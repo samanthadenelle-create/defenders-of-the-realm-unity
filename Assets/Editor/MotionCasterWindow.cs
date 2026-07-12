@@ -559,6 +559,14 @@ namespace DeNelle.Editor
                 {
                     ImportDroppedFbx();
                 }
+
+                if (GUILayout.Button(new GUIContent("Reimport drops",
+                        "Reimport every FBX already in owner-drops (fixes a failed first import " +
+                        "that logged 'does not exist' / zero takes)."),
+                    GUILayout.Width(100f)))
+                {
+                    ReimportOwnerDrops();
+                }
             }
             if (!string.IsNullOrEmpty(_avatarVerdict) || _model == null)
                 EditorGUILayout.HelpBox(_avatarVerdict ?? "Load a model (FBX or prefab) to begin.",
@@ -840,6 +848,16 @@ namespace DeNelle.Editor
             {
                 if (GUILayout.Button("Save Binding (manual = canon)", GUILayout.Height(28f)))
                     SaveBinding();
+            }
+
+            string target = SelectedTarget();
+            if (target.Length > 0)
+            {
+                EditorGUILayout.Space(2f);
+                if (GUILayout.Button(new GUIContent("Rebake controller for target",
+                        RebakeHint(target) + "\n\nRuns the matching Defenders menu bake now."),
+                    GUILayout.Height(24f)))
+                    RebakeForTarget(target, SelectedKeyword());
             }
 
             // Item 4: persistent inline confirmation — names the saved row + the
@@ -1219,17 +1237,23 @@ namespace DeNelle.Editor
                 "Import motion FBX (ActorCore / Mixamo / any)", string.Empty, "fbx");
             if (string.IsNullOrEmpty(src)) return;
 
-            if (!AssetDatabase.IsValidFolder(OwnerDropsFolder))
+            EnsureOwnerDropsFolder();
+
+            string fileName = Path.GetFileName(src);
+            string dst = OwnerDropsFolder + "/" + fileName;
+            string absDst = ProjectPathToAbsolute(dst);
+            if (File.Exists(absDst) &&
+                !EditorUtility.DisplayDialog("Motion Caster — replace?",
+                    $"{fileName} is already in owner-drops.\n\nReplace and reimport it?",
+                    "Replace", "Import as copy"))
             {
-                Directory.CreateDirectory(OwnerDropsFolder);
-                AssetDatabase.Refresh();
+                dst = AssetDatabase.GenerateUniqueAssetPath(dst);
+                absDst = ProjectPathToAbsolute(dst);
             }
 
-            string dst = AssetDatabase.GenerateUniqueAssetPath(
-                OwnerDropsFolder + "/" + Path.GetFileName(src));
             try
             {
-                File.Copy(src, dst, overwrite: true);
+                File.Copy(src, absDst, overwrite: true);
             }
             catch (Exception ex)
             {
@@ -1270,24 +1294,7 @@ namespace DeNelle.Editor
             ScanLibrary();
             LoadPickerSources();
 
-            // Default-select the longest REAL take from the new FBX; count takes.
-            ClipEntry best = null, bestAny = null;
-            int takes = 0, junk = 0;
-            foreach (var e in _library)
-            {
-                if (!string.Equals(e.Path, dst, StringComparison.OrdinalIgnoreCase)) continue;
-                takes++;
-                if (e.JunkTake) junk++;
-                if (bestAny == null || e.Clip.length > bestAny.Clip.length) bestAny = e;
-                if (!e.JunkTake && (best == null || e.Clip.length > best.Clip.length)) best = e;
-            }
-            var pick = best ?? bestAny;
-            if (pick != null)
-            {
-                _search = string.Empty;   // never hide the fresh import behind a filter
-                _chipIndex = 0;
-                SelectEntry(pick);
-            }
+            var pick = SelectBestTakeFromPath(dst, out int takes, out int junk);
 
             string summary = takes == 0
                 ? $"Imported {Path.GetFileName(dst)} — but NO animation takes were found in it. " +
@@ -1309,9 +1316,169 @@ namespace DeNelle.Editor
             double start = EditorApplication.timeSinceStartup;
             while (EditorApplication.timeSinceStartup - start < timeoutSec)
             {
-                if (!AssetDatabase.IsAssetImporting() &&
-                    AssetDatabase.LoadMainAssetAtPath(assetPath) != null)
-                    break;
+                if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null &&
+                    AssetImporter.GetAtPath(assetPath) is ModelImporter)
+                    return;
+                System.Threading.Thread.Sleep(50);
+            }
+        }
+
+        private void EnsureOwnerDropsFolder()
+        {
+            if (AssetDatabase.IsValidFolder(OwnerDropsFolder)) return;
+            Directory.CreateDirectory(ProjectPathToAbsolute(OwnerDropsFolder));
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+        }
+
+        private static string ProjectPathToAbsolute(string projectPath)
+        {
+            string rel = (projectPath ?? string.Empty).Replace('\\', '/');
+            if (rel.StartsWith("Assets/", StringComparison.Ordinal))
+                rel = rel.Substring("Assets/".Length);
+            return Path.GetFullPath(Path.Combine(Application.dataPath, rel));
+        }
+
+        /// <summary>Reimport FBXs already sitting in owner-drops — recovers from the
+        /// Refresh race that left takes at zero on the first import attempt.</summary>
+        private void ReimportOwnerDrops()
+        {
+            EnsureOwnerDropsFolder();
+            var paths = new List<string>();
+            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { OwnerDropsFolder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
+                    paths.Add(path);
+            }
+            if (paths.Count == 0)
+            {
+                EditorUtility.DisplayDialog("Motion Caster — reimport drops",
+                    $"No FBX files in {OwnerDropsFolder}.\n\nUse 'Import dropped FBX…' first.",
+                    "OK");
+                return;
+            }
+
+            try
+            {
+                for (int i = 0; i < paths.Count; i++)
+                {
+                    EditorUtility.DisplayProgressBar("Motion Caster",
+                        $"Reimporting {Path.GetFileName(paths[i])}…", (float)i / paths.Count);
+                    AssetDatabase.ImportAsset(paths[i], ImportAssetOptions.ForceUpdate);
+                    WaitForImport(paths[i]);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            ScanLibrary();
+            LoadPickerSources();
+            string last = paths[paths.Count - 1];
+            var pick = SelectBestTakeFromPath(last, out int takes, out int junk);
+            string summary = takes == 0
+                ? $"Reimported {paths.Count} FBX(s) in owner-drops but found 0 animation takes."
+                : $"Reimported {paths.Count} FBX(s) — {takes} take(s), {junk} junk — " +
+                  $"selected '{(pick != null ? pick.Clip.name : "none")}'.";
+            Debug.Log(Log + summary);
+            ShowNotification(new GUIContent(summary));
+            if (takes == 0)
+                EditorUtility.DisplayDialog("Motion Caster — no takes", summary, "OK");
+        }
+
+        /// <summary>Pick the longest real take for <paramref name="assetPath"/> and
+        /// select it in the library (loads sub-assets directly if the scan index lags).</summary>
+        private ClipEntry SelectBestTakeFromPath(string assetPath, out int takes, out int junk)
+        {
+            takes = 0;
+            junk = 0;
+            ClipEntry best = null, bestAny = null;
+
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
+            {
+                if (asset is not AnimationClip clip ||
+                    clip.name.StartsWith("__preview", StringComparison.Ordinal)) continue;
+                takes++;
+                bool junkTake = IsJunkTake(clip);
+                if (junkTake) junk++;
+
+                ClipEntry entry = null;
+                foreach (var e in _library)
+                {
+                    if (e.Clip == clip && string.Equals(e.Path, assetPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        entry = e;
+                        break;
+                    }
+                }
+                if (entry == null)
+                {
+                    entry = new ClipEntry
+                    {
+                        Clip = clip,
+                        Path = assetPath,
+                        Source = "action",
+                        NeedsExtraction = assetPath.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase),
+                        Category = GuessCategory(clip.name),
+                        Label = junkTake
+                            ? $"{clip.name}  ({clip.length:0.00}s)  [SKIP: T-POSE/BIND]  [action]"
+                            : $"{clip.name}  ({clip.length:0.00}s)  [action]",
+                        JunkTake = junkTake,
+                    };
+                    _library.Add(entry);
+                    _library.Sort((a, b) => string.CompareOrdinal(a.Label, b.Label));
+                }
+
+                if (bestAny == null || clip.length > bestAny.Clip.length) bestAny = entry;
+                if (!junkTake && (best == null || clip.length > best.Clip.length)) best = entry;
+            }
+
+            var pick = best ?? bestAny;
+            if (pick != null)
+            {
+                _search = string.Empty;
+                _chipIndex = 0;
+                SelectEntry(pick);
+            }
+            return pick;
+        }
+
+        /// <summary>Run the controller bake that consumes motion-castings for this target.</summary>
+        private static void RebakeForTarget(string target, string keyword)
+        {
+            string t = (target ?? string.Empty).ToLowerInvariant();
+            string kw = (keyword ?? string.Empty).ToLowerInvariant();
+            bool locomotion = kw is "idle" or "walk" or "run" or "combatidle" or "combatwalk"
+                or "combatrun" or "injuredidle" or "injuredwalk" or "injuredrun";
+
+            try
+            {
+                if (t.StartsWith("knight", StringComparison.Ordinal))
+                {
+                    if (locomotion)
+                        HeroAnimatorFactory.BuildKnightMocapController();
+                    else
+                        KnightPackageControllerBuilder.Build();
+                }
+                else if (t.StartsWith("orc", StringComparison.Ordinal))
+                {
+                    BuildOrcHumanoidController.Run();
+                }
+                else
+                {
+                    AnimatorSetup.BuildAnimators();
+                }
+
+                EditorUtility.DisplayDialog("Motion Caster — rebake done",
+                    $"Rebaked controller for '{target}' ({keyword}).\n\nPlay mode / Windows build " +
+                    "will pick it up after the usual save cycle.", "OK");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(Log + $"rebake failed for '{target}.{keyword}': {ex}");
+                EditorUtility.DisplayDialog("Motion Caster — rebake failed",
+                    ex.Message, "OK");
             }
         }
 
