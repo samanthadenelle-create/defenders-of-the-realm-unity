@@ -801,6 +801,22 @@ namespace DeNelle.DevTools
             AddToggleButton(cheats, "God-mode: ON", "God-mode: OFF",
                 () => GodMode, ToggleGodMode);
 
+            // ── FEATURE FLAGS (owner preview switches) ───────────────────────
+            // F8 2026-07-11 "there is no option to see the tabs from here": the
+            // strategicplacement toggle first landed on OwnerDevToolsOverlay, which is
+            // Pi-owner-gated and DORMANT on desktop — unreachable. THIS panel (F1/DEV)
+            // is the surface the owner actually uses; new preview flags belong here.
+            var flagsGroup = AddGroup("Feature flags");
+            AddToggleButton(flagsGroup, "Town/Defenses/Walls tabs: ON", "Town/Defenses/Walls tabs: OFF",
+                () => DeNelle.Core.FeatureFlags.StrategicPlacement,
+                () =>
+                {
+                    bool on = !DeNelle.Core.FeatureFlags.StrategicPlacement;
+                    PlayerPrefs.SetInt("ff.strategicplacement", on ? 1 : 0);
+                    PlayerPrefs.Save();
+                    Debug.Log($"[FeatureFlags] ff.strategicplacement = {(on ? "ON" : "OFF")} (DevPanel toggle) — reopen the Build menu to apply.");
+                });
+
             // AutoPilot (QA bot) — runs the autonomous playtest driver in-editor
             // with quitOnDone:false so a manual run never closes the editor.
             var autopilot = AddGroup("AutoPilot (QA bot)");
