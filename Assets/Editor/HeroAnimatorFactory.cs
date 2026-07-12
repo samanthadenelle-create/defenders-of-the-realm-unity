@@ -744,10 +744,14 @@ namespace DeNelle.Editor
                 return null;
             }
 
-            AnimationClip combatWalk = !string.IsNullOrEmpty(spec.combatWalkClipOverride)
-                ? LoadClip(spec.combatWalkClipOverride, spec.searchRoots) : walk;
-            AnimationClip combatRun = !string.IsNullOrEmpty(spec.combatRunClipOverride)
-                ? LoadClip(spec.combatRunClipOverride, spec.searchRoots) : run;
+            // Owner picks 2026-07-11: combat gait is registry-resolvable
+            // (knight.combatWalk/combatRun manual rows; miss = the spec override verbatim).
+            AnimationClip combatWalk = MotionCastings.Resolve(spec.castingTarget, "combatWalk",
+                !string.IsNullOrEmpty(spec.combatWalkClipOverride)
+                    ? LoadClip(spec.combatWalkClipOverride, spec.searchRoots) : walk);
+            AnimationClip combatRun = MotionCastings.Resolve(spec.castingTarget, "combatRun",
+                !string.IsNullOrEmpty(spec.combatRunClipOverride)
+                    ? LoadClip(spec.combatRunClipOverride, spec.searchRoots) : run);
 
             var combatLocoState = sm.AddState("CombatLocomotion");
             var cblend = new BlendTree { name = "CombatLocomotion", blendType = BlendTreeType.Simple1D,
@@ -777,6 +781,8 @@ namespace DeNelle.Editor
             AnimationClip unsheathe = null;
             if (!string.IsNullOrEmpty(spec.unsheatheClipOverride))
                 unsheathe = LoadClip(spec.unsheatheClipOverride, spec.searchRoots);
+            // Owner pick 2026-07-11 (ActorCore sword_drawing_m): registry row wins.
+            unsheathe = MotionCastings.Resolve(spec.castingTarget, "unsheathe", unsheathe);
 
             if (unsheathe != null)
             {

@@ -123,12 +123,30 @@
         "source": "owner-pick"
       },
       "run": {
-        "clip": "Assets/Action/Knight/standing run forward.fbx",
+        "clip": "Assets/Action/Knight/Motion/actorcore-0712/move_run_m.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
         "manual": true,
-        "pickedUtc": "2026-07-12T00:20:00Z",
+        "pickedUtc": "2026-07-12T00:30:00Z",
+        "source": "owner-pick"
+      },
+      "combatRun": {
+        "clip": "Assets/Action/Knight/Motion/actorcore-0712/combat_fastrun_loop.fbx",
+        "guid": "",
+        "vfxKey": "",
+        "sfxId": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T00:40:00Z",
+        "source": "owner-pick"
+      },
+      "unsheathe": {
+        "clip": "Assets/Action/Knight/Motion/actorcore-0712/sword_drawing_m.fbx",
+        "guid": "",
+        "vfxKey": "",
+        "sfxId": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T00:40:00Z",
         "source": "owner-pick"
       }
     },
