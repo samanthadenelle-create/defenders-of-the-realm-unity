@@ -291,7 +291,8 @@ namespace DeNelle.Village.Hero
 
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
             if (_memberLabel != null) _memberLabel.text = _vm.MemberLabel;
-            if (_walletText != null) _walletText.text = $"Gold: {_vm.Coins}";
+            // WO-697: wallet number through the ONE kit formatter (compact >= 10k).
+            if (_walletText != null) _walletText.text = $"Gold: {ElarionUi.CompactNumber(_vm.Coins)}";
             if (_statusText != null) _statusText.text = _vm.Status;
 
             // WO-598 per-trade chrome: only a GEAR vendor shows the equip context (party

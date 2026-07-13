@@ -701,12 +701,13 @@ namespace DeNelle.Village.Hero
 
         private string CostString(ResourceCost c)
         {
+            // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
             var parts = new List<string>();
-            if (c.Coins > 0) parts.Add(c.Coins + " Gold");
-            if (c.Wood > 0) parts.Add(c.Wood + "W");
-            if (c.Iron > 0) parts.Add(c.Iron + "I");
-            if (c.Food > 0) parts.Add(c.Food + "F");
-            if (c.Crystals > 0) parts.Add(c.Crystals + "C");
+            if (c.Coins > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Coins) + " Gold");
+            if (c.Wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Wood) + "W");
+            if (c.Iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Iron) + "I");
+            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + "F");
+            if (c.Crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Crystals) + "C");
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 

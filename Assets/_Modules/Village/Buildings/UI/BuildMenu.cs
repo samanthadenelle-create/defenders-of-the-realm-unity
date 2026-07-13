@@ -235,7 +235,8 @@ namespace DeNelle.Village
             for (int i = _bodyHost.childCount - 1; i >= 0; i--)
                 Destroy(_bodyHost.GetChild(i).gameObject);
 
-            MakeText(_bodyHost, "Crystals: " + CrystalBalance, 14, ElarionUi.Gilt, FontStyles.Bold,
+            // WO-697: balance through the ONE kit formatter (compact >= 10k).
+            MakeText(_bodyHost, "Crystals: " + ElarionUi.CompactNumber(CrystalBalance), 14, ElarionUi.Gilt, FontStyles.Bold,
                 TextAlignmentOptions.Right, new Vector2(0.06f, 0.955f), new Vector2(0.94f, 1f));
 
             switch (_screen)
@@ -359,9 +360,10 @@ namespace DeNelle.Village
         {
             const float rowH = 0.045f;
             bool ok = have >= required;
-            MakeText(_bodyHost, label + ": " + required, 13, ElarionUi.Parchment, FontStyles.Normal,
+            // WO-697: cost/have numbers through the ONE kit formatter (compact >= 10k).
+            MakeText(_bodyHost, label + ": " + ElarionUi.CompactNumber(required), 13, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.10f, top - rowH), new Vector2(0.62f, top));
-            MakeText(_bodyHost, (ok ? "+ " : "- ") + have, 13,
+            MakeText(_bodyHost, (ok ? "+ " : "- ") + ElarionUi.CompactNumber(have), 13,
                 ok ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
                 TextAlignmentOptions.Right, new Vector2(0.62f, top - rowH), new Vector2(0.90f, top));
             return top - rowH - 0.008f;

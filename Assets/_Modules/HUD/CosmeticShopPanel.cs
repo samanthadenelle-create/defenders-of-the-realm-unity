@@ -330,7 +330,8 @@ namespace DeNelle.HUD
             if (_serviceInstance == null) _serviceInstance = ResolveServiceInstance();
 
             if (_glimmerLabel != null)
-                _glimmerLabel.text = CurrentGlimmer().ToString("N0") + "  Glimmer";
+                // WO-697: currency through the ONE kit formatter (compact >= 10k, no N0 grouping).
+                _glimmerLabel.text = ElarionUi.CompactNumber(CurrentGlimmer()) + "  Glimmer";
 
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Destroy(_listContent.GetChild(i).gameObject);
@@ -415,7 +416,7 @@ namespace DeNelle.HUD
 
             string priceText;
             if (isAchievement) priceText = owned ? "Earned" : "Earn via play";
-            else if (glimmerCost > 0) priceText = $"{glimmerCost:N0} Glimmer" + (shortfall > 0 ? $"   (short {shortfall:N0})" : "");
+            else if (glimmerCost > 0) priceText = $"{ElarionUi.CompactNumber(glimmerCost)} Glimmer" + (shortfall > 0 ? $"   (short {ElarionUi.CompactNumber(shortfall)})" : "");   // WO-697
             else priceText = "Free";
             Color priceTint = (isBuyable && !affordable) ? ElarionUi.ParchmentDim : ElarionUi.Gold;
             MakeText(cardGo.transform, priceText, 13, priceTint, FontStyles.Normal,

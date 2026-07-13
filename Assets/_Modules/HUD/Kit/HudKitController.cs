@@ -859,10 +859,11 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.CurrencyKind.Iron, ElarionUiKit.CurrencyKind.Food,
                 ElarionUiKit.CurrencyKind.Crystal,
             };
-            // Owner F8 07-06 (flag_03): the rows showed 5 raw numbers with ZERO identifiers —
-            // the icon art (RpgUi/currency/*) doesn't exist, so every icon well hid. Each row
-            // now carries an ALWAYS-VISIBLE text tag (icon stays a bonus when art lands);
-            // names mirror the CurrencyKind/EconomyModel fields — label truthfully.
+            // WO-697 (RES-1) icon-first rows: the mirrored RpgUi/currency/* art now exists, so
+            // the chip builder shows the ICON as the identity carrier and DROPS the text label
+            // (colorblind-safe: icon = shape identity). The tags below are the no-art FALLBACK
+            // only (flag_03's never-a-naked-number law, now enforced inside the builder); values
+            // render compact via ElarionUi.CompactNumber and the chips content-fit their width.
             var tags = new[] { "Gold", "Wood", "Iron", "Food", "Crystal" };
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
             for (int i = 0; i < kinds.Length; i++)
@@ -917,7 +918,8 @@ namespace DeNelle.HUD.Kit
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
             // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
-            // "Gold" tag so the lone number is never anonymous (flag_03 / colorblind law).
+            // WO-697 icon-first: the coin icon carries identity; "Gold" is the no-art
+            // fallback tag only (builder-enforced — the chip is never a naked number).
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
                 new Vector2(0.05f, 0.82f), new Vector2(1f, 1f), primary: true, tag: "Gold");
             var tapGo = _resGoldOnly.root;

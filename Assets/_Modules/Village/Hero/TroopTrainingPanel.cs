@@ -220,7 +220,8 @@ namespace DeNelle.Village.Hero
         {
             if (_ecoText == null || EconomyService.Instance == null) return;
             var e = EconomyService.Instance;
-            _ecoText.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
+            // WO-697: wallet numbers through the ONE kit formatter (compact >= 10k).
+            _ecoText.text = $"Wood: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Wood)}   Iron: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Iron)}   Food: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Food)}   Crystals: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Crystals)}";
         }
 
         private void TrainAndRefresh(string troopId, int qty)

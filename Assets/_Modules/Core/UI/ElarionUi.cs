@@ -105,6 +105,62 @@ namespace DeNelle.Core.UI
         public const int FontLabel = 40; // small label / cost / hint   2.1% of H  (was 13)
         public const int FontMicro = 32; // hotkey badge, rune strip    1.7% of H  (was 11)
 
+        // WO-693: the ONE named mobile readability floor for detail surfaces (reference-px on
+        // the 1080x1920 canvas). Detail panes pass THIS to ElarionUiKit.FitBlock/FitSingleLine —
+        // bands grow or content ellipsis-truncates; text NEVER auto-shrinks below it. Matches
+        // ElarionUiKit.FontFloor (30 = the proven nameplate mobile-legible minimum); the kit's
+        // post-layout guard may still relax to its 20px FontHardFloor as the last resort. No
+        // per-screen font literals — screens name the floor, never a number.
+        public const float FontFloorMobile = 30f;
+
+        // ── WO-697: the ONE compact currency/number formatter ─────────────────
+        // Kit law (permanent): a currency VALUE never ellipsizes and never
+        // auto-shrinks below the font floor — it COMPACTS here instead. The
+        // CurrencyChip builder calls this itself, so no caller can reintroduce
+        // the six-digit-clips bug (ticket RES-1).
+
+        /// <summary>
+        /// Compact, ASCII-only number formatting for currency readouts (WO-697).
+        /// Thresholds: &lt; 10,000 renders verbatim as plain digits (NO group
+        /// separators — locale separators can be non-ASCII and surprise TMP);
+        /// &gt;= 10,000 renders one decimal below 100 of the tier unit ("98.6k"),
+        /// none at/above ("100k", "999k", "1.2m", "12m", "1.2b"). Decimals
+        /// TRUNCATE (a wallet is never overstated) and a trailing ".0" is
+        /// dropped ("10k", never "10.0k"). Negative values keep their sign.
+        /// </summary>
+        public static string CompactNumber(long v)
+        {
+            // |long.MinValue| overflows long negation — widen through ulong.
+            bool neg = v < 0;
+            ulong a = neg ? (ulong)(-(v + 1)) + 1UL : (ulong)v;
+            string s;
+            if (a < 10000UL)
+                s = a.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            else if (a < 1000000UL)
+                s = CompactTier(a, 1000UL, "k");
+            else if (a < 1000000000UL)
+                s = CompactTier(a, 1000000UL, "m");
+            else
+                s = CompactTier(a, 1000000000UL, "b");
+            return neg ? "-" + s : s;
+        }
+
+        /// <summary>Int convenience overload of <see cref="CompactNumber(long)"/>.</summary>
+        public static string CompactNumber(int v) => CompactNumber((long)v);
+
+        // One tier of the compact grammar: one truncated decimal while the scaled
+        // value is below 100 ("98.6k"), whole units at/above ("100k").
+        private static string CompactTier(ulong a, ulong unit, string suffix)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            ulong whole = a / unit;
+            if (whole >= 100UL) return whole.ToString(inv) + suffix;
+            ulong tenth = (a / (unit / 10UL)) % 10UL;   // truncated first decimal (no overflow)
+            return tenth == 0UL
+                ? whole.ToString(inv) + suffix
+                : whole.ToString(inv) + "." + tenth.ToString(inv) + suffix;
+        }
+
         // ── Spacing / shape scale ─────────────────────────────────────────────
         public const float PadCard   = 12f;
         public const float PadPanel  = 18f;

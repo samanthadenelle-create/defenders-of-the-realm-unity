@@ -380,11 +380,14 @@ namespace DeNelle.Village.Hero
                 var it = SelectedItem;
                 if (it == null) return "";
                 var item = it.Value;
-                if (_tab == PartyShopTab.Sell) return "+" + (item.Price > 0 ? item.Price + " Gold" : "Free");
+                // WO-697: price numbers through the ONE kit formatter (compact >= 10k).
+                if (_tab == PartyShopTab.Sell)
+                    return "+" + (item.Price > 0
+                        ? DeNelle.Core.UI.ElarionUi.CompactNumber(item.Price) + " Gold" : "Free");
                 // Locked (wrong class / above level): the price line reads the requirement, not a price.
                 if (item.Locked) return string.IsNullOrEmpty(item.LockReason) ? "Locked" : item.LockReason;
                 if (item.Equipped || item.Price <= 0) return "Owned";
-                return item.Price + " Gold";
+                return DeNelle.Core.UI.ElarionUi.CompactNumber(item.Price) + " Gold";
             }
         }
 
@@ -1353,12 +1356,13 @@ namespace DeNelle.Village.Hero
 
         private static string CostString(ResourceCost c)
         {
+            // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
             var parts = new List<string>();
-            if (c.Coins > 0) parts.Add(c.Coins + " Gold");
-            if (c.Wood > 0) parts.Add(c.Wood + "W");
-            if (c.Iron > 0) parts.Add(c.Iron + "I");
-            if (c.Food > 0) parts.Add(c.Food + "F");
-            if (c.Crystals > 0) parts.Add(c.Crystals + "C");
+            if (c.Coins > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Coins) + " Gold");
+            if (c.Wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Wood) + "W");
+            if (c.Iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Iron) + "I");
+            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + "F");
+            if (c.Crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Crystals) + "C");
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 

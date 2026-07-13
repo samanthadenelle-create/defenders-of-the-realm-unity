@@ -116,7 +116,9 @@ namespace DeNelle.Village.Hero
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
 
             if (_ecoText != null)
-                _ecoText.text = $"Gold: {_vm.Coins}   Wood: {_vm.Wood}   Iron: {_vm.Iron}   Food: {_vm.Food}   Crystals: {_vm.Crystals}";
+                // WO-697: wallet numbers through the ONE kit formatter (compact >= 10k) —
+                // a six-digit wallet never overruns the eco band.
+                _ecoText.text = $"Gold: {ElarionUi.CompactNumber(_vm.Coins)}   Wood: {ElarionUi.CompactNumber(_vm.Wood)}   Iron: {ElarionUi.CompactNumber(_vm.Iron)}   Food: {ElarionUi.CompactNumber(_vm.Food)}   Crystals: {ElarionUi.CompactNumber(_vm.Crystals)}";
 
             if (_statusText != null) _statusText.text = _vm.Status;
             if (_actionLabel != null) _actionLabel.text = _vm.ActionLabel;
@@ -701,7 +703,7 @@ namespace DeNelle.Village.Hero
             // PartyShop "[Lv 6]" lock cue — shape + luminance carry the meaning, not hue).
             string priceText = isSell ? "+" + PriceString(item) : PriceString(item);
             bool canAfford = isSell || item.Price <= 0 || item.Affordable;
-            if (!canAfford) priceText += "  [needs " + item.Price + "]";
+            if (!canAfford) priceText += "  [needs " + ElarionUi.CompactNumber(item.Price) + "]";   // WO-697
             Color priceColor = canAfford ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
             float px0 = isSell ? 0.54f : 0.50f;
             float px1 = 0.97f;
@@ -714,7 +716,8 @@ namespace DeNelle.Village.Hero
         // shop rows; Free when 0). Matches the old CostString output for a coins-only cost.
         private static string PriceString(ItemVM item)
         {
-            return item.Price > 0 ? item.Price + " Gold" : "Free";
+            // WO-697: price through the ONE kit formatter (compact >= 10k).
+            return item.Price > 0 ? ElarionUi.CompactNumber(item.Price) + " Gold" : "Free";
         }
 
         private void CreateLabel(Transform parent, string txt, float y)

@@ -155,8 +155,9 @@ namespace DeNelle.Village.World.Camps
                     Primary = ReturnHome,
                     AutoDismissSeconds = 6f,
                 };
-                vm.Spoils.Add(new SpoilRowVM { Label = "Gold", Amount = "+" + ClearGold });
-                vm.Spoils.Add(new SpoilRowVM { Label = "XP", Amount = "+" + ClearXp });
+                // WO-697: reward numbers through the ONE kit formatter (compact >= 10k).
+                vm.Spoils.Add(new SpoilRowVM { Label = "Gold", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(ClearGold) });
+                vm.Spoils.Add(new SpoilRowVM { Label = "XP", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(ClearXp) });
                 EndStateView.Show(vm);
                 FlowTrace.Step(Sys, "victory end-state shown.");
             });

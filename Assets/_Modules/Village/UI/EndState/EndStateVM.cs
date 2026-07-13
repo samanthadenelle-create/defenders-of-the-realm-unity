@@ -121,13 +121,15 @@ namespace DeNelle.Village.UI
                 vm.Spoils.Add(new SpoilRowVM
                 {
                     Icon = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge, RpgUiCatalog.BadgeLevel),
-                    Label = "Experience", Amount = "+" + xp,
+                    // WO-697: reward numbers render through the ONE kit formatter
+                    // (ElarionUi.CompactNumber) — never verbatim six-digit strings.
+                    Label = "Experience", Amount = "+" + ElarionUi.CompactNumber(xp),
                 });
             if (wisdom > 0)
                 vm.Spoils.Add(new SpoilRowVM
                 {
                     Icon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconTree),
-                    Label = "Wisdom", Amount = "+" + wisdom,
+                    Label = "Wisdom", Amount = "+" + ElarionUi.CompactNumber(wisdom),
                 });
             if (wood > 0)
                 vm.Spoils.Add(new SpoilRowVM
@@ -135,13 +137,13 @@ namespace DeNelle.Village.UI
                     // Item-catalog first (sprite-first, null-safe); no wood sheet art today
                     // -> renders as a label-only plate until the art lands.
                     Icon = ItemIconCatalog.ForConsumable("mat_wood", "Wood"),
-                    Label = "Wood", Amount = "+" + wood,
+                    Label = "Wood", Amount = "+" + ElarionUi.CompactNumber(wood),
                 });
             if (iron > 0)
                 vm.Spoils.Add(new SpoilRowVM
                 {
                     Icon = ItemIconCatalog.ForConsumable("iron_ore_ingot", "Iron Ore"),
-                    Label = "Iron", Amount = "+" + iron,
+                    Label = "Iron", Amount = "+" + ElarionUi.CompactNumber(iron),
                 });
             if (!string.IsNullOrEmpty(gearName))
                 vm.Spoils.Add(new SpoilRowVM
@@ -312,7 +314,8 @@ namespace DeNelle.Village.UI
                 string state;
                 if (e.Destroyed)
                     state = e.IsCollector && e.LootStolen > 0
-                        ? $"DESTROYED, looted {e.LootStolen}"   // collector break steals pending
+                        // WO-697: currency counts through the ONE kit formatter.
+                        ? $"DESTROYED, looted {ElarionUi.CompactNumber(e.LootStolen)}"
                         : "DESTROYED";
                 else
                     state = e.IsCollector

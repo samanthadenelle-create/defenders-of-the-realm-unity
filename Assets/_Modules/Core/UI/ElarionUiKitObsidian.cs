@@ -680,6 +680,10 @@ namespace DeNelle.Core.UI
             /// <summary>The plate Image (chrome).</summary>
             public Image plate;
 
+            /// <summary>Fraction of the chip's width the amount band occupies (set by the
+            /// builder; feeds the WO-697 content-fit preferred-width sync).</summary>
+            internal float amountBand = 0.62f;
+
             private long _shown = long.MinValue;
             private long _target;
 
@@ -702,7 +706,26 @@ namespace DeNelle.Core.UI
             {
                 if (v == _shown) return;   // no per-frame alloc while the tween passes the same int
                 _shown = v;
-                if (amount != null) amount.text = v.ToString("N0");
+                if (amount == null) return;
+                // WO-697 kit law: the chip OWNS currency formatting — CompactNumber, never
+                // a grouped verbatim string that a narrow chip must ellipsize/shrink.
+                amount.text = ElarionUi.CompactNumber(v);
+                SyncPreferredWidth();
+            }
+
+            // WO-697 content-fit safety net: when the chip lives in a layout group
+            // (resource panel rows carry a LayoutElement), grow the chip's preferred
+            // width so the amount band always seats the full compact string — a
+            // 7-digit value can never clip, whatever the formatter emits. Anchor-rect
+            // consumers (panel footers) have no LayoutElement -> no-op there.
+            private void SyncPreferredWidth()
+            {
+                if (root == null || amount == null) return;
+                var le = root.GetComponent<LayoutElement>();
+                if (le == null || le.ignoreLayout) return;
+                float textW = amount.GetPreferredValues(amount.text).x;
+                float needed = textW / Mathf.Max(0.20f, amountBand) + 12f;
+                if (needed > le.preferredWidth) le.preferredWidth = needed;
             }
         }
 
@@ -752,16 +775,24 @@ namespace DeNelle.Core.UI
             icon.preserveAspect = true;
             icon.raycastTarget = false;
             var iconSprite = UiStyle.Icon(kind.ToString().ToLowerInvariant());
+            // WO-697: mirrored currency art fallback (Resources/RpgUi/currency/currency_*,
+            // the WO-675/676 chip grammar set) when the concept resolver comes up empty.
+            if (iconSprite == null)
+                iconSprite = RpgUiCatalog.Get("currency", "currency_" + kind.ToString().ToLowerInvariant());
             if (iconSprite != null) icon.sprite = iconSprite;
             else iconGo.SetActive(false);
 
-            // Text tag (optional) — the guaranteed identifier, LEFT of the amount, visible
-            // whether or not the icon resolved (icon is a bonus; text is the contract).
+            // Text tag — WO-697 icon-first rule (supersedes the flag_03 always-visible tag):
+            // when the currency ICON resolves, the icon alone carries identity (shape identity,
+            // colorblind-safe — never color-only) and the text label is DROPPED. The tag renders
+            // only as the no-art fallback, so a chip still never reads as a naked number: the
+            // caller's tag if provided, else the kind name.
             TMP_Text tagLabel = null;
-            bool hasTag = !string.IsNullOrEmpty(tag);
+            bool hasTag = iconSprite == null;
             if (hasTag)
             {
-                tagLabel = Label(go.transform, tag, 0f, 1f,
+                string tagText = !string.IsNullOrEmpty(tag) ? tag : kind.ToString();
+                tagLabel = Label(go.transform, tagText, 0f, 1f,
                     ElarionUi.Parchment, ElarionUi.FontMicro,
                     TextAlignmentOptions.MidlineLeft, 0.33f, 0.58f);
                 tagLabel.raycastTarget = false;
@@ -771,16 +802,22 @@ namespace DeNelle.Core.UI
 
             // Amount — gold primacy: primary chip = one size class up + gilt digits.
             // With a tag present the amount cedes the tag's slot (right-aligned, so short
-            // wallets never collide; FitSingleLine shrinks the long ones).
+            // wallets never collide). WO-697 kit law: NO FitSingleLine here — a currency
+            // value never ellipsizes or auto-shrinks; the chip formats it compact instead
+            // (CompactNumber in WriteAmount) and the content-fit sync grows layout chips.
             var amount = Label(go.transform, "0", 0f, 1f,
                 primary ? ElarionUi.Gilt : ElarionUi.Parchment,
                 primary ? ElarionUi.FontHead : ElarionUi.FontLabel,
                 TextAlignmentOptions.MidlineRight, hasTag ? 0.60f : 0.32f, 0.94f, bold: primary);
             amount.raycastTarget = false;
+            amount.textWrappingMode = TextWrappingModes.NoWrap;
             EnsureFont(amount, FontRole.Body);
-            FitSingleLine(amount);                                         // §1.14 — big wallets never spill the chip
 
-            var handle = new CurrencyChipHandle { root = go, icon = icon, amount = amount, tag = tagLabel, plate = plate };
+            var handle = new CurrencyChipHandle
+            {
+                root = go, icon = icon, amount = amount, tag = tagLabel, plate = plate,
+                amountBand = (hasTag ? 0.94f - 0.60f : 0.94f - 0.32f),
+            };
             handle.SetAmount(0, animate: false);
             return handle;
         }
