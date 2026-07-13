@@ -681,6 +681,31 @@ namespace DeNelle.Village
         /// must consume it (read once) even when suppressing, or a queued tap would leak
         /// to the next frame.
         /// </summary>
+        // Scratch buffers for the over-UI tap check (allocated once — the confirm path
+        // runs per-frame while armed and must not churn the GC).
+        private static readonly List<UnityEngine.EventSystems.RaycastResult> s_uiHits =
+            new List<UnityEngine.EventSystems.RaycastResult>(8);
+        private static UnityEngine.EventSystems.PointerEventData s_uiProbe;
+
+        /// <summary>
+        /// F8 2026-07-13 (rotate-tap leak): true when <paramref name="screenPoint"/> sits
+        /// over ANY raycast-receiving uGUI element (the Rotate pair, palette dock, verb
+        /// bar, HUD buttons). EventSystem raycast at the point — phase-independent, so a
+        /// touch that already ended this frame still resolves (IsPointerOverGameObject is
+        /// unreliable after the finger lifts). No EventSystem in the scene => false
+        /// (desktop editor edge — never blocks placement).
+        /// </summary>
+        private static bool IsPointOverUi(Vector2 screenPoint)
+        {
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es == null) return false;
+            if (s_uiProbe == null) s_uiProbe = new UnityEngine.EventSystems.PointerEventData(es);
+            s_uiProbe.position = screenPoint;
+            s_uiHits.Clear();
+            es.RaycastAll(s_uiProbe, s_uiHits);
+            return s_uiHits.Count > 0;
+        }
+
         private bool PlaceConfirmedThisFrame()
         {
             // On-screen PLACE button latch — consumed FIRST and NOT zone-suppressed:
@@ -701,6 +726,18 @@ namespace DeNelle.Village
             bool inZone = VirtualJoystick.IsInZone(_input.ScreenPoint);
             FlowTrace.Step("Build", $"PlaceConfirm check: input.PlaceOrSelect={confirmed}, " +
                 $"screenPoint={_input?.ScreenPoint}, inJoystickZone={inZone}");
+            // F8 2026-07-13 ("if i click rotate, it rotates but places first — registers
+            // as a click event and places right there"): a tap on ANY uGUI control (the
+            // new Rotate pair, the palette dock, the verb bar) also lands in the touch
+            // driver's PlaceOrSelect latch and leaked into world placement. Suppress any
+            // confirm whose screen point sits over interactive UI — a labeled button is
+            // its own intent; the world only hears taps on the world. (The PLACE button
+            // is unaffected: it arrives via the explicit _uiPlaceLatch above.)
+            if (IsPointOverUi(_input.ScreenPoint))
+            {
+                FlowTrace.Warn("Build", $"PlaceConfirm SUPPRESSED: tap at {_input.ScreenPoint} is over UI (button tap, not a world placement)");
+                return false;
+            }
             // Suppress confirms whose screen point sits in the move-stick zone.
             if (inZone)
             {
