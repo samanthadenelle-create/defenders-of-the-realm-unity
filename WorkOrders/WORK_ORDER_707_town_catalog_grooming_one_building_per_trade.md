@@ -91,13 +91,24 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
 - **Placement offsets save to the player** — each placement (cell + rotation) persists in the
   save's BaseLayout records (already the WO-673 system; this ruling confirms it as canon for
   the founding flow: what you lay out is YOUR town, forever).
-- **Destroyed building = pay to rebuild.** When a raid destroys a building, it does not come
-  back free: the player must spend its resource cost again to rebuild it — and the rebuild is
-  a FRESH placement: they may **re-place it in a more strategic position** (owner, same
-  session; the loss is also the lesson — losing a badly-placed building is the invitation to
-  place it better). Repair (damaged-but-standing) stays the REP-1 paid-repair
-  path; destruction is the harder loss the WO-702 warning promises — "what burns stops earning."
-  Wire with the WO-672 damage lifecycle in pass 2.
+- **V1 destruction model = CoC-STYLE (owner refinement, same day, supersedes the pay-to-rebuild
+  line below for V1):** "the way we get there faster is exactly CoC style — one person deploying
+  their troops and watching it play out." A raid NEVER deletes buildings: they take damage,
+  may break for the battle, and **restore after the wave**; the REAL loss is **loot ripped from
+  the containers** (ResourceCollector.RaidLootFraction 0.5 already implements the steal).
+  Placement stays sacred; no rebuild flow needed for V1. The raid combat model is CoC's:
+  **the attacker deploys troops and WATCHES it play out** — no direct control; layout vs
+  deployment is the whole contest (feeds flip-a-base, WO-673; ArmyStorage/RaidDeploy exist).
+  **Deployment freedom (owner, same breath): "they can deploy all different troops in
+  whatever method they want"** — any troop MIX, any drop order/timing/location (within the
+  legal deploy zone), no scripted sequence; the troop AI does the fighting, the player's
+  choices are composition + where/when to drop.
+- *(Parked post-V1 escalation:)* **Destroyed building = pay to rebuild.** The earlier same-day
+  ruling — destruction deletes the row, full-cost fresh placement anywhere ("losing a
+  badly-placed building is the invitation to place it better") — stays canon as a HARDER mode/
+  later escalation, not V1 scope. The singleton gate needs no change either way (it reads
+  BaseLayout rows; a deleted row frees the slot automatically). Repair (damaged-but-standing)
+  stays the REP-1 paid-repair path in both models. Wire with WO-672 in pass 2.
 
 ## Acceptance
 - [ ] Town tab shows exactly: Echo Hollow, Store, Forge, Armorer, Arcane Tower, Jeweler, the
