@@ -53,6 +53,7 @@
 
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 685**), bump in the same edit. Collisions on record: 677, 678.
+- Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 688**), bump in the same edit. Collisions on record: 677, 678.
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ⛔ Apex dragon model = CC BY-NC — license/replace before commercial release.

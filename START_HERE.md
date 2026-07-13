@@ -75,6 +75,7 @@ ANYTHING until the boot sequence below is complete and reported.**
   overlay), Seating Editor, Offset Forge.
 - **Owner ops:** `tools/db-viewer/` (database state, player data, metrics — key-gated admin
   endpoint), the web-F8 watcher pattern (`vercel logs` filtered to `[sig]` error lines).
+- **Phone/async triage:** `/triage-web-issue` — pull the web-trace from the db, RCA, write the WO.
 - **Deploy chain:** `webgl-vercel-overnight.ps1` (detached build→preview, status markers in
   `Builds/webgl-chain-status.txt`).
 
