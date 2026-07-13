@@ -49,6 +49,30 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
 18. **B2 dual-wallet divergence** (failing oracle) · **pet active-slot resets on reload**
     (flag_17) · **broken-tower state not persisted**. Three known "my stuff disappeared" bugs.
 
+## D2. Security (from `docs/SECURITY_AUDIT_2026-07-12.md` — exact asks + steps)
+- **S1 (HIGH):** Create the missing TTL cron. STEPS: add `api/admin/cleanup.js` (DELETE web_trace
+  rows >7d + spent/expired auth_nonces) → add `crons` entry in vercel.json (daily) → redeploy →
+  verify row counts fall in the db-viewer Overview tab.
+- **S2 (HIGH):** Rate-limit the open POSTs. STEPS: Vercel WAF rules on /api/trace,
+  /api/events/track, /api/bug-report (per-IP) → verify with a scripted burst.
+- **S3 (HIGH, before ANY public build):** gate the HelpMenu 5-tap grant behind
+  `#if DEVELOPMENT_BUILD || UNITY_EDITOR` (HelpMenu.cs:70-75,155-175,234-276) — it currently
+  ships self-grant of 25k crystals in release.
+- **S4 (MED):** nonce-gate promo/redeem + referral/claim + referral/generate with the existing
+  `verifyAndConsume` (install-brag.js:89 is the working precedent).
+- **S5:** confirm the Neon credential flagged at api/DEPLOY.md:11 was rotated. Note: audit proved
+  `api/` is git-TRACKED (correct the 07-12 anchor's "gitignored" line).
+
+## G. db-viewer activation (exact steps for the owner)
+1. Vercel dashboard → project `defenders-of-the-realm-v2` → Settings → Environment Variables →
+   add `ADMIN_DASH_KEY` = a long random string (Production, Sensitive).
+2. Redeploy the backend (any `vercel deploy --yes` from C:\EOA ships `api/admin/db.js`; promotion
+   to prod is the owner's).
+3. Double-click `tools\db-viewer\index.html` → paste base URL + key → Save. Tabs: Overview
+   (row counts), Players (latest saves; `player=<id>` for one full record), Metrics (7-day
+   events/sessions/error-lines per day), Traces (per-session web_trace lines). Rotate the env var
+   to revoke access.
+
 ## F. Hygiene
 19. **Renumber `WORK_ORDER_677_asset_caster_toolkit_family.md`** → 685+ (banner rule).
 20. **NOTION_SOURCE_OF_TRUTH.md** still says next-free 430 — refresh line.
