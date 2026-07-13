@@ -5435,8 +5435,17 @@ namespace DeNelle.DevTools
                 FlowTrace.Step("Auto", "HomeReturnRoundTrip: self-armed exit crossed — proceeding with the round trip.");
             }
 
+            // ORACLE FIX (WO-602 repro 2026-07-13, data-proven): the y≈liftY(3) expectation was the
+            // moat-plinth design, NOT the merged world's walkable truth — the portal warp lands the
+            // hero home and the navmesh settles him at y≈0.08 (captured: WarpTo((0,3,0)) sample HIT
+            // (0.34, 0.08, 0.86); the probe's own self-arm warp to (0,liftY,0) settles to 0.08 too).
+            // Assert the FELT requirement: back inside the courtyard footprint, standing on the mesh
+            // the game actually walks — the courtyard's REAL ground Y, sampled once from the navmesh.
+            float courtyardY = liftY;
+            if (UnityEngine.AI.NavMesh.SamplePosition(Vector3.zero, out var courtHit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                courtyardY = courtHit.position.y;
             bool BackHome() => _hero != null
-                && Mathf.Abs(_hero.transform.position.y - liftY) <= 0.5f
+                && Mathf.Abs(_hero.transform.position.y - courtyardY) <= 1.0f
                 && HorizontalDistance(_hero.transform.position, Vector3.zero) < PlinthHalf;
 
             // 1) Walk OUTWARD ~20m from the castle (radially away from the origin) so the
@@ -5503,10 +5512,16 @@ namespace DeNelle.DevTools
                 if (BackHome()) { home = true; break; }
                 float d = HorizontalDistance(_hero.transform.position, retPos);
                 if (d < closest) closest = d;
-                if (d <= retRadius + 0.5f && MobileInteractButton.IsActive && MobileInteractButton.InvokeActive())
+                if (!tapped && d <= retRadius + 0.5f && MobileInteractButton.IsActive && MobileInteractButton.InvokeActive())
                 {
                     tapped = true;
                     FlowTrace.Step("Auto", $"HomeReturnRoundTrip: bot tapped 'Enter Elarion' on '{gateName}'.");
+                    // ORACLE FIX (WO-602 repro 2026-07-13): STOP walking once the cross is confirmed —
+                    // the tap starts a fade->warp; leaving autowalk armed marched the hero back OUT of
+                    // the courtyard after the warp landed (captured: repositioned @ (0.34,0.08,0.86),
+                    // then walked south and an organic encounter's BattleArena.WarpHero hijacked the
+                    // run to the 5000-offset arena — the FAIL snapshot). Stand still; poll BackHome.
+                    _hero.ClearAutoWalk();
                 }
                 yield return null;
             }
