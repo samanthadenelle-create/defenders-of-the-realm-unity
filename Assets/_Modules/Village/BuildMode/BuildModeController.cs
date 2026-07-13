@@ -1261,6 +1261,17 @@ namespace DeNelle.Village
                 return;
             }
 
+            // F8 2026-07-13 "lumbermill came in damaged": a FRESH placement is a NEW
+            // building — reset any collector's PlayerPrefs-persisted HP (keyed by
+            // buildingId only, so it outlives demolish/rebuild and even New Game).
+            // Fresh-placement path ONLY — reload replay (BaseLayoutLoader on load)
+            // keeps standing damage for the repair loop.
+            Guard.Try("BuildMode", "fresh-placement collector HP reset", () =>
+            {
+                var col = ps.GetComponentInChildren<DeNelle.Village.Buildings.Progression.ResourceCollector>(true);
+                if (col != null) col.ResetToFullHp();
+            });
+
             // V(erify the placed structure renders): a spawned-but-invisible structure reads as a
             // failed build to the player even though we charged + occupied the grid. Warn (skip-not-
             // abort: the placement is committed) if it carries no enabled Renderer, so a capture

@@ -277,5 +277,24 @@ namespace DeNelle.Village.Buildings.Progression
             PlayerPrefs.SetFloat(HpPrefsPrefix + _buildingId, _hp);
             PlayerPrefs.Save();
         }
+
+        /// <summary>
+        /// F8 2026-07-13 "lumbermill came in damaged": collector HP persists in
+        /// PlayerPrefs keyed ONLY by buildingId, so a freshly PLACED structure
+        /// inherited the previous building's wave damage (owner's Lumbermill spawned
+        /// at hp=0.41 — proving line `[Flow:DamageVis] bar attached: 'lumbermill'
+        /// (collector) hp=0.41`). A new placement is a NEW building (owner ruling:
+        /// destroyed = pay to rebuild, fresh) — call this from the fresh-placement
+        /// path to restore full HP + clear the stale persisted key. Reload replay of
+        /// a STANDING building keeps its damage (the repair loop's domain).
+        /// </summary>
+        public void ResetToFullHp()
+        {
+            _hp = _maxHp;
+            _broken = false;
+            SaveState();
+            StepChanged?.Invoke(this);   // health/broken state moved — let the fill/damage views re-read
+            FlowTrace.Step("Harvest", $"collector '{_buildingId}' HP reset to full on fresh placement (stale persisted damage cleared)");
+        }
     }
 }
