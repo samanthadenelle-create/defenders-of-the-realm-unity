@@ -1,5 +1,7 @@
 > ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-07-03.md`.
 
+> STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 07-03 anchor named above is superseded) (see CANON_GROUND_TRUTH_2026-07-12.md)
+
 # docs/ — Index
 
 ~100 files. Find your category, don't grep blind. Root-level project files are

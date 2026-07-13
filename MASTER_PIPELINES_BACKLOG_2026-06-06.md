@@ -1,5 +1,7 @@
 # Master Pipelines — Backlog Board (2026-06-06) · SOURCE OF TRUTH
 
+> ⚠ Numbering: see `CLI_LANES_WO_NUMBERS.md` banner (next free **684**, refreshed 2026-07-12).
+
 Branch **feat/tower-core-loop**. 13 lanes. Drawn from `BACKLOG_SILOS.md`, `PARALLEL_LANES.md`,
 `WORK_QUEUE_CONSOLIDATED_2026_06_01.md`, `QUEUE_HEALTH_2026-06-04.md`, `COMBAT_FEEL_PRIORITY_STACK.md`,
 this session's live findings, and the design docs (see §"Story → WO mapping").

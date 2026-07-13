@@ -10,11 +10,20 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-08.md`)
+## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-12.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
 
-- **2026-07-08 delta (LIVE — see `CANON_GROUND_TRUTH_2026-07-08.md` for full detail):** focus = THE FEEL
+- **2026-07-12 delta (LIVE — see `CANON_GROUND_TRUTH_2026-07-12.md`):** focus = the **mobile-web demo
+  wave**. **WO-677** (touch verb bar — uGUI rebuild) + **WO-678** (Pi SDK timeout clean wrap) + **WO-682**
+  (quiet web errors: 13 Sfx WebGL-override metas swept, db-proven FSB decode root; audio prewarm on battle
+  load; `SFX_WEBGL_OK` oracle) + **WO-683** (build-screen kit — d-pad moves the asset, text rotate labels)
+  all committed **LOCAL, push HELD**. Save schema **v29**; gates green (3 known pre-existers only). The
+  **WebTrace web-debug loop is PROVEN** (`?trace=1` → `api/trace` → Neon; CLI reads the runtime-log `[sig]`
+  echo); `api/` lives in-repo (gitignored). A new **ship (non-dev) WebGL preview** was deploying at handoff;
+  prod untouched. **WO numbering: next free = 684** (677/678 collisions flagged).
+
+- **2026-07-08 delta (⚠ superseded by the 07-12 delta above — see `CANON_GROUND_TRUTH_2026-07-08.md` for full detail):** focus = THE FEEL
   ARC run through the **F8 ticket program**. **P0 "still cant do the tower" FIXED + owner felt-confirmed**
   (dialogue Closed re-entrancy froze build-mode input; per-VM Closed guard `82422d11`). The 07-07/08 F8
   board (30+ tickets) is fixed/spec'd/evidence-pinned (white-Paladin root fix, F8-24 stairs sweep, dialogue

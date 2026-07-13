@@ -1,20 +1,19 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-08) — READ BEFORE WORKING
-> Current focus = **THE FEEL ARC** (owner: "the most important thing is how it FEELS"; quality bar =
-> the ten-year-old test) driven through the **F8 ticket program** (owner felt-tests → F8 flags →
-> watcher auto-harvests → CLI RCA-from-data + fix + headless-verify → owner felt-verifies + closes).
-> **P0 "still cant do the tower" is FIXED + owner felt-confirmed** (dialogue Closed re-entrancy froze
-> build-mode input; per-VM Closed guard `82422d11`; 8 real-input probes PASS 4/4). The 07-07/08 F8 board
-> (30+ tickets) is fixed/spec'd/evidence-pinned; **wave 2 CLOSED** on exe **2026-07-08 05:10:11** (fleet
-> ZERO tickets). Read the live anchor **`CANON_GROUND_TRUTH_2026-07-08.md`** +
-> **`CLI_PREP_2026-07-08_next-session.md`** + `RESUME_2026-07-08_overnight-f8-sweep.md`.
-> **Next big lane = WO-614 skill-tree solo rework** (RULED, READY — signature actives from premium mocap,
-> T1 ranged Thunderbolt/Arcane Blast, "data only always"). Open owner directives: F8-40 max-tier tower
-> identity · F8-41 waves attack the city · F8-42 repair costs. **WebGL PREVIEW =
-> `defenders-of-the-realm-v2-h0h6hfsf5.vercel.app`** (from `bb0094cc`); **prod UNTOUCHED** (07-01 Pi build);
-> promotion + push are the owner's call. Branch `wip/village2-and-f8-tickets`, 71 commits ahead, **push
-> HELD**. **BINDING: read-before-assert applies to EVERYTHING (code + non-code).**
+> ## ▶ LIVE THREAD (2026-07-12 evening) — READ BEFORE WORKING
+> Current focus = **MOBILE-WEB DEMO READINESS** (Pi hackathon **July 31**; **build mode IS the demo**
+> per the player-defined-map pivot, 07-11). Tonight's arc: **WO-677/678/682/683 committed local**
+> (`66b3272f`, `c963a553`, `33799026`, `965309a6`, `683b917b`); gates = `COMPILE_GATE_OK` +
+> DataRegression at the 3-known-pre-exister baseline; new **SFX_WEBGL_OK oracle** swept 13 broken
+> clip metas (db-proven `Loading FSB failed` SwordSwing root). **WebTrace web-debug loop PROVEN**
+> end-to-end: `?trace=1` → `POST /api/trace` → Neon `analytics_events`; the CLI read path = the
+> `[sig]` echo in Vercel runtime logs (`DATABASE_URL` is sensitive/unpullable). New **WebGL ship
+> preview deploying tonight** (non-dev build — the giant-error-overlay class dies); prior preview
+> `mexharnff` is superseded when the new URL lands; **prod UNTOUCHED**; **push HELD**. Live anchor =
+> **`CANON_GROUND_TRUTH_2026-07-12.md`** (the 07-08 anchor is bannered SUPERSEDED). Notes: `api/`
+> lives **IN-REPO (gitignored)** — the "separate React repo" line is dead; save schema **v29**;
+> **`SAMANTHA.md` + the new `START_HERE.md` are the boot gate**; WO numbering **next-free = 684**
+> (677/678 collisions flagged). **BINDING: read-before-assert applies to EVERYTHING (code + non-code).**
 
 **READ THIS FIRST on any new session (owner directive 2026-06-20).** Every CLI/agent
 loads this before doing anything, to stay an SME. It is the fast-path summary; the
@@ -45,9 +44,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (updated 2026-07-08 — anchored to `CANON_GROUND_TRUTH_2026-07-08.md`)
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD `d944d161`, 71 commits ahead of origin, clean tree, push HELD for owner word.** Last code commit `bb0094cc`. Save schema **v28** (WO-587). Fresh headless gates on HEAD = `COMPILE_GATE_OK` + `REGRESSION_OK`.
-- **THE FEEL ARC is the live focus**, run through the **F8 ticket program**: ten-year-old test = quality bar; **P0 tower placement FIXED + owner felt-confirmed**; 30+ F8 tickets fixed/spec'd/evidence-pinned; **wave 2 CLOSED** (exe 2026-07-08 05:10:11, fleet ZERO tickets). White-Paladin root fixed. **WebGL preview `h0h6hfsf5`** deployed; **prod untouched** (07-01 Pi build). **Next big lane = WO-614 skill-tree solo rework** (RULED, READY).
+## Current State (updated 2026-07-12 evening — anchored to `CANON_GROUND_TRUTH_2026-07-12.md`)
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = tonight's WO-677/678/682/683 arc (through `683b917b`), ~100 commits ahead of origin, push HELD for owner word.** Save schema **v29** (heroLevel/heroXp/heroLifetimeXp, F8-47). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the 3-known-pre-exister baseline.
+- **MOBILE-WEB DEMO READINESS is the live focus** (Pi hackathon July 31; build mode IS the demo — player-defined-map pivot 07-11), riding on the feel-arc/F8 program's quality bar (ten-year-old test). **WebGL ship preview deploying tonight** (non-dev build; `mexharnff` superseded when the new URL lands); **prod untouched** (Pi build at `defenders-of-the-realm-v2.vercel.app`). **Next big lane = WO-614 skill-tree solo rework** (RULED, READY).
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
@@ -62,11 +61,11 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **World:** home hub `MainCastle_Hall`; `OuterWorld` streams additively; `Village2` = raid target
   (`Village.unity` ABANDONED). Castle↔OuterWorld = four-side warp gates (RuntimeRegionGate); moat +
   4 drawbridges (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (offline real-clock, **save v28** — WO-587 Population & Echo growth); gold on kills; research costs.
+- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save now **v29**); gold on kills; research costs.
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-07-08.md` (the single live anchor of current reality — read FIRST; supersedes the 07-03 / 07-01 / 06-28 / 06-26 snapshots)
+- `CANON_GROUND_TRUTH_2026-07-12.md` (the single live anchor of current reality — read FIRST; the 07-08 anchor and earlier snapshots are SUPERSEDED)
 - `CLI_PREP_2026-07-08_next-session.md` (wave-2 close prep + open F8-37..F8-42 tickets + WO-614 rulings)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)

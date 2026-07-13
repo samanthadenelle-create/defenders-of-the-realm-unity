@@ -4,6 +4,8 @@ How to navigate the ~370 markdown files at project root without reading them all
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
+> STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md`; the 07-08 anchor named below (and in the table) is superseded (see CANON_GROUND_TRUTH_2026-07-12.md)
+
 > **Branch = `wip/village2-and-f8-tickets`**. The live anchor of current reality is
 > `CANON_GROUND_TRUTH_2026-07-08.md` (updated 2026-07-08; supersedes the 07-03 anchor, now bannered).
 > Several files this index historically called "living/current" are now
@@ -33,6 +35,8 @@ Docs index: `docs/README.md`.
 > `BUG_WORKFLOW.md` (Linear-era), `PIPELINE.md`, `CLI_GATEKEEPER_PLAYBOOK.md` (stale branch/path).
 
 ## Work orders — `WorkOrders/WORK_ORDER_NNN_name.md`
+
+> STALE: 2026-07-12 — "Numbering runs through 602" below is stale: WO specs on disk run through 683, next free = 684, with collisions on 677/678; the authority doc `CLI_LANES_WO_NUMBERS.md` is also ~270 stale (see CANON_GROUND_TRUTH_2026-07-12.md)
 
 The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutter
 (504 spec + result files). The numbering authority `CLI_LANES_WO_NUMBERS.md` +

@@ -15,7 +15,42 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-11 F8 BATCH + ACTION KEYWORD REGISTRY (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-12 EVENING (mobile-web demo wave) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`; **5 lane commits LOCAL tonight, push HELD**
+for the owner's word. NEXT CLI: **read `START_HERE.md` (repo root) FIRST.**
+
+**LANDED (all gated):** WO-678 Pi 120s timeout clean wrap — template unhandledrejection/showBanner
+ownership (`66b3272f`) · WO-677+683 build-mode touch verbs — uGUI verb bar; kit d-pad re-hosted on the
+build overlay publishing HudMoveInput, merged into the arrow-key move read; "Rotate Left/Right" text
+labels; palette chips de-glyphed; AssertBuildMoveChain DPAD probe link (`c963a553`) · hidden mobile dev
+unlock — 5 taps on help title → Grant Resources (`33799026`) · WO-682 quiet web errors — db-proven
+`Loading FSB failed for audio clip "SwordSwing"` + 167ms/4000ms stalls; 13 Sfx metas swept of WebGL
+platformSettingOverrides; AudioService Guard-wrapped + PrewarmCombatSfx on Battle/Arena music cue +
+dead-clip quarantine; new SFX_WEBGL_OK oracle (`965309a6`) · docs + **`CANON_GROUND_TRUTH_2026-07-12`
+anchor (supersedes 07-08)** (`683b917b`). RESULT files written for 677/678/682/683.
+
+**GATES:** COMPILE_GATE_OK; DataRegression = the 3 known pre-existers only, zero new. Windows build
+SUCCESS tonight; at handoff a chain is RUNNING: 4-bot fleet (seeds 8200) + ship WebGL (**NO -DevBuild**
+— kills the Development-overlay "giant json failure screen" class) + Vercel preview.
+
+**WEB DEBUG LOOP PROVEN:** WebTrace (`?trace=1`) → POST `/api/trace` → Neon `analytics_events`; CLI
+read path = the `[sig]` echo in Vercel runtime logs (`get_runtime_logs` / `vercel logs`) because
+DATABASE_URL is sensitive/unpullable. `api/` lives **IN THIS REPO**, gitignored (`C:\EOA\api\`) —
+the older "separate React repo" canon is WRONG.
+
+**OWNER RULINGS tonight:** errors caught quietly (never a player-visible failure screen) · build-screen
+d-pad = the kit d-pad + text labels · pre-warm combat audio on battle load.
+
+**IN FLIGHT at handoff:** VFX Caster tagging extension — tag effect → Cast/Projectile/Impact key via
+manual-overlay JSON, generator merges manual-wins.
+
+**OPEN:** owner felt-pass on the new preview → push authorization · WO numbering authority refresh
+(next free 684; 677/678 collisions) · loader-error beacon idea · preview SSO bypass friction.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-11 F8 BATCH + ACTION KEYWORD REGISTRY (⚠ superseded as newest by the 2026-07-12 EVENING block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`. Origin sits at `369c4f30`; local commits through
 `10c60eb3` (push held for owner word). **Save schema = v29** (heroLevel/heroXp/heroLifetimeXp — F8-47).

@@ -14,6 +14,8 @@ here and in the section files is STALE metadata only.
 > `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`. The per-area code mechanics below
 > remain trustworthy; the hero-identity / party / Defend-the-Tower framing does not.
 
+> STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 06-26 anchor below is superseded), and HEAD is `f123859d`, not `8aa24c32` (see CANON_GROUND_TRUTH_2026-07-12.md)
+
 > READ ORDER for a cold start: `CANON_GROUND_TRUTH_2026-06-26.md` (live anchor) → this file → the relevant
 > section file → `CLAUDE.md` (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture law) →
 > `docs/HANDOVER.md` (newest 2026-06-26 block). Trust the ground-truth anchor + newest handover for live
@@ -22,6 +24,8 @@ here and in the section files is STALE metadata only.
 ---
 
 ## 1. INDEX TABLE — areas → section file → role
+
+> STALE: 2026-07-12 — the docs-wo-state row's "next free WO = 412" is ~270 stale: WO specs on disk run through 683, next free = 684, with number collisions on 677/678 (see CANON_GROUND_TRUTH_2026-07-12.md)
 
 | Area | Section file | 1-line role |
 |---|---|---|
@@ -361,6 +365,8 @@ P3 = dead/stale, cleanup.**
     `HeroChargeVFX`, `HeroAimIK` (no SetAimTarget caller), `HeroReachRing` (DEF-205 not-attached),
     `GearVisualApplier` (primitive cubes gated off), two victory-pose paths. `NPCCommandBridge` dead.
     `RegionMobSpawner.ModelForRoamer` unused. `WaveManager.BuildPlaceholderEnemy` legacy.
+
+> STALE: 2026-07-12 — item 25's "Both build tools ship BuildOptions.Development" is false for WebGL: `WebGLBuild.cs:124` ships `BuildOptions.None` (Development is opt-in via `-devBuild`, WO-408); the DESKTOP Development flag remains (DesktopBuild.cs:178) (see CANON_GROUND_TRUTH_2026-07-12.md)
 
 25. **DUPLICATE MenuItem `Defenders/Build/WebGL Player`** (editor-tools §dead) in both `WebGLBuild` and
     `DesktopBuild` with contradictory settings (Brotli/Development/512MB vs Gzip/None) — only one binds.

@@ -1,5 +1,15 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
+> ## ⚠ REFRESHED 2026-07-12: next free WO = **685** (684 = outstanding-items board, minted 07-12). Disk max = **683**.
+> The per-lane detail below is **FROZEN HISTORY** (pre-430 era — ~270 numbers stale); do **NOT** mint from it.
+> Numbering collisions on record:
+> - **WO-677**: `mobile_buildmode_move_unreachable` (spec + RESULT, 2026-07-12 — **canonical on disk**) vs
+>   `asset_caster_toolkit_family` (the 'Asset Caster toolkit' WO from HANDOVER 07-12 morning — its spec file
+>   `WORK_ORDER_677_asset_caster_toolkit_family.md` ALSO exists on disk; **needs renumber to 684+**).
+> - **WO-678**: `pi_sdk_timeout_clean_wrap` (spec + RESULT — **canonical**) vs
+>   `WORK_ORDER_678_hovl_vfx_fidelity.md` / `.RESULT.md` (earlier same-number use).
+> Rule stands: **mint from THIS banner's next-free, bump it in the same edit.**
+
 Branch **feat/tower-core-loop**. Numbers only, run order. `→` = serial (same lane, in order);
 commas = parallel-safe. Detail in `MASTER_PIPELINES_BACKLOG_2026-06-06.md`. New WOs ≥290 are spec'd by
 this session's design docs (see "Newly minted" below) — full WO files on request.

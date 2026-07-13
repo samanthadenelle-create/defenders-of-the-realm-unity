@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Defenders DB Viewer (owner-only)</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f26; --panel2: #232733; --border: #333947;
+    --ink: #e8eaf0; --ink2: #9aa3b5; --accent: #d9b45b; --bar: #5b8dd9;
+    --mono: Consolas, "Cascadia Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border);
+           background: var(--panel); }
+  header h1 { margin: 0 0 2px; font-size: 17px; color: var(--accent); }
+  header .sub { color: var(--ink2); font-size: 12px; }
+  .cfg { display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
+         padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .cfg label { display: block; font-size: 11px; color: var(--ink2); margin-bottom: 3px; }
+  .cfg input { background: var(--panel2); color: var(--ink); border: 1px solid var(--border);
+               border-radius: 4px; padding: 6px 8px; font-family: var(--mono); font-size: 12px; }
+  #baseUrl { width: 340px; } #adminKey { width: 260px; }
+  button { background: var(--panel2); color: var(--ink); border: 1px solid var(--border);
+           border-radius: 4px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  nav { display: flex; gap: 6px; padding: 10px 20px 0; }
+  nav button.tab-on { background: var(--panel2); border-color: var(--accent);
+                      color: var(--accent); font-weight: 600; }
+  main { padding: 16px 20px 40px; max-width: 1100px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 20px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border);
+           font-size: 13px; vertical-align: top; }
+  th { color: var(--ink2); font-weight: 600; font-size: 12px; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  h2 { font-size: 15px; color: var(--accent); margin: 18px 0 4px; }
+  .note { color: var(--ink2); font-size: 12px; margin: 2px 0 8px; }
+  #status { font-family: var(--mono); font-size: 12px; padding: 8px 20px;
+            color: var(--ink2); white-space: pre-wrap; }
+  #status.err { color: #ff9d9d; }  /* error state also always says "ERROR" in text */
+  pre { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px;
+        padding: 10px; overflow-x: auto; font-family: var(--mono); font-size: 12px;
+        white-space: pre-wrap; word-break: break-word; }
+  /* bar rows: single hue; the NUMBER printed beside every bar carries the value */
+  .barrow { display: grid; grid-template-columns: 170px 1fr 90px; gap: 8px;
+            align-items: center; padding: 2px 0; }
+  .barrow .lbl { font-size: 12px; color: var(--ink2); font-family: var(--mono);
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barrow .track { background: var(--panel2); border-radius: 3px; height: 14px; }
+  .barrow .fill { background: var(--bar); border-radius: 3px; height: 14px; min-width: 2px; }
+  .barrow .val { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .mini { font-size: 12px; padding: 3px 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Defenders of the Realm — DB Viewer</h1>
+  <div class="sub">Owner-only local tool. Read-only aggregate/latest views via /api/admin/db (key-gated).</div>
+</header>
+
+<div class="cfg">
+  <div><label for="baseUrl">Base URL</label>
+    <input id="baseUrl" value="https://defenders-of-the-realm-v2.vercel.app"></div>
+  <div><label for="adminKey">Admin key (X-Admin-Key — stored in this browser's localStorage)</label>
+    <input id="adminKey" type="password" placeholder="paste ADMIN_DASH_KEY value"></div>
+  <button id="saveCfg" class="primary">Save settings</button>
+</div>
+
+<nav>
+  <button data-tab="overview" class="tab-on">Overview</button>
+  <button data-tab="players">Players</button>
+  <button data-tab="metrics">Metrics</button>
+  <button data-tab="traces">Traces</button>
+</nav>
+<div id="status">Ready. Paste your admin key, Save settings, then pick a tab.</div>
+
+<main>
+  <section id="tab-overview">
+    <div class="row"><button id="loadOverview" class="primary">Load overview</button></div>
+    <div id="overviewOut"></div>
+  </section>
+
+  <section id="tab-players" class="hidden">
+    <div class="row">
+      <div><label for="playersLimit">Rows (max 100)</label>
+        <input id="playersLimit" value="25" style="width:70px"></div>
+      <button id="loadPlayers" class="primary">Load latest players</button>
+      <div><label for="playerId">One player id (full record)</label>
+        <input id="playerId" style="width:320px" placeholder="player_id / wallet"></div>
+      <button id="loadPlayer">Load full record</button>
+    </div>
+    <p class="note">List shows payload SIZE only — a full save blob is fetched only when you ask for one explicit player.</p>
+    <div id="playersOut"></div>
+  </section>
+
+  <section id="tab-metrics" class="hidden">
+    <div class="row"><button id="loadMetrics" class="primary">Load metrics (last 7 days)</button></div>
+    <div id="metricsOut"></div>
+  </section>
+
+  <section id="tab-traces" class="hidden">
+    <div class="row">
+      <button id="loadSessions" class="primary">List recent trace sessions</button>
+      <div><label for="traceSession">Session id</label>
+        <input id="traceSession" style="width:300px" placeholder="session id"></div>
+      <div><label for="tracesLimit">Batches (max 50)</label>
+        <input id="tracesLimit" value="20" style="width:60px"></div>
+      <button id="loadTraces">Load session traces</button>
+    </div>
+    <div id="tracesOut"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const LS = { url: 'dbviewer.baseUrl', key: 'dbviewer.adminKey' };
+
+// ---- settings ---------------------------------------------------------------
+$('baseUrl').value  = localStorage.getItem(LS.url) || $('baseUrl').value;
+$('adminKey').value = localStorage.getItem(LS.key) || '';
+$('saveCfg').onclick = () => {
+  localStorage.setItem(LS.url, $('baseUrl').value.trim().replace(/\/+$/, ''));
+  localStorage.setItem(LS.key, $('adminKey').value);
+  setStatus('Settings saved to localStorage.');
+};
+
+// ---- tabs -------------------------------------------------------------------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('tab-on', x === b));
+  ['overview','players','metrics','traces'].forEach(t =>
+    $('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
+});
+
+// ---- fetch helper -----------------------------------------------------------
+function setStatus(msg, isErr) {
+  const el = $('status');
+  el.textContent = (isErr ? 'ERROR: ' : '') + msg;   // word "ERROR", never color alone
+  el.className = isErr ? 'err' : '';
+}
+async function api(params) {
+  const base = ($('baseUrl').value.trim() || '').replace(/\/+$/, '');
+  const key  = $('adminKey').value;
+  if (!base) throw new Error('Base URL is empty.');
+  if (!key)  throw new Error('Admin key is empty — paste it and Save settings.');
+  const qs = new URLSearchParams(params).toString();
+  setStatus('Loading ' + params.view + ' ...');
+  const r = await fetch(base + '/api/admin/db?' + qs, { headers: { 'X-Admin-Key': key } });
+  let body; try { body = await r.json(); } catch { body = null; }
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + (body && body.error ? body.error : 'request failed') +
+    (r.status === 400 ? ' (bad key, missing ADMIN_DASH_KEY on Vercel, or bad params)' : ''));
+  setStatus('Loaded ' + params.view + ' at ' + new Date().toLocaleTimeString() + '.');
+  return body;
+}
+
+// ---- rendering helpers (textContent only — no HTML injection) ----------------
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = String(text);
+  return e;
+}
+function makeTable(headers, rows) {
+  const t = el('table'), trh = el('tr');
+  headers.forEach(h => trh.appendChild(el('th', h.num ? 'num' : '', h.label)));
+  t.appendChild(trh);
+  rows.forEach(r => {
+    const tr = el('tr');
+    headers.forEach(h => {
+      const td = el('td', h.num ? 'num' : '');
+      if (h.render) td.appendChild(h.render(r)); else td.textContent = fmt(r[h.key]);
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+  return t;
+}
+function fmt(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return v.replace('T', ' ').replace(/\.\d+.*$/, ' UTC');
+  return String(v);
+}
+function barRows(items, labelKey, valKey) {
+  // Single-hue bars; the printed number carries the value (colorblind-safe:
+  // meaning is never encoded by color).
+  const wrap = el('div');
+  const max = Math.max(1, ...items.map(i => Number(i[valKey]) || 0));
+  items.forEach(i => {
+    const v = Number(i[valKey]) || 0;
+    const row = el('div', 'barrow');
+    row.appendChild(el('div', 'lbl', i[labelKey]));
+    const track = el('div', 'track'), fill = el('div', 'fill');
+    fill.style.width = (v / max * 100).toFixed(1) + '%';
+    track.appendChild(fill); row.appendChild(track);
+    row.appendChild(el('div', 'val', v.toLocaleString()));
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+function jsonPre(obj) { return el('pre', '', JSON.stringify(obj, null, 2)); }
+function run(fn) { fn().catch(e => setStatus(e.message, true)); }
+
+// ---- Overview -----------------------------------------------------------------
+$('loadOverview').onclick = () => run(async () => {
+  const d = await api({ view: 'overview' });
+  const out = $('overviewOut'); out.replaceChildren();
+  out.appendChild(el('h2', '', 'Tables (' + fmt(d.generated_at) + ')'));
+  out.appendChild(makeTable([
+    { label: 'Table', key: 'table' },
+    { label: 'Rows', key: 'rows', num: true },
+    { label: 'Latest (' + 'per-table timestamp' + ')', key: 'latest' },
+    { label: 'Note', key: 'error' },
+  ], d.tables));
+  out.appendChild(el('h2', '', 'Row counts'));
+  out.appendChild(barRows(d.tables.filter(t => t.rows !== null), 'table', 'rows'));
+});
+
+// ---- Players --------------------------------------------------------------------
+$('loadPlayers').onclick = () => run(async () => {
+  const d = await api({ view: 'players', limit: $('playersLimit').value || '25' });
+  const out = $('playersOut'); out.replaceChildren();
+  out.appendChild(el('h2', '', 'Latest ' + d.rows.length + ' players (by updated_at)'));
+  out.appendChild(makeTable([
+    { label: 'Player id', key: 'player_id', render: r => {
+        const b = el('button', 'mini', 'view');
+        b.onclick = () => { $('playerId').value = r.player_id; $('loadPlayer').click(); };
+        const span = el('span', '', r.player_id + '  ');
+        span.appendChild(b); return span;
+      } },
+    { label: 'Schema', key: 'schema_version', num: true },
+    { label: 'Save size (bytes)', key: 'payload_bytes', num: true },
+    { label: 'Created', key: 'created_at' },
+    { label: 'Updated', key: 'updated_at' },
+  ], d.rows));
+});
+$('loadPlayer').onclick = () => run(async () => {
+  const id = $('playerId').value.trim();
+  if (!id) throw new Error('Enter a player id first.');
+  const d = await api({ view: 'players', player: id });
+  const out = $('playersOut'); out.replaceChildren();
+  out.appendChild(el('h2', '', 'Full record: ' + id));
+  if (!d.rows.length) { out.appendChild(el('p', 'note', 'No player_data row for that id.')); return; }
+  out.appendChild(jsonPre(d.rows[0]));
+});
+
+// ---- Metrics ---------------------------------------------------------------------
+$('loadMetrics').onclick = () => run(async () => {
+  const d = await api({ view: 'metrics' });
+  const out = $('metricsOut'); out.replaceChildren();
+
+  out.appendChild(el('h2', '', 'Per day (last ' + d.window_days + ' days)'));
+  out.appendChild(makeTable([
+    { label: 'Day', key: 'day' },
+    { label: 'Events', key: 'events', num: true },
+    { label: 'Distinct players', key: 'distinct_players', num: true },
+    { label: 'Trace sessions', key: 'distinct_trace_sessions', num: true },
+  ], d.per_day));
+  out.appendChild(el('h2', '', 'Events per day'));
+  out.appendChild(barRows(d.per_day, 'day', 'events'));
+
+  out.appendChild(el('h2', '', 'web_trace ERROR lines per day'));
+  out.appendChild(el('p', 'note', 'Lines matching exception / error / fail / softlock inside web_trace batches.'));
+  if (d.trace_error_lines_per_day.length)
+    out.appendChild(barRows(d.trace_error_lines_per_day, 'day', 'error_lines'));
+  else out.appendChild(el('p', 'note', 'None in the window.'));
+
+  out.appendChild(el('h2', '', 'Events per event_name per day'));
+  out.appendChild(makeTable([
+    { label: 'Day', key: 'day' },
+    { label: 'Event name', key: 'event_name' },
+    { label: 'Count', key: 'events', num: true },
+  ], d.per_event_per_day));
+});
+
+// ---- Traces -----------------------------------------------------------------------
+$('loadSessions').onclick = () => run(async () => {
+  const d = await api({ view: 'traces' });
+  const out = $('tracesOut'); out.replaceChildren();
+  out.appendChild(el('h2', '', 'Recent web_trace sessions (last 7 days)'));
+  out.appendChild(makeTable([
+    { label: 'Session', key: 'session', render: r => {
+        const b = el('button', 'mini', 'open');
+        b.onclick = () => { $('traceSession').value = r.session; $('loadTraces').click(); };
+        const span = el('span', '', (r.session || '—') + '  ');
+        span.appendChild(b); return span;
+      } },
+    { label: 'Build', key: 'build' },
+    { label: 'Batches', key: 'batches', num: true },
+    { label: 'Total lines', key: 'total_lines', num: true },
+    { label: 'Latest', key: 'latest' },
+  ], d.sessions));
+});
+$('loadTraces').onclick = () => run(async () => {
+  const s = $('traceSession').value.trim();
+  if (!s) throw new Error('Enter a session id (or use "List recent trace sessions").');
+  const d = await api({ view: 'traces', session: s, limit: $('tracesLimit').value || '20' });
+  const out = $('tracesOut'); out.replaceChildren();
+  out.appendChild(el('h2', '', 'Traces for session ' + s + ' (' + d.rows.length + ' batches, newest first)'));
+  d.rows.forEach(r => {
+    out.appendChild(el('p', 'note',
+      'batch #' + r.event_id + ' — ' + fmt(r.received_at) + ' — build ' + fmt(r.build) +
+      ' — ' + r.line_count + ' lines'));
+    out.appendChild(el('pre', '', (r.lines || []).join('\n')));
+  });
+  if (!d.rows.length) out.appendChild(el('p', 'note', 'No web_trace rows for that session.'));
+});
+</script>
+</body>
+</html>
