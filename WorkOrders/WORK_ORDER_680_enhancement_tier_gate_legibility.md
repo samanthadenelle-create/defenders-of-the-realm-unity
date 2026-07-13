@@ -61,6 +61,27 @@ one shared band builder, never per-screen:
 - **A4 Verify on BOTH panel families:** the resource ladder (Farm) and the city perk grid
   (Forge) share the band builder after this — screenshot-vs-mockup check on each (canon §7).
 
+## AMENDMENT UNPARKED (owner F8 2026-07-13 23:39, verbatim: "does this look at all like the
+## mock up?" -> CLI verdict: DOES NOT MATCH; owner: "it's either it matches or does not")
+
+Fresh captured evidence (Forge Enhancements panel, exe 18:18, screenshot
+`flag_20260713-232518_05.png`), four divergences beyond A1-A3:
+- **A5 The Tier-1 card sits on a PURPLE filigree plate** — not the obsidian palette (recessed
+  near-black well per the mockup / UI_BLINK_TEMPLATE_CANON).
+- **A6 Card icons render pixelated over an alpha CHECKERBOARD** — sprite import/alpha defect
+  (missing-texture class), not design.
+- **A7 Tier-2 card clips its own bottom text line** (A1's clipping class confirmed live —
+  "Unlock 'Ignite the Forge' to open Tier 2" cut at the plate edge).
+- **A8 Chip-row number sizing inconsistent** (the highlighted 50k renders ~3x its siblings) —
+  if scale means affordable/selected, the meaning must be carried by text/shape, not size alone.
+
+**VERIFICATION LAW (owner rulings, this session): "we verify with data — screenshot versus
+mockup" · "if not correct, go again till matches" · "I want side-by-side image proof."**
+The fix loop is machine-side: implement -> build -> capture the SAME panel state -> compose a
+SIDE-BY-SIDE image (capture | mockup) -> compare -> iterate until they match. The DELIVERABLE
+to the owner is the side-by-side image pair itself (the image-pair sign-off discipline);
+words like "close" or "structurally matches" are not acceptance. Binary: matches or does not.
+
 ## Acceptance
 - [ ] At Village Tier max: no dead "Unlock Maxed" button anywhere; requirement text names the
       tier tile. Below max with a locked band: button shows real crystal cost and works.
