@@ -93,6 +93,19 @@ namespace DeNelle.Village.Buildings.Progression
                 int amount = ResourceBuildingState.CurrentEffectiveYield(id);
                 if (amount <= 0) continue;
 
+                // WO-709 (owner curve ruling 2026-07-13, quadratic-total): the echo-count
+                // GLOBAL harvest multiplier applies to ALL harvest income — collectors
+                // included — through this one read at the existing accrual choke point
+                // (the WO-676 pattern below). 1 echo = x1 (baseline unchanged); each new
+                // echo amps the entire operation. Null-safe: no EchoService => x1.
+                var echoSvc = EchoService.Instance;
+                if (echoSvc != null && echoSvc.GlobalHarvestMultiplier > 1.0)
+                {
+                    amount = Mathf.RoundToInt(amount * (float)echoSvc.GlobalHarvestMultiplier);
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Harvest", "echo-global-mult",
+                        $"WO-709 global harvest multiplier x{echoSvc.GlobalHarvestMultiplier:0.#} applied to collector ticks (echoes amp the whole operation).");
+                }
+
                 // WO-676 STEWARD (Provider's Bond): ONE HeroTalentModifiers read at this
                 // existing accrual choke point — `harvestRate` scales the per-tick yield.
                 // StatSum is internally null-safe (no service/tree/nodes => 0), so the

@@ -96,9 +96,20 @@ namespace DeNelle.Village
             get { var s = State; return s != null ? s.SiloResources : 0.0; }
         }
 
-        /// <summary>Total resources/sec the workforce produces right now (echoCount x base,
-        /// scaled by the STEWARD `harvestRate` talent sum — WO-676 Provider's Bond; x1 at sum 0).</summary>
-        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * (1.0 + HarvestRateBonus());
+        /// <summary>
+        /// WO-709 (owner design 2026-07-13, curve RULED quadratic-total — "each new Echo amps
+        /// up the entire harvesting operation"): every echo works at xEchoCount speed, so this
+        /// is the ONE modifier every harvest tick consumes (echo silo online+offline here;
+        /// ResourceBuildingHarvester reads it for collector yield). 1 echo = x1, 2 = x2 each
+        /// (x4 total), 4 = x4 each (x16 total vs one echo's base). Tune BaseRatePerHour down
+        /// to compensate. Displayed on the workforce HUD as the "xN ALL HARVEST" medallion.
+        /// </summary>
+        public double GlobalHarvestMultiplier => EchoCount;
+
+        /// <summary>Total resources/sec the workforce produces right now (echoCount x base
+        /// x the WO-709 global multiplier = quadratic in count, scaled by the STEWARD
+        /// `harvestRate` talent sum — WO-676 Provider's Bond; x1 at sum 0).</summary>
+        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * GlobalHarvestMultiplier * (1.0 + HarvestRateBonus());
 
         // WO-676 §2b: ONE registry read at the existing rate calc (this property feeds the
         // online Update tick AND the offline ClaimOffline integral). StatSum is internally
