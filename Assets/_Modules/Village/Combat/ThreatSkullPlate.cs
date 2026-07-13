@@ -203,7 +203,7 @@ namespace DeNelle.Village
                 _shownSkulls = skulls;
                 // "☠" U+2620 skull-and-crossbones; legacy font may fall back — pair with
                 // a "!!" so the tell still reads if the glyph is missing.
-                _label.text = skulls >= 2 ? "☠☠" : "☠";
+                _label.text = skulls >= 2 ? "LETHAL" : "RISKY";
                 _label.color = skulls >= 2 ? LethalColor : SkullColor;
             }
 

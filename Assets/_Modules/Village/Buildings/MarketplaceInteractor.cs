@@ -163,7 +163,7 @@ namespace DeNelle.Village
             var closeBtn = new Button(CloseStore)
             {
                 name = "marketplace-close-btn",
-                text = "✕  Close"
+                text = "X  Close"
             };
 
             // Absolute position — top-right corner of the store panel.
@@ -190,7 +190,7 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             _promptGo = BuildBubble(
-                "〔 Tap / F 〕  The Realm Store",
+                "[ Tap / F ]  The Realm Store",
                 _promptHeight,
                 new Color(0.08f, 0.04f, 0.16f, 0.96f),   // dark plum bg
                 new Color(0.85f, 0.60f, 1.00f, 1f));      // violet outline

@@ -243,6 +243,8 @@ namespace DeNelle.Editor
             if (!BuildEconomyRegression.Run(out var buildEconReason)) failures.Add(buildEconReason); else log.AppendLine("[build-econ] " + buildEconReason);
             if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);
             if (!HudUiRegression.Run(out var hudUiSmeReason)) failures.Add(hudUiSmeReason); else log.AppendLine("[hud-ui-sme] " + hudUiSmeReason);
+            if (!CombatAtbRegression.Run(out var combatAtbReason)) failures.Add(combatAtbReason); else log.AppendLine("[combat-atb] " + combatAtbReason);
+            if (!DialogueRegression.Run(out var dialogueReason)) failures.Add(dialogueReason); else log.AppendLine("[dialogue] " + dialogueReason);
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
             if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);

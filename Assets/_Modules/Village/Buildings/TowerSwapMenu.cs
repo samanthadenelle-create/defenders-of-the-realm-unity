@@ -218,7 +218,7 @@ namespace DeNelle.Village
             title.style.letterSpacing = 1.5f;
             headerRow.Add(title);
 
-            var closeBtn = new Button(Close) { text = "✕" };
+            var closeBtn = new Button(Close) { text = "X" };
             ApplyIconButton(closeBtn);
             headerRow.Add(closeBtn);
 
@@ -238,7 +238,7 @@ namespace DeNelle.Village
             card.Add(infoRow);
 
             // ── Wallet balance row ──────────────────────────────────────────
-            _walletLabel = MakeSubLabel("Wallet: checking…");
+            _walletLabel = MakeSubLabel("Wallet: checking...");
             _walletLabel.style.marginBottom = 14;
             card.Add(_walletLabel);
 
@@ -328,7 +328,7 @@ namespace DeNelle.Village
             _loadingOverlay.style.borderBottomLeftRadius  = 10;
             _loadingOverlay.style.borderBottomRightRadius = 10;
 
-            var spinLabel = new Label("Processing…");
+            var spinLabel = new Label("Processing...");
             spinLabel.style.color    = HeaderColor;
             spinLabel.style.fontSize = 16;
             _loadingOverlay.Add(spinLabel);
@@ -429,7 +429,7 @@ namespace DeNelle.Village
                 string label    = kind == DeNelle.Wallet.CurrencyKind.Usdc ? "USDC" : "SCR";
 
                 var btn = new Button();
-                btn.text = isSelected ? $"● {label}" : $"○ {label}";
+                btn.text = isSelected ? $"(*) {label}" : $"( ) {label}";
                 btn.style.paddingTop    = 6;  btn.style.paddingBottom = 6;
                 btn.style.paddingLeft   = 14; btn.style.paddingRight  = 14;
                 btn.style.marginRight   = 8;
@@ -481,13 +481,13 @@ namespace DeNelle.Village
 
             if (_waveLimitHit)
             {
-                _warningLabel.text = "⚠  Wave limit reached — max 4 swaps per wave.";
+                _warningLabel.text = "Wave limit reached — max 4 swaps per wave.";
                 _warningLabel.style.display = DisplayStyle.Flex;
             }
             else if (_onCooldown)
             {
                 int secs = Mathf.CeilToInt(_cooldownRemaining);
-                _warningLabel.text = $"⚠  Tower on cooldown — {secs}s remaining.";
+                _warningLabel.text = $"Tower on cooldown — {secs}s remaining.";
                 _warningLabel.style.display = DisplayStyle.Flex;
             }
             else
@@ -543,7 +543,7 @@ namespace DeNelle.Village
             _balanceUsdc = usdc;
             _balanceSkr  = skr;
             if (_walletLabel != null)
-                _walletLabel.text = $"Wallet:  {usdc:F2} USDC   •   {skr:F2} SCR";
+                _walletLabel.text = $"Wallet:  {usdc:F2} USDC   -   {skr:F2} SCR";
         }
 
         // ── Show / Hide ───────────────────────────────────────────────────────

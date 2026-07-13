@@ -181,7 +181,7 @@ namespace DeNelle.HUD.Kit
             _objMarker.anchorMax = new Vector2(0.5f, 0.5f);
             _objMarker.pivot     = new Vector2(0.5f, 0.5f);
             _objMarker.sizeDelta = new Vector2(22f, 22f);
-            _objGlyph = AddText(_objMarker, "▲", 20f, ElarionUi.Gilt, TextAlignmentOptions.Center);
+            _objGlyph = AddText(_objMarker, "^", 20f, ElarionUi.Gilt, TextAlignmentOptions.Center);  // ASCII chevron (build-font lacks triangle glyphs, WO-611); marker is disabled below anyway
             _objGlyph.fontStyle = FontStyles.Bold;
             _objMarker.gameObject.SetActive(false);
         }

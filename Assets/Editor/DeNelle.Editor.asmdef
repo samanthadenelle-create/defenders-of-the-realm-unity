@@ -6,6 +6,7 @@
         "DeNelle.Core",
         "DeNelle.Data",
         "DeNelle.Sandbox",
+        "OffsetForge.Runtime",
         "Unity.InputSystem",
         "Unity.Localization",
         "Unity.Localization.Editor",

@@ -154,7 +154,7 @@ namespace DeNelle.Village.UI
                 style = { color = ColUnlocked, fontSize = ElarionUi.FontBody, unityTextAlign = TextAnchor.MiddleRight }
             };
 
-            var closeBtn = new Button(Close) { text = "✕" };
+            var closeBtn = new Button(Close) { text = "X" };
             ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
             closeBtn.style.minHeight = StyleKeyword.Auto;
             closeBtn.style.paddingTop = 4; closeBtn.style.paddingBottom = 4;
@@ -286,7 +286,7 @@ namespace DeNelle.Village.UI
             // Unlock button — only visible + enabled when Available
             var unlockBtn = new Button(() => OnUnlockClicked(node.Id))
             {
-                text = state == NodeState.Unlocked ? "✓ Learned" : "Unlock",
+                text = state == NodeState.Unlocked ? "Learned" : "Unlock",
             };
             ElarionUi.StyleButton(unlockBtn,
                 state == NodeState.Available ? ElarionUi.ButtonKind.Confirm : ElarionUi.ButtonKind.Disabled);

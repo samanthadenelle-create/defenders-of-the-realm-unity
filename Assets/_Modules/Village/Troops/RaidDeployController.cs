@@ -443,7 +443,7 @@ namespace DeNelle.Village
 
             TroopRally.Clear();
             GameStateService.Instance?.Save();
-            SetStatus("Retreating to the castle…");
+            SetStatus("Retreating to the castle...");
             SceneRouter.GoCastle();
         }
 
@@ -577,7 +577,7 @@ namespace DeNelle.Village
         {
             if (_rallyButton == null) return;
             var lbl = _rallyButton.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-            if (lbl != null) lbl.text = _rallyMode ? "Rally ✓" : "Rally";
+            if (lbl != null) lbl.text = _rallyMode ? "Rally ON" : "Rally";
         }
 
         private void SetStatus(string s)

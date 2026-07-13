@@ -37,9 +37,19 @@ namespace DeNelle.Settings
     {
         private static bool s_hooked;
 
+        // DISABLED (owner bug 2026-07-12, web/mobile): the always-on-screen music
+        // button sat ON TOP of the mobile controls. The on/off affordance moved
+        // UNDER Settings (SettingsController Audio section) — same SettingsModel +
+        // AudioServiceBridge seam, so no logic was lost. We no longer auto-install
+        // the HUD button. The MusicToggleHud + AudioServiceBridge types below stay
+        // intact: AudioServiceBridge is the live-audio seam the Settings toggle uses.
+        // Set FORCE_HUD_BUTTON = true only to bring the old overlay back for testing.
+        private const bool ForceHudButton = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Init()
         {
+            if (!ForceHudButton) return;   // HUD overlay retired — toggle lives in Settings now
             if (s_hooked) return;
             s_hooked = true;
             SceneManager.sceneLoaded -= OnSceneLoaded;
@@ -151,7 +161,7 @@ namespace DeNelle.Settings
             }
             else
             {
-                _btn.text = on ? "♪" : "♪̷";                // note + slashed note (glyph fallback)
+                _btn.text = on ? "Music On" : "Music Off";  // ASCII words (owner reads by text, not glyph)
                 _btn.style.backgroundColor = on
                     ? new Color(0.16f, 0.52f, 0.34f, 0.92f)
                     : new Color(0.40f, 0.13f, 0.13f, 0.92f);

@@ -421,7 +421,7 @@ namespace DeNelle.Village.Buildings.Progression
             // "tier-3" -> "III"-style numeral read; fall back to the raw digit.
             int dash = id != null ? id.LastIndexOf('-') : -1;
             string n = dash >= 0 && dash < id.Length - 1 ? id.Substring(dash + 1) : "";
-            return string.IsNullOrEmpty(n) ? "◆" : n;
+            return string.IsNullOrEmpty(n) ? "-" : n;
         }
 
         private static void DressTilePlate(Image plateImg)

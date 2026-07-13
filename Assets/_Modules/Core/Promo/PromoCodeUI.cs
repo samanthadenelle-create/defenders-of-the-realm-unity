@@ -121,13 +121,13 @@ namespace DeNelle.Core.Promo
             headerRow.style.alignItems     = Align.Center;
             headerRow.style.marginBottom   = 16;
 
-            var title = new Label("🎁  Enter Promo Code");
+            var title = new Label("Enter Promo Code");
             title.style.fontSize = 17;
             title.style.color    = HeaderColor;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             headerRow.Add(title);
 
-            var closeBtn = new Button(Close) { text = "✕" };
+            var closeBtn = new Button(Close) { text = "X" };
             ApplyIconBtn(closeBtn);
             headerRow.Add(closeBtn);
             card.Add(headerRow);
@@ -190,7 +190,7 @@ namespace DeNelle.Core.Promo
             }
 
             SetBusy(true);
-            SetStatus("Validating…", SubtleColor);
+            SetStatus("Validating...", SubtleColor);
             PromoCodeService.Instance.RedeemAsync(code).Forget();
         }
 
@@ -221,7 +221,7 @@ namespace DeNelle.Core.Promo
             if (_redeemBtn != null)
             {
                 _redeemBtn.SetEnabled(!busy);
-                _redeemBtn.text = busy ? "Checking…" : "Redeem Code";
+                _redeemBtn.text = busy ? "Checking..." : "Redeem Code";
             }
         }
 

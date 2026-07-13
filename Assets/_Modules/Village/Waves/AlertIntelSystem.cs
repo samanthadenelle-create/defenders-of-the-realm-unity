@@ -146,7 +146,7 @@ namespace DeNelle.Village
 
             int secs = Mathf.Clamp(Mathf.CeilToInt(remaining), 1, 999);
             string where = DescribeApproach();
-            _banner.text = $"⚠ Raid incoming — {where} in {secs}…";
+            _banner.text = $"ALERT: Raid incoming — {where} in {secs}...";
         }
 
         private void Clear()

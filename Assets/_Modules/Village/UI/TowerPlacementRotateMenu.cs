@@ -69,7 +69,7 @@ namespace DeNelle.Village
         private static readonly Color AxisY = Hex(0x38, 0xb8, 0x38); // Yaw
         private static readonly Color AxisZ = Hex(0x38, 0x78, 0xc0); // Roll
 
-        private const string RuneGlyphs = "ᚨ ᚠ ᛗ ᚱ ᛞ ᛊ ᚲ ᛚ ᛈ ᚺ ᛜ ᛒ ᛖ ᚾ ᚢ ᛁ ";
+        private const string RuneGlyphs = "+ x + o + = + . ";
         private const string FontPath   = "Assets/_Modules/Village/Fonts/Cinzel-Regular.ttf";
 
         // ── State ───────────────────────────────────────────────────────────────
@@ -382,7 +382,7 @@ namespace DeNelle.Village
 
             row.Add(left);
 
-            var hammer = new Label("🔨");
+            var hammer = new Label("");
             hammer.style.fontSize = 16;
             row.Add(hammer);
             return row;
@@ -445,7 +445,7 @@ namespace DeNelle.Village
             input.RegisterValueChangedCallback(onInput);
             row.Add(input);
 
-            var reset = new Button(() => onReset()) { text = "↺" };
+            var reset = new Button(() => onReset()) { text = "Rst" };
             reset.style.width = 26; reset.style.height = 22;
             reset.style.marginLeft = 4;
             reset.style.backgroundColor = ResetBg;
@@ -461,7 +461,7 @@ namespace DeNelle.Village
         /// <summary>Small section divider/label above the three per-axis scale rows.</summary>
         private VisualElement BuildScaleSectionLabel()
         {
-            var label = new Label("SCALE  ·  non-uniform (× multiplier)");
+            var label = new Label("SCALE  -  non-uniform (x multiplier)");
             label.style.fontSize = 10;
             label.style.color    = RuneStripTxt;
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -502,7 +502,7 @@ namespace DeNelle.Village
             row.Add(slider);
 
             // "×" multiplier badge (styled like the euler ° readout) — purely decorative.
-            var unit = new Label("×");
+            var unit = new Label("x");
             unit.style.width    = 16;
             unit.style.fontSize = 11;
             unit.style.color    = TitleGold;
@@ -516,7 +516,7 @@ namespace DeNelle.Village
             input.RegisterValueChangedCallback(onInput);
             row.Add(input);
 
-            var reset = new Button(() => onReset()) { text = "↺" };
+            var reset = new Button(() => onReset()) { text = "Rst" };
             reset.style.width = 26; reset.style.height = 22;
             reset.style.marginLeft = 4;
             reset.style.backgroundColor = ResetBg;
@@ -608,7 +608,7 @@ namespace DeNelle.Village
             thumb.style.backgroundColor = RuneBorder;
             SetRadius(thumb, 4);
             thumb.style.marginRight = 10;
-            var thumbIcon = new Label("🏰");
+            var thumbIcon = new Label("TWR");
             thumbIcon.style.fontSize = 20;
             thumbIcon.style.unityTextAlign = TextAnchor.MiddleCenter;
             thumbIcon.style.flexGrow = 1;
@@ -618,7 +618,7 @@ namespace DeNelle.Village
             string towerName = !string.IsNullOrEmpty(_displayName)
                 ? _displayName
                 : (_towerData != null ? _towerData.towerName : "Tower");
-            var nameLabel = new Label($"{towerName}  ·  {TierLabel()}");
+            var nameLabel = new Label($"{towerName}  -  {TierLabel()}");
             nameLabel.style.fontSize = 12;
             nameLabel.style.color    = ConfirmTxt;
             ApplyFont(nameLabel);
@@ -985,7 +985,7 @@ namespace DeNelle.Village
                 if (_viewport != null)
                 {
                     _viewport.Clear();
-                    var fb = new Label("🏰\n(no preview)");
+                    var fb = new Label("(no preview)");
                     fb.style.fontSize = 18;
                     fb.style.color = TitleGold;
                     fb.style.unityTextAlign = TextAnchor.MiddleCenter;

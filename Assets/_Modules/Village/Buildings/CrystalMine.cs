@@ -294,7 +294,7 @@ namespace DeNelle.Village
             root.Add(panel);
 
             // Title.
-            var title = new Label("✦  Crystal Mine");
+            var title = new Label("Crystal Mine");
             title.style.fontSize = 22;
             title.style.color = new StyleColor(new Color(0.80f, 0.60f, 1.0f));
             title.style.marginBottom = 12;
@@ -339,7 +339,7 @@ namespace DeNelle.Village
                     if (TryUpgrade()) CloseUpgradeUI();
                     else InjectUpgradePanel(); // refresh to show updated coins
                 })
-                { text = canAfford ? "Upgrade ✦" : "Need more Coins" };
+                { text = canAfford ? "Upgrade" : "Need more Coins" };
                 upgradeBtn.SetEnabled(canAfford);
                 StyleButton(upgradeBtn, new Color(0.20f, 0.08f, 0.38f));
                 upgradeBtn.style.marginBottom = 8;
@@ -347,14 +347,14 @@ namespace DeNelle.Village
             }
             else
             {
-                var maxLbl = new Label("✦  Fully upgraded — harvesting crystals each wave.");
+                var maxLbl = new Label("Fully upgraded — harvesting crystals each wave.");
                 maxLbl.style.fontSize = 14;
                 maxLbl.style.color = new StyleColor(new Color(0.80f, 0.60f, 1.0f));
                 maxLbl.style.marginBottom = 12;
                 panel.Add(maxLbl);
             }
 
-            var closeBtn = new Button(CloseUpgradeUI) { text = "✕  Close" };
+            var closeBtn = new Button(CloseUpgradeUI) { text = "X  Close" };
             StyleButton(closeBtn, new Color(0.18f, 0.06f, 0.30f));
             panel.Add(closeBtn);
         }
@@ -375,7 +375,7 @@ namespace DeNelle.Village
         {
             if (IsMaxLevel)
             {
-                _promptGo = BuildBubble("✦  Max Level — crystals active",
+                _promptGo = BuildBubble("Max Level — crystals active",
                     _promptHeight + 0.5f,
                     new Color(0.10f, 0.04f, 0.22f, 0.96f),
                     new Color(0.70f, 0.50f, 1.0f));
@@ -383,7 +383,7 @@ namespace DeNelle.Village
             else
             {
                 int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                _promptGo = BuildBubble($"〔 Tap / F 〕 Confirm Upgrade — {cost} Coins",
+                _promptGo = BuildBubble($"[ Tap / F ] Confirm Upgrade — {cost} Coins",
                     _promptHeight + 0.5f,
                     new Color(0.10f, 0.04f, 0.22f, 0.96f),
                     new Color(0.70f, 0.50f, 1.0f));
@@ -473,8 +473,8 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             string label = IsMaxLevel
-                ? "✦  Crystal Mine — Active"
-                : $"〔 Tap / F 〕  Upgrade Mine  (L{_currentLevel}→{_currentLevel + 1})";
+                ? "Crystal Mine — Active"
+                : $"[ Tap / F ]  Upgrade Mine  (L{_currentLevel}->{_currentLevel + 1})";
 
             _promptGo = BuildBubble(label, _promptHeight,
                 new Color(0.06f, 0.02f, 0.14f, 0.96f),

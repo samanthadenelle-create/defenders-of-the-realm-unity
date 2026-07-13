@@ -144,7 +144,7 @@ namespace DeNelle.HUD
             canvas.sortingOrder = 5500;   // above the Pi sign-in button (5000)
 
             // --- always-visible toggle button (bottom-left, away from the Pi button) ---
-            var toggle = MakeButton(_canvasGo.transform, "DEV ⚙", () => TogglePanel());
+            var toggle = MakeButton(_canvasGo.transform, "DEV", () => TogglePanel());
             var trt = toggle.GetComponent<RectTransform>();
             trt.anchorMin = trt.anchorMax = new Vector2(0f, 0f);
             trt.pivot = new Vector2(0f, 0f);

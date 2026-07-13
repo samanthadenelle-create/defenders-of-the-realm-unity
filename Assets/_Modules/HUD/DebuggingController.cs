@@ -207,7 +207,7 @@ namespace DeNelle.HUD
             capGo.transform.SetParent(btnGo.transform, false);
             var cap = capGo.AddComponent<Text>();
             cap.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            cap.text = "🐞 DBG";
+            cap.text = "DBG";
             cap.alignment = TextAnchor.MiddleCenter;
             cap.color = Color.white;
             cap.fontSize = 16;

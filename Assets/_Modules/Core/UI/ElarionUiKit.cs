@@ -2357,8 +2357,8 @@ namespace DeNelle.Core.UI
             if (iconSprite != null) { h.tabIcon.sprite = iconSprite; h.tabIcon.color = Color.white; }
             else
             {
-                iconGo.SetActive(false);   // no icon art — draw a gold gear glyph instead
-                var glyph = Label(tgo.transform, "⚙", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
+                iconGo.SetActive(false);   // no icon art — draw an ASCII menu handle (build-font-safe; no gear-glyph tofu)
+                var glyph = Label(tgo.transform, "=", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
                                   TextAlignmentOptions.Center, 0f, 1f, bold: true);
                 glyph.raycastTarget = false;
             }

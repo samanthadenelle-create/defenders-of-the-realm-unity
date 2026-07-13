@@ -278,7 +278,7 @@ namespace DeNelle.Village.Hero
             var well = ElarionUiKit.AddImage(row.transform, "IconWell",
                 new Vector2(0.03f, 0.15f), new Vector2(0.20f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
             well.GetComponent<Image>().raycastTarget = false;
-            string glyph = (def != null && def.Role != null && def.Role.ToLowerInvariant().Contains("ranged")) ? "»" : "⚔";
+            string glyph = (def != null && def.Role != null && def.Role.ToLowerInvariant().Contains("ranged")) ? "RNG" : "MEL";
             var ic = ElarionUiKit.Label(well.transform, glyph, 0f, 1f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             ic.raycastTarget = false;

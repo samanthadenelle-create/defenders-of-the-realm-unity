@@ -237,7 +237,7 @@ namespace DeNelle.Village
             // label + key prompt. Owner direction 2026-05-20: needs to read as
             // an action affordance, not a debug overlay.
             _promptGo = BuildBubble(
-                $"〔 Tap / F 〕 {LabelFor(_building.Type)}",
+                $"[ Tap / F ] {LabelFor(_building.Type)}",
                 ProximityHeightAboveBuilding,
                 new Color(0.18f, 0.10f, 0.04f, 0.96f),     // deep amber-black
                 new Color(1f, 0.78f, 0.32f, 1f));          // bright gold rim

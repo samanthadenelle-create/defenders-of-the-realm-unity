@@ -128,12 +128,12 @@ namespace DeNelle.Core.Referral
 
             // ── Header ────────────────────────────────────────────────────────
             var headerRow = MakeRow(Justify.SpaceBetween, Align.Center, 0, 16);
-            var title = new Label("👥  Invite Friends");
+            var title = new Label("Invite Friends");
             title.style.fontSize = 17;
             title.style.color    = HeaderColor;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             headerRow.Add(title);
-            var closeBtn = new Button(Close) { text = "✕" };
+            var closeBtn = new Button(Close) { text = "X" };
             ApplyIconBtn(closeBtn);
             headerRow.Add(closeBtn);
             card.Add(headerRow);
@@ -145,7 +145,7 @@ namespace DeNelle.Core.Referral
 
             var codeRow = MakeRow(Justify.SpaceBetween, Align.Center, 6, 12);
 
-            _codeDisplayLabel = new Label("Loading…");
+            _codeDisplayLabel = new Label("Loading...");
             _codeDisplayLabel.style.fontSize    = 22;
             _codeDisplayLabel.style.color       = HeaderColor;
             _codeDisplayLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -166,7 +166,7 @@ namespace DeNelle.Core.Referral
             card.Add(codeRow);
 
             // Share on X button
-            var shareBtn = new Button(ShareOnX) { text = "Share on  𝕏" };
+            var shareBtn = new Button(ShareOnX) { text = "Share on X" };
             StyleXBtn(shareBtn);
             card.Add(shareBtn);
 
@@ -177,7 +177,7 @@ namespace DeNelle.Core.Referral
 
             if (ReferralService.Instance != null && ReferralService.Instance.HasClaimed)
             {
-                var alreadyLabel = new Label("✓  Referral reward already claimed.");
+                var alreadyLabel = new Label("Referral reward already claimed.");
                 alreadyLabel.style.color      = SuccessColor;
                 alreadyLabel.style.fontSize   = 12;
                 alreadyLabel.style.marginTop  = 6;
@@ -232,7 +232,7 @@ namespace DeNelle.Core.Referral
         {
             if (ReferralService.Instance == null) return;
             ReferralService.Instance.ShareOnX();
-            SetStatus("Opening X…", SubtleColor);
+            SetStatus("Opening X...", SubtleColor);
         }
 
         private void SubmitClaim()
@@ -242,7 +242,7 @@ namespace DeNelle.Core.Referral
             if (string.IsNullOrEmpty(code)) { SetStatus("Enter a referral code.", ErrorColor); return; }
 
             SetBusy(true);
-            SetStatus("Checking code…", SubtleColor);
+            SetStatus("Checking code...", SubtleColor);
             ReferralService.Instance.ClaimAsync(code).Forget();
         }
 
@@ -274,7 +274,7 @@ namespace DeNelle.Core.Referral
         private void SetCodeDisplayLoading(bool loading)
         {
             if (_codeDisplayLabel == null) return;
-            _codeDisplayLabel.text = loading ? "Loading…" : (ReferralService.Instance?.MyCode ?? "—");
+            _codeDisplayLabel.text = loading ? "Loading..." : (ReferralService.Instance?.MyCode ?? "-");
         }
 
         private void SetBusy(bool busy)
@@ -283,7 +283,7 @@ namespace DeNelle.Core.Referral
             if (_claimBtn != null)
             {
                 _claimBtn.SetEnabled(!busy);
-                _claimBtn.text = busy ? "Checking…" : "Claim Reward";
+                _claimBtn.text = busy ? "Checking..." : "Claim Reward";
             }
         }
 

@@ -605,9 +605,10 @@ namespace DeNelle.HUD.Kit
             if (markSprite != null) markImg.sprite = markSprite; else mark.SetActive(false);
 
             // WO-432: the Heart of Elarion now renders on the SHARED PartyNameplate builder
-            // (name = "♥ Elarion" + a single HP bar). Only HealthFill is used; the mana row is
+            // (name = "Heart of Elarion" + a single HP bar). Only HealthFill is used; the mana row is
             // hidden so it reads as the world-tree/heart status, never a second hero MP bar.
-            _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "♥ Elarion",
+            // (ASCII name; the old "♥" heart glyph tofu'd on the build font.)
+            _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "Heart of Elarion",
                 new Vector2(0.16f, 0.02f), new Vector2(0.99f, 0.98f));
             if (_heartPlate.ManaFill != null)
             {

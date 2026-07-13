@@ -368,7 +368,7 @@ namespace DeNelle.Village
             panel.style.paddingLeft = panel.style.paddingRight = 20;
             root.Add(panel);
 
-            var title = new Label("✦  Wellspring of Elarion");
+            var title = new Label("Wellspring of Elarion");
             title.style.fontSize = 22;
             title.style.color = new StyleColor(new Color(1.0f, 0.86f, 0.45f));
             title.style.marginBottom = 12;
@@ -405,7 +405,7 @@ namespace DeNelle.Village
                     if (TryUpgrade()) CloseUpgradeUI();
                     else InjectUpgradePanel();
                 })
-                { text = canAfford ? "Upgrade ✦" : "Need more Coins" };
+                { text = canAfford ? "Upgrade" : "Need more Coins" };
                 upgradeBtn.SetEnabled(canAfford);
                 StyleButton(upgradeBtn, new Color(0.28f, 0.20f, 0.05f));
                 upgradeBtn.style.marginBottom = 8;
@@ -413,14 +413,14 @@ namespace DeNelle.Village
             }
             else
             {
-                var maxLbl = new Label("✦  Fully attuned — restoring the Heart at full flow.");
+                var maxLbl = new Label("Fully attuned — restoring the Heart at full flow.");
                 maxLbl.style.fontSize = 14;
                 maxLbl.style.color = new StyleColor(new Color(1.0f, 0.86f, 0.45f));
                 maxLbl.style.marginBottom = 12;
                 panel.Add(maxLbl);
             }
 
-            var closeBtn = new Button(CloseUpgradeUI) { text = "✕  Close" };
+            var closeBtn = new Button(CloseUpgradeUI) { text = "X  Close" };
             StyleButton(closeBtn, new Color(0.22f, 0.16f, 0.05f));
             panel.Add(closeBtn);
         }
@@ -440,7 +440,7 @@ namespace DeNelle.Village
         {
             if (IsMaxLevel)
             {
-                _promptGo = BuildBubble("✦  Max Level — Wellspring at full flow",
+                _promptGo = BuildBubble("Max Level — Wellspring at full flow",
                     _promptHeight + 0.5f,
                     new Color(0.14f, 0.10f, 0.02f, 0.96f),
                     new Color(1.0f, 0.82f, 0.35f));
@@ -448,7 +448,7 @@ namespace DeNelle.Village
             else
             {
                 int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                _promptGo = BuildBubble($"〔 Tap / F 〕 Confirm Upgrade — {cost} Coins",
+                _promptGo = BuildBubble($"[ Tap / F ] Confirm Upgrade — {cost} Coins",
                     _promptHeight + 0.5f,
                     new Color(0.14f, 0.10f, 0.02f, 0.96f),
                     new Color(1.0f, 0.82f, 0.35f));
@@ -532,8 +532,8 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             string label = IsMaxLevel
-                ? "✦  Wellspring — Active"
-                : $"〔 Tap / F 〕  Upgrade Wellspring  (L{_currentLevel}→{_currentLevel + 1})";
+                ? "Wellspring — Active"
+                : $"[ Tap / F ]  Upgrade Wellspring  (L{_currentLevel}->{_currentLevel + 1})";
 
             _promptGo = BuildBubble(label, _promptHeight,
                 new Color(0.12f, 0.09f, 0.02f, 0.96f),

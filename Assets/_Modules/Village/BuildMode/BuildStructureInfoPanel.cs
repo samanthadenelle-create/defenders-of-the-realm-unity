@@ -213,7 +213,7 @@ namespace DeNelle.Village
             _panel.Add(_costLabel);
 
             // Footprint.
-            _footprintLabel = MakeKeyValue("Footprint", "1×1");
+            _footprintLabel = MakeKeyValue("Footprint", "1x1");
             _panel.Add(_footprintLabel);
 
             // Stats box (DPS / Range / Fire Rate — rows added per-entry).
@@ -446,10 +446,10 @@ namespace DeNelle.Village
                     Vector2Int f = grid.FootprintCells(m);
                     int fx = Mathf.Max(1, f.x);
                     int fy = Mathf.Max(1, f.y);
-                    return fx + "×" + fy + " cells";
+                    return fx + "x" + fy + " cells";
                 }
             }
-            return "1×1 cells";
+            return "1x1 cells";
         }
 
         /// <summary>
@@ -491,9 +491,9 @@ namespace DeNelle.Village
             // Ballista repurpose swaps how airOnly is surfaced.
             bool airOnly   = repo.airOnly;
             bool canHitAir = repo.canHitAir || airOnly;
-            if (airOnly)   return "▲ Targets: Air only";        // ▲ up-triangle = sky
-            if (canHitAir) return "◆ Targets: Land + Air";      // ◆ diamond = both
-            return "▬ Targets: Land only";                      // ▬ bar = ground
+            if (airOnly)   return "Targets: Air only";        // up-triangle = sky
+            if (canHitAir) return "Targets: Land + Air";      // diamond = both
+            return "Targets: Land only";                      // bar = ground
         }
 
         private static string FormatNum(float v)

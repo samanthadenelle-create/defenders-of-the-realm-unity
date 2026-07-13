@@ -70,7 +70,7 @@ namespace DeNelle.Dungeons
         private const string MsgGather = "Gather the ingredients";
         private const string MsgReady = "Ready to craft";
         private const string MsgCraftedFmt = "{0} crafted";
-        private const string TickChar = "✔"; // heavy check mark
+        private const string TickChar = "OK"; // ingredient-met marker (ASCII; the heavy-check glyph tofu'd on the build font)
 
         // ── Bound UI elements ────────────────────────────────────────────────
         private VisualElement _root;

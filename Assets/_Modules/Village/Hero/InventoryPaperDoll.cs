@@ -103,7 +103,7 @@ namespace DeNelle.Village
             var ribImg = gearRibbon.GetComponent<Image>();
             if (ribImg != null) { ApplyRounded(ribImg); ribImg.raycastTarget = false; }
             AddInnerRim(gearRibbon, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
-            var gearTag = AddLabel(gearRibbon.transform, "⚔  VIEW GEAR", 0.0f, 1.0f, Color.white,
+            var gearTag = AddLabel(gearRibbon.transform, "VIEW GEAR", 0.0f, 1.0f, Color.white,
                                    ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
                                    spacing: 2f, bold: true);
             gearTag.raycastTarget = false;

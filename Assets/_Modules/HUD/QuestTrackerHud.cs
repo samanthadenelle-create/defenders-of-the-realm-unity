@@ -142,7 +142,7 @@ namespace DeNelle.HUD
                 gr.offsetMax = Vector2.zero;
                 var gt = glyph.GetComponent<TMPro.TextMeshProUGUI>();
                 ElarionUiKit.EnsureFont(gt); // font-safe before .text (TMP GenerateTextMesh NRE)
-                gt.text = "◈"; // ◈ — the old tracker's quest eyebrow glyph
+                gt.text = "!"; // ASCII quest marker (RPG "!" convention; build-font-safe, no glyph tofu)
                 gt.fontSize = 26;
                 gt.color = ElarionUi.Gilt;
                 gt.alignment = TMPro.TextAlignmentOptions.Center;

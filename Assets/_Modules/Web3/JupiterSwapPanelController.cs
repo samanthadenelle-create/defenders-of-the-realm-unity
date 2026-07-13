@@ -194,7 +194,7 @@ namespace DeNelle.Web3
             }
 
             _currentInput = amount;
-            SetStatus("Getting rate…", isError: false);
+            SetStatus("Getting rate...", isError: false);
 
             // Cancel any in-flight debounce and start a new one.
             if (_debounceCts != null)
@@ -246,7 +246,7 @@ namespace DeNelle.Web3
 
         private void RefreshQuoteDisplay(SwapQuote q)
         {
-            if (_skrOut != null) _skrOut.text = $"≈ {q.SkrOut:F2} SKR";
+            if (_skrOut != null) _skrOut.text = $"~ {q.SkrOut:F2} SKR";
             if (_rate != null) _rate.text = $"1 USDC = {q.Rate:F4} SKR";
             if (_platformFee != null)
             {
@@ -258,10 +258,10 @@ namespace DeNelle.Web3
 
         private void ClearQuoteDisplay()
         {
-            if (_skrOut != null) _skrOut.text = "—";
-            if (_rate != null) _rate.text = "—";
-            if (_platformFee != null) _platformFee.text = "—";
-            if (_networkFee != null) _networkFee.text = "—";
+            if (_skrOut != null) _skrOut.text = "-";
+            if (_rate != null) _rate.text = "-";
+            if (_platformFee != null) _platformFee.text = "-";
+            if (_networkFee != null) _networkFee.text = "-";
         }
 
         private void SetStatus(string msg, bool isError)
@@ -303,7 +303,7 @@ namespace DeNelle.Web3
             }
 
             SetConfirmEnabled(false);
-            SetStatus("Sending to wallet for approval…", isError: false);
+            SetStatus("Sending to wallet for approval...", isError: false);
 
             bool ok;
             try

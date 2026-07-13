@@ -52,7 +52,7 @@ namespace DeNelle.Settings
         private ElarionUiKit.ObsidianModal _modal;
         private Slider _masterSlider, _musicSlider, _sfxSlider;
         private TextMeshProUGUI _masterValue, _musicValue, _sfxValue;
-        private Toggle _muteToggle, _shakeToggle;
+        private Toggle _muteToggle, _shakeToggle, _musicToggle;
         private Transform _qualityRow, _difficultyRow;
         private TextMeshProUGUI _difficultyBlurb, _audioSeam;
 
@@ -152,6 +152,11 @@ namespace DeNelle.Settings
             (_masterSlider, _masterValue) = SliderRow(body, "Master", ref y, OnMasterChanged);
             (_musicSlider,  _musicValue)  = SliderRow(body, "Music",  ref y, OnMusicChanged);
             (_sfxSlider,    _sfxValue)    = SliderRow(body, "SFX",    ref y, OnSfxChanged);
+            // Music On/Off — the affordance the retired HUD overlay used to carry
+            // (owner bug 2026-07-12: the on-screen button overlapped mobile controls).
+            // Same seam: writes SettingsModel.MusicVolume / Muted + drives the live
+            // AudioService via AudioServiceBridge, so it is audible immediately.
+            _musicToggle = ToggleRow(body, "Music", ref y, OnMusicOnOffChanged);
             _muteToggle = ToggleRow(body, "Mute all audio", ref y, OnMuteChanged);
             _audioSeam = MakeText(body, "Audio mixer not wired yet — volumes persist and apply when it lands.",
                 11, ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
@@ -273,6 +278,7 @@ namespace DeNelle.Settings
                 if (_musicSlider != null) _musicSlider.value = SettingsModel.MusicVolume;
                 if (_sfxSlider != null) _sfxSlider.value = SettingsModel.SfxVolume;
                 if (_muteToggle != null) _muteToggle.isOn = SettingsModel.Muted;
+                if (_musicToggle != null) _musicToggle.isOn = MusicOn;
                 if (_shakeToggle != null) _shakeToggle.isOn = SettingsModel.ScreenShake;
 
                 UpdateVolumeLabels();
@@ -328,6 +334,41 @@ namespace DeNelle.Settings
             if (_suppressCallbacks) return;
             SettingsModel.Muted = on;
             SettingsModel.ApplyAudio();
+            // Keep the Music On/Off toggle honest — muting everything makes music off.
+            if (_musicToggle != null) { _suppressCallbacks = true; _musicToggle.isOn = MusicOn; _suppressCallbacks = false; }
+        }
+
+        /// <summary>Music is audible only when not master-muted AND its volume is up
+        /// (mirrors the retired HUD overlay's MusicOn definition).</summary>
+        private static bool MusicOn => !SettingsModel.Muted && SettingsModel.MusicVolume > 0.01f;
+
+        /// <summary>
+        /// Music On/Off — the affordance moved here from the HUD overlay. On restores
+        /// audible music (clears master mute + raises the music volume to its default
+        /// if it was zeroed); Off zeroes only the music volume (SFX untouched). Drives
+        /// the live AudioService through AudioServiceBridge so it is heard immediately,
+        /// exactly as the old HUD button did, and persists via SettingsModel.
+        /// </summary>
+        private void OnMusicOnOffChanged(bool on)
+        {
+            if (_suppressCallbacks) return;
+            if (on)
+            {
+                SettingsModel.Muted = false;
+                if (SettingsModel.MusicVolume < 0.01f)
+                    SettingsModel.MusicVolume = SettingsModel.DefaultMusicVolume;
+                SettingsModel.ApplyAll();
+                AudioServiceBridge.SetMuted(false);
+                AudioServiceBridge.SetMusicVolume(SettingsModel.MusicVolume);
+            }
+            else
+            {
+                SettingsModel.MusicVolume = 0f;
+                SettingsModel.ApplyAll();
+                AudioServiceBridge.SetMusicVolume(0f);
+            }
+            // Reflect the change onto the music slider + mute toggle without re-firing.
+            RefreshFromModel();
         }
 
         private void OnShakeChanged(bool on)

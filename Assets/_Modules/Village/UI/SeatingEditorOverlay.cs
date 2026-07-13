@@ -291,8 +291,8 @@ namespace DeNelle.Village.UI
         }
 
         private string TargetText() => _sheathed
-            ? $"id: {_offsetKey ?? "<none>"}   ·   mode: {(_fullOverride ? "ABSOLUTE back pose" : "NUDGE on built-in sheathe")}"
-            : $"id: {_offsetKey ?? "<none>"}   ·   mode: {(_fullOverride ? "VERTICAL+delta" : "NUDGE on geometry")}";
+            ? $"id: {_offsetKey ?? "<none>"}   -   mode: {(_fullOverride ? "ABSOLUTE back pose" : "NUDGE on built-in sheathe")}"
+            : $"id: {_offsetKey ?? "<none>"}   -   mode: {(_fullOverride ? "VERTICAL+delta" : "NUDGE on geometry")}";
 
         private void RebuildBody()
         {
@@ -321,7 +321,7 @@ namespace DeNelle.Village.UI
             // is composed by the attach path — comp * authored — and reused on the back).
             if (!_sheathed)
             {
-                _body.Add(SectionLabel("SCALE  (× uniform)"));
+                _body.Add(SectionLabel("SCALE  (x uniform)"));
                 _body.Add(BuildRow("Scale", AxisS, 0.1f, 5f, 0.05f, 0.25f, "0.###",
                     () => _scale, v => _scale = Mathf.Max(0.01f, v)));
             }
@@ -445,8 +445,8 @@ namespace DeNelle.Village.UI
 
             slider.RegisterValueChangedCallback(evt => Commit(evt.newValue));
 
-            row.Add(StepBtn("−−", () => Commit(get() - stepBig)));
-            row.Add(StepBtn("−",  () => Commit(get() - stepSmall)));
+            row.Add(StepBtn("--", () => Commit(get() - stepBig)));
+            row.Add(StepBtn("-",  () => Commit(get() - stepSmall)));
             row.Add(slider);
             row.Add(val);
             row.Add(StepBtn("+",  () => Commit(get() + stepSmall)));
@@ -524,7 +524,7 @@ namespace DeNelle.Village.UI
             Apply();
             Touch();
             SetStatus(_fullOverride
-                ? "VERTICAL: weapon stands up (longest→+Y, hilt low); rotation is the absolute in-hand pose."
+                ? "VERTICAL: weapon stands up (longest to +Y, hilt low); rotation is the absolute in-hand pose."
                 : "NUDGE: rotation adds on top of the geometric grip (legacy WO-551 path).");
         }
 
