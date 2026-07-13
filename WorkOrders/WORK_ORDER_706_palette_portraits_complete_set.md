@@ -9,17 +9,23 @@ Tile art resolves: `Resources/Portraits/<id>` → `Portraits/<displayName-slug>`
 ConceptIconResolver → obsidian plate with gilt initial (never blank). Missing art = the
 letter plate the owner saw ("Mill picture of M").
 
-## Deliverables — 8 portraits, matching the existing forge.jpg style/framing/palette
-Save each to `Assets/Resources/Portraits/<name>.jpg` (id-named, so the first resolver hop hits):
+## Deliverables — 10 portraits, matching the existing forge.jpg style/framing/palette
+Save each to `Assets/Resources/Portraits/<name>.jpg` (id-named, so the first resolver hop hits).
+*(Updated per WO-707 rulings 2026-07-13: `mill.jpg` DROPPED — the mill retires, Farm is the food
+producer and farm.jpg exists; `mine_crystal.jpg` DROPPED — Crystal Mine leaves the palette, it's
+a world node; the three NEW storage containers added.)*
 
-1. `mill.jpg` — Mill (the "M" plate in the owner's screenshot)
-2. `tower_siege_tower.jpg` — Sky Ballista (Anti-Air)
-3. `wall_wood.jpg` — Wooden Palisade
-4. `wall_stone.jpg` — Stone Wall
-5. `gate_stone.jpg` — Stone Gate
-6. `mine_crystal.jpg` — Crystal Mine
-7. `fountain_healing.jpg` — Wellspring of Elarion
-8. `deco_torch.jpg` — Wall Torch
+1. `lumberyard.jpg` — Lumberyard (NEW storage: wood, pallet stacks — WO-707)
+2. `foundry.jpg` — Foundry (NEW storage: iron — WO-707)
+3. `silo.jpg` — Silo (NEW storage: grain — WO-707)
+4. `tower_siege_tower.jpg` — Sky Ballista (Anti-Air)
+5. `wall_wood.jpg` — Wooden Palisade
+6. `wall_stone.jpg` — Stone Wall
+7. `gate_stone.jpg` — Stone Gate
+8. `fountain_healing.jpg` — Wellspring of Elarion
+9. `deco_torch.jpg` — Wall Torch
+10. `market.jpg` exists but the tile becomes **Store (Buy Packs)** — re-author only if the
+    current image reads as a generic market rather than a pack store (UI-seat judgment).
 
 Match: obsidian-friendly storefront/structure portrait, same aspect + tone as
 forge.jpg / market.jpg / jeweler.jpg. Owner is red/green colorblind — read by shape/luminance.

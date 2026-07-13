@@ -25,7 +25,7 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
 | **Armorer** | Trade | armor upgrades |
 | **Arcane Tower** | Trade | magic upgrades |
 | **Jeweler** | Trade | ring gear |
-| **Food producer** (pin #1: Farm or Mill) | Trade/production | food income + upgrades |
+| **Farm** (RESOLVED — "farm is cleaner"; `mill` retires) | Trade/production | food income + upgrades |
 | **Lumbermill** | Trade/production | wood income + upgrades |
 | **Lumberyard** | **STORAGE** | **stores Wood** (visible pallet stacks fill) |
 | **Foundry** | **STORAGE** | **stores Iron** (visible fill) |
@@ -76,9 +76,9 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
   visible fill level IS the stock readout — glanceable from town view, no UI needed to know
   what you hold and what a raider would want. That readability bar is the acceptance.
 
-## Owner pins (answer before/while implementing)
-1. The food building's NAME: **Farm** or **Mill**? (farm.jpg art exists; "Farm" is
-   ten-year-old-clear — recommended. mill.jpg is in WO-706 either way until ruled.)
+## Owner pins — ALL RESOLVED
+1. **RESOLVED (owner, 2026-07-13): the food producer is the FARM** ("farm is cleaner") — the
+   `mill` row retires from the palette; farm.jpg already exists; mill.jpg dropped from WO-706.
 2. ~~Market~~ **RESOLVED (owner, same session): Market becomes "Store" (Buy Packs)** — fronts
    the existing PackStore (~70% built; PIPELINE_STATE: scene-wiring disabled pending its own
    PanelSettings — the tile/talk-route lands now, the store UI wiring stays its own lane).
