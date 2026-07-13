@@ -58,6 +58,15 @@ namespace DeNelle.Village
         /// buildings inside the walls, never distant overworld structures.</summary>
         private const float TownRadius = 60f;
 
+        // WO-703 / BLANK-1 ground band for spawn-position sampling: the merged
+        // Main_Castle_Overworld ground is the scripted flat plane at y=0
+        // (HubStructureVisualInjector.GroundY / WorldMergeBuilder.LowerCastleToGround).
+        // A NavMesh.SamplePosition hit outside this band is elevated mesh (wall-walk /
+        // deck) — never a valid townsfolk spawn. Bands mirror NpcGroundSeat's
+        // AcceptedFloorBandBelowGround (0.35) / a generous above-ground step allowance.
+        private const float GroundMinY = -0.35f;
+        private const float GroundMaxY = 0.75f;
+
         // People-pack peasant bodies — the same Resources source every NPC injector uses.
         private static readonly string[] BodyPool =
         {
@@ -162,12 +171,21 @@ namespace DeNelle.Village
             Transform hero = ResolveHero();
             Vector3 heart = HeartCenter();
 
+            // WO-703 / BLANK-1 (owner ruling 2026-07-13): every townsfolk NPC gates on ITS
+            // home building existing — ONE villager per DISTINCT in-ring Building, never a
+            // crowd recycled around a single anchor (the old i % anchors.Count loop put all
+            // 5 villagers on one building on a near-blank save — the "crowd of townsfolk
+            // near the tree" symptom). No building, no NPC.
+            int toPlace = Mathf.Min(VillagerCount, anchors.Count);
+            FlowTrace.Step("Townsfolk",
+                $"BLANK-1 gate: {anchors.Count} in-ring building(s) -> spawning {toPlace} villager(s) " +
+                $"(cap {VillagerCount}; one per distinct home building).");
+
             int placed = 0;
-            for (int i = 0; i < VillagerCount; i++)
+            for (int i = 0; i < toPlace; i++)
             {
-                // Cycle through distinct buildings so the villagers scatter across the
-                // town instead of clumping at one door.
-                Building anchor = anchors[i % anchors.Count];
+                // One villager per distinct building (BLANK-1) — scatter, never clump.
+                Building anchor = anchors[i];
                 if (anchor == null) continue;
 
                 if (!TrySamplePosNear(anchor.transform.position, heart, out Vector3 pos))
@@ -208,6 +226,21 @@ namespace DeNelle.Village
                     + tangent * Random.Range(-4f, 4f);
                 if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 6f, NavMesh.AllAreas))
                 {
+                    // WO-703 / BLANK-1 ("one NPC ON TOP of the gatehouse wall"): the 6m
+                    // sample radius is 3D — a candidate near the wall ring can resolve to
+                    // the WALL-WALK navmesh several metres up instead of the courtyard.
+                    // Constrain spawns to the GROUND RING: accept only hits inside the
+                    // ground band around y=0 (the merged world's scripted flat ground —
+                    // HubStructureVisualInjector.GroundY; band mirrors NpcGroundSeat's
+                    // accepted-floor bands). An out-of-band hit is rejected and the
+                    // attempt retried with a fresh candidate.
+                    if (hit.position.y < GroundMinY || hit.position.y > GroundMaxY)
+                    {
+                        FlowTrace.Step("Townsfolk",
+                            $"spawn sample rejected: navmesh hit y={hit.position.y:F2} outside ground band " +
+                            $"[{GroundMinY:F2}..{GroundMaxY:F2}] (wall-top/elevated mesh) — attempt {attempt + 1}/4 retried.");
+                        continue;
+                    }
                     pos = hit.position;
                     return true;
                 }

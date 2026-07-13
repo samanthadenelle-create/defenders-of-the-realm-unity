@@ -514,6 +514,15 @@ namespace DeNelle.Core
         /// delete; flip ON for V2 via PlayerPrefs "ff.barracks" = 1.</summary>
         public static bool Barracks => Get("barracks", defaultOn: false);
 
+        /// <summary>WO-703 / ticket BLANK-1 (owner ruling 2026-07-13 "should be completely flagged
+        /// off for now"): the Colosseum / arena-entrance structure visual in the home hub. When OFF
+        /// (default), <see cref="DeNelle.Village.HubStructureVisualInjector"/> skips the
+        /// Colosseum_ArenaEntrance placement entirely — the structure model, its fitted
+        /// StructureCollider, and anything parented to that host (attached emitters included) never
+        /// spawn. Disable-not-delete; reversible via PlayerPrefs "ff.colosseum" = 1. The arena's
+        /// interaction path (ArenaHeraldSpawner) stays independently gated by "ff.arena".</summary>
+        public static bool Colosseum => Get("colosseum", defaultOn: false);
+
         /// <summary>WO-VFX-POI (owner is red/green colorblind — callouts read by MOTION / SHAPE /
         /// LUMINANCE / VERTICALITY, never hue): when ON, <see cref="DeNelle.Village.PoiCalloutSystem"/>
         /// self-bootstraps and drives point-of-interest callouts off <see cref="DeNelle.Village.PoiRegistry"/>

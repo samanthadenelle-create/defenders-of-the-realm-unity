@@ -335,8 +335,21 @@ namespace DeNelle.Village
             Vector3 toHeart = new Vector3(center.x - buildingPos.x, 0f, center.z - buildingPos.z);
             toHeart = toHeart.sqrMagnitude < 0.01f ? Vector3.forward : toHeart.normalized;
             Vector3 pos = flatBuild + toHeart * frontDist;
+            // WO-703 / BLANK-1: constrain the spawn sample to the GROUND RING — the 3D
+            // sample near a wall-adjacent building can resolve to the elevated wall-walk
+            // navmesh (the "NPC on top of the gatehouse" symptom). Accept the hit only
+            // inside the ground band around the scripted flat ground y=0 (mirrors
+            // CastleTownsfolkInjector / NpcGroundSeat bands); out-of-band -> keep the
+            // computed courtyard position instead.
             if (NavMesh.SamplePosition(pos, out var hit, 4f, NavMesh.AllAreas))
-                pos = hit.position;
+            {
+                if (hit.position.y >= -0.35f && hit.position.y <= 0.75f)
+                    pos = hit.position;
+                else
+                    FlowTrace.Step("Village",
+                        $"vendor '{role}' spawn sample rejected: navmesh hit y={hit.position.y:F2} outside " +
+                        "ground band [-0.35..0.75] (wall-top/elevated mesh) — using courtyard position.");
+            }
             // Face the Heart / approaching hero (the hero comes from the centre).
             Quaternion rot = Quaternion.LookRotation(toHeart, Vector3.up);
 

@@ -92,16 +92,18 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Crafting", "JewelerStationInjector.Inject");
 
-            // WO-673 L3 STANDDOWN (always on — WO-682): once the persisted marker is set and
-            // this station is player-ownable (BaseLayout record OR a structures-catalog row),
-            // the injector stands down — BaseLayoutLoader replays the record and owns the
-            // structure (ONE owner per concern, docs/WO673_ARCHITECTURE_REVIEW.md §3). While
-            // the station has NO record and NO catalog row (not yet migrated / row missing),
-            // this injector keeps owning it — nothing vanishes.
+            // WO-673 L3 STANDDOWN, tightened by WO-703 / BLANK-1 (owner ruling 2026-07-13,
+            // supersedes the "never lost" carve-out): once the persisted marker is set the
+            // injector stands down UNCONDITIONALLY — a fresh start is the tree, the well and
+            // the walls (gates included), nothing else, so a marker-set save with no
+            // jewelers-bench record shows no bench (and no vendor NPC — the vendor anchor
+            // poll finds no Building). A save that carries a record replays it through
+            // BaseLayoutLoader (ONE owner per concern, docs/WO673_ARCHITECTURE_REVIEW.md §3).
             if (StrategicPlacementMigration.StanddownActiveForStation(StationId))
             {
                 FlowTrace.Step("Placement",
-                    $"standdown {HolderName} (migrated '{StationId}' -> BaseLayout — injector skips spawn).");
+                    $"standdown {HolderName} ('{StationId}' — WO-703/BLANK-1 ruling: marker set, injector skips spawn; " +
+                    "a BaseLayout record, if any, replays via BaseLayoutLoader).");
                 return;
             }
 

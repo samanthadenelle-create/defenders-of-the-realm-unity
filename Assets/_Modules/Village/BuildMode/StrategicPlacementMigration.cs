@@ -29,12 +29,15 @@
 //      spawn the same id:
 //        • no marker  → bakes/injectors visible, no records replayed.
 //        • marker set → records replay, bakes hidden / injectors dark.
-//      PER STRUCTURE: standdown applies to an id that HAS a migrated BaseLayout
-//      record OR a structures-catalog row (the player can build it — WO-682
-//      blank-template new game: marker set + zero records still hides the
-//      row-having bakes). A structure with NO catalog row AND no record
-//      (today: the two runtime crafting stations) keeps its bake/injector
-//      alive — a structure the player cannot place is never lost.
+//      PER STRUCTURE (bakes): standdown applies to a baked id that HAS a migrated
+//      BaseLayout record OR a structures-catalog row (the player can build it —
+//      WO-682 blank-template new game: marker set + zero records still hides the
+//      row-having bakes). A bake with NO catalog row AND no record keeps owning
+//      its structure. RUNTIME STATIONS (apothecary / jewelers-bench): WO-703 /
+//      BLANK-1 (owner ruling 2026-07-13) SUPERSEDED the "never lost" carve-out —
+//      once the marker is set the station injectors stand down unconditionally
+//      (fresh start = tree + well + walls/gates, nothing else); a save carrying a
+//      station record still replays it via BaseLayoutLoader.
 //
 // SAME-LOAD ORDERING (structural double-spawn guard): during the very load the
 // migration runs in, the records are brand new — the injectors already ran
@@ -158,15 +161,20 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Runtime-station standdown (Apothecary / Jeweler's Bench injectors): true when
-        /// standdown is active and the station's id has a BaseLayout record (the record
-        /// replays instead) or a catalog row (player-buildable — WO-682 blank template).
-        /// A station with no catalog row and no record keeps spawning via its injector —
-        /// nothing vanishes.
+        /// Runtime-station standdown (Apothecary / Jeweler's Bench injectors): true whenever
+        /// standdown is active (marker set + not the migration load). WO-703 / BLANK-1
+        /// (owner ruling 2026-07-13, supersedes the "never lost" carve-out): a fresh start is
+        /// the TREE, the WELL, and the WALLS (gates included) — NOTHING else, so a
+        /// marker-set save with NO station record shows NO station (and, downstream, no
+        /// vendor NPC — CastleVendorNpcInjector anchors to the live Building). A save that
+        /// DOES carry a station record replays it through BaseLayoutLoader as before
+        /// (ShouldReplayRecord keys off the same StanddownActive). The old
+        /// HasRecord||HasCatalogRow qualifier kept row-less stations spawning on blank
+        /// saves — that is exactly the residual the ruling stands down.
         /// </summary>
         public static bool StanddownActiveForStation(string itemId)
         {
-            return StanddownActive && (HasRecord(itemId) || HasCatalogRow(itemId));
+            return StanddownActive;
         }
 
         /// <summary>

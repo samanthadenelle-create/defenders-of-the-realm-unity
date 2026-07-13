@@ -42,8 +42,12 @@
   "Enter Elarion" return portals at the bridge mouths → fade-warp to the courtyard. No bake, no
   scene edit.
 - **`ff.buildingupgradepanel`** (WO-675 Obsidian redesign) — live on the current preview.
-- Residual on fresh saves: apothecary + jeweler's-bench STATIONS remain injector-owned until
-  their catalog rows land (deliberate "never lost" rule).
+- ~~Residual on fresh saves: apothecary + jeweler's-bench STATIONS remain injector-owned until
+  their catalog rows land (deliberate "never lost" rule).~~ **SUPERSEDED (WO-703 / BLANK-1, owner
+  ruling 2026-07-13):** fresh start = TREE + WELL + WALLS (gates included), nothing else — the
+  station injectors now stand down on ANY marker-set save (`StanddownActiveForStation` =
+  `StanddownActive`); their vendor NPCs follow (no Building, no NPC). Colosseum behind new
+  default-OFF `ff.colosseum`. Census oracle = `BlankStartCensusRegression` (BLANK_START_OK).
 
 ## WO numbering (authority = CLI_LANES_WO_NUMBERS.md banner)
 - **Next free = 699.** All disk collisions RESOLVED 2026-07-13: dupes renumbered → 688

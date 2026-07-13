@@ -147,7 +147,22 @@ namespace DeNelle.Village
         private static void ApplyAll()
         {
             for (int i = 0; i < Swaps.Length; i++) TrySwap(Swaps[i]);
-            for (int i = 0; i < Places.Length; i++) TryPlace(Places[i]);
+            for (int i = 0; i < Places.Length; i++)
+            {
+                // WO-703 / BLANK-1 (owner ruling 2026-07-13 "should be completely flagged off
+                // for now"): the colosseum placement is gated behind its own default-OFF flag.
+                // Skipping the placement here means the model, the fitted StructureCollider,
+                // and anything later parented to the host never exist — reversible via
+                // PlayerPrefs "ff.colosseum" = 1 (FeatureFlags.Colosseum).
+                if (Places[i].name == "Colosseum_ArenaEntrance" && !DeNelle.Core.FeatureFlags.Colosseum)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                        "standdown Colosseum_ArenaEntrance (ff.colosseum OFF — WO-703/BLANK-1 ruling: " +
+                        "fresh start = tree + well + walls/gates only; flag ON to restore).");
+                    continue;
+                }
+                TryPlace(Places[i]);
+            }
         }
 
         // Place a NEW model at a world position (no baked structure to swap). Idempotent by name;
