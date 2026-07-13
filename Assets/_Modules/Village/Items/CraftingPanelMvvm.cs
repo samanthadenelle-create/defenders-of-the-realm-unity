@@ -10,13 +10,17 @@
 // WO-F conversion (2026-07-03): the old 3-column card grid -> the owner-ratified
 // FrameCrafting MASTER-DETAIL template (matches VillageCraftingPanel/Workshop):
 //   * bodyLeft  (dark well)      = recipe rows (Obsidian buttons, selected=Yellow,
-//                                  +/- affordability suffix)
-//   * bodyRight (parchment well) = the selected recipe's detail in dark INK
-//                                  (light text is unreadable on parchment)
-//   * footer    (action strip)   = a one-line bench hint
+//                                  right-aligned readable state "+ Ready" / "2 of 3")
+//   * bodyRight (parchment well) = the WO-693 shared COMPACT DETAIL CARD
+//                                  (ElarionUiKit.BuildParchmentDetailCard: icon plate +
+//                                  name -> REQUIRES ingredient rows -> the ONE Craft CTA
+//                                  carrying its blocker when disabled)
+//   * footer — EMPTY (WO-693 deleted the tiny instruction strip; its content lives on
+//                                  the CTA blocker + the empty-state explanation)
 // The ONE shared Close is the chrome's (no per-panel X / close_normal / footer close).
-// Mobile-first: compact rows in the narrow left well, centered detail + a compact
-// centered Craft CTA — never full-bleed bars.
+// Mobile-first (WO-693): all detail text on the ElarionUi ladder, Fit-protected with
+// ElarionUi.FontFloorMobile — never below the readable floor; met/unmet carried by
+// ASCII glyph + have/need counts (colorblind law), color reinforcement only.
 //
 // Code-built uGUI ONLY (no UXML — §8). Registers PanelId.ConsumableCrafting
 // (SEPARATE from the gear Workshop, PanelId.Crafting). Spawned by
@@ -47,12 +51,8 @@ namespace DeNelle.Village.Items
 
         public bool IsOpen => _ui != null;
 
-        // Dark ink for text sitting ON the parchment detail well (light Parchment text
-        // is unreadable there — the well IS parchment). Mirrors VillageCraftingPanel.
-        private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
-        private static readonly Color InkDim  = new Color(0.34f, 0.28f, 0.20f, 1f);
-        private static readonly Color InkGood = new Color(0.10f, 0.42f, 0.16f, 1f);
-        private static readonly Color InkBad  = new Color(0.55f, 0.12f, 0.10f, 1f);
+        // WO-693: parchment ink lives in the kit now (ElarionUiKit.ParchmentInk*) — the
+        // shared compact detail card owns all detail-pane presentation.
 
         // ── Registration (mirror HeroSkillTreePanelMvvm) ──────────────────────────
 
@@ -131,9 +131,11 @@ namespace DeNelle.Village.Items
 
             if (n == 0)
             {
-                MakeText(_recipeHost, "No recipes.\nDefeat enemies to gather ingredients.", 13,
-                    ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
-                    new Vector2(0.05f, 0.40f), new Vector2(0.95f, 0.60f));
+                var none = MakeText(_recipeHost, "No recipes.\nDefeat enemies to gather ingredients.",
+                    ElarionUi.FontLabel, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center,
+                    new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.62f));
+                ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
             }
             else
             {
@@ -145,27 +147,43 @@ namespace DeNelle.Village.Items
                     string id = r.RecipeId;
                     bool selected = id == _selectedRecipeId;
                     string name = string.IsNullOrEmpty(r.OutputName) ? r.DisplayName : r.OutputName;
-                    string label = name + (r.CanCraft ? "  +" : "  -");
-                    ElarionUiKit.BuildObsidianButton(_recipeHost, label,
+                    // WO-693: no dangling "+/-" suffix — the row carries a readable right-
+                    // aligned state ("+ Ready" / "2 of 3"); selection keeps the gold rim (Yellow).
+                    var rowBtn = ElarionUiKit.BuildObsidianButton(_recipeHost, name,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                                  : ElarionUiKit.ObsidianButtonColor.Gray,
                         new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
                         () => { _selectedRecipeId = id; RebuildMasterDetail(); });
+                    ElarionUiKit.AddRowStateSuffix(rowBtn, RowState(r),
+                        r.CanCraft ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
                     top -= rowH + gap;
                     if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
             }
 
-            // Detail (parchment well, right — dark ink).
+            // Detail (parchment well, right — the shared compact card, WO-693).
             for (int i = _detailHost.childCount - 1; i >= 0; i--)
                 Destroy(_detailHost.GetChild(i).gameObject);
 
             int sel = FindIndex(recipes);
             if (sel >= 0) BuildDetail(recipes[sel]);
             else
-                MakeText(_detailHost, "Select a recipe.", 15, InkDim, FontStyles.Italic,
-                    TextAlignmentOptions.Center, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.55f));
+                ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "Select a recipe to inspect",
+                    "Combine ingredients dropped by enemies into potions and bombs.");
+        }
+
+        /// <summary>Readable list-row state: met -> "+ Ready"; else "met of total" progress.
+        /// Glyph + counts carry the state (colorblind law); color is reinforcement only.</summary>
+        private static string RowState(CraftRecipeVM r)
+        {
+            if (r.CanCraft) return "+ Ready";
+            var lines = r.Ingredients;
+            int total = lines != null ? lines.Count : 0;
+            if (total == 0) return "";
+            int met = 0;
+            for (int i = 0; i < total; i++) if (lines[i].Met) met++;
+            return met + " of " + total;
         }
 
         private int FindIndex(IReadOnlyList<CraftRecipeVM> recipes)
@@ -179,60 +197,47 @@ namespace DeNelle.Village.Items
         private void BuildDetail(CraftRecipeVM recipe)
         {
             string display = string.IsNullOrEmpty(recipe.OutputName) ? recipe.DisplayName : recipe.OutputName;
+            string recipeId = recipe.RecipeId;
 
-            // Title (ink, bold).
-            MakeText(_detailHost, display, 20, Ink, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.06f, 0.90f), new Vector2(0.94f, 0.99f));
-
-            // Output icon (centered under the title) when the atlas is sliced.
-            var outSprite = LoadIcon(recipe.OutputIconPath);
-            if (outSprite != null)
-            {
-                var iconGo = new GameObject("OutIcon", typeof(Image));
-                iconGo.transform.SetParent(_detailHost, false);
-                var ir = iconGo.GetComponent<RectTransform>();
-                ir.anchorMin = new Vector2(0.40f, 0.74f); ir.anchorMax = new Vector2(0.60f, 0.885f);
-                ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
-                var iImg = iconGo.GetComponent<Image>();
-                iImg.sprite = outSprite;
-                iImg.preserveAspect = true;
-                iImg.raycastTarget = false;
-            }
-
-            float y = outSprite != null ? 0.70f : 0.86f;
-            if (!string.IsNullOrEmpty(recipe.DisplayName) && recipe.DisplayName != display)
-            {
-                MakeText(_detailHost, recipe.DisplayName, 13, InkDim, FontStyles.Italic,
-                    TextAlignmentOptions.Center, new Vector2(0.06f, y - 0.06f), new Vector2(0.94f, y));
-                y -= 0.075f;
-            }
-
-            MakeText(_detailHost, "Ingredients", 15, Ink, FontStyles.Bold,
-                TextAlignmentOptions.Left, new Vector2(0.08f, y - 0.06f), new Vector2(0.92f, y));
-            y -= 0.07f;
-
+            // REQUIRES — "[OK|X] Name .... have / need"; glyph + counts carry the state.
+            var requires = new List<ElarionUiKit.DetailCardRow>();
             var lines = recipe.Ingredients;
-            int li = lines != null ? lines.Count : 0;
-            for (int k = 0; k < li; k++)
+            for (int i = 0; i < lines.Count; i++)
             {
-                var ing = lines[k];
-                MakeText(_detailHost, (ing.Met ? "+  " : "-  ") + ing.Name,
-                    14, ing.Met ? InkGood : InkBad, FontStyles.Normal,
-                    TextAlignmentOptions.Left, new Vector2(0.10f, y - 0.055f), new Vector2(0.66f, y));
-                MakeText(_detailHost, ing.Have + "/" + ing.Need, 14, InkDim, FontStyles.Normal,
-                    TextAlignmentOptions.Right, new Vector2(0.66f, y - 0.055f), new Vector2(0.90f, y));
-                y -= 0.06f;
+                var ing = lines[i];
+                requires.Add(new ElarionUiKit.DetailCardRow(
+                    ing.Met ? "OK" : "X",
+                    ing.Name,
+                    ing.Have + " / " + ing.Need,
+                    ing.Met ? ElarionUiKit.DetailRowTone.Good : ElarionUiKit.DetailRowTone.Bad));
             }
 
-            // Craft CTA — Green when affordable, Gray (non-interactable) when short.
-            // Compact + centered (mobile-first), never a full-width bar.
-            var btn = ElarionUiKit.BuildObsidianButton(_detailHost, "Craft",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                recipe.CanCraft ? ElarionUiKit.ObsidianButtonColor.Green
-                                : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.26f, 0.03f), new Vector2(0.74f, 0.13f),
-                () => { if (_vm != null) _vm.Craft(recipe.RecipeId); });
-            if (btn != null) btn.interactable = recipe.CanCraft;
+            // Consumables carry no bestows/rarity/cost in their defs — those sections are
+            // simply omitted by the shared card (no empty headers).
+            ElarionUiKit.BuildParchmentDetailCard(_detailHost, new ElarionUiKit.DetailCardSpec
+            {
+                IconPath = recipe.OutputIconPath,
+                Title = display,
+                Requires = requires,
+                RequiresHeader = "INGREDIENTS",
+                CtaLabel = CtaLabel(recipe),
+                CtaEnabled = recipe.CanCraft,
+                OnCta = () => { if (_vm != null) _vm.Craft(recipeId); },
+            });
+        }
+
+        /// <summary>The ONE action carries the blocker when disabled ("CRAFT - missing 2
+        /// ingredients") — the old instruction strip's job now lives on the CTA / empty-state.</summary>
+        private static string CtaLabel(CraftRecipeVM recipe)
+        {
+            if (recipe.CanCraft) return "CRAFT";
+            int missing = 0;
+            var lines = recipe.Ingredients;
+            for (int i = 0; i < lines.Count; i++)
+                if (!lines[i].Met) missing += lines[i].Need - lines[i].Have;
+            if (missing > 0)
+                return "CRAFT - missing " + missing + (missing == 1 ? " ingredient" : " ingredients");
+            return "CRAFT - unavailable";   // gated (e.g. ItemDropSystem disabled)
         }
 
         // ── Chrome (presentation only; INHERITS the shared kit frame + zones) ─────
@@ -262,25 +267,10 @@ namespace DeNelle.Village.Items
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
-            // One-line bench hint in the footer action strip (static — set once).
-            var footHost = layout != null && layout.footer != null
-                ? (Transform)layout.footer : chrome.content.transform;
-            MakeText(footHost, "Combine ingredients dropped by enemies into potions and bombs.",
-                13, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
-                new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
+            // WO-693: the tiny footer instruction strip is DELETED — its content lives on
+            // the CTA blocker text and the empty-state explanation (one-action law).
 
             // Close is the SHARED kit Close (top-right) — no per-panel close.
-        }
-
-        // Icon cache — Resources.Load is cheap but cached avoids reloading every Render.
-        private static readonly Dictionary<string, Sprite> s_iconCache = new Dictionary<string, Sprite>();
-        private static Sprite LoadIcon(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return null;
-            if (s_iconCache.TryGetValue(path, out var cached)) return cached;
-            Sprite sp = Resources.Load<Sprite>(path);
-            s_iconCache[path] = sp;   // cache nulls too (atlas not sliced yet) so we don't retry each frame
-            return sp;
         }
 
         // ── uGUI helper (mirrors VillageCraftingPanel.MakeText) ───────────────────

@@ -28,8 +28,41 @@ using DeNelle.Village.Crafting;   // JewelerRecipeCatalog, JewelerCraftingServic
 
 namespace DeNelle.Village.Items
 {
+    /// <summary>One stat/ability grant the output piece bestows — a pure data relay of one
+    /// non-zero bonus field on the accessory def (WO-693). Label = friendly stat name
+    /// ("Max health"); Value = the formatted grant ("+50" / "+7%").</summary>
+    public readonly struct BestowLineVM
+    {
+        public readonly string Label;
+        public readonly string Value;
+
+        public BestowLineVM(string label, string value)
+        {
+            Label = label ?? "";
+            Value = value ?? "";
+        }
+    }
+
+    /// <summary>One wallet-cost entry as data (WO-693): currency key ("iron") + display name +
+    /// amount, so the View can render the WO-675/676 currency chips instead of parsing a string.</summary>
+    public readonly struct CostChipLineVM
+    {
+        public readonly string CurrencyId;   // "wood" | "food" | "iron" | "crystal"
+        public readonly string Name;         // "Wood" / "Iron" ...
+        public readonly int Amount;
+
+        public CostChipLineVM(string currencyId, string name, int amount)
+        {
+            CurrencyId = currencyId ?? "";
+            Name = name ?? "";
+            Amount = amount;
+        }
+    }
+
     /// <summary>One jeweler recipe card's view-agnostic payload: output identity + the base/gem
-    /// checklist + an optional wallet cost line + whether it can be crafted right now.</summary>
+    /// checklist + an optional wallet cost line + whether it can be crafted right now.
+    /// WO-693 adds pure relays of existing accessories.json fields: rarity / req.level /
+    /// flavor / the non-zero bonus grants / the structured cost.</summary>
     public readonly struct JewelerRecipeVM
     {
         public readonly string RecipeId;
@@ -40,10 +73,18 @@ namespace DeNelle.Village.Items
         public readonly IReadOnlyList<CraftIngredientVM> Ingredients; // base first, then gems
         public readonly string CostLabel;       // "Iron 60, Crystals 10" or "" when free
         public readonly bool CanCraft;
+        public readonly string Rarity;          // def.rarity ("epic") or ""
+        public readonly int ReqLevel;           // def.req.level or 0
+        public readonly string Flavor;          // def.flavor (fallback def.saga) or ""
+        public readonly IReadOnlyList<BestowLineVM> Bestows;    // every non-zero bonus field
+        public readonly IReadOnlyList<CostChipLineVM> CostChips; // structured wallet cost
 
         public JewelerRecipeVM(string recipeId, string outputId, string displayName, string outputName,
                                string outputIconPath, IReadOnlyList<CraftIngredientVM> ingredients,
-                               string costLabel, bool canCraft)
+                               string costLabel, bool canCraft,
+                               string rarity, int reqLevel, string flavor,
+                               IReadOnlyList<BestowLineVM> bestows,
+                               IReadOnlyList<CostChipLineVM> costChips)
         {
             RecipeId = recipeId;
             OutputId = outputId;
@@ -53,6 +94,11 @@ namespace DeNelle.Village.Items
             Ingredients = ingredients ?? Array.Empty<CraftIngredientVM>();
             CostLabel = costLabel ?? "";
             CanCraft = canCraft;
+            Rarity = rarity ?? "";
+            ReqLevel = reqLevel;
+            Flavor = flavor ?? "";
+            Bestows = bestows ?? Array.Empty<BestowLineVM>();
+            CostChips = costChips ?? Array.Empty<CostChipLineVM>();
         }
     }
 
@@ -165,6 +211,14 @@ namespace DeNelle.Village.Items
                     ? outDef.name : (r.OutputAccessoryId ?? "");
                 string outIcon = outDef != null ? outDef.iconPath : null;
 
+                // WO-693 pure relays of existing accessories.json fields (the card is a READER
+                // of the def — no new game state, no logic).
+                string rarity = outDef != null ? outDef.rarity : null;
+                int reqLevel = outDef != null && outDef.req != null ? outDef.req.level : 0;
+                string flavor = outDef != null
+                    ? (!string.IsNullOrEmpty(outDef.flavor) ? outDef.flavor : outDef.saga)
+                    : null;
+
                 _recipes.Add(new JewelerRecipeVM(
                     r.Id,
                     r.OutputAccessoryId,
@@ -173,8 +227,87 @@ namespace DeNelle.Village.Items
                     outIcon,
                     lines,
                     CostLabel(r.Cost),
-                    JewelerCraftingService.CanCraft(r.Id)));
+                    JewelerCraftingService.CanCraft(r.Id),
+                    rarity,
+                    reqLevel,
+                    flavor,
+                    BuildBestows(outDef),
+                    BuildCostChips(r.Cost)));
             }
+        }
+
+        // ── WO-693: generic bestows relay ────────────────────────────────────────
+        // Enumerates EVERY public numeric field on AccessoryDef via reflection so a future
+        // stat (e.g. manaBonus) appears on the card with NO View/VM edit beyond an optional
+        // friendly name — the owner's lookup-table + thin-interpreter shape. Shop-price
+        // fields are excluded; zero/negative grants are skipped (no empty rows).
+
+        private static readonly HashSet<string> s_nonStatFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "buyWood", "buyFood", "buyIron", "buyCrystals"
+        };
+
+        private static readonly Dictionary<string, string> s_statNames = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "hpBonus",    "Max health" },
+            { "defense",    "Defense" },
+            { "damageMult", "Damage" },
+        };
+
+        private static IReadOnlyList<BestowLineVM> BuildBestows(AccessoryDef def)
+        {
+            if (def == null) return Array.Empty<BestowLineVM>();
+            var rows = new List<BestowLineVM>();
+            var fields = typeof(AccessoryDef).GetFields(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            foreach (var f in fields)
+            {
+                if (s_nonStatFields.Contains(f.Name)) continue;
+
+                string label = s_statNames.TryGetValue(f.Name, out var friendly)
+                    ? friendly : Prettify(f.Name);
+
+                if (f.FieldType == typeof(int))
+                {
+                    int v = (int)f.GetValue(def);
+                    if (v > 0) rows.Add(new BestowLineVM(label, "+" + v));
+                }
+                else if (f.FieldType == typeof(float))
+                {
+                    float v = (float)f.GetValue(def);
+                    // Fractional bonuses (0.07 defense / 0.10 damageMult) read as percentages.
+                    if (v > 0f) rows.Add(new BestowLineVM(label, "+" + (int)Math.Round(v * 100.0) + "%"));
+                }
+            }
+            return rows;
+        }
+
+        /// <summary>"manaBonus" -> "Mana bonus" (fallback for a stat with no friendly name).</summary>
+        private static string Prettify(string fieldName)
+        {
+            if (string.IsNullOrEmpty(fieldName)) return "";
+            var sb = new System.Text.StringBuilder(fieldName.Length + 4);
+            sb.Append(char.ToUpperInvariant(fieldName[0]));
+            for (int i = 1; i < fieldName.Length; i++)
+            {
+                char c = fieldName[i];
+                if (char.IsUpper(c)) { sb.Append(' '); sb.Append(char.ToLowerInvariant(c)); }
+                else sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>WO-693: the wallet cost as structured data (currency key + name + amount)
+        /// so the View renders the WO-675/676 currency chips. Empty when free.</summary>
+        private static IReadOnlyList<CostChipLineVM> BuildCostChips(JewelerRecipeCost cost)
+        {
+            if (cost == null) return Array.Empty<CostChipLineVM>();
+            var chips = new List<CostChipLineVM>();
+            if (cost.Wood > 0)     chips.Add(new CostChipLineVM("wood", "Wood", cost.Wood));
+            if (cost.Food > 0)     chips.Add(new CostChipLineVM("food", "Food", cost.Food));
+            if (cost.Iron > 0)     chips.Add(new CostChipLineVM("iron", "Iron", cost.Iron));
+            if (cost.Crystals > 0) chips.Add(new CostChipLineVM("crystal", "Crystals", cost.Crystals));
+            return chips;
         }
 
         /// <summary>"Iron 60, Crystals 10" — only the non-zero wallet costs; "" when free.</summary>
