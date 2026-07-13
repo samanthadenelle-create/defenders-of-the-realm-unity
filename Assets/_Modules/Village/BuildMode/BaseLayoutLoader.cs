@@ -383,6 +383,57 @@ namespace DeNelle.Village
             float w = Mathf.Max(1, footprintCells.x) * cellSize;
             float d = Mathf.Max(1, footprintCells.y) * cellSize;
 
+            // Owner F8/felt 2026-07-13 ("ground around certain ones extends into what looks
+            // like empty space making navigation impossible"): the cell claim derives from
+            // the model's AABB, which INFLATES for models carrying an off-axis roll (the
+            // Farm's 212° is ~32° off-axis -> AABB ×~1.3). Blocking walkability with that
+            // inflated square leaves un-walkable EMPTY grass around the visible walls. So:
+            // the BLOCKER (collider + nav carve) sizes to the visual's ACTUAL rendered
+            // bounds in root-local XZ (+small margin), while the grid CLAIM keeps the honest
+            // rotated-AABB cells (placement validity unchanged — WO-673 L5). Fallback to the
+            // cell rectangle when no renderers are found.
+            float cx = 0f, cz = 0f;
+            Guard.Try("Structure", "blocker-from-rendered-bounds", () =>
+            {
+                var rends = go.GetComponentsInChildren<Renderer>(true);
+                if (rends == null || rends.Length == 0) return;
+                bool any = false;
+                float minX = 0f, maxX = 0f, minZ = 0f, maxZ = 0f;
+                foreach (var r in rends)
+                {
+                    if (r == null) continue;
+                    Bounds b = r.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? b.min.x : b.max.x,
+                            (i & 2) == 0 ? b.min.y : b.max.y,
+                            (i & 4) == 0 ? b.min.z : b.max.z);
+                        Vector3 local = go.transform.InverseTransformPoint(corner);
+                        if (!any) { minX = maxX = local.x; minZ = maxZ = local.z; any = true; }
+                        else
+                        {
+                            minX = Mathf.Min(minX, local.x); maxX = Mathf.Max(maxX, local.x);
+                            minZ = Mathf.Min(minZ, local.z); maxZ = Mathf.Max(maxZ, local.z);
+                        }
+                    }
+                }
+                if (!any) return;
+                const float margin = 0.5f;   // hug the walls, keep a hand's width of solidity
+                float rw = (maxX - minX) + margin;
+                float rd = (maxZ - minZ) + margin;
+                // Never LARGER than the claimed rectangle (the claim is the ceiling), never
+                // smaller than one cell (a sliver blocker lets enemies clip through walls).
+                cx = Mathf.Clamp(rw, cellSize, w);
+                cz = Mathf.Clamp(rd, cellSize, d);
+            });
+            if (cx > 0f && cz > 0f && (cx < w - 0.01f || cz < d - 0.01f))
+            {
+                FlowTrace.Step("Structure",
+                    $"blocker sized from rendered bounds {cx:F1}x{cz:F1} (claim was {w:F1}x{d:F1}) — walkable ground matches the visible building");
+                w = cx; d = cz;
+            }
+
             var box = go.GetComponent<BoxCollider>();
             if (box == null) box = go.AddComponent<BoxCollider>();
             box.size = new Vector3(w, 4f, d);
