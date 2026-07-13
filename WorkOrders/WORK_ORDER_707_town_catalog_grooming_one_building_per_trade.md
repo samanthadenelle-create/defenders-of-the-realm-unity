@@ -79,6 +79,12 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
   **Reference = Clash of Clans storages (owner, 2026-07-13):** the gold/elixir storages whose
   visible fill level IS the stock readout — glanceable from town view, no UI needed to know
   what you hold and what a raider would want. That readability bar is the acceptance.
+  **Overhead icon ruling (owner F8 2026-07-13 evening, verbatim: "these have a shield symbol —
+  we will need some symbol to register as collectors, or remove them. I'm thinking 1/4 1/2 3/4
+  full symbol"):** the containers' floating world icon must NOT be the generic shield badge —
+  it becomes a FILL-QUARTERS symbol (a gauge that steps 0 / 1-4 / 1-2 / 3-4 / FULL). Shape +
+  step count carry the meaning (colorblind law); ties to ResourceCollector.FilledSteps
+  (StepCount is already parameterizable). Pass-2 scope with the pallet stacks.
 
 ## Owner pins — ALL RESOLVED
 1. **RESOLVED (owner, 2026-07-13): the food producer is the FARM** ("farm is cleaner") — the
