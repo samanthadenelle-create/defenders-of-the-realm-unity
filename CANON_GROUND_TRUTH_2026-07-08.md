@@ -1,5 +1,7 @@
 # CANON GROUND TRUTH — 2026-07-08
 
+> ## ⚠ SUPERSEDED 2026-07-12 — read `CANON_GROUND_TRUTH_2026-07-12.md` (save v29, WO-682/683 arc, WebTrace read path proven)
+
 > **Purpose:** the single anchor of *current reality*, derived ONLY from verified sources (the working
 > tree, HEAD commits, headless gate/fleet captures, the exe on disk, live prep/handover docs, owner
 > felt-verdicts). If a doc contradicts a line here, the doc is STALE. **Supersedes
