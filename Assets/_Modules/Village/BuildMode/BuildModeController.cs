@@ -138,8 +138,13 @@ namespace DeNelle.Village
             int dir = (_input.RotateCw ? 1 : 0) - (_input.RotateCcw ? 1 : 0);
             // Legacy single-direction Rotate (bot probes / old drivers) still steps CW —
             // via the IBuildInput default RotateCw => Rotate, so no extra poll needed here.
-            if (dir == 0) return;
-            _armedYawEighths = (_armedYawEighths + dir) & 7;
+            // WO-702 owner ask ("rotate 90 left and right" on the armed placement screen):
+            // merge the on-screen Rotate buttons' latched EIGHTH-steps (±2 = ±90°) into the
+            // SAME yaw state — one merge point, no second yaw field.
+            int eighths = dir + _uiRotateEighthsLatch;
+            _uiRotateEighthsLatch = 0;
+            if (eighths == 0) return;
+            _armedYawEighths = (_armedYawEighths + eighths) & 7;
             FlowTrace.Throttle("Build", "ghost-rotate", 0.25f,
                 $"ghost rotate -> {_armedYawEighths * 45}°");
         }
@@ -168,6 +173,22 @@ namespace DeNelle.Village
 
         /// <summary>Explicit confirm from the on-screen PLACE button (web/mobile).</summary>
         public void RequestUiPlaceConfirm() => _uiPlaceLatch = true;
+
+        // WO-702 (owner F8 2026-07-13: "on this screen i would like to see a rotate 90
+        // left and right"): the on-screen Rotate Left/Right buttons latch quarter turns
+        // here; PollRotateIntents merges them (×2 eighths = 90°) into _armedYawEighths —
+        // the ONE yaw state Q/E and the touch bar already drive, so the ghost re-poses
+        // through the existing per-frame MoveTo path.
+        private int _uiRotateEighthsLatch;
+
+        /// <summary>Explicit ±90° rotate from the on-screen Rotate buttons
+        /// (dir −1 = Rotate Left / CCW, +1 = Rotate Right / CW).</summary>
+        public void RequestUiRotateQuarter(int dir)
+        {
+            if (dir == 0) return;
+            _uiRotateEighthsLatch += (dir > 0 ? 1 : -1) * 2;
+            FlowTrace.Step("Build", $"PlaceScreen: Rotate {(dir > 0 ? "Right" : "Left")} pressed (90 deg).");
+        }
 
         /// <summary>
         /// Explicit cancel latch (WO-677) — same web-safe pattern as
@@ -313,6 +334,10 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            // WO-702: a controller torn down mid-session (scene swap) must never leave
+            // the Core truce flag stuck TRUE — a stale flag would hold tutorial intros
+            // deferred and dialogues hidden forever.
+            if (IsActive) DeNelle.Core.BuildModeState.SetActive(false);
         }
 
         /// <summary>Ensure a controller exists (HUD "Build" button entry point).</summary>
@@ -375,6 +400,10 @@ namespace DeNelle.Village
 
             if (IsActive) return;
             IsActive = true;
+            // WO-702 truce seam: publish "builder open" into Core so TutorialFlow can
+            // defer step-intro dialogues and DialogueView (HUD, Core-only) can hide an
+            // already-open dialogue until Exit. Village writes, everyone else reads.
+            DeNelle.Core.BuildModeState.SetActive(true);
             _dpadConsumedTraced = false;   // WO-683 — first-consumed trace fires once PER build session
 
             EnsureGrid();
@@ -429,6 +458,9 @@ namespace DeNelle.Village
         {
             if (!IsActive) return;
             IsActive = false;
+            // WO-702 truce seam: builder closed — TutorialFlow releases any deferred
+            // intro and DialogueView re-shows a hidden conversation next frame.
+            DeNelle.Core.BuildModeState.SetActive(false);
 
             CancelArmed();
             ClearSelection();
@@ -446,9 +478,10 @@ namespace DeNelle.Village
             }
 
             // Hide the PLACE button + drop any unconsumed press so a queued confirm
-            // can never leak into the next build-mode session.
+            // (or a queued 90-degree rotate) can never leak into the next session.
             _placeButton?.SetVisible(false);
             _uiPlaceLatch = false;
+            _uiRotateEighthsLatch = 0;
 
             CommitLayout();
 
@@ -484,7 +517,12 @@ namespace DeNelle.Village
             // click meant for the dialogue box can't place/select/cancel a structure.
             // HeroLocomotion owns the global input gate (set on dialogue start, cleared on
             // complete). The ghost is hidden so nothing tracks the cursor mid-conversation.
-            if (HeroLocomotion.InputSuppressed)
+            // WO-702 truce: while DialogueView is holding a live dialogue HIDDEN because
+            // the builder is open (owner F8 2026-07-13 "pause the sylas dialogue"), the
+            // dialogue's input lock must NOT freeze the builder — the invisible panel
+            // can't be mis-clicked, and the player has to be able to finish the asked
+            // build action. The lock still freezes placement for any VISIBLE dialogue.
+            if (HeroLocomotion.InputSuppressed && !DeNelle.Core.BuildModeState.DialogueHiddenForBuilder)
             {
                 TraceBlockedWhileArmed("HeroLocomotion.InputSuppressed",
                     "dialogue/cutscene input lock is holding the whole placement loop");
@@ -514,7 +552,9 @@ namespace DeNelle.Village
             // only while a ghost is armed or a move is in progress — the explicit
             // confirm that works regardless of which pointer device the browser binds.
             if (_placeButton == null)
-                _placeButton = BuildPlaceButton.Create(transform, RequestUiPlaceConfirm);
+                _placeButton = BuildPlaceButton.Create(transform, RequestUiPlaceConfirm,
+                    () => RequestUiRotateQuarter(-1),   // Rotate Left  (CCW 90 deg, WO-702)
+                    () => RequestUiRotateQuarter(+1));  // Rotate Right (CW 90 deg, WO-702)
             _placeButton.SetVisible(_armed != null || _movingSelected);
 
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap

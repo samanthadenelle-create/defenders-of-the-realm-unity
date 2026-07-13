@@ -266,6 +266,7 @@ namespace DeNelle.Village
                     break;
 
                 case Phase.AwaitCompletion:
+                    TickDeferredIntro();   // WO-702 truce: release a builder-held intro
                     TickProximityProbe();
                     TickScriptedWave();
                     TickStagedEncounter();
@@ -372,11 +373,66 @@ namespace DeNelle.Village
 
             // Intro dialogue — the standard NPC template; its end raises
             // dialogue.ended:<id> through the Core adapter.
+            // WO-702 truce (owner F8 2026-07-13 "pause the sylas dialogue till either
+            // action asked is completed or closed builder"; captured collision:
+            // STEP-STUCK :: founding_town — the intro opened BEHIND the build palette
+            // and sat unread 120s): while the builder is open, HOLD the intro and play
+            // it when build mode exits (TickDeferredIntro). The completion gate stays
+            // dialogue.ended — the dialogue simply presents when it can be read.
             if (step.Dialogue != null && !string.IsNullOrEmpty(step.Dialogue.Intro))
             {
-                if (!CoreDialogue.DialogueService.Play(step.Dialogue.Intro))
+                if (DeNelle.Core.BuildModeState.IsActive)
+                {
+                    _deferredIntroStepId = step.Id;
+                    _deferredIntroId = step.Dialogue.Intro;
+                    FlowTrace.Step("Tutorial",
+                        $"deferred-intro :: step '{step.Id}' intro '{step.Dialogue.Intro}' held while the builder is open (WO-702 truce) — plays on builder exit.");
+                }
+                else if (!CoreDialogue.DialogueService.Play(step.Dialogue.Intro))
                     FlowTrace.Warn("Tutorial", $"step '{step.Id}' intro dialogue '{step.Dialogue.Intro}' unknown — continuing without it.");
             }
+        }
+
+        // ── WO-702: deferred step-intro (dialogue/builder truce) ──────────────
+        // A step whose intro would have opened UNDER the build palette holds it here;
+        // the Update loop releases it the first frame the builder is closed. If the
+        // step already completed/changed while deferred (e.g. the player finished the
+        // asked build action), the stale intro is dropped with a trace, never played
+        // over the NEXT step.
+        private string _deferredIntroStepId;
+        private string _deferredIntroId;
+
+        private void TickDeferredIntro()
+        {
+            if (string.IsNullOrEmpty(_deferredIntroId)) return;
+            if (DeNelle.Core.BuildModeState.IsActive)
+            {
+                // Builder still open — keep holding, and keep the STEP-STUCK watchdog
+                // from firing on a legitimate long builder session (the intro the step
+                // waits on is deliberately not on screen yet).
+                _watchdogAt = Time.unscaledTime;
+                return;
+            }
+
+            string id = _deferredIntroId, stepId = _deferredIntroStepId;
+            _deferredIntroId = null;
+            _deferredIntroStepId = null;
+
+            if (_step == null || !string.Equals(_step.Id, stepId, StringComparison.OrdinalIgnoreCase))
+            {
+                FlowTrace.Step("Tutorial",
+                    $"deferred-intro :: held intro '{id}' for step '{stepId}' DROPPED — the step is no longer live (completed/changed while the builder was open).");
+                return;
+            }
+
+            FlowTrace.Step("Tutorial",
+                $"deferred-intro :: builder closed — playing held intro '{id}' for step '{stepId}' (WO-702 truce).");
+            // The step effectively BEGINS for the player when the intro finally shows —
+            // restart the STEP-STUCK clock so a long, legitimate builder session doesn't
+            // count against the watchdog.
+            _watchdogAt = Time.unscaledTime;
+            if (!CoreDialogue.DialogueService.Play(id))
+                FlowTrace.Warn("Tutorial", $"step '{stepId}' deferred intro dialogue '{id}' unknown — continuing without it.");
         }
 
         private void OnSignal(string id)

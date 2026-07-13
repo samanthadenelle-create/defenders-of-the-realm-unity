@@ -26,13 +26,18 @@ namespace DeNelle.Village
     {
         private GameObject _root;
         private System.Action _onPlace;
+        private System.Action _onRotateLeft;    // WO-702: -90 deg (CCW)
+        private System.Action _onRotateRight;   // WO-702: +90 deg (CW)
 
-        public static BuildPlaceButton Create(Transform parent, System.Action onPlace)
+        public static BuildPlaceButton Create(Transform parent, System.Action onPlace,
+            System.Action onRotateLeft = null, System.Action onRotateRight = null)
         {
             var host = new GameObject("BuildPlaceButton");
             if (parent != null) host.transform.SetParent(parent, false);
             var b = host.AddComponent<BuildPlaceButton>();
             b._onPlace = onPlace;
+            b._onRotateLeft = onRotateLeft;
+            b._onRotateRight = onRotateRight;
             b.Build();
             return b;
         }
@@ -67,6 +72,25 @@ namespace DeNelle.Village
                 DeNelle.Core.UI.ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.66f, 0.15f), new Vector2(0.80f, 0.225f),
                 () => _onPlace?.Invoke());
+
+            // WO-702 (owner F8 2026-07-13: "on this screen i would like to see a rotate
+            // 90 left and right"): two kit Quiet buttons directly ABOVE the Gold PLACE
+            // (same column x .66-.80, band y .235-.30 — clear of the WO-677 touch verb
+            // bar at x .845-.985 and of the centred palette dock). ASCII text labels
+            // (WO-611/WO-683 landmine rule: no glyphs), same visibility as PLACE (the
+            // whole canvas root toggles). Each steps the SAME armed-yaw state the Q/E
+            // keys drive, via BuildModeController.RequestUiRotateQuarter.
+            DeNelle.Core.Diagnostics.Guard.Try("Build", "build rotate buttons", () =>
+            {
+                DeNelle.Core.UI.ElarionUiKit.Button(_root.transform, "Rotate Left",
+                    DeNelle.Core.UI.ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(0.66f, 0.235f), new Vector2(0.7275f, 0.30f),
+                    () => _onRotateLeft?.Invoke());
+                DeNelle.Core.UI.ElarionUiKit.Button(_root.transform, "Rotate Right",
+                    DeNelle.Core.UI.ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(0.7325f, 0.235f), new Vector2(0.80f, 0.30f),
+                    () => _onRotateRight?.Invoke());
+            });
 
             _root.SetActive(false);   // hidden until a ghost is armed / moving
         }

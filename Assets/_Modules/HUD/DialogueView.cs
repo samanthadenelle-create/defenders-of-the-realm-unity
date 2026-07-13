@@ -79,9 +79,27 @@ namespace DeNelle.HUD
         // handler is now bound PER-VM and ignores any close for a VM this view no longer shows.
         private System.Action _vmClosedHandler;
 
+        // ── WO-702 dialogue/builder truce (owner F8 2026-07-13: "pause the sylas
+        // dialogue till either action asked is completed or closed builder") ─────
+        // While Build Mode is open (Core seam BuildModeState.IsActive — Village writes,
+        // HUD reads; never a HUD->Village reference) a live dialogue is HIDDEN, never
+        // Closed: closing fires Ended and would falsely complete a dialogue-gated
+        // tutorial step (the captured STEP-STUCK :: founding_town gate is
+        // dialogue.ended). On builder exit the panel re-shows and the player reads it.
+        // The view also publishes BuildModeState.DialogueHiddenForBuilder so the build
+        // placement loop knows the input lock it sees belongs to an INVISIBLE dialogue
+        // and stays usable.
+        private bool _hiddenForBuilder;
+
         private void OnOpened(DialogueViewModel vm)
         {
             if (_vm != null) Unbind();
+            // Opened while the builder is already up (e.g. a step outro riding a build
+            // action): start hidden — no one-frame flash, no arbiter registration yet.
+            _hiddenForBuilder = DeNelle.Core.BuildModeState.IsActive;
+            if (_hiddenForBuilder)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    "opened while the builder is up — starting HIDDEN (WO-702 truce); reshown on builder exit.");
             // A per-node `portrait` command override is scoped to ITS dialogue: clear the sticky
             // static at every open so the previous conversation's forced portrait can't leak onto
             // this one (the speakers block is now the data-driven default; the command re-fires
@@ -383,6 +401,8 @@ namespace DeNelle.HUD
 
         private void Update()
         {
+            TickBuilderTruce();
+            if (_hiddenForBuilder) return;   // WO-702: no any-key advance on an invisible dialogue
             if (_vm == null || !_vm.IsOpen || _vm.ShowingOptions) return;
             if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
             if (UnityEngine.Input.anyKeyDown &&
@@ -392,6 +412,38 @@ namespace DeNelle.HUD
             {
                 _vm.Advance();
             }
+        }
+
+        // WO-702: per-frame truce poll. Hide the live panel the frame the builder opens,
+        // re-show it the frame the builder closes (min-hold reset so the closing tap
+        // can't skip line 1). Publishes DialogueHiddenForBuilder truthfully every frame
+        // (self-healing: a dialogue superseded/closed while hidden clears it).
+        private void TickBuilderTruce()
+        {
+            bool builder = DeNelle.Core.BuildModeState.IsActive;
+            bool live = _vm != null && _vm.IsOpen && _ui != null;
+
+            if (builder != _hiddenForBuilder)
+            {
+                _hiddenForBuilder = builder;
+                if (live)
+                {
+                    if (builder)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                            "hidden for builder (WO-702 truce) — panel off, VM stays open, Ended NOT fired.");
+                    }
+                    else
+                    {
+                        _openedAt = Time.unscaledTime;   // re-arm min-hold: the builder-close tap can't skip line 1
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                            "reshown after builder exit (WO-702 truce) — player can read/advance now.");
+                    }
+                    Repaint();
+                }
+            }
+
+            DeNelle.Core.BuildModeState.DialogueHiddenForBuilder = _hiddenForBuilder && live;
         }
 
         private void OnBoxTapped()
@@ -405,8 +457,12 @@ namespace DeNelle.HUD
         {
             if (_vm == null || _ui == null) return;
             bool open = _vm.IsOpen;
-            _ui.SetActive(open);
-            if (!open) return;
+            // WO-702 truce: while the builder is open the panel stays OFF even though
+            // the VM is open (hidden, not closed). Skip the paint AND the arbiter
+            // notification — NotifyOpened on an inactive _ui would trip the arbiter's
+            // isOpen-verify false-Fail; it fires on the reshow Repaint instead.
+            _ui.SetActive(open && !_hiddenForBuilder);
+            if (!open || _hiddenForBuilder) return;
 
             // Register + announce to the modal arbiter on the FIRST visible paint.
             // (DialogueService raises Opened BEFORE vm.Begin(), so IsOpen is still false
