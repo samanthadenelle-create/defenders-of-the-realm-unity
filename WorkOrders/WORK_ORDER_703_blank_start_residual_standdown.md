@@ -25,10 +25,10 @@ colosseum — linked to ticket VFX-1 (same emitter class, fresh evidence for its
 
 ## VERIFY FIRST (§12 — before classifying anything a defect)
 
-0. **Save state:** the Knight is Lv 10 in the shots — confirm whether that session was a FRESH
-   save or the owner's MIGRATED main (migrated records legitimately keep their structures). If
-   it's the main save, the true defects narrow to the NPCs + the wall-percher; the building
-   inventory re-verifies on a genuinely fresh save.
+0. **Save state: ✅ RESOLVED (owner, 2026-07-13):** the session was a FRESH save — the Lv-10
+   Knight was set via devtools, not a migrated record. Every structure/NPC in the screenshots
+   is therefore a genuine defect under the tree+well+walls ruling; no migrated-record
+   classification split needed.
 1. **Fresh-save scene census:** headless/instrumented pass over the merged scene on a fresh save
    naming EVERY structure visual + NPC and the spawner that made it ([Flow:*] on each injector).
    The census makes the spawner list exhaustive ONCE — no whack-a-mole per screenshot.
