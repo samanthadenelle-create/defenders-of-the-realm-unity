@@ -412,6 +412,21 @@ namespace DeNelle.DevTools
                 // rep->engage->battle path is broken (the spawn-gate bug that sailed through the old
                 // direct-call oracle). The owner is never the tester (memory never-dragdrop-or-manual).
                 yield return RunPhase("AssertEncounterBattle", AssertEncounterRealPath());
+
+                // FTUE-1 REGRESSION LOCK (owner 2026-07-13: "I want a regression test to
+                // validate it"): SylasStewardInjector used to DESTROY ITSELF when its 1Hz
+                // poll saw Onboarded=true (which happens on the TITLE screen over a
+                // completed/skipped save), so a same-app-run New Game had no watcher and
+                // no Sylas. The landed fix unloads the BODY only; the injector stays
+                // resident. This probe poisons the precondition through the REAL API
+                // (FinishOnboarding), asserts the injector survives + the body despawns,
+                // then ResetToNewGame + hub reload and asserts Sylas respawns near the
+                // Heart. Runs LAST deliberately: it resets the save and reloads the scene,
+                // so nothing state-dependent may sit downstream of it. The reload is an
+                // intentional scene load — window the UNEXPECTED-CROSS probe around it.
+                _probes?.SetIntentionalCrossPhase(true);
+                yield return RunPhase("AssertStewardSurvivesNewGame", AssertStewardSurvivesNewGame());
+                _probes?.SetIntentionalCrossPhase(false);
             }
 
             FlowTrace.Step("Auto", "AutoPilot complete");
@@ -1859,6 +1874,34 @@ namespace DeNelle.DevTools
         }
 
         // =====================================================================
+        //  PickRepeatableArmEntry — WO-707 friendly-fire guard (fleet 2026-07-13,
+        //  10/12 runs): AssertFoundingArc places the SINGLETON 'pet-house' (it IS
+        //  the founding beat), so any LATER probe link that re-arms ps.itemId hits
+        //  the WO-707 singleton gate ("Already built" — BuildModeController.
+        //  SingletonAlreadyBuilt reads BaseLayout) and dies as a false FAIL:
+        //    [Flow:Auto] AssertBuildMoveChain: FAIL at link DPAD — ArmById('pet-house') refused.
+        //  Outside the founding beat, probes must arm a REPEATABLE id: prefer the
+        //  requested id when it is not singleton, else the storage containers
+        //  (lumberyard/foundry/silo — repeatable by design), else the tower.
+        // =====================================================================
+        private static DeNelle.Core.Catalog.CatalogEntry PickRepeatableArmEntry(params string[] preferredIds)
+        {
+            foreach (var id in preferredIds)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                var e = DeNelle.Core.Catalog.CatalogRegistry.Get(id);
+                if (e == null) continue;
+                if (e.repo != null && e.repo.singleton)
+                {
+                    FlowTrace.Step("Auto", $"PickRepeatableArmEntry: '{id}' is repo.singleton — skipped (WO-707 gate would refuse a re-arm); trying the next repeatable id.");
+                    continue;
+                }
+                return e;
+            }
+            return null;
+        }
+
+        // =====================================================================
         //  AssertBuildMoveChain — WO-677 Lane D: arm→cancel→select→move→commit
         //  + WO-683 link DPAD: drive HudMoveInput → armed ghost cell changes
         // ---------------------------------------------------------------------
@@ -1947,8 +1990,9 @@ namespace DeNelle.DevTools
                 var startCell = ps.gridCell;
 
                 // 1) ARM, then CANCEL through the WO-677 UI latch — the armed state must exit.
-                var entry2 = DeNelle.Core.Catalog.CatalogRegistry.Get(ps.itemId) ??
-                             DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+                //    WO-707: never re-arm a singleton the founding beat already placed
+                //    (ps can BE the pet-house) — pick a repeatable id instead.
+                var entry2 = PickRepeatableArmEntry(ps.itemId, "lumberyard", "foundry", "silo", TowerId);
                 if (entry2 != null)
                 {
                     GrantCost(BuildModeController.CostFor(entry2));
@@ -2022,8 +2066,10 @@ namespace DeNelle.DevTools
                 //    writes the REAL static the build-overlay d-pad publishes by reflection)
                 //    — and assert the armed ghost's grid cell CHANGES (the pad pans the
                 //    view, the ghost ray re-lands: exactly the arrow-key behavior).
-                var entry3 = DeNelle.Core.Catalog.CatalogRegistry.Get(ps.itemId) ??
-                             DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+                //    WO-707 (fleet 2026-07-13, 10/12 runs): ps.itemId was the founding
+                //    beat's SINGLETON 'pet-house'; re-arming it here hit the singleton
+                //    gate — pick a repeatable id (containers/tower) for the DPAD arm.
+                var entry3 = PickRepeatableArmEntry(ps.itemId, "lumberyard", "foundry", "silo", TowerId);
                 if (entry3 == null)
                 {
                     _lastDetail = "no catalog entry for the DPAD link";
@@ -2411,6 +2457,156 @@ namespace DeNelle.DevTools
             FlowTrace.Step("Auto", "AssertHeroCrossing: restored hero to pre-test position.");
         }
 
+        // =====================================================================
+        //  PROBE: AssertStewardSurvivesNewGame — FTUE-1 injector-lifecycle lock
+        // ---------------------------------------------------------------------
+        // ROOT (proven 2026-07-13 from the owner's session log — Bootstrap ENTER +
+        // injector created at Title, then NO Inject line ever): SylasStewardInjector's
+        // 1Hz poll used to Destroy the INJECTOR when it saw Onboarded=true — which
+        // happens on the TITLE screen when the previously-loaded save was completed/
+        // skipped — so a subsequent New Game in the same app run had no watcher and no
+        // Sylas (RuntimeInitializeOnLoadMethod fires once per app run; nothing rebuilt
+        // it). FIX UNDER TEST: the poll unloads the BODY only; the injector stays
+        // resident. Links (each failure NAMES the dead link):
+        //   link 0  context gates (ff.tutorialv2 / hub / GameStateService) — N/A else
+        //   link 1  injector resident BEFORE poisoning (Instance != null)
+        //   link 2  poison: Onboarded=true via the REAL API (FinishOnboarding — the
+        //           exact call TutorialFlow.cs:617 fires) + >2 of the 1Hz poll ticks
+        //   link 3  THE REGRESSION'S HEART: injector STILL resident after the poll
+        //   link 4  the body despawned (the "use the model, then unload it" half)
+        //   link 5  New Game via the REAL service (ResetToNewGame) + hub reload the
+        //           way the fleet boots (SceneManager.LoadScene(SceneRouter.Castle))
+        //   link 6  a GameObject named 'Sylas' stands near the Heart within 5s
+        // =====================================================================
+        private IEnumerator AssertStewardSurvivesNewGame()
+        {
+            const string Tag = "Auto";
+            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: ENTER — FTUE-1 Sylas injector-lifecycle regression probe.");
+
+            // ── link 0: context gates ────────────────────────────────────────
+            if (!DeNelle.Core.FeatureFlags.TutorialV2)
+            {
+                _lastDetail = "ff.tutorialv2 OFF — N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: ff.tutorialv2 OFF — N/A, skipping.");
+                yield break;
+            }
+            string scene = ActiveScene();
+            if (!DeNelle.Core.HubScenes.IsHub(scene))
+            {
+                _lastDetail = $"'{scene}' not a hub — N/A (skipped)";
+                FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: scene '{scene}' is not a hub — N/A.");
+                yield break;
+            }
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc == null || svc.State == null)
+            {
+                _lastDetail = "GameStateService unavailable — N/A (skipped)";
+                FlowTrace.Warn(Tag, "AssertStewardSurvivesNewGame: GameStateService/State unavailable — N/A.");
+                yield break;
+            }
+
+            // ── link 1: injector resident BEFORE poisoning ───────────────────
+            if (SylasStewardInjector.Instance == null)
+            {
+                _lastDetail = "FAIL link 1 — injector not resident before poisoning";
+                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 1 — SylasStewardInjector.Instance is NULL before the probe poisons anything; the injector never bootstrapped (or already died) this app run — read its [SylasSteward] Bootstrap lines in this log.");
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 1 PASS — injector resident before poisoning.");
+
+            // ── link 2: poison the precondition through the REAL API ─────────
+            bool wasOnboarded = svc.State.Onboarded;
+            svc.FinishOnboarding();   // the exact call the tutorial fires (TutorialFlow.cs:617)
+            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 2 — Onboarded {wasOnboarded}->true via FinishOnboarding(); waiting 2.5s (>2 of the injector's 1Hz poll ticks).");
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 2.5f) yield return null;
+
+            // ── link 3: THE REGRESSION'S HEART — injector survives the poll ──
+            if (SylasStewardInjector.Instance == null)
+            {
+                _lastDetail = "FAIL link 3 — injector self-destructed on Onboarded=true (FTUE-1 regressed)";
+                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 3 — SylasStewardInjector.Instance went NULL after Onboarded=true + 2 poll ticks; the poll destroyed the INJECTOR again (the FTUE-1 root: a same-run New Game will have no watcher and no Sylas).");
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 3 PASS — injector still resident after the Onboarded poll (the FTUE-1 fix holds).");
+
+            // ── link 4: the BODY despawned ('use the model, then unload it') ──
+            if (GameObject.Find("Sylas") != null)
+            {
+                _lastDetail = "FAIL link 4 — Sylas body still standing after Onboarded=true";
+                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 4 — a GameObject named 'Sylas' still exists >2 poll ticks after Onboarded=true; the poll did not unload the body (the 'then unload it' half of the owner ruling is broken).");
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 4 PASS — body despawned; the injector alone remains resident.");
+
+            // ── link 5: New Game via the real service + hub reload ───────────
+            try { svc.ResetToNewGame(); }
+            catch (Exception ex)
+            {
+                _lastDetail = "FAIL link 5 — ResetToNewGame threw";
+                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — ResetToNewGame() threw {ex.GetType().Name}: {ex.Message}.");
+                yield break;
+            }
+            string hub = DeNelle.Core.SceneRouter.Castle;
+            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 5 — save reset to new game; reloading hub '{hub}' (the same LoadScene-by-name path the fleet boots through).");
+            try { SceneManager.LoadScene(hub); }
+            catch (Exception ex)
+            {
+                _lastDetail = "FAIL link 5 — hub reload threw";
+                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — LoadScene('{hub}') threw {ex.GetType().Name}: {ex.Message} (is it in Build Settings?).");
+                yield break;
+            }
+            t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < BootTimeout && ActiveScene() != hub) yield return null;
+            if (ActiveScene() != hub)
+            {
+                _lastDetail = "FAIL link 5 — hub never became active after the New-Game reload";
+                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — '{hub}' never became the active scene within {BootTimeout:0}s after the New-Game reload.");
+                yield break;
+            }
+            for (int i = 0; i < 3; i++) yield return null;   // let Awake/Start + sceneLoaded handlers (incl. the injector's) run
+            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 5 PASS — hub '{hub}' reloaded on a fresh save.");
+
+            // Re-resolve the hero (the reload destroyed the old one) — same idiom as the
+            // PopupClose recovery reload; keeps any later consumer honest.
+            _hero = null;
+            t0 = Time.realtimeSinceStartup;
+            while (_hero == null && Time.realtimeSinceStartup - t0 < ResolveHeroTimeout)
+            {
+                _hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+                if (_hero != null) break;
+                yield return null;
+            }
+
+            // ── link 6: Sylas stands again near the Heart within 5s ──────────
+            GameObject sylas = null;
+            t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 5f)
+            {
+                sylas = GameObject.Find("Sylas");
+                if (sylas != null) break;
+                yield return null;
+            }
+            if (sylas == null)
+            {
+                _lastDetail = "FAIL link 6 — no 'Sylas' within 5s of the New-Game hub reload";
+                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 6 — no GameObject named 'Sylas' within 5s of the New-Game hub reload; the resident injector's OnSceneLoaded->Inject did not respawn the steward (read the [Flow:SylasSteward] lines in this run).");
+                yield break;
+            }
+            var newHeart = FindAnyObjectByType<HeartController>();
+            if (newHeart != null)
+            {
+                float d = Vector3.Distance(sylas.transform.position, newHeart.transform.position);
+                if (d > 20f)
+                    FlowTrace.Warn(Tag, $"AssertStewardSurvivesNewGame: link 6 SOFT — Sylas respawned {d:0.0}m from the Heart (expected a courtyard-adjacent spawn <= 20m).");
+                else
+                    FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 6 PASS — Sylas respawned {d:0.0}m from the Heart.");
+            }
+
+            _lastDetail = "steward survived Onboarded=true + New Game respawned Sylas";
+            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: PASS — the injector survived Onboarded=true (body-only unload) and a same-run New Game respawned Sylas near the Heart (FTUE-1 locked).");
+        }
+
         private static float TimeoutFor(string phase)
         {
             switch (phase)
@@ -2424,6 +2620,7 @@ namespace DeNelle.DevTools
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
                 case "AssertTutorialFirstTower": return 45f;  // P0 real-input build-placement probe (enter + arm + 8 candidate clicks + signal waits)
                 case "AssertFoundingArc": return 75f;         // WO-702: Sylas poll + greet dialogue drive + Hollow placement + grant/DEFEND waits
+                case "AssertStewardSurvivesNewGame": return 60f; // FTUE-1: 2.5s poll wait + New-Game hub reload + hero re-resolve + 5s Sylas wait + slack
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row

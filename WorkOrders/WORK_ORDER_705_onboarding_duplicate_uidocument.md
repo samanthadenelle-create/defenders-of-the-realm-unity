@@ -13,6 +13,13 @@ being evaded, do NOT greenfield).
 Fired ×3 across the harvested runs (seeds 1000–1003 window). Zero softlocks/talk violations in the
 same runs — the duplicate is live but its input-eating consequence didn't trip this pass.
 
+**NEW VARIANT (fleet 2026-07-13 evening, seeds 7000+, ×7 + ×3):** same class also fires for a SECOND
+PanelSettings asset — `[Flow:BotUI] duplicate UIDocument: 2 ENABLED documents share PanelSettings
+'DevRuntimePanelSettings' in scene 'Title' (cause=arm) — docs=[[DEV] QA Dev Console,JupiterSwapHost]`
+(runs 9/11, seeds 7009/7011) — plus the known OnboardingPanelSettings pair now naming
+`docs=[JupiterSwapHost,SplashLoading]`. The RCA must cover both assets; `JupiterSwapHost` appears in
+every capture and is the common suspect.
+
 ## Known context (read BEFORE touching anything)
 
 - `Assets/_Modules/Onboarding/OnboardingPanelGuard.cs` exists precisely for this: several runtime

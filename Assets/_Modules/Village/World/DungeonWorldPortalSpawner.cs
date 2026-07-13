@@ -13,10 +13,14 @@
 //   hero gets close — a small fog-of-war reveal so finding one feels like a find.
 //
 // RECONCILIATION (no parallel system — CLAUDE.md §9). EVERYTHING is reused:
-//   * PLACEMENT  — region-gated NavMesh-valid points via the SAME pattern as
-//     RegionMobSpawner.TryFindSpawnPoint: pick a candidate in an outer region
-//     (ZoneManager.GetZone / RegionSpawnTable.HasRoster) and snap it to the baked
-//     NavMesh (NavMesh.SamplePosition). One portal per assigned region.
+//   * PLACEMENT  — AUTHORED WORLD-POSITION TABLE (owner ruling 2026-07-13:
+//     "Portals are NOT in town — portals are wherever in the world we want",
+//     refined live: "visible from castle but a little walk"). The old random
+//     region-fan placement could exhaust its attempts and silently place
+//     NOTHING (the MaxPlaceAttempts=24 give-up); the table is deterministic —
+//     a portal ALWAYS appears at its authored spot, NavMesh-seated with the
+//     townsfolk-injector ground band [-0.35..0.75] so it never lands on a
+//     wall-top. Retune by editing AuthoredPortals below.
 //   * PORTAL VISUAL + INTERACTION + LOAD — the EXISTING DungeonPortal component:
 //     it already builds its own PortalVFXController glow, shows the proximity
 //     [Tap/F] prompt + MobileInteractButton, and routes via
@@ -43,7 +47,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-using DeNelle.Core.World;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.World
@@ -51,18 +54,15 @@ namespace DeNelle.Village.World
     /// <summary>
     /// Places a few hidden, discoverable dungeon portals at NavMesh-valid positions
     /// out in the OuterWorld regions and wires each to load its dungeon via the
-    /// existing <see cref="DungeonPortal"/>. Self-bootstrapping; reuses ZoneManager,
-    /// the NavMesh, DungeonDef data and the DungeonPortal interaction/load path.
+    /// existing <see cref="DungeonPortal"/>. Self-bootstrapping; placement comes from
+    /// the authored AuthoredPortals table (owner ruling 2026-07-13), seated on the
+    /// NavMesh; reuses DungeonDef data and the DungeonPortal interaction/load path.
     /// </summary>
     public sealed class DungeonWorldPortalSpawner : MonoBehaviour
     {
         public static DungeonWorldPortalSpawner Instance { get; private set; }
 
         // ── Tunables (code-only; no SO authoring) ────────────────────────────
-        [Tooltip("Where in a region to aim a portal: distance OUT past the village wall " +
-                 "(along the region's dominant axis) the placement ray targets.")]
-        public float RegionDepthMeters = 95f;
-
         [Tooltip("How far the hero must come for an undiscovered portal to reveal (metres). " +
                  "Larger than DungeonPortal's own ActivateRadius so the portal lights up " +
                  "as you approach, before the [F] prompt arms.")]
@@ -82,16 +82,41 @@ namespace DeNelle.Village.World
         [Tooltip("Visual height of the placeholder portal arch (metres).")]
         public float PortalHeight = 4f;
 
-        // Which region each available dungeon lives in. Assigned round-robin across the
-        // outer (non-Village) regions in danger order so the easy dungeon sits in the
-        // gentle region and harder ones sit deeper. Reuses ZoneManager's RegionId set.
-        private static readonly RegionId[] OuterRegionsByDanger =
+        // ── Authored world placements (owner ruling 2026-07-13) ─────────────
+        // "Portals are NOT in town — portals are wherever in the world we want",
+        // refined live: "they should travel to get there ... make visible from
+        // castle but a little walk". Geography: wall ring ~r=44, bridge outer
+        // ends ~r=66-72, south gate ~z=-62 reads adjacent, the cave at z=-404 is
+        // a trek. These sit ~95-100m past the wall ring (~140m from origin,
+        // ~70-75m walk from the nearest bridge end) on open overworld ground with
+        // a clear sightline back to the castle, on two compass sides so the two
+        // dungeons pull the player different ways. Retune by editing this table
+        // (owner has the Orient/dev tools). FacingYawDeg fronts the arch toward
+        // the castle so the hero reads its face on approach.
+        private struct AuthoredPortal
         {
-            RegionId.Goldfields, // tier 1 — gentlest
-            RegionId.Stoneback,  // tier 2
-            RegionId.Mirewood,   // tier 3
-            RegionId.Ashwood,    // tier 4 — deadliest
+            public string DungeonId;
+            public Vector3 WorldPos;
+            public float FacingYawDeg;
+            public AuthoredPortal(string id, Vector3 pos, float yaw)
+            { DungeonId = id; WorldPos = pos; FacingYawDeg = yaw; }
+        }
+
+        private static readonly AuthoredPortal[] AuthoredPortals =
+        {
+            // EAST of the walls: ~141m from origin (~97m past the r~44 ring,
+            // ~72m walk from the east bridge end). Yaw 262 faces the castle.
+            new AuthoredPortal("HealersCottage", new Vector3(140f, 0f, 20f), 262f),
+            // WEST of the walls, mirrored — the opposite compass pull. Yaw 82
+            // faces the castle.
+            new AuthoredPortal("FolksGranary",   new Vector3(-140f, 0f, -20f), 82f),
         };
+
+        // Townsfolk-injector ground band (CastleTownsfolkInjector.GroundMinY/MaxY):
+        // a NavMesh sample outside [-0.35..0.75] is elevated mesh (wall-top /
+        // bridge deck) — never a valid portal seat.
+        private const float GroundMinY = -0.35f;
+        private const float GroundMaxY = 0.75f;
 
         // PlayerPrefs key prefix for "this portal has been discovered" (position-keyed,
         // same convention as NodeDiscoverySystem so discovery survives a reload).
@@ -170,19 +195,33 @@ namespace DeNelle.Village.World
         }
 
         // =====================================================================
-        // Placement — one portal per assigned dungeon, region-gated + NavMesh-snapped.
-        // Waits (retry) until OuterWorld is loaded and a NavMesh is baked.
+        // Placement — one portal per authored table row (owner ruling 2026-07-13).
+        // Waits (retry) only for a baked NavMesh; once the mesh exists placement is
+        // DETERMINISTIC: every authored portal is built (ground-band-seated when the
+        // sample lands, raw authored point otherwise) — the old random-region path
+        // could exhaust its attempts and silently place NOTHING.
         // =====================================================================
         private void TryPlace()
         {
             var defs = LoadDefs();
             if (defs.Count == 0) return; // nothing to place (no built dungeon scenes)
 
-            // Gate on a baked NavMesh existing — without it every SamplePosition fails and
-            // we'd place portals on un-walkable ground. The triangulation is empty until the
-            // OuterWorld NavMesh bake is present at runtime.
+            // Gate on a baked NavMesh existing — the ground-band seat needs it. The
+            // triangulation is empty until the OuterWorld NavMesh bake is present at
+            // runtime. Retries stay CAPPED: CalculateTriangulation is HEAVY and an
+            // uncapped retry loop hard-hung the OuterWorld load pre-cap.
             var tri = NavMesh.CalculateTriangulation();
-            if (tri.vertices == null || tri.vertices.Length == 0) return;
+            if (tri.vertices == null || tri.vertices.Length == 0)
+            {
+                _placeAttempts++;
+                if (_placeAttempts >= MaxPlaceAttempts)
+                {
+                    _placed = true;
+                    Debug.LogWarning($"[DungeonWorldPortals] no baked NavMesh after {_placeAttempts} attempts — " +
+                        "stopping retries to avoid a CalculateTriangulation freeze (no portals this session).");
+                }
+                return;
+            }
 
             _root = new GameObject("[DungeonWorldPortals]").transform;
             DontDestroyOnLoad(_root.gameObject);
@@ -190,81 +229,66 @@ namespace DeNelle.Village.World
             int placed = 0;
             for (int i = 0; i < defs.Count; i++)
             {
-                RegionId region = OuterRegionsByDanger[i % OuterRegionsByDanger.Length];
-                if (TryFindPortalPoint(region, out Vector3 pos))
+                var def = defs[i];
+                if (def == null || string.IsNullOrEmpty(def.DungeonId)) continue;
+
+                if (!TryGetAuthored(def.DungeonId, out AuthoredPortal entry))
                 {
-                    BuildPortal(defs[i], pos);
-                    placed++;
+                    // Never fall back to random ground — an unauthored dungeon is a
+                    // loud authoring gap, not a silent roll of the dice.
+                    Debug.LogWarning($"[DungeonWorldPortals] '{def.DungeonId}' has NO authored world position " +
+                        "in AuthoredPortals — portal not placed; add a table row.");
+                    continue;
                 }
-                else
-                {
-                    Debug.LogWarning($"[DungeonWorldPortals] No NavMesh-valid point in {region} for " +
-                        $"'{defs[i].DungeonId}' — portal not placed this region.");
-                }
+
+                Vector3 pos = SeatOnGround(entry.WorldPos, out bool seated);
+                BuildPortal(def, pos, entry.FacingYawDeg);
+                placed++;
+                FlowTrace.Step("DungeonPortal",
+                    $"placed '{def.DungeonId}' at ({pos.x:F1}, {pos.y:F1}, {pos.z:F1}) " +
+                    $"(authored {entry.WorldPos}, navmesh-seated={seated}, facingYaw={entry.FacingYawDeg:F0}).");
             }
 
-            if (placed > 0)
-            {
-                _placed = true;
-                Debug.Log($"[DungeonWorldPortals] Placed {placed} hidden dungeon portal(s) across the outer world.");
-            }
-            else
-            {
-                // Couldn't seat any yet (NavMesh maybe still loading) — leave _placed false to retry.
-                if (_root != null) { Destroy(_root.gameObject); _root = null; }
-
-                // ...but CAP the retries: every attempt runs the HEAVY CalculateTriangulation
-                // above, so an outpost that can NEVER seat (all region matches fail) would
-                // re-run it forever on the main thread = a hard hang on OuterWorld load.
-                // After MaxPlaceAttempts, give up: stop retrying (portals just don't appear).
-                _placeAttempts++;
-                if (_placeAttempts >= MaxPlaceAttempts)
-                {
-                    _placed = true;
-                    Debug.LogWarning($"[DungeonWorldPortals] gave up after {_placeAttempts} attempts — " +
-                        "stopping retries to avoid a CalculateTriangulation freeze.");
-                }
-            }
+            // Authored placement is one-pass deterministic — never re-roll.
+            _placed = true;
+            Debug.Log($"[DungeonWorldPortals] Placed {placed}/{defs.Count} authored dungeon portal(s) in the world.");
         }
 
-        // Aim a point deep in the target region (dominant-axis fan-out, mirrors ZoneManager's
-        // model) and snap it to the baked NavMesh — the SAME approach as
-        // RegionMobSpawner.TryFindSpawnPoint, but biased to a region instead of the player.
-        private bool TryFindPortalPoint(RegionId region, out Vector3 pos)
+        private static bool TryGetAuthored(string dungeonId, out AuthoredPortal entry)
         {
-            Vector3 dir = RegionDirection(region);
-            for (int attempt = 0; attempt < 12; attempt++)
+            for (int i = 0; i < AuthoredPortals.Length; i++)
             {
-                // Jitter around the region's depth target so portals aren't perfectly radial.
-                float depth = RegionDepthMeters * Random.Range(0.8f, 1.25f);
-                Vector2 lat = Random.insideUnitCircle * 30f; // lateral spread off the axis
-                Vector3 perp = new Vector3(-dir.z, 0f, dir.x);
-                Vector3 want = dir * depth + perp * lat.x + new Vector3(0f, 0f, 0f);
-                want.y = 0f;
-
-                if (NavMesh.SamplePosition(want, out NavMeshHit hit, 12f, NavMesh.AllAreas)
-                    && ZoneManager.GetZone(hit.position) == region)
+                if (string.Equals(AuthoredPortals[i].DungeonId, dungeonId, System.StringComparison.OrdinalIgnoreCase))
                 {
-                    pos = hit.position;
+                    entry = AuthoredPortals[i];
                     return true;
                 }
             }
-            pos = Vector3.zero;
+            entry = default;
             return false;
         }
 
-        // Outward unit direction toward a region core (matches ZoneManager's cardinal fan-out:
-        // East +X Goldfields, West -X Stoneback, South -Z Mirewood, North +Z Ashwood).
-        private static Vector3 RegionDirection(RegionId region)
+        // Ground-band NavMesh seat (the townsfolk-injector idiom): accept a sample only
+        // inside [-0.35..0.75] so a portal never seats on a wall-top / bridge deck;
+        // widen the search once, then fall back to the raw authored point at y=0 —
+        // a portal ALWAYS appears where authored.
+        private static Vector3 SeatOnGround(Vector3 authored, out bool seated)
         {
-            switch (region)
+            float[] radii = { 8f, 20f };
+            for (int i = 0; i < radii.Length; i++)
             {
-                case RegionId.Goldfields: return Vector3.right;     // +X East
-                case RegionId.Stoneback:  return Vector3.left;      // -X West
-                case RegionId.Mirewood:   return Vector3.back;      // -Z South
-                case RegionId.Ashwood:    return Vector3.forward;   // +Z North
-                default:                  return Vector3.right;
+                if (NavMesh.SamplePosition(authored, out NavMeshHit hit, radii[i], NavMesh.AllAreas)
+                    && hit.position.y >= GroundMinY && hit.position.y <= GroundMaxY)
+                {
+                    seated = true;
+                    return hit.position;
+                }
             }
+            FlowTrace.Warn("DungeonPortal",
+                $"SeatOnGround: no ground-band [-0.35..0.75] NavMesh hit within 20m of authored {authored} — " +
+                "using the raw authored point (verify walkability in the next fleet run).");
+            seated = false;
+            return new Vector3(authored.x, 0f, authored.z);
         }
 
         // =====================================================================
@@ -272,7 +296,7 @@ namespace DeNelle.Village.World
         // driver (proximity prompt + SceneManager.LoadScene). DungeonPortal adds its own
         // PortalVFXController glow in Start(), so the arch reads as a portal with no asset.
         // =====================================================================
-        private void BuildPortal(DungeonDef def, Vector3 pos)
+        private void BuildPortal(DungeonDef def, Vector3 pos, float facingYawDeg)
         {
             using var _ = FlowTrace.Enter("DungeonPortals", $"BuildPortal id='{def?.DungeonId}'");
             if (def == null)
@@ -284,10 +308,8 @@ namespace DeNelle.Village.World
             var root = new GameObject($"DungeonWorldPortal_{def.DungeonId}");
             root.transform.SetParent(_root, false);
             root.transform.position = pos;
-            // Face the arch back toward the village centre so the hero reads its front.
-            Vector3 toVillage = -new Vector3(pos.x, 0f, pos.z);
-            if (toVillage.sqrMagnitude > 0.01f)
-                root.transform.rotation = Quaternion.LookRotation(toVillage.normalized);
+            // Authored facing (fronts read toward the castle — owner-retunable in the table).
+            root.transform.rotation = Quaternion.Euler(0f, facingYawDeg, 0f);
 
             var renderers = BuildArch(root.transform, PortalHeight, def.AccentColor);
 

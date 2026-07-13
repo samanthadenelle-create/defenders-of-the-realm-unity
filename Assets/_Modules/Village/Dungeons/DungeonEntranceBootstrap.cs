@@ -27,10 +27,18 @@ namespace DeNelle.Village
 
         private bool _placed;
 
+        // Owner ruling 2026-07-13: "Portals are NOT in town — portals are wherever in the
+        // world we want." The Heart-ring town doors are retired; world placement lives in
+        // DungeonWorldPortalSpawner's authored table. Code kept intact for later reuse
+        // (readonly, not const, so the gate below is not compile-time unreachable code).
+        private static readonly bool TownRingRetired = true;
+
         private void Start() => PlaceEntrances();
 
         public void PlaceEntrances()
         {
+            // Dormant per the 2026-07-13 owner ruling above — dungeon doors live in the world now.
+            if (TownRingRetired) return;
             // Dungeon entry gated OFF (owner 2026-07-01): first 2 dungeons are placeholder "pill" scenes
             // (KayKit dungeon art not wired). Flagged off for the public milestone; re-enable for testing:
             // PlayerPrefs "ff.dungeonportals" = 1 (FeatureFlags.DungeonPortals, default OFF).
