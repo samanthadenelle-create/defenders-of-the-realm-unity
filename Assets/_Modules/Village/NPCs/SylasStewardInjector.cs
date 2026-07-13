@@ -105,6 +105,15 @@ namespace DeNelle.Village
         }
 
         // 1 Hz Onboarded watch — "use the model for him, then unload it".
+        // FTUE-1 ROOT (owner F8 "no Sylas. Verify with DATA please", 2026-07-13, proven by
+        // her session log: Bootstrap ENTER + injector created at Title, then NO Inject line
+        // ever): the old code ALSO destroyed the INJECTOR here — and this poll runs on the
+        // TITLE screen, where the previously-loaded save (Onboarded=true after her Skip)
+        // made ArcIncomplete false, so the injector silently self-destructed BEFORE New Game
+        // reset Onboarded. RuntimeInitializeOnLoadMethod fires once per app run — nothing
+        // rebuilt it, and the hub loaded stewardless. THE FIX: unload the BODY only; the
+        // injector stays resident (a dormant 1 Hz check) so a New Game in the same app run
+        // gets its fresh spawn via OnSceneLoaded -> Inject.
         private void Update()
         {
             if (Time.unscaledTime < _nextPollAt) return;
@@ -114,11 +123,9 @@ namespace DeNelle.Village
                 var holder = GameObject.Find(HolderName);
                 if (holder != null)
                 {
-                    FlowTrace.Step("SylasSteward", "founding arc complete (Onboarded) — despawning Sylas's body (owner: 'use the model, then unload it').");
+                    FlowTrace.Step("SylasSteward", "founding arc complete (Onboarded) — despawning Sylas's body (owner: 'use the model, then unload it'); injector stays resident for a New Game this run.");
                     Destroy(holder);
                 }
-                // Injector retires with the arc: nothing left to watch or spawn.
-                Destroy(gameObject);
             }
         }
 

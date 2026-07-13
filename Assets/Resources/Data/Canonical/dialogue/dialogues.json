@@ -1,791 +1,1396 @@
 {
-  "version": 2,
-  "speakers": [
-    { "name": "Miller",      "affiliation": "Windmill",         "portrait": "Portraits/farm" },
-    { "name": "Woodcutter",  "affiliation": "Lumbermill",       "portrait": "Portraits/lumbermill" },
-    { "name": "Echo Warden", "affiliation": "Echo Hollow",      "portrait": "Portraits/pet-house" },
-    { "name": "Arcanist",    "affiliation": "Arcane Tower",     "portrait": "Portraits/arcane-tower" },
-    { "name": "Drillmaster", "affiliation": "Barracks",         "portrait": "Portraits/barracks" },
-    { "name": "Brom",        "affiliation": "Town Crier",       "portrait": "Portraits/brom" },
-    { "name": "Sylas",       "affiliation": "Ranger Companion", "portrait": "Portraits/Sylas" },
-    { "name": "Coppin",      "affiliation": "Marketplace",      "portrait": "Portraits/market" },
-    { "name": "Blacksmith",  "affiliation": "Forge",            "portrait": "Portraits/forge" },
-    { "name": "Armorer",     "affiliation": "Armorer's Hall",   "portrait": "Portraits/armorer" },
-    { "name": "Sable",       "affiliation": "Jeweler's Bench",  "portrait": "Portraits/jeweler" },
-    { "name": "Herbalist",   "affiliation": "Apothecary",       "portrait": "Portraits/apothecary" },
-    { "name": "Echo",        "affiliation": "Spirit of the Tree", "portrait": "Portraits/pet-house" }
-  ],
-  "dialogues": [
+ "version": 2,
+ "speakers": [
+  {
+   "name": "Miller",
+   "affiliation": "Windmill",
+   "portrait": "Portraits/farm"
+  },
+  {
+   "name": "Woodcutter",
+   "affiliation": "Lumbermill",
+   "portrait": "Portraits/lumbermill"
+  },
+  {
+   "name": "Echo Warden",
+   "affiliation": "Echo Hollow",
+   "portrait": "Portraits/pet-house"
+  },
+  {
+   "name": "Arcanist",
+   "affiliation": "Arcane Tower",
+   "portrait": "Portraits/arcane-tower"
+  },
+  {
+   "name": "Drillmaster",
+   "affiliation": "Barracks",
+   "portrait": "Portraits/barracks"
+  },
+  {
+   "name": "Brom",
+   "affiliation": "Town Crier",
+   "portrait": "Portraits/brom"
+  },
+  {
+   "name": "Sylas",
+   "affiliation": "Ranger Companion",
+   "portrait": "Portraits/Sylas"
+  },
+  {
+   "name": "Coppin",
+   "affiliation": "Marketplace",
+   "portrait": "Portraits/market"
+  },
+  {
+   "name": "Blacksmith",
+   "affiliation": "Forge",
+   "portrait": "Portraits/forge"
+  },
+  {
+   "name": "Armorer",
+   "affiliation": "Armorer's Hall",
+   "portrait": "Portraits/armorer"
+  },
+  {
+   "name": "Sable",
+   "affiliation": "Jeweler's Bench",
+   "portrait": "Portraits/jeweler"
+  },
+  {
+   "name": "Herbalist",
+   "affiliation": "Apothecary",
+   "portrait": "Portraits/apothecary"
+  },
+  {
+   "name": "Echo",
+   "affiliation": "Spirit of the Tree",
+   "portrait": "Portraits/pet-house"
+  },
+  {
+   "name": "Bryn",
+   "affiliation": "The Wanderer",
+   "portrait": "Portraits/apothecary"
+  }
+ ],
+ "dialogues": [
+  {
+   "id": "echo_first_meeting",
+   "startNode": "stir",
+   "nodes": [
     {
-      "id": "echo_first_meeting",
-      "startNode": "stir",
-      "nodes": [
-        {
-          "id": "stir",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/pet-house"] }
-          ],
-          "lines": [
-            { "speaker": "Echo", "text": "The Tree stirs - a spirit answers. It will gather for Elarion, even while you are away." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "brom_intro",
-      "startNode": "greet",
-      "nodes": [
-        {
-          "id": "greet",
-          "lines": [
-            { "speaker": "Brom", "text": "Word travels in Elarion. What do you need, defender?" }
-          ],
-          "options": [
-            { "text": "Show me the rumor board.", "goto": "open_board" },
-            { "text": "Tell me of the Dimming.", "requires": "quest_dimming_active", "goto": "dimming" },
-            { "text": "Just passing through.", "goto": "end" }
-          ]
-        },
-        {
-          "id": "open_board",
-          "commands": [
-            { "verb": "OpenRumorBoard", "args": [] }
-          ]
-        },
-        {
-          "id": "dimming",
-          "lines": [
-            { "speaker": "Brom", "text": "The light fails at the realm's edge. Few return who chase it." },
-            { "speaker": "Brom", "text": "If you mean to, the board has the threads. Mind the dark." }
-          ],
-          "next": "greet"
-        }
-      ]
-    },
-    {
-      "id": "pet-house",
-      "startNode": "warden",
-      "nodes": [
-        {
-          "id": "warden",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/pet-house"] }
-          ],
-          "lines": [
-            { "speaker": "Echo Warden", "text": "Welcome to the Echo Hollow. The echoes here seek a bond. Choose one and it will fight at your side, guard Elarion, and return to you always." }
-          ],
-          "options": [
-            { "text": "A frost-warden - the Ice Wolf. Steady and tough.", "requires": "pet_grantable_ice-wolf", "goto": "grant_ice" },
-            { "text": "The Ice Wolf already walks with you.", "requires": "pet_owned_ice-wolf", "goto": "have_ice" },
-            { "text": "A hearth-hound - the Flame Pup. Fierce and fast.", "requires": "pet_grantable_flame-pup", "goto": "grant_flame" },
-            { "text": "The Flame Pup already walks with you.", "requires": "pet_owned_flame-pup", "goto": "have_flame" },
-            { "text": "A heart-ward - the Aether Sprite. Quick and arcane.", "requires": "pet_grantable_aether-sprite", "goto": "grant_aether" },
-            { "text": "The Aether Sprite already walks with you.", "requires": "pet_owned_aether-sprite", "goto": "have_aether" },
-            { "text": "I'll return when I can take another.", "requires": "pet_select_closed", "goto": "closed" },
-            { "text": "Not yet - I will return.", "goto": "later" }
-          ]
-        },
-        {
-          "id": "grant_ice",
-          "commands": [
-            { "verb": "spawn_named_pet", "args": ["ice-wolf"] }
-          ],
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Ice Wolf is attuned to you. It will chill any foe that nears the Heart." }
-          ]
-        },
-        {
-          "id": "have_ice",
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Ice Wolf is already bonded to you - it answers your call when you need it." }
-          ]
-        },
-        {
-          "id": "grant_flame",
-          "commands": [
-            { "verb": "spawn_named_pet", "args": ["flame-pup"] }
-          ],
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Flame Pup answers your call. Its embers will scorch the enemy." }
-          ]
-        },
-        {
-          "id": "have_flame",
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Flame Pup is already bonded to you - its embers are yours to command." }
-          ]
-        },
-        {
-          "id": "grant_aether",
-          "commands": [
-            { "verb": "spawn_named_pet", "args": ["aether-sprite"] }
-          ],
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Aether Sprite flits to your side. It will ward the Heart with arcane light." }
-          ]
-        },
-        {
-          "id": "have_aether",
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The Aether Sprite is already bonded to you - its arcane light is ever at your side." }
-          ]
-        },
-        {
-          "id": "closed",
-          "lines": [
-            { "speaker": "Echo Warden", "text": "Welcome back. Your echo already walks with you - the bond is whole. When your bond can hold another, the echoes will be waiting." }
-          ]
-        },
-        {
-          "id": "later",
-          "lines": [
-            { "speaker": "Echo Warden", "text": "The hollow is always open when you are ready." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "SylasFirstMeeting",
-      "startNode": "encounter",
-      "nodes": [
-        {
-          "id": "encounter",
-          "lines": [
-            { "speaker": "Sylas", "text": "Hold - easy. Keep your hand off that hilt; if I wanted you down you'd not have heard me at all." },
-            { "speaker": "Sylas", "text": "I've had eyes on you since the treeline. You're the new Keeper. The Heart's been louder since you came - even out here I felt it stir." }
-          ],
-          "options": [
-            { "text": "Who are you?", "goto": "who" },
-            { "text": "You've been following me.", "goto": "following" }
-          ]
-        },
-        {
-          "id": "who",
-          "lines": [
-            { "speaker": "Sylas", "text": "Sylas. Scout of the Reach. I've read these woods longer than the Hollow Ones have walked them." },
-            { "speaker": "Sylas", "text": "I knew the people who gave themselves to that tree. Some of those Echoes were friends. So I keep the wild off the wall, and I don't ask for thanks." }
-          ],
-          "next": "hook"
-        },
-        {
-          "id": "following",
-          "lines": [
-            { "speaker": "Sylas", "text": "Watching. There's a difference, and you'll learn it. A scout who follows gets seen. A scout who watches keeps you alive." },
-            { "speaker": "Sylas", "text": "I'm Sylas - Scout of the Reach. And I don't trail just anyone through these trees." }
-          ],
-          "next": "hook"
-        },
-        {
-          "id": "hook",
-          "lines": [
-            { "speaker": "Sylas", "text": "The wild's been restless. Something past the dark side of this land is pushing them toward Elarion - the Hollow Ones first, and worse behind them." },
-            { "speaker": "Sylas", "text": "I can read a trail three days cold. You can hold a wall. Apart, we each lose slow. Together, maybe we don't." }
-          ],
-          "options": [
-            { "text": "Then walk with me.", "goto": "accept" },
-            { "text": "Why should I trust a stranger in the woods?", "goto": "doubt" }
-          ]
-        },
-        {
-          "id": "doubt",
-          "lines": [
-            { "speaker": "Sylas", "text": "You shouldn't. Not on my word. So trust the arrow - I'll put one in whatever finds us first, and you can decide what I'm worth after." }
-          ],
-          "options": [
-            { "text": "...Fair. Walk with me, Sylas.", "goto": "accept" },
-            { "text": "I work alone.", "goto": "decline" }
-          ]
-        },
-        {
-          "id": "accept",
-          "commands": [
-            { "verb": "StartQuest", "args": ["companion.sylas"] },
-            { "verb": "RecruitCompanion", "args": ["Ranger"] },
-            { "verb": "SetQuestFlag", "args": ["companion.sylas", "met"] }
-          ],
-          "lines": [
-            { "speaker": "Sylas", "text": "He lowers the bow, and something in his shoulders eases. Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first." },
-            { "speaker": "Sylas", "text": "Stay near the wall when the horns sound. Out here, I'll go first - I always have." },
-            { "speaker": "Sylas", "text": "Lead on. Let's see what the dark side of this land is hiding." }
-          ],
-          "next": "accept_close"
-        },
-        {
-          "id": "accept_close",
-          "commands": [
-            { "verb": "CompleteQuest", "args": ["companion.sylas"] }
-          ]
-        },
-        {
-          "id": "decline",
-          "lines": [
-            { "speaker": "Sylas", "text": "Suit yourself. Proud gets you killed out here, but it's your wall to bleed for." },
-            { "speaker": "Sylas", "text": "He fades back toward the trees. I'll be in the treeline when you change your mind, Keeper. You will." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "CompanionMeeting",
-      "startNode": "meet",
-      "nodes": [
-        {
-          "id": "meet",
-          "lines": [
-            { "speaker": "Sylas", "text": "You made it to the wall. Good. I'm Sylas - Scout of the Reach. I've kept the wild off these stones since long before you came." },
-            { "speaker": "Sylas", "text": "The Heart's been louder since you arrived, Keeper. That's not nothing - it means the light still answers someone." }
-          ],
-          "next": "charge"
-        },
-        {
-          "id": "charge",
-          "commands": [
-            { "verb": "StartQuest", "args": ["companion.sylas"] },
-            { "verb": "RecruitCompanion", "args": ["Ranger"] },
-            { "verb": "SetQuestFlag", "args": ["companion.sylas", "met"] },
-            { "verb": "CompleteQuest", "args": ["companion.sylas"] }
-          ],
-          "lines": [
-            { "speaker": "Sylas", "text": "Here is the shape of it: drive the dark back from the Heart and the tree grows. A brighter Heart is a stronger Heart - and the echoes gather more for you while you fight." },
-            { "speaker": "Sylas", "text": "When the horns sound, hold the line. I'll take the treeline. Let's see what the dark side of this land is hiding." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "farm",
-      "startNode": "portrait",
-      "nodes": [
-        {
-          "id": "portrait",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/farm"] }
-          ],
-          "next": "talk"
-        },
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Miller", "text": "The grain comes slow in the Dimming, Keeper - but it comes. Drive the dark back and the fields will answer." },
-            { "speaker": "Miller", "text": "Stop by the build menu when you've crystal to spare and we'll raise what this mill can yield." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "lumbermill",
-      "startNode": "portrait",
-      "nodes": [
-        {
-          "id": "portrait",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/lumbermill"] }
-          ],
-          "next": "talk"
-        },
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Woodcutter", "text": "Timber for the walls, timber for the fires. The forest gives what the Heart can spare, and no more." },
-            { "speaker": "Woodcutter", "text": "Care to grow the cut? The upgrade's yours to call when the coin's in hand." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "arcane-tower",
-      "startNode": "portrait",
-      "nodes": [
-        {
-          "id": "portrait",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/arcane-tower"] }
-          ],
-          "next": "talk"
-        },
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Arcanist", "text": "The runes hum louder since you came, Keeper. The Heart's light feeds them, and through them the towers see far." },
-            { "speaker": "Arcanist", "text": "When you would deepen the weave, the tower stands ready to learn." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "barracks",
-      "startNode": "portrait",
-      "nodes": [
-        {
-          "id": "portrait",
-          "commands": [
-            { "verb": "portrait", "args": ["Portraits/barracks"] }
-          ],
-          "next": "talk"
-        },
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Drillmaster", "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves." },
-            { "speaker": "Drillmaster", "text": "Strengthen the barracks and I'll turn out steadier blades for the line." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "market",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Coppin", "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming." },
-            { "speaker": "Coppin", "text": "Come, have a look before the good pieces go." }
-          ],
-          "options": [
-            { "text": "I'd like to buy.", "goto": "open_buy" },
-            { "text": "I'd like to sell.", "goto": "open_sell" },
-            { "text": "Show me the Realm Store.", "goto": "open_realm" },
-            { "text": "Just passing through.", "goto": "end" }
-          ]
-        },
-        {
-          "id": "open_buy",
-          "commands": [
-            { "verb": "OpenShop", "args": ["market", "buy"] }
-          ]
-        },
-        {
-          "id": "open_sell",
-          "commands": [
-            { "verb": "OpenShop", "args": ["market", "sell"] }
-          ]
-        },
-        {
-          "id": "open_realm",
-          "commands": [
-            { "verb": "OpenRealmStore", "args": [] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "forge",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Blacksmith", "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do." },
-            { "speaker": "Blacksmith", "text": "Take up what the line needs." }
-          ],
-          "options": [
-            { "text": "I'd like to buy.", "goto": "open_buy" },
-            { "text": "I'd like to sell.", "goto": "open_sell" },
-            { "text": "Just passing through.", "goto": "end" }
-          ]
-        },
-        {
-          "id": "open_buy",
-          "commands": [
-            { "verb": "OpenShop", "args": ["forge", "buy"] }
-          ]
-        },
-        {
-          "id": "open_sell",
-          "commands": [
-            { "verb": "OpenShop", "args": ["forge", "sell"] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "armorer",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Armorer", "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not." },
-            { "speaker": "Armorer", "text": "Step in and let's fit you proper." }
-          ],
-          "options": [
-            { "text": "I'd like to buy.", "goto": "open_buy" },
-            { "text": "I'd like to sell.", "goto": "open_sell" },
-            { "text": "Just passing through.", "goto": "end" }
-          ]
-        },
-        {
-          "id": "open_buy",
-          "commands": [
-            { "verb": "OpenShop", "args": ["armorer", "buy"] }
-          ]
-        },
-        {
-          "id": "open_sell",
-          "commands": [
-            { "verb": "OpenShop", "args": ["armorer", "sell"] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "jeweler",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Sable", "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light." },
-            { "speaker": "Sable", "text": "Come, look closer." }
-          ],
-          "options": [
-            { "text": "I'd like to buy.", "goto": "open_buy" },
-            { "text": "I'd like to sell.", "goto": "open_sell" },
-            { "text": "Just passing through.", "goto": "end" }
-          ]
-        },
-        {
-          "id": "open_buy",
-          "commands": [
-            { "verb": "OpenShop", "args": ["jeweler", "buy"] }
-          ]
-        },
-        {
-          "id": "open_sell",
-          "commands": [
-            { "verb": "OpenShop", "args": ["jeweler", "sell"] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "apothecary",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Herbalist", "text": "Mind the fumes, Keeper - every tincture on this bench is a small argument with the Dimming." },
-            { "speaker": "Herbalist", "text": "Bring me herbs and I'll bring you back from anything. Step up to the bench." }
-          ],
-          "next": "open"
-        },
-        {
-          "id": "open",
-          "commands": [
-            { "verb": "OpenAlchemy", "args": [] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "jewelers-bench",
-      "startNode": "talk",
-      "nodes": [
-        {
-          "id": "talk",
-          "lines": [
-            { "speaker": "Sable", "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light." },
-            { "speaker": "Sable", "text": "Step up to the bench and we'll set a stone together." }
-          ],
-          "next": "open"
-        },
-        {
-          "id": "open",
-          "commands": [
-            { "verb": "OpenJeweler", "args": [] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_move_to_sylas",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Ho, Keeper! Over here - by the gate. Quickly now, before the light thins." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_meet_sylas",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Sylas, Scout of the Reach. I know your name, Keeper - the whole town does." },
-            { "speaker": "Sylas", "text": "Hear me: when the horns sound, they come for the gates. And they WILL sound." },
-            { "speaker": "Sylas", "text": "So we make ready first. Walk with me." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_first_tower",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Before the horns sound, we build. See that gate? The last attack came through there." },
-            { "speaker": "Sylas", "text": "Tap BUILD and raise a watchtower - this first one is on me." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_first_tower_done",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Look at it stand! That's YOURS, Keeper - and it holds this gate with you." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_town_wave",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them." },
-            { "speaker": "Sylas", "text": "Horns! Here they come - to the gate, Keeper!" }
-          ],
-          "commands": [
-            { "verb": "play_sfx", "args": ["horn_warning"] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_town_wave_done",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "The line held - you and that tower of yours, together. That is how home is kept." },
-            { "speaker": "Sylas", "text": "Take your due - a defender earns their keep." }
-          ],
-          "commands": [
-            { "verb": "grant_resources_for_towers", "args": ["1"] }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_world_encounter",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Out there is DIFFERENT. No walls. No towers." },
-            { "speaker": "Sylas", "text": "When something finds you in the open, it's you alone in the fight - start to finish. Go and learn it." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_world_encounter_win",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Alone - and enough. Remember the feel of that, Keeper." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_world_encounter_retry",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Up, Keeper! The field forgives nothing - but it teaches fast. Again." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_return_home",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Home now. In town: waves at the gates, your towers beside you. Out there: just you." },
-            { "speaker": "Sylas", "text": "Two fights, Keeper. Always know which one you're in." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_freedom",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "And look - the Tree stirs. You drove the dark back, and Elarion ANSWERED." },
-            { "speaker": "Sylas", "text": "When the horn calls DEFEND, fortify every gate. Venture out. Grow stronger. Defend better." },
-            { "speaker": "Sylas", "text": "It's all yours now, Keeper. I'll be by the gate." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_greet",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "This is your castle - and this tree is what we defend. Everything else is yours to build." },
-            { "speaker": "Sylas", "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_hollow",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it." },
-            { "speaker": "Sylas", "text": "Build a thing, and the thing gives back. You'll see." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_hollow_done",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "There - and look what came out to meet you. That one's yours now, Keeper." },
-            { "speaker": "Sylas", "text": "And that little light by the Hollow is an Echo - tap it sometime; it works for you now." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_stores",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Choose your ground with care. Some roofs hold your stores - grain, timber, coin." },
-            { "speaker": "Sylas", "text": "When the horde comes, they'll strike what they can reach - an exposed lumber yard burns first, and what burns stops earning." },
-            { "speaker": "Sylas", "text": "Put what you cannot afford to lose where you can afford to defend it." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_town",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours." },
-            { "speaker": "Sylas", "text": "Take your time. A town is a plan you walk through every day." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_echo",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "See that little light? An Echo - the tree's helper. It came with your Hollow." },
-            { "speaker": "Sylas", "text": "Tap it and choose what it gathers for you - wood, iron or grain. While you rest, it works." }
-          ],
-          "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
-        }
-      ]
-    },
-    {
-      "id": "tut_founding_defense",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab." },
-            { "speaker": "Sylas", "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_ctx_echo_assign",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_ctx_first_spend",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_ctx_gear_equip",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "New steel in your pack? Iron serves no one in a chest - equip it." }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tut_ctx_talents",
-      "startNode": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "lines": [
-            { "speaker": "Sylas", "text": "A talent earned! Open your talents and shape how you fight, Keeper." }
-          ]
-        }
-      ]
+     "id": "stir",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/pet-house"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Echo",
+       "text": "The Tree stirs - a spirit answers. It will gather for Elarion, even while you are away."
+      }
+     ]
     }
-  ]
+   ]
+  },
+  {
+   "id": "brom_intro",
+   "startNode": "greet",
+   "nodes": [
+    {
+     "id": "greet",
+     "lines": [
+      {
+       "speaker": "Brom",
+       "text": "Word travels in Elarion. What do you need, defender?"
+      }
+     ],
+     "options": [
+      {
+       "text": "Show me the rumor board.",
+       "goto": "open_board"
+      },
+      {
+       "text": "Tell me of the Dimming.",
+       "requires": "quest_dimming_active",
+       "goto": "dimming"
+      },
+      {
+       "text": "Just passing through.",
+       "goto": "end"
+      }
+     ]
+    },
+    {
+     "id": "open_board",
+     "commands": [
+      {
+       "verb": "OpenRumorBoard",
+       "args": []
+      }
+     ]
+    },
+    {
+     "id": "dimming",
+     "lines": [
+      {
+       "speaker": "Brom",
+       "text": "The light fails at the realm's edge. Few return who chase it."
+      },
+      {
+       "speaker": "Brom",
+       "text": "If you mean to, the board has the threads. Mind the dark."
+      }
+     ],
+     "next": "greet"
+    }
+   ]
+  },
+  {
+   "id": "pet-house",
+   "startNode": "warden",
+   "nodes": [
+    {
+     "id": "warden",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/pet-house"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "Welcome to the Echo Hollow. The echoes here seek a bond. Choose one and it will fight at your side, guard Elarion, and return to you always."
+      }
+     ],
+     "options": [
+      {
+       "text": "A frost-warden - the Ice Wolf. Steady and tough.",
+       "requires": "pet_grantable_ice-wolf",
+       "goto": "grant_ice"
+      },
+      {
+       "text": "The Ice Wolf already walks with you.",
+       "requires": "pet_owned_ice-wolf",
+       "goto": "have_ice"
+      },
+      {
+       "text": "A hearth-hound - the Flame Pup. Fierce and fast.",
+       "requires": "pet_grantable_flame-pup",
+       "goto": "grant_flame"
+      },
+      {
+       "text": "The Flame Pup already walks with you.",
+       "requires": "pet_owned_flame-pup",
+       "goto": "have_flame"
+      },
+      {
+       "text": "A heart-ward - the Aether Sprite. Quick and arcane.",
+       "requires": "pet_grantable_aether-sprite",
+       "goto": "grant_aether"
+      },
+      {
+       "text": "The Aether Sprite already walks with you.",
+       "requires": "pet_owned_aether-sprite",
+       "goto": "have_aether"
+      },
+      {
+       "text": "I'll return when I can take another.",
+       "requires": "pet_select_closed",
+       "goto": "closed"
+      },
+      {
+       "text": "Not yet - I will return.",
+       "goto": "later"
+      }
+     ]
+    },
+    {
+     "id": "grant_ice",
+     "commands": [
+      {
+       "verb": "spawn_named_pet",
+       "args": [
+        "ice-wolf"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Ice Wolf is attuned to you. It will chill any foe that nears the Heart."
+      }
+     ]
+    },
+    {
+     "id": "have_ice",
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Ice Wolf is already bonded to you - it answers your call when you need it."
+      }
+     ]
+    },
+    {
+     "id": "grant_flame",
+     "commands": [
+      {
+       "verb": "spawn_named_pet",
+       "args": [
+        "flame-pup"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Flame Pup answers your call. Its embers will scorch the enemy."
+      }
+     ]
+    },
+    {
+     "id": "have_flame",
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Flame Pup is already bonded to you - its embers are yours to command."
+      }
+     ]
+    },
+    {
+     "id": "grant_aether",
+     "commands": [
+      {
+       "verb": "spawn_named_pet",
+       "args": [
+        "aether-sprite"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Aether Sprite flits to your side. It will ward the Heart with arcane light."
+      }
+     ]
+    },
+    {
+     "id": "have_aether",
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The Aether Sprite is already bonded to you - its arcane light is ever at your side."
+      }
+     ]
+    },
+    {
+     "id": "closed",
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "Welcome back. Your echo already walks with you - the bond is whole. When your bond can hold another, the echoes will be waiting."
+      }
+     ]
+    },
+    {
+     "id": "later",
+     "lines": [
+      {
+       "speaker": "Echo Warden",
+       "text": "The hollow is always open when you are ready."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "SylasFirstMeeting",
+   "startNode": "encounter",
+   "nodes": [
+    {
+     "id": "encounter",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Hold - easy. Keep your hand off that hilt; if I wanted you down you'd not have heard me at all."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "I've had eyes on you since the treeline. You're the new Keeper. The Heart's been louder since you came - even out here I felt it stir."
+      }
+     ],
+     "options": [
+      {
+       "text": "Who are you?",
+       "goto": "who"
+      },
+      {
+       "text": "You've been following me.",
+       "goto": "following"
+      }
+     ]
+    },
+    {
+     "id": "who",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Sylas. Scout of the Reach. I've read these woods longer than the Hollow Ones have walked them."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "I knew the people who gave themselves to that tree. Some of those Echoes were friends. So I keep the wild off the wall, and I don't ask for thanks."
+      }
+     ],
+     "next": "hook"
+    },
+    {
+     "id": "following",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Watching. There's a difference, and you'll learn it. A scout who follows gets seen. A scout who watches keeps you alive."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "I'm Sylas - Scout of the Reach. And I don't trail just anyone through these trees."
+      }
+     ],
+     "next": "hook"
+    },
+    {
+     "id": "hook",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "The wild's been restless. Something past the dark side of this land is pushing them toward Elarion - the Hollow Ones first, and worse behind them."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "I can read a trail three days cold. You can hold a wall. Apart, we each lose slow. Together, maybe we don't."
+      }
+     ],
+     "options": [
+      {
+       "text": "Then walk with me.",
+       "goto": "accept"
+      },
+      {
+       "text": "Why should I trust a stranger in the woods?",
+       "goto": "doubt"
+      }
+     ]
+    },
+    {
+     "id": "doubt",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "You shouldn't. Not on my word. So trust the arrow - I'll put one in whatever finds us first, and you can decide what I'm worth after."
+      }
+     ],
+     "options": [
+      {
+       "text": "...Fair. Walk with me, Sylas.",
+       "goto": "accept"
+      },
+      {
+       "text": "I work alone.",
+       "goto": "decline"
+      }
+     ]
+    },
+    {
+     "id": "accept",
+     "commands": [
+      {
+       "verb": "StartQuest",
+       "args": [
+        "companion.sylas"
+       ]
+      },
+      {
+       "verb": "RecruitCompanion",
+       "args": [
+        "Ranger"
+       ]
+      },
+      {
+       "verb": "SetQuestFlag",
+       "args": [
+        "companion.sylas",
+        "met"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "He lowers the bow, and something in his shoulders eases. Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Stay near the wall when the horns sound. Out here, I'll go first - I always have."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Lead on. Let's see what the dark side of this land is hiding."
+      }
+     ],
+     "next": "accept_close"
+    },
+    {
+     "id": "accept_close",
+     "commands": [
+      {
+       "verb": "CompleteQuest",
+       "args": [
+        "companion.sylas"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "decline",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Suit yourself. Proud gets you killed out here, but it's your wall to bleed for."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "He fades back toward the trees. I'll be in the treeline when you change your mind, Keeper. You will."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "CompanionMeeting",
+   "startNode": "meet",
+   "nodes": [
+    {
+     "id": "meet",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "You made it to the wall. Good. I'm Sylas - Scout of the Reach. I've kept the wild off these stones since long before you came."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "The Heart's been louder since you arrived, Keeper. That's not nothing - it means the light still answers someone."
+      }
+     ],
+     "next": "charge"
+    },
+    {
+     "id": "charge",
+     "commands": [
+      {
+       "verb": "StartQuest",
+       "args": [
+        "companion.sylas"
+       ]
+      },
+      {
+       "verb": "RecruitCompanion",
+       "args": [
+        "Ranger"
+       ]
+      },
+      {
+       "verb": "SetQuestFlag",
+       "args": [
+        "companion.sylas",
+        "met"
+       ]
+      },
+      {
+       "verb": "CompleteQuest",
+       "args": [
+        "companion.sylas"
+       ]
+      }
+     ],
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Here is the shape of it: drive the dark back from the Heart and the tree grows. A brighter Heart is a stronger Heart - and the echoes gather more for you while you fight."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "When the horns sound, hold the line. I'll take the treeline. Let's see what the dark side of this land is hiding."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "farm",
+   "startNode": "portrait",
+   "nodes": [
+    {
+     "id": "portrait",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/farm"
+       ]
+      }
+     ],
+     "next": "talk"
+    },
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Miller",
+       "text": "The grain comes slow in the Dimming, Keeper - but it comes. Drive the dark back and the fields will answer."
+      },
+      {
+       "speaker": "Miller",
+       "text": "Stop by the build menu when you've crystal to spare and we'll raise what this mill can yield."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lumbermill",
+   "startNode": "portrait",
+   "nodes": [
+    {
+     "id": "portrait",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/lumbermill"
+       ]
+      }
+     ],
+     "next": "talk"
+    },
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Woodcutter",
+       "text": "Timber for the walls, timber for the fires. The forest gives what the Heart can spare, and no more."
+      },
+      {
+       "speaker": "Woodcutter",
+       "text": "Care to grow the cut? The upgrade's yours to call when the coin's in hand."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "arcane-tower",
+   "startNode": "portrait",
+   "nodes": [
+    {
+     "id": "portrait",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/arcane-tower"
+       ]
+      }
+     ],
+     "next": "talk"
+    },
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Arcanist",
+       "text": "The runes hum louder since you came, Keeper. The Heart's light feeds them, and through them the towers see far."
+      },
+      {
+       "speaker": "Arcanist",
+       "text": "When you would deepen the weave, the tower stands ready to learn."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "barracks",
+   "startNode": "portrait",
+   "nodes": [
+    {
+     "id": "portrait",
+     "commands": [
+      {
+       "verb": "portrait",
+       "args": [
+        "Portraits/barracks"
+       ]
+      }
+     ],
+     "next": "talk"
+    },
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Drillmaster",
+       "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves."
+      },
+      {
+       "speaker": "Drillmaster",
+       "text": "Strengthen the barracks and I'll turn out steadier blades for the line."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "market",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Coppin",
+       "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming."
+      },
+      {
+       "speaker": "Coppin",
+       "text": "Come, have a look before the good pieces go."
+      }
+     ],
+     "options": [
+      {
+       "text": "I'd like to buy.",
+       "goto": "open_buy"
+      },
+      {
+       "text": "I'd like to sell.",
+       "goto": "open_sell"
+      },
+      {
+       "text": "Show me the Realm Store.",
+       "goto": "open_realm"
+      },
+      {
+       "text": "Just passing through.",
+       "goto": "end"
+      }
+     ]
+    },
+    {
+     "id": "open_buy",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "market",
+        "buy"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "open_sell",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "market",
+        "sell"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "open_realm",
+     "commands": [
+      {
+       "verb": "OpenRealmStore",
+       "args": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "forge",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Blacksmith",
+       "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do."
+      },
+      {
+       "speaker": "Blacksmith",
+       "text": "Take up what the line needs."
+      }
+     ],
+     "options": [
+      {
+       "text": "I'd like to buy.",
+       "goto": "open_buy"
+      },
+      {
+       "text": "I'd like to sell.",
+       "goto": "open_sell"
+      },
+      {
+       "text": "Just passing through.",
+       "goto": "end"
+      }
+     ]
+    },
+    {
+     "id": "open_buy",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "forge",
+        "buy"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "open_sell",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "forge",
+        "sell"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "armorer",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Armorer",
+       "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not."
+      },
+      {
+       "speaker": "Armorer",
+       "text": "Step in and let's fit you proper."
+      }
+     ],
+     "options": [
+      {
+       "text": "I'd like to buy.",
+       "goto": "open_buy"
+      },
+      {
+       "text": "I'd like to sell.",
+       "goto": "open_sell"
+      },
+      {
+       "text": "Just passing through.",
+       "goto": "end"
+      }
+     ]
+    },
+    {
+     "id": "open_buy",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "armorer",
+        "buy"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "open_sell",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "armorer",
+        "sell"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "jeweler",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Sable",
+       "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
+      },
+      {
+       "speaker": "Sable",
+       "text": "Come, look closer."
+      }
+     ],
+     "options": [
+      {
+       "text": "I'd like to buy.",
+       "goto": "open_buy"
+      },
+      {
+       "text": "I'd like to sell.",
+       "goto": "open_sell"
+      },
+      {
+       "text": "Just passing through.",
+       "goto": "end"
+      }
+     ]
+    },
+    {
+     "id": "open_buy",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "jeweler",
+        "buy"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "open_sell",
+     "commands": [
+      {
+       "verb": "OpenShop",
+       "args": [
+        "jeweler",
+        "sell"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "apothecary",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Herbalist",
+       "text": "Mind the fumes, Keeper - every tincture on this bench is a small argument with the Dimming."
+      },
+      {
+       "speaker": "Herbalist",
+       "text": "Bring me herbs and I'll bring you back from anything. Step up to the bench."
+      }
+     ],
+     "next": "open"
+    },
+    {
+     "id": "open",
+     "commands": [
+      {
+       "verb": "OpenAlchemy",
+       "args": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "jewelers-bench",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Sable",
+       "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
+      },
+      {
+       "speaker": "Sable",
+       "text": "Step up to the bench and we'll set a stone together."
+      }
+     ],
+     "next": "open"
+    },
+    {
+     "id": "open",
+     "commands": [
+      {
+       "verb": "OpenJeweler",
+       "args": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_move_to_sylas",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Ho, Keeper! Over here - by the gate. Quickly now, before the light thins."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_meet_sylas",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Sylas, Scout of the Reach. I know your name, Keeper - the whole town does."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Hear me: when the horns sound, they come for the gates. And they WILL sound."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "So we make ready first. Walk with me."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_first_tower",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Before the horns sound, we build. See that gate? The last attack came through there."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Tap BUILD and raise a watchtower - this first one is on me."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_first_tower_done",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Look at it stand! That's YOURS, Keeper - and it holds this gate with you."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_town_wave",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Horns! Here they come - to the gate, Keeper!"
+      }
+     ],
+     "commands": [
+      {
+       "verb": "play_sfx",
+       "args": [
+        "horn_warning"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_town_wave_done",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "The line held - you and that tower of yours, together. That is how home is kept."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Take your due - a defender earns their keep."
+      }
+     ],
+     "commands": [
+      {
+       "verb": "grant_resources_for_towers",
+       "args": [
+        "1"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_world_encounter",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Out there is DIFFERENT. No walls. No towers."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "When something finds you in the open, it's you alone in the fight - start to finish. Go and learn it."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_world_encounter_win",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Alone - and enough. Remember the feel of that, Keeper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_world_encounter_retry",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Up, Keeper! The field forgives nothing - but it teaches fast. Again."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_return_home",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Home now. In town: waves at the gates, your towers beside you. Out there: just you."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Two fights, Keeper. Always know which one you're in."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_freedom",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "And look - the Tree stirs. You drove the dark back, and Elarion ANSWERED."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "When the horn calls DEFEND, fortify every gate. Venture out. Grow stronger. Defend better."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "It's all yours now, Keeper. I'll be by the gate."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_greet",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "This is your castle - and this tree is what we defend. Everything else is yours to build."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_hollow",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Build a thing, and the thing gives back. You'll see."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_hollow_done",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "There - and look what came out to meet you. That one's yours now, Keeper."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "And that little light by the Hollow is an Echo - tap it sometime; it works for you now."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_stores",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Choose your ground with care. Some roofs hold your stores - grain, timber, coin."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "When the horde comes, they'll strike what they can reach - an exposed lumber yard burns first, and what burns stops earning."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Put what you cannot afford to lose where you can afford to defend it."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_town",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Take your time. A town is a plan you walk through every day."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_echo",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "See that little light? An Echo - the tree's helper. It came with your Hollow."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Tap it and choose what it gathers for you - wood, iron or grain. While you rest, it works."
+      }
+     ],
+     "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_defense",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab."
+      },
+      {
+       "speaker": "Sylas",
+       "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_echo_assign",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_first_spend",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_gear_equip",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "New steel in your pack? Iron serves no one in a chest - equip it."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_talents",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "Sylas",
+       "text": "A talent earned! Open your talents and shape how you fight, Keeper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dun_torch_warden",
+   "startNode": "warn",
+   "nodes": [
+    {
+     "id": "warn",
+     "lines": [
+      {
+       "speaker": "Bryn",
+       "text": "No one walks the cottage dark. Take a torch - and mind it burning."
+      },
+      {
+       "speaker": "Bryn",
+       "text": "Your light feeds on oil and burns down as you walk. When the flame gutters, stand at the glowing oil stones - they fill it back up."
+      },
+      {
+       "speaker": "Bryn",
+       "text": "The deep rooms eat the unlit. Come back to me if your light dies."
+      }
+     ]
+    }
+   ]
+  }
+ ]
 }

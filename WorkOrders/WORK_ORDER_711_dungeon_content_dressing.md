@@ -13,7 +13,17 @@ ship on placeholder-or-better bodies.
    dark eats the unlit ("No one walks the cottage dark. Take a torch - and mind it burning."),
    hands/sells the first torch, the dungeon's dark rooms make the lesson true. Same dialogue
    rail as everything (DialogueService rows; ASCII; word-carries-meaning).
-2. *(append further owner annotations from this walk as F8s arrive — one row per pill.)*
+2. **Interaction = TEACHING TORCH USE IN THE DARK** (owner, live): the Talk teaches the
+   actual use-action; the first dark room makes it real.
+3. **DOORS: "anywhere with a door, use Door action — nav-link PORT from one side to the
+   other"** (owner, live): every dungeon door = an interact that teleports the hero across
+   (the RegionGate/HeroLinkCrossing idiom — the game's trusted crossing primitive). No
+   squeeze-through physics.
+4. **STAIRS THE SAME** ("same with steps going up"): interact -> port to the top/bottom
+   landing. Simple.
+5. **Scope law for this walk (owner, verbatim): "WE CAN COOK LATER BUT FOR NOW SIMPLE"** —
+   every slice above ships in its simplest honest form; polish/cooking is a later pass.
+*(append further owner annotations as F8s arrive — one row per pill/feature.)*
 
 ## Shape
 - Replace each annotated pill with: a body (People-pack/KayKit as available — placeholder

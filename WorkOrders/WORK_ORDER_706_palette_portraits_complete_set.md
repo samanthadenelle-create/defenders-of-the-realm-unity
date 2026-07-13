@@ -24,7 +24,9 @@ a world node; the three NEW storage containers added.)*
 7. `gate_stone.jpg` — Stone Gate
 8. `fountain_healing.jpg` — Wellspring of Elarion
 9. `deco_torch.jpg` — Wall Torch
-10. `market.jpg` exists but the tile becomes **Store (Buy Packs)** — re-author only if the
+10. `bryn.jpg` — Bryn the Wanderer (dungeon torch-warden; currently LOANING Portraits/apothecary
+    to satisfy the dialogue portrait standard — replace with her own face).
+11. `market.jpg` exists but the tile becomes **Store (Buy Packs)** — re-author only if the
     current image reads as a generic market rather than a pack store (UI-seat judgment).
 
 Match: obsidian-friendly storefront/structure portrait, same aspect + tone as

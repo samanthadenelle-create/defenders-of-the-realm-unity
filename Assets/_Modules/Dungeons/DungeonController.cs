@@ -285,11 +285,13 @@ namespace DeNelle.Dungeons
             ConfigureCamera();
             ConfigureLantern();
             ConfigureBryn();
+            DressEntranceNpc();
             HydrateLoreStones();
             HydrateCheckpoints();
             HydrateEncounters();
             ConfigureCrafting();
             ConfigureDungeonHud();
+            DressTraversalLinks();
             StartAmbientAudio();
 
             // Settle any in-flight ATB encounter — the dungeon module's side of
@@ -481,6 +483,21 @@ namespace DeNelle.Dungeons
             _bryn.SetHero(_hero);
             if (_loreFragments != null)
                 _bryn.SetLoreFragments(_loreFragments);
+        }
+
+        /// <summary>
+        /// WO-711 item 1 (owner order 2026-07-13, verbatim: "SKIN THE PILL IN
+        /// HEALERS COTTAGE AS A NPC"): dresses the entrance placeholder pill
+        /// (Bryn's capsule stand-in from the scene builder) with a real
+        /// People-pack body + a Talk teaching the torch/light need. Runs right
+        /// after <see cref="ConfigureBryn"/> so Bryn's authored placement and
+        /// rotation are final. Purely additive runtime dress — a failure logs
+        /// and leaves the pill visible; never breaks the dungeon.
+        /// </summary>
+        private void DressEntranceNpc()
+        {
+            Guard.Try("Dungeon", "dress entrance NPC (torch warden)",
+                () => TorchWardenDresser.Dress(_bryn, Layout, _hero));
         }
 
         /// <summary>
@@ -725,6 +742,184 @@ namespace DeNelle.Dungeons
                     $"'{pendingId}' on resume — clearing the handoff to unwedge the run (no combat-lock).");
                 _runtimeState.ResumeAfterEncounter(victory);
             }
+        }
+
+        // ── Traversal ports (WO-711 items 3-4 — owner rulings, live walk) ────
+
+        /// <summary>
+        /// Dresses every door and staircase with a simple interact-to-port pair
+        /// (WO-711: "anywhere with a door, use Door action — nav-link PORT from
+        /// one side to the other"; "same with steps going up"; "we can cook
+        /// later but for now simple"). Runtime-authored — never a scene edit.
+        ///
+        /// DOORS are keyed on the layout's <c>kind=="doorway"</c> wall segments
+        /// (each carries <c>leadsTo</c>): one <see cref="DungeonPortLink"/> per
+        /// side at the doorway midpoint, offset ~1.5u into each room, targeting
+        /// the mate point across the wall. Illusory walls are SKIPPED (the
+        /// secret walk-through is the design). STAIRS have no layout data —
+        /// they are keyed on DungeonSceneBuilder's authored vertical connectors
+        /// (BuildVerticalConnectors: stairs_long/-wood/-narrow + the cellar-entry
+        /// placeholder), so the three pairs are table-driven for the Healer's
+        /// Cottage only; another dungeon id logs a Warn instead of guessing.
+        /// </summary>
+        private void DressTraversalLinks()
+        {
+            if (Layout == null || _hero == null) return;
+
+            using var _flow = FlowTrace.Enter("Dungeon", "DressTraversalLinks (WO-711)");
+
+            var root = new GameObject("TraversalLinks");
+            root.transform.SetParent(transform, false);
+
+            // Room -> floor Y. The layout JSON carries NO level field (bounds are
+            // XZ-only); the level assignment is the scene builder's (ground Y=0,
+            // upper Y=6, underground Y=-6 — DungeonSceneBuilder.cs YUpper/YUnder
+            // + each RoomDef.Level). Unknown rooms fall back to any floor-level
+            // layout object in that room (checkpoint/encounter/chest y), else 0.
+            var roomY = new System.Collections.Generic.Dictionary<string, float>
+            {
+                { "garden-approach", 0f }, { "entrance-room", 0f }, { "main-room", 0f },
+                { "kitchen", 0f }, { "pantry-alcove", 0f }, { "workshop", 0f },
+                { "loft-bedroom", 6f }, { "loft-study", 6f },
+                { "root-cellar", -6f }, { "storage", -6f },
+                { "crypt-sublevel", -6f }, { "hidden-vault", -6f },
+            };
+
+            float LevelYFor(DungeonRoom room)
+            {
+                if (room == null) return 0f;
+                if (roomY.TryGetValue(room.id, out float y)) return y;
+                foreach (var c in Layout.checkpoints)
+                    if (c != null && c.roomId == room.id) return c.position.y;
+                foreach (var e in Layout.scriptedEncounters)
+                    if (e != null && e.roomId == room.id) return e.triggerPosition.y;
+                foreach (var ch in Layout.chests)
+                    if (ch != null && ch.roomId == room.id) return ch.position.y;
+                FlowTrace.Warn("Dungeon",
+                    $"DressTraversalLinks: no level Y known for room '{room.id}' — assuming 0.");
+                return 0f;
+            }
+
+            // Seat a point on the floor band so a port never lands inside
+            // geometry (the townsfolk y-band idiom): short ray down from just
+            // above the authored point onto the room's floor collider.
+            Vector3 SeatOnFloor(Vector3 p)
+            {
+                if (Physics.Raycast(p + Vector3.up * 2f, Vector3.down,
+                        out RaycastHit hit, 8f, ~0, QueryTriggerInteraction.Ignore))
+                    return hit.point + Vector3.up * 0.05f;
+                return p;
+            }
+
+            float YawTo(Vector3 from, Vector3 to)
+            {
+                Vector3 d = to - from; d.y = 0f;
+                if (d.sqrMagnitude < 0.0001f) return 0f;
+                return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
+            }
+
+            int built = 0;
+
+            void BuildPair(string pairName, string prompt,
+                Vector3 posA, string labelA, Vector3 posB, string labelB)
+            {
+                Guard.Try("Dungeon", $"traversal pair '{pairName}'", () =>
+                {
+                    Vector3 a = SeatOnFloor(posA);
+                    Vector3 b = SeatOnFloor(posB);
+
+                    var goA = new GameObject($"PortLink_{pairName}_A");
+                    goA.transform.SetParent(root.transform, false);
+                    goA.transform.position = a;
+                    goA.AddComponent<DungeonPortLink>().Configure(
+                        prompt, b, YawTo(a, b), _hero, _heroController, labelA, labelB);
+
+                    var goB = new GameObject($"PortLink_{pairName}_B");
+                    goB.transform.SetParent(root.transform, false);
+                    goB.transform.position = b;
+                    goB.AddComponent<DungeonPortLink>().Configure(
+                        prompt, a, YawTo(b, a), _hero, _heroController, labelB, labelA);
+
+                    built++;
+                    FlowTrace.Step("Dungeon",
+                        $"DressTraversalLinks: pair '{pairName}' ('{prompt}') " +
+                        $"{labelA}@{a} <-> {labelB}@{b}.");
+                });
+            }
+
+            // ── DOORS — one pair per doorway wall segment (deduped: the same
+            //    doorway is listed in BOTH rooms' wall arrays). ────────────────
+            var done = new System.Collections.Generic.HashSet<string>();
+            foreach (var room in Layout.rooms)
+            {
+                if (room?.walls == null) continue;
+                foreach (var wall in room.walls)
+                {
+                    if (wall == null || !wall.IsDoorway) continue;
+                    if (string.IsNullOrEmpty(wall.leadsTo)) continue;
+
+                    string key = string.CompareOrdinal(room.id, wall.leadsTo) < 0
+                        ? room.id + "|" + wall.leadsTo
+                        : wall.leadsTo + "|" + room.id;
+                    if (!done.Add(key)) continue;
+
+                    DungeonRoom other = Layout.FindRoom(wall.leadsTo);
+                    if (other == null)
+                    {
+                        // e.g. the workshop doorway leadsTo "exit" — not a room;
+                        // the dungeon exit is its own flow (ExitToVillage).
+                        FlowTrace.Warn("Dungeon",
+                            $"DressTraversalLinks: doorway in '{room.id}' leadsTo " +
+                            $"'{wall.leadsTo}' which is not a room — no port authored (un-keyable).");
+                        continue;
+                    }
+
+                    // Doorway midpoint + the wall's perpendicular, signed into
+                    // each room (toward that room's footprint centre).
+                    Vector3 s = wall.start.ToWorld(), e = wall.end.ToWorld();
+                    Vector3 mid = (s + e) * 0.5f;
+                    Vector3 dir = (e - s).normalized;
+                    Vector3 n = new Vector3(dir.z, 0f, -dir.x);
+                    Vector3 intoA = Vector3.Dot(n, room.bounds.Center - mid) >= 0f ? n : -n;
+
+                    float yA = LevelYFor(room), yB = LevelYFor(other);
+                    Vector3 posA = mid + intoA * 1.5f + Vector3.up * yA;
+                    Vector3 posB = mid - intoA * 1.5f + Vector3.up * yB;
+
+                    BuildPair($"Door_{room.id}__{other.id}", "Open Door",
+                        posA, room.id, posB, other.id);
+                }
+            }
+
+            // ── STAIRS — the builder's three authored vertical connectors
+            //    (no layout data; Healer's Cottage table only). ────────────────
+            if (Layout.id == "healers-cottage")
+            {
+                // stairs_long @ (-2,-6,-2): Main Room (ground) <-> Root Cellar;
+                // the cellar-entry affordance is dressed at root-cellar (-18,·,0).
+                BuildPair("Stairs_main-room__root-cellar", "Climb",
+                    new Vector3(-2f, 0f, -2f), "main-room",
+                    new Vector3(-18f, -6f, 0f), "root-cellar");
+
+                // stairs_wood @ (0,0,-4): Main Room (ground) <-> Loft Bedroom (Y6).
+                BuildPair("Stairs_main-room__loft-bedroom", "Climb",
+                    new Vector3(0f, 0f, -4f), "main-room",
+                    new Vector3(2f, 6f, -4f), "loft-bedroom");
+
+                // stairs_narrow @ (-12,-6,5): Entrance Room trapdoor <-> Root Cellar.
+                BuildPair("Stairs_entrance-room__root-cellar", "Climb",
+                    new Vector3(-12f, 0f, 5f), "entrance-room",
+                    new Vector3(-13f, -6f, 5f), "root-cellar");
+            }
+            else
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"DressTraversalLinks: no stair table for dungeon '{Layout.id}' — " +
+                    "stairs get no ports until authored (doors still dressed from the layout).");
+            }
+
+            FlowTrace.Step("Dungeon",
+                $"DressTraversalLinks: {built} traversal pair(s) authored ({built * 2} port links).");
         }
 
         // ── Audio ────────────────────────────────────────────────────────────
