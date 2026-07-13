@@ -182,7 +182,7 @@ Breach (from Village2 / dungeon) ─► GoBattle(BattleParams) ─► ATBBattle 
   is a separate singleton to verify-or-retire; `GameState.AetherCrystals` is DEPRECATED (folded
   into Resources.Crystals at save v18). Persistence spine: `GameState` (SO, 41 partialize fields)
   + `GameStateService` (Load/Save via PlayerPrefs `dotr-save` → migrate → validate → apply) +
-  `SaveSchema` (CurrentVersion=20) + `SaveMigrator` (v1→v20). Resource model (memory): Wood/Iron/
+  `SaveSchema` (CurrentVersion=30) + `SaveMigrator` (v1→v20). Resource model (memory): Wood/Iron/
   Food build structures; Crystals = special arc (unlock spells → jewelry → armor).
 
 - **Companion / FTUE / introducer — `DeNelle.Village` StoryCompanion + `DeNelle.Onboarding`.**

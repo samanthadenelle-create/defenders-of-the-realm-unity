@@ -11,7 +11,7 @@
 > preview deploying tonight** (non-dev build — the giant-error-overlay class dies); prior preview
 > `mexharnff` is superseded when the new URL lands; **prod UNTOUCHED**; **push HELD**. Live anchor =
 > **`CANON_GROUND_TRUTH_2026-07-12.md`** (the 07-08 anchor is bannered SUPERSEDED). Notes: `api/`
-> lives **IN-REPO (gitignored)** — the "separate React repo" line is dead; save schema **v29**;
+> lives **IN-REPO (gitignored)** — the "separate React repo" line is dead; save schema **v30**;
 > **`SAMANTHA.md` + the new `START_HERE.md` are the boot gate**; WO numbering **next-free = 684**
 > (677/678 collisions flagged). **BINDING: read-before-assert applies to EVERYTHING (code + non-code).**
 
@@ -45,7 +45,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
 ## Current State (updated 2026-07-12 evening — anchored to `CANON_GROUND_TRUTH_2026-07-12.md`)
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = tonight's WO-677/678/682/683 arc (through `683b917b`), ~100 commits ahead of origin, push HELD for owner word.** Save schema **v29** (heroLevel/heroXp/heroLifetimeXp, F8-47). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the 3-known-pre-exister baseline.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = tonight's WO-677/678/682/683 arc (through `683b917b`), ~100 commits ahead of origin, push HELD for owner word.** Save schema **v30** (v29 heroLevel/heroXp/heroLifetimeXp, F8-47). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the 3-known-pre-exister baseline.
 - **MOBILE-WEB DEMO READINESS is the live focus** (Pi hackathon July 31; build mode IS the demo — player-defined-map pivot 07-11), riding on the feel-arc/F8 program's quality bar (ten-year-old test). **WebGL ship preview deploying tonight** (non-dev build; `mexharnff` superseded when the new URL lands); **prod untouched** (Pi build at `defenders-of-the-realm-v2.vercel.app`). **Next big lane = WO-614 skill-tree solo rework** (RULED, READY).
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
