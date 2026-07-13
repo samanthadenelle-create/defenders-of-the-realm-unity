@@ -8,7 +8,7 @@
 ## Repo / git
 - **Branch `wip/village2-and-f8-tickets`, HEAD `f123859d`** (build-mode pointer-universal input +
   PLACE button). ~95+ commits ahead of origin, **push HELD** (owner's call). Sole committer = CLI.
-- **Save schema = v29** (heroLevel/heroXp/heroLifetimeXp, F8-47). The 07-08 anchor's "v28" is stale.
+- **Save schema = v30** (v29 heroLevel/heroXp/heroLifetimeXp F8-47; v30 strategicPlacementMigrated WO-673 — verified from SaveSchema.cs by the CoreSave SME 07-12; "v29" claims are stale). PetName + Settlements ARE persisted (GameState field comments claiming otherwise are stale); Tribes/Wards/Arena W-L are NOT (fail-by-design oracles in CoreSaveRegression).
 - **Dirty tree (in-flight, gated `COMPILE_GATE_OK` 2026-07-12):** WO-677 mobile build-mode verbs
   (uGUI verb bar rebuild + cancel latch + select-loop instrumentation) + WO-678 Pi-SDK 120s timeout
   clean wrap (index.html unhandledrejection/showBanner ownership + PiBridge/C# late-error handling)
