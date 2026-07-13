@@ -498,18 +498,18 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 7.0,
      "noOverlap": true,
      "checkAffordable": true
     }
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
+     -90.0,
      0.0,
-     0.0,
-     0.0
+     270.0
     ],
     "offset": [
      0.0,
@@ -517,7 +517,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (PetHouse2: pitch -90 / roll 270, sizeM 7); ported WO-707 after the owner's F8 showed the Hollow ghost lying on its side -- manual:true"
    }
   },
   {
