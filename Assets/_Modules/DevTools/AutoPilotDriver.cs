@@ -1357,8 +1357,16 @@ namespace DeNelle.DevTools
                 {
                     if (placedFired) break;
                     Vector2 sp = candidates[i];
+                    // TWO-STEP placement (owner ruling 2026-07-13): the world click only
+                    // DROPS the pending ghost — the PLACE latch is the ONLY commit. Drive
+                    // the REAL player sequence: click to drop, let the place loop consume
+                    // it, then raise the PLACE latch (the on-screen button's channel).
                     bot.Click(sp);
-                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: injected click at screen (" + sp.x.ToString("F0") + "," + sp.y.ToString("F0") + ") for cell " + candidateCells[i] + ".");
+                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: injected click (two-step DROP) at screen (" + sp.x.ToString("F0") + "," + sp.y.ToString("F0") + ") for cell " + candidateCells[i] + ".");
+                    float dw = 0f;
+                    while (dw < 0.3f && !placedFired) { dw += Time.deltaTime; yield return null; }
+                    ctrl.RequestUiPlaceConfirm();
+                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: PLACE latch raised for the pending drop (two-step commit).");
                     float w = 0f;
                     while (w < 1.2f && !placedFired) { w += Time.deltaTime; yield return null; }
                 }
@@ -1635,7 +1643,12 @@ namespace DeNelle.DevTools
                     FlowTrace.Step(Tag, $"AssertFoundingArc: {candidates.Count} pre-validated Hollow candidate cell(s).");
                     for (int i = 0; i < candidates.Count && !placedFired; i++)
                     {
+                        // TWO-STEP placement (owner ruling 2026-07-13): click = DROP only;
+                        // the PLACE latch commits (same sequence AssertTutorialFirstTower drives).
                         bot.Click(candidates[i]);
+                        float dw = 0f;
+                        while (dw < 0.3f && !placedFired) { dw += Time.deltaTime; yield return null; }
+                        ctrl.RequestUiPlaceConfirm();
                         float w = 0f;
                         while (w < 1.2f && !placedFired) { w += Time.deltaTime; yield return null; }
                     }

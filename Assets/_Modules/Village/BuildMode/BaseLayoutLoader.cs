@@ -419,9 +419,15 @@ namespace DeNelle.Village
                     }
                 }
                 if (!any) return;
-                const float margin = 0.5f;   // hug the walls, keep a hand's width of solidity
-                float rw = (maxX - minX) + margin;
-                float rd = (maxZ - minZ) + margin;
+                // Owner F8 2026-07-13 ("this is as close as i can get to the pet house — on
+                // the footprint"): renderer bounds include ROOF OVERHANGS/awnings (PetHouse2's
+                // eaves + slide), and the blocker box is full-height from the ground — so the
+                // roof's ground shadow was solid. Inset to the walls: 85% of the rendered XZ
+                // approximates walls-not-eaves across the low-poly set; still clamped to
+                // [1 cell .. claim] below, so worst case remains the honest old behavior.
+                const float eaveInset = 0.85f;
+                float rw = (maxX - minX) * eaveInset;
+                float rd = (maxZ - minZ) * eaveInset;
                 // Never LARGER than the claimed rectangle (the claim is the ceiling), never
                 // smaller than one cell (a sliver blocker lets enemies clip through walls).
                 cx = Mathf.Clamp(rw, cellSize, w);

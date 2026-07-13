@@ -6,11 +6,13 @@
 // The CREATE-verb controller. Enter() freezes the threat (WaveManager), pulls the
 // camera to a top-down overview, shows the grid + the code-built palette. Tapping
 // a palette card arms a CatalogEntry; a ghost tracks the cursor and tints green/
-// red; a valid tap places the structure through the ONE creation path
-// (StructureFactory.Create), occupies the grid, charges the persisted crystal
-// wallet ONLY AFTER a committed placement (WO-131), and appends to the live
-// BaseLayout. Exit() persists BaseLayout via GameStateService.Save(), restores the
-// camera, and resumes waves.
+// red. TWO-STEP placement (owner ruling 2026-07-13): a world tap DROPS the pending
+// ghost at the snapped cell (no commit, no charge; taps elsewhere re-drop); rotate
+// buttons/Q/E/d-pad adjust it freely; the PLACE button is the ONLY commit — through
+// the ONE creation path (StructureFactory.Create), occupying the grid, charging the
+// persisted wallet ONLY AFTER a committed placement (WO-131), and appending to the
+// live BaseLayout. Exit() persists BaseLayout via GameStateService.Save(), restores
+// the camera, and resumes waves.
 //
 // P1 = place-only (move / sell / rotate-edit / upgrade are P2, deferred). Rotate
 // the ghost before placing is supported (Q/E keys / touch ⟲⟳ buttons, ±45° steps —
@@ -173,6 +175,29 @@ namespace DeNelle.Village
 
         /// <summary>Explicit confirm from the on-screen PLACE button (web/mobile).</summary>
         public void RequestUiPlaceConfirm() => _uiPlaceLatch = true;
+
+        // ── TWO-STEP placement (owner ruling, live felt-test 2026-07-13) ──────
+        // Armed placement is now DROP -> adjust -> PLACE:
+        //   1. A world tap only DROPS/positions the pending ghost at the snapped
+        //      cell — NO commit, NO charge. Tapping elsewhere RE-DROPS it there.
+        //   2. Rotate Left/Right buttons, Q/E, and the d-pad adjust the pending
+        //      ghost freely (the d-pad NUDGES the pending point instead of
+        //      panning the camera while a drop is pending).
+        //   3. The PLACE button (_uiPlaceLatch) is the ONLY commit — it routes
+        //      through the same validation + Place() at the pending cell.
+        // Instant-place-on-ground-tap is DEAD. The flow is ORDER-FREE: rotation
+        // feeds the single _armedYawEighths state that poses the ghost every
+        // frame, so rotate-then-drop and drop-then-rotate are equally valid and
+        // the yaw persists across drops/re-drops. Before any drop the ghost
+        // follows the cursor as before (desktop hover feel unchanged), and PLACE
+        // with no drop commits at the hover cell (desktop convenience).
+        private bool _dropPending;        // a pending drop exists (ghost frozen at _dropWorldPoint)
+        private Vector3 _dropWorldPoint;  // world point of the pending drop (taps re-set it, d-pad nudges it)
+        private const float PendingNudgeScale = 0.5f;   // d-pad nudge speed vs. camera pan speed
+
+        /// <summary>What kind of confirm intent (if any) fired this frame — the split the
+        /// two-step flow needs: a WORLD tap drops/re-drops, the UI PLACE latch commits.</summary>
+        private enum ConfirmKind { None, UiPlace, WorldTap }
 
         // WO-702 (owner F8 2026-07-13: "on this screen i would like to see a rotate 90
         // left and right"): the on-screen Rotate Left/Right buttons latch quarter turns
@@ -706,7 +731,16 @@ namespace DeNelle.Village
             return s_uiHits.Count > 0;
         }
 
-        private bool PlaceConfirmedThisFrame()
+        private bool PlaceConfirmedThisFrame() => ConfirmIntentThisFrame() != ConfirmKind.None;
+
+        /// <summary>
+        /// Kind-aware confirm poll (two-step placement, 2026-07-13). Same body + same
+        /// consume-once/suppression rules as the old PlaceConfirmedThisFrame — it just
+        /// REPORTS the channel: the UI PLACE latch (the only commit while armed) vs. a
+        /// world tap (drop/re-drop while armed; still the direct commit for the MOVE
+        /// and SELECT loops via the bool wrapper above). Call at most ONCE per frame.
+        /// </summary>
+        private ConfirmKind ConfirmIntentThisFrame()
         {
             // On-screen PLACE button latch — consumed FIRST and NOT zone-suppressed:
             // a labeled button press is explicit intent (web/mobile fix, 2026-07-12).
@@ -714,10 +748,10 @@ namespace DeNelle.Village
             {
                 _uiPlaceLatch = false;
                 FlowTrace.Step("Build", "PlaceConfirm: UI PLACE button latch consumed (zone suppression bypassed).");
-                return true;
+                return ConfirmKind.UiPlace;
             }
             bool confirmed = _input.PlaceOrSelect;   // consumes the latch (touch driver)
-            if (!confirmed) return false;
+            if (!confirmed) return ConfirmKind.None;
             // TGVRU §12 (EDIT-ONLY instrumentation) — a confirm WAS read this frame; trace the
             // point + joystick-zone state so a web trace shows whether a real click reached
             // placement and why it may be suppressed. NOTE: we log the already-consumed
@@ -736,13 +770,13 @@ namespace DeNelle.Village
             if (IsPointOverUi(_input.ScreenPoint))
             {
                 FlowTrace.Warn("Build", $"PlaceConfirm SUPPRESSED: tap at {_input.ScreenPoint} is over UI (button tap, not a world placement)");
-                return false;
+                return ConfirmKind.None;
             }
             // Suppress confirms whose screen point sits in the move-stick zone.
             if (inZone)
             {
                 FlowTrace.Warn("Build", "PlaceConfirm SUPPRESSED by joystick zone");
-                return false;
+                return ConfirmKind.None;
             }
             // Suppress + REPORT confirms eaten by a pickable UI panel over the cursor — the silent
             // "cannot build" class (a full-screen scrim with a bad PanelSettings ate every click 3x
@@ -752,10 +786,10 @@ namespace DeNelle.Village
                 if (_blockLogged.Add(blocker))
                     FlowTrace.Warn("BuildMode", $"build/select click SUPPRESSED — cursor is over pickable UI '{blocker}'. " +
                         "If you CANNOT place a structure, THIS panel is eating the click — check its PanelSettings / PickingMode.");
-                return false;
+                return ConfirmKind.None;
             }
             FlowTrace.Step("Build", "PlaceConfirm CONFIRMED — placement/select proceeds this frame");
-            return true;
+            return ConfirmKind.WorldTap;
         }
 
         // PANEL-BLOCK GUARD (build-defense RCA 2026-06-19): is a pickable UI element sitting over
@@ -852,8 +886,20 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Rotate (Q/E keys / touch ⟲⟳ buttons — WO-673 L5) yaws the ghost ±45° before placing (free).
+            // Rotate (Q/E keys / touch ⟲⟳ buttons / on-screen Rotate pair — WO-673 L5 /
+            // WO-702) yaws the ghost ±45°/±90° freely in BOTH two-step states: while the
+            // ghost still follows the cursor (pre-drop) AND while it is frozen at a
+            // pending drop. One yaw state (_armedYawEighths) — order-free by design.
             PollRotateIntents();
+
+            // TWO-STEP: a pending drop exists — the ghost is frozen at the drop point;
+            // this frame re-validates/tints there, applies d-pad nudges, and handles
+            // re-drop taps + the PLACE commit.
+            if (_dropPending)
+            {
+                UpdateDroppedPlaceLoop();
+                return;
+            }
 
             if (!RaycastGround(out RaycastHit hit))
             {
@@ -880,26 +926,41 @@ namespace DeNelle.Village
                 $"PlaceLoop LIVE: armed='{_armed?.id}', ghostValid={valid}{(valid ? "" : $" (reject={reason})")}, input={_input?.GetType().Name}, " +
                 $"Mouse.current={(UnityEngine.InputSystem.Mouse.current != null)} — PlaceConfirm poll runs this frame");
 
-            // WO-394 — a CLICK that lands on an invalid target must never fail silently:
-            // pop a specific reason toast (+ denied buzz). The ghost already tints red via
-            // SetValid(false); this adds the WHY. Read the place-confirm latch once.
-            if (PlaceConfirmedThisFrame())
+            // TWO-STEP (owner ruling 2026-07-13, live felt-test): a world tap DROPS the
+            // pending ghost at this cell — NO commit, NO charge (instant-place-on-tap is
+            // DEAD). The PLACE latch is the only commit; with no drop yet it commits at
+            // the hover cell (desktop convenience — one fewer tap; harmless on touch).
+            // Read the confirm intent once (consume-once latch rule).
+            ConfirmKind confirm = ConfirmIntentThisFrame();
+            if (confirm == ConfirmKind.WorldTap)
+            {
+                // DROP — freeze the ghost here; rotate/nudge stay free; PLACE commits.
+                // Dropping is allowed even on an invalid cell (the ghost tints red and
+                // re-validates per frame; the player can nudge it valid) — but the WHY
+                // still surfaces immediately (WO-394 spirit).
+                _dropPending = true;
+                _dropWorldPoint = hit.point;
+                FlowTrace.Step("Build", $"Two-step DROP: '{_armed?.id}' pending at cell ({cell.x},{cell.y}), " +
+                    $"valid={valid}, yaw={ArmedYawDegrees:F0} — rotate/nudge free; PLACE commits.");
+                if (!valid) ShowRejectToast(reason);
+            }
+            else if (confirm == ConfirmKind.UiPlace)
             {
                 if (valid)
                 {
-                // PIVOT (owner decision) — placement is now IN-WORLD for ALL types: the
+                // PIVOT (owner decision) — placement is IN-WORLD for ALL types: the
                 // ghost shows the model upright (GhostPreview applies the entry's
                 // OrientationFix) and the player rotates in-world via Q/E / touch ⟲⟳
-                // buttons (±45° steps, WO-673 L5) before tapping to drop. The old modal
-                // Preview & Rotate panel (OpenRotateMenu/OnRotateConfirmed/
-                // OnRotateCancelled/_rotateMenu) is dormant — no longer called from
-                // placement. Place() derives yawSteps + yawOffset canonically from
-                // _armedYawEighths (yaw = yawSteps × 90 + yawOffset — no double-rotation).
+                // buttons (±45° steps, WO-673 L5). The old modal Preview & Rotate panel
+                // (OpenRotateMenu/OnRotateConfirmed/OnRotateCancelled/_rotateMenu) is
+                // dormant — no longer called from placement. Place() derives yawSteps +
+                // yawOffset canonically from _armedYawEighths.
+                    FlowTrace.Step("Build", $"Two-step COMMIT at HOVER cell ({cell.x},{cell.y}) — PLACE with no prior drop (desktop convenience).");
                     Place(cell, footprint, seatSnapped, wallMounted);
 
                     // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
-                    // ghost after a place. The same entry stays armed so the next valid tap
-                    // drops ANOTHER copy (lay a wall/fence run without re-selecting), and
+                    // ghost after a place. The same entry stays armed so the next drop+PLACE
+                    // lands ANOTHER copy (lay a wall/fence run without re-selecting), and
                     // _armedYawEighths is kept so the run holds its rotation. Each copy still
                     // re-validates + re-charges inside Place(). The player stops by Cancel/
                     // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
@@ -908,15 +969,138 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    // WO-394 — REJECTED click: surface the specific reason. For an
-                    // unaffordable entry, name the shortfall (e.g. "Not enough Wood")
-                    // rather than the generic "Not enough resources".
-                    if (reason == BuildRejectReason.CannotAfford)
-                        BuildFeedbackToast.Show(ShortfallMessage(CostFor(_armed)));
-                    else
-                        BuildFeedbackToast.Show(reason);
+                    ShowRejectToast(reason);
                 }
             }
+        }
+
+        /// <summary>
+        /// WO-394 — surface the specific reject reason for the armed entry. For an
+        /// unaffordable entry, name the shortfall (e.g. "Not enough Wood") rather than
+        /// the generic "Not enough resources".
+        /// </summary>
+        private void ShowRejectToast(BuildRejectReason reason)
+        {
+            if (reason == BuildRejectReason.CannotAfford)
+                BuildFeedbackToast.Show(ShortfallMessage(CostFor(_armed)));
+            else
+                BuildFeedbackToast.Show(reason);
+        }
+
+        /// <summary>
+        /// TWO-STEP dropped state (owner ruling 2026-07-13): the pending ghost sits frozen
+        /// at <see cref="_dropWorldPoint"/>. Each frame: apply d-pad nudges to the pending
+        /// point, re-validate + tint at its snapped cell (costs/occupancy can change while
+        /// the player deliberates), handle a world tap as a RE-DROP, and commit ONLY on
+        /// the PLACE latch — through the same IsValidPlacement + Place() path as ever.
+        /// </summary>
+        private void UpdateDroppedPlaceLoop()
+        {
+            // Read the confirm intent ONCE this frame (consume-once latch rule).
+            ConfirmKind confirm = ConfirmIntentThisFrame();
+
+            // A world tap elsewhere RE-DROPS the pending ghost at the new ground point.
+            if (confirm == ConfirmKind.WorldTap)
+            {
+                if (RaycastGround(out RaycastHit tapHit))
+                {
+                    _dropWorldPoint = tapHit.point;
+                    Vector2Int reCell = _grid.WorldToCell(_grid.SnapToGrid(tapHit.point));
+                    FlowTrace.Step("Build", $"Two-step RE-DROP: '{_armed?.id}' pending moved to cell ({reCell.x},{reCell.y}), yaw={ArmedYawDegrees:F0}.");
+                }
+                else
+                {
+                    FlowTrace.Warn("Build", "Two-step RE-DROP tap missed the ground — pending drop unchanged.");
+                }
+            }
+
+            // WO-683 — while a drop is pending, the d-pad NUDGES the pending ghost
+            // (UpdateBuildCameraPan skips its camera merge in this state).
+            NudgePendingDropFromDpad();
+
+            // Re-validate at the pending point via a straight-down ground probe (the
+            // cursor ray is irrelevant here — the ghost no longer follows it).
+            if (!RaycastGroundBelow(_dropWorldPoint, out RaycastHit hit))
+            {
+                TraceBlockedWhileArmed("pending-ground miss",
+                    $"down-ray at pending point {_dropWorldPoint} hit NOTHING — pending drop invalid");
+                _ghost.SetValid(false);
+                if (confirm == ConfirmKind.UiPlace) ShowRejectToast(BuildRejectReason.BadSurface);
+                return;
+            }
+
+            Vector3 snapped = _grid.SnapToGrid(hit.point);
+            _dropWorldPoint.y = hit.point.y;   // follow terrain height while nudging
+
+            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint,
+                out BuildRejectReason reason, out float seatY, out bool wallMounted);
+            Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
+            _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
+            _ghost.SetValid(valid);
+
+            // §12 heartbeat for the dropped state — mirrors the hover placeloop-live line.
+            FlowTrace.Throttle("Build", "placeloop-pending", 1f,
+                $"PlaceLoop PENDING: armed='{_armed?.id}', cell=({cell.x},{cell.y}), ghostValid={valid}{(valid ? "" : $" (reject={reason})")}, " +
+                $"yaw={ArmedYawDegrees:F0} — PLACE commits, taps re-drop, rotate/nudge free");
+
+            if (confirm == ConfirmKind.UiPlace)
+            {
+                if (valid)
+                {
+                    FlowTrace.Step("Build", $"Two-step COMMIT at PENDING cell ({cell.x},{cell.y}) — PLACE latch consumed, routing through Place().");
+                    Place(cell, footprint, seatSnapped, wallMounted);
+                    // STAY-ARMED is preserved; the NEXT copy starts back in hover state
+                    // (drop again to position it). Yaw persists across copies.
+                    _dropPending = false;
+                }
+                else
+                {
+                    ShowRejectToast(reason);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Straight-down ground probe at a world point (two-step pending re-validation).
+        /// Same mask + retry rules as <see cref="RaycastGroundAt"/> (configured mask
+        /// first, then all layers). The ghost's colliders are stripped (GhostPreview),
+        /// so the ray can never hit the pending preview itself.
+        /// </summary>
+        private bool RaycastGroundBelow(Vector3 worldPoint, out RaycastHit hit)
+        {
+            Vector3 origin = new Vector3(worldPoint.x, worldPoint.y + 50f, worldPoint.z);
+            if (Physics.Raycast(origin, Vector3.down, out hit, 200f, _groundMask)) return true;
+            return Physics.Raycast(origin, Vector3.down, out hit, 200f, ~0);
+        }
+
+        /// <summary>
+        /// WO-683 + two-step: while a drop is pending, the kit d-pad vector moves the
+        /// PENDING point (camera-relative XZ, clamped to the grid) instead of panning
+        /// the camera — "d-pad nudges adjust the pending ghost freely".
+        /// </summary>
+        private void NudgePendingDropFromDpad()
+        {
+            Vector2 dpad = ReadHudDpadMove();
+            if (dpad.sqrMagnitude <= DpadDeadZone * DpadDeadZone) return;
+            if (_camera == null) return;
+            dpad = Vector2.ClampMagnitude(dpad, 1f);
+            Vector3 fwd = _camera.transform.forward; fwd.y = 0f;
+            fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
+            Vector3 right = _camera.transform.right; right.y = 0f;
+            right = right.sqrMagnitude > 1e-4f ? right.normalized : Vector3.right;
+            _dropWorldPoint += (right * dpad.x + fwd * dpad.y) *
+                (_camPanSpeed * PendingNudgeScale * Time.unscaledDeltaTime);
+            // Clamp to the grid (map) bounds — mirrors the camera-focus clamp.
+            if (_grid != null)
+            {
+                float halfW = _grid.gridWidth  * _grid.cellSize * 0.5f;
+                float halfH = _grid.gridHeight * _grid.cellSize * 0.5f;
+                Vector3 mapCentre = _grid.origin + new Vector3(halfW, 0f, halfH);
+                _dropWorldPoint.x = Mathf.Clamp(_dropWorldPoint.x, mapCentre.x - halfW, mapCentre.x + halfW);
+                _dropWorldPoint.z = Mathf.Clamp(_dropWorldPoint.z, mapCentre.z - halfH, mapCentre.z + halfH);
+            }
+            FlowTrace.Throttle("Build", "pending-nudge", 0.5f,
+                $"pending ghost NUDGED by d-pad {dpad} -> {_dropWorldPoint}");
         }
 
         /// <summary>True when the armed catalog entry is a tower (gets the rotate panel).</summary>
@@ -1454,6 +1638,7 @@ namespace DeNelle.Village
             _armed = entry;
             _armedYawEighths = 0;
             _pendingPlace = false;
+            _dropPending = false;   // two-step: a fresh arm starts in hover (no pending drop)
             if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
             _ghost.SetEntry(entry);
         }
@@ -1461,6 +1646,7 @@ namespace DeNelle.Village
         private void CancelArmed()
         {
             _armed = null;
+            _dropPending = false;   // two-step: drop any pending (uncommitted) drop with the arm
             _ghost?.Hide();
             // WO-334 — if the rotate panel was mid-confirm, tear it down (no callback).
             if (_pendingPlace)
@@ -2250,7 +2436,11 @@ namespace DeNelle.Village
             // pad exactly like the desktop key nudge. Reads zero on desktop (nothing
             // publishes), so the keyboard path is byte-identical there. Below the §3.1
             // 0.18 inner dead-zone the pad counts as no-press.
-            Vector2 dpad = ReadHudDpadMove();
+            // TWO-STEP (2026-07-13): while a pending drop is frozen in the CREATE loop,
+            // the d-pad NUDGES the pending ghost (NudgePendingDropFromDpad) instead of
+            // panning the view — skip the camera merge so one press can't do both.
+            bool dpadNudgesPending = _armed != null && _dropPending && !_movingSelected;
+            Vector2 dpad = dpadNudgesPending ? Vector2.zero : ReadHudDpadMove();
             if (dpad.sqrMagnitude > DpadDeadZone * DpadDeadZone)
             {
                 move += dpad;
