@@ -11,14 +11,13 @@ same edit.**
 **Each new Echo amplifies the ENTIRE harvesting operation** — unlocking one is a global power
 event, not an incremental lane:
 
-- 1 Echo → global ×1 · 2 → ×2 · 3 → ×3 · 4 (cap) → ×4, applied to ALL harvest income
-  (echo lanes + collector accrual + offline) through ONE modifier read (the
-  `HeroTalentModifiers.StatSum` pattern — a single `echoGlobalMult` every harvest tick
-  consumes; no per-system math).
-- Unlock driver: wave milestones (5/10/15/20) — matches the v25 save-era rule
-  (`wavesCompleted` unlocks next echo ≤4); reconcile with WO-587's population-milestone slots
-  (pin #2: one driver must win; recommend waves as the owner's stated design, population XP
-  retiring into flavor).
+- **RULED (owner 2026-07-13): CAP = 5 — one echo at start, +1 at each wave-5 milestone.**
+  Start → 1 echo ×1 · wave 5 → 2 ×2 · wave 10 → 3 ×3 · wave 15 → 4 ×4 · wave 20 → 5 ×5 (max).
+  Applied to ALL harvest income (echo lanes + collector accrual + offline) through ONE modifier
+  read (the `HeroTalentModifiers.StatSum` pattern — a single `echoGlobalMult` every harvest
+  tick consumes; no per-system math). Matches shipped `MaxEchoes=5` + the northstar 5-cap —
+  no code-cap change needed; WO-587's population-milestone slot driver RETIRES in favor of the
+  wave driver (population stays as flavor/XP only).
 - Lane assignment (WO-658/WO-681 picker) STAYS — it chooses WHAT each echo gathers; the
   multiplier is the main power driver. Per-echo specialization bonuses stay minor.
 - Cap-4 capstone (owner "make the final unlock feel epic"): +10% on top OR reduced node
@@ -87,8 +86,12 @@ Collect All spine (WO-663) · pet-slot legacy persistence (separate pre-exister)
 1. **RESOLVED (owner to CLI, 2026-07-13 evening, verbatim): "echoes (rebranded originally as
    pets)"** — the harvesters are ECHOES; the pet-warm presentation (names/creature icons) is
    flavor. No canon reversal.
-2. Unlock driver (waves 5/10/15/20 as pasted, recommended) + cap: **OPEN — 4 (owner's table)
-   vs 5 (shipped code MaxEchoes=5, HUD shows "1/5")** — one must win.
+2. **RESOLVED (owner 2026-07-13): "5 is correct — 1 at start and 4 at levels of 5" — and the
+   clock confirmed verbatim: "correct the waves defended."**
+   Cap 5; unlocks at WAVES DEFENDED 5/10/15/20 (not hero levels); top multiplier ×5
+   (quadratic total tops at 25× one echo's base — tune base rates with that ceiling in view).
+   Wave driver wins; WO-587 population slots retire to flavor. Capstone flavor at the 5th echo (+10% vs reduced node
+   depletion) still open under pin #3.
 3. Multiplier curve: **RESOLVED — QUADRATIC-TOTAL** (owner answered "exactly" to CLI's
    explicit "2 companions = 4x a single" framing): totalIncome = Σ(perEchoBase) × echoCount;
    tune base rates down to compensate. Capstone flavor (+10% vs reduced depletion) still OPEN.
@@ -105,6 +108,12 @@ Collect All spine (WO-663) · pet-slot legacy persistence (separate pre-exister)
    steps visibly brighter — the permanent max-workforce tell, shape/brightness not color-only).
    Ships as TEXT via the dialogue/toast rail (no VO dependency for V1). Steward stays the
    tutorial voice only. **Awaiting owner yes on speaker + lines.**
+
+## Pacing watch item (owner, 2026-07-13 — playtest feedback, not now)
+"I think eventually we will need to add more time between battles — but that's going to be a
+feedback item." Note the coupling this WO creates: waves defended now drive the echo ladder,
+so stretching inter-battle time also slows workforce growth — tune the two dials together
+when the feedback lands.
 
 *Cross-refs:* mockup in-chat 2026-07-13 · ECHO_WORKFORCE_SPEC · WO-587 (slots) · WO-658/681
 (assignment + card) · WO-657 (depletion) · WO-699 (Steward voice) · COMBAT_PIVOT_NORTHSTAR ·
