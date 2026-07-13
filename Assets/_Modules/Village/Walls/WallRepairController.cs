@@ -683,10 +683,13 @@ namespace DeNelle.Village
         /// </summary>
         public static string DescribeMaterials(CoreCost c)
         {
+            // WO-697: currency amounts render through the ONE kit formatter
+            // (ElarionUi.CompactNumber — verbatim below 10k, "98.6k"/"1.2m" above),
+            // so a six-digit rebuild price can never clip a banner/prompt line.
             var parts = new List<string>(3);
-            if (c.wood > 0) parts.Add(c.wood + " wood");
-            if (c.iron > 0) parts.Add(c.iron + " iron");
-            if (c.food > 0) parts.Add(c.food + " food");
+            if (c.wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.wood) + " wood");
+            if (c.iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.iron) + " iron");
+            if (c.food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.food) + " food");
             return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
         }
 
@@ -700,7 +703,8 @@ namespace DeNelle.Village
             public string Name;
             public float DamageFraction;
             public CoreCost Cost;     // in-kind materials (owner 2026-07-11); crystals slot always 0
-            public Action Fix;        // the structure's existing Repair primitive
+            public Action Fix;        // the structure's full-restore path (REP-1: RepairFull, not a magnitude)
+            public Func<float> FractionNow; // live re-read of the damage fraction (post-fix proof line)
         }
 
         /// <summary>
@@ -758,9 +762,13 @@ namespace DeNelle.Village
                 spent.wood += item.Cost.wood;
                 spent.food += item.Cost.food;
                 spent.iron += item.Cost.iron;
+                // REP-1 post-fix state: re-read the live fraction AFTER the fix ran —
+                // a paid repair that leaves damage on the structure is a logged line.
+                float postFrac = item.FractionNow != null ? item.FractionNow() : -1f;
                 FlowTrace.Step("Repair",
                     $"RepairAll: {(rebuild ? "REBUILT" : "repaired")} '{item.Name}' " +
-                    $"(dmg {item.DamageFraction:0.00}) for {DescribeMaterials(item.Cost)}");
+                    $"(dmg {item.DamageFraction:0.00} -> post-fix {postFrac:0.00}) " +
+                    $"for {DescribeMaterials(item.Cost)}");
             }
 
             FlowTrace.Step("Repair",
@@ -810,29 +818,34 @@ namespace DeNelle.Village
                     Name = t.DisplayName,
                     DamageFraction = t.DamageFraction,
                     Cost = CostFor(t),
-                    Fix = () => tc.Repair(100f),   // full repair, same as ConfirmRepair
+                    Fix = () => tc.RepairFull(),   // REP-1: full BY CONTRACT (a fixed 100f under-repaired 120..240-MaxHp buildings), same as ConfirmRepair
+                    FractionNow = () => tc.DamageFraction,
                 });
             }
 
             foreach (var t in UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
+                    () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
+                    () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
+                    () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DeNelle.Village.World.HarvestSite>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
+                    () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
 
             foreach (var c in ResourceCollectorRegistry.All)
@@ -848,6 +861,7 @@ namespace DeNelle.Village
                     // Priced from its Collector catalog row (was free pre-ruling).
                     Cost = CostForStructure(c, frac),
                     Fix = () => cc.Repair(),
+                    FractionNow = () => cc.IsBroken ? 1f : 1f - Mathf.Clamp01(cc.HpFraction),
                 });
             }
 
@@ -857,7 +871,7 @@ namespace DeNelle.Village
         /// <summary>Adds one costed item for an HpFraction/IsBroken structure when damaged
         /// — priced from the structure's own catalog row via <see cref="CostForStructure"/>.</summary>
         private void AddHpItem(List<RepairAllItem> items, string name, Component structure,
-            float hpFraction, bool broken, Action repair)
+            float hpFraction, bool broken, Action repair, Func<float> fractionNow)
         {
             float frac = broken ? 1f : 1f - Mathf.Clamp01(hpFraction);
             if (frac <= 0.0001f) return;
@@ -867,6 +881,7 @@ namespace DeNelle.Village
                 DamageFraction = frac,
                 Cost = CostForStructure(structure, frac),
                 Fix = repair,
+                FractionNow = fractionNow,
             });
         }
 
@@ -878,8 +893,8 @@ namespace DeNelle.Village
         /// Confirms the repair/rebuild of the selected structure. Checks the
         /// material wallets, spends the in-kind cost through the construction
         /// economy (<see cref="SpendMaterials"/> — the SAME EconomyService path
-        /// build-mode placement charges), calls the structure's existing
-        /// <c>Repair()</c> primitive (full repair) and raises success feedback.
+        /// build-mode placement charges), calls <see cref="RepairTarget.RepairFull"/>
+        /// (full restore BY CONTRACT, REP-1) and raises success feedback.
         /// On a shortfall it raises an insufficient-materials message and leaves
         /// the prompt up so the player can cancel. Bound to the HUD prompt's
         /// Confirm button by the scene-setup editor file.
@@ -919,9 +934,11 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Repair() on each structure clamps to pristine — pass a full
-            // 0..100-scale repair so the structure is fully restored.
-            _selected.Repair(100f);
+            // REP-1: full repair BY CONTRACT — RepairFull resolves each structure's
+            // own full-restore magnitude. The old hardcoded Repair(100f) assumed
+            // every structure was 0..100-scaled; buildings.json authors MaxHp
+            // 120..240, so a paid repair left buildings visibly damaged.
+            _selected.RepairFull();
 
             FeedbackShown?.Invoke(
                 rebuild ? WallRepairStrings.RebuiltMessage : WallRepairStrings.SuccessMessage, false);

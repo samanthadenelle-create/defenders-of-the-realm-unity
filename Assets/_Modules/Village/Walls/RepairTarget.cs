@@ -20,6 +20,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -186,13 +187,17 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Applies a repair of <paramref name="amount"/> to the wrapped structure
-        /// through its existing <c>Repair()</c> primitive. The amount is on each
-        /// structure's native scale (0..100 damage points / HP) — the controller
-        /// passes a full repair, so the structure clamps to pristine.
+        /// Applies an INCREMENTAL repair of <paramref name="amount"/> to the
+        /// wrapped structure through its existing <c>Repair()</c> primitive. The
+        /// amount is on each structure's native scale (0..100 damage points for
+        /// walls/gates, HP for buildings). REP-1: a fixed 100 is NOT a full repair
+        /// for a Building — buildings.json authors MaxHp 120..240, so Repair(100f)
+        /// from 0 HP leaves HpFraction 0.42..0.83 and the damage visuals correctly
+        /// stay on. The charged player-repair flow must use <see cref="RepairFull"/>.
         /// </summary>
         public void Repair(float amount)
         {
+            float before = DamageFraction;
             switch (Kind)
             {
                 case RepairTargetKind.Wall:
@@ -205,6 +210,41 @@ namespace DeNelle.Village
                     if (_building != null) _building.Repair(amount);
                     break;
             }
+            // REP-1 no-silent-failure net: an under-delivering repair is a logged
+            // line (frac lands above 0.00 with needsRepair=True), never a silent
+            // still-damaged building.
+            FlowTrace.Step("Repair",
+                $"RepairTarget.Repair '{DisplayName}' ({Kind}) amount={amount} " +
+                $"frac {before:0.00}->{DamageFraction:0.00} needsRepair={NeedsRepair}");
+        }
+
+        /// <summary>
+        /// Fully restores the wrapped structure BY CONTRACT (REP-1): resolves each
+        /// kind's own full-restore magnitude instead of assuming a fixed 100-unit
+        /// amount is "full". Walls clear their 0..100 damage track; gates and
+        /// buildings top up by their own MaxHp (both primitives clamp at max, and
+        /// both derive their broken/destroyed state from HP — no separate latch to
+        /// clear). The charged repair paths (<see cref="WallRepairController"/>
+        /// ConfirmRepair / RepairAll) call this.
+        /// </summary>
+        public void RepairFull()
+        {
+            float before = DamageFraction;
+            switch (Kind)
+            {
+                case RepairTargetKind.Wall:
+                    if (_wall != null) _wall.Repair(100f);            // damage track is 0..100 by contract
+                    break;
+                case RepairTargetKind.Gate:
+                    if (_gate != null) _gate.Repair(_gate.MaxHp);     // additive, clamped at MaxHp
+                    break;
+                case RepairTargetKind.Building:
+                    if (_building != null) _building.Repair(_building.MaxHp); // additive, clamped at MaxHp
+                    break;
+            }
+            FlowTrace.Step("Repair",
+                $"RepairTarget.RepairFull '{DisplayName}' ({Kind}) " +
+                $"frac {before:0.00}->{DamageFraction:0.00} needsRepair={NeedsRepair}");
         }
 
         /// <summary>
