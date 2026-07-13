@@ -29,8 +29,12 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
    canonical files — `weapons.json` is 256,029 B in StreamingAssets (~433 weapons) vs 19,093 B in
    Resources (~16 weapons), and RESOURCES WINS at runtime → the shipped game plays the tiny
    catalog.** Also drifted: armor.json, daily-quests.json, skin.json, stake-rewards.json,
-   tower-perks.json. STEPS: owner rules which side is truth per file (streaming is presumably
-   newer) → sync the pairs → `DATAWEB_OK` flips green. This may explain missing gear in play.
+   tower-perks.json. **OWNER RULING 2026-07-12: for gear the SMALL set is deliberate — "we don't
+   really have anything decent to use yet" — so RESOURCES (curated, ~16 weapons) is truth and the
+   433-weapon StreamingAssets copy is the stale side. Sync direction Resources → StreamingAssets
+   for weapons/armor.** STEPS: copy Resources gear jsons over the StreamingAssets pair → rule the
+   other four files' direction the same way (check which side is current per file) → re-run
+   DataRegression → `DATAWEB_OK` flips green.
 7. **WO-602 home-return unwired** — a judge who leaves the castle cannot come back. Session-ender.
 8. **Encounter-return strand (~7km, WO-453 class)** — fleet reproduces every run.
 9. **Full Pi-Browser traced felt-run** — one end-to-end session in the ACTUAL Pi Browser with
