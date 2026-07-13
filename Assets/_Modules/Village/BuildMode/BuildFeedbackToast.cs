@@ -64,7 +64,8 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class BuildFeedbackToast : MonoBehaviour
     {
-        private const float LifeSeconds = 2.2f;
+        private const float DefaultLifeSeconds = 2.2f;
+        private float _lifeSeconds = DefaultLifeSeconds;
         private const float FadeSeconds = 0.45f;
 
         // One on-screen at a time (rapid invalid clicks replace, never stack).
@@ -97,10 +98,28 @@ namespace DeNelle.Village
             Debug.Log($"[BuildMode] Placement blocked: {message}");
             GameSfx.PlayBuildDenied();
 
+            ShowRaw(message, DefaultLifeSeconds);
+        }
+
+        /// <summary>
+        /// Owner ask 2026-07-13 ("after offset tool have a visual on screen"): a NEUTRAL
+        /// info toast — no denied buzz, caller-chosen lifetime — for confirmations like
+        /// the Orient tool's saved recipe. Same chrome, same one-at-a-time rule.
+        /// </summary>
+        public static void ShowInfo(string message, float lifeSeconds = 8f)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
+            FlowTrace.Step("BuildToast", $"info toast -> '{message}'");
+            ShowRaw(message, lifeSeconds);
+        }
+
+        private static void ShowRaw(string message, float lifeSeconds)
+        {
             if (s_active != null) { Object.Destroy(s_active.gameObject); s_active = null; }
 
             var go = new GameObject("BuildFeedbackToast");
             var ui = go.AddComponent<BuildFeedbackToast>();
+            ui._lifeSeconds = Mathf.Max(1f, lifeSeconds);
             ui.Build(message);
             s_active = ui;
         }
@@ -156,12 +175,12 @@ namespace DeNelle.Village
         private void Update()
         {
             float elapsed = Time.unscaledTime - _shownAt;
-            if (elapsed >= LifeSeconds) { Destroy(gameObject); return; }
+            if (elapsed >= _lifeSeconds) { Destroy(gameObject); return; }
 
             // Fade out over the final FadeSeconds.
-            float fadeStart = LifeSeconds - FadeSeconds;
+            float fadeStart = _lifeSeconds - FadeSeconds;
             if (_group != null && elapsed > fadeStart)
-                _group.alpha = Mathf.Clamp01((LifeSeconds - elapsed) / FadeSeconds);
+                _group.alpha = Mathf.Clamp01((_lifeSeconds - elapsed) / FadeSeconds);
         }
 
         private void OnDestroy()

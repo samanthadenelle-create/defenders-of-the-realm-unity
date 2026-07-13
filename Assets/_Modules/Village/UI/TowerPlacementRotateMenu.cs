@@ -936,6 +936,13 @@ namespace DeNelle.Village
                 "[OrientRecipe] id={0} euler=({1:0.##}, {2:0.##}, {3:0.##}) offset=({4:0.##}, {5:0.##}, {6:0.##}) scale=1 scaleAxis=({7:0.###}, {8:0.###}, {9:0.###})",
                 id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scaleAxis.x, scaleAxis.y, scaleAxis.z));
 
+            // Owner ask 2026-07-13 ("would love a visual on screen after the offset tool"):
+            // the saved recipe as an ON-SCREEN toast — neutral chrome, 8s, no denied buzz —
+            // so the values are readable in a player build without the console.
+            BuildFeedbackToast.ShowInfo(string.Format(ci,
+                "Orient saved '{0}'  euler ({1:0.#}, {2:0.#}, {3:0.#})  scale ({4:0.##}, {5:0.##}, {6:0.##})",
+                id, euler.x, euler.y, euler.z, scaleAxis.x, scaleAxis.y, scaleAxis.z));
+
             // BONUS: append a JSON line to the recipes file (best-effort; never throws to the UI).
             try
             {
