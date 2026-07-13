@@ -59,6 +59,20 @@ namespace DeNelle.HUD
         // demand (own unique name — OnboardingPanelGuard matches by name and must
         // never tear this down; theme borrowed from any live doc so fonts inherit).
         private PanelSettings _adminPanelSettings;
+
+        // ── Hidden dev unlock (owner ask 2026-07-12) ─────────────────────────────
+        // Mobile has no Ctrl+Shift+A chord and release builds compile-strip the Dev
+        // Tools launcher (LB-11), so on a phone there was NO way to dev-grant
+        // resources. 5 taps on this card's TITLE within a 3s window flips a
+        // persisted unlock (PlayerPrefs) that reveals a minimal "Grant Resources"
+        // action — the grant ONLY, not the full AdminOverlay, so the LB-11 release
+        // lock on the admin panel itself stays intact.
+        private const string DevUnlockPref = "dotr.devunlock";
+        private int _titleTaps;
+        private float _lastTitleTapTime;
+        private UnityEngine.UI.Button _grantResourcesBtn;   // uGUI (UIElements.Button also in scope)
+
+        private static bool DevUnlocked => PlayerPrefs.GetInt(DevUnlockPref, 0) == 1;
         public PanelSettings ActivePanelSettings
         {
             get
@@ -138,7 +152,30 @@ namespace DeNelle.HUD
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.10f, 0.26f), new Vector2(0.90f, 0.38f), OnShowCredits);
 
+            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" exists in ALL builds
+            // but stays hidden until the 5-tap title unlock. It grants ONLY resources
+            // (the AdminOverlay full-grant bundle via the same reflection seam) — the
+            // admin panel itself keeps its LB-11 release lock.
+            _grantResourcesBtn = ElarionUiKit.BuildObsidianButton(body, "Grant Resources (dev)",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.10f, 0.12f), new Vector2(0.90f, 0.24f), OnGrantResources);
+            if (_grantResourcesBtn != null)
+                _grantResourcesBtn.gameObject.SetActive(DevUnlocked);
+
+            // 5-tap counter on the card TITLE (a TMP Graphic — it carries the Button
+            // directly; no extra widget). Window resets after 3s of no taps.
+            if (_modal.chrome != null && _modal.chrome.title != null)
+            {
+                _modal.chrome.title.raycastTarget = true;
+                var titleBtn = _modal.chrome.title.gameObject.GetComponent<UnityEngine.UI.Button>();
+                if (titleBtn == null) titleBtn = _modal.chrome.title.gameObject.AddComponent<UnityEngine.UI.Button>();
+                titleBtn.transition = UnityEngine.UI.Selectable.Transition.None;
+                titleBtn.targetGraphic = _modal.chrome.title;
+                titleBtn.onClick.AddListener(OnTitleTapped);
+            }
+
             // Toast (status messages) — kit ToastCard, low-center, fades after 5s.
+            // (dev-unlock handlers live below with the other On* handlers)
             _toast = ElarionUiKit.ToastCard(_modal.canvas.transform,
                 ElarionUiKit.ToastTone.Info, accentLeft: true, TextAnchor.MiddleCenter);
             var trt = _toast.card.GetComponent<RectTransform>();
@@ -190,6 +227,52 @@ namespace DeNelle.HUD
         private void OnShowCredits()
         {
             ShowToast("Defenders of the Realm v2 — DeNelle Studios. Models: KayKit + Tripo. Audio: original soundtrack.");
+        }
+
+        /// <summary>5-tap title counter (owner 2026-07-12): five taps inside a rolling 3s
+        /// window flips the persisted dev unlock and reveals the Grant Resources row.</summary>
+        private void OnTitleTapped()
+        {
+            if (Time.unscaledTime - _lastTitleTapTime > 3f) _titleTaps = 0;
+            _lastTitleTapTime = Time.unscaledTime;
+            _titleTaps++;
+            if (_titleTaps < 5 || DevUnlocked) return;
+
+            PlayerPrefs.SetInt(DevUnlockPref, 1);
+            PlayerPrefs.Save();
+            if (_grantResourcesBtn != null) _grantResourcesBtn.gameObject.SetActive(true);
+            FlowTrace.Step("UI", "HelpMenu: dev unlock flipped ON (5-tap title) — Grant Resources revealed.");
+            ShowToast("Dev actions unlocked.");
+        }
+
+        /// <summary>
+        /// Grants the AdminOverlay full-resource bundle (wood/food/iron/crystals + coins)
+        /// through EconomyService.GrantSpendable — which writes Wood/Iron into BOTH
+        /// wallets (in-session pool + GameState) so shop AND upgrade flows can spend it.
+        /// HUD can't reference DeNelle.Village, so reached by reflection — the exact
+        /// AdminOverlay.OnLoadResources idiom (the documented HUD→Village seam).
+        /// </summary>
+        private void OnGrantResources()
+        {
+            var ecoType = Type.GetType("DeNelle.Village.EconomyService, DeNelle.Village");
+            var instProp = ecoType?.GetProperty("Instance",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            var eco = instProp?.GetValue(null);
+            if (eco == null) { ShowToast("Grant failed — economy not alive yet."); return; }
+
+            var grant = ecoType.GetMethod("GrantSpendable",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null,
+                new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
+            if (grant == null) { ShowToast("Grant failed — GrantSpendable not found."); return; }
+            grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
+
+            var addCoins = ecoType.GetMethod("AddCoins",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null,
+                new[] { typeof(int) }, null);
+            if (addCoins != null) addCoins.Invoke(eco, new object[] { 50000 });
+
+            FlowTrace.Step("UI", "HelpMenu: dev Grant Resources fired (50k wood/iron, 25k food/crystals, 50k coins).");
+            ShowToast("Granted: 50k wood/iron, 25k food/crystals, 50k gold.");
         }
 
         /// <summary>Resets save state via reflection so the player can redo hero + pet
