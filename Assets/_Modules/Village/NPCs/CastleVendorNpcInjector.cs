@@ -323,10 +323,13 @@ namespace DeNelle.Village
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }
 
-            // CENTER-FACING PLACEMENT (owner 2026-06-21): put every vendor on the building's side
-            // FACING THE HEART (the tree at castle centre), at the marker's tuned distance — so NPCs are
-            // always BETWEEN their building and the tree, never behind/beside it ("easier to find").
-            // Preserves the hand-baked front-offset DISTANCE; only redirects WHICH side it sits on.
+            // FRONT-OF-BUILDING PLACEMENT (owner 2026-07-13 "the agents should be at the
+            // front of each building" — supersedes the 2026-06-21 Heart-facing rule for
+            // player-placed structures): the vendor stands on the side the building FACES
+            // (the door side = the placed root's forward, i.e. the yaw the player chose at
+            // placement). Fallback: when the building root has no meaningful facing
+            // (identity yaw baked shell), keep the old Heart-facing side so baked-era
+            // saves look unchanged. Preserves the hand-baked front-offset DISTANCE.
             Vector3 buildingPos = marker.parent != null ? marker.parent.position : marker.position;
             Vector3 flatBuild = new Vector3(buildingPos.x, 0f, buildingPos.z);
             float frontDist = Vector3.Distance(flatBuild, new Vector3(marker.position.x, 0f, marker.position.z));
@@ -334,7 +337,13 @@ namespace DeNelle.Village
             Vector3 center = HeartCenter();
             Vector3 toHeart = new Vector3(center.x - buildingPos.x, 0f, center.z - buildingPos.z);
             toHeart = toHeart.sqrMagnitude < 0.01f ? Vector3.forward : toHeart.normalized;
-            Vector3 pos = flatBuild + toHeart * frontDist;
+            Vector3 front = toHeart;   // fallback: the Heart-facing side
+            if (marker.parent != null)
+            {
+                Vector3 fwd = marker.parent.forward; fwd.y = 0f;
+                if (fwd.sqrMagnitude > 0.01f) front = fwd.normalized;
+            }
+            Vector3 pos = flatBuild + front * frontDist;
             // WO-703 / BLANK-1: constrain the spawn sample to the GROUND RING — the 3D
             // sample near a wall-adjacent building can resolve to the elevated wall-walk
             // navmesh (the "NPC on top of the gatehouse" symptom). Accept the hit only

@@ -525,7 +525,7 @@
    "displayName": "Forge",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Medium",
+   "visualPrefabPath": "Structures/Forge",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "buildCost": 100,
@@ -538,7 +538,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 7.0,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -546,11 +546,11 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
+     -90.0,
      0.0,
-     0.0,
-     0.0
+     180.0
     ],
     "offset": [
      0.0,
@@ -558,7 +558,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90 / roll 180); ported WO-707 -- manual:true so no tool overwrites it"
    }
   },
   {
@@ -566,7 +566,7 @@
    "displayName": "Store",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Large",
+   "visualPrefabPath": "Structures/store",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "buildCost": 110,
@@ -579,7 +579,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 8.0,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -587,10 +587,10 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
-     0.0,
+     -90.0,
+     90.0,
      0.0
     ],
     "offset": [
@@ -599,7 +599,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
    }
   },
   {
@@ -688,7 +688,7 @@
    "displayName": "Armorer",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Medium",
+   "visualPrefabPath": "Structures/armorer",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
@@ -702,17 +702,17 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 7.0,
      "noOverlap": true,
      "checkAffordable": true
     }
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
-     0.0,
+     -90.0,
+     90.0,
      0.0
     ],
     "offset": [
@@ -721,7 +721,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
    }
   },
   {
@@ -791,11 +791,11 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
+     -90.0,
      0.0,
-     0.0,
-     0.0
+     110.4
     ],
     "offset": [
      0.0,
@@ -803,7 +803,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (pitch -90 / roll 110.4); ported WO-707 -- manual:true. Swap-table ABSOLUTE scale 5.4/3.77/3.6 NOT portable (catalog scales multiply the footprint fit) -- size rides the fit; owner Orient trim if it reads small."
    }
   },
   {
@@ -811,7 +811,8 @@
    "displayName": "Arcane Tower",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Tower_Medieval_Big",
+   "visualPrefabPath": "Structures/arcane tower",
+   "visualTexturePath": "Structures/arcane tower/arcane tower",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
@@ -825,16 +826,16 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 12.0,
      "noOverlap": true,
      "checkAffordable": true
     }
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
+     -90.0,
      0.0,
      0.0
     ],
@@ -844,7 +845,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 12 -> footprint fit, pitch -90, texPath forced -- FBX material lost its map link); ported WO-707 -- manual:true so no tool overwrites it. Swap posY -0.6 sink intentionally dropped: ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
    },
    "canHitAir": true
   },
@@ -909,7 +910,7 @@
    "displayName": "Farm",
    "type": "Collector",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Windmill_Medieval",
+   "visualPrefabPath": "Structures/farm",
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "farm",
@@ -923,7 +924,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 8.0,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -931,11 +932,11 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
+     -90.0,
      0.0,
-     0.0,
-     0.0
+     212.0
     ],
     "offset": [
      0.0,
@@ -943,7 +944,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, pitch -90 / roll 212); ported WO-707 -- manual:true so no tool overwrites it. Roll 212 is 32deg off-axis: catalog fits the RAW bounds while the swap fit the ROTATED bounds, so size may read slightly larger -- trim via Orient tool if felt"
    }
   },
   {
@@ -951,7 +952,7 @@
    "displayName": "Lumbermill",
    "type": "Collector",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Watermill_Medieval",
+   "visualPrefabPath": "Structures/lumbermill",
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "lumbermill",
@@ -965,7 +966,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 7.0,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -973,9 +974,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
+     -90.0,
      0.0,
      0.0
     ],
@@ -985,7 +986,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90); ported WO-707 -- manual:true so no tool overwrites it. Swap posY +1.5 lift intentionally dropped: it compensated the BAKED root's y; ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
    }
   },
   {
@@ -1058,9 +1059,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
+     -90.0,
      0.0,
      0.0
     ],
@@ -1070,7 +1071,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed - placeholder art (polyperfect _M prefabs are upright, no -90X needed)"
+    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
    }
   },
   {
@@ -1102,9 +1103,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
+     -90.0,
      0.0,
      0.0
     ],
@@ -1114,7 +1115,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed - placeholder art (polyperfect _M prefabs are upright, no -90X needed)"
+    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
    }
   },
   {
@@ -1146,9 +1147,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0.0,
+     -90.0,
      0.0,
      0.0
     ],
@@ -1158,7 +1159,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "zeroed - placeholder art (polyperfect _M prefabs are upright, no -90X needed)"
+    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
    }
   },
   {

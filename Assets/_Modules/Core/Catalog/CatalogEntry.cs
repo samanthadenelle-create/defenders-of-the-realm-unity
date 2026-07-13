@@ -36,6 +36,17 @@ namespace DeNelle.Core.Catalog
         /// <summary>LOOK — Resources/polyperfect-style prefab path. Resolved to a model at build time.</summary>
         public string      visualPrefabPath;
 
+        /// <summary>
+        /// LOOK (WO-707, ported from HubStructureVisualInjector.Swap.texPath) — OPTIONAL
+        /// Resources texture FORCED onto the skinned visual's materials when the model's
+        /// embedded material lost its texture link and would render colorless (e.g. the
+        /// 'Structures/arcane tower' Tripo FBX — its owner-dialed swap row carried
+        /// texPath "Structures/arcane tower/arcane tower"). Applied by
+        /// StructureFactory.Create after the skin; null (default) = untouched.
+        /// JSON deserializes "visualTexturePath" straight in.
+        /// </summary>
+        public string      visualTexturePath;
+
         /// <summary>BEHAVIOR — stats, nav, placement, behaviour id.</summary>
         public RepoProps   repo = new RepoProps();
 

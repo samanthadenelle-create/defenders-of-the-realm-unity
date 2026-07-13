@@ -138,6 +138,17 @@ namespace DeNelle.Village
                     });
                 }
 
+                // WO-707 texPath escape hatch (ported verbatim from HubStructureVisualInjector's
+                // swap table): force a Resources texture onto the skinned materials when the
+                // model's embedded material lost its map link (renders colorless — the arcane
+                // tower FBX). The Tripo fixer reads the SOURCE material's _MainTex/_BaseMap, so
+                // a model whose FBX material lost that link needs it forced here, same ordering
+                // as the proven swap path (after Skin added the fixer). G: guarded — a missing
+                // texture logs + leaves the untinted mesh, never aborts the create.
+                if (!string.IsNullOrEmpty(entry.visualTexturePath))
+                    Guard.Try("Structure", $"force texture '{entry.id}'",
+                        () => ApplyForcedTexture(visual, entry.visualTexturePath, entry.id));
+
                 // V + R: PROVE the skinned structure can render (>=1 enabled renderer with a
                 // sharedMesh) — the grey-foundation / floating-untextured class self-reports here.
                 // On a render-broken create, Fail + destroy + return null so the caller falls back,
@@ -155,6 +166,43 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Structure", $"'{entry.id}' created OK -> '{root.name}'.");
             return root;
+        }
+
+        /// <summary>
+        /// WO-707 — force a Resources texture onto every material of the skinned visual.
+        /// Ported from HubStructureVisualInjector.TrySwap's texPath escape hatch (the
+        /// owner-dialed swap table): a Tripo FBX whose embedded material lost its
+        /// _MainTex/_BaseMap link renders colorless; this rebinds the authored texture.
+        /// Play mode uses instance materials (safe to retint a one-off building — same
+        /// as the proven swap path); edit mode uses sharedMaterials to avoid the
+        /// edit-time material-instantiation leak.
+        /// </summary>
+        private static void ApplyForcedTexture(GameObject visual, string texPath, string id)
+        {
+            if (visual == null || string.IsNullOrEmpty(texPath)) return;
+            var tex = Resources.Load<Texture2D>(texPath);
+            if (tex == null)
+            {
+                FlowTrace.Warn("Structure",
+                    $"'{id}': visualTexturePath '{texPath}' not found in Resources — leaving materials as-is (may render colorless).");
+                return;
+            }
+            int touched = 0;
+            foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = Application.isPlaying ? r.materials : r.sharedMaterials;
+                foreach (var m in mats)
+                {
+                    if (m == null) continue;
+                    if (m.HasProperty("_BaseMap"))   m.SetTexture("_BaseMap", tex);
+                    if (m.HasProperty("_MainTex"))   m.SetTexture("_MainTex", tex);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                    touched++;
+                }
+            }
+            FlowTrace.Step("Structure",
+                $"'{id}': forced texture '{texPath}' onto {touched} material(s) (WO-707 texPath port).");
         }
 
         /// <summary>The Resources visual path a structure shows at <paramref name="level"/>:
