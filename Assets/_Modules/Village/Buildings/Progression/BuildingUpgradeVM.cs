@@ -73,6 +73,17 @@ namespace DeNelle.Village.Buildings.Progression
         // through CostFor(id)/EffectFor(id) so it renders purely from VM data (no catalog re-pull).
         private readonly Dictionary<string, string> _costById = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _effectById = new Dictionary<string, string>();
+        // WO-680 — per-tile "this is the building-upgrade KEY" sub-line ("UPGRADES FORGE TO
+        // TIER 2") + which gate blocks the tile right now. Both composed HERE (data-driven,
+        // never hardcoded in the View) so the View stays a dumb skin.
+        private readonly Dictionary<string, string> _keyLineById = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _gateById = new Dictionary<string, string>();
+
+        /// <summary>WO-680 gate names for <see cref="GateFor"/> (the View seats the village
+        /// Unlock CTA ONLY on a village-gated band; text composes from LockReason as ever).</summary>
+        public const string GateVillage = "village";
+        public const string GateBuildingTier = "building-tier";
+        public const string GateCost = "cost";
 
         /// <summary>
         /// The View-side entry point (audit §3.1): resolves the economy handle + the default
@@ -167,6 +178,18 @@ namespace DeNelle.Village.Buildings.Progression
         /// holds more") — sourced from building-tiers.json "effect" (or derived for legacy levels).</summary>
         public string EffectFor(string id) =>
             id != null && _effectById.TryGetValue(id, out var e) ? e : "";
+
+        /// <summary>WO-680 — the "this tile IS the building upgrade" sub-line for a tier/level tile
+        /// ("UPGRADES FORGE TO TIER 2"), composed from the building's display name. Empty for perks.</summary>
+        public string KeyLineFor(string id) =>
+            id != null && _keyLineById.TryGetValue(id, out var k) ? k : "";
+
+        /// <summary>WO-680 — which gate blocks a tile right now: <see cref="GateVillage"/> (Village
+        /// Tier too low), <see cref="GateBuildingTier"/> (a lower tier tile is unowned),
+        /// <see cref="GateCost"/> (next but unaffordable), or "" (owned / open). The View uses it to
+        /// seat the village Unlock CTA ONLY where the VILLAGE gate is the blocker.</summary>
+        public string GateFor(string id) =>
+            id != null && _gateById.TryGetValue(id, out var g) ? g : "";
 
         /// <summary>Live wallet readout (View rebuilds its "Wood … Food … Crystals" line from these).</summary>
         public int Wood     => _economy?.Wood ?? 0;
@@ -303,7 +326,9 @@ namespace DeNelle.Village.Buildings.Progression
                 int cost = VillageTierService.NextCost();
                 if (crystals < cost)
                 {
-                    Status = "Need " + cost + " Crystals to raise the Village Tier (you have " + crystals + ").";
+                    Status = "Need " + DeNelle.Core.UI.ElarionUi.CompactNumber(cost)
+                           + " Crystals to raise the Village Tier (you have "
+                           + DeNelle.Core.UI.ElarionUi.CompactNumber(crystals) + ").";   // WO-697
                     Raise();
                     return;
                 }
@@ -352,6 +377,8 @@ namespace DeNelle.Village.Buildings.Progression
             _perks.Clear();
             _costById.Clear();
             _effectById.Clear();
+            _keyLineById.Clear();
+            _gateById.Clear();
 
             if (_isCity) BuildCity();
             else if (_isResource) BuildResource();
@@ -374,22 +401,29 @@ namespace DeNelle.Village.Buildings.Progression
         private void PrependVillageTierRow()
         {
             int cur = VillageTierService.Current;
-            bool maxed = VillageTierService.IsMax;
+
+            // WO-680 — at max Village Tier the village gate is OPEN: emit NO control at all.
+            // The old "(Max)" tile fed the band-header CTA a "Maxed" cost string, and the View
+            // composed the dead "Unlock Maxed" button from it. No tile -> no button, ever.
+            if (VillageTierService.IsMax)
+            {
+                FlowTrace.Step("Upgrade", _buildingId + " villagetier gate=open (maxed at "
+                    + cur + ") -> no unlock control emitted");
+                return;
+            }
+
             int cost = VillageTierService.NextCost();
             int crystals = _economy?.Crystals ?? 0;
-            bool affordable = !maxed && crystals >= cost;
+            bool affordable = crystals >= cost;
 
-            string name = maxed
-                ? "Village Tier " + cur + " (Max)"
-                : "Unlock Village Tier " + (cur + 1);
-            _costById[VillageTierRowId] = maxed ? "Maxed" : (cost + " Crystals");
-            _effectById[VillageTierRowId] = maxed
-                ? "Every tier gate is open"
-                : "Opens tier-" + (cur + 1) + " enhancements everywhere";
+            string name = "Unlock Village Tier " + (cur + 1);
+            _costById[VillageTierRowId] = DeNelle.Core.UI.ElarionUi.CompactNumber(cost) + " Crystals";   // WO-697
+            _effectById[VillageTierRowId] = "Opens tier-" + (cur + 1) + " enhancements everywhere";
+            _gateById[VillageTierRowId] = affordable ? "" : GateCost;
 
-            // equipped=maxed -> renders as an owned (lit) tile; locked=false so a non-max tile is always tappable.
+            // locked=false so the control is always tappable (Select reports affordability honestly).
             _perks.Insert(0, new ItemVM(VillageTierRowId, name, IconRoleTier, VillageTierRowId, 0, "",
-                                        affordable, rarity: null, equipped: maxed, locked: false));
+                                        affordable, rarity: null, equipped: false, locked: false));
         }
 
         private void BuildCity()
@@ -399,6 +433,12 @@ namespace DeNelle.Village.Buildings.Progression
             CurrentTier = ModifierService.TierOf(_buildingId);
             MaxTier = BuildingTierCatalog.MaxTier(_buildingId);
             int villageTier = GameStateService.Instance?.State?.VillageTier ?? 0;
+
+            // WO-680 §12 step-in: band-state resolution — the OUT line names WHICH gate blocks
+            // the next tier (village vs building-tier vs cost) so "why is this locked" is one read.
+            FlowTrace.Step("Upgrade", _buildingId + " band-state IN: curTier=" + CurrentTier
+                + "/" + MaxTier + " villageTier=" + villageTier);
+            string nextGate = "none";
 
             if (def != null && def.Tiers != null)
             {
@@ -410,24 +450,40 @@ namespace DeNelle.Village.Buildings.Progression
                     bool isNext = tier == CurrentTier + 1;
                     bool gated = isNext && t.RequiresVillageTier > villageTier;
                     bool locked = tier > CurrentTier + 1 || gated;
-                    string lockReason = null;
-                    if (gated) lockReason = "Requires Village Tier " + t.RequiresVillageTier;
-                    else if (tier > CurrentTier + 1) lockReason = "Unlock Tier " + (tier - 1) + " first";
 
                     var cost = new EcoCost { Wood = t.CostWood, Food = t.CostFood, Crystals = t.CostCrystal };
                     bool affordable = isNext && !gated && (_economy == null || _economy.CanAfford(cost));
                     string costStr = CostString(cost);
 
+                    string lockReason = null;
+                    if (gated) lockReason = "Requires Village Tier " + t.RequiresVillageTier;
+                    // WO-680 gate copy names the ACTION: point at the PREVIOUS tier tile by its
+                    // display name ("Unlock 'Ignite the Forge' to open Tier 2") so the thing to
+                    // tap is unambiguous — composed from catalog data, never hardcoded.
+                    else if (tier > CurrentTier + 1)
+                        lockReason = "Unlock '" + TierDisplayName(def, tier - 1) + "' to open Tier " + tier;
+
                     string id = TierId(tier);
                     string name = "Tier " + tier + " — " + (!string.IsNullOrEmpty(t.Name) ? t.Name : ("Tier " + tier));
                     _costById[id] = isCurrent ? "Unlocked" : costStr;
                     _effectById[id] = t.Effect ?? "";
+                    // WO-680 — mark the tier tile as THE building-upgrade key (View sub-line).
+                    _keyLineById[id] = "UPGRADES " + Title.ToUpperInvariant() + " TO TIER " + tier;
+                    _gateById[id] = isCurrent ? ""
+                        : gated ? GateVillage
+                        : tier > CurrentTier + 1 ? GateBuildingTier
+                        : !affordable ? GateCost : "";
+                    if (isNext) nextGate = string.IsNullOrEmpty(_gateById[id]) ? "open" : _gateById[id];
                     // Equipped flag carries "owned/lit"; Locked carries "not yet reachable" (+ reason).
                     _perks.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
                                           rarity: null, equipped: isCurrent, locked: locked,
                                           lockReason: lockReason));
                 }
             }
+
+            // WO-680 §12 step-out: the resolved blocker for the next reachable tier.
+            FlowTrace.Step("Upgrade", _buildingId + " band-state OUT: next=tier-"
+                + (CurrentTier + 1) + " gate=" + nextGate);
 
             // WO-432 RESEARCH TILES — every perk unlocked at a REACHED tier shows as a Gold-cost tile
             // in the grid (owned = lit; gate-not-met = dimmed + requirement; else gold affordance).
@@ -451,14 +507,17 @@ namespace DeNelle.Village.Buildings.Progression
                         // rendered as a box in builds. A VM emits strings (no procedural Image
                         // like StarRatingRow/EndStateView), so the font-safe ASCII star it is.
                         string pname = (p.IsSignature ? "* " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
-                        _costById[rid] = owned ? "Unlocked" : (p.GoldCost + " Gold");
+                        _costById[rid] = owned ? "Unlocked"
+                            : (DeNelle.Core.UI.ElarionUi.CompactNumber(p.GoldCost) + " Gold");   // WO-697
                         _effectById[rid] = p.Effect ?? "";
                         string iconKey = string.IsNullOrEmpty(p.IconId) ? p.Id : p.IconId;
                         bool perkLocked = !owned && !can;
+                        // WO-680 — the fallback gate copy names the tier TILE, not a bare number.
                         _perks.Add(new ItemVM(rid, pname, IconRolePerk, iconKey, 0, "", affordable,
                                               rarity: null, equipped: owned, locked: perkLocked,
                                               lockReason: perkLocked && !string.IsNullOrEmpty(why)
-                                                  ? why : (perkLocked ? "Unlock Tier " + t.Tier + " first" : null)));
+                                                  ? why : (perkLocked
+                                                      ? "Unlock '" + TierDisplayName(def, t.Tier) + "' first" : null)));
                     }
                 }
             }
@@ -475,6 +534,12 @@ namespace DeNelle.Village.Buildings.Progression
             Title = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : Titleize(_buildingId);
             CurrentTier = ResourceBuildingState.GetLevel(_buildingId);
             MaxTier = def != null ? def.MaxLevel : CurrentTier;
+
+            // WO-680 §12 step-in/out — mirror BuildCity's band-state trace for the level ladder
+            // (no village gate here; the blockers are building-tier order and cost only).
+            FlowTrace.Step("Upgrade", _buildingId + " band-state IN: curLevel=" + CurrentTier
+                + "/" + MaxTier);
+            string nextGate = "none";
 
             if (def != null && def.Levels != null)
             {
@@ -511,11 +576,24 @@ namespace DeNelle.Village.Buildings.Progression
                     // ("+6 Food per tick") from the level def, the owner's "Farm +25% yield" shape.
                     _effectById[id] = "+" + lvl.YieldPerTick + " "
                                       + ResourceBuildingProgression.LabelFor(lvl.Yields) + " per tick";
+                    // WO-680 — the level tile is the building-upgrade key too (level 1 is owned
+                    // by default, so no key line there); gate mirrors BuildCity minus the village gate.
+                    if (level > 1)
+                        _keyLineById[id] = "UPGRADES " + Title.ToUpperInvariant() + " TO LEVEL " + level;
+                    _gateById[id] = isCurrent ? ""
+                        : locked ? GateBuildingTier
+                        : !affordable ? GateCost : "";
+                    if (isNext) nextGate = string.IsNullOrEmpty(_gateById[id]) ? "open" : _gateById[id];
                     _perks.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
                                           rarity: null, equipped: isCurrent, locked: locked,
-                                          lockReason: locked ? "Unlock Level " + (level - 1) + " first" : null));
+                                          lockReason: locked
+                                              ? "Unlock 'Level " + (level - 1) + "' to open Level " + level : null));
                 }
             }
+
+            // WO-680 §12 step-out: the resolved blocker for the next reachable level.
+            FlowTrace.Step("Upgrade", _buildingId + " band-state OUT: next=level-"
+                + (CurrentTier + 1) + " gate=" + nextGate);
 
             if (string.IsNullOrEmpty(Status))
                 Status = ResourceBuildingState.IsMaxLevel(_buildingId)
@@ -537,14 +615,28 @@ namespace DeNelle.Village.Buildings.Progression
 
         private static string TierId(int tier) => "tier-" + tier;
 
+        /// <summary>WO-680 — a tier's player-facing display name from the (already fetched) catalog
+        /// def ("Ignite the Forge"); falls back to "Tier N" when unauthored. Pure data read.</summary>
+        private static string TierDisplayName(BuildingUpgradeDef def, int tier)
+        {
+            if (def != null && def.Tiers != null)
+                foreach (var t in def.Tiers)
+                    if (t != null && t.Tier == tier)
+                        return !string.IsNullOrEmpty(t.Name) ? t.Name : ("Tier " + tier);
+            return "Tier " + tier;
+        }
+
+        // WO-697: cost numbers render through the ONE kit formatter (ElarionUi.CompactNumber
+        // — verbatim below 10k, "98.6k"/"1.2m" above); the currency KEYWORDS stay intact so
+        // the panel's DeriveSpendableCurrencies keyword scan keeps working.
         private string CostString(EcoCost c)
         {
             var parts = new List<string>();
-            if (c.Wood > 0) parts.Add(c.Wood + " Wood");
-            if (c.Food > 0) parts.Add(c.Food + " Food");
-            if (c.Iron > 0) parts.Add(c.Iron + " Iron");
-            if (c.Crystals > 0) parts.Add(c.Crystals + " Crystals");
-            if (c.Coins > 0) parts.Add(c.Coins + " Gold");
+            if (c.Wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Wood) + " Wood");
+            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + " Food");
+            if (c.Iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Iron) + " Iron");
+            if (c.Crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Crystals) + " Crystals");
+            if (c.Coins > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Coins) + " Gold");
             return parts.Count == 0 ? "Free" : string.Join(" · ", parts);
         }
 
@@ -553,8 +645,9 @@ namespace DeNelle.Village.Buildings.Progression
             var parts = new List<string>();
             if (costs != null)
                 foreach (var c in costs)
-                    parts.Add(c.Amount + " " + ResourceBuildingProgression.LabelFor(c.Resource));
-            if (magic > 0) parts.Add(magic + " Magic");
+                    parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Amount) + " "
+                              + ResourceBuildingProgression.LabelFor(c.Resource));
+            if (magic > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(magic) + " Magic");
             return parts.Count == 0 ? "Free" : string.Join(" · ", parts);
         }
 

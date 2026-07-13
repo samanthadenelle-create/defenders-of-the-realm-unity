@@ -304,11 +304,12 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
-        // ── Tier bands (WO-675 §2) ────────────────────────────────────────────────
+        // ── Tier bands (WO-675 §2, gate seating fixed WO-680) ────────────────────
         // Group vm.Perks into bands: each "tier-N" tile becomes a "TIER n" band (crown
         // glyph + gilt rule); research perks group under a "Research" band. The synthetic
         // Village-Tier tile is pulled OUT of the grid — its one gold Unlock action rides
-        // the first LOCKED tier band's header (one action = one button).
+        // the first VILLAGE-GATED tier band's header (one action = one button); a band
+        // locked by the building's own tier ladder shows requirement text only (WO-680).
 
         private sealed class Band
         {
@@ -319,6 +320,7 @@ namespace DeNelle.Village.Buildings.Progression
             public readonly List<ItemVM> Tiles = new List<ItemVM>();
             public bool Locked;                      // this band's tier tile is not yet reachable
             public string Requirement;               // the locked tile's LockReason (header hint)
+            public string Gate;                      // WO-680 — vm.GateFor: which gate locks it
         }
 
         private void RebuildBands()
@@ -365,24 +367,29 @@ namespace DeNelle.Village.Buildings.Progression
                 }
                 band.Tiles.Add(item);
 
-                // A tier band inherits "locked" + its requirement from its tier tile.
+                // A tier band inherits "locked" + its requirement + its gate from its tier tile.
                 if (key != "research" && item.Locked)
                 {
                     band.Locked = true;
                     if (string.IsNullOrEmpty(band.Requirement)) band.Requirement = item.LockReason;
+                    if (string.IsNullOrEmpty(band.Gate)) band.Gate = _vm.GateFor(item.Id);
                 }
             }
 
-            // 2) The Village-Tier control seats on the FIRST locked tier band's header (§2).
-            // If nothing is locked but the control is still actionable (not maxed), give it a
-            // dedicated band at the top so the tech-gate is never lost.
+            // 2) WO-680 — the Village-Tier Unlock CTA seats ONLY on a band the VILLAGE gate is
+            // blocking (vm.GateFor). A band locked by the building's own tier ladder shows its
+            // requirement text alone — a village button there pointed at the WRONG gate (the
+            // "Unlock Maxed" trap's twin). When no band is village-gated the control gets a
+            // dedicated band at the top so the tech-gate is never lost. The VM emits NO village
+            // tile at all once the gate is maxed, so hasVillageTier implies actionable.
             Band villageHost = null;
             if (hasVillageTier)
             {
                 foreach (var b in bands)
-                    if (b.TierNumber != int.MaxValue && b.Locked) { villageHost = b; break; }
+                    if (b.TierNumber != int.MaxValue && b.Locked
+                        && b.Gate == BuildingUpgradeVM.GateVillage) { villageHost = b; break; }
 
-                if (villageHost == null && !villageTier.Equipped)
+                if (villageHost == null)
                 {
                     villageHost = new Band
                     {
@@ -669,11 +676,21 @@ namespace DeNelle.Village.Buildings.Progression
 
             float dim = item.Locked ? 0.55f : 1f;
 
-            // ICON — perk sprite (WO-432 art) or, for tier tiles with no art, a numeral glyph
-            // so the grid stays uniform.
+            // WO-680 — the tier-N tile IS the "upgrade the building" key: it carries the crown
+            // tier art (distinct from perk tiles) + a KeyLineFor sub-line ("UPGRADES FORGE TO
+            // TIER 2") so the gate copy's target is visibly THIS tile. VM-composed string; the
+            // View only lays it out.
+            string keyLine = _vm != null ? _vm.KeyLineFor(item.Id) : "";
+            bool hasKeyLine = !string.IsNullOrEmpty(keyLine);
+
+            // ICON — perk sprite (WO-432 art), crown art for a tier tile (WO-680 distinct
+            // treatment), or a numeral glyph fallback so the grid stays uniform.
             Sprite icon = null;
             if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
                 icon = Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
+            else if (item.IconRole == BuildingUpgradeVM.IconRoleTier
+                     && item.Id != null && item.Id.StartsWith("tier-"))
+                icon = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, "tier" + Mathf.Clamp(TierNumber(item.Id), 1, 3));
             if (icon != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
@@ -697,16 +714,26 @@ namespace DeNelle.Village.Buildings.Progression
                 ElarionUiKit.FitSingleLine(g);
             }
 
-            // NAME.
-            var nameLbl = ElarionUiKit.Label(tile.transform, item.Name, 0.345f, 0.50f,
+            // NAME (a key-lined tile cedes a strip below the name to the WO-680 sub-line).
+            var nameLbl = ElarionUiKit.Label(tile.transform, item.Name, hasKeyLine ? 0.375f : 0.345f, 0.50f,
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             nameLbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(nameLbl);
 
+            // WO-680 KEY SUB-LINE — "UPGRADES FORGE TO TIER 2" (gilt, small caps-by-content).
+            if (hasKeyLine)
+            {
+                var keyLbl = ElarionUiKit.Label(tile.transform, keyLine, 0.30f, 0.375f,
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+                keyLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(keyLbl);
+            }
+
             // EFFECT — the one-line concrete payoff, from the perk data (VM-relayed).
             string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
-            var effLbl = ElarionUiKit.Label(tile.transform, effect, 0.20f, 0.345f,
+            var effLbl = ElarionUiKit.Label(tile.transform, effect, 0.20f, hasKeyLine ? 0.30f : 0.345f,
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
             effLbl.raycastTarget = false;
