@@ -187,6 +187,15 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// The ghost's CURRENT world position — the TRACKED VISUAL's transform, not the
+        /// host. WO-683 fleet RCA (run detail "stuck at (15, 15)" = WorldToCell(origin)):
+        /// MoveTo drives the child <c>_visual</c>; the GhostPreview host GameObject never
+        /// moves off world origin, so any probe reading <c>transform.position</c> sees a
+        /// constant. Falls back to the host position when no visual is built.
+        /// </summary>
+        public Vector3 CurrentPosition => _visual != null ? _visual.transform.position : transform.position;
+
         /// <summary>Hide (but keep) the ghost — re-shown on the next MoveTo.</summary>
         public void Hide()
         {

@@ -79,6 +79,18 @@ namespace DeNelle.Editor
         private int _psCount;
         private Vector2 _infoScroll;
 
+        // ── Tag & Catalog (owner ask 2026-07-12: "tag as spell hit projectile") ─
+        // Writes the manual picks overlay (Assets/Editor/VfxManualPicks.json) that
+        // Defenders > VFX > Regenerate merges AFTER the built-in picks — manual is
+        // CANON and wins on key collision. Roles = the catalog triplet convention:
+        // Cast / Projectile / Impact ("spell hit" = Impact), plus Aura for loops.
+        private static readonly string[] TagRoles = { "Cast", "Projectile", "Impact", "Aura" };
+        private string _tagBaseName = string.Empty;
+        private bool _tagLoop;
+        // path -> overlay keys, rebuilt on scan + after each tag ("pending regenerate").
+        private Dictionary<string, List<string>> _overlayKeysByPath =
+            new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
         [MenuItem("Defenders/Animation/VFX Caster")]
         public static void Open()
         {
@@ -157,7 +169,13 @@ namespace DeNelle.Editor
                     "only raw pack prefabs will list (no bindable keys).");
             }
 
-            // 2. Every raw Hovl pack prefab not already catalogued.
+            // 2. Manual overlay rows (tagged here, catalogued on next Regenerate) —
+            //    path -> keys lookup for the dig-in panel + the list flags below.
+            RefreshOverlayLookup();
+
+            // 3. Every raw Hovl pack prefab not already catalogued. An overlay tag
+            //    that hasn't been regenerated yet reads "[tagged - regenerate]" by
+            //    TEXT (owner colorblind — never hue-only).
             if (AssetDatabase.IsValidFolder(HovlPackRoot))
             {
                 foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { HovlPackRoot }))
@@ -165,12 +183,13 @@ namespace DeNelle.Editor
                     string path = AssetDatabase.GUIDToAssetPath(guid);
                     if (cataloguedPaths.Contains(path)) continue;
                     string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                    bool tagged = _overlayKeysByPath.ContainsKey(path);
                     _library.Add(new VfxEntry
                     {
                         Key = string.Empty,
                         Path = path,
                         Catalogued = false,
-                        Label = $"{name}  [uncatalogued]",
+                        Label = tagged ? $"{name}  [tagged - regenerate]" : $"{name}  [uncatalogued]",
                     });
                 }
             }
@@ -180,6 +199,23 @@ namespace DeNelle.Editor
             }
 
             _library.Sort((a, b) => string.CompareOrdinal(a.Label, b.Label));
+        }
+
+        /// <summary>Rebuild the prefab-path -> overlay-keys lookup from the manual
+        /// picks JSON (guarded read — a bad file warns and yields empty).</summary>
+        private void RefreshOverlayLookup()
+        {
+            _overlayKeysByPath = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in HovlVfxCatalogGenerator.ReadManualPicks())
+            {
+                if (string.IsNullOrEmpty(row.key) || string.IsNullOrEmpty(row.prefabPath)) continue;
+                if (!_overlayKeysByPath.TryGetValue(row.prefabPath, out var keys))
+                {
+                    keys = new List<string>();
+                    _overlayKeysByPath[row.prefabPath] = keys;
+                }
+                keys.Add(row.key);
+            }
         }
 
         // ── Selection / preview instance ─────────────────────────────────────
@@ -440,11 +476,96 @@ namespace DeNelle.Editor
                 (_looping ? "   LOOPING effect" : ""),
                 EditorStyles.miniLabel);
 
+            DrawTagAndCatalog();
+
             EditorGUILayout.LabelField(
                 _brokenShaderCount > 0
                     ? $"Shader audit — {_brokenShaderCount} BROKEN (renders magenta in URP):"
                     : "Shader audit — all materials OK:",
                 EditorStyles.boldLabel);
+            DrawShaderAuditScroll();
+        }
+
+        /// <summary>Tag &amp; Catalog block: bind the selected prefab to a
+        /// &lt;BaseName&gt;_&lt;Role&gt; catalog key via the manual picks overlay.
+        /// State reads by TEXT (existing keys listed, "pending regenerate" flag) —
+        /// never hue alone.</summary>
+        private void DrawTagAndCatalog()
+        {
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField("Tag & Catalog (manual = canon)", EditorStyles.boldLabel);
+
+            // Existing keys for THIS prefab — catalog rows + overlay rows, as text.
+            foreach (var e in _library)
+            {
+                if (e.Catalogued &&
+                    string.Equals(e.Path, _selected.Path, StringComparison.OrdinalIgnoreCase))
+                    EditorGUILayout.LabelField($"In catalog: {e.Key}", EditorStyles.miniLabel);
+            }
+            if (_overlayKeysByPath.TryGetValue(_selected.Path, out var overlayKeys))
+            {
+                foreach (var k in overlayKeys)
+                    EditorGUILayout.LabelField($"Tagged (pending regenerate): {k}", EditorStyles.miniLabel);
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("Spell / base name", GUILayout.Width(110f));
+                _tagBaseName = EditorGUILayout.TextField(_tagBaseName);
+                _tagLoop = GUILayout.Toggle(_tagLoop,
+                    new GUIContent("Loop", "IsLoop for the row. Projectile/Aura set it ON when pressed " +
+                        "(projectiles fly until impact); still editable before pressing a role."),
+                    GUILayout.Width(50f));
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool nameOk = !string.IsNullOrEmpty(_tagBaseName?.Trim());
+                using (new EditorGUI.DisabledScope(!nameOk))
+                {
+                    foreach (var role in TagRoles)
+                    {
+                        if (GUILayout.Button(role))
+                            TagSelected(role);
+                    }
+                }
+                if (!nameOk)
+                    EditorGUILayout.LabelField("(enter a base name)", EditorStyles.miniLabel, GUILayout.Width(120f));
+            }
+            EditorGUILayout.LabelField(
+                "Key = <BaseName>_<Role>, e.g. Fireball_Impact = the spell hit. " +
+                "Run Defenders > VFX > Generate Hovl VFX Catalog to make tags bindable.",
+                EditorStyles.miniLabel);
+        }
+
+        /// <summary>Write/update the overlay row for the selected prefab as
+        /// &lt;BaseName&gt;_&lt;role&gt;. Projectile/Aura force IsLoop on.</summary>
+        private void TagSelected(string role)
+        {
+            string baseName = _tagBaseName.Trim().Replace(" ", string.Empty);
+            if (role == "Projectile" || role == "Aura") _tagLoop = true;
+            string key = $"{baseName}_{role}";
+            var row = new HovlVfxCatalogGenerator.ManualPickRow
+            {
+                key = key,
+                prefabPath = _selected.Path,
+                isLoop = _tagLoop,
+                scale = 1f,
+                manual = true,
+            };
+            if (HovlVfxCatalogGenerator.WriteManualPick(row))
+            {
+                Debug.Log(Log + $"tagged '{System.IO.Path.GetFileNameWithoutExtension(_selected.Path)}' " +
+                          $"-> key '{key}' (manual)");
+                RefreshOverlayLookup();
+                if (!_selected.Catalogued)
+                    _selected.Label =
+                        $"{System.IO.Path.GetFileNameWithoutExtension(_selected.Path)}  [tagged - regenerate]";
+            }
+            // WriteManualPick already warned on failure — no silent path.
+        }
+
+        private void DrawShaderAuditScroll()
+        {
             using (var scroll = new EditorGUILayout.ScrollViewScope(_infoScroll, GUILayout.MinHeight(70f)))
             {
                 _infoScroll = scroll.scrollPosition;

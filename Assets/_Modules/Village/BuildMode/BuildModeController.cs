@@ -200,7 +200,11 @@ namespace DeNelle.Village
         {
             cell = default;
             if (!IsActive || _armed == null || _ghost == null || _grid == null) return false;
-            cell = _grid.WorldToCell(_ghost.transform.position);
+            // WO-683 fleet RCA (4/4 FAIL, run detail "stuck at (15, 15)" = WorldToCell(origin)):
+            // GhostPreview.MoveTo drives its CHILD visual; the host transform never leaves
+            // world origin — read the tracked visual's position (GhostPreview.CurrentPosition),
+            // never _ghost.transform.position.
+            cell = _grid.WorldToCell(_ghost.CurrentPosition);
             return true;
         }
 

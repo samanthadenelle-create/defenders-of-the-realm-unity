@@ -46,6 +46,11 @@ namespace DeNelle.Editor
         private const string AssetDir  = "Assets/Resources/VFX";
         private const string AssetPath = "Assets/Resources/VFX/HovlVfxCatalog.asset";
 
+        /// <summary>Owner-authored manual picks overlay (VfxCasterWindow "Tag &amp; Catalog").
+        /// Merged AFTER the built-in Map on regenerate — manual rows are CANON and win
+        /// on key collision (same law as MotionCastings manual:true rows).</summary>
+        public const string ManualPicksPath = "Assets/Editor/VfxManualPicks.json";
+
         private const string CatalogTypeName = "DeNelle.Village.HovlVfxCatalog, DeNelle.Village";
 
         private struct Pick
@@ -156,6 +161,83 @@ namespace DeNelle.Editor
             { "Poi_Landmark",           new Pick(MAP + "Marker 4 Pillar Loop.prefab", poolSize: 3, scale: 4f, recolorable: false, isLoop: true) },
         };
 
+        // ── Manual picks overlay (owner tags from VfxCasterWindow) ────────────
+        // JSON lookup table + thin interpreter: { "rows": [ { key, prefabPath,
+        // isLoop, scale, manual } ] }. Read is guarded — a missing/bad file warns
+        // and yields zero rows, never throws (regenerate must not die on it).
+
+        /// <summary>One owner-tagged catalog row. manual:true = CANON — the merge
+        /// lets it beat the built-in Map on key collision.</summary>
+        [Serializable]
+        public class ManualPickRow
+        {
+            public string key;
+            public string prefabPath;
+            public bool   isLoop;
+            public float  scale = 1f;
+            public bool   manual = true;
+        }
+
+        [Serializable]
+        private class ManualPicksFile
+        {
+            public List<ManualPickRow> rows = new List<ManualPickRow>();
+        }
+
+        /// <summary>Load the manual overlay rows. Missing file = empty list (fine);
+        /// unreadable/garbled file = warn + empty list (never throws).</summary>
+        public static List<ManualPickRow> ReadManualPicks()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(ManualPicksPath))
+                    return new List<ManualPickRow>();
+                string json = System.IO.File.ReadAllText(ManualPicksPath);
+                var file = JsonUtility.FromJson<ManualPicksFile>(json);
+                if (file == null || file.rows == null)
+                {
+                    Debug.LogWarning($"[HovlVfxCatalogGenerator] '{ManualPicksPath}' parsed to no rows — " +
+                                     "overlay skipped (fix or delete the file).");
+                    return new List<ManualPickRow>();
+                }
+                return file.rows;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[HovlVfxCatalogGenerator] could not read '{ManualPicksPath}': {e.Message} — " +
+                                 "overlay skipped this regenerate.");
+                return new List<ManualPickRow>();
+            }
+        }
+
+        /// <summary>Write/update one manual row (keyed replace, else append) and save
+        /// the overlay JSON. Returns false (with a warning) on any IO failure.</summary>
+        public static bool WriteManualPick(ManualPickRow row)
+        {
+            if (row == null || string.IsNullOrEmpty(row.key) || string.IsNullOrEmpty(row.prefabPath))
+            {
+                Debug.LogWarning("[HovlVfxCatalogGenerator] WriteManualPick: empty key or prefabPath — not saved.");
+                return false;
+            }
+            try
+            {
+                var file = new ManualPicksFile { rows = ReadManualPicks() };
+                int existing = file.rows.FindIndex(r =>
+                    string.Equals(r.key, row.key, StringComparison.OrdinalIgnoreCase));
+                if (existing >= 0) file.rows[existing] = row;
+                else file.rows.Add(row);
+                file.rows.Sort((a, b) => string.CompareOrdinal(a.key, b.key));
+                System.IO.File.WriteAllText(ManualPicksPath, JsonUtility.ToJson(file, prettyPrint: true));
+                AssetDatabase.ImportAsset(ManualPicksPath);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[HovlVfxCatalogGenerator] could not write '{ManualPicksPath}': {e.Message}");
+                return false;
+            }
+        }
+
         [MenuItem("Defenders/VFX/Generate Hovl VFX Catalog")]
         public static void Generate()
         {
@@ -205,6 +287,35 @@ namespace DeNelle.Editor
                 }
                 rows.Add((kv.Key, prefab, kv.Value));
             }
+
+            // Merge the owner's manual overlay AFTER the built-in picks. Manual is
+            // CANON: on key collision the manual row replaces the Map row. Missing
+            // prefabs warn + skip, same policy as above.
+            int manualWired = 0;
+            foreach (var m in ReadManualPicks())
+            {
+                if (string.IsNullOrEmpty(m.key) || string.IsNullOrEmpty(m.prefabPath))
+                {
+                    Debug.LogWarning("[HovlVfxCatalogGenerator] manual overlay row with empty " +
+                                     "key/prefabPath — skipped.");
+                    continue;
+                }
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(m.prefabPath);
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[HovlVfxCatalogGenerator] manual prefab missing for '{m.key}': " +
+                                     $"'{m.prefabPath}' — key skipped (will no-op at call time).");
+                    skippedMissing++;
+                    continue;
+                }
+                string mKey = m.key;
+                rows.RemoveAll(r => string.Equals(r.key, mKey, StringComparison.OrdinalIgnoreCase));
+                rows.Add((m.key, prefab, new Pick(m.prefabPath, scale: m.scale, isLoop: m.isLoop)));
+                manualWired++;
+            }
+            if (manualWired > 0)
+                Debug.Log($"[HovlVfxCatalogGenerator] merged {manualWired} manual overlay rows " +
+                          $"from '{ManualPicksPath}' (manual wins on collision).");
 
             var so = new SerializedObject(catalog);
             var entries = so.FindProperty("Rows");

@@ -238,6 +238,11 @@ namespace DeNelle.Editor
             if (!ArtResourceRegression.Run(out var artResReason)) failures.Add(artResReason); else log.AppendLine("[art-resource] " + artResReason);
             // --- WO-682: Sfx WebGL import invariant (no divergent WebGL overrides -> no FSB decode failures) ---
             if (!SfxWebglAudioRegression.Run(out var sfxWebglReason)) failures.Add(sfxWebglReason); else log.AppendLine("[sfx-webgl] " + sfxWebglReason);
+            // --- 2026-07-12 SME suites (owner: "a SME per architect path, full suite each") ---
+            if (!CoreSaveRegression.Run(out var coreSaveSmeReason)) failures.Add(coreSaveSmeReason); else log.AppendLine("[core-save-sme] " + coreSaveSmeReason);
+            if (!BuildEconomyRegression.Run(out var buildEconReason)) failures.Add(buildEconReason); else log.AppendLine("[build-econ] " + buildEconReason);
+            if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);
+            if (!HudUiRegression.Run(out var hudUiSmeReason)) failures.Add(hudUiSmeReason); else log.AppendLine("[hud-ui-sme] " + hudUiSmeReason);
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
             if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);

@@ -88,6 +88,38 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
    events/sessions/error-lines per day), Traces (per-session web_trace lines). Rotate the env var
    to revoke access.
 
+## R. Regression suite — status + what's left (owner focus 2026-07-12)
+**DONE this session (wired into DataRegression.RunAll, compile-gated):** SFX_WEBGL (green),
+CORESAVE (Core/Save SME), BUILDECON (BuildMode/Economy SME), DATAWEB (Data/Web SME), HUDUI
+(HUD/UI SME incl. the tofu-glyph oracle). Baseline run = **7 failures, ALL truthful** (no false
+positives) — the suite is now catching real defects the fleet couldn't.
+
+**What the new oracles caught (route each — these are the "what's left" to make it GREEN):**
+- **HUDUI: 47 real tofu sites** — genuine non-ASCII glyphs that render as □ on device. Worst:
+  `TowerPlacementRotateMenu.cs` (32 — the rotate menu the owner photographed), TowerSwapMenu,
+  SeatingEditorOverlay, InventoryPaperDoll, RaidDeployScreen, BuildingInteractable/CrystalMine.
+  → ASCII-sweep pass (same fix as WO-683 Lane C, project-wide). BIG one.
+- **DATAWEB: dual-copy drift** — armor/weapons/daily-quests/skin/stake-rewards/tower-perks (gear
+  ruling = Resources truth, §B.0). Sync → green.
+- **CORESAVE: 3 fail-by-design** — Tribes/Wards/Arena W-L not persisted (schema lane §E).
+- **BUILDECON: 2** = the known B2 dual-wallet + pet-slot flag_17 (§E) — surfaced via the shared
+  economy oracles, not new.
+
+**Coverage GAPS still open (paths/classes NOT yet covered — the real "what's left"):**
+1. **PlayMode paths none of the headless SMEs can reach** (documented in each SME's skip list):
+   backend delta-sync, PersistenceBridge save-triggers, OnApplicationQuit ordering, live upgrade
+   charge/ApplyTierStats on ticking components, full BaseLayoutLoader.Spawn (collider strip +
+   NavMeshObstacle + under-construction re-arm), Obsidian panel pixel/color invariants. → needs a
+   PlayMode test asmdef suite (WO candidate).
+2. **Combat/ATB path** — no SME suite authored (5th architect path). → WO candidate.
+3. **Dialogue/Yarn path** — no SME suite. → WO candidate.
+4. **Audio mixer/routing** — SFX import covered; the 5-group mixer stub (catalog P1 #6) unasserted.
+5. **Web/loader runtime** — DataWeb covers dual-copy + WebGL-omission statically; NO oracle proves
+   a clip actually DECODES on WebGL (only a real browser/self-heal-bot run can). → ties to the
+   web-bot loop (§ web self-heal, ~60% built).
+6. **CI wiring** — every gate is still manual discipline; no automated pre-commit/PR gate runs
+   REGRESSION_OK. → the single biggest coverage-leverage item.
+
 ## F. Hygiene
 19. **Renumber `WORK_ORDER_677_asset_caster_toolkit_family.md`** → 685+ (banner rule).
 20. **NOTION_SOURCE_OF_TRUTH.md** still says next-free 430 — refresh line.
