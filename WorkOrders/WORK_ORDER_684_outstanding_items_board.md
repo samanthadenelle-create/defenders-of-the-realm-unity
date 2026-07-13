@@ -5,8 +5,13 @@ and we tag them after these currently running land"). Tag/route each after the i
 land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_WO_NUMBERS.md).
 
 ## A. In flight RIGHT NOW (land + gate + verify first — next session's step 1)
-1. **WO-683 d-pad merge fix** — fleet proved the reflection merge dead
-   (`AssertBuildMoveChain: FAIL at link DPAD`); fix agent's edits may be in the tree UNGATED.
+1. **WO-683 d-pad probe fix — IN TREE, UNGATED.** RCA proved the PROBE was wrong, not the merge:
+   `ProbeArmedGhostCell` read the GhostPreview HOST transform (never moves — ghost cell stuck at
+   grid-centre (15,15), the WorldToCell(origin) constant) while `MoveTo` moves the CHILD visual
+   (GhostPreview.cs:167). Fix: new `GhostPreview.CurrentPosition` (tracked visual) consumed by the
+   probe (BuildModeController.cs). The reflection merge itself verified sound (type string matches
+   HudMoveInput.cs:16; dead-zone cleared). NEXT: gate → build → fleet re-run for the DPAD PASS
+   line (the run now carries discriminating `[Flow:Build]` d-pad Step/Warn lines either way).
 2. **VFX Caster tag-to-catalog** (Tag & Catalog block + VfxManualPicks.json overlay; generator
    merges manual-wins) — edits in tree, UNGATED (`VfxCasterWindow.cs`, `HovlVfxCatalogGenerator.cs`).
 3. **4 regression SME suites** (CoreSave / BuildEconomy / HudUi incl. the tofu-glyph oracle /
@@ -20,6 +25,12 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
    (`DEPLOY_URL` line). Owner felt-pass closes WO-677/678/682/683.
 
 ## B. Demo-lethal (P0 — sequence BEFORE polish; PM audit 2026-07-12)
+0. **⭐ NEW ORACLE FINDING (DataWebRegression, ships RED correctly): live dual-copy DRIFT in 6
+   canonical files — `weapons.json` is 256,029 B in StreamingAssets (~433 weapons) vs 19,093 B in
+   Resources (~16 weapons), and RESOURCES WINS at runtime → the shipped game plays the tiny
+   catalog.** Also drifted: armor.json, daily-quests.json, skin.json, stake-rewards.json,
+   tower-perks.json. STEPS: owner rules which side is truth per file (streaming is presumably
+   newer) → sync the pairs → `DATAWEB_OK` flips green. This may explain missing gear in play.
 7. **WO-602 home-return unwired** — a judge who leaves the castle cannot come back. Session-ender.
 8. **Encounter-return strand (~7km, WO-453 class)** — fleet reproduces every run.
 9. **Full Pi-Browser traced felt-run** — one end-to-end session in the ACTUAL Pi Browser with
