@@ -39,6 +39,7 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Audio;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -354,6 +355,14 @@ namespace DeNelle.Audio
                 return;
             }
 
+            // WO-682: a combat/arena cue IS the battle-load moment (BattleArena.
+            // BeginEncounter / ArenaMode.TryStartRaid route here via the Core seam) —
+            // pre-warm the combat SFX decode now, inside the masked transition, so the
+            // first swing never pays the first-use FSB decode stall (db-proven
+            // 167ms/4000ms frames on WebGL). Once per session; cheap re-entry.
+            if (track == MusicTrack.Battle || track == MusicTrack.Arena)
+                PrewarmCombatSfx();
+
             // Idempotency (restored — F8 2026-07-10 music-thrash): already on this track and sounding →
             // don't re-roll the rotation pool + re-crossfade. Pooled tracks (Battle/Overworld) return a
             // NEW clip object each ClipFor call, defeating the director's ReferenceEquals guard, so
@@ -572,7 +581,8 @@ namespace DeNelle.Audio
         public void PlayUiClick()
         {
             if (_uiClickClip == null)
-                _uiClickClip = Resources.Load<AudioClip>("Sfx/UiClick") ?? GenerateUiClick();
+                _uiClickClip = Guard.Try("Audio", "load UiClick clip",
+                    () => Resources.Load<AudioClip>("Sfx/UiClick"), fallback: null) ?? GenerateUiClick();
             PlayUiSfx(_uiClickClip, 0.5f);
         }
 
@@ -625,12 +635,18 @@ namespace DeNelle.Audio
             // fallback below covers it), and _sfxLibraryResolved stops us re-loading.
             if (_sfxLibrary == null && !_sfxLibraryResolved)
             {
-                _sfxLibrary = Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath);
+                // WO-682: guarded — a corrupt/unloadable library asset is ONE logged
+                // line + the synth fallback, never a throw up the combat call stack.
+                _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary",
+                    () => Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
                 _sfxLibraryResolved = true;
             }
 
             // 1) Authored asset, if a SfxClipLibrary is wired (Inspector or Resources).
-            AudioClip clip = _sfxLibrary != null ? _sfxLibrary.GetClip(id) : null;
+            //    WO-682: resolve guarded — a bad row logs once and falls to the synth.
+            AudioClip clip = _sfxLibrary != null
+                ? Guard.Try("Audio", $"resolve clip for SfxId.{id}", () => _sfxLibrary.GetClip(id), fallback: null)
+                : null;
             float vol = volume;
             if (clip != null && _sfxLibrary != null)
                 vol = volume * _sfxLibrary.GetVolume(id);
@@ -652,6 +668,17 @@ namespace DeNelle.Audio
         private void PlayOneShotOn(AudioMixerGroup group, AudioClip clip, float volume)
         {
             if (clip == null) return; // guarded — a missing SFX is silent, not an error.
+
+            // WO-682: a clip whose audio data cannot decode (WebGL "Loading FSB failed"
+            // class) is quarantined on first sight — ONE Warn at mark time, then every
+            // later play is a silent skip. Never error-level spam, never a per-play stall.
+            if (_deadSfxClips.Contains(clip)) return;
+            if (clip.loadState == AudioDataLoadState.Failed)
+            {
+                MarkSfxClipDead(clip, "loadState=Failed at play time");
+                return;
+            }
+
             if (_sfxVoices.Count == 0) return;
 
             AudioSource voice = _sfxVoices[_sfxCursor];
@@ -660,6 +687,115 @@ namespace DeNelle.Audio
             // Route this voice to the requested group for this shot.
             voice.outputAudioMixerGroup = group ?? _sfxGroup;
             voice.PlayOneShot(clip, Mathf.Clamp01(volume));
+        }
+
+        // =====================================================================
+        //  Combat SFX pre-warm + dead-clip quarantine (WO-682)
+        // =====================================================================
+
+        // Clips whose audio data failed to decode (the WebGL "Loading FSB failed"
+        // class). Marked once with a single Warn; skipped silently by every later
+        // play — the quiet-catch path, never error-level spam.
+        private readonly HashSet<AudioClip> _deadSfxClips = new HashSet<AudioClip>();
+
+        // One-shot guard — the combat set is decoded once per session (loaded clips
+        // stay resident; re-entering battle re-runs nothing).
+        private bool _sfxPrewarmed;
+
+        // The combat-relevant Resources/Sfx clip names the Village-side players
+        // (GameSfx / EnemyCombatAudio / AbilityAudioBridge / the owner sound drops)
+        // lazy-load on first use. Pre-warming these at battle load moves the WebGL
+        // first-use FSB decode (db-proven 167ms/4000ms frame stalls) into the masked
+        // load transition. A name with no authored clip is fine — the synth
+        // fallbacks cover those, nothing to warm.
+        private static readonly string[] CombatSfxResourceNames =
+        {
+            "Sfx/SwordSwing", "Sfx/WeaponDraw", "Sfx/DragonRoar",
+            "Sfx/SwordClash", "Sfx/SwordClash2", "Sfx/SwordClash3", "Sfx/SwordClash4",
+            "Sfx/SpellCast", "Sfx/HeroHit",
+            "Sfx/EnemyHit", "Sfx/EnemyDeath", "Sfx/EnemyDeath2", "Sfx/EnemyCastCharge",
+            "Sfx/Heal", "Sfx/Spell_Impact", "Sfx/Swords_Clash",
+            "Sfx/TowerFire", "Sfx/TowerArrowHit", "Sfx/WaveStart", "Sfx/LookoutHorn",
+        };
+
+        /// <summary>
+        /// Pre-warms the combat SFX set at the battle/arena-load moment (WO-682,
+        /// owner ask: "can we pre warm those files on battle load?"): resolves the
+        /// authored SfxClipLibrary entries + the Resources/Sfx combat clips and
+        /// <see cref="AudioClip.LoadAudioData"/>s each, so the decode cost lands
+        /// inside the load transition instead of the first swing. A clip that fails
+        /// to decode is marked dead (ONE <c>Warn</c>) and skipped by PlaySfx
+        /// thereafter. Runs once per session. Every step is Guard-wrapped — an
+        /// UNEXPECTED throw in the loop itself is error-level via Guard.Report
+        /// (a true failure is never downgraded), while a failed decode is the
+        /// expected/handled class and stays a Warn.
+        /// </summary>
+        public void PrewarmCombatSfx()
+        {
+            if (_sfxPrewarmed) return;
+            _sfxPrewarmed = true;
+
+            FlowTrace.Step("Audio", "PrewarmCombatSfx: begin (battle-load decode warm, WO-682)");
+            int warmed = 0, dead = 0, missing = 0;
+            Guard.Try("Audio", "prewarm combat sfx", () =>
+            {
+                var clips = new List<AudioClip>();
+
+                // (a) Every authored SfxClipLibrary entry — resolved through the same
+                //     one-shot path PlaySfxAtPosition uses (no asset = graceful skip).
+                if (_sfxLibrary == null && !_sfxLibraryResolved)
+                {
+                    _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary (prewarm)",
+                        () => Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
+                    _sfxLibraryResolved = true;
+                }
+                if (_sfxLibrary != null && _sfxLibrary.Entries != null)
+                    foreach (var e in _sfxLibrary.Entries)
+                        if (e.Clip != null && !clips.Contains(e.Clip)) clips.Add(e.Clip);
+
+                // (b) The lazily-loaded Resources/Sfx combat set.
+                foreach (string path in CombatSfxResourceNames)
+                {
+                    var loaded = Guard.Try("Audio", $"load '{path}' (prewarm)",
+                        () => Resources.Load<AudioClip>(path), fallback: null);
+                    if (loaded == null) { missing++; continue; } // no authored clip — synth fallback covers it.
+                    if (!clips.Contains(loaded)) clips.Add(loaded);
+                }
+
+                foreach (var clip in clips)
+                {
+                    if (_deadSfxClips.Contains(clip)) { dead++; continue; }
+                    bool ok = Guard.Try("Audio", $"prewarm decode '{clip.name}'", () =>
+                    {
+                        if (clip.loadState == AudioDataLoadState.Unloaded)
+                            clip.LoadAudioData();
+                    });
+                    if (!ok || clip.loadState == AudioDataLoadState.Failed)
+                    {
+                        MarkSfxClipDead(clip, "prewarm decode failed");
+                        dead++;
+                    }
+                    else
+                    {
+                        warmed++;
+                    }
+                }
+            });
+
+            FlowTrace.Step("Audio",
+                $"PrewarmCombatSfx: prewarmed {warmed} clips, {dead} failed, {missing} names with no authored clip (synth fallback)");
+        }
+
+        /// <summary>
+        /// Quarantines a clip whose audio data cannot decode (the WebGL "Loading FSB
+        /// failed" class — expected/handled, so a <c>Warn</c>, not a <c>Fail</c>).
+        /// The first mark logs ONE Warn; every later play of the clip is a silent
+        /// skip (WO-682 quiet-catch).
+        /// </summary>
+        private void MarkSfxClipDead(AudioClip clip, string why)
+        {
+            if (clip == null || !_deadSfxClips.Add(clip)) return;
+            FlowTrace.Warn("Audio", $"sfx clip '{clip.name}' marked DEAD ({why}) — plays silent from now on");
         }
 
         // =====================================================================
