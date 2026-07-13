@@ -15,7 +15,44 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-12 EVENING (mobile-web demo wave) ★★
+## ★★ SESSION HANDOVER — 2026-07-13 MIDDAY (owner felt-pass + 7-lane parallel wave) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `2de11256` (07-13 morning brief),
+**ahead 22 of origin** (a push landed 07-12 morning — older "95+ ahead" claims stale), push HELD.
+Live anchor = **`CANON_GROUND_TRUTH_2026-07-13.md`** (07-12 bannered). Preview `9ncz1sks9`
+**owner felt-passed 07-13 morning** → **PO CLOSED WO-677/678/682/683/685** (Done on Notion);
+604/605 Dropped as deprecated.
+
+**THE 07-13 WAVE (all edit-complete in the DIRTY TREE, UNGATED — one batch cycle pending):**
+WO-680/UPG-1 upgrade-panel legibility (IsMax → no CTA; named-action gate copy; `[Flow:Upgrade]`
+band-state traces; spec amendment A1–A4 parked — needs a factory pass) · **WO-602 home-return**
+(4 runtime-injected "Enter Elarion" bridge-mouth portals → courtyard fade-warp, `ff.homereturnportal`
+ON; KEY FINDING: **MergedWorld is ON — the live scene is `Main_Castle_Overworld`**, old anchor
+world-line was stale) · WO-681/ECHO-1 echo card (Obsidian modal on the TalkPromptRegistry seam,
+hosts the WO-658 picker, placeholder wisps — no Echo body existed; `echoLanes` additive save field,
+**v31 bump pending at reconcile**) · WO-693 jeweler/crafting readability (shared parchment detail
+card in the kit, OK/X + have/need rows, FontFloorMobile=30; real defect was raw 13/14px literals,
+not FitBlock) · **WO-695 strategic placement flag REMOVED** (ex-682; 21 files; blank-template new
+game, marker-latched one-shot migration proven, FTUE guard = grace-default Forge record) ·
+**REP-1 root-fixed** (hardcoded `Repair(100f)` vs Building MaxHp 120–240 additive clamp = full-price
+spend, partial restore; walls/gates ≤100 masked it; fix = `RepairTarget.RepairFull()` at both call
+sites + permanent `[Flow:Repair]` traces + standalone `RepairProbeRegression.RunStandalone` whose one
+run emits BOTH §12 closure lines). **IN FLIGHT:** WO-697/RES-1 currency CompactNumber + icon-chips.
+
+**HYGIENE LANDED:** every WO number on disk is unique — dupes → 688–695, fresh UI-seat mints →
+696 (repair-context, ex-684; wall granularity RULED: nearest damaged segment) · 697 (RES-1) ·
+698 (encounter budget, ex-685, all 4 pins RULED). Banner next-free = **699** + a UI-seat
+translation table (its 682=695 · 683=693 · 684=696 · 685=698); owner syncing that seat.
+
+**NEXT:** WO-697 lands → reconcile (v31 bump; GameStateService/CoreSaveRegression overlap review
+echo-vs-strategic) → ONE batch: CompileGate → DataRegression → REPAIR_PROBE → build → fleet
+(HOME_RETURN + tutorial + panel probes = verdicts) → commit by lane → owner felt-pass → READY
+queue (674, 676, 679, 696-after-REP-1-verify, 698). Boards: Task list has all 8 tickets w/
+handoffLog; Notion rows per the anchor's list.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-12 EVENING (mobile-web demo wave — ⚠ superseded as newest by the 2026-07-13 block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`; **5 lane commits LOCAL tonight, push HELD**
 for the owner's word. NEXT CLI: **read `START_HERE.md` (repo root) FIRST.**
@@ -94,7 +131,7 @@ router `docs/SME/README.md`, ledger of all 34 store products; headlines: Hovl de
 vs our Bloom OFF; Blink's rigged orc bundle + 608 icons unused; KayKit 33 rigged characters
 unused; polyperfect 240 rigged villagers unused; ⛔ apex-dragon model CC BY-NC (license/replace
 before commercial release, memory + dossier); Raid BGM dead-wired (~8-line fix, AUDIO_SME).
-(6) **WO-677 minted** — Asset Caster toolkit family (Icon/Gear/Audio/Character/Texture Casters),
+(6) **WO-688 minted** (renumbered from colliding WO-677, 2026-07-13) — Asset Caster toolkit family (Icon/Gear/Audio/Character/Texture Casters),
 Phase 0 applicability assessment ready to run on the dossiers. Tools shipped earlier same night:
 VFX Caster window + Motion Caster preview gear/mocap filter. 24 commits local, push HELD.
 

@@ -1,4 +1,4 @@
-# WO-677 — Asset Caster Toolkit Family (owner vision, 2026-07-12)
+# WO-688 — Asset Caster Toolkit Family (owner vision, 2026-07-12) *(renumbered from WO-677, 2026-07-13 collision cleanup)*
 
 **Status: SPEC DRAFT — gated on the SME dossier fleet (docs/SME/) completing + per-pack applicability assessment**
 **Owner words:** "assess if the logic can be applied to what we have and implemented successfully?

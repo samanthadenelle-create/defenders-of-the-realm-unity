@@ -31,7 +31,7 @@ when you need to know exactly WHAT a folder is.
 5. Purchased-but-uninstalled or removed products (e.g. Yarn Spinner, removed per WO-455) are tracked in the ledger, not given dossiers.
 
 *Status 2026-07-12 06:00: **ALL EIGHT DOSSIERS COMPLETE** (overnight research fleet). Cross-dossier
-headline for WO-677 Phase 0: the project owns far more production-ready content than it uses —
+headline for WO-688 Phase 0 (ex-WO-677, renumbered 2026-07-13; assessment file keeps its `WO677_PHASE0_APPLICABILITY.md` name): the project owns far more production-ready content than it uses —
 Blink's Humanoid-rigged orc bundle (zero references), 608 spell/class icons, KayKit's 33 rigged
 characters, polyperfect's 240 rigged villagers + animation system, the S&S block/parry/combo
 systems, 6 Supercyan bodies. Plus two ⛔ flags: the apex-dragon model is CC BY-NC (license or

@@ -126,7 +126,7 @@ positives) — the suite is now catching real defects the fleet couldn't.
    REGRESSION_OK. → the single biggest coverage-leverage item.
 
 ## F. Hygiene
-19. **Renumber `WORK_ORDER_677_asset_caster_toolkit_family.md`** → 685+ (banner rule).
+19. **Renumber `WORK_ORDER_677_asset_caster_toolkit_family.md`** → 685+ (banner rule). ✅ DONE 2026-07-13 — now `WORK_ORDER_688_asset_caster_toolkit_family.md` (full collision sweep 677–681 → 688–692).
 20. **NOTION_SOURCE_OF_TRUTH.md** still says next-free 430 — refresh line.
 21. **CLI_PREP_2026-07-08** pointer in SESSION_CANON_LOADER Key Files — supersede when a new prep
     doc exists (START_HERE.md now carries the role).

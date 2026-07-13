@@ -1,13 +1,17 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ REFRESHED 2026-07-12: next free WO = **688** (685/686/687 = web-trace lifecycle trio, minted 07-12: 685 retention/TTL cron, 686 ingestion hardening, 687 read/triage surface). Prior: 684 = outstanding-items board. Disk max = **687**.
+> ## ⚠ REFRESHED 2026-07-13: next free WO = **700** (**699** = hero-select ability chips, ticket SEL-1); prior line: next free 699 (688–695 consumed by the collision renumber below; **696** = repair-before-upgrade context, renumbered from a colliding fresh 684 mint on 07-13; **697** = currency compact-format + icon chips, ticket RES-1; **698** = encounter budget + scouting, renumbered from a colliding fresh 685 mint). Prior refresh 07-12: 685/686/687 = web-trace lifecycle trio (685 retention/TTL cron, 686 ingestion hardening, 687 read/triage surface); 684 = outstanding-items board. Disk max = **698**.
+> ⚠ **UI-SEAT SYNC NOTE (2026-07-13):** the spec-writer seat is minting in the pre-renumber 674–685 space — every fresh mint there collides. UI-seat numbers translate: its 682=695 (strategic placement) · its 683=693 (jeweler) · its 684=696 (repair context) · its 685=698 (encounter budget). Point the UI seat at THIS banner before its next mint.
 > The per-lane detail below is **FROZEN HISTORY** (pre-430 era — ~270 numbers stale); do **NOT** mint from it.
-> Numbering collisions on record:
-> - **WO-677**: `mobile_buildmode_move_unreachable` (spec + RESULT, 2026-07-12 — **canonical on disk**) vs
->   `asset_caster_toolkit_family` (the 'Asset Caster toolkit' WO from HANDOVER 07-12 morning — its spec file
->   `WORK_ORDER_677_asset_caster_toolkit_family.md` ALSO exists on disk; **needs renumber to 684+**).
-> - **WO-678**: `pi_sdk_timeout_clean_wrap` (spec + RESULT — **canonical**) vs
->   `WORK_ORDER_678_hovl_vfx_fidelity.md` / `.RESULT.md` (earlier same-number use).
+> **Collisions RESOLVED 2026-07-13** (677–681 each had two specs on disk; the 07-12 evening-arc/ticket-board side kept its number, the other spec was renumbered — files renamed + headers updated):
+> - 677 kept `mobile_buildmode_move_unreachable` (spec + RESULT) · `asset_caster_toolkit_family` → **688**
+> - 678 kept `pi_sdk_timeout_clean_wrap` (spec + RESULT) · `hovl_vfx_fidelity` (spec + RESULT) → **689**
+> - 679 kept `crystal_economy_faucets` (owner ask 07-12) · `swordshield_full_wiring` (Grok package) → **690**
+> - 680 kept `enhancement_tier_gate_legibility` (ticket UPG-1) · `blink_orcs_activation` (Grok package) → **691**
+> - 681 kept `echo_select_intro_and_assign` (ticket ECHO-1) · `blink_icons_import` (Grok package) → **692**
+> - 683 kept `build_screen_dpad` (spec + RESULT, ticket closed by PO 07-13) · `jeweler_crafting_mobile_readability` → **693** (untracked — stage when claimed)
+> - 685 kept `webtrace_retention_ttl_cron` (banner-canonical, board row Done 07-13) · `webtrace_lifecycle` → **694** (untracked — stage when claimed)
+> - 682 kept `web_quiet_error_surface` (spec + RESULT, board row Done 07-13) · `strategic_placement_lock_on` → **695** (untracked — stage when claimed; implementation agent pre-briefed on the rename)
 > Rule stands: **mint from THIS banner's next-free, bump it in the same edit.**
 
 Branch **feat/tower-core-loop**. Numbers only, run order. `→` = serial (same lane, in order);

@@ -1,5 +1,10 @@
 # CANON GROUND TRUTH — 2026-07-12 (evening)
 
+> ⚠ **SUPERSEDED 2026-07-13 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-13.md`.**
+> Known-stale lines here: the world statement (line ~70 — MergedWorld is ON, the live scene is
+> `Main_Castle_Overworld`), "~95+ commits ahead / push HELD" (a push landed 07-12 morning; ahead 22
+> as of 07-13), and `ff.strategicplacement` (REMOVED 07-13, WO-695).
+
 > **Purpose:** the single anchor of *current reality*, verified from the working tree, HEAD, the db
 > (WebTrace runtime-log echo), the exe on disk, and owner rulings given live this session.
 > **Supersedes `CANON_GROUND_TRUTH_2026-07-08.md`** (banner it SUPERSEDED). If a doc contradicts a
@@ -57,6 +62,9 @@
 - **WO numbering authority is ~270 stale** (`CLI_LANES_WO_NUMBERS.md` says next-free 412; disk max
   is now 683). **Collisions on disk: 677** (mobile-buildmode vs HANDOVER's "Asset Caster") **and
   678** (Pi timeout vs Hovl VFX RESULT). Needs an authority-doc refresh + renumber ruling.
+  *(RESOLVED 2026-07-13: collisions 677–683 + 685 renumbered — losing-side specs now 688
+  asset-caster, 689 hovl-vfx, 690 swordshield, 691 blink-orcs, 692 blink-icons, 693 jeweler-crafting
+  readability, 694 webtrace-lifecycle, 695 strategic-placement-lock-on; banner next-free = 696.)*
 - SAMANTHA.md (root) is the boot-confirmation gate but is NOT referenced from CLAUDE.md — linked
   now via memory `samantha-md-boot-confirmation-first`.
 - Loader-stage web errors (before Unity boots) reach no telemetry — WebTrace can't install if the

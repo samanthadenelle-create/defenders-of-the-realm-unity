@@ -1,4 +1,4 @@
-# WO-678 RESULT — Hovl VFX Fidelity (2026-07-12)
+# WO-689 RESULT — Hovl VFX Fidelity (2026-07-12) *(renumbered from WO-678, 2026-07-13 collision cleanup)*
 
 **Status: IMPLEMENTED (items 1–2), NO-CHANGE-NEEDED (item 3), DEFERRED (item 4). Pending owner felt-verify.**
 
