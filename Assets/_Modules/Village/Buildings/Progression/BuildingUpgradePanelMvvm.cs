@@ -7,19 +7,24 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Buildings.Progression
 //
-// Owner redo 2026-07-02: a Warcraft-3-style PERK GRID of tiles (kit slot plates,
-// RpgUiCatalog RoleSlot — empty tiers still read as a grid). Each tile: perk
-// icon, name, COST, one-line concrete EFFECT (from the perk data). Tap a tile to
-// unlock. States: owned=lit, next/affordable=gold affordance, locked=dimmed +
-// requirement line. VERBIAGE LAW: "Unlock perk"/"Enhancement" language only.
-// ONE shared Close (the Obsidian chrome's); no other buttons — one action = one
-// tile (the old duplicate "big CTA" button is gone, per the button law).
+// WO-675 OBSIDIAN/TALENT REDESIGN (owner approved 2026-07-11 "yes so much
+// clearer"). A pure View re-skin — the VM is UNTOUCHED, zero new architecture:
+//   1. Frame -> RpgUiCatalog.FrameTalent (landscape talent frame, medallion hammer).
+//   2. Perks are grouped under TIER BANDS (crown/tier glyph + gilt rule + "TIER n").
+//      The synthetic Village-Tier tile is REMOVED from the grid; its ONE gold
+//      "Unlock" action rides the first locked tier band's header (same vm.Select).
+//   3. Tile plates use the slot_talent_* sprite (sprite-first ALWAYS, ungated) with
+//      a procedural fallback so the panel never blanks when art is absent.
+//   4. Affordance ring = a sliced rarity rim sprite (fallback: gold Outline).
+//   5. Wallet -> ElarionUiKit.CurrencyChip row in the footer zone (count-tween);
+//      only the currencies this building can spend, derived from the VM cost data.
+//   6. Status line -> transient BuildFeedbackToast (no persistent strip).
+//   7. Cost lines carry a RpgUi/currency/* icon beside the value (name text stays).
 //
-// Code-built uGUI ONLY (no UXML — §8). Chrome = BuildObsidianPanel(FrameCore):
-// title -> layout.header, grid -> layout.body, wallet -> layout.footer.
-// Smoothness (owner 2026-07-02): eased open/close (scale+fade, ~0.18s/0.14s,
-// via the local PanelOpenCloseFx below — no shared kit tween exists yet; flagged
-// for promotion to ElarionUiKit) + button ColorTint fade (never snap).
+// Chrome = BuildObsidianPanel(FrameTalent): title -> layout.header, tier bands ->
+// layout.body (scrolling), currency chips -> layout.footer. ONE shared Close.
+// Code-built uGUI ONLY (no UXML — §8). Eased open/close via the local
+// PanelOpenCloseFx (flagged for kit promotion, WO-675 §8 — additive, on-touch).
 //
 // SHIPS BEHIND FeatureFlags.BuildingUpgradePanel (default ON since WO-476 — this
 // panel IS the live upgrade surface; the legacy UIDocument twin was DELETED
@@ -43,22 +48,35 @@ namespace DeNelle.Village.Buildings.Progression
         // Locked tile dim — the plate greys down + drops alpha.
         private static readonly Color LockedTint = new Color(0.52f, 0.52f, 0.55f, 0.80f);
 
+        // Sprite-first plate (WO-675 §3) — the talent slot plate, ungated. Fallback procedural.
+        private const string SlotTalentPlate = "slot_talent_1";
+        // Rarity rim overlay for the unlockable+affordable tile (WO-675 §4).
+        private const string AffordRimSprite = "rarity_4";
+        // Committed currency-icon role folder (Resources/RpgUi/currency/currency_*).
+        private const string CurrencyRole = "currency";
+
         private BuildingUpgradeVM _vm;
 
         private GameObject _ui;
-        private GameObject _contentRoot;          // scroll host inside layout.body
-        private RectTransform _scrollContent;     // GridLayoutGroup content
-        private GridLayoutGroup _grid;
-        private TMPro.TextMeshProUGUI _walletText;
-        private TMPro.TextMeshProUGUI _statusText;
+        private RectTransform _bodyHost;          // persistent scroll host inside layout.body
+        private RectTransform _scrollContent;     // VerticalLayoutGroup content (bands)
+        private readonly List<GridLayoutGroup> _tileGrids = new List<GridLayoutGroup>();
+
+        // Footer currency chips (built once; count-tweened on each Render). WO-675 §5.
+        private struct ChipRef { public ElarionUiKit.CurrencyKind Kind; public ElarionUiKit.CurrencyChipHandle Handle; }
+        private readonly List<ChipRef> _chips = new List<ChipRef>();
+
+        // Status is now transient (WO-675 §6): toast only NEW statuses, never the open-time baseline.
+        private string _lastStatus;
 
         private PanelHandle _panelHandle;
 
         public bool IsOpen => _ui != null;
 
-        private const int   GridColumns   = 2;
-        private const float TileHeightPx  = 210f;
+        private const int   BandColumns   = 3;
+        private const float TileHeightPx  = 196f;
         private const float TileGapPx     = 12f;
+        private const float BandHeaderPx  = 62f;
         private const float ButtonFadeSec = 0.12f;   // hover/press transition — never snap
 
         // ── Registration (mirror HeroSkillTreePanelMvvm) ──────────────────────────
@@ -130,29 +148,27 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_vm == null) return;
 
-            if (_walletText != null)
-                _walletText.text = $"Wood: {_vm.Wood}   Food: {_vm.Food}   Iron: {_vm.Iron}   Crystals: {_vm.Crystals}   Gold: {_vm.Coins}";
+            // WO-675 §5: refresh the footer chips (count-tween; no red/green flash).
+            for (int i = 0; i < _chips.Count; i++)
+                _chips[i].Handle?.SetAmount(WalletValue(_chips[i].Kind));
 
-            if (_statusText != null) _statusText.text = _vm.Status;
+            // WO-675 §6: status is transient — pop a toast only when it CHANGES to a new,
+            // non-empty message (the open-time baseline was captured in BuildChrome).
+            string status = _vm.Status;
+            if (!string.IsNullOrEmpty(status) && status != _lastStatus)
+            {
+                _lastStatus = status;
+                BuildFeedbackToast.Show(status);
+            }
 
-            RebuildGrid();
-        }
-
-        private void RebuildGrid()
-        {
-            ClearContent();
-
-            var gridRoot = BuildScrollContent();
-            foreach (var item in _vm.Perks)
-                CreateTile(gridRoot, item);
-            FinalizeScroll();
+            RebuildBands();
         }
 
         // ── Chrome — MASTER FRAME ONLY (UI_BLINK_TEMPLATE_CANON §2-§4) ────────────
-        // BuildObsidianPanel(FrameCore) supplies frame + header title + the ONE shared
-        // Close. This View drops chrome-less content into the returned drop-zones:
-        //   layout.header -> title (pre-built), layout.body -> perk grid + status,
-        //   layout.footer -> wallet strip. No per-screen cards/wells/rims.
+        // BuildObsidianPanel(FrameTalent) supplies the landscape talent frame + header
+        // title + the ONE shared Close. This View drops chrome-less content into the
+        // returned drop-zones: layout.header -> title (pre-built), layout.body -> tier
+        // bands, layout.footer -> currency chips. No per-screen cards/wells/rims.
 
         private void BuildChrome()
         {
@@ -162,75 +178,246 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
             string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
-            // PORTRAIT sizing (UI review 04): Core_Panel is a PORTRAIT frame (~1210x1815). Anchor the
-            // panel to a narrow, tall center column so the rendered aspect matches the template instead
-            // of stretching the ornate frame into a landscape slab.
+
+            // WO-675 §1: LANDSCAPE Talent frame (mirror HeroSkillTreePanelMvvm's sizing).
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
-                new Vector2(0.33f, 0.05f), new Vector2(0.67f, 0.95f), () => _vm?.Close(),
-                frameName: RpgUiCatalog.FrameCore, medallionIcon: "hammer");
+                new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => _vm?.Close(),
+                headerX0: 0.04f, headerX1: 0.74f,
+                frameName: RpgUiCatalog.FrameTalent, medallionIcon: "hammer");
 
             // Zones: frame path returns layout; procedural fallback (art absent) does not —
             // synthesize an equivalent body zone over chrome.content so the screen never blanks.
-            RectTransform body = chrome.layout != null
+            RectTransform body = chrome.layout != null && chrome.layout.body != null
                 ? chrome.layout.body
-                : MakeZone(chrome.content.transform, "Zone_Body", new Vector2(0.04f, 0.075f), new Vector2(0.96f, 0.855f));
+                : MakeZone(chrome.content.transform, "Zone_Body", new Vector2(0.04f, 0.13f), new Vector2(0.96f, 0.855f));
 
             // Smooth the shared Close button's tint transition too.
             SoftenButton(chrome.close);
 
-            // BODY zone: perk grid (scrolling) above the wallet + a thin status line. The wallet rides
-            // the dark well's BASE — NOT the frame's clipped bottom-filigree footer band, which squashed
-            // + dimmed the resource line at the very edge (UI review 04). Bright gilt + auto-size so the
-            // full "Wood/Food/Iron/Crystals/Gold" line stays legible + un-clipped in the narrow column.
-            _contentRoot = MakeZone(body, "GridHost", new Vector2(0f, 0.135f), new Vector2(1f, 1f)).gameObject;
+            // BODY zone: the tier bands scroll here (full zone; the footer carries the wallet chips).
+            _bodyHost = MakeZone(body, "BandHost", new Vector2(0f, 0f), new Vector2(1f, 1f));
 
-            _walletText = MakeLine(body, "Wallet", ElarionUi.Gilt, ElarionUi.FontLabel,
-                new Vector2(0f, 0.065f), new Vector2(1f, 0.128f));
-            // §1.14: bounded fit + Truncate (keeps the authored 10px min) so the wallet
-            // line can never overflow its strip onto the status line below.
-            ElarionUiKit.FitBlock(_walletText, 10f, ElarionUi.FontLabel);
+            // WO-675 §5: currency chips ride the FOOTER band (frame path), else a synthesized
+            // base strip over the body (art-absent fallback) so the wallet never clips or blanks.
+            RectTransform footer = chrome.layout != null && chrome.layout.footer != null
+                ? chrome.layout.footer
+                : MakeZone(body, "Zone_FooterFallback", new Vector2(0f, 0f), new Vector2(1f, 0.09f));
+            BuildCurrencyFooter(footer);
 
-            _statusText = MakeLine(body, "Status", ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                new Vector2(0f, 0f), new Vector2(1f, 0.06f));
-            ElarionUiKit.FitSingleLine(_statusText);
+            // Capture the open-time status as the toast baseline (do NOT toast the idle hint).
+            _lastStatus = _vm != null ? _vm.Status : null;
 
             // Eased open (owner smoothness directive): scale 0.92->1 + fade 0->1, ease-out.
             var fx = _ui.AddComponent<PanelOpenCloseFx>();
             fx.PlayOpen(chrome.root != null ? chrome.root.transform as RectTransform : null);
         }
 
-        private static RectTransform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)
+        // ── Currency footer (WO-675 §5) ───────────────────────────────────────────
+        // ONE ElarionUiKit.CurrencyChip per spendable currency, count-tweened. The set is
+        // derived from the VM's cost strings (presentation read of VM data — no game state);
+        // falls back to all five when ambiguous. Gold is the primary (larger, gilt) chip.
+
+        private void BuildCurrencyFooter(RectTransform footer)
         {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return rt;
+            _chips.Clear();
+            if (footer == null) return;
+
+            var kinds = DeriveSpendableCurrencies();
+            int n = kinds.Count;
+            if (n == 0) return;
+
+            const float gap = 0.008f;
+            for (int i = 0; i < n; i++)
+            {
+                float x0 = (float)i / n + gap;
+                float x1 = (float)(i + 1) / n - gap;
+                bool primary = kinds[i] == ElarionUiKit.CurrencyKind.Gold;
+                var handle = ElarionUiKit.CurrencyChip(footer, kinds[i],
+                    new Vector2(x0, 0.12f), new Vector2(x1, 0.88f),
+                    primary: primary, tag: CurrencyTag(kinds[i]));
+                _chips.Add(new ChipRef { Kind = kinds[i], Handle = handle });
+            }
         }
 
-        private static TMPro.TextMeshProUGUI MakeLine(Transform parent, string name, Color color,
-            float fontSize, Vector2 min, Vector2 max)
+        // Scan the VM's per-tile cost strings for the currency keywords this building spends.
+        // Fixed display order (Gold primary first). Falls back to all five when nothing parses.
+        private List<ElarionUiKit.CurrencyKind> DeriveSpendableCurrencies()
         {
-            var go = new GameObject(name, typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.fontSize = fontSize;
-            t.color = color;
-            t.alignment = TMPro.TextAlignmentOptions.Center;
-            t.raycastTarget = false;
-            return t;
+            bool gold = false, wood = false, food = false, iron = false, crystal = false;
+            if (_vm != null && _vm.Perks != null)
+            {
+                foreach (var item in _vm.Perks)
+                {
+                    string cost = _vm.CostFor(item.Id);
+                    if (string.IsNullOrEmpty(cost)) continue;
+                    string c = cost.ToLowerInvariant();
+                    if (c.Contains("gold"))    gold = true;
+                    if (c.Contains("wood"))    wood = true;
+                    if (c.Contains("food"))    food = true;
+                    if (c.Contains("iron"))    iron = true;
+                    if (c.Contains("crystal")) crystal = true;
+                }
+            }
+
+            var list = new List<ElarionUiKit.CurrencyKind>();
+            if (gold)    list.Add(ElarionUiKit.CurrencyKind.Gold);
+            if (wood)    list.Add(ElarionUiKit.CurrencyKind.Wood);
+            if (food)    list.Add(ElarionUiKit.CurrencyKind.Food);
+            if (iron)    list.Add(ElarionUiKit.CurrencyKind.Iron);
+            if (crystal) list.Add(ElarionUiKit.CurrencyKind.Crystal);
+
+            if (list.Count == 0)
+            {
+                list.Add(ElarionUiKit.CurrencyKind.Gold);
+                list.Add(ElarionUiKit.CurrencyKind.Wood);
+                list.Add(ElarionUiKit.CurrencyKind.Food);
+                list.Add(ElarionUiKit.CurrencyKind.Iron);
+                list.Add(ElarionUiKit.CurrencyKind.Crystal);
+            }
+            return list;
         }
 
-        // ── Scroll grid (GridLayoutGroup; anti-collapse via ContentSizeFitter) ────
+        private static string CurrencyTag(ElarionUiKit.CurrencyKind kind)
+        {
+            switch (kind)
+            {
+                case ElarionUiKit.CurrencyKind.Gold:    return "Gold";
+                case ElarionUiKit.CurrencyKind.Wood:    return "Wood";
+                case ElarionUiKit.CurrencyKind.Food:    return "Food";
+                case ElarionUiKit.CurrencyKind.Iron:    return "Iron";
+                case ElarionUiKit.CurrencyKind.Crystal: return "Crystals";
+                default:                                return kind.ToString();
+            }
+        }
+
+        private long WalletValue(ElarionUiKit.CurrencyKind kind)
+        {
+            if (_vm == null) return 0;
+            switch (kind)
+            {
+                case ElarionUiKit.CurrencyKind.Gold:    return _vm.Coins;
+                case ElarionUiKit.CurrencyKind.Wood:    return _vm.Wood;
+                case ElarionUiKit.CurrencyKind.Food:    return _vm.Food;
+                case ElarionUiKit.CurrencyKind.Iron:    return _vm.Iron;
+                case ElarionUiKit.CurrencyKind.Crystal: return _vm.Crystals;
+                default:                                return 0;
+            }
+        }
+
+        // ── Tier bands (WO-675 §2) ────────────────────────────────────────────────
+        // Group vm.Perks into bands: each "tier-N" tile becomes a "TIER n" band (crown
+        // glyph + gilt rule); research perks group under a "Research" band. The synthetic
+        // Village-Tier tile is pulled OUT of the grid — its one gold Unlock action rides
+        // the first LOCKED tier band's header (one action = one button).
+
+        private sealed class Band
+        {
+            public string Key;
+            public string Label;
+            public string CrownName;                 // "tier1".."tier3" or null (research)
+            public int TierNumber = -1;
+            public readonly List<ItemVM> Tiles = new List<ItemVM>();
+            public bool Locked;                      // this band's tier tile is not yet reachable
+            public string Requirement;               // the locked tile's LockReason (header hint)
+        }
+
+        private void RebuildBands()
+        {
+            ClearContent();
+            _tileGrids.Clear();
+
+            // 1) Partition the perks into ordered bands; pull the Village-Tier control aside.
+            var bands = new List<Band>();
+            var byKey = new Dictionary<string, Band>();
+            ItemVM villageTier = default;
+            bool hasVillageTier = false;
+
+            foreach (var item in _vm.Perks)
+            {
+                if (item.Id == BuildingUpgradeVM.VillageTierRowId)
+                {
+                    villageTier = item;
+                    hasVillageTier = true;
+                    continue;   // §2 — removed from the grid; becomes a band-header action
+                }
+
+                string key; string label; string crown; int tierNum;
+                if (item.Id != null && item.Id.StartsWith("tier-"))
+                {
+                    tierNum = TierNumber(item.Id);
+                    key = "tier-" + tierNum;
+                    label = "TIER " + tierNum;
+                    crown = "tier" + Mathf.Clamp(tierNum, 1, 3);
+                }
+                else
+                {
+                    key = "research";
+                    label = "RESEARCH";
+                    crown = null;
+                    tierNum = int.MaxValue;   // research band sorts last
+                }
+
+                if (!byKey.TryGetValue(key, out var band))
+                {
+                    band = new Band { Key = key, Label = label, CrownName = crown, TierNumber = tierNum };
+                    byKey[key] = band;
+                    bands.Add(band);
+                }
+                band.Tiles.Add(item);
+
+                // A tier band inherits "locked" + its requirement from its tier tile.
+                if (key != "research" && item.Locked)
+                {
+                    band.Locked = true;
+                    if (string.IsNullOrEmpty(band.Requirement)) band.Requirement = item.LockReason;
+                }
+            }
+
+            // 2) The Village-Tier control seats on the FIRST locked tier band's header (§2).
+            // If nothing is locked but the control is still actionable (not maxed), give it a
+            // dedicated band at the top so the tech-gate is never lost.
+            Band villageHost = null;
+            if (hasVillageTier)
+            {
+                foreach (var b in bands)
+                    if (b.TierNumber != int.MaxValue && b.Locked) { villageHost = b; break; }
+
+                if (villageHost == null && !villageTier.Equipped)
+                {
+                    villageHost = new Band
+                    {
+                        Key = "villagetier",
+                        Label = "VILLAGE TIER",
+                        CrownName = "tier3",
+                        TierNumber = -1,
+                    };
+                    bands.Insert(0, villageHost);
+                }
+            }
+
+            // 3) Build the scroll + one block per band.
+            var content = BuildScrollContent();
+            foreach (var band in bands)
+            {
+                bool attachVillage = hasVillageTier && band == villageHost;
+                CreateBand(content, band, attachVillage ? villageTier : (ItemVM?)null);
+            }
+            FinalizeScroll();
+        }
+
+        private static int TierNumber(string id)
+        {
+            int dash = id != null ? id.LastIndexOf('-') : -1;
+            if (dash >= 0 && dash < id.Length - 1 && int.TryParse(id.Substring(dash + 1), out int n)) return n;
+            return 1;
+        }
+
+        // ── Scroll host: vertical stack of band blocks ────────────────────────────
 
         private Transform BuildScrollContent()
         {
             var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewport.transform.SetParent(_contentRoot.transform, false);
+            viewport.transform.SetParent(_bodyHost, false);
             var vr = viewport.GetComponent<RectTransform>();
             vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
             vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
@@ -246,13 +433,14 @@ namespace DeNelle.Village.Buildings.Progression
             cr.anchoredPosition = Vector2.zero;
             cr.sizeDelta = new Vector2(0f, 0f);
 
-            _grid = content.AddComponent<GridLayoutGroup>();
-            _grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            _grid.constraintCount = GridColumns;
-            _grid.spacing = new Vector2(TileGapPx, TileGapPx);
-            _grid.padding = new RectOffset(4, 4, 4, 4);
-            _grid.childAlignment = TextAnchor.UpperCenter;
-            _grid.cellSize = new Vector2(300f, TileHeightPx);   // corrected in FinalizeScroll
+            var vlg = content.AddComponent<VerticalLayoutGroup>();
+            vlg.spacing = 16f;
+            vlg.padding = new RectOffset(6, 6, 6, 10);
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+            vlg.childAlignment = TextAnchor.UpperCenter;
 
             var fitter = content.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -272,29 +460,158 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void FinalizeScroll()
         {
-            if (_scrollContent == null) return;
             Canvas.ForceUpdateCanvases();
-            // Size the grid cells from the REAL content width (2 columns fill it).
-            if (_grid != null)
+            // Size every band grid's cells from the REAL content width (BandColumns fill it).
+            float w = _bodyHost != null ? _bodyHost.rect.width : 0f;
+            if (w > 1f)
             {
-                float w = _scrollContent.rect.width;
-                if (w > 1f)
-                {
-                    float cell = (w - _grid.padding.horizontal - TileGapPx * (GridColumns - 1)) / GridColumns;
-                    _grid.cellSize = new Vector2(cell, TileHeightPx);
-                }
+                float cell = (w - 12f - TileGapPx * (BandColumns - 1)) / BandColumns;
+                if (cell > 1f)
+                    foreach (var g in _tileGrids)
+                        if (g != null) g.cellSize = new Vector2(cell, TileHeightPx);
             }
-            var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
-            if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            if (_scrollContent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+        }
+
+        // ── One band block: header strip + tile grid ──────────────────────────────
+
+        private void CreateBand(Transform parent, Band band, ItemVM? villageAction)
+        {
+            var root = new GameObject("Band_" + band.Key, typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+            var vlg = root.AddComponent<VerticalLayoutGroup>();
+            vlg.spacing = 6f;
+            vlg.padding = new RectOffset(0, 0, 0, 0);
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+            vlg.childAlignment = TextAnchor.UpperCenter;
+
+            CreateBandHeader(root.transform, band, villageAction);
+            CreateBandGrid(root.transform, band);
+        }
+
+        private void CreateBandHeader(Transform parent, Band band, ItemVM? villageAction)
+        {
+            var header = new GameObject("BandHeader", typeof(RectTransform));
+            header.transform.SetParent(parent, false);
+            var le = header.AddComponent<LayoutElement>();
+            le.minHeight = BandHeaderPx;
+            le.preferredHeight = BandHeaderPx;
+
+            // Crown glyph (left) — RpgUi/crown/tier{n}; text-crest fallback keeps the band readable.
+            Sprite crown = string.IsNullOrEmpty(band.CrownName)
+                ? null : RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, band.CrownName);
+            if (crown != null)
+            {
+                var cg = new GameObject("Crown", typeof(Image));
+                cg.transform.SetParent(header.transform, false);
+                var crt = cg.GetComponent<RectTransform>();
+                crt.anchorMin = new Vector2(0.005f, 0.08f); crt.anchorMax = new Vector2(0.065f, 0.92f);
+                crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+                var cimg = cg.GetComponent<Image>();
+                cimg.sprite = crown; cimg.preserveAspect = true; cimg.raycastTarget = false;
+            }
+
+            // "TIER n" label.
+            var lbl = ElarionUiKit.Label(header.transform, band.Label, 0.10f, 0.90f,
+                ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.MidlineLeft,
+                crown != null ? 0.075f : 0.01f, 0.45f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl);
+
+            // Thin gilt rule under the label band.
+            var rule = new GameObject("Rule", typeof(Image));
+            rule.transform.SetParent(header.transform, false);
+            var rr = rule.GetComponent<RectTransform>();
+            rr.anchorMin = new Vector2(0.01f, 0.02f); rr.anchorMax = new Vector2(0.99f, 0.06f);
+            rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
+            var rimg = rule.GetComponent<Image>();
+            rimg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.45f);
+            rimg.raycastTarget = false;
+
+            // Locked-band requirement hint (colorblind law: text, never hue).
+            if (band.Locked && !string.IsNullOrEmpty(band.Requirement))
+            {
+                float reqX1 = villageAction.HasValue ? 0.66f : 0.98f;
+                var req = ElarionUiKit.Label(header.transform, band.Requirement, 0.10f, 0.90f,
+                    ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineRight,
+                    0.46f, reqX1);
+                req.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(req);
+            }
+
+            // §2 — the ONE gold Unlock action for the tech-gate rides this band header.
+            if (villageAction.HasValue)
+            {
+                string cost = _vm != null ? _vm.CostFor(BuildingUpgradeVM.VillageTierRowId) : "";
+                BuildUnlockAction(header.transform, cost, () => _vm?.Select(BuildingUpgradeVM.VillageTierRowId));
+            }
+        }
+
+        private void BuildUnlockAction(Transform parent, string costText, System.Action onClick)
+        {
+            var go = new GameObject("UnlockAction", typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.68f, 0.14f); rt.anchorMax = new Vector2(0.985f, 0.86f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            var plate = go.GetComponent<Image>();
+            var gold = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonGold);
+            if (gold != null) { plate.sprite = gold; plate.type = Image.Type.Sliced; plate.color = Color.white; }
+            else
+            {
+                plate.color = ElarionUiKit.Cell;
+                ElarionUiKit.ApplyRounded(plate);
+                var outline = go.AddComponent<Outline>();
+                outline.effectColor = ElarionUiKit.ObsidianTrim;
+                outline.effectDistance = new Vector2(3f, 3f);
+            }
+
+            var btn = go.GetComponent<Button>();
+            btn.targetGraphic = plate;
+            ElarionUiKit.StyleButtonColors(btn);
+            SoftenButton(btn);
+            btn.onClick.AddListener(() => onClick?.Invoke());
+
+            string label = string.IsNullOrEmpty(costText) ? "Unlock" : ("Unlock  " + costText);
+            var lbl = ElarionUiKit.Label(go.transform, label, 0.05f, 0.95f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
+                0.05f, 0.95f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
+        private void CreateBandGrid(Transform parent, Band band)
+        {
+            var gridGo = new GameObject("BandGrid", typeof(RectTransform));
+            gridGo.transform.SetParent(parent, false);
+
+            var grid = gridGo.AddComponent<GridLayoutGroup>();
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = BandColumns;
+            grid.spacing = new Vector2(TileGapPx, TileGapPx);
+            grid.padding = new RectOffset(2, 2, 2, 2);
+            grid.childAlignment = TextAnchor.UpperLeft;
+            grid.cellSize = new Vector2(260f, TileHeightPx);   // corrected in FinalizeScroll
+
+            var fitter = gridGo.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            _tileGrids.Add(grid);
+
+            foreach (var item in band.Tiles)
+                CreateTile(gridGo.transform, item);
         }
 
         // ── Perk TILE (presentation; data from the bound ItemVM) ──────────────────
-        // Kit slot plate (RpgUiCatalog RoleSlot / SlotItem) so empty/locked tiers still
-        // read as a grid. Layout inside the tile (fraction anchors):
-        //   icon (top center) / name / effect one-liner / cost-or-requirement line.
-        // States: owned = lit (gilt tint + "UNLOCKED"), next = gold outline affordance,
-        // locked = dimmed plate + requirement line. Tap = _vm.Select(id) (unlock).
+        // slot_talent plate (sprite-first, ungated — WO-675 §3). Layout inside the tile:
+        //   icon (top center) / name / effect one-liner / cost line (currency icon + value).
+        // States: owned = lit + "UNLOCKED"; unlockable+affordable = rarity rim (§4);
+        // locked = dimmed plate + requirement. Tap = _vm.Select(id) (unlock).
 
         private void CreateTile(Transform parent, ItemVM item)
         {
@@ -325,18 +642,35 @@ namespace DeNelle.Village.Buildings.Progression
             string id = item.Id;
             btn.onClick.AddListener(() => _vm?.Select(id));
 
-            // GOLD AFFORDANCE — the unlockable-now tile carries a gold outline glow.
+            // WO-675 §4 — AFFORDANCE: the unlockable-now + affordable tile carries a rarity RIM
+            // sprite overlay (sliced), replacing the old uGUI Outline. Fallback = gold Outline
+            // so the affordance never vanishes when the rim art is absent.
             if (btn.interactable && item.Affordable)
             {
-                var outline = tile.AddComponent<Outline>();
-                outline.effectColor = ElarionUiKit.ObsidianTrim;
-                outline.effectDistance = new Vector2(3f, 3f);
+                var rim = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, AffordRimSprite);
+                if (rim != null)
+                {
+                    var rimGo = new GameObject("AffordRim", typeof(Image));
+                    rimGo.transform.SetParent(tile.transform, false);
+                    var rrt = rimGo.GetComponent<RectTransform>();
+                    rrt.anchorMin = new Vector2(-0.02f, -0.02f); rrt.anchorMax = new Vector2(1.02f, 1.02f);
+                    rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+                    var rimImg = rimGo.GetComponent<Image>();
+                    rimImg.sprite = rim; rimImg.type = Image.Type.Sliced; rimImg.color = Color.white;
+                    rimImg.raycastTarget = false;
+                }
+                else
+                {
+                    var outline = tile.AddComponent<Outline>();
+                    outline.effectColor = ElarionUiKit.ObsidianTrim;
+                    outline.effectDistance = new Vector2(3f, 3f);
+                }
             }
 
             float dim = item.Locked ? 0.55f : 1f;
 
-            // ICON — perk sprite (WO-432 <Building>_T1_<Perk> art) or, for tier/villagetier
-            // tiles with no art, a numeral/crest glyph so the grid stays uniform.
+            // ICON — perk sprite (WO-432 art) or, for tier tiles with no art, a numeral glyph
+            // so the grid stays uniform.
             Sprite icon = null;
             if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
                 icon = Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
@@ -355,9 +689,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else
             {
-                string glyph = item.Id == BuildingUpgradeVM.VillageTierRowId
-                    ? ElarionUi.CrestGlyph
-                    : TierGlyph(item.Id);
+                string glyph = TierGlyph(item.Id);
                 var g = ElarionUiKit.Label(tile.transform, glyph, 0.50f, 0.94f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
@@ -370,10 +702,6 @@ namespace DeNelle.Village.Buildings.Progression
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             nameLbl.raycastTarget = false;
-            // §1.14 (eyes-sweep 2026-07-06): each tile label OWNS its strip. A long perk
-            // name used to wrap past its band and paint over the effect + cost lines
-            // ("Unlock Village" / "Opens tier-2 enhancements" / "500 Crystals" stack).
-            // Titles fit single-line (bounded auto-size, then ellipsis) — never spill.
             ElarionUiKit.FitSingleLine(nameLbl);
 
             // EFFECT — the one-line concrete payoff, from the perk data (VM-relayed).
@@ -382,12 +710,12 @@ namespace DeNelle.Village.Buildings.Progression
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
             effLbl.raycastTarget = false;
-            // Descriptions wrap INSIDE their band and truncate — never onto siblings.
             ElarionUiKit.FitBlock(effLbl);
 
             // BOTTOM LINE — owned: "UNLOCKED"; locked: the requirement; else the COST.
             string bottom;
             Color bottomColor;
+            bool isCost = false;
             if (item.Equipped)
             {
                 bottom = "UNLOCKED";
@@ -402,42 +730,85 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 bottom = _vm != null ? _vm.CostFor(item.Id) : "";
                 bottomColor = item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger;
+                isCost = true;
                 // Colorblind law: affordability was encoded by green-vs-red hue ALONE —
                 // add a text cue ("Need ...") so the unaffordable state reads without hue.
                 if (!item.Affordable && !string.IsNullOrEmpty(bottom)) bottom = "Need " + bottom;
             }
+
+            // WO-675 §7 — a cost line gets a RpgUi/currency/* icon left of the value (name stays).
+            Sprite costIcon = isCost ? CurrencyIconFor(bottom) : null;
+            float textX0 = 0.04f;
+            if (costIcon != null)
+            {
+                var cg = new GameObject("CostIcon", typeof(Image));
+                cg.transform.SetParent(tile.transform, false);
+                var crt = cg.GetComponent<RectTransform>();
+                crt.anchorMin = new Vector2(0.10f, 0.045f); crt.anchorMax = new Vector2(0.26f, 0.185f);
+                crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+                var cimg = cg.GetComponent<Image>();
+                cimg.sprite = costIcon; cimg.preserveAspect = true; cimg.raycastTarget = false;
+                cimg.color = new Color(1f, 1f, 1f, dim);
+                textX0 = 0.27f;
+            }
+
             var botLbl = ElarionUiKit.Label(tile.transform, bottom, 0.05f, 0.20f,
                 new Color(bottomColor.r, bottomColor.g, bottomColor.b, dim),
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !item.Locked);
+                ElarionUi.FontLabel,
+                costIcon != null ? TMPro.TextAlignmentOptions.MidlineLeft : TMPro.TextAlignmentOptions.Center,
+                textX0, 0.96f, bold: !item.Locked);
             botLbl.raycastTarget = false;
-            // Cost/"UNLOCKED" fit single-line; a locked tile's requirement copy may run
-            // long — let it wrap-and-truncate INSIDE its band instead of ellipsizing away.
             if (item.Locked) ElarionUiKit.FitBlock(botLbl);
             else ElarionUiKit.FitSingleLine(botLbl);
         }
 
+        // The currency icon for a cost line — the FIRST currency the string names (multi-currency
+        // costs keep the full text; the icon is the leading cue). Null when nothing matches / art absent.
+        private static Sprite CurrencyIconFor(string costText)
+        {
+            if (string.IsNullOrEmpty(costText)) return null;
+            string c = costText.ToLowerInvariant();
+            string name = null;
+            // Order matters only when a string names several — pick the earliest-mentioned.
+            int best = int.MaxValue;
+            void Consider(string kw, string spriteName)
+            {
+                int i = c.IndexOf(kw, System.StringComparison.Ordinal);
+                if (i >= 0 && i < best) { best = i; name = spriteName; }
+            }
+            Consider("wood", "currency_wood");
+            Consider("food", "currency_food");
+            Consider("iron", "currency_iron");
+            Consider("crystal", "currency_crystal");
+            Consider("gold", "currency_gold");
+            return name != null ? RpgUiCatalog.Get(CurrencyRole, name) : null;
+        }
+
         private static string TierGlyph(string id)
         {
-            // "tier-3" -> "III"-style numeral read; fall back to the raw digit.
-            int dash = id != null ? id.LastIndexOf('-') : -1;
-            string n = dash >= 0 && dash < id.Length - 1 ? id.Substring(dash + 1) : "";
-            return string.IsNullOrEmpty(n) ? "-" : n;
+            // "tier-3" -> "3"; a research-perk id has no numeral -> the crest glyph.
+            if (id != null && id.StartsWith("tier-"))
+            {
+                int dash = id.LastIndexOf('-');
+                string n = dash >= 0 && dash < id.Length - 1 ? id.Substring(dash + 1) : "";
+                return string.IsNullOrEmpty(n) ? "-" : n;
+            }
+            return ElarionUi.CrestGlyph;
         }
 
         private static void DressTilePlate(Image plateImg)
         {
             if (plateImg == null) return;
-            if (DeNelle.Core.FeatureFlags.BlinkChrome)
+            // WO-675 §3 — sprite-first ALWAYS (canon §5): the talent slot plate, ungated.
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, SlotTalentPlate);
+            if (plate != null)
             {
-                var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
-                if (plate != null)
-                {
-                    plateImg.sprite = plate;
-                    plateImg.type   = Image.Type.Sliced;
-                    plateImg.color  = Color.white;
-                    return;
-                }
+                plateImg.sprite = plate;
+                plateImg.type   = Image.Type.Sliced;
+                plateImg.color  = Color.white;
+                return;
             }
+            // Procedural fallback (art absent) — the panel never blanks.
             plateImg.color = ElarionUiKit.Cell;
             ElarionUiKit.ApplyRounded(plateImg);
         }
@@ -457,11 +828,11 @@ namespace DeNelle.Village.Buildings.Progression
         private void ClearContent()
         {
             _scrollContent = null;
-            _grid = null;
-            if (_contentRoot == null) return;
-            for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
+            _tileGrids.Clear();
+            if (_bodyHost == null) return;
+            for (int i = _bodyHost.childCount - 1; i >= 0; i--)
             {
-                var c = _contentRoot.transform.GetChild(i);
+                var c = _bodyHost.GetChild(i);
                 if (c != null) Destroy(c.gameObject);
             }
         }
@@ -471,8 +842,8 @@ namespace DeNelle.Village.Buildings.Progression
             Unbind();
             _vm?.Dispose();
             _vm = null;
-            _walletText = null;
-            _statusText = null;
+            _chips.Clear();
+            _lastStatus = null;
             if (_ui != null)
             {
                 // Eased close (owner smoothness directive): the dying canvas fades/scales out on
@@ -483,18 +854,28 @@ namespace DeNelle.Village.Buildings.Progression
                 else Destroy(_ui);
             }
             _ui = null;
-            _contentRoot = null;
+            _bodyHost = null;
             _scrollContent = null;
-            _grid = null;
+            _tileGrids.Clear();
             PanelManager.NotifyClosed(_panelHandle);
+        }
+
+        private static RectTransform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
         }
     }
 
     /// <summary>
     /// Minimal shared open/close tween for THIS panel family (no kit tween exists yet —
-    /// flagged for promotion into ElarionUiKit). Ease-out scale 0.92-&gt;1 + fade-in on open
-    /// (~0.18s); ease-in fade/scale-out then self-destroy on close (~0.14s). Unscaled time
-    /// (panels open while gameplay may be paused); CanvasGroup blocks input while closing.
+    /// flagged for promotion into ElarionUiKit, WO-675 §8). Ease-out scale 0.92-&gt;1 + fade-in
+    /// on open (~0.18s); ease-in fade/scale-out then self-destroy on close (~0.14s). Unscaled
+    /// time (panels open while gameplay may be paused); CanvasGroup blocks input while closing.
     /// </summary>
     internal sealed class PanelOpenCloseFx : MonoBehaviour
     {
