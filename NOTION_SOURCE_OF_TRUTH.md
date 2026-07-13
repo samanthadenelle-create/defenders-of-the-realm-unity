@@ -23,7 +23,8 @@ and we're well past DEF-270) onto **Notion** (free, connected). The board mirror
 
 ## How we work now (keep these in sync)
 1. **Numbering authority is unchanged:** `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`.
-   Next free WO = **430** (through 429 used; 344–351 skipped, do not mint — reconciled 2026-06-12.
+   Next free WO = **688** (refreshed 2026-07-12; authority = `CLI_LANES_WO_NUMBERS.md` banner, NOT this line — 685/686/687 minted, 677/678 have disk collisions). The old "430" figure below is FROZEN HISTORY.
+   ~~Next free WO = **430** (through 429 used; 344–351 skipped, do not mint — reconciled 2026-06-12.~~
    412–428 minted on-board 06-11/12; 429 = repo "store stock from DB" spec renumbered from a colliding WO-414).
    Notion is the *board view*, not the numbering source.
 2. **Full WO specs stay in the git repo** as `WORK_ORDER_NNN_*.md`. Notion rows are the status/lane/deps index.
