@@ -85,6 +85,12 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
   it becomes a FILL-QUARTERS symbol (a gauge that steps 0 / 1-4 / 1-2 / 3-4 / FULL). Shape +
   step count carry the meaning (colorblind law); ties to ResourceCollector.FilledSteps
   (StepCount is already parameterizable). Pass-2 scope with the pallet stacks.
+  **One-icon ruling (owner, same F8 thread): a building and its vendor NPC share ONE icon —
+  "one for the other; should be evident, the NPC right next" [to its building].** The NPC
+  carries the interaction icon; the building carries none (containers carry the fill gauge
+  instead; defenses a badge only when actionable). Association reads by ADJACENCY — the
+  vendors-at-the-front ruling is the enabler; the owner's "some are further away than others"
+  marks any far-standing vendor as a PLACEMENT defect to fix, not a reason for double icons.
 
 ## Owner pins — ALL RESOLVED
 1. **RESOLVED (owner, 2026-07-13): the food producer is the FARM** ("farm is cleaner") — the
