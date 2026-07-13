@@ -203,6 +203,15 @@ namespace DeNelle.Village.World
         // =====================================================================
         private void TryPlace()
         {
+            // Owner session 2026-07-13 (proving line: "no baked NavMesh after 24 attempts —
+            // stopping retries ... (no portals this session)"): the DDOL bootstrap starts
+            // this retry clock on the TITLE screen, where no navmesh exists — all capped
+            // attempts burned in the menus and placement retired before the overworld ever
+            // loaded. Attempts only count IN the overworld; menus don't spend the budget.
+            var active = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (!DeNelle.Core.HubScenes.IsOverworld(active) && !DeNelle.Core.HubScenes.IsHub(active))
+                return;   // menu/battle scene — wait, no attempt spent
+
             var defs = LoadDefs();
             if (defs.Count == 0) return; // nothing to place (no built dungeon scenes)
 

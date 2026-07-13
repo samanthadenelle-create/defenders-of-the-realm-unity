@@ -58,7 +58,12 @@ namespace DeNelle.Village
         // Offset from the Heart toward the known-walkable courtyard point (6,0,4) —
         // the same safe town band TutorialWorldAnchors.ResolveTownAnchor uses — so
         // Sylas stands "beneath the tree" a few strides into the courtyard.
-        private static readonly Vector3 CourtyardOffset = new Vector3(4f, 0f, 3f);
+        // Owner F8 2026-07-13 ("is he an actual character? something I can see?") — the log
+        // proved him ALIVE at heart+(4,0,3) = world (4,0,15), which is 3m from the trunk
+        // center of the giant Heart tree: spawned INSIDE/behind the canopy, invisible from
+        // the player's south approach. Offset moves him SOUTH of the trunk onto open lawn,
+        // in the camera's natural line when walking up from spawn.
+        private static readonly Vector3 CourtyardOffset = new Vector3(2f, 0f, -9f);
 
         private const float DespawnPollInterval = 1f;
         private float _nextPollAt;
