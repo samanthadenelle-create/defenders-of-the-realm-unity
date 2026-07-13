@@ -123,6 +123,8 @@ namespace DeNelle.Core.UI
             "hud.wave_button",      // VillageHudController Start Wave CTA
             "world.sylas",          // TutorialWorldAnchors resolver (Sylas NPC / gate fallback)
             "world.gate_direction", // TutorialWorldAnchors resolver (nearest gate to hero)
+            "build.tab_town",       // WO-702 — BuildPaletteUI Town category tab (registers when the palette builds)
+            "build.tab_defenses",   // WO-702 — BuildPaletteUI Defenses category tab (founding_defense beat)
         };
     }
 }

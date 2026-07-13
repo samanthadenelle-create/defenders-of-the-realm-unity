@@ -1223,6 +1223,14 @@ namespace DeNelle.Village
                 Debug.Log($"[BuildMode] Not enough resources to place '{_armed.id}' — placement aborted.");
                 return;
             }
+            // WO-707 singleton gate, re-checked AT COMMIT (defensive — the arm gate could
+            // be stale if a placement landed between arm and click).
+            if (SingletonAlreadyBuilt(_armed))
+            {
+                BuildFeedbackToast.Show(BuildRejectReason.Singleton);
+                CancelArmed();
+                return;
+            }
 
             var loader = BaseLayoutLoader.EnsureExists();
             // F8-39 (towers vanish on death, ALL return on next placement): prove this path adds
@@ -1322,12 +1330,36 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Build", $"ArmById: '{id}' not found in CatalogRegistry — cannot arm.");
                 return false;
             }
+            if (SingletonAlreadyBuilt(entry)) { BuildFeedbackToast.Show(BuildRejectReason.Singleton); return false; }
             Arm(entry);
             return true;
         }
 
+        /// <summary>
+        /// WO-707 singleton ENFORCEMENT (owner 2026-07-13 "allows me to build two echo
+        /// hollow — should be a singleton enforce"): a catalog row flagged repo.singleton
+        /// may exist at most ONCE, judged by the persisted BaseLayout records (the source
+        /// of truth every placement appends to at commit). MOVE is unaffected — the move
+        /// path never re-arms/re-Places, it repositions the existing record. Containers
+        /// (Lumberyard/Foundry/Silo) are deliberately not singleton.
+        /// </summary>
+        private static bool SingletonAlreadyBuilt(CatalogEntry entry)
+        {
+            if (entry?.repo == null || !entry.repo.singleton) return false;
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (st?.BaseLayout == null) return false;
+            for (int i = 0; i < st.BaseLayout.Count; i++)
+                if (st.BaseLayout[i].itemId == entry.id)   // struct rows — no null element possible
+                {
+                    FlowTrace.Step("Build", $"singleton gate: '{entry.id}' already recorded — arm/place refused (WO-707)");
+                    return true;
+                }
+            return false;
+        }
+
         private void Arm(CatalogEntry entry)
         {
+            if (SingletonAlreadyBuilt(entry)) { BuildFeedbackToast.Show(BuildRejectReason.Singleton); return; }
             FlowTrace.Step("Build", $"Armed placement for '{entry?.id}'");
             // Entering CREATE mode clears any active selection / move (P2).
             ClearSelection();

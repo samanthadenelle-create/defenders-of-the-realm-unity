@@ -618,6 +618,14 @@ namespace DeNelle.Village
             img.raycastTarget = false;
             underline.SetActive(type == _activeType);
             _tabUnderlines[type] = underline;
+
+            // WO-702 (owner 2026-07-13 "should highlight town tab to start in build"):
+            // register the tab as a tutorial spotlight target — the registry handles the
+            // late build (TargetRegistered re-arms an already-armed step's spotlight).
+            if (type == BuildType.Town)
+                DeNelle.Core.UI.TutorialHighlightRegistry.Register("build.tab_town", (RectTransform)btn.transform);
+            else if (type == BuildType.Defense)
+                DeNelle.Core.UI.TutorialHighlightRegistry.Register("build.tab_defenses", (RectTransform)btn.transform);
         }
 
         /// <summary>Move the gold underline to the tab matching <see cref="_activeType"/>.
@@ -634,11 +642,15 @@ namespace DeNelle.Village
             // F8-30 — Orient is a DEV offset-authoring tool, not player UI: during the
             // tutorial the owner tapped it next to Done and the orient modal click-locked
             // the screen. Gate it behind the global DevHotkeys kill-switch (default OFF —
-            // same gate as AdminOverlay/DebugCanvas), so players/tutorial never see it;
-            // the owner reaches it via the devhotkeys flag + the AdminOverlay path.
+            // same gate as AdminOverlay/DebugCanvas), so players/tutorial never see it.
+            // WO-707 (owner 2026-07-13 "we need the orient tool at least in dev build —
+            // these are sitting wrong"): ALSO visible in Development builds (her felt-test
+            // exes), without opening the whole DevHotkeys surface. Ship builds
+            // (BuildOptions.None — the WebGL previews/prod) never show it.
             if (_orientBtn != null)
                 _orientBtn.gameObject.SetActive(
-                    DeNelle.Core.FeatureFlags.DevHotkeys && !string.IsNullOrEmpty(_armedId));
+                    (DeNelle.Core.FeatureFlags.DevHotkeys || Debug.isDebugBuild)
+                    && !string.IsNullOrEmpty(_armedId));
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — the single source of truth).</summary>

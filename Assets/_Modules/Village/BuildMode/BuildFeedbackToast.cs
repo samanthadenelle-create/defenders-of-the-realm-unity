@@ -50,6 +50,9 @@ namespace DeNelle.Village
         CannotAfford,
         /// <summary>A prerequisite tier / skill / unlock is not met.</summary>
         Locked,
+        /// <summary>WO-707: the structure is singleton (one per town) and one already
+        /// stands (a BaseLayout record exists). Containers are never singleton.</summary>
+        Singleton,
     }
 
     /// <summary>
@@ -113,6 +116,7 @@ namespace DeNelle.Village
                 case BuildRejectReason.OutOfBounds:  return "Outside the build area";
                 case BuildRejectReason.CannotAfford: return "Not enough resources";
                 case BuildRejectReason.Locked:       return "Locked";
+                case BuildRejectReason.Singleton:    return "Already built - your town has one";
                 default:                             return "Can't build there";
             }
         }
