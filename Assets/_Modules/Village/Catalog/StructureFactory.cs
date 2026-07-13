@@ -687,6 +687,13 @@ namespace DeNelle.Village
                 case "armorer":
                 case "blacksmith":   return BuildingType.Armorer;    // armor vendor
                 case "jeweler":      return BuildingType.Workshop;   // Sable the Jeweler (crafting/upgrade station; Yarn route resolves by name -> TalkToJeweler)
+                // WO-707 storage containers (lumberyard/foundry/silo): no Storage-ish
+                // BuildingType exists, so they take the generic CrystalMine ordinal —
+                // its default Upgrade panel is the right route for a capacity-upgradeable
+                // container. Explicit cases so the mapping is a decision, not a fallthrough.
+                case "lumberyard":
+                case "foundry":
+                case "silo":         return BuildingType.CrystalMine;
                 default:             return BuildingType.CrystalMine;
             }
         }

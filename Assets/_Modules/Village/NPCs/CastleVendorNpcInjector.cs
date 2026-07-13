@@ -211,8 +211,8 @@ namespace DeNelle.Village
         private static readonly (string Role, string BuildingId)[] AnchorRoles =
         {
             ("Blacksmith",    "armorer"),        // no placed armorer catalog row yet (L1) — awaits one
-            ("Lumbermill",    "lumbermill"),
-            ("Windmill",      "mill"),           // building id is "mill"; dialogue structureId stays "farm" (VendorFor)
+            ("Lumbermill",    "collector_lumbermill"), // WO-707: Sawmill retires from the palette — anchor to the surviving Lumbermill tile; dialogue structureId stays "lumbermill" (VendorFor)
+            ("Windmill",      "collector_farm"),       // WO-707: Mill retires from the palette — anchor to the Farm tile; dialogue structureId stays "farm" (VendorFor)
             ("EchoHollow",    "pet-house"),
             ("Forge",         "forge"),
             ("ArcaneTower",   "arcane-tower"),

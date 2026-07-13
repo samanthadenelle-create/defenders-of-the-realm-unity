@@ -185,9 +185,21 @@ namespace DeNelle.Village
                     Label = "Build Town",
                     // Jeweler stays unlock-gated (moved here from Defense — it is a
                     // Resource row and belongs to the Town verb).
+                    // WO-707 (owner taxonomy 2026-07-13, one building per trade): the palette
+                    // retires mine_crystal (mining = world nodes), mill (Farm is the food
+                    // producer), lumbermill (superseded by collector_lumbermill), armorer
+                    // (weapons=Forge / armor=Armorer via ids workshop/forge; the old
+                    // "Blacksmith" tile retires) and collector_forge (folded into the Forge
+                    // trade tile). Rows stay in the catalog (saves replay); mirrors
+                    // build-categories.json v2 — keep the two in sync.
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
                         "jeweler",
+                        "mine_crystal",
+                        "mill",
+                        "lumbermill",
+                        "armorer",
+                        "collector_forge",
                     },
                 },
                 [BuildType.Defense] = new BuildCategory

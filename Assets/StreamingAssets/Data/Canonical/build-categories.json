@@ -10,7 +10,12 @@
     "Collector"
    ],
    "lockedIds": [
-    "jeweler"
+    "jeweler",
+    "mine_crystal",
+    "mill",
+    "lumbermill",
+    "armorer",
+    "collector_forge"
    ]
   },
   {

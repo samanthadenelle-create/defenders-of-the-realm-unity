@@ -107,6 +107,35 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public bool singleton = false;
 
+        /// <summary>
+        /// WO-707 (owner taxonomy 2026-07-13) — STORAGE CONTAINER capacity. The three
+        /// dedicated container buildings (Lumberyard wood / Foundry iron / Silo grain)
+        /// hold the village's stock; trade buildings are pure vendor/upgrade shops and
+        /// carry NO storage field. 0 (default) = not a container. Data-only today:
+        /// capacity enforcement + the visible-fill readout land with the WO-672
+        /// damage-to-stores loop. JSON deserializes "storageCapacity" straight in.
+        /// </summary>
+        public int storageCapacity = 0;
+
+        /// <summary>
+        /// WO-707 — which resource this container stores ("wood" / "iron" / "food").
+        /// Enum-by-name string kept loose on purpose (pure data, no Village ref),
+        /// matching the projectileStyle convention. Null (default) = none.
+        /// JSON deserializes "storageResource" straight in.
+        /// </summary>
+        public string storageResource = null;
+
+        /// <summary>
+        /// WO-707 targeting ruling (owner, same session): CONTAINERS ONLY are enemy
+        /// raid targets — trade/shop buildings never are (a raid can never soft-lock a
+        /// vendor/talk-route). A row is a container iff it authors a positive
+        /// <see cref="storageCapacity"/>. TODO(WO-707/WO-672): wire this seam into the
+        /// ff.enemystructureaware sweep (Enemy.SweepForNearestStructure currently
+        /// scores ANY live IDamageableStructure via ISiegeLootTarget) so shops are
+        /// excluded and the container set is the loot-target set.
+        /// </summary>
+        public bool IsStorageContainer => storageCapacity > 0;
+
         /// <summary>Placement conditions, evaluated at the free cursor.</summary>
         public PlacementRules placement = new PlacementRules();
 
