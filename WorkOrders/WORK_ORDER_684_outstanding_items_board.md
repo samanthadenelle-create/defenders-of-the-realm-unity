@@ -35,6 +35,11 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
    for weapons/armor.** STEPS: copy Resources gear jsons over the StreamingAssets pair → rule the
    other four files' direction the same way (check which side is current per file) → re-run
    DataRegression → `DATAWEB_OK` flips green.
+   **⚠ UPDATED 2026-07-12 (later): DO NOT delete/overwrite the 446-item StreamingAssets gear set.**
+   Owner wants a Gear Imaging + Offset tool (in flight) listing all 446 with per-item
+   include/exclude checkboxes + "NEEDS PNG" flags to CURATE the shipped set FROM them. Resolution =
+   the curation overlay picks the included set → that becomes runtime truth; the 446 stay the
+   source pool. DATAWEB gear drift stays flagged (expected) until curation lands — no auto-sync.
 7. **WO-602 home-return unwired** — a judge who leaves the castle cannot come back. Session-ender.
 8. **Encounter-return strand (~7km, WO-453 class)** — fleet reproduces every run.
 9. **Full Pi-Browser traced felt-run** — one end-to-end session in the ACTUAL Pi Browser with

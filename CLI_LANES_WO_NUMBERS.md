@@ -1,6 +1,6 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ REFRESHED 2026-07-12: next free WO = **685** (684 = outstanding-items board, minted 07-12). Disk max = **683**.
+> ## ⚠ REFRESHED 2026-07-12: next free WO = **688** (685/686/687 = web-trace lifecycle trio, minted 07-12: 685 retention/TTL cron, 686 ingestion hardening, 687 read/triage surface). Prior: 684 = outstanding-items board. Disk max = **687**.
 > The per-lane detail below is **FROZEN HISTORY** (pre-430 era — ~270 numbers stale); do **NOT** mint from it.
 > Numbering collisions on record:
 > - **WO-677**: `mobile_buildmode_move_unreachable` (spec + RESULT, 2026-07-12 — **canonical on disk**) vs
