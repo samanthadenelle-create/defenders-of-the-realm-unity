@@ -66,15 +66,23 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // FTUE-1 (owner F8 2026-07-13 "No Sylas", twice, while the headless probe
+            // PASSES): every gate below logs UNCONDITIONALLY (plain Debug.Log, no
+            // FlowTrace variables) so the next interactive session NAMES the dead gate —
+            // the tutorial's own identically-registered bootstrap runs in her sessions,
+            // this one has produced ZERO lines. Instrument-first, §12.
+            Debug.Log("[SylasSteward] Bootstrap ENTER (RuntimeInitializeOnLoadMethod fired).");
             // The founding steward only exists in the Tutorial V2 world; flag OFF =
             // fully dormant (the legacy director owns its own Sylas presentation).
-            if (!FeatureFlags.TutorialV2) return;
-            if (Instance != null) return;
+            if (!FeatureFlags.TutorialV2) { Debug.Log("[SylasSteward] Bootstrap EXIT: ff.tutorialv2 OFF."); return; }
+            if (Instance != null) { Debug.Log("[SylasSteward] Bootstrap EXIT: instance already live."); return; }
             new GameObject("SylasStewardInjector").AddComponent<SylasStewardInjector>();
+            Debug.Log("[SylasSteward] Bootstrap: injector GameObject created.");
         }
 
         private void Awake()
         {
+            Debug.Log($"[SylasSteward] Awake (activeScene='{SceneManager.GetActiveScene().name}').");
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);

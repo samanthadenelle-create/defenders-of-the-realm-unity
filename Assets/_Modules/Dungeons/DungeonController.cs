@@ -326,7 +326,10 @@ namespace DeNelle.Dungeons
             if (_dungeonInventory != null)
                 _dungeonInventory.Clear();
             StopAmbientAudio();
-            return SceneRouter.LoadSceneWithFade(SceneRouter.Village);
+            // Owner ruling 2026-07-13 ("map the dungeon in"): the exit goes HOME — the
+            // merged overworld hub (SceneRouter.Castle -> Main_Castle_Overworld), not the
+            // ABANDONED legacy Village scene this predated (canon: Village.unity retired).
+            return SceneRouter.LoadSceneWithFade(SceneRouter.Castle);
         }
 
         // ── Per-frame: room tracking + encounter clock ───────────────────────

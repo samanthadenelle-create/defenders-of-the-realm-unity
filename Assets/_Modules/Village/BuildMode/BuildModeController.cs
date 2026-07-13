@@ -379,11 +379,23 @@ namespace DeNelle.Village
         // path is unchanged (back-compat).
         private BuildType _activeBuildType = BuildType.Defense;
 
-        /// <summary>Toggle the build session (defaults to <see cref="BuildType.Defense"/> — back-compat).</summary>
+        /// <summary>
+        /// Owner ruling 2026-07-13: the palette opens on TOWN for the first open / all
+        /// through the founding tutorial (the tutorial builds a town, not defenses);
+        /// once Onboarded, the veteran default is DEFENSES. Walls tab is flagged off
+        /// entirely for now (settlement building, WO-708).
+        /// </summary>
+        private static BuildType DefaultTabForPlayer()
+        {
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return (st == null || !st.Onboarded) ? BuildType.Town : BuildType.Defense;
+        }
+
+        /// <summary>Toggle the build session (Town during the founding, Defenses after — owner 2026-07-13).</summary>
         public void Toggle()
         {
             if (IsActive) Exit();
-            else EnterBuildMode(BuildType.Defense);
+            else EnterBuildMode(DefaultTabForPlayer());
         }
 
         /// <summary>Toggle the build session for a specific build verb (owner 2026-07-10).</summary>

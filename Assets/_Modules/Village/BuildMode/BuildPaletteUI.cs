@@ -251,9 +251,20 @@ namespace DeNelle.Village
             var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
                 new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
                 ElarionUiKit.ObsidianFill, rounded: false);
-            BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
-            BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
-            BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
+            // Owner ruling 2026-07-13: the WALLS tab is flagged OFF for now — player
+            // wall-building ships with settlement building (WO-708 drag-lines, post-V1).
+            // Two-tab layout re-spans the row; wall rows stay loadable for saves.
+            if (DeNelle.Core.FeatureFlags.WallsTab)
+            {
+                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
+                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
+                BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
+            }
+            else
+            {
+                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.49f);
+                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.51f, 0.98f);
+            }
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).

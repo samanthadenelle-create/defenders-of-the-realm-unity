@@ -523,6 +523,13 @@ namespace DeNelle.Core
         /// interaction path (ArenaHeraldSpawner) stays independently gated by "ff.arena".</summary>
         public static bool Colosseum => Get("colosseum", defaultOn: false);
 
+        /// <summary>Owner ruling 2026-07-13: the build palette's WALLS tab is OFF for now —
+        /// player wall-building ships with SETTLEMENT BUILDING (the WO-708 wall-builder
+        /// drag-lines tool, parked post-V1). When OFF, <see cref="DeNelle.Village.BuildPaletteUI"/>
+        /// renders only Town / Defenses (tabs re-span the row). Wall catalog rows stay loadable
+        /// (saves/replay untouched). Flip ON via PlayerPrefs "ff.wallstab" = 1.</summary>
+        public static bool WallsTab => Get("wallstab", defaultOn: false);
+
         /// <summary>WO-VFX-POI (owner is red/green colorblind — callouts read by MOTION / SHAPE /
         /// LUMINANCE / VERTICALITY, never hue): when ON, <see cref="DeNelle.Village.PoiCalloutSystem"/>
         /// self-bootstraps and drives point-of-interest callouts off <see cref="DeNelle.Village.PoiRegistry"/>
