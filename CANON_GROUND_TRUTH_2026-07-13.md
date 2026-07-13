@@ -5,6 +5,15 @@
 > (bannered). If a doc contradicts a line here, the doc is STALE.
 > Written as the sync handoff for the UI/triage seat (its 5-point request, 2026-07-13).
 
+> ## ⚡ AFTERNOON UPDATE (2026-07-13 PM — the FOUNDING arc; supersedes the midday lines below where they conflict)
+> Owner felt-passed the midday wave, then ruled + shipped the founding redesign in one arc (all committed local, push HELD):
+> - **WO-703 BLANK-1 CLOSED-pending-felt:** fresh save = tree + well + walls/gates, `BLANK_START_OK` oracle standing.
+> - **WO-707 (one building per trade, CoC-modeled):** Town tab = Echo Hollow · Store (ex-Market, Buy Packs/PackStore front) · Forge · Armorer · Arcane Tower · Jeweler · **Farm** (mill RETIRED, "farm is cleaner") · Lumbermill · **Lumberyard/Foundry/Silo** (NEW storage containers, shared GenericContainer Tripo body, `storageCapacity` data field stubbed, NOT singleton, CoC visible-fill = pass 2 with the WoodBox pallet props). Retired from palette (locked, rows loadable): mine_crystal ("that's a node"), mill, lumbermill(Sawmill), armorer(Blacksmith), collector_forge. **All 8 trade buildings singleton.** Enemy targeting = CONTAINERS ONLY (seam stubbed, WO-672 wires it). Destroyed building = pay full cost to REBUILD, re-placeable anywhere. Vendor anchors: Windmill→collector_farm, Lumbermill→collector_lumbermill.
+> - **Founding seed = 650w/385i** (affords exactly one of each + the 3 containers; StartingBudget constants). **The WO-682/695 FTUE grace forge is KILLED** ("should be placed by player") — ResetToNewGame BaseLayout = EMPTY; census + core-save oracles updated (mandatory chain = exactly 10).
+> - **WO-702 The Founding of Elarion SHIPPED (awaiting owner felt-pass):** Sylas IS the Steward (Ranger body, spawned by new SylasStewardInjector, unloads on Onboarded); 7 founding beats (greet → Hollow, pet ice-wolf SPAWNS OUT of it → stores lesson on the Lumberyard → free build → Echo gather offer → a defense or two → teaching wave); per-item signal `build.structure_placed:<id>`; peace window = the existing `!Onboarded` gates; PetSelect stays bypassed (Hollow IS the bonding). Founder's-Plan ghost NOT shipped (pin was never ruled; fast-follow if wanted).
+> - **WO-705** (onboarding duplicate UIDocument, fleet-captured) READY · **WO-706** (10 palette portraits incl. the 3 containers, UI-seat art) READY · **WO-708** (wall builder drag-lines — the owner's "complete any base" vision) **PARKED POST-V1**.
+> - Fleet-aggregation Remove-Item race fixed in run-unity-method.ps1. Latest exe = **13:59** (the founding build). Two-committer incident resolved (the crashed session auto-resumed and committed `cac9d0ca`/`7df41dee` ungated — content post-hoc gate-verified green; memory `resumed-session-ghost-committer`).
+
 ## Repo / git
 - **Branch `wip/village2-and-f8-tickets`, HEAD `2de11256`** (docs: morning brief 2026-07-13).
   **Ahead 22 of origin** (origin sits at `1ee7b6af`, 07-12 09:50 — a push happened 07-12 morning;
