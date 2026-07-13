@@ -456,8 +456,9 @@ namespace DeNelle.Village
             // A compact "Land / Air / Land+Air" caption pinned to the bottom of the art
             // band so the player counters the flying dragon BEFORE tapping into detail
             // (owner 2026-07-08: Ballista = Air only, ground towers = Land only, Wizard/
-            // Arcane = Land + Air). Colorblind-safe: meaning is the TEXT + a distinct
-            // leading shape glyph, never color alone (owner is red/green colorblind).
+            // Arcane = Land + Air). Colorblind-safe: meaning is the TEXT, never color
+            // alone (owner is red/green colorblind). ASCII-only — WO-683: the old
+            // leading shape glyphs rendered as tofu boxes on the shipped TMP font.
             string targetTag = TargetingTagFor(e);
             if (!string.IsNullOrEmpty(targetTag))
             {
@@ -480,8 +481,11 @@ namespace DeNelle.Village
         /// <summary>
         /// Compact targeting-capability caption for a DEFENSIVE tower card, from the repo
         /// flags (RepoProps.airOnly / canHitAir): airOnly → "Air only", canHitAir → "Land
-        /// + Air", else "Land only". Null for non-tower structures (no tag). The leading
-        /// shape glyph (▲ sky / ◆ both / ▬ ground) is a color-independent cue.
+        /// + Air", else "Land only". Null for non-tower structures (no tag). Pure ASCII
+        /// TEXT — WO-683 (owner device screenshot 2026-07-12): the old ▲/◆/▬ leading
+        /// glyphs render as tofu boxes on the shipped TMP font (the "□ Land + Air"
+        /// defect). The words themselves are the color-independent cue (owner colorblind:
+        /// meaning by text, never glyph/color alone).
         /// </summary>
         private static string TargetingTagFor(CatalogEntry e)
         {
@@ -490,9 +494,9 @@ namespace DeNelle.Village
             if (repo == null) return null;
             bool airOnly   = repo.airOnly;
             bool canHitAir = repo.canHitAir || airOnly;
-            if (airOnly)   return "▲ Air only";
-            if (canHitAir) return "◆ Land + Air";
-            return "▬ Land only";
+            if (airOnly)   return "Air only";
+            if (canHitAir) return "Land + Air";
+            return "Land only";
         }
 
         // ── Entry art resolution (owner 2026-07-06 image band) ────────────────

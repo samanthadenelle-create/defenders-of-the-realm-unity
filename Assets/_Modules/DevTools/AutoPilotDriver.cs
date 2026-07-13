@@ -283,6 +283,28 @@ namespace DeNelle.DevTools
                 // gate is stuck, this FAILS and the throttled '[Flow:Build] PlaceLoop BLOCKED at
                 // <gate>' lines name the culprit — that is its purpose.
                 yield return RunPhase("AssertTutorialFirstTower", AssertTutorialFirstTower());
+                // WO-677 / MOB-1 (owner 2026-07-12, mobile web: Move/Sell unreachable): the touch
+                // verb bar (Rotate ⟲⟳ + Cancel) only exists on touch devices (EnsureTouchInput
+                // gates on Input.touchSupported), so NO desktop/fleet log has ever executed its
+                // Awake→AdoptPanelSettings — the suspected silent-non-render root has zero
+                // captured data. This phase manufactures the §12 capture through the REAL path:
+                // instantiate the driver in the live scene, let AdoptPanelSettings run for real
+                // (its ':239 No sibling PanelSettings' warning lands in THIS log if none exists),
+                // census every UIDocument-with-PanelSettings so the verdict is named either way,
+                // and assert the bar is actually renderable. Pre-fix this FAILS (the proving
+                // line); after the WO-677 Lane A uGUI rebuild it PASSES (the post-fix line).
+                yield return RunPhase("AssertTouchVerbBarRenderable", AssertTouchVerbBarRenderable());
+                // WO-677 Lane D: the full mobile edit chain through the REAL seams —
+                // arm → cancel via the controller's RequestUiCancel latch (the same
+                // web-safe pattern the shipped PLACE button uses) → idle reached →
+                // tap-select the placed structure (real click through IBuildInput →
+                // UpdateSelectLoop) → Move (ProbeBeginMoveSelected, the Move button's
+                // handler target) → commit at a new cell → assert the layout record
+                // moved. Every link that fails names itself (the Lane B traces).
+                // WO-683 adds link DPAD: write the REAL HudMoveInput static (the seam
+                // the build-overlay d-pad publishes) → assert the armed ghost's cell
+                // changed via ProbeArmedGhostCell (the reflection merge is alive).
+                yield return RunPhase("AssertBuildMoveChain", AssertBuildMoveChain());
                 // DETERMINISTIC GARRISON-ROSTER DIAG (tickets #2 troll-orientation + #4 magenta): the chaos
                 // walk cannot reliably reach Village2's garrison before the time budget, so the orc/troll
                 // roster never spawns to be inspected. Build the EXACT village2_stronghold roster HERE via the
@@ -1159,6 +1181,9 @@ namespace DeNelle.DevTools
             /// <summary>How many injected clicks were actually consumed by the loop.</summary>
             public int Consumed { get; private set; }
             public void Click(Vector2 screenPoint) { _point = screenPoint; _pending = true; }
+            /// <summary>Aim the ray point WITHOUT latching a click (WO-683: park the armed
+            /// ghost at a spot so the d-pad drive can be observed — nothing places).</summary>
+            public void PointAt(Vector2 screenPoint) { _point = screenPoint; }
             public Vector2 ScreenPoint => _point;
             public bool PlaceOrSelect
             {
@@ -1388,6 +1413,376 @@ namespace DeNelle.DevTools
                 ctrl.SetInput(null);           // restore the default DesktopBuildInput
                 if (ctrl.IsActive) ctrl.Exit();
             }
+        }
+
+        // =====================================================================
+        //  AssertTouchVerbBarRenderable — WO-677 / MOB-1 §12 proof capture
+        // ---------------------------------------------------------------------
+        // The touch verb bar (Rotate ⟲⟳ + Cancel) is the ONLY touch exit from the
+        // armed place state; if it cannot render, tap-select (and so Move/Sell/
+        // Upgrade) is unreachable on mobile. The bar never instantiates on
+        // desktop (EnsureTouchInput gates on Input.touchSupported), so this phase
+        // runs its REAL construction path here and asserts renderability:
+        //   1. census every UIDocument that carries a PanelSettings (what
+        //      AdoptPanelSettings could adopt — names the web-vs-dev-build story),
+        //   2. instantiate LeanTouchBuildDriver (Awake → AdoptPanelSettings runs
+        //      for real; its ':239' warning lands in this log when nothing is
+        //      adoptable) and Install() it (builds the bar),
+        //   3. verdict: renderable = a uGUI Cancel button under the driver OR a
+        //      UIDocument with a non-null PanelSettings. Neither → FAIL (the
+        //      WO-677 proving line). Cleans up; read-only over the scene.
+        // =====================================================================
+        private IEnumerator AssertTouchVerbBarRenderable()
+        {
+            const string Tag = "Auto";
+
+            // 1) Census — every candidate PanelSettings source in the live scene.
+            int withPs = 0;
+            var census = new System.Text.StringBuilder();
+            foreach (var doc in UnityEngine.Object.FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsInactive.Include))
+            {
+                if (doc == null || doc.panelSettings == null) continue;
+                withPs++;
+                census.Append('\'').Append(doc.gameObject.name).Append("'(sort=").Append(doc.sortingOrder).Append(") ");
+            }
+            FlowTrace.Step(Tag, "TouchVerbBar census: UIDocuments-with-PanelSettings=" + withPs +
+                (withPs > 0 ? " → " + census.ToString().TrimEnd() : " (nothing for AdoptPanelSettings to adopt)"));
+
+            // 2) Run the driver's REAL construction path.
+            var go = new GameObject("WO677_TouchVerbBarProbe");
+            LeanTouchBuildDriver driver = null;
+            try { driver = go.AddComponent<LeanTouchBuildDriver>(); }   // Awake → AdoptPanelSettings NOW
+            catch (Exception ex)
+            {
+                _lastDetail = "driver AddComponent threw: " + ex.Message;
+                FlowTrace.Fail(Tag, "AssertTouchVerbBarRenderable: LeanTouchBuildDriver.AddComponent THREW — " + ex.Message);
+                UnityEngine.Object.Destroy(go);
+                yield break;
+            }
+            yield return null;
+            driver.Install(HighestDepthScreenCamera());                // builds the bar (EnsureBuilt)
+            yield return null;
+
+            // 3) Verdict — is the bar renderable by EITHER construction? The uGUI bar's
+            // Cancel is found by its stable GO name "BuildTouchCancel" (kit labels are
+            // TMP and DevTools carries no TMPro ref; same pattern as "CloseButton").
+            bool ugui = false;
+            foreach (var b in go.GetComponentsInChildren<UnityEngine.UI.Button>(true))
+            {
+                if (b != null && b.gameObject.name.IndexOf("Cancel", StringComparison.OrdinalIgnoreCase) >= 0)
+                { ugui = true; break; }
+            }
+            var barDoc = go.GetComponent<UnityEngine.UIElements.UIDocument>();
+            bool uitkRenderable = barDoc != null && barDoc.panelSettings != null;
+
+            if (ugui)
+            {
+                _lastDetail = "PASS — code-built uGUI Cancel present (UIDocument dependency gone)";
+                FlowTrace.Step(Tag, "AssertTouchVerbBarRenderable: PASS — touch verb bar is code-built uGUI; Cancel renders without any PanelSettings adoption.");
+            }
+            else if (uitkRenderable)
+            {
+                _lastDetail = "adopted PanelSettings (UITK path live) — re-diagnose per WO-677 candidates 6";
+                FlowTrace.Warn(Tag, "AssertTouchVerbBarRenderable: bar ADOPTED a PanelSettings (census above names the source) — the UITK bar WOULD render in THIS build; if mobile web still can't cancel, the adoptable doc is dev-build-only or a WO-677 candidate-6 suppressor is eating the tap. RE-DIAGNOSE before fixing.");
+            }
+            else
+            {
+                _lastDetail = "FAIL — no PanelSettings adoptable + no uGUI bar: Cancel can never render on touch";
+                FlowTrace.Fail(Tag, "AssertTouchVerbBarRenderable: FAIL — the touch verb bar has NO PanelSettings to adopt and NO uGUI construction (census=" + withPs + "). Rotate/Cancel silently never draw on a touch device → the armed state is inescapable → tap-select/Move/Sell unreachable (WO-677 root CONFIRMED).");
+            }
+
+            UnityEngine.Object.Destroy(go);
+        }
+
+        // =====================================================================
+        //  AssertBuildMoveChain — WO-677 Lane D: arm→cancel→select→move→commit
+        //  + WO-683 link DPAD: drive HudMoveInput → armed ghost cell changes
+        // ---------------------------------------------------------------------
+        // The exact chain the owner cannot complete on mobile (MOB-1). Drives the
+        // REAL paths: the controller's UI-cancel latch (RequestUiCancel — the
+        // web-safe latch pattern proven by the PLACE button), a real injected
+        // click through IBuildInput for tap-select, ProbeBeginMoveSelected (the
+        // Move handler's target), and a real click to commit the move. PASS =
+        // the persisted layout record changed cell. WO-683 extends the chain:
+        // re-arm, write the REAL HudMoveInput static (the seam the build d-pad
+        // publishes + BuildModeController's reflection merge reads), assert the
+        // armed ghost's cell changes (ProbeArmedGhostCell).
+        // =====================================================================
+        private IEnumerator AssertBuildMoveChain()
+        {
+            const string Tag = "Auto";
+            const string TowerId = "tower_ground_archer";
+
+            var ctrl = UnityEngine.Object.FindFirstObjectByType<BuildModeController>();
+            if (ctrl == null)
+            {
+                _lastDetail = "no BuildModeController — skipped";
+                FlowTrace.Warn(Tag, "AssertBuildMoveChain: no BuildModeController in scene — skipped.");
+                yield break;
+            }
+            if (!ctrl.IsActive) ctrl.Enter();
+            yield return null; yield return null;
+            if (!ctrl.IsActive)
+            {
+                _lastDetail = "Enter() refused";
+                FlowTrace.Fail(Tag, "AssertBuildMoveChain: BuildModeController.Enter() did not activate — chain untestable.");
+                yield break;
+            }
+
+            var bot = new BotBuildInput();
+            ctrl.SetInput(bot);
+            try
+            {
+                var cam = HighestDepthScreenCamera();
+                var grid = PlacementGrid.Instance;
+                if (cam == null || grid == null)
+                {
+                    _lastDetail = "cam=" + (cam != null) + " grid=" + (grid != null);
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: no screen camera / PlacementGrid — cannot project clicks.");
+                    yield break;
+                }
+
+                // 0) A placed structure to edit — prefer one left by AssertTutorialFirstTower;
+                //    otherwise place one here through the real place path.
+                var ps = UnityEngine.Object.FindFirstObjectByType<PlacedStructure>();
+                if (ps == null)
+                {
+                    var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+                    if (entry == null)
+                    {
+                        _lastDetail = "'" + TowerId + "' not in catalog and no PlacedStructure in scene";
+                        FlowTrace.Fail(Tag, "AssertBuildMoveChain: nothing placed and '" + TowerId + "' missing from catalog.");
+                        yield break;
+                    }
+                    GrantCost(BuildModeController.CostFor(entry));
+                    if (!ctrl.ArmById(TowerId))
+                    {
+                        _lastDetail = "ArmById failed";
+                        FlowTrace.Fail(Tag, "AssertBuildMoveChain: ArmById('" + TowerId + "') failed — cannot seed a structure.");
+                        yield break;
+                    }
+                    Vector2 seedSp;
+                    if (!TryFindValidArmedPoint(ctrl, cam, grid, out seedSp))
+                    {
+                        _lastDetail = "no valid seed cell";
+                        FlowTrace.Fail(Tag, "AssertBuildMoveChain: no valid placement point found to seed the chain.");
+                        yield break;
+                    }
+                    bot.Click(seedSp);
+                    float sw = 0f;
+                    while (sw < 2f && UnityEngine.Object.FindFirstObjectByType<PlacedStructure>() == null)
+                    { sw += Time.deltaTime; yield return null; }
+                    ps = UnityEngine.Object.FindFirstObjectByType<PlacedStructure>();
+                    if (ps == null)
+                    {
+                        _lastDetail = "seed placement never committed";
+                        FlowTrace.Fail(Tag, "AssertBuildMoveChain: seed placement click never produced a PlacedStructure.");
+                        yield break;
+                    }
+                }
+                var startCell = ps.gridCell;
+
+                // 1) ARM, then CANCEL through the WO-677 UI latch — the armed state must exit.
+                var entry2 = DeNelle.Core.Catalog.CatalogRegistry.Get(ps.itemId) ??
+                             DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+                if (entry2 != null)
+                {
+                    GrantCost(BuildModeController.CostFor(entry2));
+                    if (ctrl.ArmById(entry2.id))
+                    {
+                        yield return null;
+                        ctrl.RequestUiCancel();
+                        yield return null; yield return null;
+                        if (ctrl.HasArmedEntry)
+                        {
+                            _lastDetail = "RequestUiCancel did NOT exit the armed state";
+                            FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link CANCEL — RequestUiCancel latch consumed but the armed state persists (the touch exit is broken; this is the MOB-1 trap).");
+                            yield break;
+                        }
+                        FlowTrace.Step(Tag, "AssertBuildMoveChain: link CANCEL PASS — RequestUiCancel exits the armed state to idle.");
+                    }
+                }
+
+                // 2) TAP-SELECT the placed structure through the real idle select loop.
+                Vector3 sp3 = cam.WorldToScreenPoint(ps.transform.position + Vector3.up * 0.5f);
+                if (sp3.z <= 0f)
+                {
+                    _lastDetail = "structure behind camera — select untestable";
+                    FlowTrace.Warn(Tag, "AssertBuildMoveChain: placed structure projects behind the camera — select link skipped.");
+                    yield break;
+                }
+                bot.Click(new Vector2(sp3.x, sp3.y));
+                float w = 0f;
+                var selUi = (BuildSelectionUI)null;
+                while (w < 2f)
+                {
+                    selUi = UnityEngine.Object.FindFirstObjectByType<BuildSelectionUI>();
+                    if (selUi != null && selUi.gameObject.activeInHierarchy) break;
+                    w += Time.deltaTime; yield return null;
+                }
+                if (selUi == null || !selUi.gameObject.activeInHierarchy)
+                {
+                    _lastDetail = "tap on structure never showed BuildSelectionUI";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link SELECT — idle click on the placed structure never opened the Move/Sell panel (read the '[Flow:Build] SelectLoop:' lines above — they name the dead link).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertBuildMoveChain: link SELECT PASS — BuildSelectionUI shown for '" + ps.itemId + "'.");
+
+                // 3) MOVE via the Move handler's target, then commit at a fresh valid point.
+                if (!ctrl.ProbeBeginMoveSelected())
+                {
+                    _lastDetail = "ProbeBeginMoveSelected refused";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link MOVE — BeginMoveSelected did not enter move mode with a live selection.");
+                    yield break;
+                }
+                bool committed = false;
+                for (int attempt = 0; attempt < 6 && !committed; attempt++)
+                {
+                    Vector2 mp;
+                    if (!TryFindNearbyGroundPoint(cam, grid, startCell, 2 + attempt * 2, out mp)) continue;
+                    bot.Click(mp);
+                    float cw = 0f;
+                    while (cw < 1.2f && ps.gridCell == startCell) { cw += Time.deltaTime; yield return null; }
+                    committed = ps.gridCell != startCell;
+                }
+                if (!committed)
+                {
+                    _lastDetail = "move never committed (cell unchanged " + startCell + ")";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link COMMIT — move mode entered but no click committed a new cell (all candidates invalid, or the move-loop confirm is broken).");
+                    yield break;
+                }
+
+                // 4) WO-683 — D-PAD: re-arm, park the ghost at a valid point (aim only, no
+                //    click), then drive the SAME seam the build merge reads —
+                //    DeNelle.HUD.Kit.HudMoveInput (DevTools references DeNelle.HUD, so this
+                //    writes the REAL static the build-overlay d-pad publishes by reflection)
+                //    — and assert the armed ghost's grid cell CHANGES (the pad pans the
+                //    view, the ghost ray re-lands: exactly the arrow-key behavior).
+                var entry3 = DeNelle.Core.Catalog.CatalogRegistry.Get(ps.itemId) ??
+                             DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+                if (entry3 == null)
+                {
+                    _lastDetail = "no catalog entry for the DPAD link";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link DPAD — no catalog entry to arm.");
+                    yield break;
+                }
+                GrantCost(BuildModeController.CostFor(entry3));
+                if (!ctrl.ArmById(entry3.id))
+                {
+                    _lastDetail = "ArmById failed for the DPAD link";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link DPAD — ArmById('" + entry3.id + "') refused.");
+                    yield break;
+                }
+                Vector2 parkSp;
+                if (!TryFindValidArmedPoint(ctrl, cam, grid, out parkSp))
+                {
+                    _lastDetail = "no valid park point for the DPAD link";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link DPAD — no valid point to park the armed ghost.");
+                    yield break;
+                }
+                bot.PointAt(parkSp);                       // aim only — nothing places
+                yield return null; yield return null;      // let the place loop track the ghost
+                Vector2Int ghostStart;
+                if (!ctrl.ProbeArmedGhostCell(out ghostStart))
+                {
+                    _lastDetail = "ProbeArmedGhostCell refused (no armed ghost)";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link DPAD — armed but ProbeArmedGhostCell returned false (no live ghost/grid).");
+                    yield break;
+                }
+                bool dpadMoved = false;
+                Vector2Int ghostNow = ghostStart;
+                // Second direction in case the pan clamped at a grid edge on the first.
+                Vector2[] dpadDirs = { Vector2.up, Vector2.down };
+                for (int d = 0; d < dpadDirs.Length && !dpadMoved; d++)
+                {
+                    DeNelle.HUD.Kit.HudMoveInput.Set(dpadDirs[d]);
+                    float dw = 0f;
+                    while (dw < 1.5f && !dpadMoved)
+                    {
+                        dw += Time.deltaTime;
+                        yield return null;
+                        dpadMoved = ctrl.ProbeArmedGhostCell(out ghostNow) && ghostNow != ghostStart;
+                    }
+                    DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+                }
+                ctrl.RequestUiCancel();   // back out the probe's armed entry (return to idle)
+                yield return null;
+                if (!dpadMoved)
+                {
+                    _lastDetail = "d-pad drive never changed the armed ghost's cell (stuck at " + ghostStart + ")";
+                    FlowTrace.Fail(Tag, "AssertBuildMoveChain: FAIL at link DPAD — HudMoveInput.Move published but the armed ghost's cell never changed (the WO-683 reflection merge is dead — read the '[Flow:Build] HudMoveInput' warn lines above).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertBuildMoveChain: link DPAD PASS — HudMoveInput seam moved the armed ghost " + ghostStart + " -> " + ghostNow + " (WO-683).");
+
+                _lastDetail = "PASS — " + ps.itemId + " moved " + startCell + " -> " + ps.gridCell +
+                              "; d-pad moved ghost " + ghostStart + " -> " + ghostNow;
+                FlowTrace.Step(Tag, "AssertBuildMoveChain: PASS — arm->cancel->select->move->commit->dpad intact; '" + ps.itemId + "' moved " + startCell + " -> " + ps.gridCell + ".");
+            }
+            finally
+            {
+                // WO-683 — never leak a held d-pad vector into hero movement if the
+                // coroutine aborts mid-drive (HeroLocomotion reads the same static).
+                DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+                ctrl.SetInput(null);
+                if (ctrl.IsActive) ctrl.Exit();
+            }
+        }
+
+        /// <summary>Fund a build cost (test setup, not a bypass — the cost gate still runs).
+        /// Same funding path AssertTutorialFirstTower uses.</summary>
+        private static void GrantCost(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            var econ = EconomyService.Instance;
+            if (econ != null) econ.Grant(BuildModeController.ToEconomy(cost));
+            else DeNelle.Core.State.GameStateService.Instance?.AddCrystals(cost.crystals);
+        }
+
+        /// <summary>Ring-sample screen points around the grid centre until the controller's own
+        /// reason-aware gate (ProbeArmedPlacementAt) accepts one. Requires an armed entry.</summary>
+        private static bool TryFindValidArmedPoint(BuildModeController ctrl, Camera cam, PlacementGrid grid, out Vector2 screenPoint)
+        {
+            screenPoint = default;
+            var centre = new Vector2Int(grid.gridWidth / 2, grid.gridHeight / 2);
+            for (int r = 2; r <= 12; r += 2)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                for (int dz = -r; dz <= r; dz++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;
+                    var cell = centre + new Vector2Int(dx, dz);
+                    if (cell.x < 0 || cell.y < 0 || cell.x >= grid.gridWidth || cell.y >= grid.gridHeight) continue;
+                    Vector3 p = cam.WorldToScreenPoint(grid.CellToWorld(cell));
+                    if (p.z <= 0f || p.x < 0f || p.y < 0f || p.x >= Screen.width || p.y >= Screen.height) continue;
+                    var sp = new Vector2(p.x, p.y);
+                    if (ctrl.ProbeArmedPlacementAt(sp, out _)) { screenPoint = sp; return true; }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>An on-screen ground point roughly <paramref name="ringRadius"/> cells from
+        /// <paramref name="fromCell"/> (move-commit candidates; validity is judged by the live
+        /// move loop itself, so this only needs to be on screen).</summary>
+        private static bool TryFindNearbyGroundPoint(Camera cam, PlacementGrid grid, Vector2Int fromCell, int ringRadius, out Vector2 screenPoint)
+        {
+            screenPoint = default;
+            var offsets = new[]
+            {
+                new Vector2Int(ringRadius, 0), new Vector2Int(-ringRadius, 0),
+                new Vector2Int(0, ringRadius), new Vector2Int(0, -ringRadius),
+                new Vector2Int(ringRadius, ringRadius), new Vector2Int(-ringRadius, -ringRadius),
+            };
+            foreach (var off in offsets)
+            {
+                var cell = fromCell + off;
+                if (cell.x < 0 || cell.y < 0 || cell.x >= grid.gridWidth || cell.y >= grid.gridHeight) continue;
+                Vector3 p = cam.WorldToScreenPoint(grid.CellToWorld(cell));
+                if (p.z <= 0f || p.x < 0f || p.y < 0f || p.x >= Screen.width || p.y >= Screen.height) continue;
+                screenPoint = new Vector2(p.x, p.y);
+                return true;
+            }
+            return false;
         }
 
         private IEnumerator RunPhase(string name, IEnumerator phase, bool abortIfFailed = false)

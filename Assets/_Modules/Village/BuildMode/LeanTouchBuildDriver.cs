@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // Makes Build Mode thumb-playable on a phone by implementing IBuildInput from
-// touch gestures + a tiny code-built button bar. Mirrors LeanTouchAimDriver: the
+// touch gestures + an on-screen verb bar. Mirrors LeanTouchAimDriver: the
 // controller's place / move / select / rotate / cancel loops never reference
 // Lean.Touch — only this file does, and the DeNelle.Village asmdef already refs
 // LeanTouch / LeanCommon / CW.Common, so it compiles in-assembly (verified).
@@ -16,18 +16,35 @@
 //                      ghost isn't hidden under the thumb.
 //   two-finger PAN   → slides the overview camera across the plot.
 //   two-finger PINCH → raises / lowers the overview camera (zoom).
-//   [⟲/⟳ Rotate]     → RotateCcw / RotateCw (±45° yaw, WO-673 L5) — mirrors Q/E.
+//   [Rotate Left/Right] → RotateCcw / RotateCw (±45° yaw, WO-673 L5) — mirrors Q/E.
 //   [Cancel] button  → Cancel (back out arm/move) — replaces right-click / Escape.
+//   [D-pad cross]    → the SAME kit d-pad the combat/town HUD hosts (WO-683):
+//                      publishes HudMoveInput.Move (loose reflection), which the
+//                      controller merges into the arrow-key move vector so the
+//                      armed ghost / in-progress move nudges exactly like keys.
+//
+// WO-677 (MOB-1, 2026-07-12): the verb bar is CODE-BUILT uGUI on its own
+// Screen-Space-Overlay canvas via ElarionUiKit — the SAME pattern as
+// BuildPlaceButton, whose taps are PROVEN working on the owner's phone. It was
+// previously a UIToolkit UIDocument that adopted a sibling's PanelSettings
+// (AdoptPanelSettings): fleet census 2026-07-12 proved adoption *can* succeed
+// (AdminOverlay et al.), but the bar then still rode UITK — the one UI class this
+// project has banned on web builds (PIPELINE_STATE landmine; BuildPaletteUI was
+// converted off UIDocument for the same reason). The uGUI rebuild removes the
+// whole silent-non-render/unpickable class: no PanelSettings, no adoption, no
+// UITK picking. Buttons register with the EventSystem via GraphicRaycaster, so
+// LeanTouch's finger.IsOverGui still suppresses world taps over the bar.
 //
 // The controller installs this via Install() on Enter and Uninstall() on Exit, so
 // on a desktop build where it is never installed the mouse path is untouched.
 // =============================================================================
 
 using System.Collections.Generic;
+using System.Reflection;          // WO-683: loose-reflection publish into HudMoveInput.Set (no Village->HUD edge)
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using Lean.Touch;
-using DeNelle.Core.Diagnostics;   // EDIT-ONLY: FlowTrace breadcrumbs (touch install + tap)
+using DeNelle.Core.Diagnostics;   // FlowTrace breadcrumbs (touch install + tap + bar verbs)
 
 namespace DeNelle.Village
 {
@@ -58,19 +75,18 @@ namespace DeNelle.Village
         private bool _placeOrSelectLatched;   // raised by a Lean tap, consumed next controller poll
         private bool _cancelLatched;           // raised by the Cancel button
         private bool _rotateLatched;           // legacy single-direction latch (kept for IBuildInput.Rotate compat)
-        private bool _rotateCwLatched;         // raised by the Rotate ⟳ button (WO-673 L5: +45°)
-        private bool _rotateCcwLatched;        // raised by the Rotate ⟲ button (WO-673 L5: −45°)
+        private bool _rotateCwLatched;         // raised by the "Rotate Right" button (WO-673 L5: +45°)
+        private bool _rotateCcwLatched;        // raised by the "Rotate Left" button (WO-673 L5: -45°)
 
-        // ── On-screen button bar ──────────────────────────────────────────────
-        private UIDocument _document;
-        private VisualElement _root;
+        // ── On-screen verb bar (code-built uGUI, WO-677) ─────────────────────
+        private GameObject _barRoot;
 
         // =====================================================================
         //  Install / Uninstall (called by BuildModeController)
         // =====================================================================
 
         /// <summary>
-        /// Wire the driver to the live overview camera and show the button bar.
+        /// Wire the driver to the live overview camera and show the verb bar.
         /// Seeds <see cref="ScreenPoint"/> to screen-centre so the first frame casts
         /// somewhere sensible before the player touches.
         /// </summary>
@@ -84,14 +100,22 @@ namespace DeNelle.Village
             if (LeanTouch.Instance == null) gameObject.AddComponent<LeanTouch>();
 
             EnsureBuilt();
-            if (_root != null) _root.style.display = DisplayStyle.Flex;
+            if (_barRoot != null) _barRoot.SetActive(true);
+            // WO-683 §12 — the d-pad-SHOWN decision, named: the pad rides the touch
+            // bar, so it shows exactly when the touch driver installs (never desktop).
+            FlowTrace.Step("Build", "TouchBar SHOWN — verb bar + kit d-pad visible for this build session " +
+                "(WO-683 d-pad-shown decision: touch driver installed).");
             enabled = true;
         }
 
-        /// <summary>Hide the button bar and stop driving (controller calls on Exit).</summary>
+        /// <summary>Hide the verb bar and stop driving (controller calls on Exit).</summary>
         public void Uninstall()
         {
-            if (_root != null) _root.style.display = DisplayStyle.None;
+            if (_barRoot != null) _barRoot.SetActive(false);
+            // WO-683 — zero the published move so a chevron still held at Exit can't
+            // keep feeding HeroLocomotion (the same HudMoveInput static) after the
+            // pad is hidden (its onUp never fires once the GO deactivates).
+            PublishDpadMove(Vector2.zero);
             _overviewCamera = null;
             enabled = false;
         }
@@ -134,14 +158,15 @@ namespace DeNelle.Village
         /// <summary>
         /// One-finger tap = a place/select/commit. Lifted above the fingertip and
         /// stored as the ray point so the controller validates + acts at the spot the
-        /// ghost actually sits. Taps over the GUI (the Rotate/Cancel buttons) are
-        /// ignored so the bar can't double-fire a placement.
+        /// ghost actually sits. Taps over the GUI (the verb bar's uGUI buttons — the
+        /// EventSystem raycast counts GraphicRaycaster hits) are ignored so the bar
+        /// can't double-fire a placement.
         /// </summary>
         private void HandleFingerTap(LeanFinger finger)
         {
             if (finger == null || finger.Index < 0) return;   // skip simulated mouse
             FlowTrace.Step("Build", $"finger tap idx={finger.Index} overGui={finger.IsOverGui} screen={finger.ScreenPosition}");
-            if (finger.IsOverGui) return;                      // don't place through the button bar
+            if (finger.IsOverGui) return;                      // don't place through the verb bar
             if (LeanTouch.Fingers.Count >= 2) return;          // 2-finger = camera gesture
 
             _screenPoint = LiftAboveThumb(finger.ScreenPosition);
@@ -203,87 +228,127 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
-        //  Code-built Rotate / Cancel button bar (no UXML — repo rule)
+        //  Code-built uGUI verb bar (WO-677 — the BuildPlaceButton pattern)
         // =====================================================================
 
-        private void Awake()
-        {
-            _document = GetComponent<UIDocument>();
-            if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            AdoptPanelSettings();
-        }
-
         /// <summary>
-        /// Adopt a sibling UIDocument's PanelSettings so the bar renders (a freshly
-        /// AddComponent'd UIDocument has none → invisible). Mirrors BuildPaletteUI;
-        /// sorts above the palette so the buttons are tappable on top.
-        /// </summary>
-        private void AdoptPanelSettings()
-        {
-            if (_document == null) return;
-            UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                if (doc == null || doc == _document || doc.panelSettings == null) continue;
-                if (any == null) any = doc;
-                if (doc.gameObject.name.IndexOf("Hud", System.StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
-            }
-            var src = hud ?? any;
-            if (src != null)
-            {
-                _document.panelSettings = src.panelSettings;
-                _document.sortingOrder = src.sortingOrder + 7;   // above HUD + palette, below selection panel
-            }
-            else
-            {
-                Debug.LogWarning("[LeanTouchBuildDriver] No sibling PanelSettings found — touch buttons will not render.");
-            }
-        }
-
-        /// <summary>
-        /// Build a right-edge vertical stack of two big thumb-sized buttons: Rotate
-        /// (+90° yaw) and Cancel (back out the armed entry / move). Done/Exit stays on
-        /// the palette's top bar; these are the in-placement verbs the keyboard owned.
+        /// Build the right-edge vertical verb stack once: the Rotate Left / Rotate Right
+        /// pair (45° steps, WO-673 L5; ASCII text labels, WO-683) over Cancel, plus the
+        /// WO-683 kit d-pad on the left. Own overlay canvas + GraphicRaycaster so the bar
+        /// renders with NO external dependency and its taps register as GUI. Done/Exit
+        /// stays on the palette's top bar; these are the in-placement verbs the
+        /// keyboard owned. Seated x 0.845-0.985 / y 0.16-0.435 — clear of the centred
+        /// 540px palette dock and of the PLACE button at x 0.66-0.80 (WO-677 Lane C).
         /// </summary>
         private void EnsureBuilt()
         {
-            if (_root != null) return;
-            var docRoot = _document != null ? _document.rootVisualElement : null;
-            if (docRoot == null) return;
+            if (_barRoot != null) return;
 
-            _root = new VisualElement { name = "build-touch-controls" };
-            _root.style.position = Position.Absolute;
-            _root.style.right = 16;
-            _root.style.bottom = 150;                  // above the bottom palette strip (~120 tall)
-            _root.style.flexDirection = FlexDirection.Column;
-            _root.style.alignItems = Align.FlexEnd;
-            docRoot.Add(_root);
+            _barRoot = new GameObject("BuildTouchBarCanvas");
+            _barRoot.transform.SetParent(transform, false);
+            var canvas = _barRoot.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 5001;   // just above the PLACE button (5000), below modals
+            var scaler = _barRoot.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            _barRoot.AddComponent<GraphicRaycaster>();
 
-            // WO-673 L5 (owner ruling 2026-07-11): rotation is 45° stepped, BOTH directions.
-            // The single legacy Rotate button becomes a ⟲/⟳ pair — SAME StyleBigButton
-            // chrome (no new bespoke UI), one 45° step per tap, mirroring desktop Q/E.
-            var rotateCcwBtn = new Button(() => _rotateCcwLatched = true) { text = "⟲ Rotate" };
-            StyleBigButton(rotateCcwBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
-            _root.Add(rotateCcwBtn);
+            // Kit buttons (STYLE EVERYTHING OBSIDIAN — never hand-roll uGUI widgets).
+            // Text labels carry the meaning, never color alone (owner colorblind).
+            // WO-683 (owner ruling + device screenshot 2026-07-12): the ⟲/⟳ glyphs render
+            // as tofu boxes on the shipped TMP font ("square symbol rotate") — labels are
+            // plain ASCII TEXT: "Rotate Left" / "Rotate Right" (WO-611 landmine rule).
+            DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Rotate Left",
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.845f, 0.36f), new Vector2(0.985f, 0.435f),
+                () => { FlowTrace.Step("Build", "TouchBar: Rotate Left pressed"); _rotateCcwLatched = true; });
 
-            var rotateBtn = new Button(() => _rotateCwLatched = true) { text = "Rotate ⟳" };
-            StyleBigButton(rotateBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
-            _root.Add(rotateBtn);
+            DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Rotate Right",
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.845f, 0.26f), new Vector2(0.985f, 0.335f),
+                () => { FlowTrace.Step("Build", "TouchBar: Rotate Right pressed"); _rotateCwLatched = true; });
 
-            var cancelBtn = new Button(() => _cancelLatched = true) { text = "Cancel" };
-            StyleBigButton(cancelBtn, new Color(0.30f, 0.32f, 0.40f, 0.98f));
-            _root.Add(cancelBtn);
+            var cancelBtn = DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Cancel",
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
+                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.845f, 0.16f), new Vector2(0.985f, 0.235f),
+                () => { FlowTrace.Step("Build", "TouchBar: Cancel pressed"); _cancelLatched = true; });
+            // Stable name — the fleet's AssertTouchVerbBarRenderable probe finds the bar
+            // by this GO name (DevTools has no TMPro ref to read the label).
+            cancelBtn.gameObject.name = "BuildTouchCancel";
+
+            // ── WO-683: THE kit d-pad on the build screen ─────────────────────
+            // Owner ruling 2026-07-12: the d-pad from the combat/friendly HUD must
+            // show in build mode and move the asset. BuildModeHudBridge hides the
+            // WHOLE HUD kit while building (root CanvasGroup fade), so exempting one
+            // widget from that fade would mean HUD-side surgery; instead the build
+            // overlay hosts its OWN instance of the SAME kit builder the HUD uses
+            // (same component, same chrome — mirrors HudKitController's moveCluster
+            // branch, incl. the CombatHud611 cross-vs-cluster flag). It publishes
+            // into DeNelle.HUD.Kit.HudMoveInput.Set by loose reflection (no
+            // Village->HUD asmdef edge, §5 — the HeroLocomotion pattern's write
+            // side); BuildModeController merges HudMoveInput.Move into the SAME
+            // move vector as the arrow keys. Seated left side, ABOVE the hero
+            // stick's bottom-left engage zone (VirtualJoystick.IsInZone) and clear
+            // of the centred palette dock. Its chevron zones are uGUI buttons on
+            // this canvas, so presses register as GUI (finger.IsOverGui) and can
+            // never fall through as world taps. Direction is carried by the
+            // chevron SHAPES + position, never color alone (owner colorblind).
+            var dpad = DeNelle.Core.FeatureFlags.CombatHud611
+                ? DeNelle.Core.UI.ElarionUiKit.BuildVirtualDPad(
+                    _barRoot.transform, new Vector2(0.11f, 0.60f), PublishDpadMove)
+                : DeNelle.Core.UI.ElarionUiKit.BuildControllerCluster(
+                    _barRoot.transform, new Vector2(0.11f, 0.60f), PublishDpadMove);
+            dpad.root.name = "BuildDPad";   // stable probe/debug name (BuildTouchCancel precedent)
+            FlowTrace.Step("Build", "TouchBar: kit d-pad BUILT on the build overlay (WO-683) — " +
+                (DeNelle.Core.FeatureFlags.CombatHud611 ? "VirtualDPad cross" : "controller cluster") +
+                ", same builder as the combat/town HUD moveCluster.");
+
+            _barRoot.SetActive(false);   // shown by Install, hidden by Uninstall
         }
 
-        /// <summary>Thumb-sized button styling — large hit target for mobile.</summary>
-        private static void StyleBigButton(Button b, Color bg)
+        // ── WO-683: HudMoveInput publish seam (loose reflection, cached once) ──
+        private static MethodInfo s_hudMoveSet;
+        private static bool s_hudMoveSetResolved;
+
+        /// <summary>
+        /// Publish the build d-pad's held direction into DeNelle.HUD.Kit.HudMoveInput.Set —
+        /// the SAME static the combat/town HUD d-pad writes and that BuildModeController /
+        /// HeroLocomotion read by name (no Village->HUD asmdef edge, §5). Resolution is
+        /// cached once; a miss or a throw WARNS (§12 — never a silent catch) and the pad
+        /// goes inert rather than blanking the bar.
+        /// </summary>
+        private static void PublishDpadMove(Vector2 v)
         {
-            b.style.height = 56; b.style.minWidth = 120;
-            b.style.marginTop = 8; b.style.marginBottom = 8;
-            b.style.fontSize = 18;
-            b.style.unityFontStyleAndWeight = FontStyle.Bold;
-            b.style.color = Color.white;
-            b.style.backgroundColor = bg;
+            if (!s_hudMoveSetResolved)
+            {
+                s_hudMoveSetResolved = true;
+                try
+                {
+                    var t = System.Type.GetType("DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD");
+                    s_hudMoveSet = t != null
+                        ? t.GetMethod("Set", BindingFlags.Public | BindingFlags.Static,
+                            null, new[] { typeof(Vector2) }, null)
+                        : null;
+                }
+                catch (System.Exception ex)
+                {
+                    s_hudMoveSet = null;
+                    FlowTrace.Warn("Build", "HudMoveInput.Set reflection resolve threw: " + ex.Message);
+                }
+                if (s_hudMoveSet == null)
+                    FlowTrace.Warn("Build", "HudMoveInput.Set reflection MISS " +
+                        "('DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD') — build d-pad presses publish nowhere (WO-683).");
+            }
+            if (s_hudMoveSet == null) return;
+            try { s_hudMoveSet.Invoke(null, new object[] { v }); }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("Build", "HudMoveInput.Set invoke threw: " + ex.Message);
+            }
         }
     }
 }

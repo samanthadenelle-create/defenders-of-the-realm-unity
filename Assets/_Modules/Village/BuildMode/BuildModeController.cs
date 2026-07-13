@@ -59,6 +59,9 @@ namespace DeNelle.Village
         /// <summary>True while a build session is active.</summary>
         public bool IsActive { get; private set; }
 
+        /// <summary>True while a CREATE entry is armed (WO-677 probe seam — read-only).</summary>
+        public bool HasArmedEntry => _armed != null;
+
         [Header("Camera overview")]
         [Tooltip("Camera height (Y) while in build mode — angled 3D overview so structures read as upright.")]
         [SerializeField] private float _buildModeHeight = 22f;
@@ -161,9 +164,117 @@ namespace DeNelle.Village
         // button is explicit intent, never a stray tap.
         private BuildPlaceButton _placeButton;
         private bool _uiPlaceLatch;
+        private bool _uiCancelLatch;
 
         /// <summary>Explicit confirm from the on-screen PLACE button (web/mobile).</summary>
         public void RequestUiPlaceConfirm() => _uiPlaceLatch = true;
+
+        /// <summary>
+        /// Explicit cancel latch (WO-677) — same web-safe pattern as
+        /// <see cref="RequestUiPlaceConfirm"/>: a labeled control or a fleet probe backs
+        /// out the armed entry / in-progress move through the controller's REAL cancel
+        /// path, regardless of which pointer/input link the platform breaks.
+        /// </summary>
+        public void RequestUiCancel() => _uiCancelLatch = true;
+
+        /// <summary>
+        /// WO-677 Lane D probe seam — begin the MOVE of the currently selected structure
+        /// through the real BeginMoveSelected path (the BuildSelectionUI Move button's
+        /// handler target). Returns false when nothing is selected. Mirrors the
+        /// ProbeArmedPlacementAt probe-seam precedent.
+        /// </summary>
+        public bool ProbeBeginMoveSelected()
+        {
+            if (!IsActive || _selected == null) return false;
+            BeginMoveSelected();
+            return _movingSelected;
+        }
+
+        /// <summary>
+        /// WO-683 Lane D probe seam — the armed ghost's CURRENT grid cell (where the next
+        /// PLACE would land). Read-only over ghost + grid; false when no armed ghost/grid.
+        /// The fleet drives the HudMoveInput seam and asserts this cell CHANGES (mirrors
+        /// the ProbeArmedPlacementAt / ProbeBeginMoveSelected probe-seam precedent).
+        /// </summary>
+        public bool ProbeArmedGhostCell(out Vector2Int cell)
+        {
+            cell = default;
+            if (!IsActive || _armed == null || _ghost == null || _grid == null) return false;
+            cell = _grid.WorldToCell(_ghost.transform.position);
+            return true;
+        }
+
+        // ── WO-683: kit d-pad merge (loose-reflection read of HudMoveInput.Move) ──
+        // The build-overlay d-pad (LeanTouchBuildDriver) and the combat/town HUD cross
+        // both publish DeNelle.HUD.Kit.HudMoveInput.Move; build mode reads it by the
+        // SAME reflection-by-name pattern HeroLocomotion uses (no Village->HUD asmdef
+        // edge, §5) and merges it into the arrow-key pan vector — ONE merge point, so
+        // d-pad = arrow keys exactly for the armed ghost AND the in-progress move.
+        private static System.Reflection.PropertyInfo s_hudMoveProp;
+        private static bool s_hudMoveResolved;
+        private bool _dpadConsumedTraced;   // first-consumed FlowTrace once per build session
+        // docs/audit/input-controls.md §3.1: innerDeadZone 0.18 — on the digital kit pad
+        // this is the no-press threshold (the t^1.6 response curve is a no-op on a
+        // unit-step direction vector, so it is not applied here).
+        private const float DpadDeadZone = 0.18f;
+
+        /// <summary>
+        /// Read the kit d-pad's published vector (HudMoveInput.Move) by cached loose
+        /// reflection. Zero when the HUD assembly/static is absent; a resolve miss or a
+        /// read throw WARNS (§12 — never a silent catch) instead of silently deadening
+        /// the pad.
+        /// </summary>
+        private static Vector2 ReadHudDpadMove()
+        {
+            if (!s_hudMoveResolved)
+            {
+                s_hudMoveResolved = true;
+                try
+                {
+                    var t = System.Type.GetType("DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD");
+                    s_hudMoveProp = t != null
+                        ? t.GetProperty("Move",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                        : null;
+                }
+                catch (System.Exception ex)
+                {
+                    s_hudMoveProp = null;
+                    FlowTrace.Warn("Build", "HudMoveInput.Move reflection resolve threw: " + ex.Message);
+                }
+                if (s_hudMoveProp == null)
+                    FlowTrace.Warn("Build", "HudMoveInput.Move reflection MISS " +
+                        "('DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD') — the d-pad cannot move the ghost/camera in build mode (WO-683).");
+            }
+            if (s_hudMoveProp == null) return Vector2.zero;
+            try
+            {
+                object v = s_hudMoveProp.GetValue(null);
+                return v is Vector2 vec ? vec : Vector2.zero;
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Throttle("Build", "dpad-read-throw", 5f,
+                    "HudMoveInput.Move read threw: " + ex.Message);
+                return Vector2.zero;
+            }
+        }
+
+        /// <summary>
+        /// Read the cancel intent for THIS frame: the UI/probe latch first (consumed),
+        /// then the live input seam. Shared by the place + move loops so both exits
+        /// honor the on-screen Cancel identically.
+        /// </summary>
+        private bool CancelRequestedThisFrame()
+        {
+            if (_uiCancelLatch)
+            {
+                _uiCancelLatch = false;
+                FlowTrace.Step("Build", "Cancel: UI cancel latch consumed (touch bar / probe seam).");
+                return true;
+            }
+            return _input.Cancel;
+        }
 
         // ── Selection / edit state (P2) ───────────────────────────────────────
         // The currently tap-selected placed structure (move/sell target).
@@ -260,6 +371,7 @@ namespace DeNelle.Village
 
             if (IsActive) return;
             IsActive = true;
+            _dpadConsumedTraced = false;   // WO-683 — first-consumed trace fires once PER build session
 
             EnsureGrid();
             SeedBaseLayoutIfFirstEntry();
@@ -425,6 +537,13 @@ namespace DeNelle.Village
                 UpdateMoveLoop(); return;
             }
             if (_armed != null) { UpdatePlaceLoop(); return; }
+            // WO-677 — a cancel latch raised while idle (nothing armed/moving) has no
+            // target; drop it so it can't fire a phantom cancel on the NEXT arm/move.
+            if (_uiCancelLatch)
+            {
+                _uiCancelLatch = false;
+                FlowTrace.Step("Build", "UI cancel latch dropped — nothing armed or moving.");
+            }
             UpdateSelectLoop();
         }
 
@@ -598,13 +717,29 @@ namespace DeNelle.Village
         {
             if (!PlaceConfirmedThisFrame()) return;
 
-            if (!RaycastGround(out RaycastHit hit)) return;
+            // WO-677 Lane B (§12 step-in/out): the idle tap-select chain was silent past the
+            // confirm — a raycast miss or a non-structure hit died without a trace, so "tap on
+            // my tower does nothing" (the mobile Move/Sell symptom) was uncapturable. Every
+            // link now names itself; no mechanics change.
+            if (!RaycastGround(out RaycastHit hit))
+            {
+                FlowTrace.Warn("Build", $"SelectLoop: confirm read but ground raycast MISSED at " +
+                    $"screenPoint={_input?.ScreenPoint} — nothing selectable under the tap.");
+                return;
+            }
 
             // Hit collider's GameObject or any parent may carry the marker.
             var ps = hit.collider != null
                 ? hit.collider.GetComponentInParent<PlacedStructure>()
                 : null;
-            if (ps != null) SelectStructure(ps);
+            if (ps == null)
+            {
+                FlowTrace.Step("Build", $"SelectLoop: tap hit '{(hit.collider != null ? hit.collider.gameObject.name : "<no collider>")}' " +
+                    "but no PlacedStructure in its parents — not a placed piece, select skipped.");
+                return;
+            }
+            FlowTrace.Step("Build", $"SelectLoop: tap SELECTS '{ps.itemId}' — Move/Upgrade/Sell panel path entered.");
+            SelectStructure(ps);
         }
 
         /// <summary>CREATE mode: the original armed-entry ghost-follow place loop (P1).</summary>
@@ -627,9 +762,9 @@ namespace DeNelle.Village
                 _ghost.Hide(); return;
             }
 
-            // Cancel (right-click / Escape / touch Cancel button) backs out the armed
-            // entry (keeps build mode open).
-            if (_input.Cancel)
+            // Cancel (right-click / Escape / touch Cancel button / the WO-677 UI latch)
+            // backs out the armed entry (keeps build mode open).
+            if (CancelRequestedThisFrame())
             {
                 FlowTrace.Step("Build", $"PlaceLoop: Cancel intent read — disarming '{_armed?.id}'");
                 CancelArmed();
@@ -782,7 +917,7 @@ namespace DeNelle.Village
         {
             if (_ghost == null || _selected == null) { CancelMove(); return; }
 
-            if (_input.Cancel)
+            if (CancelRequestedThisFrame())   // WO-677 — UI latch honored in MOVE too
             {
                 CancelMove();
                 return;
@@ -1983,6 +2118,24 @@ namespace DeNelle.Village
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  move.y -= 1f;
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  move.x -= 1f;
+            }
+
+            // WO-683 — the kit d-pad (HudMoveInput.Move, published by the build-overlay
+            // d-pad / the HUD cross) merges into the SAME move vector as the arrow keys:
+            // one merge point, so the armed ghost and the in-progress move follow the
+            // pad exactly like the desktop key nudge. Reads zero on desktop (nothing
+            // publishes), so the keyboard path is byte-identical there. Below the §3.1
+            // 0.18 inner dead-zone the pad counts as no-press.
+            Vector2 dpad = ReadHudDpadMove();
+            if (dpad.sqrMagnitude > DpadDeadZone * DpadDeadZone)
+            {
+                move += dpad;
+                if (!_dpadConsumedTraced)
+                {
+                    _dpadConsumedTraced = true;
+                    FlowTrace.Step("Build", $"d-pad move vector CONSUMED (first this build session): {dpad} — " +
+                        "merged into the arrow-key pan vector; ghost/move follow it (WO-683).");
+                }
             }
 
             // Edge-scroll — pointer near a screen border nudges the view that way. DESKTOP ONLY:

@@ -55,12 +55,17 @@ namespace DeNelle.Village
             _root.AddComponent<GraphicRaycaster>();
 
             // The canonical kit button (STYLE EVERYTHING OBSIDIAN law — never hand-roll
-            // uGUI widgets): Gold CTA "PLACE", fraction-anchored bottom-centre-right,
-            // clear of the 128px palette tray and the toast slot at centre. Sized big
+            // uGUI widgets): Gold CTA "PLACE", fraction-anchored bottom-right, sized big
             // for touch (the web/mobile place fix this button exists for).
+            // WO-677 Lane C: the old seat (x .58-.72, y .15-.225) overlapped the palette
+            // header's Done button — the centred 540px dock spans x ≈.36-.64 at 1920 and
+            // Done sits at its top-right (screen ≈ x .55-.63, y .20-.24). Reseated fully
+            // RIGHT of the dock (x .66-.80) and clear of the WO-677 touch verb bar at
+            // x .845-.985; Done stays tappable at every aspect (dock is px-fixed, so it
+            // only narrows in fraction terms on wider screens).
             DeNelle.Core.UI.ElarionUiKit.Button(_root.transform, "PLACE",
                 DeNelle.Core.UI.ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.58f, 0.15f), new Vector2(0.72f, 0.225f),
+                new Vector2(0.66f, 0.15f), new Vector2(0.80f, 0.225f),
                 () => _onPlace?.Invoke());
 
             _root.SetActive(false);   // hidden until a ghost is armed / moving
