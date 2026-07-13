@@ -46,6 +46,7 @@ using TMPro;
 using DeNelle.Core;
 using DeNelle.Core.UI;
 using DeNelle.Core.Audio;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.DialogueUI
 {
@@ -100,6 +101,10 @@ namespace DeNelle.DialogueUI
         private AudioSource _audioSource;
         private RenderTexture _rt;
         private RawImage _videoSurface;
+        private AspectRatioFitter _videoFitter;   // WO-704: envelope-crop the video surface, never stretch
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private bool _fullscreenRequested;        // WO-704: WebGL browser-fullscreen entered via the tap gesture
+#endif
         private bool _ending;
         private bool _videoErrored;
         private Coroutine _run;
@@ -161,7 +166,9 @@ namespace DeNelle.DialogueUI
             _videoPlayer.waitForFirstFrame = true;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
 
-            // Full-screen RenderTexture → RawImage surface.
+            // Pre-prepare placeholder RenderTexture -> RawImage surface. WO-704: this is
+            // only the placeholder; once the video is prepared the RT is reallocated at
+            // the SOURCE dimensions (see below) so nothing is squashed into a portrait RT.
             _rt = new RenderTexture(1080, 1920, 0) { name = "IntroVideoRT" };
             _videoPlayer.targetTexture = _rt;
             _videoSurface.texture = _rt;
@@ -219,6 +226,10 @@ namespace DeNelle.DialogueUI
                 yield break;
             }
 
+            // WO-704: size the RT + aspect fitter from the PREPARED source dimensions so
+            // the trailer renders at its native aspect (envelope-cropped, never stretched).
+            ApplySourceDimensions();
+
             // Show the surface and play. loopPointReached → EndIntro (natural end).
             _videoSurface.enabled = true;
             _videoPlayer.Play();
@@ -230,6 +241,37 @@ namespace DeNelle.DialogueUI
             // must never overlay the video (owner 2026-06-28). Hide it explicitly.
             if (_captionBand != null) _captionBand.gameObject.SetActive(false);
             Debug.Log("[IntroSequence] Video playing full-screen.");
+        }
+
+        /// <summary>WO-704: once the video is prepared, reallocate the RenderTexture at
+        /// the source's native dimensions and point the AspectRatioFitter at the source
+        /// aspect (EnvelopeParent = full-bleed crop, never letterbox, never distortion).
+        /// Guards zero/absurd reported dimensions by keeping the portrait placeholder.</summary>
+        private void ApplySourceDimensions()
+        {
+            uint w = _videoPlayer != null ? _videoPlayer.width : 0u;
+            uint h = _videoPlayer != null ? _videoPlayer.height : 0u;
+
+            if (w == 0u || h == 0u || w > 8192u || h > 8192u)
+            {
+                FlowTrace.Warn("Intro", $"prepared video reported absurd dimensions {w}x{h} -> keeping 1080x1920 placeholder RT");
+                return;
+            }
+
+            if (_rt == null || _rt.width != (int)w || _rt.height != (int)h)
+            {
+                if (_rt != null) { _rt.Release(); Destroy(_rt); }
+                _rt = new RenderTexture((int)w, (int)h, 0) { name = "IntroVideoRT" };
+                _videoPlayer.targetTexture = _rt;
+                if (_videoSurface != null) _videoSurface.texture = _rt;
+                FlowTrace.Step("Intro", $"RT reallocated to source dimensions {w}x{h}");
+            }
+
+            if (_videoFitter != null)
+            {
+                _videoFitter.aspectRatio = (float)w / h;
+                FlowTrace.Step("Intro", $"video surface aspect fitter set to {(float)w / h:F4} (EnvelopeParent full-bleed)");
+            }
         }
 
         private void OnVideoError(VideoPlayer _, string message)
@@ -264,6 +306,14 @@ namespace DeNelle.DialogueUI
             _videoSurface.color = Color.white;
             _videoSurface.raycastTarget = false;
             Stretch(_videoSurface.rectTransform, 0f, 0f, 1f, 1f);
+            // WO-704: envelope the parent (fill the screen, crop overflow) at the video's
+            // native aspect — cinematic full-bleed, never letterbox bars, never stretch.
+            // Ratio starts at the portrait placeholder; ApplySourceDimensions() sets the
+            // real ratio once the video is prepared. VIDEO SURFACE ONLY — the fallback
+            // slate keeps its own full-stretch layout untouched.
+            _videoFitter = surfGo.AddComponent<AspectRatioFitter>();
+            _videoFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            _videoFitter.aspectRatio = 1080f / 1920f;
             _videoSurface.enabled = false;
 
             // Fallback slate image (also full-screen, used only on the fallback path).
@@ -320,10 +370,30 @@ namespace DeNelle.DialogueUI
         }
 
         // Tap: in video mode, skip the whole intro; in slate mode, advance one beat.
+        // WO-704 (WebGL only): the tap is the user gesture browser fullscreen APIs
+        // require, so a best-effort Screen.fullScreen request rides it BEFORE the skip
+        // fires — skip semantics unchanged. Quiet-fail per the web-errors law: if the
+        // browser refuses, nothing is shown to the player.
         private void OnTap()
         {
             if (_ending) return;
-            if (_videoSurface != null && _videoSurface.enabled) { EndIntro(); return; }
+            if (_videoSurface != null && _videoSurface.enabled)
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                try
+                {
+                    Screen.fullScreen = true;
+                    _fullscreenRequested = true;
+                    FlowTrace.Step("Intro", "WebGL browser-fullscreen requested on tap (best-effort; rides the skip gesture)");
+                }
+                catch (Exception e)
+                {
+                    FlowTrace.Warn("Intro", $"WebGL fullscreen request refused/threw (quiet-fail): {e.Message}");
+                }
+#endif
+                EndIntro();
+                return;
+            }
             AdvanceSlate();
         }
 
@@ -423,6 +493,23 @@ namespace DeNelle.DialogueUI
             _ending = true;
             if (_run != null) StopCoroutine(_run);
             if (_dip != null) SetAlpha(_dip, 1f);   // black out instantly so the scene swap is unseen
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WO-704: intro over — restore/cancel the best-effort browser fullscreen.
+            // Quiet-fail: never a player-visible error if the browser objects.
+            if (_fullscreenRequested)
+            {
+                try
+                {
+                    Screen.fullScreen = false;
+                    FlowTrace.Step("Intro", "WebGL browser-fullscreen restored to windowed on intro end");
+                }
+                catch (Exception e)
+                {
+                    FlowTrace.Warn("Intro", $"WebGL fullscreen restore threw (quiet-fail): {e.Message}");
+                }
+                _fullscreenRequested = false;
+            }
+#endif
             ReleaseVideo();
             Debug.Log("[IntroSequence] Intro complete — routing to hero select.");
             SceneRouter.GoHeroSelect();
