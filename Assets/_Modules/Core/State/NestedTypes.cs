@@ -65,22 +65,25 @@ namespace DeNelle.Core.State
     /// authoritative constant pair; <c>GameStateService.ResetToNewGame</c> applies them
     /// unconditionally (always-on since WO-682 removed ff.strategicplacement).
     ///
-    /// Arithmetic, from the authored structures-catalog.json repo.cost rows:
-    ///   core kit  = forge "Armorer" (60w,70i) + collector_forge (60w,60i)
-    ///             + tower_ground_archer (70w,40i)             = 190w, 170i
-    ///   one extra = the priciest single leftover choice tier
-    ///     (archer tower 70w/40i · market 70w/30i · mill 70w/20i
-    ///      · workshop 60w/40i · collector_farm 60w/20i)       = 70w, 40i
-    ///   seed      = 190+70 wood, 170+40 iron                  = 260w, 210i
-    /// After the kit + one extra, ≤20 wood remains — no second full structure is
-    /// affordable, so the budget affords the kit + EXACTLY one leftover choice.
+    /// Arithmetic (WO-707, owner ruling 2026-07-13: seed affords ONE OF EACH Town
+    /// building + the THREE storage containers — buildings are singleton, containers
+    /// are not), from the authored structures-catalog.json repo.cost rows:
+    ///   trades     = pet-house (80w,30i) + workshop (60w,40i) + market (70w,30i)
+    ///              + forge (60w,70i) + jeweler (50w,40i,+30c) + arcane-tower (60w,60i)
+    ///              + collector_farm (60w,20i) + collector_lumbermill (40w,30i,+20f)
+    ///   containers = lumberyard (50w,20i) + foundry (60w,30i) + silo (60w,15i)
+    ///   seed       = 650 wood, 385 iron (crystals 30 + food 20 ride the
+    ///                ResourceBalance.Starter wallet: 250c/80f — ample).
+    /// The budget affords exactly the full founding set; a second copy of any
+    /// non-container is blocked by the singleton flag, not by scarcity.
+    /// (Superseded arithmetic: the WO-673 "core kit + one leftover" 260w/210i seed.)
     /// </summary>
     public static class StartingBudget
     {
-        /// <summary>New-game Wood seed (strategic placement, always on — see class remarks).</summary>
-        public const int StrategicWood = 260;
-        /// <summary>New-game Iron seed (strategic placement, always on — see class remarks).</summary>
-        public const int StrategicIron = 210;
+        /// <summary>New-game Wood seed (one-of-each + 3 containers — see class remarks).</summary>
+        public const int StrategicWood = 650;
+        /// <summary>New-game Iron seed (one-of-each + 3 containers — see class remarks).</summary>
+        public const int StrategicIron = 385;
     }
 
     /// <summary>An in-flight pet-assisted tower build (villageSlice PendingTowerBuild).</summary>

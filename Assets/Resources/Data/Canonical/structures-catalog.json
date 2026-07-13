@@ -541,7 +541,8 @@
      "footprint": 3.4,
      "noOverlap": true,
      "checkAffordable": true
-    }
+    },
+    "singleton": true
    },
    "orientation": {
     "corrected": false,
@@ -581,7 +582,8 @@
      "footprint": 3.4,
      "noOverlap": true,
      "checkAffordable": true
-    }
+    },
+    "singleton": true
    },
    "orientation": {
     "corrected": false,
@@ -924,7 +926,8 @@
      "footprint": 3.4,
      "noOverlap": true,
      "checkAffordable": true
-    }
+    },
+    "singleton": true
    },
    "orientation": {
     "corrected": false,
@@ -965,7 +968,8 @@
      "footprint": 3.4,
      "noOverlap": true,
      "checkAffordable": true
-    }
+    },
+    "singleton": true
    },
    "orientation": {
     "corrected": false,
@@ -1030,8 +1034,8 @@
    "displayName": "Lumberyard",
    "type": "Resource",
    "kind": "Cell",
-   "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed.",
-   "visualPrefabPath": "Structures/Stables_Medieval",
+   "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed. | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+   "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "storageCapacity": 500,
@@ -1074,8 +1078,8 @@
    "displayName": "Foundry",
    "type": "Resource",
    "kind": "Cell",
-   "_note": "WO-707 storage container: stores Iron. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium).",
-   "visualPrefabPath": "Structures/House_Medieval_Small",
+   "_note": "WO-707 storage container: stores Iron. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+   "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "storageCapacity": 500,
@@ -1118,8 +1122,8 @@
    "displayName": "Silo",
    "type": "Resource",
    "kind": "Cell",
-   "_note": "WO-707 storage container: stores Grain/food. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette).",
-   "visualPrefabPath": "Structures/Windmill_Medieval",
+   "_note": "WO-707 storage container: stores Grain/food. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+   "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "storageCapacity": 500,
