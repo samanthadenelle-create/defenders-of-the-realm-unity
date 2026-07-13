@@ -41,15 +41,14 @@ namespace DeNelle.Village.World
     {
         // The old placeholder outpost the baked trigger points at.
         private const string OldTarget = "Outpost1";
-        // Owner ruling 2026-07-13 evening ("the whole dungeon exists, just needs mapped in"):
-        // the ONE baked overworld cave trigger now leads to the BUILT HealersCottage dungeon
-        // (DungeonController owns hero placement on load, so EntryPos is a safe fallback
-        // only). The prior KayKitChallengeOutpost destination retires with this repoint —
-        // the outpost arena returns via the camps/raid lane when that feature unlocks
-        // (the WO-710 viability law). Recon dossier 2026-07-13: the dungeon run loop
-        // (rooms/encounters/mini-boss/loot/resume) is complete; entry was the orphan.
-        private const string NewTarget = "Dungeon_HealersCottage";
-        private static readonly Vector3 EntryPos = Vector3.zero;
+        // Owner ruling 2026-07-13 evening, CORRECTED same hour: "the portal take to
+        // dungeons" — DUNGEONS enter through the ANIMATED DungeonPortal objects
+        // (ff.dungeonportals flipped ON, DungeonEntranceBootstrap Heart-ring doors +
+        // world portals), NOT this cave. The cave stays the OUTPOST's door exactly as
+        // before (the bounded KayKit arena with its own victory/return loop).
+        private const string NewTarget = "KayKitChallengeOutpost";
+        // The builder's Outpost_Entry world position (Entry = -Outer*0.5 + 4 = -24).
+        private static readonly Vector3 EntryPos = new Vector3(0f, 0f, -24f);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Register()

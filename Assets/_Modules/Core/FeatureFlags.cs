@@ -352,9 +352,15 @@ namespace DeNelle.Core
         /// into the (future) loading-zone → dungeon resolver. Same unbuilt-resolver caveat: the bake places
         /// the portal GEOMETRY only and leaves the behavior INERT until the resolver lands. Kept SEPARATE
         /// from <see cref="OutpostCaves"/> so cave-outposts and portal-dungeons can be enabled
-        /// independently (cave skin = outpost, portal skin = dungeon). Default OFF. Flip ON when ready:
-        /// PlayerPrefs "ff.dungeonportals" = 1.</summary>
-        public static bool DungeonPortals => Get("dungeonportals", defaultOn: false);
+        /// independently (cave skin = outpost, portal skin = dungeon).
+        /// DEFAULT ON since 2026-07-13 (owner: "can we fold in a simple dungeon — it's already
+        /// been tested many times… the portal take to dungeons"): the animated DungeonPortal
+        /// entrances arm for the two REAL dungeon scenes only (HealersCottage + FolksGranary —
+        /// both bootstraps' lists cover exactly the built scenes). The old placeholder-pill
+        /// concern is accepted for this milestone; portal ANIMATION polish is a flagged
+        /// follow-up (owner: "animation needs looked at but all works").
+        /// Kill switch: PlayerPrefs "ff.dungeonportals" = 0.</summary>
+        public static bool DungeonPortals => Get("dungeonportals", defaultOn: true);
 
         /// <summary>WORLD FEEL (owner felt-test 2026-07-01: "world feels empty / very flat / not polished").
         /// When ON (default), <c>DeNelle.Village.World.WorldFeelInjector</c> applies the world-aesthetics
