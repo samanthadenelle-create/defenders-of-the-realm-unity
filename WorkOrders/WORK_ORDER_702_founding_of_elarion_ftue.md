@@ -70,8 +70,12 @@ until they arm a defense or the idle-DEFEND prompt fires.
       on a true fresh save (PO closes).
 
 ## Owner pins
-1. The Steward: who is he/she? (named elder vs an existing vendor promoted vs an Echo speaking
-   for the tree — the tree speaking would tie the lore tightest.)
+1. **RESOLVED (owner, 2026-07-13): the Steward = SYLAS, the scout** — "use the model for him,
+   then unload it." He already exists end-to-end: the Ranger hero body is his model
+   (HeroSelectController.cs:707), Resources/Portraits/Sylas.png + HeroPortraits/Sylas exist,
+   Tutorial V2 already speaks through him (TutorialStepModel.cs:35, `world.sylas` anchor in
+   TutorialHighlightRegistry.cs:124). Spawn his body for the founding beats; DESPAWN (unload)
+   when the arc completes — no permanent NPC, no new art.
 2. Final copy for the three lines (drafts above are placeholders in her voice).
 3. Ghost in V1 scope, or guided-Forge-only first and ghost as fast-follow?
 4. Does the migrated-save cohort ever see a one-line "your town survived" variant, or nothing?
