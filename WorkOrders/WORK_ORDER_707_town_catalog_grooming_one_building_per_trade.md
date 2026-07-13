@@ -58,6 +58,10 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
   entangles stock logic; (b) **storage upgrades independently to hold more** — the containers
   get their own capacity tiers on the existing building-upgrade tech tree (WO-432 perk model /
   WO-675 panel), the classic CoC storage-upgrade loop, without touching shop upgrade paths.
+  **(c) Enemy targeting: CONTAINERS ONLY (owner, same session):** the trade/shop buildings are
+  NOT enemy targets — only Lumberyard/Foundry/Silo are attackable stores (wire into the
+  `ff.enemystructureaware` targeting sweep as the container set, shops excluded). The threat
+  lives exactly where the stock lives; a raid can never soft-lock a vendor/talk-route.
   **Design lineage (owner, 2026-07-13 — do not re-consolidate):** the owner ORIGINALLY designed
   per-resource storehouse containers; a prior implementation collapsed storage into one. This
   ruling restores the original intent in distributed form — each trade building IS the container
