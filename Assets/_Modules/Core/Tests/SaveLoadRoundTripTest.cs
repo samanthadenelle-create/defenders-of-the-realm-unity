@@ -99,8 +99,9 @@ namespace DeNelle.Core.Tests
             Assert.That(reloaded.Resources.Coins, Is.EqualTo(15));
             Assert.That(reloaded.Voidshards, Is.EqualTo(5));
             Assert.That(reloaded.Stone, Is.EqualTo(20));
-            Assert.That(reloaded.Iron, Is.EqualTo(5));
-            Assert.That(reloaded.Wood, Is.EqualTo(15));
+            // WO-682: strategic placement is always on — New Game seeds the core-kit budget.
+            Assert.That(reloaded.Iron, Is.EqualTo(StartingBudget.StrategicIron));
+            Assert.That(reloaded.Wood, Is.EqualTo(StartingBudget.StrategicWood));
             Assert.That(reloaded.TutorialStep, Is.EqualTo(TutorialStep.Step1));
             Assert.That(reloaded.SchemaVersion, Is.EqualTo(SaveSchema.CurrentVersion));
         }

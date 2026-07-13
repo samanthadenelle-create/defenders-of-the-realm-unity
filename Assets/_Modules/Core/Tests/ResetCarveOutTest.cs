@@ -156,8 +156,10 @@ namespace DeNelle.Core.Tests
                 Is.EqualTo(new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0 }), "towerAbilities -> [0]x9");
             Assert.That(_state.WallLevel, Is.EqualTo(0), "wallLevel -> 0");
             Assert.That(_state.Stone, Is.EqualTo(20), "stone -> 20");
-            Assert.That(_state.Iron, Is.EqualTo(5), "iron -> 5");
-            Assert.That(_state.Wood, Is.EqualTo(15), "wood -> 15");
+            // WO-682: strategic placement is always on — New Game seeds the core-kit
+            // budget (StartingBudget constants), not the legacy 5 iron / 15 wood.
+            Assert.That(_state.Iron, Is.EqualTo(StartingBudget.StrategicIron), "iron -> core-kit seed");
+            Assert.That(_state.Wood, Is.EqualTo(StartingBudget.StrategicWood), "wood -> core-kit seed");
             Assert.That(_state.BuildingCooldowns, Is.Empty, "buildingCooldowns wiped");
             Assert.That(_state.PendingBuilds, Is.Empty, "pendingBuilds wiped");
             Assert.That(_state.TutorialStep, Is.EqualTo(TutorialStep.Step1), "tutorialStep -> Step1");

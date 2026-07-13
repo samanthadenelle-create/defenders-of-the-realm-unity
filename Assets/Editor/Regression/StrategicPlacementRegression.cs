@@ -7,12 +7,13 @@
 // (real objects in, real response out; reflection only on private seams, fail
 // LOUD when a seam moves — never a vacuous pass).
 //
-// The five gates (the §2c permission gate — these must be green before
-// ff.strategicplacement may ever default ON):
-//   1. FLAG-OFF PARITY   — ff.strategicplacement defaults OFF; with the flag OFF
-//      the Defense verb renders towers/gates only (no functional building leaked)
-//      and NO standdown/migration path is reachable (StanddownActive false,
-//      managed records withheld from replay, RunIfNeeded writes nothing).
+// The gates (WO-673 §5; ff.strategicplacement REMOVED by WO-682 — strategic
+// placement is ALWAYS ON, so gate 1's old flag-off parity is now MARKER parity):
+//   1. MARKER PARITY     — with the marker UNSET no standdown/migration path is
+//      reachable (StanddownActive false, managed records withheld from replay,
+//      RunIfNeeded writes nothing outside the home hub), and the palette verbs
+//      keep the owner taxonomy (Defense = towers/gates only, Walls = walls,
+//      Town = Resource+Collector with the jeweler locked).
 //   2. MIGRATION ROUND-TRIP — drive the REAL one-shot writer seam
 //      (StrategicPlacementMigration.TryWriteRecord) over the REAL census table
 //      (the private BakedRows/StationRows — read by reflection, not re-derived):
@@ -64,16 +65,13 @@ namespace DeNelle.Editor
 {
     public static class StrategicPlacementRegression
     {
-        private const string FlagKey = "ff.strategicplacement";
-
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
             var log = new StringBuilder();
-            log.AppendLine("--- STRATEGIC PLACEMENT (WO-673 §5 permission gates) ---");
+            log.AppendLine("--- STRATEGIC PLACEMENT (WO-673 §5 gates; always-on per WO-682) ---");
 
             // ── Global-state bookkeeping: restore EVERYTHING in finally ─────────
-            int prevFlagPref = PlayerPrefs.GetInt(FlagKey, -1);
             var prevServiceInstance = ReadServiceInstance();
             var created = new List<UnityEngine.Object>();
 
@@ -98,7 +96,7 @@ namespace DeNelle.Editor
                 created.Add(gridGo);
                 var grid = gridGo.AddComponent<PlacementGrid>();
 
-                GateOne_FlagOffParity(state, failures, log);
+                GateOne_MarkerParity(state, failures, log);
                 GateTwo_MigrationRoundTrip(state, grid, failures, log);
                 GateThree_OneBuildingPerId(state, failures, log);
                 GateFour_SaveRoundTripV30(failures, log);
@@ -112,8 +110,6 @@ namespace DeNelle.Editor
             }
             finally
             {
-                if (prevFlagPref == -1) PlayerPrefs.DeleteKey(FlagKey);
-                else PlayerPrefs.SetInt(FlagKey, prevFlagPref);
                 WriteServiceInstance(prevServiceInstance);
                 foreach (var o in created)
                     if (o != null) UnityEngine.Object.DestroyImmediate(o);
@@ -122,8 +118,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "STRATEGIC_PLACEMENT_OK");
-                reason = "STRATEGIC PLACEMENT OK — flag-off parity + migration round-trip + one-per-id + " +
-                         "save v30 round-trip + placement/repair cost chain all hold (WO-673 §5 gates)";
+                reason = "STRATEGIC PLACEMENT OK — marker parity + migration round-trip + one-per-id + " +
+                         "save v30 round-trip + placement/repair cost chain all hold (WO-673 §5 gates, always-on per WO-682)";
                 return true;
             }
             reason = "strategic-placement: " + string.Join("; ", failures);
@@ -132,50 +128,35 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  GATE 1 — flag-off parity (review §5 test 2 / L6 test 1)
+        //  GATE 1 — marker parity (was flag-off parity; WO-682 removed the flag)
         // =====================================================================
-        private static void GateOne_FlagOffParity(GameState state, List<string> failures, StringBuilder log)
+        private static void GateOne_MarkerParity(GameState state, List<string> failures, StringBuilder log)
         {
-            log.AppendLine("[gate 1] flag-off parity");
+            log.AppendLine("[gate 1] marker parity (always-on, WO-682)");
 
-            // 1a. The flag DEFAULTS OFF (pref absent → resolved false). The flag IS
-            //     the FTUE mitigation (review §5) — a default flip is a gate breach.
-            PlayerPrefs.DeleteKey(FlagKey);
-            if (DeNelle.Core.FeatureFlags.StrategicPlacement)
-                failures.Add("ff.strategicplacement resolves ON with no PlayerPrefs override — the review mandates default OFF until felt-passed (§5 FTUE risk)");
-            else log.AppendLine("  flag default = OFF ok");
-
-            // 1b. The pref override is honored both ways (reversibility).
-            PlayerPrefs.SetInt(FlagKey, 1);
-            if (!DeNelle.Core.FeatureFlags.StrategicPlacement)
-                failures.Add("ff.strategicplacement pref=1 does not resolve ON (override broken)");
-            PlayerPrefs.SetInt(FlagKey, 0);
-            if (DeNelle.Core.FeatureFlags.StrategicPlacement)
-                failures.Add("ff.strategicplacement pref=0 does not resolve OFF (override broken)");
-
-            // From here on in this gate: flag OFF.
-            // 1c. No standdown/migration path is reachable: StanddownActive false,
-            //     managed ids withheld from replay (bake owns them), non-managed
-            //     ids (towers) replay exactly as today.
+            // 1a. With the marker UNSET no standdown path is reachable: StanddownActive
+            //     false, managed ids withheld from replay (bake owns them), non-managed
+            //     ids (towers) always replay.
+            state.StrategicPlacementMigrated = false;
             if (StrategicPlacementMigration.StanddownActive)
-                failures.Add("flag OFF but StanddownActive == true — the standdown path is reachable with the flag off");
+                failures.Add("marker UNSET but StanddownActive == true — the standdown path is reachable before migration");
             if (StrategicPlacementMigration.ShouldReplayRecord("forge"))
-                failures.Add("flag OFF but ShouldReplayRecord('forge') == true — a managed functional record would replay while the bake owns it (double-spawn)");
+                failures.Add("marker UNSET but ShouldReplayRecord('forge') == true — a managed functional record would replay while the bake owns it (double-spawn)");
             if (!StrategicPlacementMigration.ShouldReplayRecord("tower_ground_archer"))
-                failures.Add("flag OFF but ShouldReplayRecord('tower_ground_archer') == false — non-managed records (player towers) must ALWAYS replay (today's behavior)");
+                failures.Add("marker UNSET but ShouldReplayRecord('tower_ground_archer') == false — non-managed records (player towers) must ALWAYS replay");
             if (!StrategicPlacementMigration.IsManagedId("forge") || StrategicPlacementMigration.IsManagedId("tower_ground_archer"))
                 failures.Add("IsManagedId census membership wrong ('forge' must be managed, 'tower_ground_archer' must not)");
 
-            // 1d. The one-shot writer writes NOTHING with the flag off (zero
-            //     migration writes — review §5 test 2 'byte-identical no-op').
+            // 1b. The one-shot writer writes NOTHING outside the home hub (the headless
+            //     harness scene is never SceneRouter.Castle — the scene gate holds).
             int before = state.BaseLayout != null ? state.BaseLayout.Count : 0;
             StrategicPlacementMigration.RunIfNeeded();
             int after = state.BaseLayout != null ? state.BaseLayout.Count : 0;
             if (after != before || state.StrategicPlacementMigrated)
-                failures.Add($"flag OFF but RunIfNeeded mutated state (records {before}->{after}, marker={state.StrategicPlacementMigrated}) — migration must be unreachable");
-            else log.AppendLine("  flag-off RunIfNeeded: zero writes, marker false ok");
+                failures.Add($"RunIfNeeded mutated state outside the home hub (records {before}->{after}, marker={state.StrategicPlacementMigrated}) — the scene gate failed");
+            else log.AppendLine("  marker-unset standdown unreachable + non-hub RunIfNeeded no-op ok");
 
-            // 1e. Palette category parity — the Defense verb renders towers/gates
+            // 1c. Palette category parity — the Defense verb renders towers/gates
             //     ONLY (no functional building/collector/wall leaked into it), Walls
             //     is walls-only, Town is Resource+Collector with the jeweler locked.
             var defense = BuildCategoryRegistry.Get(DeNelle.Core.Catalog.BuildType.Defense);
@@ -192,7 +173,7 @@ namespace DeNelle.Editor
                         failures.Add($"Defense palette renders '{e.id}' (type {e.type}) — a non-defense row leaked into the Defense verb");
                 }
             if (defenseRendered == 0)
-                failures.Add("Defense verb renders 0 entries — the flag-off palette would be EMPTY (parity broken)");
+                failures.Add("Defense verb renders 0 entries — the Defenses palette would be EMPTY (parity broken)");
             else log.AppendLine($"  Defense verb renders {defenseRendered} tower/gate entrie(s) ok");
 
             var walls = BuildCategoryRegistry.Get(DeNelle.Core.Catalog.BuildType.Walls);
@@ -227,7 +208,7 @@ namespace DeNelle.Editor
             if (migrated == null || !migrated.StrategicPlacementMigrated.HasValue)
                 failures.Add("migrate v29->current did not seed strategicPlacementMigrated (v30 step missing)");
             else if (migrated.StrategicPlacementMigrated.Value)
-                failures.Add("migrate v29->current seeded strategicPlacementMigrated = TRUE — the migrator must seed FALSE (an old save loads with bakes owning everything; only the flag-gated writer flips it)");
+                failures.Add("migrate v29->current seeded strategicPlacementMigrated = TRUE — the migrator must seed FALSE (an old save loads with bakes owning everything; only the one-shot writer flips it)");
             else log.AppendLine("  v29->v30 marker seeded FALSE ok");
 
             // Drive the REAL writer seam over the REAL census table (reflection on the
@@ -244,7 +225,6 @@ namespace DeNelle.Editor
             { failures.Add("StrategicPlacementMigration.BakedRows read empty by reflection — the census table moved; re-point this oracle"); return; }
             log.AppendLine($"  census: {bakedIds.Count} baked + {stationIds.Count} station id(s)");
 
-            PlayerPrefs.SetInt(FlagKey, 1);   // flag ON for the writer-path asserts
             state.StrategicPlacementMigrated = false;
             state.BaseLayout = new List<PlacedStructureData>();
             // Pre-existing player tower — migration must never touch non-managed records.
@@ -311,7 +291,7 @@ namespace DeNelle.Editor
             if (state.BaseLayout.Count != total)
                 failures.Add("RunIfNeeded ran AGAIN with the marker set — the one-shot latch failed (migration must never run twice)");
 
-            // Home-hub scoping: marker unset + flag ON but NOT the castle scene →
+            // Home-hub scoping: marker unset but NOT the castle scene →
             // the writer must not fire (records only ever migrate in the home hub).
             state.StrategicPlacementMigrated = false;
             StrategicPlacementMigration.RunIfNeeded();
@@ -349,18 +329,16 @@ namespace DeNelle.Editor
             // StanddownActive — the SAME property that hides the bake — so both owners
             // can never spawn in one frame. Headless (not the castle scene, migration
             // load latched) StanddownActive is false → managed records are withheld
-            // even with flag ON + marker set (also the clean flag-rollback path).
-            PlayerPrefs.SetInt(FlagKey, 1);
+            // even with the marker set.
             state.StrategicPlacementMigrated = true;
             if (StrategicPlacementMigration.StanddownActive)
                 failures.Add("StanddownActive == true outside the home hub — standdown/replay must be castle-scoped");
             if (StrategicPlacementMigration.ShouldReplayRecord("forge") != StrategicPlacementMigration.StanddownActive)
                 failures.Add("ShouldReplayRecord('forge') disagrees with StanddownActive — replay must key strictly off the one standdown authority (bake-owns XOR record-replays)");
-            PlayerPrefs.SetInt(FlagKey, 0);
-            if (StrategicPlacementMigration.ShouldReplayRecord("forge"))
-                failures.Add("flag rolled OFF after migration but the managed record would still replay — rollback must return ownership to the bakes (no double-spawn)");
-            else log.AppendLine("  standdown mutual-exclusion + flag-rollback withhold ok");
             state.StrategicPlacementMigrated = false;
+            if (StrategicPlacementMigration.ShouldReplayRecord("forge"))
+                failures.Add("marker cleared but the managed record would still replay — ownership must return to the bakes (no double-spawn)");
+            else log.AppendLine("  standdown mutual-exclusion + marker-cleared withhold ok");
         }
 
         // =====================================================================

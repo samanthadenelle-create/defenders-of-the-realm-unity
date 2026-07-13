@@ -63,8 +63,7 @@ namespace DeNelle.Core.State
     /// exactly one leftover choice"). Wood/Iron are GameState scalar fields (not part of
     /// <see cref="ResourceBalance"/>), so their raised seeds live here as the ONE
     /// authoritative constant pair; <c>GameStateService.ResetToNewGame</c> applies them
-    /// when <c>FeatureFlags.StrategicPlacement</c> is ON (flag OFF keeps the legacy
-    /// 15 wood / 5 iron seed — today's behavior byte-identical).
+    /// unconditionally (always-on since WO-682 removed ff.strategicplacement).
     ///
     /// Arithmetic, from the authored structures-catalog.json repo.cost rows:
     ///   core kit  = forge "Armorer" (60w,70i) + collector_forge (60w,60i)
@@ -78,9 +77,9 @@ namespace DeNelle.Core.State
     /// </summary>
     public static class StartingBudget
     {
-        /// <summary>New-game Wood seed under ff.strategicplacement (see class remarks).</summary>
+        /// <summary>New-game Wood seed (strategic placement, always on — see class remarks).</summary>
         public const int StrategicWood = 260;
-        /// <summary>New-game Iron seed under ff.strategicplacement (see class remarks).</summary>
+        /// <summary>New-game Iron seed (strategic placement, always on — see class remarks).</summary>
         public const int StrategicIron = 210;
     }
 

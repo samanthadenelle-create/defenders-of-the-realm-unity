@@ -92,11 +92,11 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Crafting", "JewelerStationInjector.Inject");
 
-            // WO-673 L3 STANDDOWN: once the one-shot strategic-placement migration has written
-            // this station's BaseLayout record (ff.strategicplacement ON + persisted marker),
+            // WO-673 L3 STANDDOWN (always on — WO-682): once the persisted marker is set and
+            // this station is player-ownable (BaseLayout record OR a structures-catalog row),
             // the injector stands down — BaseLayoutLoader replays the record and owns the
             // structure (ONE owner per concern, docs/WO673_ARCHITECTURE_REVIEW.md §3). While
-            // the station has NO record (flag off / not yet migrated / catalog row missing),
+            // the station has NO record and NO catalog row (not yet migrated / row missing),
             // this injector keeps owning it — nothing vanishes.
             if (StrategicPlacementMigration.StanddownActiveForStation(StationId))
             {

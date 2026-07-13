@@ -314,6 +314,14 @@ namespace DeNelle.Core
         /// preview once the bake lands.</summary>
         public static bool MergedWorld => Get("mergedworld", defaultOn: true);   // TEST-BUILD 07-04: ON for owner merged-world felt-walk; merge lane commit HELD until verified + felt-approved (set final default per owner verdict)
 
+        /// <summary>WO-602 (fleet-proven P0: <c>HOME_RETURN_FAIL :: gate=&lt;none&gt;</c> x4) — when ON,
+        /// <see cref="DeNelle.Village.World.HomeReturnPortalInjector"/> authors four "Enter Elarion"
+        /// return portals (SceneTransitionTrigger targeting the hub) at the moat-bridge outer ends,
+        /// so a player who leaves the castle always has a discoverable, tap-to-confirm way back to
+        /// the courtyard. Runtime-authored (no scene edit, no rebake). PlayerPrefs
+        /// "ff.homereturnportal" = 0 to hide/disable.</summary>
+        public static bool HomeReturnPortal => Get("homereturnportal", defaultOn: true);
+
         /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
         /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
         /// RuntimeRegionGate south deck, splitting the south navmesh -> spawn->gate PathPartial. South now
@@ -520,18 +528,9 @@ namespace DeNelle.Core
         // build 2; the catalog Poi_* keys are authored. Set ff.poicallouts=0 to turn off if too busy.
         public static bool PoiCallouts => Get("poicallouts", defaultOn: true);
 
-        /// <summary>WO-673 — STRATEGIC BUILDING PLACEMENT (owner go 2026-07-11): when ON, the
-        /// player places the FUNCTIONAL town buildings (Forge/production/storefronts/collectors)
-        /// through the BuildMode spine instead of receiving them auto-placed — the build palette
-        /// gains the owner-ruled three-category switcher (Build → Town / Defenses / Walls,
-        /// BuildPaletteUI tab row), the Town verb lists CatalogType.Resource + Collector rows,
-        /// Walls split out of Defense, and the new-game wood/iron seed rises to afford the core
-        /// kit + exactly one leftover choice (GameStateService.ResetToNewGame). Companion lanes
-        /// gate the baked-storefront standdown / vendor anchors / migration behind this SAME flag.
-        /// Default OFF until owner felt-pass — flag-off is today's behavior exactly (Defense-only
-        /// palette, legacy 15w/5i seed, baked town untouched). PlayerPrefs "ff.strategicplacement"
-        /// = 1 to preview. Spec: WORK_ORDER_673 + docs/WO673_ARCHITECTURE_REVIEW.md.</summary>
-        public static bool StrategicPlacement => Get("strategicplacement", defaultOn: false);
+        // WO-682 (owner ruling 2026-07-12 "have that ff removed and set to lock in build"):
+        // ff.strategicplacement is REMOVED — strategic building placement (WO-673) is
+        // ALWAYS ON in every build. All former call sites are the unconditional TRUE path.
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

@@ -71,8 +71,7 @@ namespace DeNelle.Village
         // "Defensive only" ruling that restricted the palette to Tower/Wall/Gate:
         // functional buildings (CatalogType.Resource + Collector) JOIN the palette under
         // the Build → Town verb, and Walls split out of Defense (owner taxonomy
-        // Town / Defenses / Walls), all behind ff.strategicplacement. Flag OFF renders
-        // today's Defense-only palette exactly.
+        // Town / Defenses / Walls). Always on — WO-682 removed ff.strategicplacement.
         private CatalogType[] _types = { CatalogType.Tower, CatalogType.Gate };
 
         // Catalog ids defined-but-not-yet-buildable for the active build verb. They stay
@@ -118,14 +117,13 @@ namespace DeNelle.Village
         private Button _orientBtn;            // shown only while an entry is armed
         private string _armedId;
 
-        // WO-673 category switcher (ff.strategicplacement ON only): the owner-ruled three
-        // build categories — Town / Defenses / Walls — as a tab row between the header and
+        // WO-673 category switcher (always on — WO-682): the owner-ruled three build
+        // categories — Town / Defenses / Walls — as a tab row between the header and
         // the card tray. Tapping a tab Configure()s this palette for that verb (placement
         // stays generic; BuildModeController's _activeBuildType is only ever used to
         // Configure this palette, verified BuildModeController.cs:256). The active tab
         // carries a gold UNDERLINE — position/shape tell, never color alone (owner is
-        // red/green colorblind). Flag OFF: no tab row is built and the dock keeps its
-        // exact pre-673 size/layout.
+        // red/green colorblind).
         private BuildType _activeType = BuildType.Defense;
         private readonly Dictionary<BuildType, GameObject> _tabUnderlines =
             new Dictionary<BuildType, GameObject>();
@@ -197,14 +195,11 @@ namespace DeNelle.Village
             // header row (balance | Orient | Done) over a 180px card tray. Only the
             // dock's own graphics raycast — the rest of the screen stays click-through
             // so world taps still land placements.
-            // WO-673: with strategic placement ON, the dock grows a 40px category tab row
+            // WO-673 (always on — WO-682): the dock carries a 40px category tab row
             // (Town / Defenses / Walls) between the header and the card tray — dock 264
-            // tall, header 0.83–1.0 (~45px), tabs 0.68–0.83 (~40px), tray 0–0.68 (~179px,
-            // same tray height as flag-off). Flag OFF: the exact pre-673 layout (224 tall,
-            // header 0.80–1.0, tray 0–0.80), no tab row.
-            bool strategicTabs = DeNelle.Core.FeatureFlags.StrategicPlacement;
-            float trayTop = strategicTabs ? 0.68f : 0.80f;
-            float headerBottom = strategicTabs ? 0.83f : 0.80f;
+            // tall, header 0.83–1.0 (~45px), tabs 0.68–0.83 (~40px), tray 0–0.68 (~179px).
+            const float trayTop = 0.68f;
+            const float headerBottom = 0.83f;
 
             var dock = new GameObject("PaletteDock", typeof(RectTransform));
             dock.transform.SetParent(_canvas.transform, false);
@@ -213,7 +208,7 @@ namespace DeNelle.Village
             drt.anchorMax = new Vector2(0.5f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
             drt.anchoredPosition = Vector2.zero;
-            drt.sizeDelta = new Vector2(540f, strategicTabs ? 264f : 224f);
+            drt.sizeDelta = new Vector2(540f, 264f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
@@ -249,19 +244,16 @@ namespace DeNelle.Village
                 () => OnExitRequested?.Invoke());
             exitBtn.gameObject.name = "CloseButton";
 
-            // WO-673 category tab row (flag-on only): Town / Defenses / Walls, each tab
-            // Configure()s this palette for that verb; the active tab carries a gold
+            // WO-673 category tab row (always on — WO-682): Town / Defenses / Walls, each
+            // tab Configure()s this palette for that verb; the active tab carries a gold
             // underline (position/shape tell, not color alone).
-            if (strategicTabs)
-            {
-                _tabUnderlines.Clear();
-                var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
-                    new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
-                    ElarionUiKit.ObsidianFill, rounded: false);
-                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
-                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
-                BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
-            }
+            _tabUnderlines.Clear();
+            var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
+                new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
+                ElarionUiKit.ObsidianFill, rounded: false);
+            BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
+            BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
+            BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
@@ -579,20 +571,23 @@ namespace DeNelle.Village
         private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
         {
             if (c.IsZero) return "Free";
+            // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
             var parts = new List<string>(4);
-            if (c.wood     > 0) parts.Add(c.wood     + "W");
-            if (c.food     > 0) parts.Add(c.food     + "F");
-            if (c.iron     > 0) parts.Add(c.iron     + "I");
-            if (c.crystals > 0) parts.Add(c.crystals + "C");
+            if (c.wood     > 0) parts.Add(ElarionUi.CompactNumber(c.wood)     + "W");
+            if (c.food     > 0) parts.Add(ElarionUi.CompactNumber(c.food)     + "F");
+            if (c.iron     > 0) parts.Add(ElarionUi.CompactNumber(c.iron)     + "I");
+            if (c.crystals > 0) parts.Add(ElarionUi.CompactNumber(c.crystals) + "C");
             return string.Join("  ", parts);
         }
 
         private void UpdateBalance()
         {
-            if (_balanceLabel != null) _balanceLabel.text = "Crystals: " + CrystalBalance;
+            // WO-697: balance through the ONE kit formatter (compact >= 10k).
+            if (_balanceLabel != null)
+                _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(CrystalBalance);
         }
 
-        // ── WO-673 category tabs (ff.strategicplacement) ──────────────────────
+        // ── WO-673 category tabs (always on — WO-682) ──────────────────────────
 
         /// <summary>
         /// Build one category tab (WO-673): a kit button that Configure()s this palette

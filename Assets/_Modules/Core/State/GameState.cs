@@ -401,15 +401,29 @@ namespace DeNelle.Core.State
 
         // ── WO-673 — strategic-placement migration marker (v30) ──────────────
         /// <summary>
-        /// True once the ONE-SHOT WO-673 migration (StrategicPlacementMigration.RunIfNeeded)
-        /// has converted the auto-placed functional structures (baked ring storefronts +
-        /// runtime crafting stations) into <see cref="BaseLayout"/> records. Gates BOTH the
-        /// injector/bake standdown AND the loader's replay of those records — mutual
-        /// exclusion, never a double-spawn (docs/WO673_ARCHITECTURE_REVIEW.md §3). False on
-        /// a fresh save / pre-v30 save = bakes/injectors own everything (prior behaviour).
+        /// True once the player owns the town layout: set by the ONE-SHOT WO-673 migration
+        /// (StrategicPlacementMigration.RunIfNeeded — converts a pre-existing save's
+        /// auto-placed functional structures into <see cref="BaseLayout"/> records), or by
+        /// ResetToNewGame (WO-682 blank-template new game: nothing to migrate, marker set
+        /// so the writer never runs). Gates BOTH the injector/bake standdown AND the
+        /// loader's replay of managed records — mutual exclusion, never a double-spawn
+        /// (docs/WO673_ARCHITECTURE_REVIEW.md §3). False on a pre-v30 save =
+        /// bakes/injectors own everything until the one-shot writer runs.
         /// Round-trips through SaveSchema v30 — additive at the END so older saves load false.
         /// </summary>
         public bool StrategicPlacementMigrated = false;
+
+        // ── WO-681/658 — Echo lane assignments ───────────────────────────────
+        /// <summary>
+        /// Per-Echo gather-lane assignments as a CSV by echo index ("wood,iron,idle").
+        /// Lane ids: "wood" / "iron" / "food" / "idle". An index beyond the CSV length
+        /// reads as "idle" (a newly unlocked Echo waits for the player's word); the
+        /// fresh default "wood" covers the starter Echo (ECHO_WORKFORCE_SPEC: start 1
+        /// Echo auto-assigned). Written by the WO-681 Echo card via EchoAssignments;
+        /// WO-658's rate-split will consume the SAME field. Additive default-on-read
+        /// (nullable on the wire; absent → this initializer). Append-only at the END.
+        /// </summary>
+        public string EchoLanes = "wood";
 
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)

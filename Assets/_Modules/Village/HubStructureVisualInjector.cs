@@ -203,14 +203,14 @@ namespace DeNelle.Village
         {
             Transform target = FindByName(s.bakedName);
             if (target == null) return;                              // not in this scene
-            // WO-673 L3 STANDDOWN (docs/WO673_ARCHITECTURE_REVIEW.md §3, the Barracks pattern below):
-            // once the one-shot migration has written this storefront's BaseLayout record
-            // (ff.strategicplacement ON + persisted marker + not the migration load itself),
-            // the BAKE stands down — deactivate the whole baked structure (building, NPC
-            // interact markers, tap-dialogue anchors all disappear; the vendor injector then
-            // finds no markers and no-ops by construction) and let BaseLayoutLoader replay the
-            // record instead. Per-structure: a storefront with NO record (missing catalog row,
-            // skipped by the writer) keeps its bake — nothing is ever lost. Flag OFF → false.
+            // WO-673 L3 STANDDOWN (docs/WO673_ARCHITECTURE_REVIEW.md §3, the Barracks pattern
+            // below; always-on since WO-682): once the persisted marker is set and this
+            // storefront is player-ownable (BaseLayout record OR a structures-catalog row —
+            // the WO-682 blank-template rule), the BAKE stands down — deactivate the whole
+            // baked structure (building, NPC interact markers, tap-dialogue anchors all
+            // disappear) and let BaseLayoutLoader replay the record (if any) instead.
+            // Per-structure: a storefront with NO record and NO catalog row keeps its bake —
+            // a structure the player cannot place is never lost.
             if (StrategicPlacementMigration.StanddownActiveForBaked(s.bakedName, out string migratedId))
             {
                 target.gameObject.SetActive(false);

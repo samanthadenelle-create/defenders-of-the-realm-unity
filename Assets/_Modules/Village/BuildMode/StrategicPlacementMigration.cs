@@ -1,6 +1,7 @@
 // =============================================================================
-// StrategicPlacementMigration — WO-673 L3: flag-gated standdown + ONE-SHOT
-// migration writer for the auto-placed functional structures.
+// StrategicPlacementMigration — WO-673 L3: standdown + ONE-SHOT migration
+// writer for the auto-placed functional structures. ALWAYS ON since WO-682
+// removed ff.strategicplacement (owner ruling 2026-07-12).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
@@ -10,7 +11,7 @@
 // the same id is the double-spawn factory; ONE owner per concern).
 //
 // WHAT THIS FILE IS:
-//   1. THE MIGRATION WRITER — on the first ff.strategicplacement-ON load of the
+//   1. THE MIGRATION WRITER — on the first marker-unset load of the
 //      HOME hub (SceneRouter.Castle), each auto-placed functional structure
 //      (the baked ring storefronts + the two runtime crafting stations) is
 //      converted into a BaseLayout PlacedStructureData record at its CURRENT
@@ -28,10 +29,12 @@
 //      spawn the same id:
 //        • no marker  → bakes/injectors visible, no records replayed.
 //        • marker set → records replay, bakes hidden / injectors dark.
-//      PER STRUCTURE: standdown only applies to an id that actually HAS a
-//      migrated BaseLayout record — a structure whose catalog row was missing
-//      at migration time (skipped + Warned, lanes compose at gate time) keeps
-//      its bake/injector alive. Nothing is ever lost.
+//      PER STRUCTURE: standdown applies to an id that HAS a migrated BaseLayout
+//      record OR a structures-catalog row (the player can build it — WO-682
+//      blank-template new game: marker set + zero records still hides the
+//      row-having bakes). A structure with NO catalog row AND no record
+//      (today: the two runtime crafting stations) keeps its bake/injector
+//      alive — a structure the player cannot place is never lost.
 //
 // SAME-LOAD ORDERING (structural double-spawn guard): during the very load the
 // migration runs in, the records are brand new — the injectors already ran
@@ -40,14 +43,10 @@
 // handle compare — no event-order dependence); the ownership handover happens
 // atomically on the NEXT home-hub load: records replay, bakes stand down.
 //
-// FLAG OFF = today byte-identical behaviour: every public gate here returns
-// "not active" and the writer never runs. Flipping the flag OFF after a
-// migration ROLLS BACK cleanly: bakes/injectors resume ownership and
-// BaseLayoutLoader withholds the migrated records (no double-spawn).
-//
-// ff.strategicplacement itself is DEFINED by the L1 data lane in FeatureFlags.cs;
-// this file only REFERENCES it — and it is the ONLY file in the L3 lane that
-// does, so the flag surface stays one line wide.
+// WO-682 (owner 2026-07-12): ff.strategicplacement is REMOVED — this lane is
+// ALWAYS ON. New games set the marker in ResetToNewGame (nothing to migrate =
+// blank template); pre-existing saves load marker false (SaveMigrator v30) and
+// migrate once on their next home-hub load.
 // =============================================================================
 
 using System.Collections;
@@ -125,16 +124,16 @@ namespace DeNelle.Village
         // home-hub load — the atomic ownership handover. int.MinValue = "never".
         private static int _migratedSceneHandle = int.MinValue;
 
-        // ── PUBLIC GATES (the whole lane asks these; flag OFF → all false) ───────
+        // ── PUBLIC GATES (the whole lane asks these) ─────────────────────────────
 
-        /// <summary>True when the flag is ON, the one-shot migration has run (persisted
-        /// marker), and we are NOT still inside the scene-load the migration ran in.
-        /// Scene-scoped to the HOME hub — the only scene BaseLayout replays in.</summary>
+        /// <summary>True when the one-shot migration has run (persisted marker — set by
+        /// the writer on migrated saves, or by ResetToNewGame on a blank-template new
+        /// game, WO-682), and we are NOT still inside the scene-load the migration ran
+        /// in. Scene-scoped to the HOME hub — the only scene BaseLayout replays in.</summary>
         public static bool StanddownActive
         {
             get
             {
-                if (!DeNelle.Core.FeatureFlags.StrategicPlacement) return false;
                 var svc = GameStateService.Instance;
                 if (svc == null || svc.State == null || !svc.State.StrategicPlacementMigrated) return false;
                 var scene = SceneManager.GetActiveScene();
@@ -144,34 +143,38 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Baked-storefront standdown (HubStructureVisualInjector): true when the bake
-        /// named <paramref name="bakedName"/> was MIGRATED (its record is in BaseLayout)
-        /// and standdown is active — hide it (Barracks SetActive(false) pattern); the
-        /// record replays instead. False → the bake keeps owning the structure.
+        /// Baked-storefront standdown (HubStructureVisualInjector): true when standdown
+        /// is active and the bake named <paramref name="bakedName"/> is PLAYER-OWNABLE —
+        /// it has a BaseLayout record (migrated/placed; the record replays instead) OR a
+        /// structures-catalog row (WO-682 blank-template new game: no record yet, the
+        /// player builds it). Hide it (Barracks SetActive(false) pattern). False → the
+        /// bake keeps owning the structure (an id with no row and no record can never be
+        /// player-placed, so it is never taken away).
         /// </summary>
         public static bool StanddownActiveForBaked(string bakedName, out string itemId)
         {
             itemId = ItemIdForBaked(bakedName);
-            return itemId != null && StanddownActive && HasRecord(itemId);
+            return itemId != null && StanddownActive && (HasRecord(itemId) || HasCatalogRow(itemId));
         }
 
         /// <summary>
         /// Runtime-station standdown (Apothecary / Jeweler's Bench injectors): true when
-        /// the station's id was migrated into BaseLayout and standdown is active — skip
-        /// the spawn; the record replays instead. A station with no catalog row (no
-        /// record written) keeps spawning via its injector — nothing vanishes.
+        /// standdown is active and the station's id has a BaseLayout record (the record
+        /// replays instead) or a catalog row (player-buildable — WO-682 blank template).
+        /// A station with no catalog row and no record keeps spawning via its injector —
+        /// nothing vanishes.
         /// </summary>
         public static bool StanddownActiveForStation(string itemId)
         {
-            return StanddownActive && HasRecord(itemId);
+            return StanddownActive && (HasRecord(itemId) || HasCatalogRow(itemId));
         }
 
         /// <summary>
         /// Replay filter (BaseLayoutLoader.Rebuild): a MIGRATION-MANAGED id replays only
-        /// while standdown is active (marker set + flag ON + not the migration load) —
-        /// otherwise the bake/injector owns that structure and replaying the record would
-        /// double-spawn it (e.g. flag flipped OFF after migration = clean rollback).
-        /// Non-managed ids (towers, walls, player-placed defenses) always replay.
+        /// while standdown is active (marker set + not the migration load) — otherwise
+        /// the bake/injector owns that structure and replaying the record would
+        /// double-spawn it. Non-managed ids (towers, walls, player-placed defenses)
+        /// always replay.
         /// </summary>
         public static bool ShouldReplayRecord(string itemId)
         {
@@ -190,6 +193,13 @@ namespace DeNelle.Village
             return false;
         }
 
+        /// <summary>True when <paramref name="itemId"/> has a structures-catalog row —
+        /// i.e. the player can build it through the palette (WO-682 standdown rule).</summary>
+        private static bool HasCatalogRow(string itemId)
+        {
+            return !string.IsNullOrEmpty(itemId) && CatalogRegistry.Get(itemId) != null;
+        }
+
         private static bool HasRecord(string itemId)
         {
             var svc = GameStateService.Instance;
@@ -205,13 +215,11 @@ namespace DeNelle.Village
         /// <summary>
         /// Convert every auto-placed functional structure into a BaseLayout record at its
         /// current position/yaw, set the persisted marker, and save. Idempotent: no-ops
-        /// when the flag is OFF, the marker is already set, or we're not in the home hub.
+        /// when the marker is already set or we're not in the home hub.
         /// Called by the bootstrap below; public for the regression harness.
         /// </summary>
         public static void RunIfNeeded()
         {
-            if (!DeNelle.Core.FeatureFlags.StrategicPlacement) return;
-
             var svc = GameStateService.Instance;
             if (svc == null || svc.State == null)
             {
@@ -329,10 +337,9 @@ namespace DeNelle.Village
     /// <summary>
     /// Self-bootstrapping DDOL runner (mirrors <see cref="BaseLayoutLoaderBootstrap"/> —
     /// no scene edit, CLAUDE.md §3) that fires the one-shot migration writer when the
-    /// HOME hub loads with ff.strategicplacement ON and the marker unset. Runs a frame
-    /// late (coroutine) so GameStateService / the injector-spawned stations exist first;
-    /// waits briefly for the save service on a cold boot. Flag OFF → constructs nothing
-    /// beyond the listener and never writes.
+    /// HOME hub loads with the marker unset. Runs a frame late (coroutine) so
+    /// GameStateService / the injector-spawned stations exist first; waits briefly for
+    /// the save service on a cold boot.
     /// </summary>
     internal sealed class StrategicPlacementMigrationBootstrap : MonoBehaviour
     {
@@ -364,7 +371,6 @@ namespace DeNelle.Village
 
         private void TryArm()
         {
-            if (!DeNelle.Core.FeatureFlags.StrategicPlacement) return;
             if (SceneManager.GetActiveScene().name != DeNelle.Core.SceneRouter.Castle) return;
             StopAllCoroutines();
             StartCoroutine(RunDeferred());

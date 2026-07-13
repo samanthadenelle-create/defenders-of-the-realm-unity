@@ -172,7 +172,7 @@ namespace DeNelle.Village
 
         // ── Hardcoded fallback — used ONLY when the JSON cannot be loaded ──────────
         // WO-673 taxonomy (owner ruling 2026-07-11, displays "Town / Defenses / Walls"):
-        // Town → Resource+Collector (player-placed functional buildings, ff.strategicplacement),
+        // Town → Resource+Collector (player-placed functional buildings, always on — WO-682),
         // Defense → Tower/Gate, Walls → Wall (split out — claimed-outpost wall canon).
         // Mirrors build-categories.json v2; keep the two in sync.
         private static Dictionary<BuildType, BuildCategory> BuildFallback()

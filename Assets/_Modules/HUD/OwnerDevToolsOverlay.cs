@@ -252,10 +252,8 @@ namespace DeNelle.HUD
             // (the 0492d7dc behavior); OFF = pos-only nudge. Re-equip applies it on next
             // sheathe re-parent (walk/combat flip), no restart needed.
             AddFlagToggle(parent, "sheathdrawnrot", () => FeatureFlags.SheathedDrawnRotFallback);
-            // WO-673: player-defined town preview (Town/Defenses/Walls tabs, movable
-            // storefronts, 45° rotation). F8 2026-07-11 "no tabs": the flag existed but
-            // had NO reachable switch — a new flag must be listed here to be flippable.
-            AddFlagToggle(parent, "strategicplacement", () => FeatureFlags.StrategicPlacement);
+            // (WO-682: the ff.strategicplacement toggle was removed — strategic placement
+            // is always on; the flag no longer exists.)
 
             // --- State / diagnostics ---
             AddTool(parent, "Reset to New Game",        ResetToNewGame);

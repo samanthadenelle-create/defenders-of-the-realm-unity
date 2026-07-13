@@ -14,7 +14,15 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
 
-- **2026-07-12 delta (LIVE — see `CANON_GROUND_TRUTH_2026-07-12.md`):** focus = the **mobile-web demo
+- **2026-07-13 delta — STRATEGIC PLACEMENT LOCKED ON (WO-695, ex-682 "strategic placement lock on"):**
+  `ff.strategicplacement` is **REMOVED from the codebase** — the WO-673 player-defined town (Build →
+  Town/Defenses/Walls palette tabs, movable functional storefronts, 260w/210i core-kit new-game seed,
+  baked-storefront/vendor/collector standdown) is **ALWAYS ON in every build**. New Game = the **blank
+  template** (marker set in ResetToNewGame; authored shell + zero functional buildings except the FTUE
+  grace-default Forge record, WO-695 option b). Existing saves still migrate once via the v30 one-shot
+  writer (marker-false path). DevPanel/OwnerDevToolsOverlay toggle rows removed.
+
+- **2026-07-12 delta (see `CANON_GROUND_TRUTH_2026-07-12.md`):** focus = the **mobile-web demo
   wave**. **WO-677** (touch verb bar — uGUI rebuild) + **WO-678** (Pi SDK timeout clean wrap) + **WO-682**
   (quiet web errors: 13 Sfx WebGL-override metas swept, db-proven FSB decode root; audio prewarm on battle
   load; `SFX_WEBGL_OK` oracle) + **WO-683** (build-screen kit — d-pad moves the asset, text rotate labels)

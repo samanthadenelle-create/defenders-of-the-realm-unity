@@ -15,8 +15,8 @@ namespace DeNelle.Core.Catalog
     /// collector places exactly like a tower.
     ///
     /// WO-673 taxonomy (owner ruling 2026-07-11, display names "Town / Defenses / Walls"):
-    /// <c>Town</c> → Resource + Collector (the player-placed functional buildings, behind
-    /// ff.strategicplacement); <c>Defense</c> → Tower/Gate (displays "Defenses");
+    /// <c>Town</c> → Resource + Collector (the player-placed functional buildings, always
+    /// on — WO-682 removed ff.strategicplacement); <c>Defense</c> → Tower/Gate (displays "Defenses");
     /// <c>Walls</c> → Wall (split out — claimed-outpost wall canon). <c>Collector</c> /
     /// <c>Support</c> remain as standalone verbs for back-compat (nothing in the HUD
     /// invokes them directly today; Town lists their catalog types).

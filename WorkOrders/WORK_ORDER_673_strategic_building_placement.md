@@ -1,5 +1,11 @@
 # WORK ORDER 673 — Strategic Building Placement (player-placed functional buildings)
 
+> **⚠ FLAG LANGUAGE SUPERSEDED 2026-07-13 (WO-695, ex-682):** `ff.strategicplacement` has been
+> **REMOVED** — strategic placement is ALWAYS ON in every build. Every "default OFF until felt-pass" /
+> "flag-off = today byte-identical" line below is historical. Also superseded: the §Reconciliation
+> "new game inherits the pre-laid town" ruling — owner ruled 2026-07-12 "I want to see the blank
+> template and add buildings"; New Game is now the blank template (+ one FTUE grace-default Forge record).
+
 **Status:** RULED + IN IMPLEMENTATION (owner go 2026-07-11 "lets do it. sounds great").
 **Owner rulings (the creative+architecture recommendations, accepted wholesale):** free position +
 walkability validity, collector yield scales with node distance (fast-follow lane), NO adjacency

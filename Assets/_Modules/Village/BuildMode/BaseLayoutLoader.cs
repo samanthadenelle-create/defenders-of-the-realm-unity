@@ -218,11 +218,11 @@ namespace DeNelle.Village
             {
                 // WO-673 L3 DOUBLE-SPAWN GUARD (docs/WO673_ARCHITECTURE_REVIEW.md §3): a
                 // migration-MANAGED record replays only while the bake/injector standdown is
-                // active (marker set + ff.strategicplacement ON + not the migration load
-                // itself). Otherwise the bake/injector owns that structure this session —
-                // replaying the record too would spawn it twice (e.g. flag flipped OFF after
-                // migration = clean rollback to the baked town). Non-managed records
-                // (towers/walls/defenses) are untouched by this filter.
+                // active (marker set + not the migration load itself — always-on since
+                // WO-682 removed ff.strategicplacement). Otherwise the bake/injector owns
+                // that structure this session — replaying the record too would spawn it
+                // twice. Non-managed records (towers/walls/defenses) are untouched by
+                // this filter.
                 if (!StrategicPlacementMigration.ShouldReplayRecord(layout[i].itemId))
                 {
                     withheld++;

@@ -625,9 +625,17 @@ namespace DeNelle.Editor
                 if (st.Pets.Count != 0 || st.OwnedPets.Count != 0 || st.PetName != null)
                     failures.Add("ResetToNewGame left ghost pet ownership (Pets/OwnedPets/PetName must all clear)");
                 if (st.Zones == null || st.Zones.Count == 0) failures.Add("ResetToNewGame did not seed the default zone graph");
-                int expectedWood = DeNelle.Core.FeatureFlags.StrategicPlacement ? StartingBudget.StrategicWood : 15;
-                if (st.Wood != expectedWood)
-                    failures.Add($"ResetToNewGame wood seed {st.Wood} != expected {expectedWood} (ff.strategicplacement={DeNelle.Core.FeatureFlags.StrategicPlacement})");
+                // WO-682: strategic placement is always on — the seed is unconditionally
+                // the StartingBudget core-kit pair, and New Game = the blank template
+                // (marker set, BaseLayout = the single FTUE grace-default forge record).
+                if (st.Wood != StartingBudget.StrategicWood)
+                    failures.Add($"ResetToNewGame wood seed {st.Wood} != expected {StartingBudget.StrategicWood} (strategic placement is always on, WO-682)");
+                if (st.Iron != StartingBudget.StrategicIron)
+                    failures.Add($"ResetToNewGame iron seed {st.Iron} != expected {StartingBudget.StrategicIron} (strategic placement is always on, WO-682)");
+                if (!st.StrategicPlacementMigrated)
+                    failures.Add("ResetToNewGame did not SET the strategic-placement marker — a new game must be the blank template (WO-682), never a re-migrated town");
+                if (st.BaseLayout == null || st.BaseLayout.Count != 1 || st.BaseLayout[0].itemId != "forge")
+                    failures.Add($"ResetToNewGame BaseLayout != the single FTUE grace-default 'forge' record (got {(st.BaseLayout == null ? "null" : st.BaseLayout.Count.ToString())} record(s)) — WO-682 option (b)");
                 log.AppendLine("  ResetToNewGame carve-out holds (wallet/breachStyle kept; progression + pets wiped)");
 
                 // ── Tamper gate through the REAL Load: mutate, save, corrupt, reload. ──

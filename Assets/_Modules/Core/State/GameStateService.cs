@@ -432,6 +432,7 @@ namespace DeNelle.Core.State
                 HeroXp = s.HeroXp,                   // F8-47 — banked XP toward next level (v29)
                 HeroLifetimeXp = s.HeroLifetimeXp,   // F8-47 — lifetime XP counter (v29)
                 StrategicPlacementMigrated = s.StrategicPlacementMigrated,   // WO-673 — one-shot bake→BaseLayout migration marker (v30)
+                EchoLanes = s.EchoLanes,             // WO-681/658 — per-Echo gather-lane CSV (additive default-on-read)
             };
         }
 
@@ -512,6 +513,7 @@ namespace DeNelle.Core.State
             if (p.HeroXp.HasValue) s.HeroXp = (float)p.HeroXp.Value;                    // F8-47 — banked XP (v29); absent → keep 0
             if (p.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = (float)p.HeroLifetimeXp.Value; // F8-47 — lifetime XP (v29); absent → keep 0
             if (p.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = p.StrategicPlacementMigrated.Value; // WO-673 — migration marker (v30); absent → migrator seeds false
+            if (p.EchoLanes != null) s.EchoLanes = p.EchoLanes;   // WO-681/658 — echo lane CSV; absent → keep the "wood" starter default
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -806,12 +808,12 @@ namespace DeNelle.Core.State
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
             s.Stone = 20;
-            // WO-673 — strategic-placement new-game budget (owner: core kit + exactly one
-            // leftover choice). Flag ON: seed from the StartingBudget constants (260w/210i —
-            // arithmetic documented on the constants in NestedTypes.cs). Flag OFF: the
-            // legacy 15w/5i seed, byte-identical to pre-673 behavior.
-            s.Iron = FeatureFlags.StrategicPlacement ? StartingBudget.StrategicIron : 5;
-            s.Wood = FeatureFlags.StrategicPlacement ? StartingBudget.StrategicWood : 15;
+            // WO-673/WO-682 — strategic-placement new-game budget (owner: core kit + exactly
+            // one leftover choice). Always-on since WO-682 removed ff.strategicplacement:
+            // seed from the StartingBudget constants (260w/210i — arithmetic documented on
+            // the constants in NestedTypes.cs).
+            s.Iron = StartingBudget.StrategicIron;
+            s.Wood = StartingBudget.StrategicWood;
             s.BuildingCooldowns = new SerializableDict<string, double>();
             s.PendingBuilds = new List<PendingTowerBuild>();
             s.TutorialStep = TutorialStep.Step1;
@@ -831,7 +833,18 @@ namespace DeNelle.Core.State
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
-            s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
+            // WO-108/WO-682 — New Game starts on the BLANK template (owner ruling 2026-07-12
+            // "I want to see the blank template and add buildings"): authored shell only,
+            // zero pre-placed functional buildings... except the FTUE grace default below.
+            s.BaseLayout = new List<PlacedStructureData>();
+            // WO-682 FTUE guard (option b, grace default): pre-place the Forge ("forge",
+            // the Armorer storefront) as the player's FIRST movable BaseLayout record, at
+            // the town ring's traditional forge site (cell 3,11 = world ~(-31.5, 1.5) on the
+            // 28x22 3m grid — the baked Forge_Armor_Storefront spot, freed by the standdown),
+            // facing the Heart (yawSteps 1 = 90). Guarantees a live vendor talk-route on a
+            // fresh save (CastleVendorNpcInjector anchors by Building id) while the rest of
+            // the town stays blank. Still fully movable/demolishable — a normal record.
+            s.BaseLayout.Add(new PlacedStructureData("forge", 3, 11, 1, 1));
             s.ArenaDefense = new List<PlacedDefenderData>();  // WO-389 — New Game starts with no pre-placed Arena defense.
             s.Army = new ArmyStorage();                       // WO-453 — New Game starts with an empty cap-10 army.
             s.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();   // WO-430 — New Game: all buildings at tier 0 (locked).
@@ -848,7 +861,8 @@ namespace DeNelle.Core.State
             s.HeroLevel = 1;                                  // F8-47 — New Game starts a fresh level-1 hero.
             s.HeroXp = 0f;                                    // F8-47 — no banked XP yet.
             s.HeroLifetimeXp = 0f;                            // F8-47 — no lifetime XP yet.
-            s.StrategicPlacementMigrated = false;             // WO-673 — New Game: migration not yet run (bakes/injectors own the town until the flag-gated one-shot writer fires).
+            s.StrategicPlacementMigrated = true;              // WO-682 — New Game: nothing to migrate (no auto-placed town was ever granted); marker SET so the one-shot writer never runs and the bake standdown activates = the blank template. Existing saves still migrate via the marker-false path (SaveMigrator v30 seeds false).
+            s.EchoLanes = "wood";                             // WO-681/658 — New Game: the starter Echo is auto-assigned to Wood; later Echoes idle until assigned.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
