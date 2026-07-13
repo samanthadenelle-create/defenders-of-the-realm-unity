@@ -14,14 +14,22 @@ One building per trade. Each is that trade's UPGRADE vendor; the resource trades
 their resource (the store is the attackable stake — WO-702's "some roofs hold your stores"
 lesson and WO-672's damage lifecycle hang off this).
 
-| Building | Trade | Vendor/Upgrade | Stores |
-|---|---|---|---|
-| **Forge** | Weapons | weapon upgrades | **Iron** |
-| **Armorer** | Armor | armor upgrades | — |
-| **Arcane Tower** | Magic | magic upgrades | — |
-| **Jeweler** | Rings | ring gear | — |
-| **Food building** (pin #1: Farm or Mill) | Food | food/econ upgrades | **Food** |
-| **Lumbermill** | Wood | wood/econ upgrades | **Wood** |
+**REFINED same session (owner, final form):** storage lives in THREE DEDICATED CONTAINER
+buildings — the original storehouse-containers design restored. Trade buildings are pure
+vendor/upgrade shops; the containers hold the stock with CoC-style visible fill. The earlier
+"Forge stores iron / food stores food / Lumbermill stores wood" annotations are superseded.
+
+| Building | Role | Function |
+|---|---|---|
+| **Forge** | Trade | weapon upgrades |
+| **Armorer** | Trade | armor upgrades |
+| **Arcane Tower** | Trade | magic upgrades |
+| **Jeweler** | Trade | ring gear |
+| **Food producer** (pin #1: Farm or Mill) | Trade/production | food income + upgrades |
+| **Lumbermill** | Trade/production | wood income + upgrades |
+| **Lumberyard** | **STORAGE** | **stores Wood** (visible pallet stacks fill) |
+| **Foundry** | **STORAGE** | **stores Iron** (visible fill) |
+| **Silo** | **STORAGE** | **stores Grain/food** (visible fill) |
 | **Echo Hollow** | Pets | pet acquisition | — (stays — WO-702 first placement) |
 | **Store** | Buy Packs | PackStore front (monetization — ~70% built, do NOT greenfield) | — |
 
@@ -39,9 +47,17 @@ lesson and WO-672's damage lifecycle hang off this).
   trade per the table, "Blacksmith" retires (weapons=Forge, armor=Armorer). Prefer remapping
   displayNames + palette membership over renaming ids (ids are load-bearing: BaseLayout records,
   vendor AnchorRoles, talk-routes, WO-695 migration rows — a save with old ids must still replay).
-- **Storage capacity** becomes a catalog field on Forge/Food/Lumbermill rows (data-driven per the
-  owner's lookup-table doctrine) wired to the existing resource caps if caps exist, else stubbed
-  for the WO-672 damage-to-stores loop.
+- **THREE NEW catalog rows — the storage containers** (`lumberyard` wood · `foundry` iron ·
+  `silo` grain): type Resource (Town tab), storage capacity as a catalog field (data-driven per
+  the owner's lookup-table doctrine) wired to the resource caps if caps exist, else stubbed for
+  the WO-672 damage-to-stores loop. **This design was discussed long ago and NEVER shipped
+  (owner: "it never came out") — this WO is where it finally lands.** Portraits for the three
+  new rows join the WO-706 art list. Trade buildings carry NO storage field.
+  **Why separate (owner rationale, same session):** (a) it **isolates the shop from storage** —
+  bounded contexts: raiding a container never breaks a vendor/talk-route, and shop logic never
+  entangles stock logic; (b) **storage upgrades independently to hold more** — the containers
+  get their own capacity tiers on the existing building-upgrade tech tree (WO-432 perk model /
+  WO-675 panel), the classic CoC storage-upgrade loop, without touching shop upgrade paths.
   **Design lineage (owner, 2026-07-13 — do not re-consolidate):** the owner ORIGINALLY designed
   per-resource storehouse containers; a prior implementation collapsed storage into one. This
   ruling restores the original intent in distributed form — each trade building IS the container
@@ -68,9 +84,11 @@ lesson and WO-672's damage lifecycle hang off this).
    PanelSettings — the tile/talk-route lands now, the store UI wiring stays its own lane).
 
 ## Acceptance
-- [ ] Town tab shows exactly: Echo Hollow, Forge, Armorer, Arcane Tower, Jeweler, the food
-      building, Lumbermill (+ Market per pin #2). No Crystal Mine, no collector duplicates,
-      no two tiles sharing a word.
+- [ ] Town tab shows exactly: Echo Hollow, Store, Forge, Armorer, Arcane Tower, Jeweler, the
+      food producer, Lumbermill, **Lumberyard, Foundry, Silo**. No Crystal Mine, no collector
+      duplicates, no two tiles sharing a word.
+- [ ] The three containers show CoC-style visible fill (pallet stacks / fill steps) that tracks
+      actual stored amounts; coarse 3–4 steps acceptable for the first pass.
 - [ ] Every surviving building: vendor anchors + talk-routes still resolve (fleet vendor probe
       green); echo-worker gather assignment targets the merged buildings (ECHO-1/WO-681 flow).
 - [ ] Migrated + fresh saves both replay/place correctly (BaseLayout ids unchanged;
