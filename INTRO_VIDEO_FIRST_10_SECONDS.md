@@ -1,3 +1,4 @@
+> ⚠ **SUPERSEDED 2026-07-13 (owner ruling):** this shot script was NEVER the shipped video. The live `Assets/StreamingAssets/Video/Defenders.mp4` (WO-569, 06-29) is a NEW cut that does not follow this script, and this doc's Heartwood-SPIRE framing was already superseded by the living world-Tree ruling (CANON_READINESS_LEDGER 06-26). Intro canon = the shipped mp4 + the IntroSequencePlayer slates + docs/LORE_FALL_AND_FOUNDING_OF_ELARION.md. Kept for shot-direction reference only.
 # Defenders of the Realm — Intro Video
 ## First 10 Seconds: Shot Direction + Voice Over
 
@@ -67,3 +68,4 @@ After Thrain's line lands, the camera begins to pull back and drift toward the w
 ---
 
 *Voice direction and shot notes are final. VO lines are written to rhythm — do not paraphrase or condense.*
+
