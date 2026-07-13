@@ -87,6 +87,18 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
    the existing PackStore (~70% built; PIPELINE_STATE: scene-wiring disabled pending its own
    PanelSettings — the tile/talk-route lands now, the store UI wiring stays its own lane).
 
+## Destruction & persistence rulings (owner, 2026-07-13 — pass 2 scope)
+- **Placement offsets save to the player** — each placement (cell + rotation) persists in the
+  save's BaseLayout records (already the WO-673 system; this ruling confirms it as canon for
+  the founding flow: what you lay out is YOUR town, forever).
+- **Destroyed building = pay to rebuild.** When a raid destroys a building, it does not come
+  back free: the player must spend its resource cost again to rebuild it — and the rebuild is
+  a FRESH placement: they may **re-place it in a more strategic position** (owner, same
+  session; the loss is also the lesson — losing a badly-placed building is the invitation to
+  place it better). Repair (damaged-but-standing) stays the REP-1 paid-repair
+  path; destruction is the harder loss the WO-702 warning promises — "what burns stops earning."
+  Wire with the WO-672 damage lifecycle in pass 2.
+
 ## Acceptance
 - [ ] Town tab shows exactly: Echo Hollow, Store, Forge, Armorer, Arcane Tower, Jeweler, the
       food producer, Lumbermill, **Lumberyard, Foundry, Silo**. No Crystal Mine, no collector

@@ -25,9 +25,9 @@
 //   - the townsfolk injector spawns at most ONE villager per distinct building;
 //   - the scene bake itself carries NO baked NPC bodies (AmbientNPC components).
 // Emits BLANK_START_OK, or BLANK_START_FAIL listing each extra WITH its spawner.
-// The FTUE grace forge (+ its single vendor) is reported explicitly as the ONE
-// sanctioned record-backed exception (WO-695 FTUE guard) — flag it to the PO if
-// the BLANK-1 ruling is later read to supersede it too.
+// WO-707 (owner ruling 2026-07-13) KILLED the WO-695 FTUE grace forge — a fresh
+// save carries ZERO records and ZERO vendors ("should be placed by player").
+// The one sanctioned NPC at spawn is Sylas the Steward (WO-702 founding guide).
 // =============================================================================
 using System;
 using System.Collections.Generic;
@@ -73,17 +73,17 @@ namespace DeNelle.Editor
                 var state = ScriptableObject.CreateInstance<GameState>();
                 created.Add(state);
                 state.StrategicPlacementMigrated = true;
-                state.BaseLayout = new List<PlacedStructureData>
-                {
-                    new PlacedStructureData("forge", 3, 11, 1, 1),   // WO-695 FTUE grace default
-                };
+                // WO-707 (owner ruling 2026-07-13): the WO-695 FTUE grace-default Forge is
+                // KILLED — "should be placed by player". Fresh save = EMPTY BaseLayout;
+                // the vista is the tree, the well, the walls, and Sylas the Steward (WO-702).
+                state.BaseLayout = new List<PlacedStructureData>();
                 var svcGo = new GameObject("BlankStartCensus_GameStateService");
                 svcGo.SetActive(false);   // Awake must never run (no Load over the fixture)
                 created.Add(svcGo);
                 var svc = svcGo.AddComponent<GameStateService>();
                 SetPrivate(svc, "_state", state);
                 WriteServiceInstance(svc);
-                log.AppendLine("[fixture] fresh-save state installed: marker=true, BaseLayout=[forge] (FTUE grace)");
+                log.AppendLine("[fixture] fresh-save state installed: marker=true, BaseLayout=EMPTY (WO-707: grace forge killed — player places everything)");
 
                 // ── 1b. Populate the structures catalog the way the RUNTIME does ──
                 // CatalogBootstrap.Register() is [RuntimeInitializeOnLoadMethod] — it never runs in
@@ -164,8 +164,7 @@ namespace DeNelle.Editor
                     if (hasRecord)
                     {
                         vendorsEligible++;
-                        log.AppendLine($"[vendor] {role} -> SPAWNS at record-backed '{buildingId}' " +
-                                       (buildingId == "forge" ? "(the sanctioned WO-695 FTUE grace forge)" : "(record present)"));
+                        log.AppendLine($"[vendor] {role} -> SPAWNS at record-backed '{buildingId}' (record present)");
                         if (buildingId != "forge")
                             failures.Add($"EXTRA NPC: vendor '{role}' eligible via unexpected record '{buildingId}' on the " +
                                          "fresh-save fixture — spawner: CastleVendorNpcInjector.AnchorVendorsToPlacedBuildings");
@@ -173,9 +172,9 @@ namespace DeNelle.Editor
                     else
                         log.AppendLine($"[vendor] {role} -> WITHHELD (no '{buildingId}' building; anchor poll keeps waiting)");
                 }
-                if (vendorsEligible != 1)
-                    failures.Add($"vendor census: {vendorsEligible} role(s) eligible on a fresh save — expected exactly 1 " +
-                                 "(the FTUE grace forge's Armorer)");
+                if (vendorsEligible != 0)
+                    failures.Add($"vendor census: {vendorsEligible} role(s) eligible on a fresh save — expected ZERO " +
+                                 "(WO-707: no grace forge; vendors come online only as the player places buildings)");
 
                 // ── 7. Townsfolk: one villager per distinct building (fresh save: <=1) ──
                 int villagerCap = ReadConstInt(typeof(CastleTownsfolkInjector), "VillagerCount", failures);
@@ -225,7 +224,7 @@ namespace DeNelle.Editor
             {
                 Debug.Log(log.ToString() +
                     "BLANK_START_OK — fresh save census: tree + well + walls/gates only " +
-                    "(plus the single sanctioned WO-695 FTUE grace forge record + its vendor).");
+                    "(zero records, zero vendors — WO-707: the player places everything; Sylas the Steward is the one sanctioned NPC, WO-702).");
                 return;
             }
             Debug.LogError(log.ToString() + "BLANK_START_FAIL (" + failures.Count + "):\n  - " +

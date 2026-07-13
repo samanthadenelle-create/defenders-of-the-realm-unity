@@ -37,8 +37,18 @@ Fresh save, after landing at the hub (tree + well + walls only, per the BLANK-1 
    *"I can sketch where the old town stood — build it my way, or ignore an old man's chalk."*
    One tap = build-it-for-me (spends the seed budget); ignoring it is fully valid. Ghosts fade
    as the player places their own.
+4b. **Guided defenses — "a defense or two" (owner, 2026-07-13).** After the town basics stand
+   (Sylas's dialog has walked the player through the core buildings), Sylas turns to defense:
+   guided placement of one or two defensive pieces (an Archer Tower; optionally a wall segment)
+   before the first wave is ever armed. The Defenses tab gets its introduction here, not in a
+   menu tooltip.
 5. **Close the loop.** First DEFEND prompt after the core kit exists (or the player idles) —
    the wave teaches what the warning promised.
+
+## Fresh-spawn vista (owner ruling 2026-07-13 — the acceptance image)
+New game opens on: **the tree, the well, and Sylas standing there** — walls/gates around,
+nothing else. No grace forge (killed, WO-707), no vendors, no wisps in frame if avoidable.
+Sylas's dialog then constructs the town basics, then a defense or two, then the first wave.
 
 ## Sequencing ruling (owner, 2026-07-13 — BINDING on this arc)
 

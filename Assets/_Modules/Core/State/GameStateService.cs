@@ -833,18 +833,16 @@ namespace DeNelle.Core.State
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
-            // WO-108/WO-682 — New Game starts on the BLANK template (owner ruling 2026-07-12
-            // "I want to see the blank template and add buildings"): authored shell only,
-            // zero pre-placed functional buildings... except the FTUE grace default below.
+            // WO-108/WO-682/WO-707 — New Game starts on the BLANK template (owner ruling
+            // 2026-07-12 "I want to see the blank template and add buildings"): authored
+            // shell only, ZERO pre-placed functional buildings. The WO-682 FTUE "grace
+            // default" Forge that used to be pre-placed here was KILLED by owner ruling
+            // 2026-07-13 ("I don't want the forge to start with — should be placed by
+            // player"): every building, Forge included, is the player's to place from the
+            // WO-707 founding seed (650w/385i affords one of each + the 3 containers).
+            // Vendor talk-routes now come online only as their buildings are placed; the
+            // guided first-placement FTUE is WO-702 (Sylas the Steward).
             s.BaseLayout = new List<PlacedStructureData>();
-            // WO-682 FTUE guard (option b, grace default): pre-place the Forge ("forge",
-            // the Armorer storefront) as the player's FIRST movable BaseLayout record, at
-            // the town ring's traditional forge site (cell 3,11 = world ~(-31.5, 1.5) on the
-            // 28x22 3m grid — the baked Forge_Armor_Storefront spot, freed by the standdown),
-            // facing the Heart (yawSteps 1 = 90). Guarantees a live vendor talk-route on a
-            // fresh save (CastleVendorNpcInjector anchors by Building id) while the rest of
-            // the town stays blank. Still fully movable/demolishable — a normal record.
-            s.BaseLayout.Add(new PlacedStructureData("forge", 3, 11, 1, 1));
             s.ArenaDefense = new List<PlacedDefenderData>();  // WO-389 — New Game starts with no pre-placed Arena defense.
             s.Army = new ArmyStorage();                       // WO-453 — New Game starts with an empty cap-10 army.
             s.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();   // WO-430 — New Game: all buildings at tier 0 (locked).
