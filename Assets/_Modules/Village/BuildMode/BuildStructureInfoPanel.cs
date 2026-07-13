@@ -317,7 +317,11 @@ namespace DeNelle.Village
                 _targetingLabel.text = targeting;
             }
 
-            SetKeyValue(_costLabel, "Cost", CostLabel(CostFor(e)));
+            // First-build freebie (owner 2026-07-13): the info panel agrees with the
+            // palette/validator/commit — a live freebie reads "FREE" (the WORD, never
+            // color-alone; ASCII); after consumption it reverts to the normal cost.
+            SetKeyValue(_costLabel, "Cost",
+                BuildModeController.FreeBuildAvailable(e) ? "FREE" : CostLabel(CostFor(e)));
             SetKeyValue(_footprintLabel, "Footprint", FootprintLabel(e));
 
             RenderCurrentStats(e, repo);

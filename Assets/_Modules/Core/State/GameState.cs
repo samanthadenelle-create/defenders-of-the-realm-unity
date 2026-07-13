@@ -425,6 +425,21 @@ namespace DeNelle.Core.State
         /// </summary>
         public string EchoLanes = "wood";
 
+        // ── First-build freebies (v32) ───────────────────────────────────────
+        /// <summary>
+        /// Catalog itemIds whose ONE-TIME free first build has been CONSUMED (owner
+        /// ruling 2026-07-13 evening: the FIRST placement of each catalog building id
+        /// is FREE; the flag burns at the committed placement and can NEVER reset —
+        /// destroying/selling the building does not restore it). Per-save: a New Game
+        /// gets a fresh empty list = all freebies live again. The free-first-build
+        /// flags REPLACE the old 650w/385i founding resource seed (StartingBudget is
+        /// now 0/0): players earn everything beyond the free kit from production.
+        /// Consumed by BuildModeController.Place(); read by EffectiveCostFor.
+        /// Additive default-on-read (nullable on the wire; absent → this initializer,
+        /// so an old save gains its full freebies — correct). Append-only at the END.
+        /// </summary>
+        public List<string> FreeBuildsUsed = new List<string>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

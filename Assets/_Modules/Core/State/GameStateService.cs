@@ -433,6 +433,7 @@ namespace DeNelle.Core.State
                 HeroLifetimeXp = s.HeroLifetimeXp,   // F8-47 — lifetime XP counter (v29)
                 StrategicPlacementMigrated = s.StrategicPlacementMigrated,   // WO-673 — one-shot bake→BaseLayout migration marker (v30)
                 EchoLanes = s.EchoLanes,             // WO-681/658 — per-Echo gather-lane CSV (additive default-on-read)
+                FreeBuildsUsed = s.FreeBuildsUsed != null ? new List<string>(s.FreeBuildsUsed) : null,   // v32 — consumed first-build freebies (one-shot, never resets)
             };
         }
 
@@ -514,6 +515,7 @@ namespace DeNelle.Core.State
             if (p.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = (float)p.HeroLifetimeXp.Value; // F8-47 — lifetime XP (v29); absent → keep 0
             if (p.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = p.StrategicPlacementMigrated.Value; // WO-673 — migration marker (v30); absent → migrator seeds false
             if (p.EchoLanes != null) s.EchoLanes = p.EchoLanes;   // WO-681/658 — echo lane CSV; absent → keep the "wood" starter default
+            if (p.FreeBuildsUsed != null) s.FreeBuildsUsed = p.FreeBuildsUsed;   // v32 — consumed freebies; absent → keep the fresh empty list (old save gains full freebies, correct)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -808,10 +810,11 @@ namespace DeNelle.Core.State
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
             s.Stone = 20;
-            // WO-673/WO-682 — strategic-placement new-game budget (owner: core kit + exactly
-            // one leftover choice). Always-on since WO-682 removed ff.strategicplacement:
-            // seed from the StartingBudget constants (260w/210i — arithmetic documented on
-            // the constants in NestedTypes.cs).
+            // Owner ruling 2026-07-13 evening — the founding seed is ZERO: the per-id
+            // free-first-build flags (FreeBuildsUsed, below) REPLACE the resource seed.
+            // Players earn everything beyond the one-free-each kit from production
+            // (prevents all-defense-no-town). StartingBudget stays the one authoritative
+            // pair (NestedTypes.cs), now 0/0.
             s.Iron = StartingBudget.StrategicIron;
             s.Wood = StartingBudget.StrategicWood;
             s.BuildingCooldowns = new SerializableDict<string, double>();
@@ -862,6 +865,7 @@ namespace DeNelle.Core.State
             s.StrategicPlacementMigrated = true;              // WO-682 — New Game: nothing to migrate (no auto-placed town was ever granted); marker SET so the one-shot writer never runs and the bake standdown activates = the blank template. Existing saves still migrate via the marker-false path (SaveMigrator v30 seeds false).
             s.EchoLanes = "wood";                             // WO-681/658 — New Game: the starter Echo is auto-assigned to Wood; later Echoes idle until assigned.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
+            s.FreeBuildsUsed = new List<string>();            // v32 — New Game: every catalog id's one-time FREE first build is live again (per-save flags; they replace the retired wood/iron founding seed).
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.

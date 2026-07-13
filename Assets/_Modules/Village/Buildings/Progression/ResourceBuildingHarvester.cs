@@ -69,11 +69,19 @@ namespace DeNelle.Village.Buildings.Progression
                 var def = ResourceBuildingProgression.Find(id);
                 if (def == null) continue;
 
-                // Owner 2026-06-14: a FRESH game must not auto-grow resources. These global
-                // CoC-style nodes pay out ONLY after the player invests an upgrade (level > 1).
-                // Level 1 (the un-built default) produces nothing — manual node farming funds
-                // the first upgrade, then the node ticks. Keeps the loop earned, not free.
-                if (ResourceBuildingState.GetLevel(id) <= 1) continue;
+                // SUPERSEDED 2026-07-13 evening (owner "agree"): LEVEL 1 PRODUCES —
+                // CoC-style, a placed collector earns from the moment it stands
+                // (level-1 interval/yield from the existing tables: LevelDef(1), no
+                // step bonus); upgrades multiply. The old owner-2026-06-14 rule
+                // ("level > 1 only, manual farming funds the first upgrade") is dead:
+                // with the free-first-build flags + ZERO founding seed there is no
+                // other baseline income, and level-1-pays-nothing would deadlock the
+                // bootstrap. Defensive < 1 only (GetLevel never returns below 1).
+                int level = ResourceBuildingState.GetLevel(id);
+                if (level < 1) continue;
+                if (level == 1)
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Harvest", "level1-accrual-" + id,
+                        $"level-1 '{id}' is ACCRUING from placement (owner 2026-07-13: level 1 produces; zero-seed bootstrap income live).");
 
                 float interval = ResourceBuildingState.CurrentHarvestInterval(id);
                 _elapsed[i] += dt;

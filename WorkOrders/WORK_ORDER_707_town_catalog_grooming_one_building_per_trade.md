@@ -87,6 +87,19 @@ vendor/upgrade shops; the containers hold the stock with CoC-style visible fill.
    the existing PackStore (~70% built; PIPELINE_STATE: scene-wiring disabled pending its own
    PanelSettings — the tile/talk-route lands now, the store UI wiring stays its own lane).
 
+## Economy bootstrap rulings (owner, 2026-07-13 evening — CANON)
+- **First build of each id is FREE, one-shot, never resets** ("after free flag is spent cant be
+  untriggered") — per-save `FreeBuildsUsed` flags (schema v32) replace the resource seed
+  entirely (StartingBudget -> 0). "We make them earn what they have"; one-free-each prevents
+  all-defense-no-town. Applies to EVERY placeable id (first tower/wall/gate free too).
+- **Producers start at level 1 AND PRODUCE** ("start at 1") — CoC collectors: baseline income
+  from placement; upgrades multiply. Supersedes the level-1-pays-nothing gate.
+- **The Echo is the ENHANCER: "the echo enhances whatever they need the most"** — the player's
+  echo-lane choice (WO-681 picker) becomes a BOOST on that resource's production line, aimed at
+  whatever they need most, on top of the level-1 baseline. Wiring = the WO-658 rate-split seam
+  (today lanes are storage-only); implement as +rate on the chosen lane's harvest, not an
+  independent trickle. Player-aimed (they choose), not auto-detected.
+
 ## Destruction & persistence rulings (owner, 2026-07-13 — pass 2 scope)
 - **Placement offsets save to the player** — each placement (cell + rotation) persists in the
   save's BaseLayout records (already the WO-673 system; this ruling confirms it as canon for

@@ -68,6 +68,7 @@ namespace DeNelle.Core.State
                 { 29, MigrateToV29 },
                 { 30, MigrateToV30 },
                 { 31, MigrateToV31 },
+                { 32, MigrateToV32 },
             };
 
         /// <summary>
@@ -455,6 +456,17 @@ namespace DeNelle.Core.State
         private static PersistedState MigrateToV31(PersistedState s)
         {
             if (s.EchoLanes == null) s.EchoLanes = "wood";
+            return s;
+        }
+
+        // v32 — first-build-free flags (owner ruling 2026-07-13 evening: first placement of
+        // each catalog id is free; the flag burns on use and never resets; replaces the
+        // resource seed, StartingBudget -> 0). A pre-v32 save has burned nothing, so the
+        // correct default IS the fresh default: an EMPTY list (full freebies — the player
+        // keeps whatever wood/iron they banked on top). Additive + idempotent.
+        private static PersistedState MigrateToV32(PersistedState s)
+        {
+            if (s.FreeBuildsUsed == null) s.FreeBuildsUsed = new System.Collections.Generic.List<string>();
             return s;
         }
 

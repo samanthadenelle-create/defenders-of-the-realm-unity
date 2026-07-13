@@ -351,7 +351,11 @@ namespace DeNelle.Village
 
         private void BuildCard(CatalogEntry e)
         {
-            DeNelle.Core.Catalog.ResourceCost cost = CostFor(e);
+            // First-build freebie (owner 2026-07-13): the card reads the SAME effective
+            // cost as the validator/commit (BuildModeController.EffectiveCostFor), so a
+            // live freebie is a zero cost = the card never greys out on a first build.
+            bool freebie = BuildModeController.FreeBuildAvailable(e);
+            DeNelle.Core.Catalog.ResourceCost cost = freebie ? default : CostFor(e);
             bool affordable = CanAfford(cost);
             bool armed = e.id == _armedId;
 
@@ -439,7 +443,10 @@ namespace DeNelle.Village
                     TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
             }
 
-            var costLabel = MakeText(cardGo.transform, CostLabel(cost), 13,
+            // A live freebie says "FREE" in so many words — the WORD carries the meaning
+            // (owner is red/green colorblind; never color-alone). After the one-shot flag
+            // is consumed the label reverts to the normal per-resource cost. ASCII only.
+            var costLabel = MakeText(cardGo.transform, freebie ? "FREE" : CostLabel(cost), 13,
                 affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
             costLabel.raycastTarget = false;

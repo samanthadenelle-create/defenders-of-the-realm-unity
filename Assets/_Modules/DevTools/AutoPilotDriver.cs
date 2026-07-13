@@ -1591,10 +1591,23 @@ namespace DeNelle.DevTools
                     ctrl.Exit();
                     yield break;
                 }
-                var cost = BuildModeController.CostFor(entry);
+                // First-build freebie (owner 2026-07-13 evening): when the Hollow's FREE
+                // first build is live, do NOT fund the gate — the freebie itself must
+                // carry the placement (that's the link under test). Only a consumed-flag
+                // rerun still funds the normal cost so the gate can pass.
                 var econ = EconomyService.Instance;
-                if (econ != null) econ.Grant(BuildModeController.ToEconomy(cost));   // fund the gate — the gate still runs
-                else DeNelle.Core.State.GameStateService.Instance?.AddCrystals(cost.crystals);
+                bool freebieWasLive = BuildModeController.FreeBuildAvailable(entry);
+                if (!freebieWasLive)
+                {
+                    var cost = BuildModeController.CostFor(entry);
+                    if (econ != null) econ.Grant(BuildModeController.ToEconomy(cost));   // fund the gate — the gate still runs
+                    else DeNelle.Core.State.GameStateService.Instance?.AddCrystals(cost.crystals);
+                }
+                // Snapshot the ledger AFTER any funding grant — if the FREE first build
+                // charges anyway, the post-commit balance drops below this pair and the
+                // link 3b assertion below fails loud.
+                int woodBeforePlace = econ != null ? econ.Wood : st.Wood;
+                int ironBeforePlace = econ != null ? econ.Iron : st.Iron;
 
                 if (!ctrl.ArmById(HollowId))
                 {
@@ -1669,6 +1682,35 @@ namespace DeNelle.DevTools
                         yield break;
                     }
                     FlowTrace.Step(Tag, $"AssertFoundingArc: link 3 PASS — '{hollowSignal}' raised.");
+
+                    // ── link 3b: the FIRST Hollow build is FREE (owner 2026-07-13 evening) ──
+                    // The freebie was live at arm time, so the committed placement must have
+                    // charged NOTHING (wood/iron not below the post-grant snapshot) and burned
+                    // the one-shot per-id flag into FreeBuildsUsed (never resets).
+                    if (freebieWasLive)
+                    {
+                        int woodAfter = econ != null ? econ.Wood : st.Wood;
+                        int ironAfter = econ != null ? econ.Iron : st.Iron;
+                        if (woodAfter < woodBeforePlace || ironAfter < ironBeforePlace)
+                        {
+                            _lastDetail = $"FAIL link 3b — FREE first Hollow charged the ledger (wood {woodBeforePlace}->{woodAfter}, iron {ironBeforePlace}->{ironAfter})";
+                            FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 3b — the Hollow's first-build freebie was live but the ledger DROPPED (wood {woodBeforePlace}->{woodAfter}, iron {ironBeforePlace}->{ironAfter}); Place() charged instead of consuming the freebie.");
+                            yield break;
+                        }
+                        bool flagBurned = false;
+                        if (st.FreeBuildsUsed != null)
+                            foreach (var fid in st.FreeBuildsUsed)
+                                if (string.Equals(fid, HollowId, StringComparison.OrdinalIgnoreCase)) { flagBurned = true; break; }
+                        if (!flagBurned)
+                        {
+                            _lastDetail = "FAIL link 3b — freebie paid but 'pet-house' missing from FreeBuildsUsed";
+                            FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 3b — the Hollow placed free but FreeBuildsUsed does not contain '{HollowId}' (got [{(st.FreeBuildsUsed == null ? "<null>" : string.Join(",", st.FreeBuildsUsed))}]); the one-shot flag did not burn — a re-place would be free again.");
+                            yield break;
+                        }
+                        FlowTrace.Step(Tag, $"AssertFoundingArc: link 3b PASS — first Hollow build was FREE (wood {woodBeforePlace}->{woodAfter}, iron {ironBeforePlace}->{ironAfter}) and FreeBuildsUsed now contains '{HollowId}' (one-shot burned).");
+                    }
+                    else
+                        FlowTrace.Step(Tag, "AssertFoundingArc: link 3b N/A — the pet-house freebie was already consumed on this save (idempotent rerun).");
                 }
                 finally
                 {

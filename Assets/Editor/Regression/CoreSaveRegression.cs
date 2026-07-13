@@ -580,6 +580,8 @@ namespace DeNelle.Editor
                 svc1.State.HeroXp = 55.5f;
                 svc1.State.PetName = "Squeaks";
                 svc1.State.BaseLayout.Add(new PlacedStructureData("market", 4, 5, 1, 1));
+                if (svc1.State.FreeBuildsUsed == null) svc1.State.FreeBuildsUsed = new List<string>();
+                svc1.State.FreeBuildsUsed.Add("pet-house");   // v32 — a consumed first-build freebie must round-trip (one-shot, never resets)
                 svc1.Save();
 
                 // Stored blob must be SIGNED and VALID (the LB-3 write contract).
@@ -609,6 +611,8 @@ namespace DeNelle.Editor
                 if (st.BaseLayout == null || st.BaseLayout.Count != 1 || st.BaseLayout[0].itemId != "market"
                     || st.BaseLayout[0].cellX != 4 || st.BaseLayout[0].cellZ != 5)
                     failures.Add("round-trip lost the baseLayout record through the REAL service path");
+                if (st.FreeBuildsUsed == null || !st.FreeBuildsUsed.Contains("pet-house"))
+                    failures.Add($"round-trip lost freeBuildsUsed=['pet-house'] (loaded {(st.FreeBuildsUsed == null ? "null" : "[" + string.Join(",", st.FreeBuildsUsed) + "]")}) — a consumed v32 freebie must NEVER silently reset");
                 log.AppendLine("  lifetime-1 -> lifetime-2 round-trip holds (bestWave/crystals/difficulty/heroLevel/petName/baseLayout)");
 
                 // ── ResetToNewGame carve-out: wallet + breachStyle survive; progression wipes. ──
@@ -625,11 +629,11 @@ namespace DeNelle.Editor
                 if (st.Pets.Count != 0 || st.OwnedPets.Count != 0 || st.PetName != null)
                     failures.Add("ResetToNewGame left ghost pet ownership (Pets/OwnedPets/PetName must all clear)");
                 if (st.Zones == null || st.Zones.Count == 0) failures.Add("ResetToNewGame did not seed the default zone graph");
-                // WO-682/WO-707: strategic placement is always on — the seed is
-                // unconditionally the StartingBudget founding pair (one of each + the 3
-                // containers), and New Game = the TRULY blank template (marker set,
-                // BaseLayout EMPTY — the WO-682 grace-default forge was KILLED by owner
-                // ruling 2026-07-13: "should be placed by player").
+                // WO-682/WO-707 + owner ruling 2026-07-13 evening: the seed is
+                // unconditionally the StartingBudget pair — now ZERO, because the
+                // per-id free-first-build flags REPLACE the resource seed. New Game =
+                // the TRULY blank template (marker set, BaseLayout EMPTY — the WO-682
+                // grace-default forge was KILLED: "should be placed by player").
                 if (st.Wood != StartingBudget.StrategicWood)
                     failures.Add($"ResetToNewGame wood seed {st.Wood} != expected {StartingBudget.StrategicWood} (strategic placement is always on, WO-682)");
                 if (st.Iron != StartingBudget.StrategicIron)
@@ -638,6 +642,10 @@ namespace DeNelle.Editor
                     failures.Add("ResetToNewGame did not SET the strategic-placement marker — a new game must be the blank template (WO-682), never a re-migrated town");
                 if (st.BaseLayout == null || st.BaseLayout.Count != 0)
                     failures.Add($"ResetToNewGame BaseLayout != EMPTY (got {(st.BaseLayout == null ? "null" : st.BaseLayout.Count.ToString())} record(s)) — WO-707: no grace default, the player places everything");
+                // v32 — the loaded save had 'pet-house' consumed; a New Game must hand back
+                // EVERY first-build freebie (fresh empty list, owner ruling 2026-07-13 evening).
+                if (st.FreeBuildsUsed == null || st.FreeBuildsUsed.Count != 0)
+                    failures.Add($"ResetToNewGame FreeBuildsUsed != EMPTY (got {(st.FreeBuildsUsed == null ? "null" : "[" + string.Join(",", st.FreeBuildsUsed) + "]")}) — a fresh save must have ALL first-build freebies live");
                 log.AppendLine("  ResetToNewGame carve-out holds (wallet/breachStyle kept; progression + pets wiped)");
 
                 // ── Tamper gate through the REAL Load: mutate, save, corrupt, reload. ──

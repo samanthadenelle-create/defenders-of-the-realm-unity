@@ -982,7 +982,7 @@ namespace DeNelle.Village
         private void ShowRejectToast(BuildRejectReason reason)
         {
             if (reason == BuildRejectReason.CannotAfford)
-                BuildFeedbackToast.Show(ShortfallMessage(CostFor(_armed)));
+                BuildFeedbackToast.Show(ShortfallMessage(EffectiveCostFor(_armed)));
             else
                 BuildFeedbackToast.Show(reason);
         }
@@ -1131,7 +1131,7 @@ namespace DeNelle.Village
                 ? Resources.Load<GameObject>(_armed.visualPrefabPath)
                 : null;
             string name = !string.IsNullOrEmpty(_armed.displayName) ? _armed.displayName : _armed.id;
-            double costSkr = CostFor(_armed).crystals;
+            double costSkr = EffectiveCostFor(_armed).crystals;   // freebie-aware (0 while the first-build is live)
 
             // Seed the panel from the ghost's current rotate yaw, rounded down to the
             // quarter-step the (dormant) panel understands.
@@ -1329,10 +1329,11 @@ namespace DeNelle.Village
             // 5. Affordable from the persisted multi-resource ledger (EconomyService —
             //    the GameState-backed Wood/Food/Iron/Crystals surface). Crystals-only
             //    entries fall back to a Crystals cost. A move is free, so the cost gate
-            //    is skipped for it.
+            //    is skipped for it. EffectiveCostFor: a live first-build freebie is a
+            //    zero cost, so the ghost/validator agrees with the Place() commit.
             if (!ignoreCost)
             {
-                DeNelle.Core.Catalog.ResourceCost cost = CostFor(entry);
+                DeNelle.Core.Catalog.ResourceCost cost = EffectiveCostFor(entry);
                 if (!CanAfford(cost)) { reason = BuildRejectReason.CannotAfford; return false; }
             }
 
@@ -1478,7 +1479,10 @@ namespace DeNelle.Village
             // Re-check affordability AT commit through the same ledger the validity gate
             // used — never spawn if the player can't pay (defensive: balance may have
             // changed since the ghost frame). Charge ONLY after this, per WO-131.
-            DeNelle.Core.Catalog.ResourceCost cost = CostFor(_armed);
+            // First-build freebie (owner 2026-07-13): read the flag ONCE here so the
+            // affordability gate, the charge and the consumption below all agree.
+            bool freeBuild = FreeBuildAvailable(_armed);
+            DeNelle.Core.Catalog.ResourceCost cost = freeBuild ? default : CostFor(_armed);
             if (!CanAfford(cost))
             {
                 Debug.Log($"[BuildMode] Not enough resources to place '{_armed.id}' — placement aborted.");
@@ -1552,7 +1556,27 @@ namespace DeNelle.Village
             // multi-resource ledger (EconomyService → GameState-backed Crystals/Food +
             // in-session Wood/Iron). TrySpend is atomic; it can't fail here (we re-checked
             // CanAfford above) but the bool is honoured for safety.
-            ChargeLedger(cost);
+            // First-build freebie (owner 2026-07-13 evening): the FIRST committed
+            // placement of each catalog id is FREE — skip the charge and burn the
+            // per-id flag HERE, at the committed placement only (an armed/cancelled
+            // ghost never consumes it). The flag NEVER resets: selling/destroying the
+            // building does not restore it. Persistence rides Exit() -> CommitLayout ->
+            // GameStateService.Save(), the SAME save that carries the BaseLayout append
+            // above — building and burned flag commit or revert together.
+            if (freeBuild)
+            {
+                var st0 = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                if (st0 != null)
+                {
+                    if (st0.FreeBuildsUsed == null) st0.FreeBuildsUsed = new List<string>();
+                    st0.FreeBuildsUsed.Add(_armed.id);
+                }
+                FlowTrace.Step("Build", $"first-build FREE consumed for '{_armed.id}' (one-shot, never resets)");
+            }
+            else
+            {
+                ChargeLedger(cost);
+            }
 
             // Append to the live BaseLayout so Exit() persists it.
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
@@ -1580,7 +1604,7 @@ namespace DeNelle.Village
                     $"no free build slot for '{jobKey}' — completed instantly (never block)");
             }
 
-            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}°, charged {Describe(cost)}.");
+            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}°, charged {(freeBuild ? "nothing (first-build FREE)" : Describe(cost))}.");
         }
 
         // =====================================================================
@@ -2121,6 +2145,35 @@ namespace DeNelle.Village
             if (!repo.cost.IsZero) return repo.cost;                       // multi-cost wins
             return new DeNelle.Core.Catalog.ResourceCost { crystals = repo.buildCost };   // crystals fallback
         }
+
+        /// <summary>
+        /// First-build freebie (owner ruling 2026-07-13 evening): TRUE while the
+        /// entry's ONE-TIME free first placement is still live — i.e. its id is not
+        /// yet in the per-save <c>GameState.FreeBuildsUsed</c> ledger (v32). The flag
+        /// burns ONLY at a committed placement (Place()); it never resets — selling/
+        /// destroying the building does not restore it. Service-less/state-less =
+        /// no freebie (fall back to the normal cost, never a free exploit path).
+        /// </summary>
+        public static bool FreeBuildAvailable(CatalogEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.id)) return false;
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (st == null) return false;
+            var used = st.FreeBuildsUsed;
+            if (used == null) return true;   // additive default — never-written list = all freebies live
+            for (int i = 0; i < used.Count; i++)
+                if (string.Equals(used[i], entry.id, System.StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// The cost the player actually pays: ZERO (all components — wood/iron/food/
+        /// crystals) while the entry's first-build freebie is live, else CostFor.
+        /// The ONE cost reader for the ghost validator, the palette, the info panel
+        /// and the Place() commit, so every surface agrees with the ledger.
+        /// </summary>
+        public static DeNelle.Core.Catalog.ResourceCost EffectiveCostFor(CatalogEntry entry)
+            => FreeBuildAvailable(entry) ? default : CostFor(entry);
 
         /// <summary>Map the Core cost to EconomyService.ResourceCost (1:1 field copy).</summary>
         public static ResourceCost ToEconomy(DeNelle.Core.Catalog.ResourceCost c)
