@@ -14,6 +14,12 @@ multiplier, seam SHIPPED).
 - "Free model": first build of each id FREE (v32 flags) replaced the seed — the phased feel's
   economic half.
 
+## THE LAW (owner, 2026-07-13 — the rule every case below instantiates)
+**"As it becomes viable, we add it to the visible ones."** A building enters the palette at
+the moment the game can honestly answer *why would I build this?* — need creates the option,
+never a list. Every future building gets its viability trigger AT MINT TIME (a signal id in
+its WO) instead of a bespoke ruling later.
+
 ## What THIS WO ships — progressive palette disclosure
 1. **Category reveal rides the founding beats** (data-driven off the SAME SeenTutorials
    `tutorial_v2:<step>` keys — no new state). The owner-confirmed order — "start with a few,
@@ -24,9 +30,24 @@ multiplier, seam SHIPPED).
    - **STORAGE:** the containers band (Lumberyard/Foundry/Silo) reveals at the
      founding_stores beat — taught by the surplus, not by a list.
    - **DEFENSES tab** appears at founding_defense.
-   - **SHOPS (Forge/Armorer/Arcane Tower/Jeweler/Store)** reveal AFTER the teaching wave is
+   - **SHOPS (Forge/Armorer/Arcane Tower/Store)** reveal AFTER the teaching wave is
      won — Grok phase 4, "upgrades feel like rewards for surviving, not chores at the start."
-   Post-Onboarded: everything visible forever.
+   - **JEWELER is discovery-gated (owner, 2026-07-13): it unlocks when the player FINDS their
+     first gem-stone** — the loot asks the question, the building answers it. Signal = first
+     gem/crystal-class pickup (`item.acquired:<gem-class>` one-shot adapter); until then the
+     Jeweler card stays locked with the carrot "Found a strange stone? Someone could set it."
+     (Replaces the old static unlock-gate lockedIds entry for jeweler as the PLAYER-FACING
+     gate; the catalog row is untouched.)
+   - **BARRACKS is milestone-gated the same way (owner, 2026-07-13): it reveals when
+     AUTOMATED DEFENDING unlocks** — the troop-training building appears exactly when troops
+     become a concept (the army/auto-defense feature arriving, `ff.barracks` flipping ON /
+     the ArmyStorage-deploy loop going live). Until then it never shows; carrot on unlock:
+     "Your walls can fight without you now - train who mans them."
+   - **ARENA/COLOSSEUM the same (owner, 2026-07-13):** the colosseum structure + arena entry
+     reveal only when the arena feature itself unlocks (`ff.arena`/`ff.colosseum` flipping ON
+     — the WO-703 default-OFF gates become the milestone: feature lands, building appears).
+   Post-Onboarded: everything visible forever — EXCEPT the milestone-gated trio: Jeweler
+   (first-stone discovery), Barracks (automated defending), Arena/Colosseum (arena feature).
 2. **SELECTABLE = the current chunk ONLY (owner, verbatim: "if we group the tutorial into
    chunks only those options should be under the build - at least as selectable").** During
    the founding, a card outside the active chunk is NEVER armable: it renders as a
