@@ -18,15 +18,21 @@ Fresh save, after landing at the hub (tree + well + walls only, per the BLANK-1 
    character the owner picks) walks up / awaits at the Heart: *"This is your castle — and this
    tree is what we defend. Everything else… is yours to build."* (final copy = owner pass;
    ten-year-old-clear, diegetic).
-2. **Guided first placement.** The beat opens Build → Town with the Forge highlighted (the
-   WO-673 review's ruling #4: first placement BY HAND — ownership lands). Existing
+2. **Guided first placement — LOW-STAKES FIRST (owner ruling 2026-07-13, supersedes the
+   Forge-first line from WO-673 ruling #4; BY-HAND placement stands).** The beat opens
+   Build → Town with the **Echo Hollow** highlighted: a lesser-value building whose placement
+   can't be "wrong," and it pays off immediately — **placing it grants the pet** (the reward
+   teaches "building things gives me things" before any stakes talk). Existing
    `TutorialSignals` fire on placement; add a generic `StructurePlaced(itemId)` signal if only
    TowerPlaced exists (small, reusable).
-3. **The strategic warning — the owner's key line.** After placement, the Steward delivers the
-   stakes: *"Choose your ground with care. When the horde comes, they'll strike what they can
-   reach — an exposed lumber yard burns first, and what burns stops earning."* This is WO-672's
-   damage lifecycle + WO-698's threat framing taught in one sentence — placement = strategy,
-   stated at minute one.
+3. **The strategic warning — escalate to the STORE-HOLDERS (owner ruling 2026-07-13).** Next
+   the Steward turns to the buildings that hold value: *"Choose your ground with care. Some
+   roofs hold your stores — grain, timber, coin. When the horde comes, they'll strike what
+   they can reach — an exposed lumber yard burns first, and what burns stops earning. Put
+   what you cannot afford to lose where you can afford to defend it."* Guided second placement
+   = a store-holding building (Mill/Market/Lumbermill), with the defensible-ground framing
+   live on screen. This is WO-672's damage lifecycle + WO-698's threat framing taught at the
+   moment it matters — placement = strategy, low-stakes → reward → stakes escalation.
 4. **The Founder's Plan ghost (approved ruling 3A).** The Steward offers the ghost layout:
    *"I can sketch where the old town stood — build it my way, or ignore an old man's chalk."*
    One tap = build-it-for-me (spends the seed budget); ignoring it is fully valid. Ghosts fade
