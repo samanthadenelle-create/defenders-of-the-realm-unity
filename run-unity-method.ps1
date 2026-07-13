@@ -44,7 +44,9 @@ if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
 $logDir = Join-Path $proj 'Builds'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $log = Join-Path $logDir $LogName
-if (Test-Path $log) { Remove-Item $log -Force }
+# Tolerate the check-then-delete race (2026-07-13 fleet aggregation: Test-Path passed,
+# the file vanished before Remove-Item ran, and the emitter aborted with exit 1).
+if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 
 $unityArgs = @('-batchmode', '-quit', '-projectPath', $proj, '-executeMethod', $Method, '-logFile', $log)
 Write-Host "[run] editor=$($chosen.Name)  method=$Method"
