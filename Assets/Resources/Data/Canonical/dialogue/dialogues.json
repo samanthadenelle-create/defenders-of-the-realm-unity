@@ -12,9 +12,25 @@
     { "name": "Blacksmith",  "affiliation": "Forge",            "portrait": "Portraits/forge" },
     { "name": "Armorer",     "affiliation": "Armorer's Hall",   "portrait": "Portraits/armorer" },
     { "name": "Sable",       "affiliation": "Jeweler's Bench",  "portrait": "Portraits/jeweler" },
-    { "name": "Herbalist",   "affiliation": "Apothecary",       "portrait": "Portraits/apothecary" }
+    { "name": "Herbalist",   "affiliation": "Apothecary",       "portrait": "Portraits/apothecary" },
+    { "name": "Echo",        "affiliation": "Spirit of the Tree", "portrait": "Portraits/pet-house" }
   ],
   "dialogues": [
+    {
+      "id": "echo_first_meeting",
+      "startNode": "stir",
+      "nodes": [
+        {
+          "id": "stir",
+          "commands": [
+            { "verb": "portrait", "args": ["Portraits/pet-house"] }
+          ],
+          "lines": [
+            { "speaker": "Echo", "text": "The Tree stirs - a spirit answers. It will gather for Elarion, even while you are away." }
+          ]
+        }
+      ]
+    },
     {
       "id": "brom_intro",
       "startNode": "greet",

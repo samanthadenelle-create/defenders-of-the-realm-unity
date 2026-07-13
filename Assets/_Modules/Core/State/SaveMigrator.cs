@@ -67,6 +67,7 @@ namespace DeNelle.Core.State
                 { 28, MigrateToV28 },
                 { 29, MigrateToV29 },
                 { 30, MigrateToV30 },
+                { 31, MigrateToV31 },
             };
 
         /// <summary>
@@ -438,11 +439,22 @@ namespace DeNelle.Core.State
         // v30 — WO-673 strategic-placement migration marker. A pre-v30 save has never run the
         // one-shot bake→BaseLayout migration, so seed false: the baked storefronts + runtime
         // station injectors keep owning the functional structures (exactly the prior behaviour)
-        // until the flag-gated writer (StrategicPlacementMigration.RunIfNeeded) flips it once.
+        // until the one-shot writer (StrategicPlacementMigration.RunIfNeeded) flips it once
+        // on the next home-hub load (always-on since WO-682 removed ff.strategicplacement).
         // Additive + idempotent (only seeds when null), mirroring the v25/v29 seed precedent.
         private static PersistedState MigrateToV30(PersistedState s)
         {
             if (!s.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = false;
+            return s;
+        }
+
+        // v31 — WO-681/658 echo gather-lane assignments (per-Echo lane CSV, index 0 = the
+        // starter Echo). A pre-v31 save has never assigned a lane, so seed the "wood" starter
+        // default — exactly the prior behaviour (the starter Echo always gathered wood).
+        // Additive + idempotent (only seeds when null), mirroring the v29/v30 seed precedent.
+        private static PersistedState MigrateToV31(PersistedState s)
+        {
+            if (s.EchoLanes == null) s.EchoLanes = "wood";
             return s;
         }
 
