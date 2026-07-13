@@ -625,17 +625,19 @@ namespace DeNelle.Editor
                 if (st.Pets.Count != 0 || st.OwnedPets.Count != 0 || st.PetName != null)
                     failures.Add("ResetToNewGame left ghost pet ownership (Pets/OwnedPets/PetName must all clear)");
                 if (st.Zones == null || st.Zones.Count == 0) failures.Add("ResetToNewGame did not seed the default zone graph");
-                // WO-682: strategic placement is always on — the seed is unconditionally
-                // the StartingBudget core-kit pair, and New Game = the blank template
-                // (marker set, BaseLayout = the single FTUE grace-default forge record).
+                // WO-682/WO-707: strategic placement is always on — the seed is
+                // unconditionally the StartingBudget founding pair (one of each + the 3
+                // containers), and New Game = the TRULY blank template (marker set,
+                // BaseLayout EMPTY — the WO-682 grace-default forge was KILLED by owner
+                // ruling 2026-07-13: "should be placed by player").
                 if (st.Wood != StartingBudget.StrategicWood)
                     failures.Add($"ResetToNewGame wood seed {st.Wood} != expected {StartingBudget.StrategicWood} (strategic placement is always on, WO-682)");
                 if (st.Iron != StartingBudget.StrategicIron)
                     failures.Add($"ResetToNewGame iron seed {st.Iron} != expected {StartingBudget.StrategicIron} (strategic placement is always on, WO-682)");
                 if (!st.StrategicPlacementMigrated)
                     failures.Add("ResetToNewGame did not SET the strategic-placement marker — a new game must be the blank template (WO-682), never a re-migrated town");
-                if (st.BaseLayout == null || st.BaseLayout.Count != 1 || st.BaseLayout[0].itemId != "forge")
-                    failures.Add($"ResetToNewGame BaseLayout != the single FTUE grace-default 'forge' record (got {(st.BaseLayout == null ? "null" : st.BaseLayout.Count.ToString())} record(s)) — WO-682 option (b)");
+                if (st.BaseLayout == null || st.BaseLayout.Count != 0)
+                    failures.Add($"ResetToNewGame BaseLayout != EMPTY (got {(st.BaseLayout == null ? "null" : st.BaseLayout.Count.ToString())} record(s)) — WO-707: no grace default, the player places everything");
                 log.AppendLine("  ResetToNewGame carve-out holds (wallet/breachStyle kept; progression + pets wiped)");
 
                 // ── Tamper gate through the REAL Load: mutate, save, corrupt, reload. ──

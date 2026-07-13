@@ -1,0 +1,325 @@
+// =============================================================================
+// SylasStewardInjector — WO-702 "The Founding of Elarion": Sylas's BODY for the
+// founding beats (owner ruling 2026-07-13: "use the model for him, then unload it").
+// -----------------------------------------------------------------------------
+// The Tutorial V2 founding arc speaks through Sylas (tutorial-steps.json rows →
+// TutorialFlow → DialogueService), but under ff.singlehero the walk-up companion
+// introducer no-ops, so NO Sylas body exists — TutorialWorldAnchors.ResolveSylas
+// falls to a synthetic courtyard anchor and "world.sylas" spotlights empty air.
+//
+// This injector mirrors CastleCompanionIntroducerInjector's proven shape
+// (RuntimeInitializeOnLoadMethod bootstrap → HubScenes.IsHub gate → runtime
+// holder → Resources body + height-normalize + NpcGroundSeat) and spawns the
+// Ranger-Scout body NEAR THE HEART, named "Sylas", so:
+//   * TutorialWorldAnchors.ResolveSylas finds it by name (GameObject.Find("Sylas"))
+//     and the "world.sylas" highlight + "sylas_anchor" proximity resolve to a REAL
+//     character standing at the tree — the fresh-spawn vista (tree + well + Sylas).
+//   * A manual Talk (TalkPromptRegistry proximity prompt) REPLAYS the current
+//     founding step's intro line (TutorialFlow.CurrentIntroDialogueId) — the flow
+//     itself auto-plays each beat, so Talk is a courtesy replay, never a gate.
+//
+// LIFECYCLE (the "then unload it" half): the body exists ONLY while the founding
+// arc is incomplete — gate = FeatureFlags.TutorialV2 && !GameState.Onboarded, the
+// SAME arc-incomplete signal the FTUE peace window uses (TutorialFlow.Hostiles-
+// SuppressedForTutorial; no new flag). A cheap 1 Hz poll watches Onboarded and
+// destroys the holder the moment the arc completes.
+//
+// NO wander: AmbientNPC configured wander:false + NavMeshAgent disabled (the
+// introducer's exact static-body idiom). Village → Core only. Guard/FlowTrace
+// per §12 (docs/INSTRUMENTATION_STANDARD.md).
+// =============================================================================
+
+using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
+using DeNelle.Core.UI;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+using CoreDialogue = DeNelle.Core.Dialogue;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Runtime, non-destructive spawn of Sylas's steward body near the Heart for
+    /// the WO-702 founding beats; despawns the moment onboarding completes.
+    /// </summary>
+    public sealed class SylasStewardInjector : MonoBehaviour
+    {
+        public static SylasStewardInjector Instance { get; private set; }
+
+        /// <summary>The body prefab — the same Ranger-Scout source the companion
+        /// introducer uses (Sylas IS the Ranger scout, owner pin #1). Capsule fallback.</summary>
+        private const string StewardBody   = "NPCs/NPC_Ranger_Scout";
+        private const string FallbackBody  = "NPCs/NPC_Peasant_Tob";
+
+        private const string HolderName = "SylasSteward (runtime)";
+
+        // Offset from the Heart toward the known-walkable courtyard point (6,0,4) —
+        // the same safe town band TutorialWorldAnchors.ResolveTownAnchor uses — so
+        // Sylas stands "beneath the tree" a few strides into the courtyard.
+        private static readonly Vector3 CourtyardOffset = new Vector3(4f, 0f, 3f);
+
+        private const float DespawnPollInterval = 1f;
+        private float _nextPollAt;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            // The founding steward only exists in the Tutorial V2 world; flag OFF =
+            // fully dormant (the legacy director owns its own Sylas presentation).
+            if (!FeatureFlags.TutorialV2) return;
+            if (Instance != null) return;
+            new GameObject("SylasStewardInjector").AddComponent<SylasStewardInjector>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(this); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+
+            if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Inject();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (HubScenes.IsHub(scene.name)) Inject();
+        }
+
+        // 1 Hz Onboarded watch — "use the model for him, then unload it".
+        private void Update()
+        {
+            if (Time.unscaledTime < _nextPollAt) return;
+            _nextPollAt = Time.unscaledTime + DespawnPollInterval;
+            if (!ArcIncomplete())
+            {
+                var holder = GameObject.Find(HolderName);
+                if (holder != null)
+                {
+                    FlowTrace.Step("SylasSteward", "founding arc complete (Onboarded) — despawning Sylas's body (owner: 'use the model, then unload it').");
+                    Destroy(holder);
+                }
+                // Injector retires with the arc: nothing left to watch or spawn.
+                Destroy(gameObject);
+            }
+        }
+
+        /// <summary>The founding-arc-incomplete gate — the SAME signal the FTUE peace
+        /// window keys on (ff.tutorialv2 + !Onboarded). No new flag (owner sequencing ruling).</summary>
+        private static bool ArcIncomplete()
+        {
+            if (!FeatureFlags.TutorialV2) return false;
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            return state != null && !state.Onboarded;
+        }
+
+        private void Inject()
+        {
+            using var _ = FlowTrace.Enter("SylasSteward", "Inject");
+
+            if (!ArcIncomplete())
+            {
+                FlowTrace.Step("SylasSteward", "arc already complete (Onboarded) or state unavailable — no steward spawned.");
+                return;
+            }
+
+            // Idempotent: nuke any prior runtime holder so a re-load never double-spawns.
+            var prior = GameObject.Find(HolderName);
+            if (prior != null) Destroy(prior);
+
+            var holder = new GameObject(HolderName);
+
+            // Position: the live Heart (the tree, scene centre) + a courtyard offset,
+            // snapped to the walkable NavMesh. Heart unresolved => canon origin (0,0,0).
+            var heart = FindAnyObjectByType<HeartController>();
+            if (heart == null)
+                FlowTrace.Warn("SylasSteward", "Inject: no HeartController resolved — steward anchors to the canon origin (0,0,0) + courtyard offset.");
+            Vector3 basePos = (heart != null ? heart.transform.position : Vector3.zero) + CourtyardOffset;
+            if (NavMesh.SamplePosition(basePos, out var hit, 8f, NavMesh.AllAreas))
+                basePos = hit.position;
+
+            // Face the Heart/tree — the greeting reads "at the tree", not into a wall.
+            Vector3 toHeart = (heart != null ? heart.transform.position : Vector3.zero) - basePos;
+            toHeart.y = 0f;
+            Quaternion rot = toHeart.sqrMagnitude > 0.01f
+                ? Quaternion.LookRotation(toHeart.normalized, Vector3.up)
+                : Quaternion.identity;
+
+            GameObject body = null;
+            Guard.Try("SylasSteward", "spawn steward body", () => body = SpawnBody(basePos, rot, holder.transform));
+            if (body == null)
+            {
+                FlowTrace.Fail("SylasSteward", "Inject: body spawn failed entirely — 'world.sylas' falls back to the synthetic town anchor (flow degrades, never blocks).");
+                return;
+            }
+
+            // THE LOAD-BEARING NAME: TutorialWorldAnchors.ResolveSylas finds Sylas by
+            // GameObject.Find("Sylas") — this is what points the spotlight at him.
+            body.name = "Sylas";
+
+            Guard.Try("SylasSteward", "attach steward Talk", () => AttachInteraction(body));
+
+            FlowTrace.Step("SylasSteward", $"Sylas steward spawned at {basePos} (near the Heart, facing the tree) — founding beats have a body.");
+        }
+
+        // ── Body (the introducer/vendor idiom: Resources body + normalize + seat) ──
+
+        private GameObject SpawnBody(Vector3 pos, Quaternion rot, Transform parent)
+        {
+            using var _ = FlowTrace.Enter("SylasSteward", "SpawnBody");
+
+            GameObject prefab = null;
+            string usedKey = null;
+            foreach (var key in new[] { StewardBody, FallbackBody })
+            {
+                FlowTrace.Try("SylasSteward", $"Resources.Load '{key}'",
+                    () => { if (prefab == null) prefab = Resources.Load<GameObject>(key); });
+                if (prefab != null) { usedKey = key; break; }
+            }
+            if (prefab == null)
+            {
+                FlowTrace.Warn("SylasSteward", "no body prefab found (Models gitignored on a fresh clone?) — capsule placeholder used.");
+                return SpawnPlaceholder(pos, rot, parent);
+            }
+
+            GameObject go = null;
+            FlowTrace.Try("SylasSteward", "Instantiate steward body",
+                () => go = Instantiate(prefab, pos, rot, parent));
+            if (go == null)
+            {
+                FlowTrace.Fail("SylasSteward", $"Instantiate returned null for '{usedKey}' — capsule placeholder used.");
+                return SpawnPlaceholder(pos, rot, parent);
+            }
+
+            NormalizeToHeroHeight(go);
+            NpcGroundSeat.Seat(go, pos.y);
+
+            // STATIC body: no wander (owner spec), belt-and-braces disable any agent.
+            var npc = go.GetComponent<AmbientNPC>();
+            if (npc != null) npc.Configure(TownsfolkDialogue.Archetype.Villager, /*wander*/ false, pos);
+            var agent = go.GetComponent<NavMeshAgent>();
+            if (agent != null) agent.enabled = false;
+
+            // Render-verify (§12: anything that renders can be broken).
+            int enabled = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                if (r != null && r.enabled) enabled++;
+            if (enabled <= 0)
+                FlowTrace.Fail("SylasSteward", $"steward body from '{usedKey}' has NO enabled renderer — Sylas will be invisible.");
+            else
+                FlowTrace.Step("SylasSteward", $"steward body OK from '{usedKey}' ({enabled} enabled renderer(s)).");
+
+            return go;
+        }
+
+        private static GameObject SpawnPlaceholder(Vector3 pos, Quaternion rot, Transform parent)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos + Vector3.up * 1f;
+            go.transform.rotation = rot;
+            var col = go.GetComponent<Collider>();
+            if (col != null) col.isTrigger = true;   // never block the hero
+            return go;
+        }
+
+        private void AttachInteraction(GameObject body)
+        {
+            if (body == null) return;
+            var interact = body.AddComponent<SylasStewardInteractable>();
+            if (interact == null)
+                FlowTrace.Fail("SylasSteward", "AttachInteraction: AddComponent failed — Sylas is visible but un-talkable (the flow's auto-played beats still run).");
+        }
+
+        private static void NormalizeToHeroHeight(GameObject go)
+        {
+            float scale = 1f;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                if (b.size.y > 0.01f) scale = 1.95f / b.size.y;
+            }
+            if (scale > 0.01f && !Mathf.Approximately(scale, 1f))
+            {
+                go.transform.localScale *= scale;
+                var bubbleRoot = go.transform.Find("BubbleRoot");
+                if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, scale);
+            }
+        }
+    }
+
+    // =========================================================================
+    // SylasStewardInteractable — courtesy Talk: replays the CURRENT founding
+    // step's intro line. Mirrors CompanionIntroducerInteractable's registry shape
+    // (proximity TalkPromptRegistry, suppressed during dialogue/build mode) but:
+    //   * routes to TutorialFlow.CurrentIntroDialogueId (the live beat's line),
+    //   * NEVER auto-fires (the flow auto-plays each beat on step enter),
+    //   * never one-shots — re-talk = re-hear the current instruction.
+    // =========================================================================
+    [DisallowMultipleComponent]
+    public sealed class SylasStewardInteractable : MonoBehaviour
+    {
+        private const float ActivateRadius = 6f;
+
+        private Transform _hero;
+
+        private void Update()
+        {
+            if (_hero == null) { ResolveHero(); return; }
+
+            // Build mode / open dialogue: drop the prompt (same rules as every NPC).
+            if (MobileInteractButton.Suppressed || CoreDialogue.DialogueService.IsRunning)
+            {
+                TalkPromptRegistry.Deregister(transform);
+                return;
+            }
+
+            float distSqr = (_hero.position - transform.position).sqrMagnitude;
+            if (distSqr <= ActivateRadius * ActivateRadius)
+                TalkPromptRegistry.Register(transform, Interact);
+            else
+                TalkPromptRegistry.Deregister(transform);
+        }
+
+        private void Interact()
+        {
+            var flow = FindAnyObjectByType<TutorialFlow>();
+            string dialogueId = flow != null ? flow.CurrentIntroDialogueId : null;
+            if (string.IsNullOrEmpty(dialogueId))
+            {
+                FlowTrace.Step("SylasSteward", "Talk: no live founding step with an intro line — nothing to replay.");
+                return;
+            }
+            if (CoreDialogue.DialogueService.Play(dialogueId))
+                FlowTrace.Step("SylasSteward", $"Talk: replayed the current beat's line '{dialogueId}'.");
+            else
+                FlowTrace.Warn("SylasSteward", $"Talk: DialogueService.Play('{dialogueId}') returned false — row missing?");
+        }
+
+        private void ResolveHero()
+        {
+            var tagged = GameObject.FindWithTag("Player");
+            if (tagged != null) { _hero = tagged.transform; return; }
+            var loco = FindAnyObjectByType<HeroLocomotion>();
+            if (loco != null) _hero = loco.transform;
+        }
+
+        private void OnDisable()
+        {
+            TalkPromptRegistry.Deregister(transform);
+        }
+    }
+}

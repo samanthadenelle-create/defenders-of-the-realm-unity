@@ -34,6 +34,12 @@ namespace DeNelle.Core.Tutorial
         // ── Canonical signal ids (spec §2.1b) — keep in sync with tutorial-steps.json ──
         public const string BuildModeEntered = "build.mode_entered";
         public const string TowerPlaced      = "build.tower_placed";
+        /// <summary>WO-702 per-item placement completion: "build.structure_placed:" +
+        /// the placed CatalogEntry id (e.g. "build.structure_placed:pet-house") —
+        /// raised ALONGSIDE the generic <see cref="TowerPlaced"/> by
+        /// DeNelle.Village.TutorialSignalAdapters.OnStructurePlaced so a step can
+        /// gate on a SPECIFIC structure (the founding-arc guided placements).</summary>
+        public const string StructurePlacedPrefix = "build.structure_placed:";   // + CatalogEntry id
         public const string WaveCleared      = "wave.cleared";
         public const string ArenaWin         = "arena.resolved:win";
         public const string ArenaLoss        = "arena.resolved:loss";

@@ -56,12 +56,17 @@ namespace DeNelle.Core.Tutorial
         [JsonProperty("count")] public int Count;
     }
 
-    /// <summary>One-time grants applied when the step enters (interpreter-applied;
-    /// prepaidTower = the guided first tower is free — WO-T3 drives the build flow).</summary>
+    /// <summary>One-time grants applied by the interpreter (prepaidTower on step ENTER —
+    /// WO-T3 funds the guided build; starterPet on step COMPLETION — WO-702: the reward
+    /// follows the placement, granting the starter pet when the Echo Hollow is placed).</summary>
     [Serializable]
     public sealed class TutorialGrant
     {
         [JsonProperty("prepaidTower")] public bool PrepaidTower;
+        /// <summary>WO-702 founding arc: on COMPLETION of this step, grant the starter pet
+        /// (PetAcquisitionService.Acquire + GameState.StarterPetId) with a visible birth at
+        /// the placed Echo Hollow. Idempotent per save (tutorial_v2_grant key + Owns check).</summary>
+        [JsonProperty("starterPet")] public bool StarterPet;
     }
 
     /// <summary>One declarative tutorial step (mandatory-chain or contextual one-shot).</summary>

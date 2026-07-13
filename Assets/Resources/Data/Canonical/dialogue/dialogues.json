@@ -647,6 +647,99 @@
       ]
     },
     {
+      "id": "tut_founding_greet",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "This is your castle - and this tree is what we defend. Everything else is yours to build." },
+            { "speaker": "Sylas", "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_hollow",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it." },
+            { "speaker": "Sylas", "text": "Build a thing, and the thing gives back. You'll see." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_hollow_done",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "There - and look what came out to meet you. That one's yours now, Keeper." },
+            { "speaker": "Sylas", "text": "And that little light by the Hollow is an Echo - tap it sometime; it works for you now." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_stores",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Choose your ground with care. Some roofs hold your stores - grain, timber, coin." },
+            { "speaker": "Sylas", "text": "When the horde comes, they'll strike what they can reach - an exposed lumber yard burns first, and what burns stops earning." },
+            { "speaker": "Sylas", "text": "Put what you cannot afford to lose where you can afford to defend it." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_town",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours." },
+            { "speaker": "Sylas", "text": "Take your time. A town is a plan you walk through every day." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_echo",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "See that little light? An Echo - the tree's helper. It came with your Hollow." },
+            { "speaker": "Sylas", "text": "Tap it and choose what it gathers for you - wood, iron or grain. While you rest, it works." }
+          ],
+          "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
+        }
+      ]
+    },
+    {
+      "id": "tut_founding_defense",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab." },
+            { "speaker": "Sylas", "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow." }
+          ]
+        }
+      ]
+    },
+    {
       "id": "tut_ctx_echo_assign",
       "startNode": "start",
       "nodes": [

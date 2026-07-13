@@ -283,6 +283,15 @@ namespace DeNelle.DevTools
                 // gate is stuck, this FAILS and the throttled '[Flow:Build] PlaceLoop BLOCKED at
                 // <gate>' lines name the culprit — that is its purpose.
                 yield return RunPhase("AssertTutorialFirstTower", AssertTutorialFirstTower());
+                // WO-702 founding-arc probe: on a FRESH save, assert Sylas's steward body
+                // stands near the Heart (+ 'world.sylas' resolves to it), drive the live
+                // founding_greet dialogue to its end through the REAL Advance path, place
+                // the Echo Hollow through the REAL build gate (ArmById('pet-house') +
+                // injected click — the 2990aaf6 lesson, no logic bypass), then assert the
+                // per-item signal, the starter-pet grant (Pets roster + StarterPetId), the
+                // FTUE peace window, and that DEFEND (ForceBeginNextWave→GuardedKickoff)
+                // refuses while the arc is incomplete. Every failed link names itself.
+                yield return RunPhase("AssertFoundingArc", AssertFoundingArc());
                 // WO-677 / MOB-1 (owner 2026-07-12, mobile web: Move/Sell unreachable): the touch
                 // verb bar (Rotate ⟲⟳ + Cancel) only exists on touch devices (EnsureTouchInput
                 // gates on Input.touchSupported), so NO desktop/fleet log has ever executed its
@@ -1416,6 +1425,306 @@ namespace DeNelle.DevTools
         }
 
         // =====================================================================
+        //  AssertFoundingArc — WO-702 founding-FTUE chain probe (real gates)
+        // ---------------------------------------------------------------------
+        // Fresh-save founding arc, link by link (each failure NAMES the dead link):
+        //   link 0  context gates (ff.tutorialv2 / hub / fresh save) — N/A otherwise
+        //   link 1  Sylas body present near the Heart AND 'world.sylas' resolves TO IT
+        //   link 2  founding_greet driven to its end via the REAL dialogue Advance
+        //   link 3  Echo Hollow through the REAL build gate: Enter → ArmById('pet-house')
+        //           → injected click (IBuildInput seam) → placement commits →
+        //           'build.structure_placed:pet-house' raised (the WO-702 signal)
+        //   link 4  starter-pet grant: GameState.Pets grew + StarterPetId set
+        //   link 5  FTUE peace window: HostilesSuppressedForTutorial TRUE throughout
+        //   link 6  DEFEND refused: ForceBeginNextWave leaves the wave phase Idle
+        // =====================================================================
+        private IEnumerator AssertFoundingArc()
+        {
+            const string Tag = "Auto";
+            const string HollowId = "pet-house";
+            string hollowSignal = DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix + HollowId;
+            string scene = ActiveScene();
+            FlowTrace.Step(Tag, "AssertFoundingArc: ENTER — WO-702 founding-arc chain probe.");
+
+            // ── link 0: context gates ────────────────────────────────────────
+            if (!DeNelle.Core.FeatureFlags.TutorialV2)
+            {
+                _lastDetail = "ff.tutorialv2 OFF — N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertFoundingArc: ff.tutorialv2 OFF — N/A, skipping.");
+                yield break;
+            }
+            if (!DeNelle.Core.HubScenes.IsHub(scene))
+            {
+                _lastDetail = $"'{scene}' not a hub — N/A (skipped)";
+                FlowTrace.Step(Tag, $"AssertFoundingArc: scene '{scene}' is not a hub — N/A.");
+                yield break;
+            }
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var st = svc != null ? svc.State : null;
+            if (st == null)
+            {
+                _lastDetail = "GameStateService unavailable — N/A (skipped)";
+                FlowTrace.Warn(Tag, "AssertFoundingArc: GameStateService/State unavailable — N/A.");
+                yield break;
+            }
+            if (st.Onboarded)
+            {
+                _lastDetail = "save already Onboarded — N/A (returning player)";
+                FlowTrace.Step(Tag, "AssertFoundingArc: save already Onboarded — founding arc done; N/A.");
+                yield break;
+            }
+
+            // ── link 5 (entry): the peace window must already hold on a fresh save ──
+            if (!TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                _lastDetail = "FAIL link 5 — peace window NOT held on a fresh save";
+                FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 5 — fresh save (Onboarded=false, ff.tutorialv2 ON) but TutorialFlow.HostilesSuppressedForTutorial is FALSE; the founding peace window is broken at entry.");
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertFoundingArc: link 5 (entry) PASS — peace window held (HostilesSuppressedForTutorial=true).");
+
+            // ── link 1: Sylas body near the Heart + 'world.sylas' resolves to it ──
+            GameObject sylas = null;
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 5f)
+            {
+                sylas = GameObject.Find("Sylas");
+                if (sylas != null) break;
+                yield return null;
+            }
+            if (sylas == null)
+            {
+                _lastDetail = "FAIL link 1 — no 'Sylas' body (SylasStewardInjector never spawned it)";
+                FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 1 — no GameObject named 'Sylas' within 5s on a fresh save; SylasStewardInjector did not spawn the steward body (read its [Flow:SylasSteward] lines in this run).");
+                yield break;
+            }
+            var heart = FindAnyObjectByType<HeartController>();
+            if (heart != null)
+            {
+                float d = Vector3.Distance(sylas.transform.position, heart.transform.position);
+                if (d > 20f)
+                    FlowTrace.Warn(Tag, $"AssertFoundingArc: link 1 SOFT — Sylas is {d:0.0}m from the Heart (expected a courtyard-adjacent spawn <= 20m).");
+                else
+                    FlowTrace.Step(Tag, $"AssertFoundingArc: link 1a PASS — Sylas body {d:0.0}m from the Heart.");
+            }
+            var anchor = DeNelle.Core.UI.TutorialHighlightRegistry.Resolve("world.sylas");
+            bool anchorIsSylas = anchor.IsValid && anchor.World != null &&
+                (anchor.World == sylas.transform || anchor.World.IsChildOf(sylas.transform) || sylas.transform.IsChildOf(anchor.World));
+            if (!anchorIsSylas)
+            {
+                _lastDetail = "FAIL link 1 — 'world.sylas' does not resolve to the spawned body";
+                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 1 — 'world.sylas' resolved to '{(anchor.World != null ? anchor.World.name : "<invalid>")}' instead of the spawned Sylas body; TutorialWorldAnchors.ResolveSylas is not finding it by name.");
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertFoundingArc: link 1 PASS — Sylas body present and 'world.sylas' resolves to it.");
+
+            // ── link 2: drive founding_greet's dialogue to its end (real Advance) ──
+            var flow = FindAnyObjectByType<TutorialFlow>();
+            if (flow != null && string.Equals(flow.CurrentStepId, "founding_greet", StringComparison.OrdinalIgnoreCase))
+            {
+                // Wait for the beat's intro dialogue to open, then Advance through it —
+                // the SAME call the continue tap fires (DialogueViewModel.Advance).
+                t0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - t0 < 5f && !DeNelle.Core.Dialogue.DialogueService.IsRunning)
+                    yield return null;
+                int taps = 0;
+                while (DeNelle.Core.Dialogue.DialogueService.IsRunning && taps < 40)
+                {
+                    DeNelle.Core.Dialogue.DialogueService.ActiveVm?.Advance();
+                    taps++;
+                    yield return null;
+                }
+                // The dialogue.ended completion should move the flow off founding_greet.
+                t0 = Time.realtimeSinceStartup;
+                bool advanced = false;
+                while (Time.realtimeSinceStartup - t0 < 5f)
+                {
+                    if (!string.Equals(flow.CurrentStepId, "founding_greet", StringComparison.OrdinalIgnoreCase)) { advanced = true; break; }
+                    yield return null;
+                }
+                if (!advanced)
+                {
+                    _lastDetail = $"FAIL link 2 — founding_greet never completed after {taps} Advance taps";
+                    FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 2 — drove the greet dialogue with {taps} real Advance taps but the flow never left founding_greet (dialogue.ended:tut_founding_greet not consumed).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertFoundingArc: link 2 PASS — founding_greet completed via real dialogue Advance ({taps} taps); flow now on '{flow.CurrentStepId}'.");
+            }
+            else
+                FlowTrace.Step(Tag, $"AssertFoundingArc: link 2 skipped — flow not parked on founding_greet this run (step '{(flow != null ? flow.CurrentStepId : "<no flow>")}').");
+
+            // ── link 3+4: the Echo Hollow placement + the starter-pet grant ─────
+            int petsBefore = st.Pets != null ? st.Pets.Count : 0;
+            bool hollowAlreadyPlaced = false;
+            if (st.BaseLayout != null)
+                foreach (var rec in st.BaseLayout)
+                    if (string.Equals(rec.itemId, HollowId, StringComparison.OrdinalIgnoreCase)) { hollowAlreadyPlaced = true; break; }
+
+            if (hollowAlreadyPlaced)
+                FlowTrace.Step(Tag, "AssertFoundingArc: link 3 N/A — a pet-house already stands on this save (singleton; idempotent rerun). Grant asserted from persisted state below.");
+            else
+            {
+                var ctrl = BuildModeController.EnsureExists();
+                if (ctrl.IsActive) { ctrl.Exit(); yield return null; }
+                ctrl.Enter();
+                yield return null; yield return null;
+                if (!ctrl.IsActive)
+                {
+                    _lastDetail = "FAIL link 3 — build Enter() refused";
+                    FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 3 — BuildModeController.Enter() did not activate; the Hollow placement chain is dead before arming.");
+                    yield break;
+                }
+
+                var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(HollowId);
+                if (entry == null)
+                {
+                    _lastDetail = "FAIL link 3 — 'pet-house' not in CatalogRegistry";
+                    FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 3 — 'pet-house' missing from CatalogRegistry; the founding_hollow step can never arm.");
+                    ctrl.Exit();
+                    yield break;
+                }
+                var cost = BuildModeController.CostFor(entry);
+                var econ = EconomyService.Instance;
+                if (econ != null) econ.Grant(BuildModeController.ToEconomy(cost));   // fund the gate — the gate still runs
+                else DeNelle.Core.State.GameStateService.Instance?.AddCrystals(cost.crystals);
+
+                if (!ctrl.ArmById(HollowId))
+                {
+                    _lastDetail = "FAIL link 3 — ArmById('pet-house') refused";
+                    FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 3 — ArmById('pet-house') returned false (arming path broken for the Hollow).");
+                    ctrl.Exit();
+                    yield break;
+                }
+
+                var bot = new BotBuildInput();
+                ctrl.SetInput(bot);
+                bool placedFired = false;
+                string placedId = null;
+                Action<string> onPlaced = id => { if (string.Equals(id, HollowId, StringComparison.OrdinalIgnoreCase)) { placedFired = true; placedId = id; } };
+                BuildModeController.StructurePlaced += onPlaced;
+                DeNelle.Core.Tutorial.TutorialSignals.Clear(hollowSignal);
+
+                try
+                {
+                    var cam = HighestDepthScreenCamera();
+                    var grid = PlacementGrid.Instance;
+                    if (cam == null || grid == null)
+                    {
+                        _lastDetail = "FAIL link 3 — no camera/grid after Enter()";
+                        FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 3 — " + (cam == null ? "no screen camera" : "no PlacementGrid") + " after Enter(); cannot project a ground click.");
+                        yield break;
+                    }
+                    var centre = new Vector2Int(grid.gridWidth / 2, grid.gridHeight / 2);
+                    var candidates = new List<Vector2>();
+                    for (int r = 2; r <= 12 && candidates.Count < 8; r += 2)
+                    {
+                        for (int dx = -r; dx <= r && candidates.Count < 8; dx++)
+                        for (int dz = -r; dz <= r && candidates.Count < 8; dz++)
+                        {
+                            if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;
+                            var cell = centre + new Vector2Int(dx, dz);
+                            if (cell.x < 0 || cell.y < 0 || cell.x >= grid.gridWidth || cell.y >= grid.gridHeight) continue;
+                            Vector3 sp3 = cam.WorldToScreenPoint(grid.CellToWorld(cell));
+                            if (sp3.z <= 0f) continue;
+                            if (sp3.x < 0f || sp3.y < 0f || sp3.x >= Screen.width || sp3.y >= Screen.height) continue;
+                            var sp = new Vector2(sp3.x, sp3.y);
+                            if (!ctrl.ProbeArmedPlacementAt(sp, out _)) continue;
+                            candidates.Add(sp);
+                        }
+                    }
+                    FlowTrace.Step(Tag, $"AssertFoundingArc: {candidates.Count} pre-validated Hollow candidate cell(s).");
+                    for (int i = 0; i < candidates.Count && !placedFired; i++)
+                    {
+                        bot.Click(candidates[i]);
+                        float w = 0f;
+                        while (w < 1.2f && !placedFired) { w += Time.deltaTime; yield return null; }
+                    }
+                    if (!placedFired)
+                    {
+                        _lastDetail = $"FAIL link 3 — no Hollow placement committed (polls={bot.Polls}, consumed={bot.Consumed})";
+                        FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 3 — armed 'pet-house' but no placement committed at any candidate (polls={bot.Polls}, clicksConsumed={bot.Consumed}); read the '[Flow:Build]' reject lines in this run.");
+                        yield break;
+                    }
+                    FlowTrace.Step(Tag, $"AssertFoundingArc: link 3a PASS — Hollow placement committed (StructurePlaced('{placedId}')).");
+
+                    float sw = 0f;
+                    while (sw < 2f && !DeNelle.Core.Tutorial.TutorialSignals.HasFired(hollowSignal)) { sw += Time.deltaTime; yield return null; }
+                    if (!DeNelle.Core.Tutorial.TutorialSignals.HasFired(hollowSignal))
+                    {
+                        _lastDetail = "FAIL link 3 — per-item signal never raised";
+                        FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 3 — StructurePlaced fired but '{hollowSignal}' never raised within 2s (TutorialSignalAdapters.OnStructurePlaced not raising the WO-702 per-item id).");
+                        yield break;
+                    }
+                    FlowTrace.Step(Tag, $"AssertFoundingArc: link 3 PASS — '{hollowSignal}' raised.");
+                }
+                finally
+                {
+                    BuildModeController.StructurePlaced -= onPlaced;
+                    ctrl.SetInput(null);
+                    if (ctrl.IsActive) ctrl.Exit();
+                }
+            }
+
+            // ── link 4: the completion-side starter-pet grant ────────────────────
+            // (only asserted hard when the flow was live on founding_hollow OR the
+            //  grant already persisted; a mid-run probe placement without the flow on
+            //  that step does not trigger the grant — that's interpreter-correct.)
+            float gw = 0f;
+            bool granted = false;
+            while (gw < 6f)
+            {
+                int petsNow = st.Pets != null ? st.Pets.Count : 0;
+                if (!string.IsNullOrEmpty(st.StarterPetId) && (petsNow > petsBefore || petsNow > 0)) { granted = true; break; }
+                gw += Time.deltaTime;
+                yield return null;
+            }
+            bool flowWasOnHollow = flow != null && string.Equals(flow.CurrentStepId, "founding_hollow", StringComparison.OrdinalIgnoreCase);
+            if (granted)
+                FlowTrace.Step(Tag, $"AssertFoundingArc: link 4 PASS — starter pet granted (Pets={(st.Pets != null ? st.Pets.Count : 0)}, StarterPetId='{st.StarterPetId}').");
+            else if (flowWasOnHollow || hollowAlreadyPlaced)
+            {
+                _lastDetail = "FAIL link 4 — Hollow placed but no pet grant (Pets/StarterPetId unchanged)";
+                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 4 — the Hollow stands but GameState.Pets ({petsBefore}→{(st.Pets != null ? st.Pets.Count : 0)}) / StarterPetId ('{st.StarterPetId}') show NO grant within 6s; ApplyStarterPetGrant never fired on step completion.");
+                yield break;
+            }
+            else
+                FlowTrace.Step(Tag, "AssertFoundingArc: link 4 skipped — flow was not awaiting founding_hollow this run, so the completion-side grant is correctly untriggered.");
+
+            // ── link 6: DEFEND must refuse while the arc is incomplete ───────────
+            if (!st.Onboarded)
+            {
+                var wm = FindAnyObjectByType<WaveManager>();
+                if (wm == null)
+                    FlowTrace.Warn(Tag, "AssertFoundingArc: link 6 SOFT — no WaveManager in scene; DEFEND-refusal unassertable here.");
+                else
+                {
+                    wm.ForceBeginNextWave();   // → GuardedKickoff, which must stand down under the FTUE guard
+                    float dw = 0f;
+                    while (dw < 2f) { dw += Time.deltaTime; yield return null; }
+                    if (wm.Phase != WavePhase.Idle)
+                    {
+                        _lastDetail = $"FAIL link 6 — DEFEND armed a wave mid-founding (phase '{wm.Phase}')";
+                        FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 6 — ForceBeginNextWave moved the wave phase to '{wm.Phase}' while the founding arc is incomplete; GuardedKickoff's FTUE stand-down is broken.");
+                        yield break;
+                    }
+                    FlowTrace.Step(Tag, "AssertFoundingArc: link 6 PASS — DEFEND refused (wave phase stayed Idle under the FTUE guard).");
+                }
+
+                // link 5 (exit): the peace window still holds after everything above.
+                if (!TutorialFlow.HostilesSuppressedForTutorial)
+                {
+                    _lastDetail = "FAIL link 5 — peace window dropped mid-arc";
+                    FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 5 — HostilesSuppressedForTutorial went FALSE while the arc is still incomplete (the peace window dropped mid-founding).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertFoundingArc: link 5 (exit) PASS — peace window still held.");
+            }
+
+            _lastDetail = "PASS — founding-arc chain intact (Sylas, greet, Hollow, grant, peace, DEFEND-refusal)";
+            FlowTrace.Step(Tag, "AssertFoundingArc: PASS — the WO-702 founding-arc chain is intact end-to-end.");
+        }
+
+        // =====================================================================
         //  AssertTouchVerbBarRenderable — WO-677 / MOB-1 §12 proof capture
         // ---------------------------------------------------------------------
         // The touch verb bar (Rotate ⟲⟳ + Cancel) is the ONLY touch exit from the
@@ -2059,6 +2368,7 @@ namespace DeNelle.DevTools
                 case "AssertEquip":       return EquipTimeout;
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
                 case "AssertTutorialFirstTower": return 45f;  // P0 real-input build-placement probe (enter + arm + 8 candidate clicks + signal waits)
+                case "AssertFoundingArc": return 75f;         // WO-702: Sylas poll + greet dialogue drive + Hollow placement + grant/DEFEND waits
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row

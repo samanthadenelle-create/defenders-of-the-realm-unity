@@ -104,8 +104,16 @@ namespace DeNelle.Village
             Discover();
         }
 
-        private void OnStructurePlaced(string entryId) =>
+        private void OnStructurePlaced(string entryId)
+        {
             TutorialSignals.Raise(TutorialSignals.TowerPlaced);
+            // WO-702 (founding arc): ALSO raise the per-item id so a step can gate on a
+            // SPECIFIC structure ("build.structure_placed:pet-house" — the guided Echo
+            // Hollow / Lumberyard placements). Additive: the generic TowerPlaced above
+            // keeps every existing row working.
+            if (!string.IsNullOrEmpty(entryId))
+                TutorialSignals.Raise(TutorialSignals.StructurePlacedPrefix + entryId);
+        }
 
         // ── Late-spawning source discovery (1 Hz) ─────────────────────────────
 

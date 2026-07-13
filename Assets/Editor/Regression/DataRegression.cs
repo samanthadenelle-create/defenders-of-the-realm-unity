@@ -301,8 +301,12 @@ namespace DeNelle.Editor
 
             if (mandatory.Count == 0)
             { failures.Add("tutorial-steps.json deserialized to 0 mandatory steps (mapping break or empty)"); return; }
-            if (mandatory.Count != 7)
-                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided flow is exactly 7 (spec CREATIVE SCOPE)");
+            // WO-702 (owner ruling 2026-07-13): the founding arc = 7 founding beats
+            // (greet, hollow, stores, town, echo, defense, defend) + world_encounter +
+            // return_home + freedom = exactly 10 mandatory steps. Supersedes the 07-02
+            // "exactly 7" creative scope.
+            if (mandatory.Count != 10)
+                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided founding flow is exactly 10 (WO-702, 2026-07-13)");
 
             // Known highlight-registry ids + completion-signal vocabulary.
             var knownHighlights = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds);
@@ -319,7 +323,9 @@ namespace DeNelle.Editor
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstSkillPoint ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix) ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.HeroReachedPrefix) ||
-                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix));
+                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix) ||
+                    // WO-702: per-item placement signals (build.structure_placed:<entryId>)
+                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix));
 
             int lastOrder = int.MinValue;
             var tutSpeakers = new HashSet<string>();

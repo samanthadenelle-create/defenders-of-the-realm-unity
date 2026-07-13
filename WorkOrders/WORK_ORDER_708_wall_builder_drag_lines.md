@@ -1,6 +1,8 @@
 # WORK ORDER 708 — Wall Builder: drag-to-draw wall lines (the last base-creation tool)
 
-**Status: SPEC — design pins below, then READY** (owner vision statement 2026-07-13, verbatim:
+**Status: PARKED — POST-V1** (owner 2026-07-13: "lets figure those out after we ship v1" — pins
++ implementation wait for the V1 ship; the vision is canon now, the tool comes after).
+(owner vision statement 2026-07-13, verbatim:
 "this really is the very center of anyone creating their own base. the only thing we add is
 wall builder and its a full build generic structure and can completely create any base").
 **Lane:** BuildMode/UI. **Depends:** WO-707 (groomed palette, seed), WO-702 (founding arc — the

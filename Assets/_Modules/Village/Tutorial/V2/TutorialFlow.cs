@@ -103,6 +103,14 @@ namespace DeNelle.Village
         /// mid-session Finished from the fresh-boot decline.</summary>
         public static bool RanThisSession => s_ranThisSession;
 
+        /// <summary>Current mandatory step id, or null when idle/finished (probe read).</summary>
+        public string CurrentStepId => _step != null ? _step.Id : null;
+
+        /// <summary>The live step's intro dialogue id (WO-702: SylasStewardInjector routes a
+        /// manual Talk to this — replaying the current beat's line; null when none).</summary>
+        public string CurrentIntroDialogueId =>
+            _step != null && _step.Dialogue != null ? _step.Dialogue.Intro : null;
+
         /// <summary>
         /// F8 2026-07-08 ("during tutorial we need to not let anything spawn. died in tutorial"):
         /// TRUE while the first-time tutorial (FTUE) is active/incomplete — ALL ambient hostile
@@ -415,9 +423,9 @@ namespace DeNelle.Village
         /// <summary>
         /// Player-facing SKIP TUTORIAL (owner directive 2026-07-08): completes the ENTIRE
         /// FTUE in one call so a skipper ends in the SAME state as a completer — NOT half-
-        /// granted. It (a) applies every mandatory step's cumulative essential GRANTS (today
-        /// the only <c>grant.*</c> authored is <c>first_tower.grant.prepaidTower</c> = +150
-        /// crystals; ApplyPrepaidTowerGrant is idempotent per save), (b) marks every step
+        /// granted. It (a) applies every mandatory step's cumulative essential GRANTS
+        /// (grant.prepaidTower = +150 crystals; WO-702 grant.starterPet = the founding
+        /// Hollow's pet — both idempotent per save), (b) marks every step
         /// seen so a resume never replays one, then (c) reuses the SINGLE completion path
         /// <see cref="FinishFlow"/> — which sets Onboarded (GameStateService.FinishOnboarding),
         /// tears down the spotlight/banner/pressure-hold, and kicks the normal town wave loop.
@@ -454,6 +462,10 @@ namespace DeNelle.Village
                     if (step == null || string.IsNullOrEmpty(step.Id)) continue;
                     if (step.Grant != null && step.Grant.PrepaidTower)
                         ApplyPrepaidTowerGrant(step);   // idempotent: no-op if already granted this save
+                    // WO-702: the founding_hollow starter-pet grant is essential too — a
+                    // skipper ends with the pet like a completer. Same idempotent key.
+                    if (step.Grant != null && step.Grant.StarterPet)
+                        ApplyStarterPetGrant(step);
                     bool alreadySeen = state != null && state.SeenTutorials != null &&
                         state.SeenTutorials.TryGetValue(SeenPrefix + step.Id, out bool seen) && seen;
                     if (!alreadySeen) svc?.MarkTutorialSeen(SeenPrefix + step.Id);
@@ -508,6 +520,12 @@ namespace DeNelle.Village
             }
 
             GameStateService.Instance?.MarkTutorialSeen(SeenPrefix + step.Id);
+
+            // WO-702: COMPLETION-side grant — the starter pet FOLLOWS the Hollow placement
+            // (reward-after-action; ENTER-side grants like prepaidTower stay in EnterStep).
+            // Applied on skip too: a skipped step still credits its essential grant.
+            if (step.Grant != null && step.Grant.StarterPet)
+                ApplyStarterPetGrant(step);
 
             UiSpotlight.Hide();
             ObjectiveBannerUi.Hide();
@@ -578,6 +596,113 @@ namespace DeNelle.Village
             svc.AddCrystals(PrepaidTowerCrystals);   // clamps, persists, raises ResourcesChanged (HUD + BuildMenu re-render)
             FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.prepaidTower APPLIED: +{PrepaidTowerCrystals} crystals " +
                 $"(one watchtower — BuildMenu default variant cost) via GameStateService.AddCrystals; balance now {state.Resources.Crystals}.");
+        }
+
+        // =====================================================================
+        //  WO-702 — grant.starterPet (the Echo Hollow's reward: the pet emerges)
+        // =====================================================================
+
+        /// <summary>Starter pet species the founding-arc Hollow placement grants —
+        /// "ice-wolf", the project's canonical default starter (the same species
+        /// PetDeployer.DefaultStarterSpecies resolves when no pick is recorded;
+        /// the PetSelect screen is bypassed under ff.bypasspetselect).</summary>
+        private const string StarterPetSpecies = "ice-wolf";
+
+        /// <summary>
+        /// WO-702: grants the starter pet on COMPLETION of the founding_hollow step —
+        /// the reward follows the placement. Three moves, each self-reporting:
+        ///   1. record <c>GameState.StarterPetId</c> (the SAME field the old PetSelect
+        ///      confirm wrote — SyncSlotsFromState restores slot 0 from it on reload),
+        ///   2. VISIBLE BIRTH (owner refinement 2026-07-13): the pet's body emerges AT
+        ///      the placed Echo Hollow via PetDeployer.SummonAt (the WO-360 one-summon
+        ///      path; PetHeroLeash then walks it to the hero) — Guard-wrapped so a failed
+        ///      visual spawn NEVER blocks the grant,
+        ///   3. roster grant through the ONE funnel PetAcquisitionService.Acquire
+        ///      (GameState.Pets + OwnedPets + slot + Save; idempotent via its Owns check).
+        /// Idempotent per save like prepaidTower: the tutorial_v2_grant key persists FIRST.
+        /// Order matters: StarterPetId before SummonAt (its owned-gate), SummonAt before
+        /// Acquire (so the slot redeploy sees the Hollow-born body and never double-spawns).
+        /// </summary>
+        private void ApplyStarterPetGrant(TutorialStepDef step)
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (svc == null || state == null)
+            {
+                FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — GameStateService unavailable, grant skipped.");
+                return;
+            }
+
+            string key = GrantSeenPrefix + step.Id;
+            if (state.SeenTutorials != null &&
+                state.SeenTutorials.TryGetValue(key, out bool granted) && granted)
+            {
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet already granted on this save — not re-granted.");
+                return;
+            }
+            svc.MarkTutorialSeen(key);   // persist FIRST — a replay can never double-grant (prepaidTower order)
+
+            // 1) StarterPetId — the canonical "pet-<species>" catalog id.
+            if (string.IsNullOrEmpty(state.StarterPetId))
+            {
+                var def = DeNelle.Pets.PetCatalog.FindBySpecies(StarterPetSpecies);
+                state.StarterPetId = def != null && !string.IsNullOrEmpty(def.Id)
+                    ? def.Id : "pet-" + StarterPetSpecies;
+            }
+
+            // 2) Visible birth at the Hollow (never blocks the grant).
+            Guard.Try("Tutorial", "starter-pet visible birth at the Echo Hollow", () =>
+            {
+                Vector3 origin = ResolveHollowPosition();
+                var deployer = FindAnyObjectByType<DeNelle.Pets.PetDeployer>();
+                if (deployer == null)
+                {
+                    var host = new GameObject("PetDeployer (tutorial runtime)");
+                    deployer = host.AddComponent<DeNelle.Pets.PetDeployer>();
+                    var heart = FindAnyObjectByType<HeartController>();
+                    deployer.SetHeartPosition(heart != null ? heart.transform.position : Vector3.zero);
+                }
+                var pet = deployer.SummonAt(origin, DeNelle.Pets.PetMode.Defend);
+                if (pet != null)
+                    FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — pet body spawned at the Echo Hollow {origin} (PetHeroLeash walks it to the hero).");
+                else
+                    FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — SummonAt returned null (visual birth skipped; roster grant still applies).");
+            });
+
+            // 3) Roster grant (the single funnel — Acquire saves, covering StarterPetId too).
+            var petSvc = DeNelle.Pets.PetAcquisitionService.Instance;
+            if (petSvc == null)
+            {
+                FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — PetAcquisitionService.Instance is null; StarterPetId recorded, roster entry deferred.");
+                svc.Save();   // still persist StarterPetId + the grant key
+                return;
+            }
+            bool acquiredNew = false;
+            Guard.Try("Tutorial", "starter-pet Acquire", () =>
+                acquiredNew = petSvc.Acquire(StarterPetSpecies, DeNelle.Pets.PetAcquisitionSource.Starter));
+            FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet APPLIED: '{StarterPetSpecies}' " +
+                $"(acquiredNew={acquiredNew}, StarterPetId='{state.StarterPetId}', roster={(state.Pets != null ? state.Pets.Count : 0)} pet(s)).");
+        }
+
+        /// <summary>World position of the placed Echo Hollow — the persisted BaseLayout
+        /// record (itemId "pet-house") projected through PlacementGrid; falls back to the
+        /// hero, then the origin, so the birth moment always has SOME anchor.</summary>
+        private Vector3 ResolveHollowPosition()
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var grid = PlacementGrid.Instance;
+            if (state != null && state.BaseLayout != null && grid != null)
+            {
+                foreach (var rec in state.BaseLayout)
+                {
+                    if (!string.Equals(rec.itemId, "pet-house", StringComparison.OrdinalIgnoreCase)) continue;
+                    Vector3 pos = grid.CellToWorld(new Vector2Int(rec.cellX, rec.cellZ));
+                    if (rec.worldY != 0f) pos.y = rec.worldY;
+                    return pos;
+                }
+            }
+            if (_hero == null) _hero = FindAnyObjectByType<HeroLocomotion>();
+            return _hero != null ? _hero.transform.position : Vector3.zero;
         }
 
         // =====================================================================
