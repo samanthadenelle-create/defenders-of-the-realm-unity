@@ -34,6 +34,16 @@ Fresh save, after landing at the hub (tree + well + walls only, per the BLANK-1 
 5. **Close the loop.** First DEFEND prompt after the core kit exists (or the player idles) —
    the wave teaches what the warning promised.
 
+## Sequencing ruling (owner, 2026-07-13 — BINDING on this arc)
+
+**The founding happens in a PEACEFUL town first; the defense comes after.** Beats 1–4 play out
+with zero hostile pressure: no waves arm, and no hostile mobs threaten the hub ring while the
+founding beats are incomplete (hold `OverworldEncounterSpawner`/`RegionMobSpawner` pressure away
+from the walls for the fresh-save founding window — gate on the same beat-incomplete GameState
+flag, don't invent a new one). The first DEFEND (beat 5) is the moment hostility enters the
+world; the peace→threat turn IS the lesson landing. Skip-path players get the same peace window
+until they arm a defense or the idle-DEFEND prompt fires.
+
 ## Reconciliation (reuse, never greenfield)
 - **Tutorial V2** (`ff.tutorialv2`, tutorial-steps.json + interpreter + telemetry) is the beat
   engine — this WO AUTHORS ROWS, it does not build a tutorial system. If V2's flag is still
