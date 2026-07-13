@@ -22,9 +22,24 @@ var PiBridgeLib = {
     }
   },
 
-  // true only inside Pi Browser (window.Pi present).
+  // true when the Pi SDK object exists (pi-sdk.js loaded). NOTE (WO-678): this is TRUE in
+  // ANY browser once the script loads — it does NOT mean we are inside Pi Browser. Use
+  // PiIsPiBrowser for the environment check.
   PiIsAvailable: function () {
     return (typeof window !== 'undefined' && typeof window.Pi !== 'undefined') ? 1 : 0;
+  },
+
+  // WO-678 Lane C: true only in the real Pi Browser app. Detection: the Pi Browser app
+  // ships the token "PiBrowser" in its user agent (case-insensitive match to be safe).
+  // Conservative by design — an unrecognised UA returns 0, which only skips AUTO
+  // sign-in; the manual "Sign in with Pi" button still works everywhere.
+  PiIsPiBrowser: function () {
+    try {
+      var ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+      return /pibrowser/i.test(ua) ? 1 : 0;
+    } catch (e) {
+      return 0;
+    }
   },
 
   // Pi.init({version:"2.0", sandbox}). sandbox != 0 → Testnet sandbox.

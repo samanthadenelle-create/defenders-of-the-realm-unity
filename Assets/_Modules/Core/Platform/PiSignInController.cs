@@ -94,6 +94,17 @@ namespace DeNelle.Core.Platform
                 if (_pi == null) _pi = PiPlatform.Current;
                 if (_pi != null && _pi.IsAvailable)
                 {
+                    // WO-678 Lane C: window.Pi exists in ANY browser once pi-sdk.js loads, but only
+                    // the real Pi Browser host ever answers it — auto-firing Pi.init elsewhere
+                    // guarantees one doomed promise the SDK rejects at 120s ("Promise with id 0
+                    // timed out after 120000 ms"). Gate AUTO sign-in on the UA environment check;
+                    // the manual button stays available everywhere (Lane A absorbs its rejection).
+                    if (!WebGLPiPlatform.IsPiBrowserEnvironment)
+                    {
+                        FlowTrace.Step("Pi", "Pi SDK loaded but UA is not Pi Browser — skipping auto sign-in; manual button available.");
+                        SetButton("Sign in with Pi", true);
+                        return;
+                    }
                     SignInAsync().Forget(); // auto-trigger the moment Pi is ready
                     return;
                 }
