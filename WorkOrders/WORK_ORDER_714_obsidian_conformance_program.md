@@ -36,7 +36,52 @@ panel · 693 jeweler/crafting · 713 inventory + character/gear · 676 skill tre
 699/SEL-1 hero-select chips.
 **Remainder inventory (the BuildObsidianPanel consumer census + known UXML risks), in
 player-touched priority order:**
-W1 ShopPanel + PartyShopPanelMvvm + vendor flows (pack MERCHANT reference) ·
+W1 ShopPanel + PartyShopPanelMvvm + vendor flows — **exact model APPROVED-PENDING in-chat
+2026-07-13 (the merchant buy/sell mockup is the composition authority for this lane):**
+  · Header: 42px round medallion (vendor-trade glyph) + vendor NAME + one flavor line.
+  · Mode toggle: full-width segmented BUY | SELL (34px band, selected = lit plate + bold —
+    replaces any separate buy/sell screens; VendorStockContract keeps governing stock).
+  · Item rows: FIXED 48px height, 8px gaps, 10px side padding; 36px icon plate with the
+    RARITY-colored border; name (13px floor) + one-line grant/effect under it; PRICE CHIP
+    pinned right (icon-first, CompactNumber). Unaffordable = dimmed row + red-bordered
+    "Need 🪙N" chip (text carries state). SELL mode: same rows, right chip = sell value,
+    name line gains "×owned".
+  · Select → detail strip (60px): icon + name + rarity chip + **the upgrade-delta line**
+    ("+22 attack — replaces Squire's Blade (+12)" — computed vs equipped; the single best
+    buy-decision aid) + ONE action button carrying the full price ("BUY · 🪙1.2k" — a
+    truncated price is a defect).
+  · Footer: gold chip left, Close right, top hairline; rows never clip under it.
+  · Spacing rhythm for the WHOLE lane: 14px panel padding, 12px between sections, 8px
+    between rows — no other gap values.
+  · **STOCK RULE (owner 2026-07-13, reaffirms + extends VendorStockContract):** the list shows
+    ONLY what THIS vendor sells — weaponsmith = weapons only, armorer = armor only; the ITEM
+    STORE (general/marketplace) = crafting materials + consumables. Extend `AllowedFor()` with
+    the item-store mapping; the AutoPilot stock assert keeps checking intent (the built seam).
+  · **PREVIEW WINDOW right (owner 2026-07-13):** the buy/sell layout becomes two-column —
+    rows LEFT, a preview pane RIGHT: weapons/armor render as a lit model preview (the WO-713
+    render-rig/GearIconRenderer recipe — show the item, or on-hero for armor), consumables/
+    materials show the large icon + effect text. Preview updates on row select; the detail
+    strip's upgrade-delta line moves INTO the preview pane's base. Render cost only while
+    open (same §B guardrails).
+  · **W1b — the UPGRADE screen (exact model approved-pending in-chat 2026-07-13):** header
+    "UPGRADE — <structure> · Level N → N+1" · LEFT = "WHAT CHANGES" delta rows (fixed 44px,
+    same rhythm: stat glyph + name, then old → new with the new value green+text) + build-time
+    row + COST chips · RIGHT = the PREVIEW pane showing the NEXT-TIER model (the
+    ReskinForLevel visual — the player sees what they're buying; slow turntable, rim-lit) ·
+    footer = relevant currency chips + ONE "UPGRADE · <full cost>" action + Close. Serves
+    resource buildings, towers (WO-696 context routes here), and gates/walls alike — deltas
+    from catalog rows, ZERO per-type layouts. Blocked states name why ("Repair first" per
+    WO-696; "Requires Village Tier N" per the gate).
+    **+ UNLOCKS BAND (owner 2026-07-13: "each tier unlocks perks like Warcraft that can be
+    researched"):** below WHAT CHANGES, a "UNLOCKS AT LEVEL N+1 — RESEARCH" strip: the perk
+    chips this tier opens (perk icon plate + name, dimmed with a small lock-open glyph +
+    "research after upgrade"), sourced from the WO-432 per-building research defs
+    (BuildingTierCatalog/perk rows — data-driven, no hardcoding). POST-upgrade, the success
+    toast carries "New research available — <Building> Enhancements" and tapping it routes to
+    the enhancement panel (the WO-675/680 surface) with the newly-opened tier band visible.
+    This makes the tier buy legible as the TECH-GATE it is: stats now + research unlocked —
+    the Warcraft promise on one screen. If a tier opens no research, the band hides (no empty
+    header). ·
 W2 EndStateView + wave damage report (defeat/victory = pack row-list grammar; REP-1 fix lane
 touches the same surface — coordinate) · W3 QuestsHud/DailyQuestHud + GameGuidePanel (pack
 QUESTS reference: list + parchment detail) · W4 RaidSelectionScreen + RaidDeployScreen +
@@ -67,3 +112,10 @@ founding-flow content (skin only if touched).
 *Cross-refs:* the read-order docs above · WO-675/676/680/693/697/713 (instances) ·
 MASTER_CATALOG P1 #8 (Settings/Pause UXML risk) · pack gallery (owner screenshots 2026-07-13)
 · `BlinkUiImporter` (§5 mirror pipeline).
+
+## PROGRAM STATUS (2026-07-13 overnight)
+Waves 1+2 SHIPPED and OWNER-ACCEPTED ("i accept the edits", night review): P1 kit factory +
+W1/W2/W3/W4/W5/W7/W8/W9 + WO-713 — nine lanes, gated per wave, committed per lane, pushed.
+Review drop: UI_REVIEW/INDEX.html (31/32 pairs; 01_HeroTalents re-shoots next pass).
+Remaining: W6 dialogue verify (capture-only) · W10 PackStore skin · PetSelect UITK conversion
+(own WO) · per-screen FIX verdicts from the owner's ongoing pair walk.
