@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" font-family="Segoe UI, sans-serif">
+<rect width="960" height="560" fill="#0d0b11"/>
+<text x="480" y="40" fill="#544b5e" font-size="11" text-anchor="middle">SCRIM owns the screen behind the modal (no gameplay bleed-through)</text>
+<rect x="280" y="70" width="400" height="420" fill="#16131b" stroke="#8a6d2f" stroke-width="3"/>
+<rect x="286" y="76" width="388" height="408" fill="none" stroke="#3a2f18"/>
+<circle cx="330" cy="112" r="22" fill="#211c29" stroke="#c9a24b" stroke-width="2.5"/>
+<text x="480" y="118" fill="#e8dcc0" font-size="18" text-anchor="middle" letter-spacing="2">SETTINGS</text>
+<g>
+<text x="316" y="166" fill="#bdb3a4" font-size="12">Music</text>
+<rect x="420" y="156" width="200" height="10" fill="#241f2d" stroke="#3a2f18"/><rect x="420" y="156" width="140" height="10" fill="#c9a24b"/><circle cx="560" cy="161" r="9" fill="#e3b54e"/>
+<text x="632" y="166" fill="#8d8272" font-size="11">70</text>
+<text x="316" y="206" fill="#bdb3a4" font-size="12">Effects</text>
+<rect x="420" y="196" width="200" height="10" fill="#241f2d" stroke="#3a2f18"/><rect x="420" y="196" width="170" height="10" fill="#c9a24b"/><circle cx="590" cy="201" r="9" fill="#e3b54e"/>
+<text x="632" y="206" fill="#8d8272" font-size="11">85</text>
+<text x="316" y="246" fill="#bdb3a4" font-size="12">Camera shake</text>
+<rect x="560" y="232" width="60" height="24" rx="12" fill="#2e2716" stroke="#c9a24b"/><circle cx="604" cy="244" r="9" fill="#e3b54e"/><text x="632" y="248" fill="#9fd08a" font-size="11">On</text>
+</g>
+<line x1="316" y1="276" x2="644" y2="276" stroke="#3a2f18"/>
+<g>
+<rect x="316" y="292" width="328" height="40" fill="#241f2d" stroke="#4a3c1e"/><text x="480" y="317" fill="#bdb3a4" font-size="13" text-anchor="middle">Row action — full words, never truncated</text>
+<rect x="316" y="340" width="328" height="40" fill="#241f2d" stroke="#4a3c1e"/><text x="480" y="365" fill="#bdb3a4" font-size="13" text-anchor="middle">Report a bug</text>
+</g>
+<text x="480" y="404" fill="#544b5e" font-size="10" text-anchor="middle">CODE-BUILT via the kit (this family retires the last UXML surfaces — W8)</text>
+<rect x="400" y="424" width="160" height="38" fill="#2e2716" stroke="#8a6d2f" stroke-width="2"/>
+<text x="480" y="448" fill="#e8dcc0" font-size="14" text-anchor="middle" letter-spacing="3">CLOSE</text>
+<text x="480" y="530" fill="#544b5e" font-size="10" text-anchor="middle">FAMILY F — small modal (compact FrameCore/FrameSettings): Settings · Pause · Help Menu · Bug Report · Jukebox · confirms/toast anchors · Echo card (WO-681)</text>
+</svg>
