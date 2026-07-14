@@ -1,28 +1,39 @@
 // =============================================================================
-// DailyQuestHud — compact, centered daily-quest card showing today's daily-quest
-// progress. Spawned by DailyQuestHudBootstrap once a scene has a hero (so it does
-// NOT appear on Title / HeroSelect).
+// DailyQuestHud — today's daily quests on the pack QUESTS reference (WO-714 W3).
+// Spawned by DailyQuestHudBootstrap once a scene has a hero (so it does NOT
+// appear on Title / HeroSelect).
 // -----------------------------------------------------------------------------
-// WO-F conversion (2026-07-03, coverage matrix row #54): UIDocument/UITK widget
-// -> code-built uGUI on the Obsidian master frame (BuildObsidianPanel: FrameCore
-// + medallion + the ONE shared kit Close), per the LeaderboardPanel / HelpMenu
-// reference recipe. Mobile-first: a small CENTERED card (thumb-zone), not a
-// full-height top-right bar.
+// WO-714 Phase 2 W3 conformance (2026-07-13): the compact FrameCore card ->
+// the pack QUESTS reference grammar (Quest_Log_Panel / FrameQuest master-detail,
+// the owner-ratified FrameCrafting template shape):
+//   * bodyLeft  (dark well)      = quest rows (kit Obsidian buttons, selected =
+//                                  Yellow; right-aligned readable state
+//                                  "+ Done" / "2 / 5" — counts carry the state,
+//                                  color is reinforcement only, colorblind law)
+//   * bodyRight (parchment well) = the WO-693 shared COMPACT DETAIL CARD
+//                                  (ElarionUiKit.BuildParchmentDetailCard:
+//                                  name + slot flavor -> REWARDS -> PROGRESS).
+//                                  No CTA — rewards auto-dispense on completion
+//                                  (DEF-223 reward bridge), there is no claim.
+// The ONE shared Close is the chrome's; the frame supplies ALL chrome (no
+// per-screen plates/rims/fills — the old BuildRow/BgFor/RimFor grammar is gone).
 //
-// PRESENTATION-ONLY: this view binds DailyQuestService.Today and DISPLAYS it. It
-// owns no quest data or logic; it refreshes on the service's SetChanged event.
-// The only view-side memory it keeps is _celebrated (which quests it has already
-// toasted) so a completion toast fires exactly once per quest (owner WO-35).
+// PRESENTATION-ONLY: this view binds DailyQuestService.Today and DISPLAYS it
+// (plus the slot's catalog reward row — catalog reads are presentation binding,
+// same as QuestTrackerHud's QuestCatalog reads). It owns no quest data or logic;
+// it refreshes on the service's SetChanged event. View-side memory: _celebrated
+// (completion toast fires exactly once per quest, owner WO-35) + _selectedKey
+// (which row the detail card inspects).
 //
 // Toggled on-demand by the TOWN ACTIONS "Quests" button (WO-411, via Toggle());
 // hidden while any modal is open (modal stand-down discipline).
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.Quests;
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace DeNelle.HUD
 {
@@ -31,13 +42,14 @@ namespace DeNelle.HUD
     {
         private ElarionUiKit.PanelChrome _chrome;
         private GameObject _canvas;
-        private Transform _rowHost;
+        private Transform _listHost;     // bodyLeft — dark list well
+        private Transform _detailHost;   // bodyRight — parchment detail well
         // Quests we've already celebrated, so a toast fires only on the FIRST time
         // a quest reaches Completed (owner WO-35: "expected something on completion").
-        private readonly System.Collections.Generic.HashSet<string> _celebrated =
-            new System.Collections.Generic.HashSet<string>();
+        private readonly HashSet<string> _celebrated = new HashSet<string>();
         private bool _initialized;
-        private bool _visible;   // user toggle state (the card starts hidden)
+        private bool _visible;           // user toggle state (the card starts hidden)
+        private string _selectedKey;     // which quest the detail card inspects
 
         public static DailyQuestHud Instance { get; private set; }
 
@@ -71,7 +83,7 @@ namespace DeNelle.HUD
             if (_canvas != null) Destroy(_canvas);
         }
 
-        /// <summary>Show/hide the daily-quest card — driven by the TOWN ACTIONS "Quests"
+        /// <summary>Show/hide the daily-quest panel — driven by the TOWN ACTIONS "Quests"
         /// button (WO-411: quests are on-demand, not a free-floating top-right panel).</summary>
         public void Toggle()
         {
@@ -87,7 +99,7 @@ namespace DeNelle.HUD
             _chrome.root.SetActive(_visible && !PanelManager.AnyOpen);
         }
 
-        // ── UI construction (kit panel on its own overlay canvas, lazy) ──────────
+        // ── UI construction (kit FrameQuest master-detail on its own overlay canvas) ──
         private void EnsureBuilt()
         {
             if (_canvas != null) return;
@@ -96,21 +108,28 @@ namespace DeNelle.HUD
             var c = _canvas.GetComponent<Canvas>();
             if (c != null) c.overrideSorting = true;
 
-            // Mobile-first: a compact card centered both horizontally AND vertically —
-            // NOT a full-height top-right bar. No backdrop scrim (non-blocking HUD card).
-            // Close routes to the kit's ONE shared sleek Close button (never an X); it
-            // hides the card, matching the Quests-button toggle.
+            // The pack QUESTS reference: FrameQuest (Quest_Log_Panel) master-detail —
+            // dark quest list LEFT, parchment detail RIGHT, medallion, ONE shared kit
+            // Close (it hides the card, matching the Quests-button toggle). No backdrop
+            // scrim — this stays a non-blocking HUD surface, not a PanelManager modal.
             _chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "Daily Quests",
-                new Vector2(0.34f, 0.32f), new Vector2(0.66f, 0.68f),
+                new Vector2(0.06f, 0.12f), new Vector2(0.94f, 0.88f),
                 onClose: () => { _visible = false; ApplyVisibility(); },
-                withBackdrop: false, frameName: RpgUiCatalog.FrameCore, medallionIcon: "quest");
+                withBackdrop: false, frameName: RpgUiCatalog.FrameQuest, medallionIcon: "quest");
 
-            var body = _chrome.layout != null && _chrome.layout.body != null
-                ? (Transform)_chrome.layout.body
-                : MakeZone(_chrome.content.transform, "Body",
-                    new Vector2(0.08f, 0.10f), new Vector2(0.92f, 0.86f));
-
-            _rowHost = MakeZone(body, "QuestRows", Vector2.zero, Vector2.one);
+            // Drop-zones only (canon §4): split wells when the frame resolves; graceful
+            // fallback zones on the procedural path (frame art absent — never blank).
+            var layout = _chrome.layout;
+            _listHost = layout != null && layout.bodyLeft != null
+                ? (Transform)layout.bodyLeft
+                : (layout != null && layout.body != null
+                    ? (Transform)layout.body
+                    : MakeZone(_chrome.content.transform, "ListWell",
+                        new Vector2(0.05f, 0.24f), new Vector2(0.48f, 0.86f)));
+            _detailHost = layout != null && layout.bodyRight != null
+                ? (Transform)layout.bodyRight
+                : MakeZone(_chrome.content.transform, "DetailWell",
+                    new Vector2(0.52f, 0.24f), new Vector2(0.95f, 0.86f));
 
             _chrome.root.SetActive(false);   // built hidden; Toggle() shows it
         }
@@ -118,35 +137,63 @@ namespace DeNelle.HUD
         // ── Repaint (presentation binding) ───────────────────────────────────────
         private void Repaint()
         {
-            if (_rowHost == null) return;
-            for (int i = _rowHost.childCount - 1; i >= 0; i--)
-                Destroy(_rowHost.GetChild(i).gameObject);
+            if (_listHost == null || _detailHost == null) return;
+            ClearZone(_listHost);
+            ClearZone(_detailHost);
 
             var svc = DailyQuestService.Instance;
             var today = svc?.Today;
             if (svc == null || today == null) return;
 
-            // Count valid quests so we can stack them compactly and centered.
-            var quests = new System.Collections.Generic.List<DailyQuestInstance>();
+            var quests = new List<DailyQuestInstance>();
             foreach (var q in today.Quests)
                 if (q != null) quests.Add(q);
 
             if (quests.Count == 0)
             {
-                MakeText(_rowHost, "No daily quests today.", 13, ElarionUi.ParchmentDim,
-                    FontStyles.Italic, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+                var none = ElarionUiKit.Label(_listHost, "No daily quests today.",
+                    0.40f, 0.60f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                    TextAlignmentOptions.Center, 0.05f, 0.95f);
+                none.fontStyle = FontStyles.Italic;
+                ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
+                ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "No daily quests today",
+                    "Fresh quests arrive with the new day.");
             }
             else
             {
-                const float gap = 0.04f;
-                float rowH = (1f - gap * (quests.Count - 1)) / quests.Count;
-                rowH = Mathf.Min(rowH, 0.30f);   // cap so few quests stay compact, not stretched
-                float top = 1f;
-                foreach (var q in quests)
+                // Keep / default the selection (first quest until one is tapped).
+                if (string.IsNullOrEmpty(_selectedKey) || FindIndex(quests, _selectedKey) < 0)
+                    _selectedKey = KeyFor(quests[0]);
+
+                // Quest rows (dark well, left) — the Jeweler/Crafting master-list grammar:
+                // kit Obsidian buttons, selected = Yellow face, readable right-aligned state.
+                const float rowH = 0.16f, gap = 0.02f;
+                float top = 0.98f;
+                for (int i = 0; i < quests.Count; i++)
                 {
-                    BuildRow(_rowHost, q, new Vector2(0f, top - rowH), new Vector2(1f, top));
+                    var q = quests[i];
+                    string key = KeyFor(q);
+                    bool selected = key == _selectedKey;
+                    var rowBtn = ElarionUiKit.BuildObsidianButton(_listHost, ResolveLabel(q),
+                        ElarionUiKit.ObsidianButtonStyle.Style1,
+                        selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                 : ElarionUiKit.ObsidianButtonColor.Gray,
+                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        () => { _selectedKey = key; Repaint(); });
+                    // State text carries the state (colorblind law); color = reinforcement.
+                    ElarionUiKit.AddRowStateSuffix(rowBtn,
+                        q.Completed ? "+ Done" : q.Progress + " / " + q.Target,
+                        q.Completed ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
                     top -= rowH + gap;
+                    if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
+
+                // Detail (parchment well, right — the WO-693 shared compact card).
+                int sel = FindIndex(quests, _selectedKey);
+                if (sel >= 0) BuildDetail(quests[sel]);
+                else
+                    ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "Select a quest",
+                        "Tap a quest to inspect its progress and rewards.");
             }
 
             // Fire a completion toast the first time each quest reaches Completed.
@@ -163,23 +210,52 @@ namespace DeNelle.HUD
             _initialized = true;
         }
 
-        // One compact quest row: rounded plate + name + progress "n/m" + a thin fill bar.
-        private void BuildRow(Transform parent, DailyQuestInstance q, Vector2 min, Vector2 max)
+        // ── Parchment detail card (WO-693 grammar: name + flavor -> REWARDS -> PROGRESS) ──
+        private void BuildDetail(DailyQuestInstance q)
         {
-            var plate = MakeImage(parent, "Quest", min, max, BgFor(q.Completed), rounded: true);
+            // REWARDS — the slot's catalog grant, relayed generically ("+ Crystals +25").
+            // All-ASCII glyphs; Good tone is reinforcement only (counts are the carrier).
+            var rewards = new List<ElarionUiKit.DetailCardRow>();
+            var slotReward = DailyQuestCatalog.RewardFor(q.Slot);
+            if (slotReward != null)
+            {
+                if (slotReward.RewardCrystals > 0)
+                    rewards.Add(new ElarionUiKit.DetailCardRow("+", "Crystals",
+                        "+" + slotReward.RewardCrystals, ElarionUiKit.DetailRowTone.Good));
+                if (slotReward.RewardFood > 0)
+                    rewards.Add(new ElarionUiKit.DetailCardRow("+", "Food",
+                        "+" + slotReward.RewardFood, ElarionUiKit.DetailRowTone.Good));
+                if (slotReward.RewardGlimmer > 0)
+                    rewards.Add(new ElarionUiKit.DetailCardRow("+", "Glimmer",
+                        "+" + slotReward.RewardGlimmer, ElarionUiKit.DetailRowTone.Good));
+                if (slotReward.RewardWisdom > 0)
+                    rewards.Add(new ElarionUiKit.DetailCardRow("+", "Wisdom",
+                        "+" + slotReward.RewardWisdom, ElarionUiKit.DetailRowTone.Good));
+                if (slotReward.RewardRandomItem)
+                    rewards.Add(new ElarionUiKit.DetailCardRow("*", "Bonus item", "1",
+                        ElarionUiKit.DetailRowTone.Dim));
+            }
 
-            MakeText(plate.transform, ResolveLabel(q), 13, ElarionUi.Parchment, FontStyles.Normal,
-                TextAlignmentOptions.MidlineLeft, new Vector2(0.06f, 0.42f), new Vector2(0.74f, 0.96f));
-            MakeText(plate.transform, $"{q.Progress}/{q.Target}", 12, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.MidlineRight, new Vector2(0.74f, 0.42f), new Vector2(0.94f, 0.96f));
+            // PROGRESS — "OK done" / count toward target; glyph + counts carry the state.
+            var progress = new List<ElarionUiKit.DetailCardRow>
+            {
+                new ElarionUiKit.DetailCardRow(
+                    q.Completed ? "OK" : "*",
+                    q.Completed ? "Complete" : "In progress",
+                    q.Progress + " / " + q.Target,
+                    q.Completed ? ElarionUiKit.DetailRowTone.Good : ElarionUiKit.DetailRowTone.Neutral),
+            };
 
-            // Progress bar (track + slot-tinted fill).
-            var bar = MakeImage(plate.transform, "Bar",
-                new Vector2(0.06f, 0.16f), new Vector2(0.94f, 0.30f),
-                new Color(1f, 1f, 1f, 0.10f), rounded: true);
-            float frac = Mathf.Clamp01(q.ProgressFraction);
-            MakeImage(bar.transform, "Fill",
-                new Vector2(0f, 0f), new Vector2(frac, 1f), RimFor(q.Slot), rounded: true);
+            ElarionUiKit.BuildParchmentDetailCard(_detailHost, new ElarionUiKit.DetailCardSpec
+            {
+                Title = ResolveLabel(q),
+                Flavor = SlotFlavor(q.Slot),
+                BestowsHeader = "REWARDS",
+                Bestows = rewards,
+                RequiresHeader = "PROGRESS",
+                Requires = progress,
+                // No CTA: completion rewards auto-dispense (DEF-223 reward bridge).
+            });
         }
 
         // A brief centered "Daily Quest Complete" toast that auto-dismisses (kit ToastCard).
@@ -205,26 +281,51 @@ namespace DeNelle.HUD
 
         // ── presentation helpers ─────────────────────────────────────────────────
 
+        private static string KeyFor(DailyQuestInstance q)
+            => q.Id ?? q.TemplateId ?? q.Slot ?? "";
+
+        private static int FindIndex(List<DailyQuestInstance> quests, string key)
+        {
+            if (quests == null || string.IsNullOrEmpty(key)) return -1;
+            for (int i = 0; i < quests.Count; i++)
+                if (KeyFor(quests[i]) == key) return i;
+            return -1;
+        }
+
         private static string ResolveLabel(DailyQuestInstance q)
         {
             if (string.IsNullOrEmpty(q.Label)) return q.TemplateId;
             return q.Label.Replace("{target}", q.Target.ToString());
         }
 
-        private static Color BgFor(bool done) => done
-            ? new Color(ElarionUi.Affordable.r * 0.35f, ElarionUi.Affordable.g * 0.35f, ElarionUi.Affordable.b * 0.35f, 0.92f)
-            : new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.92f);
-
-        private static Color RimFor(string slot) => slot switch
+        /// <summary>One readable flavor line naming the quest's slot (text carries the
+        /// category — the old slot-color rim is retired with the per-screen chrome).</summary>
+        private static string SlotFlavor(string slot)
         {
-            "combat"      => ElarionUi.Danger,
-            "exploration" => ElarionUi.ManaBlue,
-            "wildcard"    => ElarionUi.Aether,
-            _ => ElarionUi.Gold,
-        };
+            switch (slot)
+            {
+                case "combat":      return "Combat objective - resets daily.";
+                case "exploration": return "Exploration objective - resets daily.";
+                case "wildcard":    return "Wildcard objective - resets daily.";
+                default:            return "Daily objective - resets daily.";
+            }
+        }
 
-        // ── uGUI construction helpers (mirror LeaderboardPanel) ──────────────────
+        // Clear a drop-zone's repaintable children, PRESERVING the factory's ZoneBacking
+        // plate (the two-tone parchment-bleed fix paints it as the zone's first child —
+        // destroying it would re-expose the baked art seam under the content).
+        private static void ClearZone(Transform host)
+        {
+            if (host == null) return;
+            for (int i = host.childCount - 1; i >= 0; i--)
+            {
+                var child = host.GetChild(i);
+                if (child == null || child.name == "ZoneBacking") continue;
+                Destroy(child.gameObject);
+            }
+        }
 
+        // Fallback drop-zone for the PROCEDURAL (frame-art-absent) path only.
         private static Transform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -233,41 +334,6 @@ namespace DeNelle.HUD
             rt.anchorMin = min; rt.anchorMax = max;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             return go.transform;
-        }
-
-        private static Image MakeImage(Transform parent, string name, Vector2 min, Vector2 max,
-            Color color, bool rounded)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            img.raycastTarget = false;
-            if (rounded) ElarionUiKit.ApplyRounded(img);
-            return img;
-        }
-
-        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
-            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
-        {
-            var go = new GameObject("Text", typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var t = go.AddComponent<TextMeshProUGUI>();
-            t.text = text;
-            t.fontSize = size;
-            t.color = color;
-            t.fontStyle = style;
-            t.alignment = align;
-            t.raycastTarget = false;
-            t.textWrappingMode = TextWrappingModes.Normal;
-            ElarionUiKit.EnsureFont(t);
-            return t;
         }
     }
 }
