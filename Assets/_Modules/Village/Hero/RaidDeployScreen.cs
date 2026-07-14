@@ -47,8 +47,8 @@ namespace DeNelle.Village.Hero
     {
         private GameObject _ui;
         private SceneConfigDef _def;
-        private GameObject _troopListRoot;
-        private RectTransform _scrollContent;
+        private RectTransform _troopListArea;          // list region inside the body zone
+        private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
 
         private const float RowHeightPx = 60f;
         private const float RowGapPx    = 3f;
@@ -89,42 +89,51 @@ namespace DeNelle.Village.Hero
             // PanelFramed + a per-panel "X" Danger button. The chrome's header zone carries the
             // ONE title (UI matrix 2026-07-03: the extra procedural Header was a duplicate);
             // BuildHeader now adds only the badge / stars / target-time sub-row.
+            // WO-714 P10: a raw id is never player-visible — missing displayName routes
+            // through the ONE kit formatter.
             string raidName = _def != null && !string.IsNullOrEmpty(_def.displayName)
-                ? _def.displayName : (_def != null ? _def.id : "Raid");
+                ? _def.displayName
+                : (_def != null ? ElarionUiKit.SpacedDisplayName(_def.id) : "Raid");
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAID: " + raidName,
                 new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore);
-            var panel = chrome.content.transform;
 
-            BuildHeader(panel);
+            // WO-714 W4: ALL content drops into the FACTORY zones (chrome.layout.body /
+            // .footer) — the kit owns the close-band reservation and the frame-filigree
+            // margins, so the years of hand-tuned "dodge the medallion / dodge the Close"
+            // panel fractions below are retired. Fractions in the builders are OF THE ZONE.
+            var body = chrome.layout != null && chrome.layout.body != null
+                ? (Transform)chrome.layout.body : chrome.content.transform;
+            var footer = chrome.layout != null && chrome.layout.footer != null
+                ? (Transform)chrome.layout.footer : body;
+
+            // WO-714 P8: the ONE shared open ease (scale target = the panel rect).
+            ElarionUiKit.AttachPanelOpenFx(_ui,
+                chrome.root != null ? chrome.root.transform as RectTransform : null);
+
+            BuildHeader(body);
 
             // LEFT column — Your Forces (party row + troop list + cap indicator).
-            BuildLeftColumn(panel);
+            BuildLeftColumn(body);
 
             // CENTER/RIGHT column — battle preview + estimated clear time + summary.
-            BuildCenterColumn(panel);
+            BuildCenterColumn(body);
 
-            // BOTTOM — Auto Recommend + the big glowing DEPLOY CTA.
-            BuildDeployBar(panel);
+            // FOOTER action strip — Auto Recommend + the big glowing DEPLOY CTA.
+            BuildDeployBar(footer);
 
             Debug.Log($"[RaidDeployScreen] Opened for raid '{_def?.id}' -> scene '{_def?.sceneName}'.");
         }
 
-        private void BuildHeader(Transform panel)
+        // Sub-row (difficulty badge + star row + target time) across the TOP band of the
+        // BODY zone. The chrome's header zone carries the ONE title; the body zone starts
+        // below the FrameCore medallion socket, so no per-screen dodge fractions remain
+        // (WO-714 W4 — the old sweep-9413 / #29 hand-tuned offsets are the kit's job now).
+        private void BuildHeader(Transform body)
         {
-            // Title lives in the obsidian chrome's header zone (set in Open) — no second
-            // header here (UI matrix 2026-07-03 dedupe). This builds only the sub-row.
-
-            // Difficulty badge + ★★★ target time, just under the header.
-            // HEADER PILE-UP FIX (sweep 9413): this sub-row sat at y 0.885–0.925, which
-            // vertically intersects the FrameCore header band (0.900–0.972) where the
-            // chrome title renders — title + badge + "Target:" stacked text-on-text.
-            // The whole sub-row drops to y 0.840–0.880, fully BELOW the header band.
             Color tint = DifficultyColor(_def != null ? _def.difficulty : null);
-            // (#29) Shifted right so it clears the FrameCore top-left medallion socket
-            // (~x<=0.22) — it previously overlapped the emblem circle.
-            var badge = ElarionUiKit.AddImage(panel, "DiffBadge",
-                new Vector2(0.24f, 0.840f), new Vector2(0.44f, 0.880f),
+            var badge = ElarionUiKit.AddImage(body, "DiffBadge",
+                new Vector2(0.00f, 0.945f), new Vector2(0.20f, 1.00f),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
             var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_def != null ? _def.difficulty : null),
@@ -135,27 +144,23 @@ namespace DeNelle.Village.Hero
             // zero m_Unicode:9733 hits), so the old "★★★" text rendered as boxes in
             // builds. Procedural gold diamonds instead (EndStateView's pattern via
             // the shared StarRatingRow), then a plain font-safe "Target:" label.
-            StarRatingRow.Build(panel, 3, 3, 0.45f, 0.840f, 0.515f, 0.880f, sizePx: 12f);
-            var timeLbl = ElarionUiKit.Label(panel, "Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
-                0.840f, 0.880f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.525f, 0.90f, bold: true);
+            StarRatingRow.Build(body, 3, 3, 0.23f, 0.945f, 0.32f, 1.00f, sizePx: 12f);
+            var timeLbl = ElarionUiKit.Label(body, "Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
+                0.945f, 1.00f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.335f, 0.75f, bold: true);
             timeLbl.raycastTarget = false;
         }
 
         // LEFT — Your Forces: hero + companions portrait row, then the scrollable
         // troop-card list grouped by TroopDefId, then the army-cap indicator.
-        private void BuildLeftColumn(Transform panel)
+        private void BuildLeftColumn(Transform body)
         {
-            // Section label. Sweep 9413: dropped below the relocated badge/target sub-row
-            // (now y 0.840–0.880) and inset from x 0.05 -> 0.07 so it no longer rides the
-            // FrameCore corner filigree (body well starts at x 0.055).
-            // Fresh-capture sweep 2026-07-06: at x 0.07 the heading still clipped the inner
-            // frame filigree — inset to 0.09, safely inside the FrameCore body well.
-            var lbl = ElarionUiKit.Label(panel, "YOUR FORCES", 0.790f, 0.825f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.09f, 0.50f, bold: true);
+            // Section label — top of the left half of the body zone, below the sub-row.
+            var lbl = ElarionUiKit.Label(body, "YOUR FORCES", 0.855f, 0.915f, ElarionUi.Gilt,
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
-            BuildPartyRow(panel);
+            BuildPartyRow(body);
 
             // Army-cap indicator (SlotsUsed / MaxArmySize).
             var army = Army();
@@ -165,23 +170,21 @@ namespace DeNelle.Village.Hero
                 int used = army.SlotsUsed(TroopDialogueCommands.SlotOf);
                 capText = $"Army: {used} / {army.MaxArmySize} slots";
             }
-            else capText = "Army: —";
-            // Sweep 9413 re-stack: below the party row (0.700–0.785).
-            var capLbl = ElarionUiKit.Label(panel, capText, 0.655f, 0.690f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.07f, 0.50f, bold: true);
+            else capText = "Army: -";
+            var capLbl = ElarionUiKit.Label(body, capText, 0.635f, 0.685f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
             capLbl.raycastTarget = false;
 
-            // Troop list content area (left half, below the party row). Bottom raised to
-            // 0.19: the Close box's REAL top on a landscape screen is ≈0.173 of this panel
-            // (fixed 120 units / 972-unit panel + the 0.05 seat — the old 0.119 figure used
-            // the portrait reference height), so 0.155 still dipped under the Close corner.
-            _troopListRoot = new GameObject("TroopListArea", typeof(RectTransform));
-            _troopListRoot.transform.SetParent(panel, false);
-            var cr = _troopListRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.05f, 0.19f);
-            cr.anchorMax = new Vector2(0.49f, 0.645f);
-            cr.offsetMin = Vector2.zero;
-            cr.offsetMax = Vector2.zero;
+            // Troop list region (left half of the body zone, below the cap line). The body
+            // zone's bottom already sits ABOVE the footer + Close band (factory reservation,
+            // WO-714 P6) — the old hand-computed 0.19 Close-dodge is retired.
+            var listGo = new GameObject("TroopListArea", typeof(RectTransform));
+            listGo.transform.SetParent(body, false);
+            _troopListArea = listGo.GetComponent<RectTransform>();
+            _troopListArea.anchorMin = new Vector2(0.00f, 0.00f);
+            _troopListArea.anchorMax = new Vector2(0.48f, 0.615f);
+            _troopListArea.offsetMin = Vector2.zero;
+            _troopListArea.offsetMax = Vector2.zero;
 
             BuildTroopList();
         }
@@ -190,17 +193,16 @@ namespace DeNelle.Village.Hero
         // left column. The hero's class = GameState.HeroClass; companions = the class
         // strings in PartyMemberIds. (Hero is added explicitly so the row always shows
         // the player even before any companion has joined.)
-        private void BuildPartyRow(Transform panel)
+        private void BuildPartyRow(Transform body)
         {
             var classes = PartyClasses();
 
-            // Row host.
+            // Row host — left half of the body zone, below "YOUR FORCES".
             var rowHost = new GameObject("PartyRow", typeof(RectTransform));
-            rowHost.transform.SetParent(panel, false);
+            rowHost.transform.SetParent(body, false);
             var rr = rowHost.GetComponent<RectTransform>();
-            // Sweep 9413 left-column re-stack: sits below "YOUR FORCES" (0.790–0.825).
-            rr.anchorMin = new Vector2(0.05f, 0.700f);
-            rr.anchorMax = new Vector2(0.49f, 0.785f);
+            rr.anchorMin = new Vector2(0.00f, 0.700f);
+            rr.anchorMax = new Vector2(0.48f, 0.845f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
 
@@ -244,18 +246,20 @@ namespace DeNelle.Village.Hero
                 }
             }
 
-            var listRoot = BuildScrollContent(order.Count);
-
             if (order.Count == 0)
             {
-                ElarionUiKit.Label(listRoot, "No troops trained yet. Visit the Barracks.", 0.3f, 0.7f,
+                // Empty state sits directly on the list area (a stretched label inside the
+                // scroll column reports height 0 under the kit's childControlHeight:false law).
+                ElarionUiKit.Label(_troopListArea, "No troops trained yet. Visit the Barracks.", 0.3f, 0.7f,
                     ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center);
-                FinalizeScroll();
                 return;
             }
 
+            // WO-714 W4: the ONE kit scroll zone (§1.14) replaces the hand-rolled
+            // viewport/content/fitter plumbing — screens add no scroll plumbing of their own.
+            _scroll = ElarionUiKit.MakeScrollZone(_troopListArea, spacing: RowGapPx, padding: 3);
             foreach (var defId in order)
-                CreateTroopRow(listRoot, defId, counts[defId]);
+                CreateTroopRow(_scroll.content, defId, counts[defId]);
 
             FinalizeScroll();
         }
@@ -263,13 +267,16 @@ namespace DeNelle.Village.Hero
         private void CreateTroopRow(Transform parent, string troopDefId, int owned)
         {
             var def = TroopCatalog.Find(troopDefId);
-            string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : troopDefId;
+            // WO-714 P10: a raw troopDefId is never player-visible.
+            string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
+                ? def.DisplayName : ElarionUiKit.SpacedDisplayName(troopDefId);
 
-            var row = new GameObject("TroopRow_" + troopDefId, typeof(Image), typeof(LayoutElement));
+            var row = new GameObject("TroopRow_" + troopDefId, typeof(Image));
             row.transform.SetParent(parent, false);
-            var le = row.GetComponent<LayoutElement>();
-            le.preferredHeight = RowHeightPx;
-            le.minHeight = RowHeightPx;
+            // Kit scroll-column row law (MakeScrollZone runs childControlHeight:false): rows
+            // carry their own height via sizeDelta, not a LayoutElement.
+            var rowRt = row.GetComponent<RectTransform>();
+            rowRt.sizeDelta = new Vector2(0f, RowHeightPx);
             var rowImg = row.GetComponent<Image>();
             rowImg.color = ElarionUiKit.Cell;
             ElarionUiKit.ApplyRounded(rowImg);
@@ -286,6 +293,8 @@ namespace DeNelle.Village.Hero
             var nameLbl = ElarionUiKit.Label(row.transform, name, 0.45f, 0.95f, ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.23f, 0.98f, bold: true);
             nameLbl.raycastTarget = false;
+            // §1.14 fit-never-truncate: a long troop name shrinks, never clips, at phone aspect.
+            ElarionUiKit.FitSingleLine(nameLbl);
 
             var ownedLbl = ElarionUiKit.Label(row.transform, "x" + owned, 0.05f, 0.5f, ElarionUi.Affordable,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.23f, 0.98f, bold: true);
@@ -293,12 +302,13 @@ namespace DeNelle.Village.Hero
         }
 
         // CENTER/RIGHT — battle-preview placeholder + estimated clear time + summary.
-        private void BuildCenterColumn(Transform panel)
+        // Fractions are OF THE BODY ZONE (WO-714 W4).
+        private void BuildCenterColumn(Transform body)
         {
             // Battle preview placeholder (the RaidBaseGenerator thumbnail goes here later).
             // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
             // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
-            var preview = ElarionUiKit.Well(panel, new Vector2(0.52f, 0.42f), new Vector2(0.95f, 0.83f));
+            var preview = ElarionUiKit.Well(body, new Vector2(0.52f, 0.36f), new Vector2(1.00f, 0.845f));
             preview.GetComponent<Image>().raycastTarget = false;
             var pvLbl = ElarionUiKit.Label(preview.transform, "Battle Preview\n(enemy base)", 0.40f, 0.60f,
                 ElarionUi.ParchmentDim, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
@@ -306,43 +316,37 @@ namespace DeNelle.Village.Hero
 
             // Estimated Clear Time readout (FIRST PASS: static from the config; TODO live).
             string est = _def != null ? FormatTime(_def.twoStarTime > 0f ? _def.twoStarTime : _def.recommendedClearTime) : "--:--";
-            var estLbl = ElarionUiKit.Label(panel, "Est. Clear Time: ~" + est, 0.355f, 0.40f, ElarionUi.Gilt,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 0.95f, bold: true);
+            var estLbl = ElarionUiKit.Label(body, "Est. Clear Time: ~" + est, 0.27f, 0.33f, ElarionUi.Gilt,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
             estLbl.raycastTarget = false;
 
             // Summary — total deployable troops + a simple power rating (sum of deployable).
             int totalTroops = DeployableCount();
             int power = PowerRating();
-            var sumLbl = ElarionUiKit.Label(panel, $"Troops: {totalTroops}    Power: {power}", 0.30f, 0.35f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 0.95f, bold: true);
+            var sumLbl = ElarionUiKit.Label(body, $"Troops: {totalTroops}    Power: {power}", 0.19f, 0.25f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
             sumLbl.raycastTarget = false;
         }
 
-        // BOTTOM — Auto Recommend (stub) + the big glowing DEPLOY CTA.
-        private void BuildDeployBar(Transform panel)
+        // FOOTER action strip — Auto Recommend (stub) + the big glowing DEPLOY CTA.
+        // The footer zone is re-seated ABOVE the shared Close band at the factory
+        // (WO-714 P6), so the old hand-computed Close-dodge row math is retired:
+        //   Auto Recommend (left) | DEPLOY (right); Close sits in its own band below.
+        private void BuildDeployBar(Transform footer)
         {
-            // ONE IN-FRAME ACTION ROW (fresh 1280x720 capture, 2026-07-06): the old numbers
-            // used the Close top ≈0.119, computed against the PORTRAIT reference height; on a
-            // landscape screen the fixed 360x120-unit Close on this 972-unit panel really
-            // spans x 0.383–0.617, y 0.05–0.173 — so DEPLOY (x 0.52–0.95, y 0.155–0.275)
-            // painted over the Close corner, and Auto Recommend (y 0.05–0.12) sat on the
-            // painted bottom border ("hangs half outside"). The row is now
-            //   Auto Recommend (x 0.06–0.35) | Close (kit seat, 0.383–0.617) | DEPLOY (0.65–0.94)
-            // all aligned at y 0.075–0.165, inside the frame, zero overlaps.
-
             // Auto Recommend — FIRST PASS stub: selects all deployable (no comp logic yet).
-            ElarionUiKit.Button(panel, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.075f), new Vector2(0.35f, 0.165f), OnAutoRecommend);
+            ElarionUiKit.Button(footer, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.00f, 0.05f), new Vector2(0.32f, 0.95f), OnAutoRecommend);
 
             // DEPLOY — the big glowing primary CTA. Confirm-green with a gilt ember glow
             // ring behind it so it reads as the dominant action.
-            var glow = ElarionUiKit.AddImage(panel, "DeployGlow",
-                new Vector2(0.635f, 0.055f), new Vector2(0.955f, 0.185f),
+            var glow = ElarionUiKit.AddImage(footer, "DeployGlow",
+                new Vector2(0.60f, 0.00f), new Vector2(1.00f, 1.00f),
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.35f));
             glow.GetComponent<Image>().raycastTarget = false;
 
-            var deployBtn = ElarionUiKit.Button(panel, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.65f, 0.075f), new Vector2(0.94f, 0.165f), OnDeploy);
+            var deployBtn = ElarionUiKit.Button(footer, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.615f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
             // Gold-ink-on-green reads as the ember CTA; keep it enabled (the raid can be
             // entered to scout even with no troops — the in-raid tray handles placement).
             if (deployBtn != null) deployBtn.interactable = _def != null && !string.IsNullOrEmpty(_def.sceneName);
@@ -353,6 +357,10 @@ namespace DeNelle.Village.Hero
             // FIRST PASS stub: "select all deployable" is the whole roster already shown.
             // A real comp picker (driven by a scout report) is a later increment (see TODO).
             int n = DeployableCount();
+            // WO-714 P5: transient feedback through the ONE kit toast — a button tap must
+            // never be a silent no-op (dead-button law), and no status label to go stale.
+            ElarionUiKit.ShowToast("Auto Recommend: all " + n + " deployable troop(s) selected.",
+                ElarionUiKit.ToastTone.Info);
             Debug.Log($"[RaidDeployScreen] Auto Recommend (stub) — would deploy all {n} deployable troop(s).");
         }
 
@@ -360,6 +368,8 @@ namespace DeNelle.Village.Hero
         {
             if (_def == null || string.IsNullOrEmpty(_def.sceneName))
             {
+                // WO-714 P5: player-visible transient feedback, not just a console line.
+                ElarionUiKit.ShowToast("This raid has no battleground yet.", ElarionUiKit.ToastTone.Danger);
                 Debug.LogWarning("[RaidDeployScreen] DEPLOY: no scene to load for this raid.");
                 return;
             }
@@ -471,82 +481,34 @@ namespace DeNelle.Village.Hero
             return (total / 60) + ":" + (total % 60).ToString("00");
         }
 
-        // ── Scroll list (the ShopPanel anti-collapse rendering mechanism) ──────
-
-        private Transform BuildScrollContent(int rowCount)
-        {
-            var well = ElarionUiKit.Well(_troopListRoot.transform, Vector2.zero, Vector2.one);
-            var wImg = well.GetComponent<Image>();
-            if (wImg != null) wImg.raycastTarget = false;
-
-            var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewport.transform.SetParent(_troopListRoot.transform, false);
-            var vr = viewport.GetComponent<RectTransform>();
-            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
-            vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
-            var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f);
-
-            var content = new GameObject("ScrollContent", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            var cr = content.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0f, 1f);
-            cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot = new Vector2(0.5f, 1f);
-            cr.anchoredPosition = Vector2.zero;
-            cr.sizeDelta = new Vector2(0f, 0f);
-
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(3, 3, 3, 3);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
-
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            var scroll = viewport.GetComponent<ScrollRect>();
-            scroll.viewport = vr;
-            scroll.content = cr;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 25f;
-
-            _scrollContent = cr;
-            return content.transform;
-        }
+        // ── Scroll list — the kit scroll zone owns all plumbing (WO-714 W4) ────
 
         private void FinalizeScroll()
         {
-            if (_scrollContent == null) return;
+            if (_scroll == null || _scroll.content == null) return;
             Canvas.ForceUpdateCanvases();
-            var contentArea = _troopListRoot != null ? _troopListRoot.transform as RectTransform : null;
-            if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_scroll.content);
         }
 
         private void ClearTroopList()
         {
-            _scrollContent = null;
-            if (_troopListRoot == null) return;
-            for (int i = _troopListRoot.transform.childCount - 1; i >= 0; i--)
+            _scroll = null;
+            if (_troopListArea == null) return;
+            for (int i = _troopListArea.childCount - 1; i >= 0; i--)
             {
-                var c = _troopListRoot.transform.GetChild(i);
+                var c = _troopListArea.GetChild(i);
                 if (c != null) Destroy(c.gameObject);
             }
         }
 
         public void Close()
         {
-            if (_ui != null) Destroy(_ui);
+            // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
+            // immediate Destroy when the FX is absent / not playing).
+            if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
             _ui = null;
-            _troopListRoot = null;
-            _scrollContent = null;
+            _troopListArea = null;
+            _scroll = null;
         }
 
         private void OnDestroy()

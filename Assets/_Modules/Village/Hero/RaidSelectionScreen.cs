@@ -44,8 +44,8 @@ namespace DeNelle.Village.Hero
         };
 
         private GameObject _ui;
-        private GameObject _contentRoot;
-        private RectTransform _scrollContent;
+        private RectTransform _bodyZone;              // chrome.layout.body — the ONE content well
+        private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
 
         // Card pixel height in the scroll list (tall plaque — banner + badge + time + reward).
         private const float CardHeightPx = 168f;
@@ -90,21 +90,22 @@ namespace DeNelle.Village.Hero
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAIDS",
                 new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore);
-            var panel = chrome.content.transform;
 
             // (#28) The decorative RAIDS banner Niche was REMOVED — with BlinkChrome off (the
             // default look) the Niche paints an opaque warm-stone slab that covered the frame's
             // own gold "RAIDS" header. The FrameCore header zone already carries the title; per
             // canon the frame IS the chrome, so the screen adds none.
 
-            // Content area (the card grid lives here).
-            _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
-            var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.04f);
-            cr.anchorMax = new Vector2(0.96f, 0.80f);
-            cr.offsetMin = Vector2.zero;
-            cr.offsetMax = Vector2.zero;
+            // WO-714 W4: the card grid drops into the FACTORY body zone (chrome.layout.body —
+            // close-band reservation + zone backing owned by the kit), never a custom fraction
+            // rect on chrome.content (the "unprotected class" named in the kit's own §12 line).
+            _bodyZone = chrome.layout != null && chrome.layout.body != null
+                ? chrome.layout.body
+                : (RectTransform)chrome.content.transform;
+
+            // WO-714 P8: the ONE shared open ease (scale target = the panel rect, never the canvas).
+            ElarionUiKit.AttachPanelOpenFx(_ui,
+                chrome.root != null ? chrome.root.transform as RectTransform : null);
 
             BuildCards();
 
@@ -131,19 +132,21 @@ namespace DeNelle.Village.Hero
                     if (def != null && def.IsEnemy) defs.Add(def);
             }
 
-            var listRoot = BuildScrollContent(defs.Count);
-
             if (defs.Count == 0)
             {
-                ElarionUiKit.Label(listRoot, "No raids available.", 0.4f, 0.6f, ElarionUi.ParchmentDim,
+                // Empty state sits directly on the body zone (a stretched label inside the
+                // scroll column reports height 0 under the kit's childControlHeight:false law).
+                ElarionUiKit.Label(_bodyZone, "No raids available.", 0.4f, 0.6f, ElarionUi.ParchmentDim,
                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center);
-                FinalizeScroll();
                 Debug.LogWarning("[RaidSelectionScreen] No enemy raids in SceneConfigCatalog — empty grid.");
                 return;
             }
 
+            // WO-714 W4: the ONE kit scroll zone (§1.14) replaces the hand-rolled
+            // viewport/content/fitter plumbing — screens add no scroll plumbing of their own.
+            _scroll = ElarionUiKit.MakeScrollZone(_bodyZone, spacing: CardGapPx, padding: 8);
             foreach (var def in defs)
-                CreateRaidCard(listRoot, def);
+                CreateRaidCard(_scroll.content, def);
 
             FinalizeScroll();
         }
@@ -157,11 +160,12 @@ namespace DeNelle.Village.Hero
 
             // Card root: a Cell tile (LayoutElement-sized for the scroll layout) with a
             // difficulty-tinted inner rim, and a Button so the whole plaque taps.
-            var card = new GameObject("RaidCard_" + def.id, typeof(Image), typeof(Button), typeof(LayoutElement));
+            var card = new GameObject("RaidCard_" + def.id, typeof(Image), typeof(Button));
             card.transform.SetParent(parent, false);
-            var le = card.GetComponent<LayoutElement>();
-            le.preferredHeight = CardHeightPx;
-            le.minHeight = CardHeightPx;
+            // Kit scroll-column row law (MakeScrollZone runs childControlHeight:false): rows
+            // carry their own height via sizeDelta, not a LayoutElement.
+            var cardRt = card.GetComponent<RectTransform>();
+            cardRt.sizeDelta = new Vector2(0f, CardHeightPx);
             var cardImg = card.GetComponent<Image>();
             // (#28) Obsidian row plate. Was ElarionUiKit.Cell (warm) + AddInnerRim(difficulty@0.7),
             // and AddInnerRim paints a near-full-surface tint (not a thin border) — with BlinkChrome
@@ -181,11 +185,15 @@ namespace DeNelle.Village.Hero
                 new Color(tint.r, tint.g, tint.b, 0.95f), rounded: false);
             accent.GetComponent<Image>().raycastTarget = false;
 
-            // Fortress name — gold serif title, top band.
-            string name = string.IsNullOrEmpty(def.displayName) ? def.id : def.displayName;
+            // Fortress name — gold serif title, top band. WO-714 P10: a raw id is never
+            // player-visible — missing displayName routes through the ONE kit formatter.
+            string name = string.IsNullOrEmpty(def.displayName)
+                ? ElarionUiKit.SpacedDisplayName(def.id) : def.displayName;
             var nameLabel = ElarionUiKit.Label(card.transform, name, 0.66f, 0.94f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
             nameLabel.raycastTarget = false;
+            // §1.14 fit-never-truncate: a long fortress name shrinks, never clips, at phone aspect.
+            ElarionUiKit.FitSingleLine(nameLabel);
 
             // Difficulty badge — colour-tinted chip, top-right.
             var badge = ElarionUiKit.AddImage(card.transform, "DiffBadge",
@@ -267,82 +275,36 @@ namespace DeNelle.Village.Hero
             return string.Join("   ", parts);
         }
 
-        // ── Scroll list (the ShopPanel anti-collapse rendering mechanism) ──────
-
-        private Transform BuildScrollContent(int rowCount)
-        {
-            var well = ElarionUiKit.Well(_contentRoot.transform, Vector2.zero, Vector2.one);
-            var wImg = well.GetComponent<Image>();
-            if (wImg != null) wImg.raycastTarget = false;
-
-            var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewport.transform.SetParent(_contentRoot.transform, false);
-            var vr = viewport.GetComponent<RectTransform>();
-            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
-            vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
-            var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible; ScrollRect needs a raycast graphic
-
-            var content = new GameObject("ScrollContent", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            var cr = content.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0f, 1f);
-            cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot = new Vector2(0.5f, 1f);
-            cr.anchoredPosition = Vector2.zero;
-            cr.sizeDelta = new Vector2(0f, 0f); // height driven by the ContentSizeFitter
-
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = CardGapPx;
-            vlg.padding = new RectOffset(8, 8, 8, 8);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
-
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            var scroll = viewport.GetComponent<ScrollRect>();
-            scroll.viewport = vr;
-            scroll.content = cr;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 25f;
-
-            _scrollContent = cr;
-            return content.transform;
-        }
+        // ── Scroll list — the kit scroll zone owns all plumbing (WO-714 W4) ────
 
         private void FinalizeScroll()
         {
-            if (_scrollContent == null) return;
+            if (_scroll == null || _scroll.content == null) return;
             Canvas.ForceUpdateCanvases();
-            var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
-            if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_scroll.content);
         }
 
         private void ClearContent()
         {
-            _scrollContent = null;
-            if (_contentRoot == null) return;
-            for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
+            _scroll = null;
+            if (_bodyZone == null) return;
+            for (int i = _bodyZone.childCount - 1; i >= 0; i--)
             {
-                var c = _contentRoot.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                var c = _bodyZone.GetChild(i);
+                // The kit's zone backing plate is the FIRST child the factory adds — keep any
+                // Image-only backing named by the kit, clear everything the screen added.
+                if (c != null && c.name != "ZoneBacking") Destroy(c.gameObject);
             }
         }
 
         public void Close()
         {
-            if (_ui != null) Destroy(_ui);
+            // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
+            // immediate Destroy when the FX is absent / not playing).
+            if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
             _ui = null;
-            _contentRoot = null;
-            _scrollContent = null;
+            _bodyZone = null;
+            _scroll = null;
         }
 
         private void OnDestroy()

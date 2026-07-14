@@ -35,11 +35,14 @@ namespace DeNelle.Village.Hero
         private GameObject _ui;
         private Transform _troopHost;    // bodyLeft — dark list well
         private Transform _detailHost;   // bodyRight — parchment detail well
-        private TextMeshProUGUI _ecoText;    // footer strip — live economy readout
+        // WO-714 P2: the footer wallet is a row of kit CurrencyChips — the ONE currency
+        // read (chip owns CompactNumber/icon/tag; no hand-formatted wallet string ever).
+        private ElarionUiKit.CurrencyChipHandle[] _wallet;
         private System.Action<ResourceSnapshot> _ecoHandler;
 
         private string _selectedTroopId;
-        private string _status = "Train troops to defend Elarion and raid enemy camps.";
+        // Static instruction (never mutates — transient train feedback is a kit toast, P5).
+        private const string DetailHint = "Train troops to defend Elarion and raid enemy camps.";
 
         // Dark ink for text sitting ON the parchment detail well (family convention).
         private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
@@ -73,11 +76,21 @@ namespace DeNelle.Village.Hero
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
-            // Live economy readout in the footer action strip (gold ink on the dark strip).
+            // WO-714 P2: the footer wallet = the ONE kit wallet strip (CurrencyChip rows —
+            // icon + tag + CompactNumber owned by the chip; no hand-formatted string).
             var footHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer : chrome.content.transform;
-            _ecoText = MakeText(footHost, "", 13, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
+            _wallet = ElarionUiKit.BuildWalletRow(footHost, new[]
+            {
+                ElarionUiKit.CurrencyKind.Wood,
+                ElarionUiKit.CurrencyKind.Iron,
+                ElarionUiKit.CurrencyKind.Food,
+                ElarionUiKit.CurrencyKind.Crystal,
+            });
+
+            // WO-714 P8: the ONE shared open ease (scale target = the panel rect).
+            ElarionUiKit.AttachPanelOpenFx(_ui,
+                chrome.root != null ? chrome.root.transform as RectTransform : null);
 
             // The economy readout tracks the wallet live (unchanged seam; presentation refresh).
             if (EconomyService.Instance != null)
@@ -98,18 +111,12 @@ namespace DeNelle.Village.Hero
             return svc != null && svc.State != null ? svc.State.Army : null;
         }
 
-        private void SetStatus(string s)
-        {
-            _status = s;
-            Rebuild();
-        }
-
         // Re-project the whole master-detail from the live services after every train.
         private void Rebuild()
         {
             if (_troopHost == null || _detailHost == null) return;
 
-            UpdateEcoText();
+            UpdateWallet();
 
             var army = Army();
 
@@ -142,7 +149,9 @@ namespace DeNelle.Village.Hero
                 {
                     string id = d.Id;
                     bool selected = id == _selectedTroopId;
-                    string name = string.IsNullOrEmpty(d.DisplayName) ? d.Id : d.DisplayName;
+                    // WO-714 P10: a raw troop id is never player-visible.
+                    string name = string.IsNullOrEmpty(d.DisplayName)
+                        ? ElarionUiKit.SpacedDisplayName(d.Id) : d.DisplayName;
                     ElarionUiKit.BuildObsidianButton(_troopHost, name,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         selected ? ElarionUiKit.ObsidianButtonColor.Yellow
@@ -167,7 +176,9 @@ namespace DeNelle.Village.Hero
 
         private void BuildDetail(TroopDef def, ArmyStorage army)
         {
-            string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
+            // WO-714 P10: a raw troop id is never player-visible.
+            string name = string.IsNullOrEmpty(def.DisplayName)
+                ? ElarionUiKit.SpacedDisplayName(def.Id) : def.DisplayName;
             int owned = OwnedCount(army, def.Id);
 
             // Title (ink, bold).
@@ -195,8 +206,9 @@ namespace DeNelle.Village.Hero
             MakeText(_detailHost, "Cost:  " + CostString(def), 15, costColor, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.70f));
 
-            // Feedback / status line.
-            MakeText(_detailHost, _status, 13, InkDim, FontStyles.Italic,
+            // Static instruction line (WO-714 P5: transient train feedback is a kit toast —
+            // no mutable status label that can go stale).
+            MakeText(_detailHost, DetailHint, 13, InkDim, FontStyles.Italic,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.18f), new Vector2(0.94f, 0.28f));
 
             // Train x1 + x5 — compact, centered CTAs (mobile-first), disabled when the cap is
@@ -216,22 +228,29 @@ namespace DeNelle.Village.Hero
             if (b5 != null) b5.interactable = canTrain;
         }
 
-        private void UpdateEcoText()
+        // WO-714 P2: amounts flow through the chips' SetAmount (count-tween; CompactNumber
+        // formatting lives inside the chip — WO-697 law, currency-ellipsis forbidden).
+        private void UpdateWallet()
         {
-            if (_ecoText == null || EconomyService.Instance == null) return;
+            if (_wallet == null || _wallet.Length < 4 || EconomyService.Instance == null) return;
             var e = EconomyService.Instance;
-            // WO-697: wallet numbers through the ONE kit formatter (compact >= 10k).
-            _ecoText.text = $"Wood: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Wood)}   Iron: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Iron)}   Food: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Food)}   Crystals: {DeNelle.Core.UI.ElarionUi.CompactNumber(e.Crystals)}";
+            if (_wallet[0] != null) _wallet[0].SetAmount(e.Wood);
+            if (_wallet[1] != null) _wallet[1].SetAmount(e.Iron);
+            if (_wallet[2] != null) _wallet[2].SetAmount(e.Food);
+            if (_wallet[3] != null) _wallet[3].SetAmount(e.Crystals);
         }
 
         private void TrainAndRefresh(string troopId, int qty)
         {
             int trained = TroopDialogueCommands.Train(troopId, qty);
             var def = TroopCatalog.Find(troopId);
-            string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : troopId;
+            // WO-714 P10: never toast a raw troop id.
+            string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
+                ? def.DisplayName : ElarionUiKit.SpacedDisplayName(troopId);
             if (trained > 0)
             {
-                SetStatus($"Trained {trained}x {name}.");
+                // WO-714 P5: transient feedback through the ONE kit toast, never a stuck label.
+                ElarionUiKit.ShowToast($"Trained {trained}x {name}.", ElarionUiKit.ToastTone.Confirm);
                 // Push the fresh economy snapshot to the town HUD too (mirrors ShopPanel).
                 var eco = EconomyService.Instance;
                 if (eco != null)
@@ -240,9 +259,10 @@ namespace DeNelle.Village.Hero
             }
             else
             {
-                SetStatus($"Couldn't train {name} — army cap full or not enough resources.");
+                ElarionUiKit.ShowToast($"Couldn't train {name} - army cap full or not enough resources.",
+                    ElarionUiKit.ToastTone.Danger);
             }
-            // SetStatus already re-projected; no double rebuild needed.
+            Rebuild();   // re-project owned counts / cap / affordability after the attempt
         }
 
         private static int OwnedCount(ArmyStorage army, string troopId)
@@ -297,10 +317,12 @@ namespace DeNelle.Village.Hero
             if (_ecoHandler != null && EconomyService.Instance != null)
                 EconomyService.Instance.OnChanged -= _ecoHandler;
             _ecoHandler = null;
-            _ecoText = null;
+            _wallet = null;
             _troopHost = null;
             _detailHost = null;
-            if (_ui != null) Destroy(_ui);
+            // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
+            // immediate Destroy when the FX is absent / not playing).
+            if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
             _ui = null;
         }
 
