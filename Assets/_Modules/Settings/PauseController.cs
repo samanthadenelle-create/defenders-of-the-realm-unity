@@ -85,6 +85,26 @@ namespace DeNelle.Settings
 
         private void OnPauseToggleRequested() => TogglePause();
 
+        /// <summary>
+        /// Runtime wiring seam (WO-714 W8): the serialized <c>_settings</c> reference only
+        /// works for scene-placed instances, but Settings/Pause are installed by
+        /// <see cref="PauseHudBootstrap"/> via AddComponent — Awake/OnEnable run with the
+        /// field still null. This attaches the settings screen after construction and
+        /// (re)wires the SettingsClosed listener so the pause panel re-shows on Back.
+        /// Call before the first Pause(); the Settings button builds only if attached.
+        /// </summary>
+        public void AttachSettings(SettingsController settings)
+        {
+            if (_settings == settings) return;
+            if (_settings != null) _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
+            _settings = settings;
+            if (_settings != null)
+            {
+                _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
+                _settings.SettingsClosed.AddListener(OnSettingsClosed);
+            }
+        }
+
         private void OnDestroy()
         {
             // Safety net: never leave the engine frozen if this object dies

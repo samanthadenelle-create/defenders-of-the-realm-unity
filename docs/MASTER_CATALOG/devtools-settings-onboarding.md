@@ -89,12 +89,12 @@ asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module call
 - Apply: `ApplyAll()` / `ApplyAudio()` (→ AudioMixerBridge) / `ApplyQuality()` (→ SeekerBootstrap.ApplyTier) / `ApplyScreenShake()`. `ResetToDefaults()`. Tier name mapping helpers `TierName`/`TierFromName`/`TierLabel`.
 - Deps: GameStateService, AudioMixerBridge, SeekerBootstrap (Core), DifficultyTuning. WIRED + LIVE.
 
-### SettingsController.cs
+### SettingsController.cs (re-verified from code 2026-07-13, WO-714 W8)
 - File: `Assets/_Modules/Settings/SettingsController.cs`
-- Responsibility: drives SettingsScreen.uxml — audio sliders+mute, 3-way Difficulty selector, 3-tier Quality selector, screen-shake toggle, Reset, Back. Modal.
-- MonoBehaviour, `[RequireComponent(typeof(UIDocument))]`. Binds named elements **from SettingsScreen.uxml via `_root.Q<>()`** (UXML-dependent — unlike DevPanel/Onboarding which code-build; see FLAGS). Difficulty/Quality buttons built in code into rows.
-- Public: `Open()`, `Close()`, `IsOpen`, event `SettingsClosed` (UnityEvent). Every control persists+applies through SettingsModel (no save step).
-- Opened by PauseController. WIRED — live depends on a scene placing the UIDocument (PauseController holds the ref).
+- Responsibility: the options menu — Master/Music/SFX sliders + Music On/Off + global mute, 3-way Difficulty selector + blurb, 3-tier Quality selector, screen-shake toggle, Game Guide (WO-588) + Reset Defaults, Back = chrome Close. Modal.
+- **CODE-BUILT since 2026-07-03 (WO-F, coverage row #47): NO UIDocument/UXML.** Lazy `ElarionUiKit.BuildObsidianModal` (FrameSettings, sortingOrder 32000) on first `Open()`; all controls are composed uGUI/TMP through the kit. WO-714 W8 (2026-07-13): modal widened to x 0.08–0.92 and every label routed through `FitSingleLine`/`FitBlock` at the WO-693 mobile font floor.
+- Public: `Open()`, `Close()`, `IsOpen`, event `SettingsClosed` (UnityEvent). Every control persists+applies through SettingsModel (no save step). Music On/Off also drives live audio via AudioServiceBridge.
+- Opened by PauseController's Settings button. LIVE via `PauseHudBootstrap` (below) — no scene placement needed.
 
 ### SettingsBootstrap.cs
 - File: `Assets/_Modules/Settings/SettingsBootstrap.cs`
@@ -106,11 +106,18 @@ asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module call
 - Responsibility: 0..1.5 linear → dB onto AudioMixer exposed params (`MasterVol`/`MusicVol`/`SfxVol`). `static`.
 - **Seam-safe: no-ops quietly when no mixer asset present** (resolves Resources `Audio/GameAudioMixer` lazily, or `SetMixer()` direct). `HasMixer`, `SetMaster/Music/Sfx/Group`, `LinearToDecibels`/`DecibelsToLinear`, `MaxLinear=1.5`, `ResetCache()`. The mixer asset is the parallel-Audio seam — may be absent → sliders persist but per-mixer audio unaffected (AudioService per-source fallback covers playback). WIRED, partially-live (mixer-dependent).
 
-### PauseController.cs
+### PauseController.cs (re-verified from code 2026-07-13, WO-714 W8)
 - File: `Assets/_Modules/Settings/PauseController.cs`
-- Responsibility: pause overlay + `Time.timeScale` freeze (audit P0-10). Resume/Settings/Quit-to-Title.
-- MonoBehaviour, `[RequireComponent(typeof(UIDocument))]`. Binds PauseOverlay.uxml named elements via `Q<>()`. Esc-to-pause (**legacy Input Manager** — see FLAGS, header says new Input System). `OnApplicationPause(true)` auto-pauses (mobile compliance).
-- Public: `TogglePause()`, `Pause()`, `Resume()`, `IsPaused`, event `PauseStateChanged(bool)`. Serialized `_settings` ref → Settings button (hidden if null). Quit → restores timeScale then `SceneRouter.GoTitle()`. WIRED — live depends on scene placement + HUD pause-button integrator wiring.
+- Responsibility: pause overlay + `Time.timeScale` freeze (audit P0-10). Resume/Settings/Quit-to-Title; chrome Close = Resume.
+- **CODE-BUILT since 2026-07-03 (WO-F, coverage row #47b): NO UIDocument/UXML, NO Esc handling.** Lazy kit modal (FrameOptions, sortingOrder 31500 — below Settings 32000) on first `Pause()`. Toggle arrives via `PauseGate.PauseToggleRequested` (the Core back/pause seam); `OnApplicationPause(true)` auto-pauses (mobile compliance), never auto-resumes.
+- Public: `TogglePause()`, `Pause()`, `Resume()`, `IsPaused`, `AttachSettings(SettingsController)` (WO-714 W8 runtime wiring — the serialized `_settings` ref is scene-only), event `PauseStateChanged(bool)`. Settings button builds only if a settings screen is attached. Quit → restores timeScale FIRST then `SceneRouter.GoTitle()`. LIVE via `PauseHudBootstrap`.
+
+### PauseHudBootstrap.cs (NEW 2026-07-13, WO-714 W8 — the routing that made Pause/Settings reachable)
+- File: `Assets/_Modules/Settings/PauseHudBootstrap.cs`
+- Responsibility: closes the "panels exist but nothing routes to them" gap (proved by grep: no scene carried either controller's GUID; `PauseGate.RequestBack()` had zero call sites). Contains 2 types:
+  - `static PauseHudBootstrap` — **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` + sceneLoaded hook** (HelpMenuBootstrap pattern, global dedupe). Per gameplay scene spawns `PauseSettingsHost` = SettingsController + PauseController (wired via `AttachSettings`) + PauseHudButton. Skips front-end scenes (Title/HeroSelect/PetSelect/Intro/Splash/Loading).
+  - `PauseHudButton : MonoBehaviour` — the on-screen pause chip (own uGUI canvas sort 90, 52px kit slot plate + gear icon, top-right edge at the retired MusicToggleHud's vacated spot right 14 / top 200; null-art fallback = two gold pause bars, glyph-proof). Tap → `PauseGate.RequestBack()`. Hides while `PanelManager.AnyOpen` (QuestTrackerHud pattern).
+- WIRED + LIVE (no scene wiring needed).
 
 ### MusicToggleBootstrap.cs
 - File: `Assets/_Modules/Settings/MusicToggleBootstrap.cs`
@@ -118,10 +125,10 @@ asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module call
   - `static MusicToggleBootstrap` — **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → `Init()`** + sceneLoaded hook; borrows top-sorted UIDocument's PanelSettings, spawns MusicToggleHud (+50 sort).
   - `MusicToggleHud : MonoBehaviour [RequireComponent(UIDocument)]` — code-built button top-right (top 200, right 14), loads sprite `HudIcons/hud_music`. `Toggle()` drives SettingsModel + AudioServiceBridge.
   - `internal static AudioServiceBridge` — reflection bridge to `DeNelle.Audio.AudioService` (SetMuted / SetVolume(MixerGroup.Music)). No-ops if Audio absent.
-- WIRED + LIVE (needs a scene with a PanelSettings-bearing UIDocument).
+- DORMANT since 2026-07-12: `ForceHudButton = false` keeps the HUD overlay retired (owner bug — it overlapped mobile controls); the affordance moved into Settings. `AudioServiceBridge` remains the live audio seam SettingsController uses.
 
-### UXML/USS (editor-reference; UXML-bound by their controllers)
-- SettingsScreen.uxml (125) / .uss, PauseOverlay.uxml (46) / .uss. **These two controllers DO bind from UXML** (unlike the rest of the area). Risk: UXML-renders-empty-in-builds (CLAUDE.md §8) — see FLAGS.
+### UXML/USS
+- **NONE remain in this module (verified 2026-07-13).** SettingsScreen.uxml/.uss + PauseOverlay.uxml/.uss were retired with the 2026-07-03 code-built conversion and are deleted from the tree — the whole area now code-builds; the UXML-in-builds risk class is closed here (MASTER_CATALOG P1 #8 marked RESOLVED).
 
 ### README.md — current.
 
@@ -179,7 +186,7 @@ asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module call
 ## FLAGS
 
 ### Stale-comment-vs-code
-- **PauseController** header (line ~14, ~60) says Esc uses the "new Input System (UnityEngine.InputSystem)" and integrator note #4 repeats it — but `Update()` uses **legacy `Input.GetKeyDown(KeyCode.Escape)`** (comment at line ~131 correctly notes "legacy Input Manager"). Header/integrator-note vs body **contradict**; the body is legacy. Mobile pause still requires the HUD-button integrator wiring regardless.
+- ~~PauseController Esc header/body contradiction~~ **RESOLVED (verified 2026-07-13):** the current PauseController has NO Update()/Esc handling at all — the toggle rides `PauseGate.PauseToggleRequested` (keyboard-removal sweep), and the HUD-button caller landed as `PauseHudButton` (WO-714 W8).
 - DevPanelController / DevBootstrap headers reference DevPanel.uxml as the UI source, but the code **explicitly does NOT use it** (code-built). The code comments self-correct this clearly, so it is documented-not-stale — but the class-doc summary line "drives DevPanel.uxml" wording could mislead a skim.
 - AdminOverlay class header says actions "call through reflection so the HUD asmdef stays decoupled" — accurate. But the header's list of actions (waves, give crystals, reset) describes the **pre-2026-06-11 trim**; only Load-resources + Reset-Yarn are now wired (inline comment at ~143 documents the trim). Header is partially stale.
 - AdminOverlay sortingOrder inline comment references an old "170" value that was raised to 2710 — documented, not a live bug.
@@ -194,8 +201,9 @@ asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module call
 ### Scene-gated / disabled
 - DevTools whole assembly compiled out of release (`#if` + asmdef defineConstraints) — by design.
 - AdminOverlay owner-wallet gate is permanently false (`OwnerWalletAddress = ""`) → only the Ctrl+Shift+A chord opens it.
-- SettingsController / PauseController only render if a scene/integrator places their UIDocument and wires PauseController→SettingsController + the HUD pause button (mobile). PIPELINE_STATE notes settings scene-wiring has historically been disabled pending its own PanelSettings.
+- ~~SettingsController / PauseController only render if a scene/integrator places their UIDocument~~ **RESOLVED 2026-07-13 (WO-714 W8):** no UIDocument/PanelSettings involved anymore (code-built kit modals) and `PauseHudBootstrap` auto-installs both + the on-screen pause chip per gameplay scene — no scene wiring.
+- MusicToggleBootstrap HUD overlay DORMANT since 2026-07-12 (owner bug: button overlapped mobile controls) behind `ForceHudButton = false`; the Music On/Off affordance lives in Settings (same SettingsModel + AudioServiceBridge seam). AudioServiceBridge itself stays live.
 - AudioMixerBridge no-ops until the parallel Audio mixer asset exists at `Resources/Audio/GameAudioMixer` — sliders persist but don't drive the mixer (per-source AudioService fallback covers actual playback).
 
 ### Broken / contradictory
-- **UXML-bound risk:** SettingsScreen.uxml + PauseOverlay.uxml are the only surfaces in this area still bound by `Q<>()` from UXML (DevPanel, OnboardingFlow, TitleController all code-build to dodge the "UXML renders empty in player builds" trap, CLAUDE.md §8). If those two come up empty in a build, Settings/Pause silently no-op — they have **no code-built fallback** like OnboardingFlow does. Likely latent build risk.
+- ~~UXML-bound risk: SettingsScreen.uxml + PauseOverlay.uxml~~ **RESOLVED (verified from code 2026-07-13):** both UXML surfaces were deleted with the 2026-07-03 code-built conversion; the whole area now code-builds. See MASTER_CATALOG P1 #8 (marked RESOLVED).

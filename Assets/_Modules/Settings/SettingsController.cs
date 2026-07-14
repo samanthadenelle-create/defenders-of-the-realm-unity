@@ -115,8 +115,13 @@ namespace DeNelle.Settings
             if (_modal != null && _modal.canvas != null) return;
 
             // Chrome Close = Back (raises SettingsClosed via Close()).
+            // WO-714 W8 (P7 font floor): widened 0.26-0.74 -> 0.08-0.92. The old ~518
+            // reference-px panel could not seat FontFloor(30) text in its fractional
+            // zones ("100%" needs ~60px, the value zone had ~52); at ~907px every zone
+            // seats floor-size text. Portrait near-full-width matches the other
+            // Obsidian panels (upgrade/inventory).
             _modal = ElarionUiKit.BuildObsidianModal("SettingsUI", "Settings",
-                new Vector2(0.26f, 0.05f), new Vector2(0.74f, 0.95f), Close,
+                new Vector2(0.08f, 0.05f), new Vector2(0.92f, 0.95f), Close,
                 sortingOrder: 32000,   // settings sits above every other modal
                 frameName: RpgUiCatalog.FrameSettings, medallionIcon: "settings");
 
@@ -158,18 +163,20 @@ namespace DeNelle.Settings
             // AudioService via AudioServiceBridge, so it is audible immediately.
             _musicToggle = ToggleRow(body, "Music", ref y, OnMusicOnOffChanged);
             _muteToggle = ToggleRow(body, "Mute all audio", ref y, OnMuteChanged);
-            _audioSeam = MakeText(body, "Audio mixer not wired yet — volumes persist and apply when it lands.",
-                11, ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
-                new Vector2(0.06f, y - 0.030f), new Vector2(0.94f, y));
-            y -= 0.038f;
+            // WO-714 W8 (P7): 11 -> 30 (FontFloor) + FitBlock; row height grew to seat it.
+            _audioSeam = MakeText(body, "Audio mixer not wired yet - volumes persist and apply when it lands.",
+                30, ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
+                new Vector2(0.06f, y - 0.048f), new Vector2(0.94f, y), multiline: true);
+            y -= 0.056f;
 
             // ── Gameplay ─────────────────────────────────────────────────────
             y = Caption(body, "Gameplay", y);
             _difficultyRow = ZoneRect(body, "DifficultyRow", new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y));
             y -= 0.062f;
-            _difficultyBlurb = MakeText(body, "", 11, ElarionUi.ParchmentDim, FontStyles.Italic,
-                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.035f), new Vector2(0.94f, y));
-            y -= 0.045f;
+            // WO-714 W8 (P7): 11 -> 30 (FontFloor) + FitBlock; taller zone seats two lines.
+            _difficultyBlurb = MakeText(body, "", 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y), multiline: true);
+            y -= 0.062f;
 
             // ── Graphics ─────────────────────────────────────────────────────
             y = Caption(body, "Graphics", y);
@@ -415,7 +422,9 @@ namespace DeNelle.Settings
         /// <summary>Section caption; returns the next row's top y.</summary>
         private float Caption(Transform body, string text, float y)
         {
-            MakeText(body, text, 15, ElarionUi.Gilt, FontStyles.Bold,
+            // WO-714 W8 (P7 font floor): 15 -> 34 (above FontFloor 30; section headers
+            // lead the ladder). MakeText auto-fits, so long captions ellipsize, never clip.
+            MakeText(body, text, 34, ElarionUi.Gilt, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.05f, y - 0.035f), new Vector2(0.95f, y));
             return y - 0.042f;
         }
@@ -425,7 +434,8 @@ namespace DeNelle.Settings
             Action<float> onChanged)
         {
             float top = y, bottom = y - 0.048f;
-            MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
+            // WO-714 W8 (P7): 13 -> 30 (FontFloor).
+            MakeText(body, label, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.24f, top));
 
             var host = ZoneRect(body, "Slider_" + label, new Vector2(0.26f, bottom + 0.012f), new Vector2(0.82f, top - 0.012f));
@@ -490,7 +500,8 @@ namespace DeNelle.Settings
             slider.maxValue = SettingsModel.MaxVolume;
             slider.onValueChanged.AddListener(v => onChanged(v));
 
-            var valueLabel = MakeText(body, "100%", 12, ElarionUi.ParchmentDim, FontStyles.Normal,
+            // WO-714 W8 (P7): 12 -> 30 (FontFloor); the widened modal seats "100%" at floor size.
+            var valueLabel = MakeText(body, "100%", 30, ElarionUi.ParchmentDim, FontStyles.Normal,
                 TextAlignmentOptions.Right, new Vector2(0.84f, bottom), new Vector2(0.94f, top));
 
             y = bottom - 0.010f;
@@ -504,14 +515,15 @@ namespace DeNelle.Settings
             // pixel square (below) — the fraction-stretched box collapsed to a sliver on the
             // capture aspect once the plate/outline landed.
             float top = y, bottom = y - 0.055f;
-            MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
+            // WO-714 W8 (P7): 13 -> 30 (FontFloor).
+            MakeText(body, label, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.70f, top));
 
             // FRESH-CAPTURE FIX (2026-07-06, colorblind law): the toggle's state was carried
             // by the gold check ALONE (color/shape only) and the box read as an anonymous
             // square far from its label. An explicit "On"/"Off" state TEXT sits beside the
             // box — never color-alone — and updates with every value change.
-            var stateLbl = MakeText(body, "Off", 12, ElarionUi.Parchment, FontStyles.Bold,
+            var stateLbl = MakeText(body, "Off", 30, ElarionUi.Parchment, FontStyles.Bold,   // P7: 12 -> 30
                 TextAlignmentOptions.Right, new Vector2(0.71f, bottom), new Vector2(0.84f, top));
 
             var host = ZoneRect(body, "Toggle_" + label, new Vector2(0.86f, bottom + 0.004f), new Vector2(0.94f, top - 0.004f));
@@ -580,7 +592,8 @@ namespace DeNelle.Settings
         }
 
         private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
-            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max,
+            bool multiline = false)
         {
             var go = new GameObject("Text", typeof(RectTransform));
             go.transform.SetParent(parent, false);
@@ -594,8 +607,12 @@ namespace DeNelle.Settings
             t.fontStyle = style;
             t.alignment = align;
             t.raycastTarget = false;
-            t.textWrappingMode = TextWrappingModes.Normal;
             ElarionUiKit.EnsureFont(t);
+            // WO-714 W8 (P7 mobile font floor): every label routes through the kit fit
+            // helpers — bounded auto-size down to the factory floor, then ellipsis
+            // (single-line) / truncate (block). Never sub-legible, never clipping.
+            if (multiline) ElarionUiKit.FitBlock(t);
+            else ElarionUiKit.FitSingleLine(t);
             return t;
         }
     }

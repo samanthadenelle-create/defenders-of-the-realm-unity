@@ -281,11 +281,15 @@ P3 = dead/stale, cleanup.**
    SESSION_START_HERE still say "next 384" — index lines lag. **Never mint from filesystem max**;
    30 WO numbers collide (docs-wo §2h) — renumber 391+. 438 WO files for ~280 distinct numbers.
 
-8. **Settings/Pause are the only UXML-bound surfaces with NO code-built fallback** (devtools §FLAGS).
-   `SettingsScreen.uxml` + `PauseOverlay.uxml` bind via `Q<>()`; if they render empty in a player
-   build (the documented UXML trap), Settings/Pause silently no-op — unlike OnboardingFlow which has
-   a code-built fallback. Latent build risk. (ATBBattle `BattleHUD.uxml`, dungeon panels, PromoCodeUI/
-   InviteFriendsUI/WalletConnectDialog/JupiterSwapPanel are the other UXML-in-build risks.)
+8. **RESOLVED (verified from code 2026-07-13, WO-714 W8).** Settings/Pause are NO LONGER UXML-bound:
+   both were rebuilt as code-built kit modals on 2026-07-03 (WO-F conversion, coverage rows #47/#47b —
+   `ElarionUiKit.BuildObsidianModal`, FrameSettings/FrameOptions); `SettingsScreen.uxml` +
+   `PauseOverlay.uxml` are DELETED from the tree (script GUIDs appear in no scene). The REAL residual
+   gap — no scene placed the controllers and nothing called `PauseGate.RequestBack()`, so the panels
+   were unreachable in-game — closed 2026-07-13 by `PauseHudBootstrap` (DeNelle.Settings): auto-installs
+   PauseController+SettingsController per gameplay scene + the on-screen pause chip that calls
+   RequestBack. (ATBBattle `BattleHUD.uxml`, dungeon panels, PromoCodeUI/InviteFriendsUI/
+   WalletConnectDialog/JupiterSwapPanel remain the outstanding UXML-in-build risks.)
 
 ### P2 — wrong behavior, contained
 
