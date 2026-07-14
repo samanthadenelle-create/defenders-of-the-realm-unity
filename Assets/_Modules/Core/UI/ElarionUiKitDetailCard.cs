@@ -94,7 +94,12 @@ namespace DeNelle.Core.UI
         public sealed class DetailCardSpec
         {
             public string IconPath;                  // Resources sprite path ("" = no plate)
+            /// <summary>Player-facing display name. WO-714 P3/P10: NEVER a raw itemId — pass
+            /// catalog displayName, or run the id through ElarionUiKit.SpacedDisplayName.</summary>
             public string Title = "";
+            /// <summary>Owned/stack count ("x3") shown right of the header (WO-683 grammar);
+            /// "" = none. WO-714 P3, additive.</summary>
+            public string CountText = "";
             public string RarityText = "";           // "EPIC" etc — chip by the name; "" = none
             public string Flavor = "";               // ONE line; ellipsized past the floor
             public string BestowsHeader = "BESTOWS";
@@ -280,14 +285,29 @@ namespace DeNelle.Core.UI
                 }
 
                 bool hasRarity = !string.IsNullOrEmpty(spec.RarityText);
+                bool hasCount  = !string.IsNullOrEmpty(spec.CountText);
                 var name = CardTmp(hs, spec.Title, ElarionUi.FontBody, ParchmentInk,
                     FontStyles.Bold, TextAlignmentOptions.MidlineLeft, textX0, -6f);
                 var nrt = name.rectTransform;
                 nrt.anchorMin = new Vector2(0f, hasRarity ? 0.42f : 0f);
                 nrt.anchorMax = new Vector2(1f, 1f);
                 nrt.offsetMin = new Vector2(textX0, 0f);
-                nrt.offsetMax = new Vector2(-6f, -4f);
+                nrt.offsetMax = new Vector2(hasCount ? -150f : -6f, -4f);
                 FitSingleLine(name, ElarionUi.FontFloorMobile);
+
+                // WO-714 P3 (WO-683 grammar): owned/stack count chip, right-aligned in the
+                // header band — text carries the count (never color-only, never a raw id).
+                if (hasCount)
+                {
+                    var cnt = CardTmp(hs, spec.CountText, ElarionUi.FontLabel, ParchmentInkDim,
+                        FontStyles.Bold, TextAlignmentOptions.MidlineRight, 0f, -6f);
+                    var crt = cnt.rectTransform;
+                    crt.anchorMin = new Vector2(1f, hasRarity ? 0.42f : 0f);
+                    crt.anchorMax = new Vector2(1f, 1f);
+                    crt.offsetMin = new Vector2(-144f, 0f);
+                    crt.offsetMax = new Vector2(-6f, -4f);
+                    FitSingleLine(cnt, ElarionUi.FontFloorMobile);
+                }
 
                 if (hasRarity)
                 {

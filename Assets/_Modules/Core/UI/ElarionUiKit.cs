@@ -161,7 +161,9 @@ namespace DeNelle.Core.UI
         {
             // BlinkChrome: keep the GameObject (callers parent content onto it) but make the stone
             // backing transparent + skip the rim, so the Blink panel shows through the alcove.
-            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;
+            // WO-714 P9: art-presence gated (BlinkChromeActive), never the raw flag — with the
+            // flag ON but the art absent the procedural chrome must still render (sprite-first).
+            bool chrome = !BlinkChromeActive;
             var n = AddImage(parent, "Niche", anchorMin, anchorMax, chrome ? StoneNiche : new Color(0f, 0f, 0f, 0f));
             if (chrome) AddInnerRim(n, AccentSoft);
             return n;
@@ -205,9 +207,11 @@ namespace DeNelle.Core.UI
             public TextMeshProUGUI title;
             /// <summary>The ONE standard Close button (top-right), wired to onClose.</summary>
             public Button close;
-            /// <summary>When a Blink frame is used, the pre-styled drop-zones (medallion / body /
-            /// footer) measured from that frame's art. Screens DROP chrome-less content into these
-            /// instead of re-styling per screen. Null when the procedural panel is used.</summary>
+            /// <summary>The pre-styled drop-zones (medallion / body / footer). Frame path: measured
+            /// from that frame's art. PROCEDURAL path (WO-714 P6): the DEFAULT zone set with the
+            /// same close-band reservation, so content dropped into <c>layout.body/footer</c> ends
+            /// above the shared Close even when the frame art is absent (sweep-9413 class killed at
+            /// the factory). Never null after BuildObsidianPanel; medallion is null procedurally.</summary>
             public FrameLayout layout;
         }
 
@@ -706,14 +710,13 @@ namespace DeNelle.Core.UI
 
             // §12 instrumentation (sweep 9413): a panel that logs THIS line built on the
             // PROCEDURAL path — the frame sprite did not resolve (frameName null OR the
-            // Resources/RpgUi art absent in this build). There are NO drop-zones here, so the
-            // close-band reservation cannot apply: consumers' `layout.body ?? chrome.content`
-            // fallbacks all land on chrome.content (full rect) and content CAN extend under
-            // the default bottom-center Close. If the sweep's colliding panels log this line,
-            // the root cause is the missing frame art, not the zone math.
+            // Resources/RpgUi art absent in this build). WO-714 P6: this path now ALSO builds
+            // the DEFAULT drop-zones with the close-band reservation (below), so zone-consuming
+            // screens end above the Close on the art-absent path too. Screens laying custom
+            // fractions directly on chrome.content remain the unprotected legacy class.
             FlowTrace.Step("UI", string.Format(
                 "BuildObsidianPanel '{0}' frame={1} PROCEDURAL path (frame sprite missing) — " +
-                "no zones, no close-band reservation; Close seats at default band ({2:F3},{3:F3},{4:F3},{5:F3})",
+                "default zones + close-band reservation (WO-714 P6); Close seats at default band ({2:F3},{3:F3},{4:F3},{5:F3})",
                 title, string.IsNullOrEmpty(frameName) ? "<none>" : frameName,
                 DefaultCloseZone.x, DefaultCloseZone.y, DefaultCloseZone.z, DefaultCloseZone.w));
 
@@ -736,6 +739,40 @@ namespace DeNelle.Core.UI
 
             // The single standard Close button (top-right corner).
             chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
+
+            // ── WO-714 P6: DEFAULT DROP-ZONES + CLOSE-BAND RESERVATION on the PROCEDURAL
+            // path too. Same math as the frame path above (PostScaleCanvasHeight so the
+            // reserved band matches where SeatSharedCloseInside's fixed 120-unit box really
+            // tops out). Zone-consuming screens (layout.body/footer) geometrically end above
+            // the shared Close whether or not the frame art resolved; chrome.content stays
+            // the full-rect legacy surface, byte-identical for screens that ignore layout.
+            {
+                var pz = ZonesFor(null);   // the default zone set (close already forced to the band)
+                float pPanelFracH = Mathf.Max(0.05f, anchorMax.y - anchorMin.y);
+                float pCanvasH    = PostScaleCanvasHeight(chrome.root.transform);
+                float pCloseTop   = pz.close.y + CanonCtaHeight / (pPanelFracH * pCanvasH);
+                if (pz.hasFooter && pz.footer.y < pCloseTop + 0.015f)
+                {
+                    float fh = Mathf.Max(0.02f, pz.footer.w - pz.footer.y);
+                    pz.footer.y = Mathf.Min(pCloseTop + 0.015f, 0.40f);
+                    pz.footer.w = pz.footer.y + fh;
+                }
+                float pBodyFloor = pz.hasFooter ? pz.footer.w + 0.015f : pCloseTop + 0.020f;
+                float pReserved  = Mathf.Min(pBodyFloor, 0.45f);
+                if (pz.body.y < pReserved) pz.body.y = pReserved;
+
+                chrome.layout = new FrameLayout
+                {
+                    header = Zone(chrome.content.transform, "Zone_Header", pz.header),
+                    body   = Zone(chrome.content.transform, "Zone_Body",   pz.body),
+                    footer = pz.hasFooter ? Zone(chrome.content.transform, "Zone_Footer", pz.footer) : null,
+                };
+                // Zones must never occlude the Close: keep them behind the earlier-built
+                // title/Close siblings (transparent RectTransforms; render order only).
+                chrome.layout.header.SetAsFirstSibling();
+                chrome.layout.body.SetSiblingIndex(1);
+                if (chrome.layout.footer != null) chrome.layout.footer.SetSiblingIndex(2);
+            }
 
             return chrome;
         }
@@ -1133,7 +1170,8 @@ namespace DeNelle.Core.UI
                                              float y0 = 0.92f, float y1 = 0.98f)
         {
             // BlinkChrome: skip the drop-shadow + the gilt underline rule (chrome); keep the TITLE (content).
-            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;
+            // WO-714 P9: gate on BlinkChromeActive (flag AND art present), never the raw flag.
+            bool chrome = !BlinkChromeActive;
             if (chrome)
             {
                 // Soft shadow under the title for legibility on busy scenes.
@@ -1161,7 +1199,7 @@ namespace DeNelle.Core.UI
             r.anchorMin = new Vector2(x0, y); r.anchorMax = new Vector2(x1, y);
             r.offsetMin = new Vector2(0f, -1f); r.offsetMax = new Vector2(0f, 1f);
             var img = go.GetComponent<Image>();
-            img.color = DeNelle.Core.FeatureFlags.BlinkChrome ? new Color(0f, 0f, 0f, 0f) : Accent;   // chrome: invisible
+            img.color = BlinkChromeActive ? new Color(0f, 0f, 0f, 0f) : Accent;   // chrome: invisible (WO-714 P9: art-presence gated)
             img.raycastTarget = false;
             return go;
         }
@@ -2090,7 +2128,7 @@ namespace DeNelle.Core.UI
         /// <summary>A single faint gold rule hugging a panel's bottom edge (sleek accent).</summary>
         public static void AddRimUnderline(GameObject panel)
         {
-            if (panel == null || DeNelle.Core.FeatureFlags.BlinkChrome) return;   // chrome: skip the bottom gold rule
+            if (panel == null || BlinkChromeActive) return;   // chrome: skip the bottom gold rule (WO-714 P9: art-presence gated)
             var go = new GameObject("Accent", typeof(Image));
             go.transform.SetParent(panel.transform, false);
             var rt = go.GetComponent<RectTransform>();
@@ -2108,7 +2146,7 @@ namespace DeNelle.Core.UI
         /// <summary>A 1px inner rim hugging an element's edges — crisp framed depth.</summary>
         public static void AddInnerRim(GameObject host, Color color)
         {
-            if (host == null || DeNelle.Core.FeatureFlags.BlinkChrome) return;   // chrome: skip the gilt inner rim
+            if (host == null || BlinkChromeActive) return;   // chrome: skip the gilt inner rim (WO-714 P9: art-presence gated)
             var go = new GameObject("Rim", typeof(Image));
             go.transform.SetParent(host.transform, false);
             var rt = go.GetComponent<RectTransform>();

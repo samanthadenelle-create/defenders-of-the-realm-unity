@@ -899,10 +899,13 @@ namespace DeNelle.Village.Buildings.Progression
     }
 
     /// <summary>
-    /// Minimal shared open/close tween for THIS panel family (no kit tween exists yet —
-    /// flagged for promotion into ElarionUiKit, WO-675 §8). Ease-out scale 0.92-&gt;1 + fade-in
-    /// on open (~0.18s); ease-in fade/scale-out then self-destroy on close (~0.14s). Unscaled
-    /// time (panels open while gameplay may be paused); CanvasGroup blocks input while closing.
+    /// DEPRECATED private twin (WO-714 P8, 2026-07-13): the kit now owns this tween as
+    /// <c>ElarionUiKit.PanelOpenCloseFx</c> (+ AttachPanelOpenFx / ClosePanelWithFx) — new
+    /// code uses the kit version; this copy is kept only so tonight's parallel lanes stay
+    /// additive, and migrates on-touch. Original: minimal shared open/close tween for THIS
+    /// panel family. Ease-out scale 0.92-&gt;1 + fade-in on open (~0.18s); ease-in fade/
+    /// scale-out then self-destroy on close (~0.14s). Unscaled time (panels open while
+    /// gameplay may be paused); CanvasGroup blocks input while closing.
     /// </summary>
     internal sealed class PanelOpenCloseFx : MonoBehaviour
     {

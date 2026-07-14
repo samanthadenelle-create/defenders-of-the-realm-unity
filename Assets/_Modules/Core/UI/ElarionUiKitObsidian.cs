@@ -2196,6 +2196,10 @@ namespace DeNelle.Core.UI
             if (t == null) return;
             if (maxSize <= 0f) maxSize = t.fontSize;
             if (minSize <= 0f) minSize = FontFloor;
+            // WO-714 P7 (WO-693 mobile floor, factory-enforced): no caller may auto-shrink text
+            // below the FontHardFloor readability floor — an explicit sub-floor minSize is clamped
+            // UP here (ellipsis past the floor, never sub-legible phone text).
+            if (minSize < FontHardFloor) minSize = FontHardFloor;
             if (minSize > maxSize) minSize = maxSize;
             t.textWrappingMode = TextWrappingModes.NoWrap;
             t.overflowMode = TextOverflowModes.Ellipsis;
@@ -2215,6 +2219,8 @@ namespace DeNelle.Core.UI
             if (t == null) return;
             if (maxSize <= 0f) maxSize = t.fontSize;
             if (minSize <= 0f) minSize = FontFloor;
+            // WO-714 P7: same factory floor as FitSingleLine — never below FontHardFloor.
+            if (minSize < FontHardFloor) minSize = FontHardFloor;
             if (minSize > maxSize) minSize = maxSize;
             t.textWrappingMode = TextWrappingModes.Normal;
             t.overflowMode = TextOverflowModes.Truncate;
