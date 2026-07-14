@@ -1,20 +1,27 @@
 // =============================================================================
 // HeroLoadoutPanelMvvm — the loadout-chooser VIEW (MVVM slice). A DUMB SKIN: it
-// builds presentation (ElarionUiKit dark-glass + gold frame) and BINDS a
-// HeroLoadoutVM. ALL state/logic (slot map, unlocked-skill grid, equip routing)
-// lives in the VM — the View never reads game state.
+// builds presentation (ElarionUiKit Obsidian frame + the WO-714 slot grammar) and
+// BINDS a HeroLoadoutVM. ALL state/logic (slot map, unlocked-skill grid, equip
+// routing) lives in the VM — the View never reads game state.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Talents
 //
 // Code-built uGUI ONLY (no UXML — §8). This fills the HOT-SWAP bar (the player-
 // assignable bottom-middle battle row); the bottom-RIGHT bar is the FIXED class kit
-// and is not edited here (owner-correct, 2026-06-28). Layout:
-//   * TOP ROW — the hot-swap slot tiles (1..N). Each shows the assigned skill name,
-//     or an empty "+" placeholder.
-//   * BOTTOM — a grid of unlocked skills. TAP a skill (it highlights), then tap a
-//     hot-swap slot to assign it (tap-tap, WebGL-safe — no drag, per the never-drag
-//     rule). Tap a filled slot with nothing picked to clear it.
-//   * A status line echoes the VM's hint / result.
+// and is not edited here (owner-correct, 2026-06-28).
+//
+// WO-714 W5 conformance (pack SOCKETING/slot grammar — kit primitives only):
+//   * TOP ROW — the hot-swap sockets as kit RARITY SLOTS (BuildRaritySlot:
+//     Inventory_Slot plate + rarity rim; EMPTY = dim plate per the sparse-grid law,
+//     kept tappable — they are sockets, not inventory cells).
+//   * BOTTOM — the unlocked skills as a kit SPARSE SLOT GRID (BuildSparseSlotGrid:
+//     a grid reads as a grid even when sparse). TAP a skill, then tap a socket
+//     (tap-tap, WebGL-safe — no drag). State reads as TEXT chips ("ON BAR" /
+//     "PICKED" / "TAP TO ASSIGN"), never by color alone (colorblind law).
+//   * Transient VM status (assigned / cleared / can't-edit) surfaces as the ONE
+//     kit toast (ShowToast, P5) — no parked status label that can go stale.
+//   * Open/close ride the shared PanelOpenCloseFx (P8); raw ids route through
+//     SpacedDisplayName (P10) so snake_case never reaches the player.
 //
 // Registers PanelId.HeroLoadout (opened from the skill-tree panel's Equip button).
 // =============================================================================
@@ -36,7 +43,11 @@ namespace DeNelle.Village.Talents
         private GameObject _slotsRoot;
         private GameObject _gridRoot;
         private TMPro.TextMeshProUGUI _headerLabel;
-        private TMPro.TextMeshProUGUI _statusText;
+
+        // P5 toast plumbing: the VM's Status is a hint/result line; the View toasts
+        // CHANGES only (the initial hint lives in the static caption, not a toast).
+        private string _lastStatus;
+        private bool _statusSeeded;
 
         private PanelHandle _panelHandle;
 
@@ -82,6 +93,8 @@ namespace DeNelle.Village.Talents
             Unbind();
             _vm = vm as HeroLoadoutVM;
             if (_vm == null) return;
+            _statusSeeded = false;          // fresh VM → seed its opening hint silently
+            _lastStatus = null;
             _vm.Changed += Render;
             Render();
         }
@@ -97,144 +110,204 @@ namespace DeNelle.Village.Talents
         {
             if (_vm == null) return;
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
-            if (_statusText != null) _statusText.text = _vm.Status;
+            SurfaceStatus();
             RebuildSlots();
             RebuildGrid();
         }
 
+        /// <summary>P5: transient VM status changes surface as the ONE kit toast —
+        /// never a parked label that can go stale. The FIRST status (the opening
+        /// hint) is seeded silently; the caption already teaches the flow.</summary>
+        private void SurfaceStatus()
+        {
+            string st = _vm.Status ?? "";
+            if (!_statusSeeded)
+            {
+                _statusSeeded = true;
+                _lastStatus = st;
+                return;
+            }
+            if (string.Equals(st, _lastStatus)) return;
+            _lastStatus = st;
+            if (string.IsNullOrEmpty(st)) return;
+            ElarionUiKit.ShowToast(st, ToneFor(st));
+        }
+
+        private static ElarionUiKit.ToastTone ToneFor(string status)
+        {
+            // Presentation-only read of the result line: success reads Confirm,
+            // blocked reads Danger, hints read Info. Meaning still carried by TEXT.
+            if (status.StartsWith("Assigned", System.StringComparison.OrdinalIgnoreCase) ||
+                status.StartsWith("Added", System.StringComparison.OrdinalIgnoreCase) ||
+                status.StartsWith("Slot cleared", System.StringComparison.OrdinalIgnoreCase))
+                return ElarionUiKit.ToastTone.Confirm;
+            if (status.IndexOf("Can't", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                status.StartsWith("No hero", System.StringComparison.OrdinalIgnoreCase))
+                return ElarionUiKit.ToastTone.Danger;
+            return ElarionUiKit.ToastTone.Info;
+        }
+
+        /// <summary>P10 guard: the VM already prefers the catalog displayName; when a
+        /// raw id leaked through (name == id, or snake_case), space it.</summary>
+        private static string DisplayName(string name, string abilityId)
+        {
+            if (string.IsNullOrEmpty(name)) return ElarionUiKit.SpacedDisplayName(abilityId);
+            if (name.IndexOf('_') >= 0 || name.IndexOf('-') >= 0 ||
+                string.Equals(name, abilityId, System.StringComparison.OrdinalIgnoreCase))
+                return ElarionUiKit.SpacedDisplayName(name);
+            return name;
+        }
+
+        // ── Hot-swap sockets (top row) — kit rarity slots ─────────────────────────
+
         private void RebuildSlots()
         {
             ClearChildren(_slotsRoot);
-            if (_slotsRoot == null) return;
+            if (_slotsRoot == null || _vm == null) return;
 
             var slots = _vm.Slots;
             int n = slots != null ? slots.Count : 0;
             if (n <= 0) return;
 
-            float gap = 0.02f;
+            bool aSkillIsPicked = !string.IsNullOrEmpty(_vm.SelectedAbilityId);
+
+            float gap = 0.03f;
             float w = (1f - gap * (n - 1)) / n;
             for (int i = 0; i < n; i++)
             {
                 float x0 = i * (w + gap);
-                BuildSlotTile(_slotsRoot.transform, slots[i], x0, x0 + w);
+                BuildSocket(_slotsRoot.transform, slots[i], aSkillIsPicked,
+                    new Vector2(x0, 0f), new Vector2(x0 + w, 1f));
             }
         }
 
-        private void BuildSlotTile(Transform parent, LoadoutSlotVM slot, float x0, float x1)
+        private void BuildSocket(Transform parent, LoadoutSlotVM slot, bool aSkillIsPicked,
+            Vector2 anchorMin, Vector2 anchorMax)
         {
-            var tile = new GameObject("Slot_" + slot.SlotKey, typeof(Image), typeof(Button));
-            tile.transform.SetParent(parent, false);
-            var rt = tile.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(x0, 0.06f); rt.anchorMax = new Vector2(x1, 0.94f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var img = tile.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(img);
-            // Discoverability (owner: "not intuitive how to assign — could only get the first slot"):
-            // once a skill is picked, the tappable W/E/R slots glow gold so it's obvious THIS is the
-            // next tap target (the tap-skill-then-tap-slot flow). Q (locked) never glows.
-            bool aSkillIsPicked = _vm != null && !string.IsNullOrEmpty(_vm.SelectedAbilityId);
-            bool isAssignTarget = aSkillIsPicked;
-            // Empty slots read as a quiet socket; filled read gold-warm; when a skill is picked
-            // every slot glows gold (the tap-skill-then-tap-slot flow). Tap a filled slot with
-            // nothing picked to clear it.
-            Color fill;
-            if (isAssignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
-            else if (slot.IsEmpty) fill = ElarionUiKit.Track;
-            else fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.20f);
-            img.color = fill;
-
-            var btn = tile.GetComponent<Button>();
-            btn.targetGraphic = img;
-            ElarionUiKit.StyleButtonColors(btn);
             int slotIndex = slot.SlotIndex;
-            btn.onClick.AddListener(() => { if (_vm != null) _vm.OnSlotTapped(slotIndex); });
 
-            // Slot number — big, top.
-            ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.62f, 0.95f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            // THE slot grammar (WO-714 P4): Inventory_Slot plate + rarity rim.
+            var h = ElarionUiKit.BuildRaritySlot(parent, 0, anchorMin, anchorMax,
+                empty: false,
+                onTap: () => { if (_vm != null) _vm.OnSlotTapped(slotIndex); });
+            if (h == null || h.root == null) return;
+            h.root.name = "Slot_" + slot.SlotKey;
 
-            // Content line.
-            string body;
-            Color bodyColor;
             if (slot.IsEmpty)
             {
-                body = isAssignTarget ? "tap to assign" : "+";
-                bodyColor = isAssignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim;
+                // Sparse-grid law visuals (dim plate, rim off) — but a SOCKET stays
+                // tappable: it is the assign target of the tap-tap flow.
+                h.SetEmpty(true);
+                if (h.button != null) h.button.interactable = true;
+                // Discoverability (owner: "not intuitive how to assign"): once a skill
+                // is picked, the rim lights and the socket SAYS what to do — text, not
+                // a color-only glow (colorblind law).
+                if (aSkillIsPicked && h.rim != null) h.rim.enabled = true;
+                ElarionUiKit.Label(h.root.transform,
+                    aSkillIsPicked ? "TAP TO\nASSIGN" : "+",
+                    0.14f, 0.62f,
+                    aSkillIsPicked ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+                    aSkillIsPicked ? ElarionUi.FontMicro : ElarionUi.FontTitle,
+                    TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: aSkillIsPicked);
             }
             else
             {
-                body = isAssignTarget ? slot.AbilityName : slot.AbilityName + "\n(tap to clear)";
-                bodyColor = ElarionUi.Parchment;
+                var nameLabel = ElarionUiKit.Label(h.root.transform,
+                    DisplayName(slot.AbilityName, slot.AbilityId),
+                    0.26f, 0.70f, ElarionUi.Parchment, ElarionUi.FontMicro,
+                    TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                ElarionUiKit.FitSingleLine(nameLabel, ElarionUi.FontFloorMobile);
+                // Action affordance as TEXT in the count corner (kit-built, gilt).
+                if (h.count != null)
+                    h.count.text = aSkillIsPicked ? "tap: replace" : "tap: clear";
             }
-            ElarionUiKit.Label(tile.transform, body, 0.08f, 0.58f, bodyColor,
-                slot.IsEmpty ? ElarionUi.FontTitle : ElarionUi.FontMicro,
-                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: !slot.IsEmpty);
+
+            // Slot number — top-left, gilt (the socket's key, "1".."4").
+            var key = ElarionUiKit.Label(h.root.transform, slot.SlotKey, 0.64f, 0.98f,
+                ElarionUi.Gilt, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.50f, bold: true);
+            key.raycastTarget = false;
         }
+
+        // ── Unlocked skills (bottom) — kit sparse slot grid ───────────────────────
 
         private void RebuildGrid()
         {
             ClearChildren(_gridRoot);
-            if (_gridRoot == null) return;
+            if (_gridRoot == null || _vm == null) return;
 
             var choices = _vm.UnlockedSkills;
             int n = choices != null ? choices.Count : 0;
+
+            // The sparse-grid law: build the FULL grid; unfilled cells render as dim
+            // plates so the area reads as a grid even before any skill is unlocked.
+            const int cols = 4;
+            int rows = Mathf.Clamp(Mathf.CeilToInt(n / (float)cols), 2, 4);
+            int visible = Mathf.Min(n, cols * rows);
+
+            var handles = ElarionUiKit.BuildSparseSlotGrid(_gridRoot.transform, cols, rows,
+                visible,
+                rarityOf: i => 0,
+                onTap: i =>
+                {
+                    if (_vm == null) return;
+                    var list = _vm.UnlockedSkills;
+                    if (list != null && i >= 0 && i < list.Count)
+                        _vm.SelectSkill(list[i].AbilityId);
+                },
+                gapFrac: 0.02f);
+
             if (n <= 0)
             {
-                ElarionUiKit.Label(_gridRoot.transform, "No unlocked skills yet — unlock SKILL nodes in the tree.",
-                    0.45f, 0.55f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                var empty = ElarionUiKit.Label(_gridRoot.transform,
+                    "No unlocked skills yet. Unlock SKILL nodes in the tree.",
+                    0.42f, 0.58f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+                empty.raycastTarget = false;
                 return;
             }
 
-            const int cols = 3;
-            float gapX = 0.02f, gapY = 0.03f;
-            float cardW = (1f - gapX * (cols - 1)) / cols;
-            float cardH = 0.20f;
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < visible && i < handles.Length; i++)
+                DressChoice(handles[i], choices[i]);
+
+            // Overflow beyond the grid cap — say so instead of silently dropping.
+            if (n > visible)
             {
-                int row = i / cols;
-                int col = i % cols;
-                float x0 = col * (cardW + gapX);
-                float y1 = 0.98f - row * (cardH + gapY);
-                float y0 = y1 - cardH;
-                if (y0 < 0.02f) break; // overflow guard (no scroll on the chooser grid)
-                BuildChoiceCard(_gridRoot.transform, choices[i], x0, x0 + cardW, y0, y1);
+                var more = ElarionUiKit.Label(_gridRoot.transform,
+                    "+" + (n - visible) + " more unlocked", -0.06f, 0.0f,
+                    ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                more.raycastTarget = false;
             }
         }
 
-        private void BuildChoiceCard(Transform parent, SkillChoiceVM choice, float x0, float x1, float y0, float y1)
+        private void DressChoice(ElarionUiKit.RaritySlotHandle h, SkillChoiceVM choice)
         {
-            var card = new GameObject("Choice_" + choice.AbilityId, typeof(Image), typeof(Button));
-            card.transform.SetParent(parent, false);
-            var rt = card.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var img = card.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(img);
+            if (h == null || h.root == null) return;
+            h.root.name = "Choice_" + choice.AbilityId;
 
             bool selected = !string.IsNullOrEmpty(_vm.SelectedAbilityId) &&
-                            string.Equals(_vm.SelectedAbilityId, choice.AbilityId, System.StringComparison.OrdinalIgnoreCase);
-            Color fill;
-            if (selected) fill = ElarionUiKit.CellSelected;
-            else if (choice.IsEquipped) fill = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.18f);
-            else fill = ElarionUiKit.Cell;
-            img.color = fill;
+                            string.Equals(_vm.SelectedAbilityId, choice.AbilityId,
+                                System.StringComparison.OrdinalIgnoreCase);
 
-            var btn = card.GetComponent<Button>();
-            btn.targetGraphic = img;
-            ElarionUiKit.StyleButtonColors(btn);
-            string id = choice.AbilityId;
-            btn.onClick.AddListener(() => { if (_vm != null) _vm.SelectSkill(id); });
+            // Skill name — center of the plate (no icon art for abilities yet).
+            var nameLabel = ElarionUiKit.Label(h.root.transform,
+                DisplayName(choice.Name, choice.AbilityId),
+                0.34f, 0.86f, selected ? ElarionUi.Gilt : ElarionUi.Parchment,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                0.06f, 0.94f, bold: true);
+            ElarionUiKit.FitSingleLine(nameLabel, ElarionUi.FontFloorMobile);
 
-            ElarionUiKit.Label(card.transform, choice.Name, 0.30f, 0.92f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-
-            string chip = choice.IsEquipped ? "EQUIPPED" : (selected ? "SELECTED" : "tap to pick");
-            Color chipColor = choice.IsEquipped ? ElarionUi.Affordable : (selected ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
-            ElarionUiKit.Label(card.transform, chip, 0.06f, 0.28f, chipColor,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: selected);
+            // State chip — TEXT carries the meaning (colorblind law), color assists.
+            string chip = choice.IsEquipped ? "ON BAR" : (selected ? "PICKED" : "");
+            if (!string.IsNullOrEmpty(chip))
+            {
+                var c = ElarionUiKit.Label(h.root.transform, chip, 0.06f, 0.30f,
+                    choice.IsEquipped ? ElarionUi.Affordable : ElarionUi.Gilt,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                    0.06f, 0.94f, bold: true);
+                c.raycastTarget = false;
+            }
         }
 
         // ── Chrome ────────────────────────────────────────────────────────────────
@@ -248,55 +321,49 @@ namespace DeNelle.Village.Talents
 
             // INHERIT the common Obsidian kit (owner: one common frame + one common close): the Talent
             // master-frame + its measured drop-zones + the ONE shared kit Close (built by
-            // BuildObsidianPanel). No bespoke chrome/frame/close of our own — the old "Done" gold
-            // button (a per-panel close) is GONE; the shared top-right kit Close is the only close.
+            // BuildObsidianPanel). No bespoke chrome/frame/close of our own.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Hot-Swap Skills",
                 new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f),
                 () => { if (_vm != null) _vm.Close(); },
                 frameName: RpgUiCatalog.FrameTalent, medallionIcon: "talent");
             _headerLabel = chrome.title;
 
-            // Lay out INSIDE the frame's BODY drop-zone (mobile-first: compact + centered, no
-            // full-bleed bars). Falls back to the transparent content overlay when no frame art.
+            // P8 — the shared open ease (scale target = the PANEL rect, never the canvas).
+            ElarionUiKit.AttachPanelOpenFx(_ui,
+                chrome.root != null ? chrome.root.GetComponent<RectTransform>() : null);
+
+            // Lay out INSIDE the frame's BODY drop-zone (mobile-first: compact + centered).
+            // Falls back to the transparent content overlay when no frame art.
             var bodyHost = (chrome.layout != null && chrome.layout.body != null)
                 ? chrome.layout.body : (RectTransform)chrome.content.transform;
             Transform panel = bodyHost;
 
-            // Caption: the class kit is fixed; this bar is for extra talent skills.
-            ElarionUiKit.Label(panel, "Your class kit is fixed — assign extra talent skills to your hot-swap bar.",
+            // Caption: the persistent teach line (transient results ride the P5 toast).
+            ElarionUiKit.Label(panel,
+                "Your class kit is fixed. Tap a skill, then a socket, to fill your hot-swap bar.",
                 0.94f, 0.99f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
 
-            // Hot-swap slot strip — centered + compact (mobile thumb-zone), not a full-width bar.
+            // Hot-swap socket strip — centered + compact (mobile thumb-zone).
             _slotsRoot = new GameObject("SlotsRow", typeof(RectTransform));
             _slotsRoot.transform.SetParent(panel, false);
             var sr = _slotsRoot.GetComponent<RectTransform>();
-            sr.anchorMin = new Vector2(0.16f, 0.76f); sr.anchorMax = new Vector2(0.84f, 0.90f);
+            sr.anchorMin = new Vector2(0.18f, 0.74f); sr.anchorMax = new Vector2(0.82f, 0.90f);
             sr.offsetMin = Vector2.zero; sr.offsetMax = Vector2.zero;
 
             // Divider caption.
-            ElarionUiKit.Label(panel, "Unlocked Skills", 0.685f, 0.735f, ElarionUi.Gilt,
+            ElarionUiKit.Label(panel, "Unlocked Skills", 0.665f, 0.715f, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
 
-            // Unlocked-skill grid — centered well inside the body zone.
-            _gridRoot = ElarionUiKit.Well(panel, new Vector2(0.10f, 0.11f), new Vector2(0.90f, 0.66f));
-            var gImg = _gridRoot.GetComponent<Image>();
-            if (gImg != null) gImg.raycastTarget = false;
+            // Unlocked-skill grid host — transparent (the kit slots ARE the chrome;
+            // no per-screen well behind them).
+            _gridRoot = new GameObject("SkillGrid", typeof(RectTransform));
+            _gridRoot.transform.SetParent(panel, false);
+            var gr = _gridRoot.GetComponent<RectTransform>();
+            gr.anchorMin = new Vector2(0.10f, 0.06f); gr.anchorMax = new Vector2(0.90f, 0.64f);
+            gr.offsetMin = Vector2.zero; gr.offsetMax = Vector2.zero;
 
-            // Status line.
-            var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel, false);
-            var stRect = statusGo.GetComponent<RectTransform>();
-            stRect.anchorMin = new Vector2(0.08f, 0.03f); stRect.anchorMax = new Vector2(0.92f, 0.09f);
-            stRect.offsetMin = Vector2.zero; stRect.offsetMax = Vector2.zero;
-            _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(_statusText);
-            _statusText.fontSize = ElarionUi.FontLabel;
-            _statusText.color = ElarionUi.ParchmentDim;
-            _statusText.alignment = TMPro.TextAlignmentOptions.Center;
-            _statusText.raycastTarget = false;
-
-            // NO per-panel Close/Done button — the shared kit Close (top-right, built by
+            // NO per-panel Close/Done button — the shared kit Close (built by
             // BuildObsidianPanel above) is the ONE close game-wide (owner: one common close).
         }
 
@@ -317,8 +384,9 @@ namespace DeNelle.Village.Talents
             Unbind();
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
-            _statusText = null;
-            if (_ui != null) Destroy(_ui);
+            _lastStatus = null;
+            _statusSeeded = false;
+            if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);   // P8 shared close ease
             _ui = null;
             _slotsRoot = null;
             _gridRoot = null;
