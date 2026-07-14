@@ -1,8 +1,18 @@
 {
   "version": 1,
-  "_note": "WO-603 currency/auth/branding skin table. 'active' selects the skin at runtime (Pi = live production default, zero regression). The Solana/$SKR deployment flips it via ?skin=skr on the page URL or by setting active:'skr' here. One build artifact serves both.",
-  "active": "pi",
+  "_note": "WO-603 currency/auth/branding skin table. 'active' selects the skin at runtime. WO-713 owner ruling 2026-07-13: V1 ships the GENERIC WALLET skin (icon + plain amount, NO Pi/SKR symbol; auth stays on the Pi path so only presentation changes). The Pi/SKR skins stay for the later crypto arc via ?skin=pi / ?skin=skr or by flipping 'active'.",
+  "active": "wallet",
   "skins": {
+    "wallet": {
+      "skinId": "wallet",
+      "currencySymbol": "",
+      "currencyName": "Wallet",
+      "authMode": "PiSdk",
+      "brandingKey": "",
+      "storeCtaVerb": "Spend",
+      "identityKeyKind": "PiUid",
+      "bindIdentityOnAuth": false
+    },
     "pi": {
       "skinId": "pi",
       "currencySymbol": "π",

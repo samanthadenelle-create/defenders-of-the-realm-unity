@@ -7,14 +7,19 @@
 //
 // Resolution order (first hit wins), all synchronous so it completes before the
 // first view builds:
-//   1. URL query param  ?skin=pi | ?skin=skr   (WebGL — the SKR Vercel deployment
-//      appends ?skin=skr; mirrors FeatureFlags.ApplyUrlActivationOnce, allow-listed
-//      to pi|skr only so a crafted link can only swap skin, never game state).
+//   1. URL query param  ?skin=pi | ?skin=skr | ?skin=wallet   (WebGL — the SKR
+//      Vercel deployment appends ?skin=skr; mirrors FeatureFlags.ApplyUrlActivationOnce,
+//      allow-listed to pi|skr|wallet only so a crafted link can only swap skin,
+//      never game state).
 //   2. skin.json "active" field  (Assets/Resources/Data/Canonical/skin.json).
-//   3. "pi" — the live production default (ZERO REGRESSION).
+//   3. "wallet" — the V1 GENERIC WALLET default (WO-713 owner ruling 2026-07-13:
+//      "remove the Pi symbol on inventory screen ... leave generic as wallet").
+//      V1 ships ZERO crypto; the Pi/SKR skins stay in the table for the later
+//      crypto arc (?skin=pi / ?skin=skr / skin.json "active" re-select them).
 //
-// Rule (WO): a Pi feed → Pi skin; otherwise → SKR skin. The default is Pi so an
-// un-configured / offline / garbled-json boot ALWAYS lands on today's behaviour.
+// The generic wallet skin is PRESENTATION-only: no symbol glyph (views show a
+// wallet ICON + the plain amount); auth/identity stay on the Pi path so the
+// live auth behaviour is unchanged by the currency-presentation swap.
 //
 // PRESENTATION READS CurrencySkinResolver.Active — never hardcoded π / Pi / $SKR.
 // =============================================================================
@@ -50,6 +55,27 @@ namespace DeNelle.Core.Platform
 
         /// <summary>True once the active skin is the SKR/Solana skin.</summary>
         public static bool IsSkr => Active.SkinId == "skr";
+
+        /// <summary>True once the active skin is the V1 generic-wallet skin (no crypto symbol).</summary>
+        public static bool IsGenericWallet => Active.SkinId == "wallet";
+
+        /// <summary>
+        /// The V1 GENERIC WALLET skin (WO-713 owner ruling 2026-07-13): currency rows show a
+        /// wallet ICON + the plain amount — no Pi/SKR symbol (CurrencySymbol is intentionally
+        /// EMPTY; views render icon + amount and may label with CurrencyName). Auth/identity
+        /// mirror the Pi defaults so making this skin active changes PRESENTATION ONLY —
+        /// the live sign-in/identity behaviour is untouched (V1 ships zero crypto; the Pi and
+        /// SKR skins remain in skin.json for the later crypto arc).
+        /// </summary>
+        public static CurrencySkin WalletDefault { get; } = new CurrencySkin(
+            skinId: "wallet",
+            currencySymbol: "",
+            currencyName: "Wallet",
+            authMode: SkinAuthMode.PiSdk,
+            brandingKey: "",
+            storeCtaVerb: "Spend",
+            identityKeyKind: SkinIdentityKeyKind.PiUid,
+            bindIdentityOnAuth: false);
 
         /// <summary>
         /// Raised when a view's auth button under the SolanaWallet skin is pressed. The
@@ -93,8 +119,8 @@ namespace DeNelle.Core.Platform
             if (string.IsNullOrEmpty(requested))               // step 2 — skin.json "active"
                 requested = table?["active"]?.ToString();
 
-            if (string.IsNullOrEmpty(requested))               // step 3 — default
-                requested = "pi";
+            if (string.IsNullOrEmpty(requested))               // step 3 — V1 generic-wallet default
+                requested = "wallet";
 
             requested = requested.Trim().ToLowerInvariant();
 
@@ -105,9 +131,9 @@ namespace DeNelle.Core.Platform
         }
 
         /// <summary>
-        /// Reads <c>?skin=pi</c>/<c>?skin=skr</c> from the WebGL page URL. Allow-listed to
-        /// pi|skr only. Empty off-web (Application.absoluteURL is empty in editor/standalone).
-        /// Never throws.
+        /// Reads <c>?skin=pi</c>/<c>?skin=skr</c>/<c>?skin=wallet</c> from the WebGL page URL.
+        /// Allow-listed to pi|skr|wallet only. Empty off-web (Application.absoluteURL is empty
+        /// in editor/standalone). Never throws.
         /// </summary>
         private static string ReadUrlSkinOverride()
         {
@@ -124,13 +150,13 @@ namespace DeNelle.Core.Platform
                     string key = (eq < 0 ? pair : pair.Substring(0, eq)).Trim();
                     if (!key.Equals("skin", StringComparison.OrdinalIgnoreCase)) continue;
                     string val = (eq < 0 ? "" : pair.Substring(eq + 1)).Trim().ToLowerInvariant();
-                    if (val == "pi" || val == "skr")
+                    if (val == "pi" || val == "skr" || val == "wallet")
                     {
                         FlowTrace.Step("Skin", $"?skin={val} detected on the page URL — overriding skin.json.");
                         return val;
                     }
                     if (!string.IsNullOrEmpty(val))
-                        FlowTrace.Warn("Skin", $"?skin={val} is not an allow-listed skin (pi|skr) — ignored.");
+                        FlowTrace.Warn("Skin", $"?skin={val} is not an allow-listed skin (pi|skr|wallet) — ignored.");
                 }
             }
             catch (Exception ex) { FlowTrace.Warn("Skin", "URL skin-override parse skipped: " + ex.Message); }
@@ -164,7 +190,10 @@ namespace DeNelle.Core.Platform
         /// </summary>
         private static CurrencySkin BuildSkin(string skinId, JObject table)
         {
-            CurrencySkin fallback = skinId == "skr" ? CurrencySkin.SkrDefault : CurrencySkin.PiDefault;
+            CurrencySkin fallback =
+                skinId == "skr"    ? CurrencySkin.SkrDefault :
+                skinId == "wallet" ? WalletDefault :
+                                     CurrencySkin.PiDefault;
 
             JToken entry = table?["skins"]?[skinId];
             if (entry == null) return fallback;

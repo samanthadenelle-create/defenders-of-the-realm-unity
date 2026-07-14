@@ -79,6 +79,12 @@ namespace DeNelle.Village
             NoRaycast(_sidebarRoot);
 
             BuildFooterBar(panel.transform);
+
+            // WO-713 — the ONE shared open ease (kit PanelOpenCloseFx, WO-714 P8): scale
+            // target = the chrome panel rect (never the overlay canvas root). Attach-only
+            // when inactive (headless-safe); Close stays instant (controller destroys _ui).
+            if (panelChrome.root != null)
+                ElarionUiKit.AttachPanelOpenFx(_ui, panelChrome.root.GetComponent<RectTransform>());
         }
 
         // ── Footer bar (mockup #41 bottom) ---
@@ -124,37 +130,71 @@ namespace DeNelle.Village
                     $"BuildFooterBar: resource read threw ({ex.GetType().Name}: {ex.Message}) — wallet shows 0.");
             }
 
-            const float wEnd = 0.985f, wStart = 0.470f, wGap = 0.012f;
-            float wW = (wEnd - wStart - wGap * 2f) / 3f;
-            float wx = wStart;
-            ResourceWell(tray.transform, "GoldWell", wx, wx + wW, "o " + coins, "GOLD", GiltInk); wx += wW + wGap;
-            ResourceWell(tray.transform, "CrystalWell", wx, wx + wW, "* " + crystals, "CRYSTALS",
-                         new Color(0.42f, 0.26f, 0.62f, 1f)); wx += wW + wGap;
-            // Premium-currency well: the SYMBOL comes from the active CurrencySkin model
-            // (CurrencySkinResolver.Active — "π"/Pi or "$SKR"), NEVER a hardcoded "SKR"
-            // literal (CurrencySkin canon §: presentation reads the skin, never types the
-            // symbol inline). So this reads correctly under both the Pi and SKR skins.
-            var skin = DeNelle.Core.Platform.CurrencySkinResolver.Active;
-            ResourceWell(tray.transform, "SkrWell", wx, wx + wW, "* " + skin.CurrencySymbol, "WALLET",
-                         new Color(0.18f, 0.43f, 0.40f, 1f));
+            // WO-713 A.6 + the appended owner ruling (2026-07-13): the footer is the STANDARD
+            // kit chip row (CurrencyChip owns ALL currency presentation — CompactNumber,
+            // icon-first identity, no flash), never hand-rolled wells. Gold + Crystals ride
+            // the ONE wallet strip (WO-714 P2 BuildWalletRow); the third chip is the GENERIC
+            // WALLET — icon + plain amount, NO Pi/SKR symbol. CurrencySkinResolver.Active
+            // still drives the wallet chip's identity text (never a symbol typed inline), so
+            // the Pi/SKR skins render correctly when the later crypto arc re-activates them.
+            var chipHost = AddImage(tray.transform, "WalletChips",
+                                    new Vector2(0.40f, 0.10f), new Vector2(0.985f, 0.90f),
+                                    new Color(0f, 0f, 0f, 0f));
+            NoRaycast(chipHost);
+            var softHost = AddImage(chipHost.transform, "SoftCurrency",
+                                    new Vector2(0f, 0f), new Vector2(0.64f, 1f),
+                                    new Color(0f, 0f, 0f, 0f));
+            NoRaycast(softHost);
+            var chips = ElarionUiKit.BuildWalletRow(softHost.transform,
+                new[] { ElarionUiKit.CurrencyKind.Gold, ElarionUiKit.CurrencyKind.Crystal });
+            if (chips != null && chips.Length > 0 && chips[0] != null) chips[0].SetAmount(coins, animate: false);
+            if (chips != null && chips.Length > 1 && chips[1] != null) chips[1].SetAmount(crystals, animate: false);
+
+            BuildGenericWalletChip(chipHost.transform);
         }
 
-        private void ResourceWell(Transform tray, string name, float x0, float x1,
-                                  string value, string caps, Color valueColor)
+        // The premium/wallet chip — GENERIC under the V1 "wallet" skin (owner ruling appended
+        // to WO-713: "remove the Pi symbol on inventory screen ... leave generic as wallet").
+        // Built on the SAME kit CurrencyChip as the soft currencies (no hand-rolled well),
+        // then re-iconed to the wallet/bag art: icon + plain amount, zero symbol glyphs.
+        // Identity text comes from the active skin's CurrencyName (colorblind law: when no
+        // icon art resolves the chip still carries a text identifier, never a naked number).
+        private void BuildGenericWalletChip(Transform host)
         {
-            var well = AddImage(tray, name, new Vector2(x0, 0.10f), new Vector2(x1, 0.90f), GlassDeep);
-            AddInnerRim(well, new Color(valueColor.r, valueColor.g, valueColor.b, 0.55f));
-            NoRaycast(AddImage(well.transform, "Glint", new Vector2(0.42f, 0.80f), new Vector2(0.58f, 0.96f),
-                               new Color(valueColor.r, valueColor.g, valueColor.b, 0.85f)));
-            // Eyes-sweep 2026-07-06: GOLD/CRYSTALS/WALLET caps painted over their values — the
-            // caps/value text overflowed the narrow wells. Disjoint bands kept; both labels now
-            // fit-or-ellipsize inside their own band (§1.14 NoWrap+ellipsis).
-            var valLbl = AddLabel(well.transform, value, 0.42f, 0.96f, valueColor,
-                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            ElarionUiKit.FitSingleLine(valLbl, 0f, ElarionUi.FontLabel);
-            var capsLbl = AddLabel(well.transform, caps, 0.06f, 0.40f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
-            ElarionUiKit.FitSingleLine(capsLbl, 0f, ElarionUi.FontMicro);
+            var skin = DeNelle.Core.Platform.CurrencySkinResolver.Active;
+            string tagText = (string.IsNullOrEmpty(skin.CurrencyName) ? "Wallet" : skin.CurrencyName)
+                             .ToUpperInvariant();
+            var chip = ElarionUiKit.CurrencyChip(host, ElarionUiKit.CurrencyKind.Gold,
+                new Vector2(0.66f, 0f), new Vector2(1f, 1f), primary: false, tag: tagText);
+            if (chip == null || chip.root == null) return;
+            chip.root.name = "WalletChip";
+
+            var bag = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            if (bag != null && chip.icon != null)
+            {
+                // Wallet ICON (the bronze chest/bag) replaces the kind icon — generic read.
+                chip.icon.sprite = bag;
+                chip.icon.gameObject.SetActive(true);
+                if (chip.tag != null) chip.tag.text = tagText;
+            }
+            else
+            {
+                // No wallet art: never let the GOLD kind icon mislabel the wallet — drop the
+                // icon and make sure a text identifier carries the chip's identity instead.
+                if (chip.icon != null) chip.icon.gameObject.SetActive(false);
+                if (chip.tag != null) chip.tag.text = tagText;
+                else
+                {
+                    var t = ElarionUiKit.Label(chip.root.transform, tagText, 0f, 1f,
+                        ElarionUi.Parchment, ElarionUi.FontMicro,
+                        TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.58f);
+                    t.raycastTarget = false;
+                    ElarionUiKit.FitSingleLine(t, 0f, ElarionUi.FontMicro);
+                }
+            }
+
+            // V1 ships zero crypto and no local premium-balance model exists — the honest 0.
+            chip.SetAmount(0, animate: false);
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -166,7 +206,9 @@ namespace DeNelle.Village
         // build-menu Orient, and AdminOverlay launch. Falls back to the world hero when no preview.
         private void BuildOrientButton(Transform parent)
         {
-            var btn = ElarionUiKit.ButtonPack(parent, "⚒ Orient", ElarionUiKit.ButtonKind.Quiet,
+            // WO-713: the U+2692 hammer glyph tofu'd in the build TMP font (known HUDUI red)
+            // — plain ASCII label per the ASCII-only law.
+            var btn = ElarionUiKit.ButtonPack(parent, "Orient", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f),
                 () =>
                 {
@@ -183,124 +225,27 @@ namespace DeNelle.Village
         }
 #endif
 
-        private static void CreamLabel(Button btn)
-        {
-            if (btn == null) return;
-            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-            if (lbl == null) return;
-            lbl.color = ElarionUi.Parchment;
-            lbl.fontStyle = TMPro.FontStyles.Bold;
-            lbl.outlineColor = new Color32(20, 12, 4, 235);
-            lbl.outlineWidth = 0.22f;
-            lbl.transform.SetAsLastSibling();
-        }
-
         // ── TABS ---
-        // The four item tabs PLUS a "Skills" pseudo-tab. Skills isn't a content category
-        // (the tree is a full MVVM modal — HeroSkillTreePanelMvvm); tapping it OPENS that
-        // panel via PanelRouter (PanelManager swaps the inventory out, one-modal-at-a-time).
-        // Consistent with how the other tabs switch the right-pane content.
+        // WO-713 A.2 — the ONE uniform kit tab row (WO-714 P1 BuildTabRow): element_tab
+        // plates, one size class, labels renamed so they FIT (owner spec): Weapons / Armor /
+        // Trinkets / Potions / Skills (was "Accessories"/"Consumables" — the truncating pair).
+        // Selected state = the kit's lit plate + bold, never color-only. "Skills" stays the
+        // pseudo-tab: it isn't a content category — tapping it OPENS the MVVM skill tree via
+        // PanelRouter (PanelManager swaps the inventory out, one-modal-at-a-time). The row is
+        // rebuilt from the VM's active tab on every Render (RebuildTabsRow), so the VM stays
+        // the source of truth for selection.
         private void BuildTabs(Transform host)
         {
-            string[] names = { "Weapons", "Armor", "Accessories", "Consumables", "Skills" };
-            // Skills carries a null Tab (handled specially below); the other indices map 1:1.
+            string[] labels = { "Weapons", "Armor", "Trinkets", "Potions", "Skills" };
             Tab[] tabs = { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables, Tab.Weapons };
             const int skillsIndex = 4;
-            float y0 = 0.06f, y1 = 0.94f;
-            float gap = 0.012f;
-            float w = (1f - gap * (names.Length - 1)) / names.Length;
-            float x = 0f;
-            for (int i = 0; i < names.Length; i++)
-            {
-                bool isSkills = i == skillsIndex;
-                Tab t = tabs[i];
-                bool sel = !isSkills && _tab == t;
-                float cx = x + w * 0.5f;
-                Color inactive = new Color(0.847f, 0.804f, 0.710f, 1f);
-                Color bg = sel ? ElarionUi.GoldButton : inactive;
-                System.Action onTap = isSkills ? (System.Action)OpenSkillTree : () => SelectTab(t);
-                var btn = AddButton(host, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
-                                    bg, onTap, sel ? ButtonKind.Gold : ButtonKind.Neutral);
-                if (sel) 
-                { 
-                    DressButtonPack(btn);
-                }
-                else 
-                { 
-                    // no special for inactive here
-                }
-
-                // Completely redesigned elegant tabs for mobile RPG raid style game.
-                // Strict use of Tech Profile tabs (P1/P2 fills) for all category tabs – ornate, clean, no action "Play" sprites or text leak ever.
-                // RPG kit reserved for main panels, grid tiles, and CTAs for professional inventory aesthetic.
-                // Active tab: gold-tinted P1 with glow + underline.
-                // Icons from pack (Sword for Weapons, Profile for Armor, Healing for others).
-                var pi = btn.targetGraphic as Image; 
-                if (pi != null) 
-                { 
-                    Sprite tabBg = null;
-                    if (sel) {
-                        tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                        if (tabBg == null) tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/bg.png");
-                    } else {
-                        tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P2/fill.png");
-                        if (tabBg == null) tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                    }
-                    // Clean-build fallback (Tech pack gitignored): committed RpgUi ornate tab banner.
-                    if (tabBg == null) tabBg = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelTab);
-                    if (tabBg != null) {
-                        pi.sprite = tabBg;
-                        pi.type = Image.Type.Sliced;
-                        pi.color = sel ? Color.white : new Color(0.75f, 0.7f, 0.6f, 1f);
-                    } else {
-                        pi.color = sel ? ElarionUi.GoldButton : inactive;
-                        ApplyRounded(pi);
-                    }
-                }
-                Sprite tabIcon = isSkills ? null : TabPackIcon(t);
-                if (tabIcon != null)
+            ElarionUiKit.BuildTabRow(host, labels,
+                idx =>
                 {
-                    var ic = AddImage(btn.transform, "TabIcon",
-                                      new Vector2(0.04f, 0.30f), new Vector2(0.30f, 0.92f), new Color(0, 0, 0, 0));
-                    NoRaycast(ic);
-                    var im = ic.GetComponent<Image>();
-                    im.sprite = tabIcon; im.color = Color.white; im.type = Image.Type.Simple;
-                    im.preserveAspect = true;
-                }
-                // Eyes-sweep 2026-07-06: tab labels wrapped mid-word over the tab art
-                // ("Weapon s" / "Accesso ries" / "Consum ables"). The label gets its OWN band
-                // (clear of the icon strip at x 0.04–0.30) and fits-or-ellipsizes (§1.14).
-                var tabLbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-                if (tabLbl != null)
-                {
-                    var lr = tabLbl.GetComponent<RectTransform>();
-                    lr.anchorMin = new Vector2(tabIcon != null ? 0.32f : 0.06f, 0f);
-                    lr.anchorMax = new Vector2(0.96f, 1f);
-                    ElarionUiKit.FitSingleLine(tabLbl, 0f, ElarionUi.FontBody);
-                }
-                if (sel)
-                {
-                    var glow = AddImage(host, "TabGlow_" + names[i],
-                                        new Vector2(cx - w * 0.5f - 0.006f, y0 - 0.06f),
-                                        new Vector2(cx + w * 0.5f + 0.006f, y1 + 0.06f),
-                                        new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.30f));
-                    NoRaycast(glow);
-                    glow.transform.SetSiblingIndex(btn.transform.GetSiblingIndex());
-                }
-                if (sel)
-                {
-                    var rule = new GameObject("TabUnderline", typeof(Image));
-                    rule.transform.SetParent(btn.transform, false);
-                    var rr = rule.GetComponent<RectTransform>();
-                    rr.anchorMin = new Vector2(0.12f, 0f); rr.anchorMax = new Vector2(0.88f, 0f);
-                    rr.pivot = new Vector2(0.5f, 0f);
-                    rr.sizeDelta = new Vector2(0f, 3f);
-                    rr.anchoredPosition = new Vector2(0f, -4f);
-                    var ri = rule.GetComponent<Image>();
-                    ri.color = GiltInk; ri.raycastTarget = false;
-                }
-                x += w + gap;
-            }
+                    if (idx == skillsIndex) { OpenSkillTree(); return; }
+                    SelectTab(tabs[idx]);
+                },
+                initial: (int)_tab);
         }
 
         // The "Skills" pseudo-tab: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
@@ -331,33 +276,8 @@ namespace DeNelle.Village
             panel.Open();   // NotifyOpened closes this inventory (it is the registered open panel)
         }
 
-        private static Sprite TabPackIcon(Tab t)
-        {
-            try
-            {
-                Sprite sp;
-                switch (t)
-                {
-                    case Tab.Weapons:     sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Sword icons/Sword icons");
-                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
-                    case Tab.Armor:       sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
-                    case Tab.Outfits:     sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H5");
-                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconHeart);
-                    case Tab.Consumables: sp = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Icons/Icon 5");
-                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
-                    default:              return null;
-                }
-            }
-            catch (System.Exception ex)
-            {
-                // No silent failure (§12): a tab-icon load that throws falls back to no icon, but
-                // it must be logged — never swallowed blind.
-                FlowTrace.Warn("Inventory",
-                    $"TabPackIcon: load threw for tab {t} ({ex.GetType().Name}: {ex.Message}) — tab shows no icon.");
-                return null;
-            }
-        }
+        // (TabPackIcon retired with the WO-713 kit tab row — BuildTabRow tabs are label-first;
+        //  CreamLabel was already dead. Verified zero remaining references before deletion.)
 
         // ── Live 3D dressed-hero preview in the paper-doll niche ─────────────────────
         // REUSE (no new system): the SAME proven HeroPreviewViewer the Character / Gear screen

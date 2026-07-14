@@ -42,6 +42,7 @@ namespace DeNelle.Village.Hero
         // Live 3D hero preview (the showcase centerpiece) + the per-target body it previews.
         private HeroPreviewViewer _preview;
         private RawImage _previewImage;
+        private Image _previewSilhouette;   // sil_male fallback behind the render (WO-713 §D)
         private readonly List<GameObject> _targetBodies = new List<GameObject>();
         private int _previewTargetIndex = -1;
 
@@ -138,6 +139,11 @@ namespace DeNelle.Village.Hero
 #endif
 
             Bind(_vm);
+
+            // WO-713 — the ONE shared open ease (kit PanelOpenCloseFx, WO-714 P8): scale
+            // target = the chrome panel rect (never the overlay canvas root).
+            if (chrome.root != null)
+                ElarionUiKit.AttachPanelOpenFx(_ui, chrome.root.GetComponent<RectTransform>());
 
             // Modal arbiter: announce the open (closes any other panel; one-modal-at-a-time).
             // Rejected during battle — NotifyOpened already invoked Close in that case.
@@ -309,23 +315,14 @@ namespace DeNelle.Village.Hero
             BuildGearSlot(EquipVM.SlotRing,     new Vector2(0.765f, 0.115f), new Vector2(0.965f, 0.27f));
         }
 
-        // One labeled slot: caption above + a framed plate showing the equipped item's glyph +
-        // name (rarity-tinted) or an empty placeholder. Tapping opens the change-drawer.
+        // One labeled slot CARD (WO-713 §D): the label lives INSIDE the card — the old floating
+        // captions collided with neighbouring plates ("Shield (Off Hand)" over "Ironward Plate",
+        // the §1.14 fit-never-spill class). A filled card shows icon + name + its one-line grant
+        // (the WO-683 BESTOWS read — gear states why it matters); an EMPTY card shows a pointer
+        // to the system that fills it, not a bare "Empty". Tapping opens the change-drawer.
         private void BuildGearSlot(string slotKey, Vector2 anchorMin, Vector2 anchorMax)
         {
             var slot = FindSlot(slotKey);
-
-            // Caption above the plate — fits-or-ellipsizes inside its own band (§1.14).
-            // Guard sweep 9413 (Player.log TextFitGuard): the old 16%-of-plate-height band gave the
-            // short Amulet/Ring plates 265x9 / 265x12 px captions — below the guard's minimum line
-            // even at floor 12 → 0 visible glyphs. The band is now a FIXED body fraction (CapH =
-            // 0.055 ≈ a full 23px line at the owner's window) regardless of plate height; the
-            // RebuildSlots rects reserve exactly this gap above every plate.
-            const float capH = 0.055f;
-            var capLbl = ElarionUiKit.Label(_slotsHost.transform, SlotCaption(slotKey),
-                anchorMax.y, anchorMax.y + capH, ElarionUi.Gilt,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, anchorMin.x, anchorMax.x, bold: true);
-            ElarionUiKit.FitSingleLine(capLbl, 0f, ElarionUi.FontLabel);
 
             // Framed plate (button).
             var go = new GameObject("Slot_" + slotKey, typeof(Image), typeof(Button));
@@ -359,24 +356,23 @@ namespace DeNelle.Village.Hero
             bool filled = slot.HasValue && slot.Value.Content.HasValue;
             var item = filled ? slot.Value.Content.Value : default;
 
-            // Real item art for FILLED slots (mirrors InventoryGrid.ResolveItemIcon): the slot's
-            // ItemVM already carries the correct IconRole + item id, so resolve the actual weapon/
-            // armor sprite instead of the generic slot glyph. Owner bug: the armor slot fell to the
-            // SlotChest glyph = IconInventory ("icon_inventory" = a gold chest/bag), so equipped armor
-            // read as a "gold bag". Empty slots keep the ghost glyph.
-            // Guard sweep 9413: the name band (0.26 of plate height) collapsed to 243x13px on the
-            // short Amulet plate → "Empty" rendered 0 glyphs. Guarantee the band at least the same
-            // 0.055 BODY fraction as the captions (grows on short plates), and seat the icon ABOVE
-            // the grown band so they stay disjoint.
-            float plateH = Mathf.Max(0.01f, anchorMax.y - anchorMin.y);
-            float nameTop = Mathf.Min(0.46f, Mathf.Max(filled ? 0.30f : 0.26f, 0.04f + 0.055f / plateH));
-            float iconY0 = Mathf.Max(filled ? 0.34f : 0.30f, nameTop + 0.02f);
+            // ── Card interior — FOUR disjoint bands, all INSIDE the plate (fit-never-spill):
+            //    caption (top) / icon / name / grant-or-pointer (bottom). Every label is
+            //    FitSingleLine-protected, so the short Amulet/Ring plates stay legible
+            //    (the guard-9413 zero-glyph class cannot recur — no band is outside the card).
+            var capLbl = ElarionUiKit.Label(go.transform, SlotCaption(slotKey), 0.80f, 0.97f,
+                ElarionUi.Gilt, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            capLbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(capLbl, 0f, ElarionUi.FontMicro);
 
+            // Real item art for FILLED slots (mirrors InventoryGrid.ResolveItemIcon): the slot's
+            // ItemVM already carries the correct IconRole + item id. Empty slots keep the ghost
+            // glyph at low alpha.
             var iconSprite = filled ? ResolveSlotItemArt(slotKey, item) : null;
             if (iconSprite == null)
                 iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
             var iconGo = ElarionUiKit.AddImage(go.transform, "Icon",
-                new Vector2(0.28f, iconY0), new Vector2(0.72f, filled ? 0.86f : 0.78f),
+                new Vector2(0.30f, 0.42f), new Vector2(0.70f, 0.78f),
                 Color.white, rounded: false);
             var iconImg = iconGo.GetComponent<Image>();
             iconImg.raycastTarget = false;
@@ -393,14 +389,62 @@ namespace DeNelle.Village.Hero
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             }
 
-            // Item name (or "Empty") along the bottom band — single line, fitted, so a long name
-            // ("Ironward Plate" / "Apprentice Wand") never wraps out of its plate onto neighbours.
-            // Band top = nameTop (guard 9413: guarantees >= 0.055 body height on the short plates).
-            string nameText = filled ? item.Name : "Empty";
-            var slotName = ElarionUiKit.Label(go.transform, nameText, 0.04f, nameTop,
+            // Item name (or "Empty") — single line, fitted, never wraps onto neighbours.
+            string nameText = filled ? ElarionUiKit.SpacedDisplayName(item.Name) : "Empty";
+            var slotName = ElarionUiKit.Label(go.transform, nameText, 0.24f, 0.41f,
                 filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: filled);
+            slotName.raycastTarget = false;
             ElarionUiKit.FitSingleLine(slotName, 0f, ElarionUi.FontMicro);
+
+            // Bottom band: FILLED = the item's one-line grant (why it matters, WO-683 BESTOWS
+            // read from the catalog defs); EMPTY = a pointer to the system that fills the slot.
+            string valueText = filled ? GrantLine(slotKey, item) : EmptySlotPointer(slotKey);
+            if (!string.IsNullOrEmpty(valueText))
+            {
+                var grantLbl = ElarionUiKit.Label(go.transform, valueText, 0.05f, 0.23f,
+                    filled ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+                grantLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(grantLbl, 0f, ElarionUi.FontMicro);
+            }
+        }
+
+        // The one-line grant a filled card shows ("+25% dmg" / "+35% def +12 hp") — a
+        // presentation read of the same catalog defs this view already resolves for slot art.
+        // Returns "" when no def resolves (accessories have no stat def yet) — no fake stats.
+        private static string GrantLine(string slotKey, ItemVM item)
+        {
+            if (slotKey == EquipVM.SlotMainhand)
+            {
+                var w = GearCatalog.FindWeapon(item.Id);
+                if (w == null) return "";
+                int dmgPct = Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult) - 1f) * 100f);
+                return "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + w.reach.ToString("0.#") + "m" : "");
+            }
+            if (slotKey == EquipVM.SlotChest || slotKey == EquipVM.SlotOffHand)
+            {
+                var a = GearCatalog.FindArmor(item.Id);
+                if (a == null) return "";
+                int defPct = Mathf.RoundToInt(Mathf.Clamp(a.defense, 0f, 0.9f) * 100f);
+                return "+" + defPct + "% def" + (a.hpBonus > 0f ? "  +" + a.hpBonus.ToString("0.#") + " hp" : "");
+            }
+            return "";
+        }
+
+        // EMPTY slots route the player to the system that fills them (owner spec: a pointer,
+        // never a bare "Empty"). ASCII only.
+        private static string EmptySlotPointer(string slotKey)
+        {
+            switch (slotKey)
+            {
+                case EquipVM.SlotAmulet:
+                case EquipVM.SlotRing:     return "Craft one at the Jeweler";
+                case EquipVM.SlotMainhand:
+                case EquipVM.SlotOffHand:
+                case EquipVM.SlotChest:    return "Forge or buy gear in town";
+                default:                   return "";
+            }
         }
 
         private void OnSlotTapped(string slotKey)
@@ -504,7 +548,9 @@ namespace DeNelle.Village.Hero
         // no new tool: same overlay the build-menu Orient and AdminOverlay launch.
         private void BuildOrientButton(Transform parent)
         {
-            var btn = ElarionUiKit.ButtonPack(parent, "⚒ Orient", ElarionUiKit.ButtonKind.Quiet,
+            // WO-713: the U+2692 hammer glyph tofu'd in the build TMP font (known HUDUI red)
+            // — plain ASCII label per the ASCII-only law.
+            var btn = ElarionUiKit.ButtonPack(parent, "Orient", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.02f, 0.02f), new Vector2(0.20f, 0.07f),
                 () =>
                 {
@@ -700,6 +746,10 @@ namespace DeNelle.Village.Hero
             _vm.Equip(id);
             if (_vm.ActiveTargetIndex == 0 && _equip != null && (id == "basic_sword" || id == "leather_armor"))
                 _equip.Equip(id);
+            // WO-713 A.5 — visible confirmation as the ONE transient kit toast (WO-714 P5);
+            // the id is spaced so a raw itemId never reaches the player (P10).
+            ElarionUiKit.ShowToast("Equipped " + ElarionUiKit.SpacedDisplayName(id) + ".",
+                ElarionUiKit.ToastTone.Confirm);
             Debug.Log($"[EquipmentPanel] Equipped {id} via EquipVM — hero visual/stat updated.");
         }
 
@@ -722,6 +772,27 @@ namespace DeNelle.Village.Hero
                     hostImg.type   = Image.Type.Sliced;
                     hostImg.color  = Color.white;
                 }
+            }
+
+            // WO-713 §D null-safe-by-construction: the mirrored Obsidian sil_male silhouette
+            // sits BEHIND the live render — if the RT rig ever fails, the paperdoll well still
+            // reads as a hero silhouette, never a blank black box. Toggled with the preview.
+            var silGo = ElarionUiKit.AddImage(host.transform, "Silhouette",
+                new Vector2(0.14f, 0.06f), new Vector2(0.86f, 0.92f),
+                new Color(0f, 0f, 0f, 0f), rounded: false);
+            _previewSilhouette = silGo.GetComponent<Image>();
+            _previewSilhouette.raycastTarget = false;
+            var silSp = RpgUiCatalog.Get(RpgUiCatalog.RoleSilhouette, RpgUiCatalog.SilMale);
+            if (silSp != null)
+            {
+                _previewSilhouette.sprite = silSp;
+                _previewSilhouette.preserveAspect = true;
+                _previewSilhouette.color = new Color(1f, 1f, 1f, 0.55f);
+            }
+            else
+            {
+                _previewSilhouette.enabled = false;   // no art — the dark plate stays the fallback
+                _previewSilhouette = null;
             }
 
             var imgGo = new GameObject("PreviewRawImage", typeof(RectTransform), typeof(RawImage));
@@ -764,6 +835,7 @@ namespace DeNelle.Village.Hero
                 _previewImage.texture = _preview.Texture;
                 _previewImage.enabled = true;
                 _preview.SetRotation(18f);
+                if (_previewSilhouette != null) _previewSilhouette.enabled = false;
             }
             else
             {
@@ -781,6 +853,8 @@ namespace DeNelle.Village.Hero
         private void HidePreview()
         {
             if (_previewImage != null) { _previewImage.enabled = false; _previewImage.texture = null; }
+            // Obsidian silhouette stands in whenever the live render is off (WO-713 §D law).
+            if (_previewSilhouette != null) _previewSilhouette.enabled = true;
         }
 
         private void DisposePreview()
@@ -944,6 +1018,7 @@ namespace DeNelle.Village.Hero
             _scrollContent = null;
             _panelTransform = null;
             _previewImage = null;
+            _previewSilhouette = null;
             _previewTargetIndex = -1;
             _targetBodies.Clear();
             PanelManager.NotifyClosed(_panelHandle);

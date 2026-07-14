@@ -40,6 +40,9 @@ namespace DeNelle.Village
             NoRaycast(bar);
 
             // NOTHING selected → a quiet hint so the strip never reads as broken.
+            // WO-713 A.5: action feedback ("Used X.") is a TRANSIENT kit toast now (fired at
+            // the CTA site, WO-714 P5 ShowToast) — the strip never parks status text that
+            // can go stale.
             if (sel == null)
             {
                 // Eyes-sweep 2026-07-06: every strip label fits-or-ellipsizes inside its band
@@ -47,28 +50,26 @@ namespace DeNelle.Village
                 var hint = AddLabel(bar.transform, "Tap an item to inspect it.", 0f, 1f, InkDim,
                          ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.03f, 0.97f);
                 ElarionUiKit.FitSingleLine(hint, 0f, ElarionUi.FontLabel);
-                // Surface a prior action's status (e.g. "Used X.") even with no live selection.
-                if (!string.IsNullOrEmpty(_vm.Status))
-                {
-                    var st = AddLabel(bar.transform, _vm.Status, 0f, 1f,
-                             new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 1f),
-                             ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineRight, 0.03f, 0.74f);
-                    ElarionUiKit.FitSingleLine(st, 0f, ElarionUi.FontMicro);
-                }
                 return;
             }
 
             var d = sel.Value;
 
-            // LEFT: item name (top) + stats (bottom). RIGHT: the explicit Equip/Use CTA.
-            var nmLbl = AddLabel(bar.transform, d.Name ?? "", 0.50f, 1f, GiltInk,
-                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft, 0.03f, 0.74f, bold: true);
+            // LEFT: item name (top, SPACED — WO-714 P10: a raw itemId like "BoneFragment"/
+            // "bone_fragment" must never reach the player) + count + one-line effect (bottom).
+            // RIGHT: the explicit Equip/Use CTA.
+            string displayName = ElarionUiKit.SpacedDisplayName(d.Name ?? "");
+            var nmLbl = AddLabel(bar.transform, displayName, 0.50f, 1f, GiltInk,
+                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft, 0.03f, 0.62f, bold: true);
             ElarionUiKit.FitSingleLine(nmLbl, 0f, ElarionUi.FontBody);
-            string statLine = d.Stats ?? "";
-            if (!string.IsNullOrEmpty(_vm.Status)) statLine = _vm.Status;   // last action confirmation
-            var stLbl = AddLabel(bar.transform, statLine, 0f, 0.50f,
-                     string.IsNullOrEmpty(_vm.Status) ? InkDim
-                        : new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 1f),
+            // Owned/stack count (WO-683 detail grammar) — text chip right of the name band.
+            if (d.StackCount > 1)
+            {
+                var cntLbl = AddLabel(bar.transform, "x" + d.StackCount, 0.50f, 1f, InkDim,
+                         ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineRight, 0.62f, 0.74f, bold: true);
+                ElarionUiKit.FitSingleLine(cntLbl, 0f, ElarionUi.FontLabel);
+            }
+            var stLbl = AddLabel(bar.transform, d.Stats ?? "", 0f, 0.50f, InkDim,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.03f, 0.74f);
             ElarionUiKit.FitSingleLine(stLbl, 0f, ElarionUi.FontMicro);
 
@@ -85,20 +86,30 @@ namespace DeNelle.Village
             if (cta != null) DressButtonPack(cta);
         }
 
-        // The CTA handler: instrument (§12) the explicit equip/use + the resulting vm.Status, then
-        // route to the VM command. The VM raises Changed -> Render -> RebuildSidebar re-paints the
-        // strip with the "Equipped X." / "Used X." confirmation, so the action is ALWAYS visible.
+        // The CTA handler: instrument (§12) the explicit equip/use + the resulting vm.Status,
+        // then route to the VM command. WO-713 A.5: the confirmation ("Used X." / "Equipped
+        // X.") surfaces as the ONE transient kit toast (WO-714 P5) — auto-fading, never a
+        // parked strip label; any raw itemId inside the VM's status line is spaced before it
+        // reaches the player (WO-714 P10 id-leak law).
         private System.Action BuildEquipAction(bool isConsumable)
         {
             return () =>
             {
                 if (_vm == null) return;
+                string rawName = _vm.Selected.HasValue ? _vm.Selected.Value.Name : null;
                 FlowTrace.Step("Inventory",
                     $"Equip CTA id={_vm.SelectedId} tab={_vm.ActiveTab} consumable={isConsumable} (ACTION)");
                 if (isConsumable) _vm.Use();
                 else _vm.Equip();
                 FlowTrace.Step("Inventory",
                     $"Equip CTA post-action Status='{_vm.Status}'");
+                string msg = _vm.Status;
+                if (!string.IsNullOrEmpty(msg))
+                {
+                    if (!string.IsNullOrEmpty(rawName))
+                        msg = msg.Replace(rawName, ElarionUiKit.SpacedDisplayName(rawName));
+                    ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Info);
+                }
             };
         }
     }

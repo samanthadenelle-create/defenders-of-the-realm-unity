@@ -175,27 +175,13 @@ namespace DeNelle.Village
                     $"Inventory had {wantCount} owned slot(s) but built 0 cells ({failed} failed) — grid shows empties only (built-but-broken).");
         }
 
-        // WO-582 — an empty Obsidian inventory slot: the Blink Inventory_Slot frame (committed via
-        // RpgUi/slot), tinted faint so it reads as an available-but-empty cell. Non-interactive.
-        // Sized by the parent GridLayoutGroup, exactly like a real cell, so the grid stays uniform.
+        // WO-713 A.4 — an empty slot is now the kit's dim plate (WO-714 P4 sparse-grid law):
+        // same BuildRaritySlot construction as a live cell, empty:true (rim/icon hidden, tap
+        // disabled). Sized by the parent GridLayoutGroup exactly like a real cell.
         private void BuildEmptySlot(Transform content)
         {
-            var go = new GameObject("EmptySlot", typeof(Image));
-            go.transform.SetParent(content, false);
-            var img = go.GetComponent<Image>();
-            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
-            if (slotSprite != null)
-            {
-                img.sprite = slotSprite;
-                img.type = Image.Type.Sliced;
-                img.color = new Color(1f, 1f, 1f, 0.55f);  // faint = empty
-            }
-            else
-            {
-                img.color = new Color(Cell.r, Cell.g, Cell.b, 0.35f);
-                ApplyRounded(img);
-            }
-            img.raycastTarget = false;
+            var slot = ElarionUiKit.BuildRaritySlot(content, 0, Vector2.zero, Vector2.one, empty: true);
+            if (slot != null && slot.root != null) slot.root.name = "EmptySlot";
         }
 
         // Pick the cell icon from the VM's role/name KEYS — presentation mapping (a key -> art),
@@ -273,134 +259,86 @@ namespace DeNelle.Village
                      TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
         }
 
+        // WO-713 A.4 — one live cell = the kit rarity slot (WO-714 P4 BuildRaritySlot):
+        // sprite-first Inventory_Slot plate + the rarity_1..5 rim (ornate PER-TIER art —
+        // shape carries the tier, colorblind-safe; the letter chip reinforces it). All the
+        // old hand-rolled frame/glow/Tech-socket construction dies (kit over hand-rolled).
+        // The parent GridLayoutGroup drives the cell rect, so full-rect anchors are fine.
         private void BuildGearCell(Transform content, string icon, Sprite iconSprite, string name, string rarity,
                                    bool equipped, bool locked, bool selected, string lockText, System.Action onTap)
         {
-            Color rc    = RarityColor(rarity);
-            Color rcInk = RarityInk(rarity);
+            var slot = ElarionUiKit.BuildRaritySlot(content, RarityIndex(rarity),
+                Vector2.zero, Vector2.one, empty: false, onTap: onTap);
+            if (slot == null || slot.root == null) return;
+            slot.root.name = "Cell_" + (string.IsNullOrEmpty(name) ? "item" : name);
 
-            float frameAlpha = RarityFrameStrength(rarity);
-            Color frameCol = selected
-                ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 1f)
-                : new Color(rc.r, rc.g, rc.b, locked ? frameAlpha * 0.5f : frameAlpha);
-            var frame = new GameObject("CellFrame", typeof(Image));
-            frame.transform.SetParent(content, false);
-            var fimg = frame.GetComponent<Image>();
-            Sprite techCellFrame = null;
-            try {
-                if (icon != null && (icon.Contains("/") || icon == "B" || icon == "S" || icon == "A" || icon == "H" || icon == "D"))
-                    techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H3");
-                else
-                    techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                if (techCellFrame == null) techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Menu Bars/Menu Bar 1");
-            } catch (System.Exception ex) {
-                // No silent failure (§12): a Tech-pack load that throws falls back to the committed
-                // RpgUi plate below — but it must be logged, never swallowed blind.
-                FlowTrace.Warn("Inventory",
-                    $"BuildGearCell: Tech cell-frame load threw ({ex.GetType().Name}: {ex.Message}) — using RpgUi plate fallback.");
-            }
-            // Clean-build fallback (Tech pack gitignored): committed RpgUi grid plate frame.
-            if (techCellFrame == null) techCellFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
-            if (techCellFrame != null) { fimg.sprite = techCellFrame; fimg.type = Image.Type.Sliced; fimg.color = frameCol; }
-            else { fimg.color = frameCol; ApplyRounded(fimg); }
-            // Extra professional composition: subtle inner rim on every cell frame for depth (dark wood + gilt Forge look)
-            if (techCellFrame != null)
+            // Icon: real item art first; the BMP type-glyph stays the no-art fallback.
+            if (iconSprite != null)
             {
-                AddInnerRim(frame, new Color(0.2f, 0.15f, 0.1f, 0.7f));
+                slot.SetIcon(iconSprite);
+                if (slot.icon != null && locked)
+                    slot.icon.color = new Color(1f, 1f, 1f, 0.6f);
+            }
+            else
+            {
+                var glyphLbl = AddLabel(slot.root.transform, string.IsNullOrEmpty(icon) ? "?" : icon,
+                    0.18f, 0.82f, RarityInk(rarity), ElarionUi.FontTitle + 4,
+                    TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+                glyphLbl.raycastTarget = false;
             }
 
+            // SELECTED = gold inner rim + lit plate (shape + brightness — never color-only;
+            // the detail strip also names the selection).
             if (selected)
             {
-                var glow = new GameObject("SelGlow", typeof(Image));
-                glow.transform.SetParent(frame.transform, false);
-                var grt = glow.GetComponent<RectTransform>();
-                grt.anchorMin = new Vector2(-0.10f, -0.10f); grt.anchorMax = new Vector2(1.10f, 1.10f);
-                grt.offsetMin = Vector2.zero; grt.offsetMax = Vector2.zero;
-                var gimg = glow.GetComponent<Image>();
-                gimg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f);
-                gimg.raycastTarget = false;
-                ApplyRounded(gimg);
-                glow.transform.SetAsFirstSibling();
+                AddInnerRim(slot.root, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f));
+                if (slot.plate != null)
+                    slot.plate.color = new Color(1.15f, 1.10f, 0.92f, slot.plate.color.a);
             }
 
-            var cell = new GameObject("Cell", typeof(Image), typeof(Button));
-            cell.transform.SetParent(frame.transform, false);
-            var crt = cell.GetComponent<RectTransform>();
-            crt.anchorMin = new Vector2(0.04f, 0.05f); crt.anchorMax = new Vector2(0.96f, 0.95f);
-            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
-            var img = cell.GetComponent<Image>();
-            img.color = locked ? new Color(Cell.r, Cell.g, Cell.b, 0.85f)
-                       : selected ? CellSel
-                       : equipped ? CellSel : Cell;
-
-            // WO-434 Phase C — Blink dressing (flag-gated). BlinkChrome ON + the Blink per-item
-            // slot plate present → dress the inner cell tile with the Obsidian slot plate (the same
-            // slot_item the shop rows use) so the grid reads as one Obsidian surface. Flag OFF (or
-            // plate missing) → the EXACT current look: the RPG kit PanelInventory tile, else rounded.
-            Sprite cellTile = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
-            if (cellTile == null)
-                cellTile = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelInventory);
-            if (cellTile != null) {
-                img.sprite = cellTile;
-                img.type = Image.Type.Sliced;
-                img.color = Color.white;  // kit/Blink sprite provides the base; rarity applied via outer frame
-            } else {
-                ApplyRounded(img);
-            }
-
-            var btn = cell.GetComponent<Button>();
-            btn.targetGraphic = img;
-            StyleButtonColors(btn);
-            if (onTap != null) btn.onClick.AddListener(() => onTap());
-
-            bool isW = icon != null && (icon.Contains("/") || icon.Contains("B") || icon.Contains("S") || icon.Contains("A") || icon.Contains("H") || icon.Contains("D"));
-            var techSock = ElarionUiKit.TechGearSocket(cell.transform, "TechIconWell", new Vector2(0.26f, 0.38f), new Vector2(0.74f, 0.95f),
-                new Color(rc.r, rc.g, rc.b, locked ? 0.30f : 0.55f), isWeapon: isW);
-            NoRaycast(techSock);
-            // Icon larger in center, no long name label (matches mockup's icon-focused cards with number in corner).
-            // Small number/glyph in corner like the mockup's "2","4","3".
-            AddIcon(techSock.transform, iconSprite, icon, ElarionUi.FontTitle + 4,
-                    locked ? InkMicro : rcInk, locked ? 0.6f : 1f);
-
-            // Eyes-sweep 2026-07-06: the rarity letter (C/E) sat at y 0.65–0.88 and overflowed
-            // LEFT over the icon well (0.26–0.74 x, 0.38–0.95 y). Moved to the free bottom-right
-            // corner band (below the icon well) and fitted (§1.14) so it can never spill.
-            string numText = lockText != "" ? lockText
-                           : (!string.IsNullOrEmpty(rarity) ? rarity.Substring(0,1).ToUpper() : "");
-            // No rarity letter / lock text -> no glyph to draw. Building a Label for whitespace creates a
-            // permanently 0-glyph "dead" label (a space is never visible), tripping the TextFitGuard on
-            // every cell (owner F8 2026-07-10 "dead-button law violated"). Skip the Label entirely.
+            // Rarity letter / lock text (bottom-right) — text reinforcement of the rim art.
+            // (Skip whitespace: a 0-glyph label trips the TextFitGuard — owner F8 2026-07-10.)
+            string numText = !string.IsNullOrEmpty(lockText) ? lockText
+                           : (!string.IsNullOrEmpty(rarity) ? rarity.Substring(0, 1).ToUpper() : "");
             if (!string.IsNullOrWhiteSpace(numText))
             {
-                var numLbl = AddLabel(cell.transform, numText, 0.04f, 0.30f,
+                var numLbl = AddLabel(slot.root.transform, numText, 0.04f, 0.30f,
                          Ink, ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.Center, 0.70f, 0.98f, bold: true);
+                numLbl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(numLbl, 0f, ElarionUi.FontMicro + 2);
             }
 
-            NoRaycast(AddImage(cell.transform, "Gem", new Vector2(0.05f, 0.80f), new Vector2(0.20f, 0.95f),
-                               new Color(rc.r, rc.g, rc.b, 0.95f)));
-
             if (equipped)
             {
-                // Was (0.62,0.80)-(0.96,0.96) — the chip's left half painted over the icon well's
-                // top-right corner. Bottom-LEFT band is free (gem = top-left, letter = bottom-right).
-                var chip = AddImage(cell.transform, "Equipped", new Vector2(0.02f, 0.04f), new Vector2(0.30f, 0.28f),
+                // "EQ" chip bottom-left — TEXT carries the state (colorblind law), the green
+                // tint is reinforcement only.
+                var chip = AddImage(slot.root.transform, "Equipped",
+                                    new Vector2(0.02f, 0.04f), new Vector2(0.30f, 0.28f),
                                     new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.95f));
                 NoRaycast(chip);
-                var chipLbl = AddLabel(chip.transform, "v", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
+                var chipLbl = AddLabel(chip.transform, "EQ", 0f, 1f, ElarionUi.Ink, ElarionUi.FontMicro,
                          TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
-                ElarionUiKit.FitSingleLine(chipLbl, 0f, ElarionUi.FontLabel);
+                chipLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(chipLbl, 0f, ElarionUi.FontMicro);
             }
             if (locked)
             {
-                NoRaycast(AddImage(cell.transform, "Veil", Vector2.zero, Vector2.one,
-                                   new Color(0.965f, 0.945f, 0.890f, 0.45f)));
-                var chip = AddImage(cell.transform, "Locked", new Vector2(0.26f, 0.40f), new Vector2(0.74f, 0.62f),
-                                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.90f));
-                NoRaycast(chip);
-                var lockLbl = AddLabel(chip.transform, "[ " + lockText + " ]", 0f, 1f, Ink,
-                         ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
-                ElarionUiKit.FitSingleLine(lockLbl, 0f, ElarionUi.FontMicro);
+                NoRaycast(AddImage(slot.root.transform, "Veil", Vector2.zero, Vector2.one,
+                                   new Color(0.05f, 0.05f, 0.07f, 0.55f)));
+                if (slot.button != null) slot.button.interactable = false;
+            }
+        }
+
+        // Canonical 0..4 rarity ladder for the kit's rarity_1..5 rim art.
+        private static int RarityIndex(string rarity)
+        {
+            switch ((rarity ?? "common").ToLowerInvariant())
+            {
+                case "uncommon":  return 1;
+                case "rare":      return 2;
+                case "epic":      return 3;
+                case "legendary": return 4;
+                default:          return 0;
             }
         }
 

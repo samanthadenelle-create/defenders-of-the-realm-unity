@@ -121,12 +121,49 @@ namespace DeNelle.Village
                      InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
             ElarionUiKit.FitSingleLine(classLbl, 0f, ElarionUi.FontMicro);
 
-            // Colored bars in NON-overlapping vertical bands (HP red / MP blue / LVL green),
-            // full card width below the name. Single HP bar (dup removed).
-            PaperDollBarTech("HP", 0.27f, 0.36f, new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
-            PaperDollBarTech("MP", 0.165f, 0.255f, new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
-            // Additional bar for "Till Next Level" or other, using green.
-            PaperDollBarTech("LVL", 0.06f, 0.15f, new Color(0.2f, 0.6f, 0.2f, 1f), medBand.transform);
+            // WO-713 A.3 — HP and MP are KIT bars WITH values (BuildObsidianBar, the §1.1
+            // fill-binding contract: bar + "cur/max" label written atomically); the old
+            // decorative LVL bar becomes the badge_level chip + a THIN XP strip. Values are
+            // presentation reads of the live hero's components (same resolve family the
+            // portrait/preview already uses); a missing hero leaves full quiet bars with the
+            // labels blank — never a fake number (ResetLabel), never a blank column.
+            var vitalsHero = GameObject.FindWithTag("Player");
+            if (vitalsHero == null) vitalsHero = SafeFindByTag("HeroTarget");
+            var hh = vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroHealth>() : null;
+            var ha = vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroAbilities>() : null;
+            var prog = _loadout != null ? _loadout.GetComponent<HeroProgression>()
+                     : (vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroProgression>() : null);
+
+            var hpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Health,
+                new Vector2(0.08f, 0.27f), new Vector2(0.92f, 0.36f), withValue: true);
+            if (hh != null) hpBar.SetImmediate(hh.Hp, hh.MaxHp);
+            else { hpBar.SetImmediate(1f, 1f); hpBar.ResetLabel(); }
+
+            var mpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Mana,
+                new Vector2(0.08f, 0.165f), new Vector2(0.92f, 0.255f), withValue: true);
+            if (ha != null) mpBar.SetImmediate(ha.Mana, ha.MaxMana);
+            else { mpBar.SetImmediate(1f, 1f); mpBar.ResetLabel(); }
+
+            // Level badge (badge_level art; text "LV n" always carries the value) + thin XP strip.
+            var badgeSp = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge, RpgUiCatalog.BadgeLevel);
+            var badgeGo = AddImage(medBand.transform, "LevelBadge",
+                                   new Vector2(0.08f, 0.055f), new Vector2(0.24f, 0.155f),
+                                   badgeSp != null ? Color.white : new Color(0f, 0f, 0f, 0.35f),
+                                   rounded: badgeSp == null);
+            NoRaycast(badgeGo);
+            if (badgeSp != null)
+            {
+                var bImg = badgeGo.GetComponent<Image>();
+                bImg.sprite = badgeSp; bImg.type = Image.Type.Simple; bImg.preserveAspect = true;
+            }
+            var lvLbl = AddLabel(badgeGo.transform, "LV " + level, 0f, 1f, GiltInk,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            ElarionUiKit.FitSingleLine(lvLbl, 0f, ElarionUi.FontMicro);
+
+            var xpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Xp,
+                new Vector2(0.27f, 0.075f), new Vector2(0.92f, 0.135f), withValue: false);
+            if (prog != null) xpBar.SetImmediate(prog.Xp, prog.XpToNext);
+            else xpBar.SetImmediate(0f, 1f);
 
             // No EQUIPMENT list / slots in left panel — portrait + name + bars only. Equipped status
             // is shown via grid cell highlights/marks. Equipping is preserved (tap a grid cell).
@@ -170,80 +207,9 @@ namespace DeNelle.Village
             }
         }
 
-        private void PaperDollRow(int slot, float top, float rowH, float gap, string label,
-                                  string icon, Sprite iconSprite, string value, string rarity, bool filled)
-        {
-            float y1 = top - slot * (rowH + gap);
-            float y0 = y1 - rowH;
-
-            Color rc    = filled ? RarityColor(rarity) : AccentSoft;
-            Color rcInk = filled ? RarityInk(rarity)   : InkDim;
-
-            if (filled)
-            {
-                var halo = AddImage(_paperDoll.transform, "EquipGlow_" + label,
-                                    new Vector2(0.025f, y0 - 0.012f), new Vector2(0.975f, y1 + 0.012f),
-                                    new Color(rc.r, rc.g, rc.b, 0.22f), rounded: false);
-                NoRaycast(halo);
-            }
-
-            var row = AddImage(_paperDoll.transform, "EquipRow_" + label,
-                               new Vector2(0.04f, y0), new Vector2(0.96f, y1),
-                               filled ? CellSel : new Color(Cell.r, Cell.g, Cell.b, 0.45f));
-            NoRaycast(row);
-            AddInnerRim(row, new Color(rc.r, rc.g, rc.b, filled ? 0.85f : 0.22f));
-
-            Color socketTint = filled ? rc : new Color(AccentSoft.r, AccentSoft.g, AccentSoft.b, AccentSoft.a * 0.6f);
-            var sock = ElarionUiKit.TechGearSocket(row.transform, "TechSocket", new Vector2(0.04f, 0.10f), new Vector2(0.32f, 0.90f), socketTint, isWeapon: label == "WEAPON");
-            NoRaycast(sock);
-            Color glyphCol = filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.55f);
-            string glyph = filled
-                ? (string.IsNullOrEmpty(icon) ? "?" : icon)
-                : SlotGhostGlyph(label);
-            AddIcon(sock.transform, filled ? iconSprite : null, glyph, ElarionUi.FontHead, glyphCol, filled ? 1f : 0.5f);
-
-            AddLabel(row.transform, label, 0.50f, 0.92f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.40f, 0.97f, spacing: 2f);
-            AddLabel(row.transform, value, 0.10f, 0.55f,
-                     filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.7f),
-                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.40f, 0.97f, bold: filled);
-        }
-
-        private void PaperDollBarTech(string caps, float y0, float y1, Color fallbackFill, Transform host)
-        {
-            // WO-573: full card width (was 0.50–0.97 = right half, which crowded the old portrait).
-            const float x0 = 0.08f, x1 = 0.92f;
-            var frameGo = AddImage(host, "Bar_" + caps + "_frame",
-                                   new Vector2(x0, y0), new Vector2(x1, y1), Color.white, rounded: false);
-            var fImg = frameGo.GetComponent<Image>();
-            if (fImg != null)
-            {
-                fImg.raycastTarget = false;
-                Sprite fs = null;
-                try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Loading bar/Loading bar"); } catch { }
-                if (fs == null) try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/Loading 1/Loading 1"); } catch { }
-                if (fs == null) try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H4"); } catch { }
-                // Clean-build fallback (Tech pack gitignored): committed RpgUi bar frame.
-                if (fs == null) fs = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, RpgUiCatalog.BarFrameGreen);
-                if (fs != null) { fImg.sprite = fs; fImg.type = Image.Type.Sliced; fImg.color = Color.white; }
-                else { fImg.color = new Color(0f, 0f, 0f, 0.35f); ApplyRounded(fImg); }
-            }
-            var fillGo = AddImage(frameGo.transform, "Bar_" + caps + "_fill",
-                                  new Vector2(0.04f, 0.20f), new Vector2(0.97f, 0.80f), fallbackFill, rounded: false);
-            var fillImg = fillGo.GetComponent<Image>();
-            if (fillImg != null)
-            {
-                fillImg.raycastTarget = false;
-                Sprite fl = null;
-                try { fl = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Loading bar/Loading bar"); } catch { }
-                // Clean-build fallback (Tech pack gitignored): committed RpgUi tinted bar fill.
-                if (fl == null) { fl = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, RpgUiCatalog.BarFillGreen); }
-                if (fl != null) { fillImg.sprite = fl; fillImg.type = Image.Type.Sliced; fillImg.color = fl.name != null && fl.name.StartsWith("bar_fill") ? fallbackFill : Color.white; }
-                else ApplyRounded(fillImg);
-            }
-            AddLabel(frameGo.transform, caps, 0f, 1f, Ink, ElarionUi.FontMicro,
-                     TMPro.TextAlignmentOptions.Left, 0.03f, 0.30f, bold: true);
-        }
-
+        // (PaperDollRow + PaperDollBarTech retired in WO-713: the equipment-row column was
+        //  already dead code [zero callers], and the decorative Tech bars are replaced by the
+        //  kit BuildObsidianBar HP/MP-with-values + badge_level + XP strip above. Verified
+        //  zero remaining references before deletion.)
     }
 }
