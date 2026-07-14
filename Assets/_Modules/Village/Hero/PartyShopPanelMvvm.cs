@@ -62,8 +62,23 @@ namespace DeNelle.Village.Hero
         private RectTransform _scrollContent;
         private TMPro.TextMeshProUGUI _headerLabel;
         private TMPro.TextMeshProUGUI _memberLabel;
-        private TMPro.TextMeshProUGUI _walletText;
-        private TMPro.TextMeshProUGUI _statusText;
+
+        // WO-714 W1 (P2): the wallet is the ONE kit CurrencyChip (gold primary) in the frame's
+        // FOOTER zone — the chip owns CompactNumber formatting + count-tween.
+        private ElarionUiKit.CurrencyChipHandle _walletChip;
+
+        // WO-714 W1 (P1): BUY/SELL + category + type rows are kit BuildTab handles — the kit's
+        // plate/underline selected state (shape + luminance), never a hue-only tint.
+        private ElarionUiKit.TabHandle _tabBuy, _tabSell;
+        private readonly List<(PartyShopCategory cat, ElarionUiKit.TabHandle tab)> _categoryTabs =
+            new List<(PartyShopCategory, ElarionUiKit.TabHandle)>();
+        private readonly List<(PartyShopType type, ElarionUiKit.TabHandle tab)> _typeTabs =
+            new List<(PartyShopType, ElarionUiKit.TabHandle)>();
+
+        // WO-714 W1 (P5): transient VM status surfaces as a kit ToastCard, not a stuck strip.
+        private GameObject _toastCard;
+        private string _lastStatus;
+        private bool _statusBaselined;
 
         // -- Preview pane (WO-501 owner point 3) - a 3D render of the selected gear + stat-diff + price --
         private GameObject _previewRoot;        // the chrome well that holds the preview widgets
@@ -83,6 +98,8 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _buySellLabel;
         private Button _equipBtn;
         private TMPro.TextMeshProUGUI _equipLabel;
+        // The kit-assigned label ink (contrast law) — the disabled cue dims THIS color.
+        private Color _equipLabelBase = Color.white;
 
         // -- Preview icon BACKING card (tunable) -----------------------------------
         // A dark slate frame drawn BEHIND the preview icon/3D square so a transparent (or
@@ -291,9 +308,11 @@ namespace DeNelle.Village.Hero
 
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
             if (_memberLabel != null) _memberLabel.text = _vm.MemberLabel;
-            // WO-697: wallet number through the ONE kit formatter (compact >= 10k).
-            if (_walletText != null) _walletText.text = $"Gold: {ElarionUi.CompactNumber(_vm.Coins)}";
-            if (_statusText != null) _statusText.text = _vm.Status;
+            // WO-714 W1 (P2): the wallet renders through the ONE CurrencyChip — the chip owns
+            // formatting (CompactNumber, WO-697) + count-tween; never a raw text line.
+            _walletChip?.SetAmount(_vm.Coins);
+            // WO-714 W1 (P5): transient status surfaces as a toast, never a stuck strip.
+            MaybeToastStatus();
 
             // WO-598 per-trade chrome: only a GEAR vendor shows the equip context (party
             // selector, member header, Equip button). The Market/Jeweler are goods counters
@@ -354,18 +373,23 @@ namespace DeNelle.Village.Hero
             var bodyHost = (chrome.layout != null && chrome.layout.body != null)
                 ? chrome.layout.body : (RectTransform)panel;
 
-            // Wallet readout (top-right band).
-            var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
-            walletGo.transform.SetParent(bodyHost, false);
-            var wr = walletGo.GetComponent<RectTransform>();
-            wr.anchorMin = new Vector2(0.60f, 0.905f); wr.anchorMax = new Vector2(0.96f, 0.96f);
-            wr.offsetMin = Vector2.zero; wr.offsetMax = Vector2.zero;
-            _walletText = walletGo.GetComponent<TMPro.TextMeshProUGUI>();
-            _walletText.fontSize = ElarionUi.FontLabel;
-            _walletText.color = ElarionUi.Gilt;
-            _walletText.alignment = TMPro.TextAlignmentOptions.Right;
-            _walletText.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(_walletText);   // flag_06: big wallets never spill the band
+            // WO-714 W1 (P2): the wallet is a kit CurrencyChip (gold primary) riding the frame's
+            // FOOTER drop-zone (WO-675 §5 grammar); art-absent fallback = the old top-right band
+            // so the wallet never blanks.
+            RectTransform walletHost = chrome.layout != null ? chrome.layout.footer : null;
+            Vector2 chipMin = new Vector2(0.58f, 0.10f), chipMax = new Vector2(0.98f, 0.90f);
+            if (walletHost == null)
+            {
+                var fb = new GameObject("Zone_WalletFallback", typeof(RectTransform));
+                fb.transform.SetParent(bodyHost, false);
+                walletHost = fb.GetComponent<RectTransform>();
+                walletHost.anchorMin = new Vector2(0.60f, 0.905f);
+                walletHost.anchorMax = new Vector2(0.96f, 0.96f);
+                walletHost.offsetMin = Vector2.zero; walletHost.offsetMax = Vector2.zero;
+                chipMin = Vector2.zero; chipMax = Vector2.one;
+            }
+            _walletChip = ElarionUiKit.CurrencyChip(walletHost, ElarionUiKit.CurrencyKind.Gold,
+                chipMin, chipMax, primary: true, tag: "Gold");
 
             // TOP-LEFT party-member selector bar (spec point 1).
             _partyBar = new GameObject("PartyBar", typeof(RectTransform));
@@ -399,8 +423,11 @@ namespace DeNelle.Village.Hero
             var tb = _tabBar.GetComponent<RectTransform>();
             tb.anchorMin = new Vector2(0.66f, 0.755f); tb.anchorMax = new Vector2(0.96f, 0.80f);
             tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
-            CreateTab("BUY",  new Vector2(0.02f, 0.49f), () => _vm?.SetTab(PartyShopTab.Buy));
-            CreateTab("SELL", new Vector2(0.51f, 0.98f), () => _vm?.SetTab(PartyShopTab.Sell));
+            // WO-714 W1 (P1): kit BuildTab — plate/underline selection (shape + luminance).
+            _tabBuy  = ElarionUiKit.BuildTab(_tabBar.transform, "BUY",
+                new Vector2(0.02f, 0.05f), new Vector2(0.49f, 0.95f), () => _vm?.SetTab(PartyShopTab.Buy));
+            _tabSell = ElarionUiKit.BuildTab(_tabBar.transform, "SELL",
+                new Vector2(0.51f, 0.05f), new Vector2(0.98f, 0.95f), () => _vm?.SetTab(PartyShopTab.Sell));
 
             // Category selector ("dropdown selections": All / Weapons / Armor) - the missing
             // narrow over the combined weapons+armor list. Pinned/hidden for single-kind vendors
@@ -410,6 +437,7 @@ namespace DeNelle.Village.Hero
             var cb = _categoryBar.GetComponent<RectTransform>();
             cb.anchorMin = new Vector2(0.04f, 0.705f); cb.anchorMax = new Vector2(0.96f, 0.748f);
             cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
+            _categoryTabs.Clear();
             CreateCategory("All",     new Vector2(0.01f, 0.32f),  PartyShopCategory.All);
             CreateCategory("Armor",   new Vector2(0.34f, 0.65f),  PartyShopCategory.Armor);
             CreateCategory("Weapons", new Vector2(0.67f, 0.99f),  PartyShopCategory.Weapons);
@@ -446,11 +474,12 @@ namespace DeNelle.Village.Hero
             // ~0.14-0.19, INSIDE the Close band (~0.05-0.17) and rendered half-hidden. The whole
             // bottom stack is raised to clear it: buttons 0.10-0.175, status 0.18-0.22, list/
             // preview bottoms 0.23 (all body-relative; panel-y of the buttons is now ~0.19+).
-            _buySellBtn = ElarionUiKit.ButtonPack(bodyHost, "Purchase", ElarionUiKit.ButtonKind.Gold,
+            // WO-714 W1: both actions are kit BuildObsidianButton — the kit owns plate art,
+            // label ink (contrast law: gold plate = dark Ink, dark plate = Parchment) and text-fit.
+            _buySellBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Purchase",
+                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0.30f, 0.10f), new Vector2(0.60f, 0.175f),
-                () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); },
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
-            CreamTab(_buySellBtn);
+                () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); });
             _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
 
             // EQUIP the selected owned item to the selected member (IEquipTarget seam via the VM).
@@ -458,7 +487,8 @@ namespace DeNelle.Village.Hero
             // equipped state: worn -> UnequipSelected, owned -> EquipSelected (RenderActionBar
             // swaps the label + disables state 3; the VM guards re-verify, so a stale tap no-ops
             // with a status line rather than mis-acting).
-            _equipBtn = ElarionUiKit.ButtonPack(bodyHost, "Equip", ElarionUiKit.ButtonKind.Gold,
+            _equipBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Equip",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.64f, 0.10f), new Vector2(0.86f, 0.175f),
                 () =>
                 {
@@ -466,23 +496,15 @@ namespace DeNelle.Village.Hero
                     var it = _vm.SelectedItem;
                     if (it.HasValue && it.Value.Equipped) _vm.UnequipSelected();
                     else _vm.EquipSelected();
-                },
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
-            CreamTab(_equipBtn);
+                });
             _equipLabel = _equipBtn != null ? _equipBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            // The kit set the label ink per contrast law — remember it so RenderActionBar's
+            // disabled cue dims the SAME ink (luminance cue) instead of forcing a hue.
+            _equipLabelBase = _equipLabel != null ? _equipLabel.color : ElarionUi.Parchment;
 
-            // Status line (narrow strip above the buttons so a row can never eat the tap).
-            var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(bodyHost, false);
-            var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.04f, 0.18f); sRect.anchorMax = new Vector2(0.96f, 0.22f);   // 07-06 #3: raised with the action bar, clear of the Close CTA
-            sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
-            _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
-            _statusText.fontSize = ElarionUi.FontLabel;
-            _statusText.color = ElarionUi.ParchmentDim;
-            _statusText.alignment = TMPro.TextAlignmentOptions.Center;
-            _statusText.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(_statusText);   // flag_06: status copy fits its strip
+            // WO-714 W1 (P5): no stuck status strip — vm.Status changes surface as a kit toast
+            // (MaybeToastStatus in Render). Baseline the open-time idle hint so it never toasts.
+            _statusBaselined = false;
 
             // Raise the action buttons above the scroll content so a row never eats the tap (ShopPanel trap).
             if (_buySellBtn != null) _buySellBtn.transform.SetAsLastSibling();
@@ -490,21 +512,13 @@ namespace DeNelle.Village.Hero
             if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
         }
 
-        private void CreateTab(string label, Vector2 anchorX, System.Action onClick)
-        {
-            var btn = ElarionUiKit.ButtonPack(_tabBar.transform, label, ElarionUiKit.ButtonKind.Gold,
-                new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick,
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            CreamTab(btn);
-        }
-
+        // WO-714 W1 (P1): category chips are kit BuildTab — plate/underline selection.
         private void CreateCategory(string label, Vector2 anchorX, PartyShopCategory cat)
         {
-            var btn = ElarionUiKit.ButtonPack(_categoryBar.transform, label, ElarionUiKit.ButtonKind.Quiet,
+            var tab = ElarionUiKit.BuildTab(_categoryBar.transform, label,
                 new Vector2(anchorX.x, 0.08f), new Vector2(anchorX.y, 0.92f),
-                () => _vm?.SetCategory(cat),
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            CreamTab(btn);
+                () => _vm?.SetCategory(cat));
+            if (tab != null) _categoryTabs.Add((cat, tab));
         }
 
         // -- Finer weapon/armor TYPE chip row (WO-501 owner point 1) ------------------
@@ -513,6 +527,7 @@ namespace DeNelle.Village.Hero
         private void RebuildTypeBar()
         {
             if (_typeBar == null || _vm == null) return;
+            _typeTabs.Clear();
             for (int i = _typeBar.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _typeBar.transform.GetChild(i);
@@ -528,6 +543,7 @@ namespace DeNelle.Village.Hero
             var chips = new List<(string label, PartyShopType type)> { ("All", PartyShopType.Any) };
             foreach (var t in avail) chips.Add((TypeLabel(t), t));
 
+            // WO-714 W1 (P1): type chips are kit BuildTab — plate/underline selection.
             int n = chips.Count;
             const float gap = 0.01f;
             float w = (1f - gap * (n + 1)) / n;
@@ -535,15 +551,13 @@ namespace DeNelle.Village.Hero
             {
                 var chip = chips[i];
                 float x0 = gap + i * (w + gap);
-                var btn = ElarionUiKit.ButtonPack(_typeBar.transform, chip.label, ElarionUiKit.ButtonKind.Quiet,
+                var tab = ElarionUiKit.BuildTab(_typeBar.transform, chip.label,
                     new Vector2(x0, 0.08f), new Vector2(x0 + w, 0.92f),
-                    () => _vm?.SetType(chip.type),
-                    packSpriteName: RpgUiCatalog.ButtonFrame);
-                if (btn == null) continue;
-                btn.name = "Type_" + chip.type;
-                CreamTab(btn);
-                var img = btn.GetComponent<Image>();
-                if (img != null) img.color = _vm.Type == chip.type ? TabSelectedTint : TabRestTint;
+                    () => _vm?.SetType(chip.type));
+                if (tab == null) continue;
+                if (tab.button != null) tab.button.name = "Type_" + chip.type;
+                tab.SetSelected(_vm.Type == chip.type);
+                _typeTabs.Add((chip.type, tab));
             }
         }
 
@@ -569,27 +583,15 @@ namespace DeNelle.Village.Hero
             _categoryBar.SetActive(show);
             if (!show) return;
 
-            string active = _vm.Category == PartyShopCategory.Weapons ? "Btn_Weapons"
-                          : _vm.Category == PartyShopCategory.Armor   ? "Btn_Armor"
-                          : "Btn_All";
-            foreach (Transform child in _categoryBar.transform)
-            {
-                if (child == null) continue;
-                var img = child.GetComponent<Image>();
-                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
-            }
+            // WO-714 W1: kit tab selection state (shape + luminance), never a hue-only tint.
+            for (int i = 0; i < _categoryTabs.Count; i++)
+                _categoryTabs[i].tab?.SetSelected(_categoryTabs[i].cat == _vm.Category);
         }
 
         private void HighlightTab(PartyShopTab tab)
         {
-            if (_tabBar == null) return;
-            string active = tab == PartyShopTab.Buy ? "Btn_BUY" : "Btn_SELL";
-            foreach (Transform child in _tabBar.transform)
-            {
-                if (child == null) continue;
-                var img = child.GetComponent<Image>();
-                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
-            }
+            _tabBuy?.SetSelected(tab == PartyShopTab.Buy);
+            _tabSell?.SetSelected(tab == PartyShopTab.Sell);
         }
 
         // -- Party selector (top-left member icon buttons) -------------------------
@@ -645,6 +647,18 @@ namespace DeNelle.Village.Hero
 
                 var plate = btn.GetComponent<Image>();
                 if (plate != null) plate.color = member.Selected ? TabSelectedTint : TabRestTint;
+
+                // WO-714 W1 (colorblind canon): selection carries a SHAPE cue too — a gilt
+                // underline bar on the selected member chip, never the tint alone. (No kit
+                // member-chip primitive exists yet — noted for the wave-2 uplift.)
+                if (member.Selected)
+                {
+                    var rim = ElarionUiKit.AddImage(btn.transform, "SelectedRim",
+                        new Vector2(0.06f, 0f), new Vector2(0.94f, 0.05f),
+                        ElarionUiKit.ObsidianTrim, rounded: false);
+                    var rimImg = rim.GetComponent<Image>();
+                    if (rimImg != null) rimImg.raycastTarget = false;
+                }
             }
         }
 
@@ -1430,8 +1444,12 @@ namespace DeNelle.Village.Hero
                 _equipBtn.interactable = canAct;
                 if (_equipLabel != null)
                 {
-                    _equipLabel.text = equipped ? "Unequip" : "Equip";   // FitSingleLine (CreamTab) keeps it fitted
-                    _equipLabel.color = canAct ? ElarionUi.Parchment : ElarionUi.ParchmentDim;   // luminance cue on the label too
+                    _equipLabel.text = equipped ? "Unequip" : "Equip";   // kit FitSingleLine keeps it fitted
+                    // Luminance cue on the KIT-assigned ink (contrast law: gold plate = dark Ink) —
+                    // dim the same color, never swap to a different hue.
+                    _equipLabel.color = canAct ? _equipLabelBase
+                        : new Color(_equipLabelBase.r, _equipLabelBase.g, _equipLabelBase.b,
+                                    _equipLabelBase.a * 0.55f);
                 }
             }
         }
@@ -1491,56 +1509,49 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.ApplyRounded(rowImg);
         }
 
-        private static void CreamTab(Button btn)
+        // CreamTab + PathOf REMOVED (WO-714 W1): every tab/chip/action now builds through
+        // ElarionUiKit.BuildTab / BuildObsidianButton — the kit owns label ink (contrast law),
+        // bold, and §1.14 text-fit, so the per-screen dress pass has nothing left to dress.
+        // Ref-grep proof at removal: zero call sites remained.
+
+        // -- Status toast (WO-714 W1, P5) ------------------------------------------
+        // vm.Status is transient feedback — surface each CHANGE as a kit ToastCard that
+        // auto-dismisses; the open-time idle hint is baselined (never toasted). One live
+        // toast at a time; presentation only.
+
+        private void MaybeToastStatus()
         {
-            // Round-3 instrumentation (orchestrator 2026-07-06): the capture showed the BUY/SELL/
-            // category/type/party strips as EMPTY PLATES yet the TextFitGuard sweep contained ZERO
-            // lines for them — so either the label never reaches this dress/fit path, or its text
-            // is empty at dress time. Trace EVERY dress (path + active + text + rect + font) so the
-            // next capture NAMES the branch; the null/inactive branches log as failures ("no dead
-            // buttons" law). Rect here is pre-layout; the guard logs the post-layout rect.
-            if (btn == null)
+            if (_vm == null) return;
+            string s = _vm.Status;
+            if (!_statusBaselined)
             {
-                FlowTrace.Fail("UI", "PartyShop.CreamTab: NULL button (builder returned nothing) — dead strip slot");
+                _statusBaselined = true;
+                _lastStatus = s;
                 return;
             }
-            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);   // true: an INACTIVE label must be found + reported, not silently skipped
-            if (lbl == null)
-            {
-                FlowTrace.Fail("UI", "PartyShop.CreamTab: '" + PathOf(btn.transform) +
-                    "' has NO TMP label anywhere under it — dead button (builder produced no text child)");
-                return;
-            }
-            if (!lbl.gameObject.activeSelf)
-            {
-                FlowTrace.Warn("UI", "PartyShop.CreamTab: label under '" + btn.name + "' was INACTIVE (text '" +
-                    lbl.text + "') — re-activating (no dead buttons)");
-                lbl.gameObject.SetActive(true);
-            }
-            FlowTrace.Step("UI", "PartyShop.CreamTab dress '" + PathOf(btn.transform) + "': text='" + lbl.text +
-                "' active=" + lbl.gameObject.activeInHierarchy +
-                " rect=" + ((int)lbl.rectTransform.rect.width) + "x" + ((int)lbl.rectTransform.rect.height) +
-                " font=" + lbl.fontSize.ToString("F0") +
-                " autoSize=" + lbl.enableAutoSizing);
-            lbl.color = ElarionUi.Parchment;
-            lbl.fontStyle = TMPro.FontStyles.Bold;
-            lbl.outlineColor = new Color32(20, 12, 4, 235);
-            lbl.outlineWidth = 0.22f;
-            lbl.transform.SetAsLastSibling();
-            // flag_06 (owner F8 2026-07-06): tab/button labels truncated mid-word at her window
-            // size ("BU SEL" / "Purcha Equi"). Every CreamTab'd label (BUY/SELL tabs, category,
-            // type chips, party chips, Purchase/Equip) auto-sizes within the mobile floor then
-            // ellipsizes — §1.14 kit text-fit, never a mid-glyph clip.
-            ElarionUiKit.FitSingleLine(lbl);
+            if (s == _lastStatus) return;
+            _lastStatus = s;
+            if (string.IsNullOrEmpty(s) || _ui == null) return;
+
+            if (_toastCard != null) Destroy(_toastCard);
+            var parts = ElarionUiKit.ToastCard(_ui.transform, ElarionUiKit.ToastTone.Gold,
+                accentLeft: false, TextAnchor.MiddleCenter);
+            if (parts == null || parts.card == null) return;
+            var rt = parts.card.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.30f, 0.79f);
+            rt.anchorMax = new Vector2(0.70f, 0.86f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            if (parts.label != null) parts.label.text = s;
+            _toastCard = parts.card;
+            if (isActiveAndEnabled) StartCoroutine(DismissToast(parts.card, 2.8f));
         }
 
-        /// <summary>Short hierarchy path for the CreamTab traces (panel/strip/button).</summary>
-        private static string PathOf(Transform t)
+        private System.Collections.IEnumerator DismissToast(GameObject go, float seconds)
         {
-            string s = t != null ? t.name : "?";
-            int depth = 0;
-            while (t != null && t.parent != null && depth++ < 4) { t = t.parent; s = t.name + "/" + s; }
-            return s;
+            yield return new WaitForSecondsRealtime(seconds);
+            if (go != null) Destroy(go);
+            if (_toastCard == go) _toastCard = null;
         }
 
         private static string Cap(string s)
@@ -1577,8 +1588,13 @@ namespace DeNelle.Village.Hero
         {
             DisposeViewModel();
             TeardownRig();
-            _walletText = null;
-            _statusText = null;
+            _walletChip = null;
+            _tabBuy = null; _tabSell = null;
+            _categoryTabs.Clear();
+            _typeTabs.Clear();
+            _toastCard = null;   // destroyed with _ui below
+            _lastStatus = null;
+            _statusBaselined = false;
             _headerLabel = null;
             _memberLabel = null;
             _previewRoot = null;
