@@ -180,34 +180,82 @@ namespace DeNelle.Village.UI
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // ── Container: OBSIDIAN chrome (near-black panel + gold trim) ────────
-            // Mirrors ElarionUiKit's own procedural Obsidian panel recipe — a gold-
-            // trim rect with a near-black fill inset by the trim thickness — using the
-            // kit's PUBLIC chrome constants + builders (ObsidianTrim / ObsidianFill /
-            // ObsidianTrimPx / AddImage / AddInnerRim). Built this way rather than
+            // ── Container: sprite-FIRST pack plate, procedural Obsidian fallback ──
+            // W7 (WO-714): when the mirrored Blink art is present, the panel wears the
+            // REAL Panel_Element plate (element/element_bar — the wide 9-sliced forged
+            // plate; ChromeTint = the A3 global chrome hook). Null art falls back to the
+            // pre-existing procedural recipe below (gold-trim rect + near-black fill +
+            // inner rim) so the bar can never blank. Built this way rather than
             // BuildObsidianPanel because that bakes in a modal Close button + backdrop,
             // which a passive top-of-screen HUD HP bar must NOT carry. Top-centre, ~60% wide.
-            _panel = ElarionUiKit.AddImage(canvasGo.transform, "BossBarPanel",
-                new Vector2(0.20f, 0.875f), new Vector2(0.80f, 0.978f),
-                ElarionUiKit.ObsidianTrim, rounded: true);
-            var trimImg = _panel.GetComponent<Image>();
-            if (trimImg != null) trimImg.raycastTarget = false;
+            Transform content;
+            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementBar);
+            if (plateSprite != null)
+            {
+                _panel = ElarionUiKit.AddImage(canvasGo.transform, "BossBarPanel",
+                    new Vector2(0.20f, 0.875f), new Vector2(0.80f, 0.978f),
+                    ElarionUiKit.ChromeTint, rounded: false);
+                var plateImg = _panel.GetComponent<Image>();
+                if (plateImg != null)
+                {
+                    plateImg.sprite = plateSprite;
+                    plateImg.type = Image.Type.Sliced;
+                    plateImg.fillCenter = true;
+                    plateImg.raycastTarget = false;
+                }
+                content = _panel.transform;
+            }
+            else
+            {
+                // Procedural fallback (unchanged look): mirrors ElarionUiKit's own
+                // Obsidian panel recipe via the kit's PUBLIC chrome constants + builders
+                // (ObsidianTrim / ObsidianFill / ObsidianTrimPx / AddImage / AddInnerRim).
+                _panel = ElarionUiKit.AddImage(canvasGo.transform, "BossBarPanel",
+                    new Vector2(0.20f, 0.875f), new Vector2(0.80f, 0.978f),
+                    ElarionUiKit.ObsidianTrim, rounded: true);
+                var trimImg = _panel.GetComponent<Image>();
+                if (trimImg != null) trimImg.raycastTarget = false;
 
-            var card = ElarionUiKit.AddImage(_panel.transform, "PanelFill",
-                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
-            var cardRt = (RectTransform)card.transform;
-            cardRt.offsetMin = new Vector2(ElarionUiKit.ObsidianTrimPx, ElarionUiKit.ObsidianTrimPx);
-            cardRt.offsetMax = new Vector2(-ElarionUiKit.ObsidianTrimPx, -ElarionUiKit.ObsidianTrimPx);
-            var cardImg = card.GetComponent<Image>();
-            if (cardImg != null) cardImg.raycastTarget = false;
-            ElarionUiKit.AddInnerRim(card, ElarionUiKit.ObsidianTrim);   // soft gold inner rim
-            var content = card.transform;
+                var card = ElarionUiKit.AddImage(_panel.transform, "PanelFill",
+                    Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
+                var cardRt = (RectTransform)card.transform;
+                cardRt.offsetMin = new Vector2(ElarionUiKit.ObsidianTrimPx, ElarionUiKit.ObsidianTrimPx);
+                cardRt.offsetMax = new Vector2(-ElarionUiKit.ObsidianTrimPx, -ElarionUiKit.ObsidianTrimPx);
+                var cardImg = card.GetComponent<Image>();
+                if (cardImg != null) cardImg.raycastTarget = false;
+                ElarionUiKit.AddInnerRim(card, ElarionUiKit.ObsidianTrim);   // soft gold inner rim
+                content = card.transform;
+            }
+
+            // W7 accent: the pack's Nameplate_Boss_Border (hud/nameplate_boss — a
+            // near-square boss emblem frame) as a left-edge emblem so the bar reads
+            // BOSS in the pack's own language (shape + position, never color alone).
+            // preserveAspect keeps the square art square inside its band; art-absent
+            // runs simply skip it and the name label reclaims the full row.
+            bool emblemShown = false;
+            var bossBorder = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudNameplateBoss);
+            if (bossBorder != null)
+            {
+                var emblem = ElarionUiKit.AddImage(content, "BossEmblem",
+                    new Vector2(0.008f, 0.10f), new Vector2(0.072f, 0.94f),
+                    ElarionUiKit.ChromeTint, rounded: false);
+                var emblemImg = emblem.GetComponent<Image>();
+                if (emblemImg != null)
+                {
+                    emblemImg.sprite = bossBorder;
+                    emblemImg.type = Image.Type.Simple;
+                    emblemImg.preserveAspect = true;
+                    emblemImg.raycastTarget = false;
+                    emblemShown = true;
+                }
+            }
 
             // Info row: boss name (gilt, left) + HP number (parchment, right) — kit
             // Label builder handles font-safety + the mobile readable floor (>=40px here).
+            // The name insets past the boss emblem when the pack art is present.
             _nameLabel = ElarionUiKit.Label(content, BossDisplayName,
                 0.52f, 0.95f, ElarionUi.Gilt, ElarionUi.FontBody,
-                TextAlignmentOptions.MidlineLeft, x0: 0.04f, x1: 0.72f, bold: true);
+                TextAlignmentOptions.MidlineLeft, x0: emblemShown ? 0.095f : 0.04f, x1: 0.72f, bold: true);
             _hpLabel = ElarionUiKit.Label(content, "",
                 0.52f, 0.95f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.MidlineRight, x0: 0.72f, x1: 0.96f, bold: true);

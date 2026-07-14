@@ -116,6 +116,13 @@ namespace DeNelle.Onboarding
             using var _ = FlowTrace.Enter("Onboarding", "TitleController.Start (uGUI title menu)");
             BuildTitleMenu();
             SetTitleVisible(true);
+
+            // W9 (WO-714): the kit's shared open ease (PanelOpenCloseFx, P8) — a gentle
+            // fade-in only (null scale target: the full-bleed cover art must not scale),
+            // so the front door opens with the same feel as every kit panel. Attached
+            // AFTER the show call so the visibility reset cannot stamp on the ease.
+            // Skin only — no element moves, no flow change.
+            ElarionUiKit.AttachPanelOpenFx(_canvas, null);
             _splashActive = true;
         }
 
@@ -501,7 +508,16 @@ namespace DeNelle.Onboarding
 
         private void SetTitleVisible(bool visible)
         {
-            if (_canvas != null) _canvas.SetActive(visible);
+            if (_canvas == null) return;
+            _canvas.SetActive(visible);
+            // W9 guard: hiding the canvas mid open-ease stops the fx coroutine; force
+            // the CanvasGroup fully opaque on every SHOW so the restored title menu
+            // can never come back stuck semi-transparent.
+            if (visible)
+            {
+                var group = _canvas.GetComponent<CanvasGroup>();
+                if (group != null) group.alpha = 1f;
+            }
         }
 
         /// <summary>Keeps the built canvas in this controller's scene so scene unload

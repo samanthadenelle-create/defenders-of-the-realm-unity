@@ -223,21 +223,43 @@ namespace DeNelle.Village
             // a subtle inner softness so it reads as a styled bar, not a raw quad.
             Sprite chip = ChipSprite();
 
-            // Gold rim (slightly larger backing plate behind the frame).
-            var rimGo = new GameObject("Rim");
-            rimGo.transform.SetParent(canvasGo.transform, false);
-            var rimImg = rimGo.AddComponent<Image>();
-            rimImg.sprite = chip; rimImg.type = Image.Type.Simple;
-            rimImg.color = RimColor;
-            StretchToCanvas(rimGo.GetComponent<RectTransform>(), -0.035f);
+            // W7 (WO-714) — sprite-FIRST plate: when the mirrored Blink nameplate
+            // plate art resolves (enemy bg for enemies, Nameplate_Bar for the hero —
+            // the same enemy-vs-friendly split the fill below already uses), the
+            // frame layer wears the REAL pack plate and the procedural gold rim is
+            // skipped (the pack plate carries its own chrome). Null art keeps the
+            // pre-existing rim + arcane-violet chip look — the bar can never blank.
+            var packPlate = RpgUiCatalog.Get(RpgUiCatalog.RoleHud,
+                _destroyOnDead ? RpgUiCatalog.HudNameplateEnemyBg : RpgUiCatalog.HudNameplateBar);
 
-            // Arcane-violet frame plate.
+            if (packPlate == null)
+            {
+                // Gold rim (slightly larger backing plate behind the frame).
+                var rimGo = new GameObject("Rim");
+                rimGo.transform.SetParent(canvasGo.transform, false);
+                var rimImg = rimGo.AddComponent<Image>();
+                rimImg.sprite = chip; rimImg.type = Image.Type.Simple;
+                rimImg.color = RimColor;
+                StretchToCanvas(rimGo.GetComponent<RectTransform>(), -0.035f);
+            }
+
+            // Frame plate — pack nameplate plate when present, arcane-violet chip fallback.
             var frameGo = new GameObject("Frame");
             frameGo.transform.SetParent(canvasGo.transform, false);
             var frameImg = frameGo.AddComponent<Image>();
-            frameImg.sprite = chip; frameImg.type = Image.Type.Simple;
-            frameImg.color = FrameColor;
-            StretchToCanvas(frameGo.GetComponent<RectTransform>(), -0.018f);
+            if (packPlate != null)
+            {
+                frameImg.sprite = packPlate; frameImg.type = Image.Type.Simple;
+                frameImg.color = Color.white;   // pack art's own forged-steel look is the chrome
+                StretchToCanvas(frameGo.GetComponent<RectTransform>(), -0.028f);
+            }
+            else
+            {
+                frameImg.sprite = chip; frameImg.type = Image.Type.Simple;
+                frameImg.color = FrameColor;
+                StretchToCanvas(frameGo.GetComponent<RectTransform>(), -0.018f);
+            }
+            frameImg.raycastTarget = false;
 
             // Empty track.
             var trackGo = new GameObject("Track");

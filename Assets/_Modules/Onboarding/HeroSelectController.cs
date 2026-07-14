@@ -197,6 +197,12 @@ namespace DeNelle.Onboarding
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "crest");
             if (_chrome.close != null) _chrome.close.gameObject.SetActive(false);
 
+            // W9 (WO-714): the kit's shared open ease (PanelOpenCloseFx, P8) on the
+            // master-frame chrome — the same eased scale+fade every kit panel opens
+            // with. Skin only; layout, routing and the forced-flow contract untouched.
+            ElarionUiKit.AttachPanelOpenFx(_canvas,
+                _chrome.root != null ? _chrome.root.GetComponent<RectTransform>() : null);
+
             // Drop-zones (frame art present) or content fallback (procedural panel).
             Transform body = _chrome.layout != null && _chrome.layout.body != null
                 ? _chrome.layout.body.transform
@@ -545,16 +551,31 @@ namespace DeNelle.Onboarding
             }
         }
 
-        /// <summary>One primary-skill row — a gold slot badge (Q/F/E/R) + the ability name.</summary>
+        /// <summary>One primary-skill row — a slot badge (Q/F/E/R) + the ability name.
+        /// W9 (WO-714): the badge is sprite-FIRST on the pack's Stat_Element plate
+        /// (element/element_stat, 9-sliced, chrome-tinted) with the pre-existing
+        /// procedural gold chip as the null-art fallback — the badge ink follows the
+        /// plate (parchment on the dark pack plate, Ink on the gold fallback).</summary>
         private static void BuildSkillRow(Transform parent, string slot, string name, float y0, float y1)
         {
+            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementStat);
             var badge = ElarionUiKit.AddImage(parent, "SlotBadge",
                 new Vector2(0.02f, y0), new Vector2(0.115f, y1),
-                ElarionUi.GoldButton, rounded: true);
+                plateSprite != null ? ElarionUiKit.ChromeTint : ElarionUi.GoldButton,
+                rounded: plateSprite == null);
             var badgeImg = badge.GetComponent<Image>();
-            if (badgeImg != null) badgeImg.raycastTarget = false;
+            if (badgeImg != null)
+            {
+                badgeImg.raycastTarget = false;
+                if (plateSprite != null)
+                {
+                    badgeImg.sprite = plateSprite;
+                    badgeImg.type = Image.Type.Sliced;
+                    badgeImg.fillCenter = true;
+                }
+            }
             var badgeLbl = ElarionUiKit.Label(badge.transform, slot, 0f, 1f,
-                ElarionUi.Ink, ElarionUi.FontMicro,
+                plateSprite != null ? ElarionUi.Parchment : ElarionUi.Ink, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
             FitLine(badgeLbl);
