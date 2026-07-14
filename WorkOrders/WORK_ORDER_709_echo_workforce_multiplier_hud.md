@@ -118,3 +118,11 @@ when the feedback lands.
 *Cross-refs:* mockup in-chat 2026-07-13 · ECHO_WORKFORCE_SPEC · WO-587 (slots) · WO-658/681
 (assignment + card) · WO-657 (depletion) · WO-699 (Steward voice) · COMBAT_PIVOT_NORTHSTAR ·
 docs/LORE_FALL_AND_FOUNDING_OF_ELARION.md (who the Echoes are).
+
+## Echo skill tree direction (owner, 2026-07-13 night review of the UI drop)
+Verbatim: "I think echo skill tree isn't ever used since they don't defend, unless we add it
+as a passive offline type item." Direction: the pet/echo skill tree either RETIRES or
+converts to PASSIVE/OFFLINE WORKFORCE PERKS — candidates: +gather rate per lane, +silo
+capacity hours, +offline accrual efficiency, and WO-701 Mending (offline repair) as a
+learnable perk. Combat-shaped nodes are dead weight (echoes never fight). Fold the decision
+into this WO's HUD/panel slice or mint separately when claimed.
