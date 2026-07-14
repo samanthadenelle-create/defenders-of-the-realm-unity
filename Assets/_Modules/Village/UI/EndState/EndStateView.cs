@@ -518,15 +518,33 @@ namespace DeNelle.Village.UI
         private void BuildSpoilRow(RectTransform host, SpoilRowVM row, float revealDelay)
         {
             if (row == null) return;
-            // (#23) Obsidian row plate + gold accent. Was ElarionUiKit.Slot (an inventory rarity
-            // plate) which read as a flat saturated block; the end-state wants the black+gold row
-            // language. A near-black tile + a thin gold left bar reads obsidian on the dark body.
-            var plate = ElarionUiKit.AddImage(host, "SpoilRow",
-                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f), ElarionUiKit.ObsidianFill);
-            plate.GetComponent<Image>().raycastTarget = false;
-            var accent = ElarionUiKit.AddImage(plate.transform, "GoldAccent",
-                new Vector2(0f, 0.12f), new Vector2(0.02f, 0.88f), ElarionUiKit.ObsidianTrim, rounded: false);
-            accent.GetComponent<Image>().raycastTarget = false;
+            // WO-714 W2 (pack row-list grammar): the row plate is the REAL Blink Stat_Element
+            // (element/element_stat, 9-sliced — the same plate CurrencyChip and the HUD stat rows
+            // sit on), resolved sprite-first ALWAYS (P9 — never gated on ff.blinkchrome). On the
+            // real plate the pack's embossed steel carries the depth, so no procedural accent:
+            // gold stays reserved for content (the amount / gilt values), never chrome.
+            // Null-art fallback = the previous (#23) procedural obsidian tile + thin gold left
+            // bar, byte-for-byte — an art-absent run never blanks a reward row.
+            GameObject plate;
+            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementStat);
+            if (plateSprite != null)
+            {
+                plate = ElarionUiKit.AddImage(host, "SpoilRow",
+                    new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f), Color.white, rounded: false);
+                var pImg = plate.GetComponent<Image>();
+                pImg.sprite = plateSprite;
+                pImg.type = Image.Type.Sliced;
+                pImg.raycastTarget = false;
+            }
+            else
+            {
+                plate = ElarionUiKit.AddImage(host, "SpoilRow",
+                    new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f), ElarionUiKit.ObsidianFill);
+                plate.GetComponent<Image>().raycastTarget = false;
+                var accent = ElarionUiKit.AddImage(plate.transform, "GoldAccent",
+                    new Vector2(0f, 0.12f), new Vector2(0.02f, 0.88f), ElarionUiKit.ObsidianTrim, rounded: false);
+                accent.GetComponent<Image>().raycastTarget = false;
+            }
             // Icon: sprite-first from the VM; when the VM had no sheet art for the item (R4: "Wood"
             // — ItemIconCatalog.ForConsumable("mat_wood") resolves null today, EndStateVM.cs:120-122)
             // fall back to a generic resource/loot icon so a reward row NEVER blanks its slot. Same
