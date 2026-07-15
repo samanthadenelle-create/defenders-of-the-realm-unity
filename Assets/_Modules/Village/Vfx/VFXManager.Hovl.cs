@@ -101,6 +101,15 @@ namespace DeNelle.Village
         // right bucket on return (mirrors _loopObjects for the VFXType path).
         private readonly HashSet<GameObject> _hovlLoopObjects = new HashSet<GameObject>();
 
+        // WO-VFX #2 (hue-shift tint): the AUTHORED startColor of each child ParticleSystem,
+        // cached the first time that PS is recolored. Every pooled reuse then hue-shifts from
+        // the ORIGINAL saturation / value (brightness) / alpha instead of a previously written
+        // (already hue-shifted) value - so an HDR round-trip can't drag the S/V off the authored
+        // bright core across reuses, and a later acquire with a DIFFERENT hue still starts clean.
+        // Keyed by the PS; pooled instances live for the app lifetime, so the entry stays valid.
+        private readonly Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient> _hovlAuthoredStartColor
+            = new Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient>();
+
         // ── Catalog load / pool pre-warm ─────────────────────────────────────────
 
         private void EnsureHovlCatalog()
@@ -338,40 +347,56 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Recolour a Hovl effect toward <paramref name="color"/> the way the VENDOR's own
-        /// recolor tool does (WO-678, docs/HOVL_STUDIO_SME.md §4b): shift each particle
-        /// system's authored startColor HUE to the target hue while PRESERVING its authored
-        /// saturation / value / alpha — so the bright-core / soft-halo layering survives.
-        /// The old flat MinMaxGradient(color) flood-fill stamped every layer one identical
-        /// color, flattening the authored art ("not like the demo"). Near-white hot cores
-        /// (saturation &lt; 0.05) are left untouched — hue means nothing on them and pushing
-        /// the tint in is exactly the flood-fill artifact. Idempotent under pooling: only
-        /// hue is written, so authored S/V/A persist across reuses.
+        /// recolor tool does (HS_CameraHolder.Counter/OnGUI, docs/HOVL_STUDIO_SME.md sec 4d):
+        /// cache each particle system's AUTHORED startColor as HSV on first acquire, then
+        /// shift only the HUE to the target hue while PRESERVING its cached saturation / value
+        /// (brightness) / alpha - so the bright-core / soft-halo layering (and the HDR luminance
+        /// bloom feeds on) survives. The old flat MinMaxGradient(color) flood-fill stamped every
+        /// layer one identical color, flattening the authored art ("not like the demo"). Near-
+        /// white hot cores (saturation &lt; 0.05) are left untouched - hue means nothing on them
+        /// and pushing the tint in is exactly the flood-fill artifact. Idempotent under pooling:
+        /// the S/V/A always come from the cached ORIGINAL, never from an already-shifted value,
+        /// so repeated reuses (and later hue changes) never drift the authored brightness.
+        /// Gradient startColor modes are hue-rotated key-by-key (never thrown on).
         /// </summary>
-        private static void ApplyStartColor(GameObject go, Color color)
+        private void ApplyStartColor(GameObject go, Color color)
         {
             Color.RGBToHSV(color, out float targetHue, out _, out _);
             foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
             {
+                if (ps == null) continue;
                 var main = ps.main;
-                var sc = main.startColor;
-                switch (sc.mode)
+                // Cache the AUTHORED startColor the first time this PS is recolored, so every
+                // pooled reuse hue-shifts from the original S/V/A rather than a prior result.
+                if (!_hovlAuthoredStartColor.TryGetValue(ps, out var authored))
                 {
-                    case ParticleSystemGradientMode.Color:
-                        sc.color = ShiftHue(sc.color, targetHue);
-                        break;
-                    case ParticleSystemGradientMode.TwoColors:
-                        sc.colorMin = ShiftHue(sc.colorMin, targetHue);
-                        sc.colorMax = ShiftHue(sc.colorMax, targetHue);
-                        break;
-                    case ParticleSystemGradientMode.Gradient:
-                        sc.gradient = ShiftHue(sc.gradient, targetHue);
-                        break;
-                    case ParticleSystemGradientMode.TwoGradients:
-                        sc.gradientMin = ShiftHue(sc.gradientMin, targetHue);
-                        sc.gradientMax = ShiftHue(sc.gradientMax, targetHue);
-                        break;
+                    authored = main.startColor;
+                    _hovlAuthoredStartColor[ps] = authored;
                 }
-                main.startColor = sc;
+                main.startColor = ShiftHue(authored, targetHue);
+            }
+        }
+
+        /// <summary>Return a hue-shifted copy of a ParticleSystem startColor
+        /// <see cref="ParticleSystem.MinMaxGradient"/>, preserving each source colour's authored
+        /// saturation / value / alpha across every gradient mode (Color / TwoColors / Gradient /
+        /// TwoGradients). Never mutates <paramref name="sc"/>; safe on the cached authored value.</summary>
+        private static ParticleSystem.MinMaxGradient ShiftHue(ParticleSystem.MinMaxGradient sc, float targetHue)
+        {
+            switch (sc.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    return new ParticleSystem.MinMaxGradient(ShiftHue(sc.color, targetHue));
+                case ParticleSystemGradientMode.TwoColors:
+                    return new ParticleSystem.MinMaxGradient(ShiftHue(sc.colorMin, targetHue),
+                                                             ShiftHue(sc.colorMax, targetHue));
+                case ParticleSystemGradientMode.Gradient:
+                    return new ParticleSystem.MinMaxGradient(ShiftHue(sc.gradient, targetHue));
+                case ParticleSystemGradientMode.TwoGradients:
+                    return new ParticleSystem.MinMaxGradient(ShiftHue(sc.gradientMin, targetHue),
+                                                             ShiftHue(sc.gradientMax, targetHue));
+                default:
+                    return sc;
             }
         }
 

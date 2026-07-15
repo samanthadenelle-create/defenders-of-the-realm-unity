@@ -397,7 +397,7 @@ namespace DeNelle.Village
                 // damage/slow land in ApplyBlast, so the shot reads as a cast spell. Stop the
                 // following bolt trail as the shot arrives, then ApplyBlast plays the Hovl impact.
                 bolt.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
-                    () => { boltFx?.Stop(); ApplyBlast(primary, impact); });
+                    () => { boltFx?.StopSoft(); ApplyBlast(primary, impact); });   // WO-VFX #3: trail finishes, no pop
             });
 
             if (bolt == null)

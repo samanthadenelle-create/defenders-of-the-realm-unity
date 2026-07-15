@@ -125,7 +125,8 @@ namespace DeNelle.Village
                 {
                     var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
                     var inner = arrive;
-                    arrive = () => { h?.Stop(); inner?.Invoke(); };
+                    // WO-VFX #3: soft-stop so the Hovl travel trail finishes instead of popping.
+                    arrive = () => { h?.StopSoft(); inner?.Invoke(); };
                 }
                 smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, arrive);
                 return;
@@ -174,7 +175,8 @@ namespace DeNelle.Village
                 {
                     var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
                     var inner = arrive;
-                    arrive = () => { h?.Stop(); inner?.Invoke(); };
+                    // WO-VFX #3: soft-stop so the Hovl travel trail finishes instead of popping.
+                    arrive = () => { h?.StopSoft(); inner?.Invoke(); };
                 }
                 smover.Launch(targetWorldPos, _orbSpeed, 0f, arrive);
                 return;

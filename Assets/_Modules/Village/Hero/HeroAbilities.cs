@@ -1469,7 +1469,7 @@ namespace DeNelle.Village
                 if (proxy != null) proxy.transform.position = Vector3.Lerp(from, to, Mathf.Clamp01(t / travel));
                 yield return null;
             }
-            handle?.Stop();
+            handle?.StopSoft();   // WO-VFX #3: let the cosmetic projectile trail finish, not pop
             if (proxy != null) Destroy(proxy);
         }
 

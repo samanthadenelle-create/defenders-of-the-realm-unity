@@ -104,6 +104,40 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-VFX #3 (soft-stop projectiles): stop EMISSION only (no Clear) and defer the
+        /// pool-return by a short grace so an in-flight projectile's TRAIL particles finish
+        /// their natural lifetime instead of popping out of the air on impact. Projectile
+        /// callers use this on arrival; loop/aura callers keep <see cref="Stop"/>. Hovl-keyed
+        /// handles route to the short-grace Hovl return; VFXType handles fall back to the
+        /// standard graceful Stop (never worse than before). Safe on a dead handle.
+        /// </summary>
+        /// <param name="grace">Seconds to let live particles die before pooling (default ~0.6).</param>
+        public void StopSoft(float grace = 0.6f)
+        {
+            if (_go == null) return;
+
+            // Non-Hovl (VFXType) handles have no short-grace Hovl route - defer to the
+            // standard graceful Stop so a projectile still finishes its tail.
+            if (_hovlKey == null) { Stop(false); return; }
+
+            var go = _go;
+            _go = null;   // clear first - prevents double-stop
+
+            var mgr = VFXManager.Instance;
+            if (mgr == null)
+            {
+                Object.Destroy(go);
+                return;
+            }
+
+            // StopEmitting WITHOUT clear: existing trail particles keep rendering and age out
+            // during the grace window; then ReturnHovlAfterDelay pools the root.
+            foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            mgr.ReturnHovlAfterDelay(go, _hovlKey, grace);
+        }
+
+        /// <summary>
         /// Move the effect to follow a new world position (if it is a free-floating
         /// loop not parented to a Transform). Has no effect on pooled/inactive handles.
         /// </summary>
