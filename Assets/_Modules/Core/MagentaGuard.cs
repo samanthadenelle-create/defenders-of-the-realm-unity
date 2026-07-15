@@ -244,10 +244,40 @@ namespace DeNelle.Core
                         FlowTrace.Step("FloorDiag",
                             "TERRAIN '" + t.name + "' scene='" + t.gameObject.scene.name + "' pos=" + t.transform.position +
                             " mat='" + (tm != null ? tm.name : "<NULL>") + "' shader='" + sh + "' broken=" + (tm != null && IsBrokenShader(tm.shader)) + " " + layers);
-                        if (tm != null && IsBrokenShader(tm.shader) && _terrainLit != null)
+                        // PROVEN (RCA 2026-07-15; Player.log 07-14 22:10, the ONE FloorDiag TERRAIN line):
+                        //   TERRAIN 'ExteriorTerrain' ... mat='<NULL>' shader='<null-mat-or-shader>' broken=False
+                        // The scene references the terrain material by GUID (Main_Castle_Overworld.unity:16016
+                        // -> 0eb083914b7ffae4eaf721e2353fea0b) but Assets/Generated/ was GITIGNORED, so
+                        // ExteriorTerrainMaterial.mat was NEVER IN GIT (`git log --all -- <it>` = empty) — it only
+                        // ever existed as a bake artifact on whichever machine last ran the terrain bake. Its
+                        // siblings (ExteriorTerrainData.asset + the 5 .terrainlayers) ARE tracked, committed before
+                        // the ignore rule landed — which is why the ground is WALKABLE (geometry survived) but
+                        // MAGENTA (material did not). On any machine that never baked: dangling GUID ->
+                        // materialTemplate == NULL -> the Terrain draws with the engine default = MAGENTA under URP.
+                        // WHY THE OLD FIX COULD NEVER FIRE: the condition read `tm != null && IsBrokenShader(...)`,
+                        // so a NULL material SHORT-CIRCUITED to false and the recovery was skipped — which is
+                        // exactly why the log says broken=False on a terrain that is very much broken. Same class
+                        // of blind spot as the HasProperty("_BaseColor") short-circuit fixed at :140.
+                        // A NULL material IS the break. Treat it as one and assign a fresh URP/Terrain/Lit.
+                        // Idempotent: once assigned, tm != null with a valid shader -> no-op on later sweeps.
+                        bool terrainBroken = tm == null || IsBrokenShader(tm.shader);
+                        if (terrainBroken && _terrainLit != null)
                         {
-                            tm.shader = _terrainLit; terrainFixed++;
-                            FlowTrace.Warn("FloorDiag", "-> recovered TERRAIN '" + t.name + "' broken shader -> URP Terrain/Lit.");
+                            if (tm == null)
+                            {
+                                t.materialTemplate = new Material(_terrainLit) { name = "ExteriorTerrainMaterial_Recovered" };
+                                // FAIL (not Warn): magenta ground in a shipped player IS a break — surface it in
+                                // the F8 break-log so the source loss self-identifies instead of costing a cycle.
+                                FlowTrace.Fail("FloorDiag",
+                                    "-> recovered TERRAIN '" + t.name + "' NULL materialTemplate -> fresh URP Terrain/Lit " +
+                                    "(magenta ground killed at runtime; SOURCE fix = restore Assets/Generated/Terrain/ExteriorTerrainMaterial.mat).");
+                            }
+                            else
+                            {
+                                tm.shader = _terrainLit;
+                                FlowTrace.Warn("FloorDiag", "-> recovered TERRAIN '" + t.name + "' broken shader -> URP Terrain/Lit.");
+                            }
+                            terrainFixed++;
                         }
                     }
                 }

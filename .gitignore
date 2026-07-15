@@ -86,6 +86,9 @@ Thumbs.db
 .vercel-token.*
 .vercel/
 
+# Transient LAN transfer credential (laptop SMB) — machine-local, never commit.
+.laptop-cred
+
 # Claude Code — local permission grant is personal/machine-scoped, not committed.
 .claude/settings.local.json
 
@@ -174,7 +177,26 @@ portraits*.log
 keystore.properties
 
 # Generated config
-Assets/Generated/
+Assets/Generated/*
+
+# EXCEPT the terrain material (RCA 2026-07-15 — the magenta ground).
+# Main_Castle_Overworld.unity:16016 references this material BY GUID
+# (0eb083914b7ffae4eaf721e2353fea0b). Ignoring it meant the .mat was NEVER IN GIT — verified:
+# `git log --all -- Assets/Generated/Terrain/ExteriorTerrainMaterial.mat` returns EMPTY. It only
+# ever existed as a bake artifact on whichever machine last ran the terrain bake, so on every
+# other machine the GUID dangled, materialTemplate resolved to NULL, and the Terrain drew with
+# the engine default = MAGENTA under URP.
+# The asymmetry that hid this for so long: ExteriorTerrainData.asset + the 5 .terrainlayer files
+# ARE tracked (committed BEFORE this ignore rule landed), so the terrain geometry/collider always
+# survived — the ground was walkable, just magenta.
+# A TRACKED SCENE MUST NOT REFERENCE AN IGNORED ASSET. Tracking the material also guarantees the
+# build retains URP/Terrain/Lit's shader VARIANTS (a material serialized into a built scene is what
+# exempts them from URP's m_StripUnusedVariants).
+# SCOPE: the WHOLE Terrain bake folder, not just the .mat — every file in it is bake output the
+# scene binds by GUID, so a missing .terrainlayer would reproduce this exact bug with a different
+# symptom. 14 of its 16 files were already tracked; this makes the set complete and consistent.
+# Other Assets/Generated/* subfolders stay ignored (they are not scene-referenced).
+!Assets/Generated/Terrain/
 
 # Test wallets (devnet only, but still treat as secrets)
 Assets/Tests/Fixtures/DevnetTestWallet.*

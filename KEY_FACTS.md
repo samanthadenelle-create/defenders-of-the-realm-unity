@@ -42,6 +42,28 @@
 - **No TTL cron exists** for trace rows (security H1 — fix pending). Open POSTs (trace/track/bug-report) have **no rate limit**. *(audit 2026-07-12)*
 - db-viewer: `tools/db-viewer/index.html` + `api/admin/db.js`, key = `ADMIN_DASH_KEY` (Vercel env, set + redeploy to activate). *(2026-07-12)*
 
+## Ground / terrain (RCA 2026-07-15 — the magenta ground)
+- **The visible ground of `Main_Castle_Overworld` is the `ExteriorTerrain` Terrain**, NOT the courtyard
+  tiles (those are dropped to Y=-0.5 + hidden by GroundZFightFixer). It binds its material BY GUID at
+  `Main_Castle_Overworld.unity:16016` -> `0eb083914b7ffae4eaf721e2353fea0b` =
+  `Assets/Generated/Terrain/ExteriorTerrainMaterial.mat`. *(2026-07-15)*
+- **That .mat was NEVER IN GIT** (`git log --all -- <it>` = empty) — `Assets/Generated/` was ignored, so it
+  only ever existed on the machine that ran the terrain bake (laptop, baked 05-31). Its siblings
+  (ExteriorTerrainData + the 5 .terrainlayers) WERE tracked, committed before the ignore rule → the ground
+  was **walkable but MAGENTA** on every other machine. **FIXED:** original recovered from the laptop share +
+  `Assets/Generated/Terrain/` is now TRACKED (the whole bake folder). *(2026-07-15)*
+- **MagentaGuard could not save it:** `MagentaGuard.cs` gated terrain recovery on `tm != null &&
+  IsBrokenShader(...)` — a NULL material short-circuited it, so the fix never fired (the FloorDiag line
+  reads `mat='<NULL>' ... broken=False`). Now treats a null materialTemplate AS the break. *(2026-07-15)*
+- ⚠ **The instruments are OFF in ship builds:** `FlowTrace.cs:28` = `Application.isEditor ||
+  Debug.isDebugBuild`, and ship WebGL/desktop = `BuildOptions.None` → every `[Flow:*]` line (FloorDiag,
+  MagentaGuard, Guard) is **suppressed in prod**. The guards still ACT; they just report nothing. This is why
+  a live magenta had to be diagnosed from a *desktop* Player.log. **Open gap — needs a WO.** *(2026-07-15)*
+- ⚠ **`/Assets/Resources/Structures/` is gitignored** (`.gitignore:121`) — only **4** models are tracked
+  (ArcaneSpire_1/2/3, WizardTower_1); the other ~37 arrive ONLY by manual LAN copy from the laptop. Any
+  build cut on a machine/CI without that copy ships **placeholder buildings**. Deliberate per the big-art
+  policy, but it silently broke the 07-14 22:00 exe (art landed 22:45, 45 min AFTER the build). *(2026-07-15)*
+
 ## Builds
 - **Ship WebGL = `BuildOptions.None`** (Development is opt-in `-DevBuild` — NEVER deploy a DevBuild: Development players paint the full-screen error overlay). Desktop release still ships Development (open item). *(verified WebGLBuild.cs:124 / DesktopBuild.cs:178, 2026-07-12)*
 - Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
