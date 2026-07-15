@@ -127,7 +127,10 @@ namespace DeNelle.Village
             btnGO.transform.SetParent(parent, false);
             var rect = btnGO.GetComponent<RectTransform>();
             rect.anchoredPosition = anchored;
-            rect.sizeDelta = new Vector2(1.4f, 0.5f);
+            // WorldSpace canvas (panel is 4x3 world units) — the reference-px canonical pin
+            // (360x132) does NOT apply here, so grow the button in its OWN units for a
+            // thumb-friendly tap target (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P1).
+            rect.sizeDelta = new Vector2(1.8f, 0.7f);
 
             btnGO.GetComponent<Image>().color = new Color(0.25f, 0.2f, 0.15f);
 
@@ -138,7 +141,7 @@ namespace DeNelle.Village
             txtGO.transform.SetParent(btnGO.transform, false);
             var tmp = txtGO.GetComponent<TMPro.TextMeshProUGUI>();
             tmp.text = label;
-            tmp.fontSize = 14;
+            tmp.fontSize = 18;
             tmp.alignment = TMPro.TextAlignmentOptions.Center;
             tmp.color = Color.white;
             var tRect = txtGO.GetComponent<RectTransform>();

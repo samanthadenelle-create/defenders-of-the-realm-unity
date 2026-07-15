@@ -284,8 +284,10 @@ namespace DeNelle.Core.UI
         {
             if (button == null) return;
             button.text = "Close";
-            button.style.minWidth = 72; button.style.height = 34;
-            button.style.fontSize = 14;
+            // Raw device px (no PanelSettings ref scaler): 148 ≈ 60 dp on the Seeker
+            // (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0 — was 34px ≈ 14 dp).
+            button.style.minWidth = 148; button.style.height = 148;
+            button.style.fontSize = 34;
             button.style.unityFontStyleAndWeight = FontStyle.Bold;
             button.style.backgroundColor = ElarionUi.GoldButton;
             button.style.color = ElarionUi.Ink;

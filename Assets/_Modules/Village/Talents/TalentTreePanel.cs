@@ -156,7 +156,9 @@ namespace DeNelle.Village.UI
 
             var closeBtn = new Button(Close) { text = "X" };
             ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
-            closeBtn.style.minHeight = StyleKeyword.Auto;
+            // Was minHeight=Auto — that DELETED StyleButton's TapTarget floor, collapsing the
+            // "X" to ~24px (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0). Restore a 120px box.
+            closeBtn.style.minHeight = 120; closeBtn.style.minWidth = 120;
             closeBtn.style.paddingTop = 4; closeBtn.style.paddingBottom = 4;
             closeBtn.style.paddingLeft = 10; closeBtn.style.paddingRight = 10;
             closeBtn.style.marginLeft = 8;
@@ -173,7 +175,7 @@ namespace DeNelle.Village.UI
             int respecCost = HeroTalentCatalog.RespecCostCrystals;
             var respecBtn  = new Button(() => OnRespecClicked())
             {
-                text = $"Respec — {respecCost} 💎",
+                text = $"Respec - {respecCost} Crystals",
             };
             ElarionUi.StyleButton(respecBtn, ElarionUi.ButtonKind.Neutral);
             respecBtn.style.alignSelf = Align.Center;

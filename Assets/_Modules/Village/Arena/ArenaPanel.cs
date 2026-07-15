@@ -197,8 +197,12 @@ namespace DeNelle.Village.Arena
                       new Vector2(0.5f, 0.22f), new Vector2(0.20f, 0.27f),
                       ElarionUi.GoldButton, OpenDefenseSetup, ButtonKind.Gold);
 
-            AddButton(_entryRoot.transform, "Close", new Vector2(0.30f, 0.70f),
-                      new Vector2(0.025f, 0.075f), Glass, Close, ButtonKind.Neutral);
+            // Route the Close through the canonical CTA pin so it matches every other
+            // panel's Close size (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P1 — was a
+            // free-floating fraction-anchored button with no touch floor).
+            ElarionUiKit.PinCanonicalCtaSize(
+                AddButton(_entryRoot.transform, "Close", new Vector2(0.30f, 0.70f),
+                          new Vector2(0.025f, 0.075f), Glass, Close, ButtonKind.Neutral));
         }
 
         // ── ATTACK flow: open the recruit screen (pick a <=50-pt squad -> Launch
@@ -397,8 +401,10 @@ namespace DeNelle.Village.Arena
 
             AddButton(_resultRoot.transform, "Back to Arena", new Vector2(0.34f, 0.66f),
                       new Vector2(0.16f, 0.28f), ElarionUi.GoldButton, ShowEntry, ButtonKind.Gold);
-            AddButton(_resultRoot.transform, "Close", new Vector2(0.34f, 0.66f),
-                      new Vector2(0.04f, 0.13f), Glass, Close, ButtonKind.Neutral);
+            // Canonical CTA pin so the Close matches every other panel (P1).
+            ElarionUiKit.PinCanonicalCtaSize(
+                AddButton(_resultRoot.transform, "Close", new Vector2(0.34f, 0.66f),
+                          new Vector2(0.04f, 0.13f), Glass, Close, ButtonKind.Neutral));
         }
 
         private static string StatsLine()

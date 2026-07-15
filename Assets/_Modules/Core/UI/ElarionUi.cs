@@ -74,10 +74,19 @@ namespace DeNelle.Core.UI
         public static readonly Color AetherDim      = new Color(0.24f, 0.18f, 0.34f, 1f);
 
         // ── State colours ─────────────────────────────────────────────────────
-        /// <summary>Affordable / confirm / success green.</summary>
+        /// <summary>Affordable / confirm / success green (TEXT/GLYPH accent on dark panels).</summary>
         public static readonly Color Affordable     = new Color(0.46f, 0.74f, 0.42f, 1f);
-        /// <summary>Unaffordable / danger / locked red.</summary>
+        /// <summary>Unaffordable / danger / locked red (TEXT/GLYPH accent on dark panels).</summary>
         public static readonly Color Danger         = new Color(0.86f, 0.34f, 0.32f, 1f);
+
+        // BUTTON-FACE contrast (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P1): parchment on the
+        // OLD bright faces failed WCAG (green ~1.9:1, red ~3.2:1). The FACE deepens; the bright
+        // Affordable/Danger above stay for text/glyph accents. These are opaque so the rendered
+        // face equals the audited colour (no near-black composite muddying the hue).
+        /// <summary>Confirm/green BUTTON FACE — deep green #286b33 (parchment ~5.4:1).</summary>
+        public static readonly Color ConfirmFace    = new Color(0.157f, 0.420f, 0.200f, 1f);
+        /// <summary>Danger/red BUTTON FACE — deep red #9e2924 (parchment ~6.3:1).</summary>
+        public static readonly Color DangerFace     = new Color(0.620f, 0.160f, 0.140f, 1f);
         /// <summary>Disabled / inert stone grey.</summary>
         public static readonly Color Disabled       = new Color(0.30f, 0.26f, 0.22f, 1f);
 
@@ -364,8 +373,8 @@ namespace DeNelle.Core.UI
             switch (kind)
             {
                 case ButtonKind.Gold:     return GoldButton;
-                case ButtonKind.Confirm:  return new Color(Affordable.r, Affordable.g, Affordable.b, 0.92f);
-                case ButtonKind.Danger:   return new Color(Danger.r, Danger.g, Danger.b, 0.55f);
+                case ButtonKind.Confirm:  return ConfirmFace;
+                case ButtonKind.Danger:   return DangerFace;
                 case ButtonKind.Disabled: return Disabled;
                 default:                  return PanelStone;
             }

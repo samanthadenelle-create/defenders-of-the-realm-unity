@@ -170,11 +170,15 @@ namespace DeNelle.Village
             closeBtn.style.position         = Position.Absolute;
             closeBtn.style.top              = 12;
             closeBtn.style.right            = 12;
-            closeBtn.style.paddingTop       = 6;
-            closeBtn.style.paddingBottom    = 6;
-            closeBtn.style.paddingLeft      = 14;
-            closeBtn.style.paddingRight     = 14;
-            closeBtn.style.fontSize         = 14;
+            // Raw device px (no PanelSettings ref scaler): ~148px box ≈ 60 dp on the Seeker
+            // (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0 — was ~26px ≈ 11 dp).
+            closeBtn.style.minHeight        = 148;
+            closeBtn.style.minWidth         = 148;
+            closeBtn.style.paddingTop       = 10;
+            closeBtn.style.paddingBottom    = 10;
+            closeBtn.style.paddingLeft      = 20;
+            closeBtn.style.paddingRight     = 20;
+            closeBtn.style.fontSize         = 34;
             closeBtn.style.backgroundColor  = new StyleColor(new Color(0.15f, 0.06f, 0.28f, 0.92f));
             closeBtn.style.color            = new StyleColor(new Color(0.97f, 0.88f, 1.00f, 1f));
             closeBtn.style.borderTopLeftRadius     = new StyleLength(6);

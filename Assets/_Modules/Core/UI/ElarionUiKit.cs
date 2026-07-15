@@ -298,8 +298,15 @@ namespace DeNelle.Core.UI
         // =====================================================================
         /// <summary>Canonical Continue/Close CTA width in reference pixels (1080x1920 modal canvas).</summary>
         public const float CanonCtaWidth = 360f;
-        /// <summary>Canonical Continue/Close CTA height in reference pixels (1080x1920 modal canvas).</summary>
-        public const float CanonCtaHeight = 120f;
+        /// <summary>Canonical Continue/Close CTA height in reference pixels (1080x1920 modal canvas).
+        /// Raised 120→132 (~60 dp one-handed thumb, VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14 P0).</summary>
+        public const float CanonCtaHeight = 132f;
+
+        /// <summary>Kit touch floor: the SHORTEST resolved side of any kit-built button in
+        /// reference px (~50 dp on the Seeker). The analogue of the FontFloor for buttons —
+        /// buttons already larger are never shrunk (pure floor). Enforced post-layout by
+        /// <see cref="ClampMinTouch"/> (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0).</summary>
+        public const float MinTouchPx = 112f;
 
         /// <summary>The drop-zone rects for a named frame (defaults are a sane full-well layout).</summary>
         private static FrameZones ZonesFor(string frameName)
@@ -888,6 +895,66 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// KIT TOUCH FLOOR (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0): grow a kit button so its
+        /// SHORTEST resolved side is at least <see cref="MinTouchPx"/> reference px. Buttons already
+        /// larger are untouched (pure floor, never shrinks). Kit buttons anchor by fraction-of-parent
+        /// with zero offsets, so the physical size is unknown until the first layout pass — a one-shot
+        /// guard measures the resolved rect and, if a side is sub-floor, grows the offsets symmetrically
+        /// about the centre so the button stays put. When the rect is layout-group-driven the offset
+        /// write is overridden (harmless no-op) — the same safety contract as the text-fit guard.
+        /// Idempotent: re-uses an existing guard on the same button.
+        /// </summary>
+        public static void ClampMinTouch(Button button)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            var guard = rt.GetComponent<UiKitMinTouchGuard>();
+            if (guard == null) guard = rt.gameObject.AddComponent<UiKitMinTouchGuard>();
+            guard.Arm();
+        }
+
+        /// <summary>One-shot post-layout enforcer for <see cref="ClampMinTouch"/>.</summary>
+        private sealed class UiKitMinTouchGuard : MonoBehaviour
+        {
+            private RectTransform _rt;
+            private int _frames;
+
+            private void Awake() { _rt = transform as RectTransform; }
+
+            /// <summary>(Re)start the post-layout floor check.</summary>
+            public void Arm() { _frames = 0; enabled = true; }
+
+            private void LateUpdate()
+            {
+                if (_rt == null) { enabled = false; return; }
+                if (_frames++ < 1) return;                 // let the first layout pass size the rect
+
+                float w = _rt.rect.width;
+                float h = _rt.rect.height;
+                if (w <= 0f && h <= 0f)
+                {
+                    if (_frames > 600) enabled = false;    // never sized — stand down (not a size bug)
+                    return;
+                }
+
+                if (w > 0f && w < MinTouchPx)
+                {
+                    float half = (MinTouchPx - w) * 0.5f;
+                    _rt.offsetMin = new Vector2(_rt.offsetMin.x - half, _rt.offsetMin.y);
+                    _rt.offsetMax = new Vector2(_rt.offsetMax.x + half, _rt.offsetMax.y);
+                }
+                if (h > 0f && h < MinTouchPx)
+                {
+                    float half = (MinTouchPx - h) * 0.5f;
+                    _rt.offsetMin = new Vector2(_rt.offsetMin.x, _rt.offsetMin.y - half);
+                    _rt.offsetMax = new Vector2(_rt.offsetMax.x, _rt.offsetMax.y + half);
+                }
+                enabled = false;                           // one-shot floor; re-armed by ClampMinTouch if reused
+            }
+        }
+
+        /// <summary>
         /// Height of the canvas above <paramref name="under"/> in CANVAS-LOCAL units, as it
         /// will be AFTER the CanvasScaler has applied — NOT the live rect. F8-5 root cause
         /// (DlgLayout capture 2026-07-07): a ScreenSpaceOverlay canvas created the SAME
@@ -1246,6 +1313,7 @@ namespace DeNelle.Core.UI
             var tt = Label(go.transform, label, 0f, 1f, textColor, ElarionUi.FontBody,
                            TextAlignmentOptions.Center, 0f, 1f, spacing: 1f, bold: true);
             tt.raycastTarget = false;
+            ClampMinTouch(btn);   // P0 kit touch floor
             return btn;
         }
 
@@ -1255,8 +1323,8 @@ namespace DeNelle.Core.UI
             switch (kind)
             {
                 case ButtonKind.Gold:    return ElarionUi.GoldButton;
-                case ButtonKind.Confirm: return new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f);
-                case ButtonKind.Danger:  return new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f);
+                case ButtonKind.Confirm: return ElarionUi.ConfirmFace;   // deep green face — parchment ~5.4:1 (P1)
+                case ButtonKind.Danger:  return ElarionUi.DangerFace;    // deep red face — parchment ~6.3:1 (P1)
                 default:                 return Glass;   // Quiet
             }
         }

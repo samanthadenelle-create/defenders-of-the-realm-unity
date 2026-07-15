@@ -607,6 +607,7 @@ namespace DeNelle.Core.UI
                         FitSingleLine(overlay);                            // §1.14
                     }
                     if (onClick != null) pfBtn.onClick.AddListener(() => onClick());
+                    ClampMinTouch(pfBtn);   // P0 kit touch floor
                     return pfBtn;
                 }
                 FlowTrace.Warn("UI", "BuildObsidianButton: prefab '" + pf.name + "' has no Button — constructing fallback");
@@ -641,6 +642,7 @@ namespace DeNelle.Core.UI
             tt.raycastTarget = false;
             EnsureFont(tt, FontRole.Body);
             FitSingleLine(tt);                                             // §1.14 — button text never clips
+            ClampMinTouch(btn);   // P0 kit touch floor
             return btn;
         }
 

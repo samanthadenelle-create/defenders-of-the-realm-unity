@@ -225,7 +225,7 @@ namespace DeNelle.Village
             card.Add(headerRow);
 
             // ── Info row — current tower + cost ────────────────────────────
-            string currentName = _currentTower?.Data?.towerName ?? "—";
+            string currentName = _currentTower?.Data?.towerName ?? "-";
             var infoRow = new VisualElement();
             infoRow.style.flexDirection  = FlexDirection.Row;
             infoRow.style.justifyContent = Justify.SpaceBetween;
@@ -593,7 +593,11 @@ namespace DeNelle.Village
             btn.style.borderTopWidth  = 0; btn.style.borderRightWidth  = 0;
             btn.style.borderBottomWidth = 0; btn.style.borderLeftWidth = 0;
             btn.style.color           = SubtleColor;
-            btn.style.fontSize        = 16;
+            // Fixed 120px touch box (no PanelSettings ref scaler, so device px), was ~24px
+            // auto-size (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0).
+            btn.style.width           = 120; btn.style.height = 120;
+            btn.style.fontSize        = 34;
+            btn.style.unityTextAlign  = TextAnchor.MiddleCenter;
             btn.style.paddingLeft     = 6; btn.style.paddingRight = 6;
         }
 

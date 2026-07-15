@@ -291,7 +291,11 @@ namespace DeNelle.Core.Promo
             btn.style.borderTopWidth    = 0; btn.style.borderRightWidth  = 0;
             btn.style.borderBottomWidth = 0; btn.style.borderLeftWidth   = 0;
             btn.style.color             = SubtleColor;
-            btn.style.fontSize          = 16;
+            // Fixed 120px touch box (no PanelSettings ref scaler, so device px), was transparent
+            // auto-size ~28px (VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14, P0).
+            btn.style.width             = 120; btn.style.height = 120;
+            btn.style.fontSize          = 34;
+            btn.style.unityTextAlign    = TextAnchor.MiddleCenter;
             btn.style.paddingLeft       = 6; btn.style.paddingRight = 6;
         }
 
