@@ -62,10 +62,9 @@ namespace DeNelle.Village
         [SerializeField] private float _thumbLiftPx = 90f;
         [Tooltip("World metres the overview camera pans per screen pixel of two-finger drag.")]
         [SerializeField] private float _panMetresPerPx = 0.06f;
-        [Tooltip("Overview camera height (Y) clamp — min.")]
-        [SerializeField] private float _minHeight = 22f;
-        [Tooltip("Overview camera height (Y) clamp — max.")]
-        [SerializeField] private float _maxHeight = 90f;
+        // NOTE (Grok #8): the overview HEIGHT clamp moved to BuildModeController
+        // (_camHeightMin/_camHeightMax) — the driver no longer owns zoom bounds; it
+        // forwards the pinch scale to ctrl.AdjustZoom, which clamps + re-applies the orbit.
 
         // ── Wiring (set by BuildModeController.Install) ────────────────────────
         private Camera _overviewCamera;
@@ -202,29 +201,31 @@ namespace DeNelle.Village
         {
             if (_overviewCamera == null) return;
 
+            // SME camera (Grok #8): the driver NO LONGER writes camera.transform.position
+            // (that fought BuildModeController.ApplyBuildCamera every frame). Two-finger
+            // gestures call the controller's setters, which mutate _camFocus/_camHeight/
+            // _camYaw and re-apply the orbit. One finger = placement (the tap/drag handlers
+            // above), two fingers = camera — no conflict.
+            var ctrl = BuildModeController.Instance;
+            if (ctrl == null) return;
+
             List<LeanFinger> fingers = LeanTouch.GetFingers(true, true, 2);   // ignore GUI, want 2
             if (fingers == null || fingers.Count < 2) return;
 
-            // PINCH → raise / lower the camera (zoom). scale > 1 = fingers apart = zoom IN.
+            // PINCH → zoom (scale > 1 = fingers apart = zoom IN; controller clamps height).
             float scale = LeanGesture.GetPinchScale(fingers);
             if (scale > 0f && !Mathf.Approximately(scale, 1f))
-            {
-                Vector3 p = _overviewCamera.transform.position;
-                p.y = Mathf.Clamp(p.y / scale, _minHeight, _maxHeight);
-                _overviewCamera.transform.position = p;
-            }
+                ctrl.AdjustZoom(scale);
 
-            // PAN → slide the camera across the plot opposite the two-finger drag.
+            // TWIST → rotate the view (controller snaps yaw to 45° detents).
+            float twist = LeanGesture.GetTwistDegrees(fingers);
+            if (!Mathf.Approximately(twist, 0f))
+                ctrl.AdjustYaw(twist);
+
+            // PAN → slide the focus opposite the two-finger drag (controller clamps to map).
             Vector2 panDelta = LeanGesture.GetScreenDelta(fingers);
             if (panDelta.sqrMagnitude > 0f)
-            {
-                Vector3 p = _overviewCamera.transform.position;
-                // Top-down: screen-X → world-X, screen-Y → world-Z. Drag right pushes
-                // the view left (content follows the fingers), so subtract.
-                p.x -= panDelta.x * _panMetresPerPx;
-                p.z -= panDelta.y * _panMetresPerPx;
-                _overviewCamera.transform.position = p;
-            }
+                ctrl.PanFocusBy(panDelta, _panMetresPerPx);
         }
 
         // =====================================================================
@@ -256,21 +257,11 @@ namespace DeNelle.Village
 
             // Kit buttons (STYLE EVERYTHING OBSIDIAN — never hand-roll uGUI widgets).
             // Text labels carry the meaning, never color alone (owner colorblind).
-            // WO-683 (owner ruling + device screenshot 2026-07-12): the ⟲/⟳ glyphs render
-            // as tofu boxes on the shipped TMP font ("square symbol rotate") — labels are
-            // plain ASCII TEXT: "Rotate Left" / "Rotate Right" (WO-611 landmine rule).
-            DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Rotate Left",
-                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
-                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.845f, 0.36f), new Vector2(0.985f, 0.435f),
-                () => { FlowTrace.Step("Build", "TouchBar: Rotate Left pressed"); _rotateCcwLatched = true; });
-
-            DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Rotate Right",
-                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
-                DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.845f, 0.26f), new Vector2(0.985f, 0.335f),
-                () => { FlowTrace.Step("Build", "TouchBar: Rotate Right pressed"); _rotateCwLatched = true; });
-
+            // Grok slice 2 (KILL the duplicate rotate): the Rotate Left/Right pair that
+            // used to live HERE is REMOVED — rotate now has exactly ONE home, the Build
+            // HUD's single intent bar (BuildHudController → RequestUiRotateQuarter). This
+            // touch bar keeps only Cancel (the touch-safe back-out + the fleet's
+            // AssertTouchVerbBarRenderable probe seam) and the WO-683 kit d-pad.
             var cancelBtn = DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Cancel",
                 DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
                 DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -297,11 +288,14 @@ namespace DeNelle.Village
             // this canvas, so presses register as GUI (finger.IsOverGui) and can
             // never fall through as world taps. Direction is carried by the
             // chevron SHAPES + position, never color alone (owner colorblind).
+            // Grok slice / D-pad lane: seated BOTTOM-LEFT (owner "backup virtual D-pad
+            // bottom-left"), above the hero stick's engage zone and clear of the centred
+            // shop carousel. Keep the GO name "BuildDPad" for probe stability (WO-683).
             var dpad = DeNelle.Core.FeatureFlags.CombatHud611
                 ? DeNelle.Core.UI.ElarionUiKit.BuildVirtualDPad(
-                    _barRoot.transform, new Vector2(0.11f, 0.60f), PublishDpadMove)
+                    _barRoot.transform, new Vector2(0.12f, 0.24f), PublishDpadMove)
                 : DeNelle.Core.UI.ElarionUiKit.BuildControllerCluster(
-                    _barRoot.transform, new Vector2(0.11f, 0.60f), PublishDpadMove);
+                    _barRoot.transform, new Vector2(0.12f, 0.24f), PublishDpadMove);
             dpad.root.name = "BuildDPad";   // stable probe/debug name (BuildTouchCancel precedent)
             FlowTrace.Step("Build", "TouchBar: kit d-pad BUILT on the build overlay (WO-683) — " +
                 (DeNelle.Core.FeatureFlags.CombatHud611 ? "VirtualDPad cross" : "controller cluster") +

@@ -90,6 +90,12 @@ namespace DeNelle.Village
         private float   _camHeight;
         private bool    _camDragging;
         private Vector2 _camDragLastPoint;
+        // SME camera (Grok #8): raw accumulated orbit yaw about _camFocus. Default 0 =
+        // the ORIGINAL top-down-angled framing (identical to the pre-orbit ApplyBuildCamera).
+        // The APPLIED framing SNAPS to 45-degree detents (SnappedYaw) so twist rotates the
+        // view in clean CoC quarter/eighth steps; _camYaw itself stays continuous so the
+        // twist/zoom read-assert can see it move.
+        private float   _camYaw;
 
         [Header("Placement")]
         [SerializeField] private float _rayDistance = 800f;
@@ -166,12 +172,22 @@ namespace DeNelle.Village
         private LeanTouchBuildDriver _touchDriver;
 
         // On-screen PLACE confirm (owner ask 2026-07-12, web/mobile demo: clicks/taps
-        // never placed). The button sets this latch; PlaceConfirmedThisFrame consumes
-        // it FIRST and bypasses the joystick-zone suppression — pressing a labeled
-        // button is explicit intent, never a stray tap.
-        private BuildPlaceButton _placeButton;
+        // never placed). A labeled control (now the Build HUD intent bar's PLACE button)
+        // sets this latch; ConfirmIntentThisFrame consumes it FIRST and bypasses the
+        // joystick-zone suppression — pressing a labeled button is explicit intent, never
+        // a stray tap. (The standalone BuildPlaceButton canvas is retired — the Build HUD
+        // owns the place intents now; BuildPlaceButton.cs is left dead/untouched.)
         private bool _uiPlaceLatch;
         private bool _uiCancelLatch;
+
+        // Grok slices 1-4: the dedicated Build HUD presentation layer — ONE landscape
+        // canvas that owns the wallet row, the BUILD MODE label, the Done exit, and the
+        // single place-intent bar (Rotate L/R . PLACE . Cancel). It REPLACES the old
+        // BuildPlaceButton canvas as the place-intent surface; the controller (BRAIN)
+        // drives it via Show/Hide/SetState/RefreshResources and it calls back into the
+        // controller's SAME intent latches (RequestUiRotateQuarter/RequestUiPlaceConfirm/
+        // RequestUiCancel/Exit) — so placement behaviour is byte-identical.
+        private BuildHudController _hud;
 
         /// <summary>Explicit confirm from the on-screen PLACE button (web/mobile).</summary>
         public void RequestUiPlaceConfirm() => _uiPlaceLatch = true;
@@ -252,6 +268,18 @@ namespace DeNelle.Village
             // never _ghost.transform.position.
             cell = _grid.WorldToCell(_ghost.CurrentPosition);
             return true;
+        }
+
+        /// <summary>
+        /// SME camera probe seam (Grok #8) — read the live overview orbit yaw + zoom
+        /// height WITHOUT mutating anything. The fleet drives AdjustYaw/AdjustZoom (twist/
+        /// pinch) and asserts these move. Read-only; false when no live build camera.
+        /// </summary>
+        public bool ProbeBuildCameraState(out float yaw, out float height)
+        {
+            yaw = _camYaw;
+            height = _camHeight;
+            return IsActive && _camera != null;
         }
 
         // ── WO-683: kit d-pad merge (loose-reflection read of HudMoveInput.Move) ──
@@ -477,6 +505,13 @@ namespace DeNelle.Village
             _palette.Configure(_activeBuildType);
             _palette.Show();
 
+            // Grok slices 1-4: bring up the dedicated Build HUD (wallet + label + Done +
+            // single place-intent bar) as the sole edit-chrome surface. Browse by default.
+            EnsureHud();
+            _hud.Show();
+            _hud.SetState(BuildHudState.Browse);
+            _hud.RefreshResources();
+
             FlowTrace.Step("Build", "BuildMode.Enter — palette shown, EnsureTouchInput next");
             EnsureTouchInput();   // install the Lean.Touch driver on a touch device (S6)
 
@@ -504,6 +539,7 @@ namespace DeNelle.Village
             _infoPanel?.Hide();   // WO-352 — close any open structure preview on exit
             _palette?.Hide();
             _selectionUi?.Hide();
+            _hud?.Hide();
             _grid?.SetGridVisible(false);
 
             // Stop the Lean.Touch driver + hide its button bar; revert to the desktop
@@ -514,9 +550,9 @@ namespace DeNelle.Village
                 _input = new DesktopBuildInput();
             }
 
-            // Hide the PLACE button + drop any unconsumed press so a queued confirm
-            // (or a queued 90-degree rotate) can never leak into the next session.
-            _placeButton?.SetVisible(false);
+            // Drop any unconsumed press so a queued confirm (or a queued 90-degree rotate)
+            // can never leak into the next session. (The HUD canvas hides via _hud.Hide()
+            // above; its intent bar goes with it.)
             _uiPlaceLatch = false;
             _uiRotateEighthsLatch = 0;
 
@@ -585,14 +621,15 @@ namespace DeNelle.Village
             // while arming, moving, or idle.
             UpdateBuildCameraPan();
 
-            // On-screen PLACE confirm (web/mobile, 2026-07-12): lazily created, shown
-            // only while a ghost is armed or a move is in progress — the explicit
-            // confirm that works regardless of which pointer device the browser binds.
-            if (_placeButton == null)
-                _placeButton = BuildPlaceButton.Create(transform, RequestUiPlaceConfirm,
-                    () => RequestUiRotateQuarter(-1),   // Rotate Left  (CCW 90 deg, WO-702)
-                    () => RequestUiRotateQuarter(+1));  // Rotate Right (CW 90 deg, WO-702)
-            _placeButton.SetVisible(_armed != null || _movingSelected);
+            // Grok slices 1-2: the dedicated Build HUD is the single place-intent surface
+            // (the old BuildPlaceButton canvas is retired). Drive the three-state chrome
+            // from the live mode each frame — Placing while armed or moving (the intent
+            // bar shows Rotate L/R . PLACE . Cancel), Selected while a placed structure is
+            // picked (BuildSelectionUI owns those verbs), else Browse (shop only).
+            EnsureHud();
+            _hud.SetState((_armed != null || _movingSelected)
+                ? BuildHudState.Placing
+                : (_selected != null ? BuildHudState.Selected : BuildHudState.Browse));
 
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap
             // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
@@ -1677,6 +1714,14 @@ namespace DeNelle.Village
             _dropPending = false;   // two-step: a fresh arm starts in hover (no pending drop)
             if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
             _ghost.SetEntry(entry);
+
+            // Grok slice 4 (owner "minimize on select"): collapse the shop to the armed-
+            // card summary while placing, and switch the HUD to the Placing intent bar.
+            string armedLabel = entry != null && !string.IsNullOrEmpty(entry.displayName)
+                ? entry.displayName : entry?.id;
+            _palette?.Collapse(armedLabel);
+            _hud?.SetState(BuildHudState.Placing);
+            _hud?.RefreshResources();
         }
 
         private void CancelArmed()
@@ -1690,6 +1735,8 @@ namespace DeNelle.Village
                 _pendingPlace = false;
                 _rotateMenu?.Close();
             }
+            // Grok slice 4: expand the shop back to the full carousel when disarming.
+            _palette?.Expand();
         }
 
         // =====================================================================
@@ -2451,20 +2498,91 @@ namespace DeNelle.Village
             // from _camHeight at the build pitch, so pan = move focus, zoom = change height.
             _camFocus  = new Vector3(centre.x, 0f, centre.z);
             _camHeight = Mathf.Clamp(_buildModeHeight, _camHeightMin, _camHeightMax);
+            _camYaw    = 0f;   // reset orbit to the original framing on every entry
             _camDragging = false;
             ApplyBuildCamera();
         }
 
+        /// <summary>Applied orbit yaw — the raw <see cref="_camYaw"/> SNAPPED to 45° detents
+        /// (owner ruling: twist rotates the view in clean CoC steps). Zero at default.</summary>
+        private float SnappedYaw => Mathf.Round(_camYaw / 45f) * 45f;
+
         /// <summary>
-        /// Place the overview camera from the live focus + zoom state at the build pitch.
-        /// Keeps the original framing (back-and-up by the height, 45° down) but driven by
-        /// _camFocus / _camHeight so the pan/zoom loop just mutates those.
+        /// Place the overview camera ORBITING <see cref="_camFocus"/> at the applied yaw
+        /// (SnappedYaw) and the build pitch. At yaw 0 this is byte-identical to the original
+        /// framing (back-and-up by the height, 45° down); a non-zero yaw swings the same
+        /// focus/height offset around the Y axis so the view rotates without changing what
+        /// it looks at. Driven by _camFocus / _camHeight / _camYaw so the pan/zoom/twist
+        /// setters just mutate those and re-apply.
         /// </summary>
         private void ApplyBuildCamera()
         {
             if (_camera == null) return;
-            _camera.transform.position = new Vector3(_camFocus.x, _camHeight, _camFocus.z - _camHeight);
-            _camera.transform.rotation = Quaternion.Euler(_buildModePitch, 0f, 0f);
+            float yaw = SnappedYaw;
+            // Original (yaw 0) offset from the focus: back by height on Z, up by height on Y.
+            Vector3 offset = Quaternion.Euler(0f, yaw, 0f) * new Vector3(0f, _camHeight, -_camHeight);
+            _camera.transform.position = new Vector3(_camFocus.x, 0f, _camFocus.z) + offset;
+            _camera.transform.rotation = Quaternion.Euler(_buildModePitch, yaw, 0f);
+        }
+
+        /// <summary>Clamp <see cref="_camFocus"/> to the grid (map) bounds so the view can't
+        /// leave the world. Shared by the desktop pan loop and the touch pan setter.</summary>
+        private void ClampFocusToMap()
+        {
+            if (_grid == null) return;
+            float halfW = _grid.gridWidth  * _grid.cellSize * 0.5f;
+            float halfH = _grid.gridHeight * _grid.cellSize * 0.5f;
+            Vector3 mapCentre = _grid.origin + new Vector3(halfW, 0f, halfH);
+            _camFocus.x = Mathf.Clamp(_camFocus.x, mapCentre.x - halfW, mapCentre.x + halfW);
+            _camFocus.z = Mathf.Clamp(_camFocus.z, mapCentre.z - halfH, mapCentre.z + halfH);
+        }
+
+        // =====================================================================
+        //  SME camera setters (Grok #8) — the Lean.Touch driver calls THESE
+        //  instead of writing camera.transform.position (which would fight
+        //  ApplyBuildCamera every frame). One finger = placement, two = camera.
+        // =====================================================================
+
+        /// <summary>
+        /// Pan the overview by a two-finger SCREEN delta (LeanGesture.GetScreenDelta),
+        /// converted to world on the camera's yaw-aware right/forward basis. Content
+        /// follows the fingers (drag right pushes the world left), so the focus moves
+        /// opposite the drag. Clamped to the map.
+        /// </summary>
+        public void PanFocusBy(Vector2 screenDelta, float metresPerPixel)
+        {
+            if (_camera == null) return;
+            Vector3 fwd = _camera.transform.forward; fwd.y = 0f;
+            fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
+            Vector3 right = _camera.transform.right; right.y = 0f;
+            right = right.sqrMagnitude > 1e-4f ? right.normalized : Vector3.right;
+            _camFocus -= (right * screenDelta.x + fwd * screenDelta.y) * metresPerPixel;
+            ClampFocusToMap();
+            ApplyBuildCamera();
+        }
+
+        /// <summary>
+        /// Zoom the overview by a pinch SCALE (LeanGesture.GetPinchScale): scale &gt; 1
+        /// (fingers apart) LOWERS the camera height (zoom IN), matching the old driver's
+        /// height/scale. Clamped to the height min/max. No-op for a non-positive scale.
+        /// </summary>
+        public void AdjustZoom(float pinchScale)
+        {
+            if (_camera == null || pinchScale <= 0f) return;
+            _camHeight = Mathf.Clamp(_camHeight / pinchScale, _camHeightMin, _camHeightMax);
+            ApplyBuildCamera();
+        }
+
+        /// <summary>
+        /// Rotate the overview by a twist (LeanGesture.GetTwistDegrees). The accumulated
+        /// yaw is continuous (so the twist read-assert sees it move); the APPLIED framing
+        /// snaps to 45° detents (SnappedYaw in ApplyBuildCamera).
+        /// </summary>
+        public void AdjustYaw(float twistDegrees)
+        {
+            if (_camera == null || Mathf.Approximately(twistDegrees, 0f)) return;
+            _camYaw += twistDegrees;
+            ApplyBuildCamera();
         }
 
         /// <summary>
@@ -2664,6 +2782,22 @@ namespace DeNelle.Village
             // so the green ghost shows on select and Done fires. Re-enable the preview
             // (EnsureInfoPanel + OnCardTapped) once its PanelSettings resolution is fixed
             // (same UIToolkit-panel-render class as WO-465).
+        }
+
+        /// <summary>
+        /// Lazily create the dedicated Build HUD (one per session). Its intent-bar buttons
+        /// call the SAME controller latches the retired BuildPlaceButton did — so placement
+        /// behaviour is unchanged; only the chrome ownership moved.
+        /// </summary>
+        private void EnsureHud()
+        {
+            if (_hud != null) return;
+            _hud = BuildHudController.Create(transform,
+                () => RequestUiRotateQuarter(-1),   // Rotate Left  (CCW 90 deg)
+                () => RequestUiRotateQuarter(+1),   // Rotate Right (CW 90 deg)
+                RequestUiPlaceConfirm,               // PLACE (the only commit latch)
+                RequestUiCancel,                     // Cancel (back out arm/move)
+                Exit);                               // X Done (exit build mode)
         }
 
         /// <summary>Lazily create the WO-352 Structure Info Preview panel (one per session).</summary>

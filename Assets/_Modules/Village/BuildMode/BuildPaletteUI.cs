@@ -117,6 +117,14 @@ namespace DeNelle.Village
         private Button _orientBtn;            // shown only while an entry is armed
         private string _armedId;
 
+        // Grok slice 4 (collapse-on-place, owner "minimize on select"): while an entry
+        // is armed the shop collapses to a compact "armed card" summary. These refs let
+        // Collapse()/Expand() swap the card tray + tab row for the summary line.
+        private GameObject _trayGo;           // the scroll well (hidden while collapsed)
+        private GameObject _tabRowGo;         // the category tab band (hidden while collapsed)
+        private GameObject _summaryGo;        // the compact placing summary (shown while collapsed)
+        private TextMeshProUGUI _summaryLabel;
+
         // WO-673 category switcher (always on — WO-682): the owner-ruled three build
         // categories — Town / Defenses / Walls — as a tab row between the header and
         // the card tray. Tapping a tab Configure()s this palette for that verb (placement
@@ -125,8 +133,9 @@ namespace DeNelle.Village
         // carries a gold UNDERLINE — position/shape tell, never color alone (owner is
         // red/green colorblind).
         private BuildType _activeType = BuildType.Defense;
-        private readonly Dictionary<BuildType, GameObject> _tabUnderlines =
-            new Dictionary<BuildType, GameObject>();
+        // WO — the kit tab component (BuildTabRow) that renders Town/Defenses/Walls and
+        // owns the active-underline + tutorial spotlight registration (was an inline loop).
+        private BuildTabRow _tabRow;
 
         private void OnEnable()
         {
@@ -201,6 +210,9 @@ namespace DeNelle.Village
             const float trayTop = 0.68f;
             const float headerBottom = 0.83f;
 
+            // Grok slice 4 (landscape density): the shop is now a LARGE landscape
+            // bottom carousel, not the old 540px portrait dock — wider so more
+            // icon-first tiles read at once (owner CoC shop bar). Bottom-centred.
             var dock = new GameObject("PaletteDock", typeof(RectTransform));
             dock.transform.SetParent(_canvas.transform, false);
             var drt = (RectTransform)dock.transform;
@@ -208,7 +220,10 @@ namespace DeNelle.Village
             drt.anchorMax = new Vector2(0.5f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
             drt.anchoredPosition = Vector2.zero;
-            drt.sizeDelta = new Vector2(540f, 264f);
+            // Phone enlargement (owner felt-test 2026-07-14 "make it larger for
+            // selection on a phone"): taller + wider dock so the shop tiles read big
+            // and thumb-reachable on a small landscape phone screen (CoC shop bar).
+            drt.sizeDelta = new Vector2(1560f, 440f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
@@ -244,33 +259,23 @@ namespace DeNelle.Village
                 () => OnExitRequested?.Invoke());
             exitBtn.gameObject.name = "CloseButton";
 
-            // WO-673 category tab row (always on — WO-682): Town / Defenses / Walls, each
-            // tab Configure()s this palette for that verb; the active tab carries a gold
-            // underline (position/shape tell, not color alone).
-            _tabUnderlines.Clear();
+            // WO — category tab row via the reusable kit component (BuildTabRow):
+            // Town / Defenses / Walls (Walls gated by FeatureFlags.WallsTab). Each tab
+            // Configure()s this palette for that verb; the active tab carries a gilt
+            // underline (position/shape tell, not colour alone). Owns tutorial spotlights.
             var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
                 new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
                 ElarionUiKit.ObsidianFill, rounded: false);
-            // Owner ruling 2026-07-13: the WALLS tab is flagged OFF for now — player
-            // wall-building ships with settlement building (WO-708 drag-lines, post-V1).
-            // Two-tab layout re-spans the row; wall rows stay loadable for saves.
-            if (DeNelle.Core.FeatureFlags.WallsTab)
-            {
-                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
-                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
-                BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
-            }
-            else
-            {
-                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.49f);
-                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.51f, 0.98f);
-            }
+            _tabRowGo = tabRow;
+            _tabRow = tabRow.AddComponent<BuildTabRow>();
+            _tabRow.Build(tabRow.transform, Configure, _activeType);
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
             var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
                 new Vector2(0f, 0f), new Vector2(1f, trayTop),
                 new Color(0f, 0f, 0f, 0.55f), rounded: false);
+            _trayGo = tray;
 
             var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
             scrollGo.transform.SetParent(tray.transform, false);
@@ -302,8 +307,54 @@ namespace DeNelle.Village
             scroll.scrollSensitivity = 24f;
 
             _stripContent = contentGo.transform;
+
+            // Grok slice 4 collapse summary: a compact "armed card" line shown IN PLACE
+            // of the tray + tabs while placing (Collapse/Expand). Spans the tray band,
+            // near-black backing (WO-562), hidden until Collapse().
+            _summaryGo = ElarionUiKit.AddImage(dock.transform, "PlacingSummary",
+                new Vector2(0f, 0f), new Vector2(1f, headerBottom),
+                ElarionUiKit.ObsidianFill, rounded: false);
+            _summaryLabel = MakeText(_summaryGo.transform, "Placing", 18, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Center, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
+            _summaryLabel.raycastTarget = false;
+            _summaryGo.SetActive(false);
+
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
+
+        // ── Grok slice 4: collapse-on-place (owner "minimize on select") ──────────
+
+        /// <summary>
+        /// Collapse the shop to the compact armed-card summary while placing: hide the
+        /// card tray + tab row, show a "Placing: &lt;name&gt;" line. Called from
+        /// BuildModeController.Arm. Safe before the palette is built (no-op).
+        /// </summary>
+        public void Collapse(string armedDisplayName)
+        {
+            if (_canvas == null) return;
+            if (_trayGo != null) _trayGo.SetActive(false);
+            if (_tabRowGo != null) _tabRowGo.SetActive(false);
+            if (_summaryLabel != null)
+                _summaryLabel.text = "Placing: " +
+                    (string.IsNullOrEmpty(armedDisplayName) ? "structure" : armedDisplayName) +
+                    "  (drop, adjust, then PLACE)";
+            if (_summaryGo != null) _summaryGo.SetActive(true);
+        }
+
+        /// <summary>Expand the shop back to the full carousel + tabs (called from CancelArmed).</summary>
+        public void Expand()
+        {
+            if (_canvas == null) return;
+            if (_summaryGo != null) _summaryGo.SetActive(false);
+            if (_tabRowGo != null) _tabRowGo.SetActive(true);
+            if (_trayGo != null) _trayGo.SetActive(true);
+        }
+
+        /// <summary>
+        /// Public wrapper over <see cref="ResolveEntryArt"/> so the Build HUD carousel can
+        /// reuse the SAME data-driven card art (Grok reuse ledger) without a second resolver.
+        /// </summary>
+        public static Sprite ResolveEntryArtPublic(CatalogEntry e) => ResolveEntryArt(e);
 
         // ── Render ──────────────────────────────────────────────────────────────
 
@@ -375,8 +426,8 @@ namespace DeNelle.Village
             var cardGo = new GameObject("Card_" + e.id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             cardGo.transform.SetParent(_stripContent, false);
             var rt = cardGo.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(160f, 0f);
-            cardGo.GetComponent<LayoutElement>().preferredWidth = 160f;
+            rt.sizeDelta = new Vector2(260f, 0f);
+            cardGo.GetComponent<LayoutElement>().preferredWidth = 260f;
 
             var img = cardGo.GetComponent<Image>();
             var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
@@ -605,53 +656,13 @@ namespace DeNelle.Village
                 _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(CrystalBalance);
         }
 
-        // ── WO-673 category tabs (always on — WO-682) ──────────────────────────
+        // ── Category tabs (now the reusable BuildTabRow kit component) ─────────
 
-        /// <summary>
-        /// Build one category tab (WO-673): a kit button that Configure()s this palette
-        /// for <paramref name="type"/>, plus a gold active-tab underline registered in
-        /// <see cref="_tabUnderlines"/>. Caption = the owner-ruled display name
-        /// (Town / Defenses / Walls), not the enum name.
-        /// </summary>
-        private void BuildCategoryTab(Transform parent, string caption, BuildType type,
-            float xMin, float xMax)
-        {
-            var btn = ElarionUiKit.BuildObsidianButton(parent, caption,
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(xMin, 0.12f), new Vector2(xMax, 0.88f),
-                () => Configure(type));
-
-            // Active-tab tell: a gilt underline bar pinned to the tab's bottom edge —
-            // POSITION + SHAPE carry the meaning (owner is red/green colorblind; never
-            // encode state in hue alone).
-            var underline = new GameObject("ActiveUnderline", typeof(RectTransform), typeof(Image));
-            underline.transform.SetParent(btn.transform, false);
-            var urt = (RectTransform)underline.transform;
-            urt.anchorMin = new Vector2(0.08f, 0f);
-            urt.anchorMax = new Vector2(0.92f, 0f);
-            urt.pivot = new Vector2(0.5f, 0f);
-            urt.sizeDelta = new Vector2(0f, 3f);
-            var img = underline.GetComponent<Image>();
-            img.color = ElarionUi.Gilt;
-            img.raycastTarget = false;
-            underline.SetActive(type == _activeType);
-            _tabUnderlines[type] = underline;
-
-            // WO-702 (owner 2026-07-13 "should highlight town tab to start in build"):
-            // register the tab as a tutorial spotlight target — the registry handles the
-            // late build (TargetRegistered re-arms an already-armed step's spotlight).
-            if (type == BuildType.Town)
-                DeNelle.Core.UI.TutorialHighlightRegistry.Register("build.tab_town", (RectTransform)btn.transform);
-            else if (type == BuildType.Defense)
-                DeNelle.Core.UI.TutorialHighlightRegistry.Register("build.tab_defenses", (RectTransform)btn.transform);
-        }
-
-        /// <summary>Move the gold underline to the tab matching <see cref="_activeType"/>.
-        /// No-op when the tab row was never built (flag off / palette not built yet).</summary>
+        /// <summary>Move the gilt underline to the tab matching <see cref="_activeType"/>.
+        /// No-op when the tab row was never built (palette not built yet).</summary>
         private void UpdateTabHighlight()
         {
-            foreach (var kv in _tabUnderlines)
-                if (kv.Value != null) kv.Value.SetActive(kv.Key == _activeType);
+            _tabRow?.SetActive(_activeType);
         }
 
         /// <summary>Show the Orient button only while an entry is armed.</summary>
