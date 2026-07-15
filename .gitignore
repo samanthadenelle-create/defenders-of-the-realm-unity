@@ -81,6 +81,11 @@ Thumbs.db
 **/secrets/
 *.seed
 
+# Vercel deploy token for the dedicated build machine — machine-local secret, never commit.
+.vercel-token
+.vercel-token.*
+.vercel/
+
 # Claude Code — local permission grant is personal/machine-scoped, not committed.
 .claude/settings.local.json
 
@@ -309,3 +314,4 @@ terminals/
 /Assets/AddressableAssetsData/link.xml.meta
 
 tools/docs/__pycache__/
+.env*
