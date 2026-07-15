@@ -5,6 +5,10 @@
 and logic to fill with your conditions (model) … one master frame to create those structures
 which fill elements to their styled areas." This doc is that formula, made explicit.
 
+> **Ops companion (Grok-02):** `docs/UI/Grok-02-Obsidian-UI-guidance.md` — tight Obsidian-only
+> guidance (factory map, failure modes, surface recommendations, non-goals). This file remains
+> the constitutional one-liner + zone law; Grok-02 is the implementer’s field guide.
+
 ---
 
 ## 0. The one-line rule

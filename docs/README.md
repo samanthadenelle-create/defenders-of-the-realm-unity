@@ -21,6 +21,9 @@ indexed separately in `../PROJECT_INDEX.md`.
 - Pack notes: `KAYKIT_NOTES.md`, `POLYPERFECT_NOTES.md`, `QUATERNIUS_NOTES.md`,
   `MIRZABEIG_VFX_NOTES.md`, `LANA_RPG_VFX_NOTES.md`, `SPELLS_PACK_NOTES.md`,
   `MAGIC_VFX_LIBRARY.md`, `MASTER_ASSET_REFERENCE.md`
+- **VFX guidance (Hovl combat):** `vfx/Grok-01-VFX-guidance.md` — Grok-01 towers / sword-shield / spellcasting picks + laws; SME hub `HOVL_STUDIO_SME.md`; inventory `vfx/HovlStudio_Inventory.md`; ability keys `vfx/SkillTree_VFX_Mapping.md`; implement via **WO-715**
+- **UI guidance (Blink Obsidian, tight lens):** `UI/Grok-02-Obsidian-UI-guidance.md` — Grok-02 frames/slots/factory/MVVM only (not weapons/orcs); binding formula `UI_BLINK_TEMPLATE_CANON.md`; full pack SME `SME/BLINK_SME.md` §1.4/§2.2
+- **Here → There WO program:** `UI/Grok-03-here-to-there-WO-program.md` — explicit WOs **716–722** + **715** (capture → unstyled kill → kit law → build HUD → founding FIX → vitals → expansion; VFX 715)
 - Library notes: `LEANTOUCH_NOTES.md`, `UNITASK_NOTES.md`, `YARNSPINNER_DIALOGUE_NOTES.md`
 - `Assets/_Modules/HUD/README_HUD.md` — Dark Fantasy Mobile HUD (HUD-001) setup, Lean Touch exclusive input, integration wiring (Economy/Heart/Wave/HeroAbilities/Build), D-Pad locomotion tie, prefab + acceptance steps.
 

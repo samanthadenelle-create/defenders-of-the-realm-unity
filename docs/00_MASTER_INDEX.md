@@ -223,6 +223,9 @@
 - [QA Test Plan — Echoes of Elarion / Defenders of the Realm **V1**](qa/TEST_PLAN_V1.md)  · 🟢 Stable · 4212 words · modified 2026-06-28
 - [Bug Log — Defenders of the Realm (v2 Unity Port)](qa/bug-log.md)  · 🟢 Stable · 3264 words · modified 2026-06-16
 - [Owner Acceptance Checklist](qa/owner-acceptance-checklist.md)  · 🟢 Stable · 1032 words · modified 2026-06-16
+- [Grok-01 — VFX Guidance (Hovl towers · sword/shield · spellcasting)](vfx/Grok-01-VFX-guidance.md)  · 🟢 Stable · 2026-07-14 · implement via WO-715
+- [Grok-02 — Obsidian UI Guidance (Blink, tight lens)](UI/Grok-02-Obsidian-UI-guidance.md)  · 🟢 Stable · 2026-07-14 · formula = UI_BLINK_TEMPLATE_CANON
+- [Grok-03 — Here → There WO program (716–722 + 715)](UI/Grok-03-here-to-there-WO-program.md)  · 🟢 Stable · 2026-07-14 · demo-ready Obsidian + build HUD + VFX
 - [Hovl Studio VFX — Inventory & Hero-Ready Shortlist (WO-VFX-001)](vfx/HovlStudio_Inventory.md)  · 🟢 Stable · 2995 words · modified 2026-07-10
 - [Knight Skill-Tree VFX Mapping (WO-VFX-003)](vfx/SkillTree_VFX_Mapping.md)  · 🟢 Stable · 983 words · modified 2026-07-10
 - [Overworld Minimap — spec (V2 navigation polish, QUEUED — NOT V1)](vfx/minimap_spec_v2.md)  · 🟢 Stable · 226 words · modified 2026-06-23

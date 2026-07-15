@@ -12,6 +12,7 @@ ANYTHING until the boot sequence below is complete and reported.**
 | # | Read | Why |
 |---|------|-----|
 | 0 | `KEY_FACTS.md` (repo root) | The LIVING fact sheet + ⭐ NORTH STAR state. Always current; update in place. |
+| 0b | `docs/GROK_MEMORY.md` (if present) | Grok session fast path — program WOs, overnight orders, distance snapshot. |
 | 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — take the newest; today: `CANON_GROUND_TRUTH_2026-07-12.md`) | Current reality. If any doc contradicts it, the doc is stale. |
 | 2 | `SESSION_CANON_LOADER.md` | The SME primer: live thread, core rules, current state, key files. |
 | 3 | `SAMANTHA.md` | The boot-confirmation gate: verify state with evidence → report → WAIT for the owner's go. |
@@ -85,3 +86,11 @@ Finish the SAMANTHA.md STEP-2 verification (git state, gates, exe timestamps, in
 the newest HANDOVER block), post the evidence + any mismatch as a finding + your proposed next
 mechanical step — **then wait for the owner's go.** Her first reply may just be "go," but the
 report must exist first.
+
+---
+
+## 7. ACTIVE OVERNIGHT ORDERS (when present)
+
+If `OVERNIGHT_ORDERS_*.md` exists at repo root (e.g. `OVERNIGHT_ORDERS_GROK03_2026-07-14.md`),
+**that file is the night’s execution authority** after the boot sequence — not a free-form backlog
+graze. Follow its must/stretch/park tables and morning report template.
