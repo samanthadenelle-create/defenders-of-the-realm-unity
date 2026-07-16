@@ -42,6 +42,28 @@
 - **No TTL cron exists** for trace rows (security H1 — fix pending). Open POSTs (trace/track/bug-report) have **no rate limit**. *(audit 2026-07-12)*
 - db-viewer: `tools/db-viewer/index.html` + `api/admin/db.js`, key = `ADMIN_DASH_KEY` (Vercel env, set + redeploy to activate). *(2026-07-12)*
 
+## Web triage — the read path (LIVE as of 2026-07-15; it never was before)
+- **`ADMIN_DASH_KEY` is now SET** (Vercel env, preview+production; value in gitignored `.admin-dash-key`).
+  It had NEVER been set, so `tools/db-viewer` + the `/triage-web-issue` skill were **dark since written**
+  — 70,053 `analytics_events` rows accumulated unread. Endpoint verified live. *(2026-07-15)*
+- ⚠ **`vercel logs` CANNOT give you the `[sig]` lines** — proven: even `--json` returns exactly ONE
+  message per request (the summary `[web_trace] sess=… lines=N signal=N`); the per-line
+  `[sig]` echoes from `api/trace.js:67` are never surfaced. The canon read-path "the `[sig]` echo in
+  Vercel runtime logs" gets you `signal=18` but **not the 18 lines**. **Real read path = the admin
+  endpoint** → `api/admin/db.js?view=traces` (sessions) → `&session=<id>&order=asc&limit=50` (the
+  scene-load HEAD, where TERRAINDIAG / MagentaGuard / catalog resolution live). Header
+  `x-admin-key`; base rotates per deploy → `Builds\admin-preview-url.txt`. *(2026-07-15)*
+- **`order=asc` + `offset` + `total_batches`/`has_more` added** to the traces view. It was
+  `DESC LIMIT 20` with no offset, so long sessions (one ran 2840 batches / 153k lines) were readable
+  only from the TAIL = gameplay spam; the diagnostic head was structurally unreachable. *(2026-07-15)*
+- **WEB F8 WATCHER LIVE:** `.claude/skills/run-defenders/websig-watch-start.ps1` polls the trace DB and
+  emits into the SAME `logs/f8-inbox` with the same PING seq contract, so `f8-check-inbox.ps1` covers
+  desktop AND web. Start it alongside `f8-watch-start.ps1`. Proven against the known-bad 07-15 session:
+  29 signal hits, fires on the MAGENTA line. *(2026-07-15)*
+- **Sessions are attributable from 2026-07-15:** `WebTrace._buildId` = `<version>@<host>` (was
+  `Application.version` = **"1.0" for every build**, so a magenta preview and healthy prod were
+  indistinguishable). Needs a WebGL rebuild to reach players. *(2026-07-15)*
+
 ## Ground / terrain (RCA 2026-07-15 — the magenta ground)
 - **The visible ground of `Main_Castle_Overworld` is the `ExteriorTerrain` Terrain**, NOT the courtyard
   tiles (those are dropped to Y=-0.5 + hidden by GroundZFightFixer). It binds its material BY GUID at
@@ -55,14 +77,27 @@
 - **MagentaGuard could not save it:** `MagentaGuard.cs` gated terrain recovery on `tm != null &&
   IsBrokenShader(...)` — a NULL material short-circuited it, so the fix never fired (the FloorDiag line
   reads `mat='<NULL>' ... broken=False`). Now treats a null materialTemplate AS the break. *(2026-07-15)*
-- ⚠ **The instruments are OFF in ship builds:** `FlowTrace.cs:28` = `Application.isEditor ||
-  Debug.isDebugBuild`, and ship WebGL/desktop = `BuildOptions.None` → every `[Flow:*]` line (FloorDiag,
-  MagentaGuard, Guard) is **suppressed in prod**. The guards still ACT; they just report nothing. This is why
-  a live magenta had to be diagnosed from a *desktop* Player.log. **Open gap — needs a WO.** *(2026-07-15)*
+- **The web build is NOT blind — read the live trace, don't hunt a desktop log** (a CLI got this wrong
+  2026-07-15 and wrote a bogus WO; the answer was already in START_HERE §3). `FlowTrace.cs:28` defaults
+  `Enabled = isEditor || isDebugBuild` **on purpose** (PII: hot-path lines carry wallet ids / save-blob
+  lengths / roster), but `WebTrace.cs:162` sets `FlowTrace.Enabled = true` when web tracing activates, and
+  BOTH its gates are already open: `FeatureFlags.cs:117` `WebTrace => Get("webtrace", defaultOn: true)` and
+  `WebTrace.cs:63` `TraceEndpoint = https://defenders-of-the-realm-v2.vercel.app/api/trace`. So a live web
+  session streams `[Flow:*]` to Neon `analytics_events`; **CLI read path = the `[sig]` echo in Vercel runtime
+  logs**. ⚠ `WebTrace.cs:11-15`'s header still says "DORMANT BY DEFAULT / default OFF" — **the comment LIES**
+  vs `defaultOn: true` (classic: verify from code). *(2026-07-15)*
+- Minor, unfixed: `FloorDeepDiag.cs:32` is hard-scoped to `TargetScene = "MainCastle_Hall"`, so it never runs
+  in the live merged world `Main_Castle_Overworld`. MagentaGuard's own FloorDiag dump is what actually fires. *(2026-07-15)*
 - ⚠ **`/Assets/Resources/Structures/` is gitignored** (`.gitignore:121`) — only **4** models are tracked
-  (ArcaneSpire_1/2/3, WizardTower_1); the other ~37 arrive ONLY by manual LAN copy from the laptop. Any
-  build cut on a machine/CI without that copy ships **placeholder buildings**. Deliberate per the big-art
-  policy, but it silently broke the 07-14 22:00 exe (art landed 22:45, 45 min AFTER the build). *(2026-07-15)*
+  (ArcaneSpire_1/2/3, WizardTower_1); the other ~37 arrive ONLY by manual LAN copy from the laptop.
+  **This is DELIBERATE and stays** (owner ruling 2026-07-15): there are exactly **two machines** (this
+  desktop + `Kayden-Laptop`, share `\\<ip>\EoA`, user `Kayden-Laptop`) — no CI, no fresh clones, so the
+  big-art-out-of-git policy holds and LFS is not worth it.
+  **The real risk is TWO-MACHINE DRIFT, and it is not theoretical — it caused BOTH 07-15 bugs:** the
+  terrain material existed only on the laptop (magenta ground), and the 22:00 exe was cut 45 min BEFORE
+  the 22:45 art copy, shipping 4 of 41 models as placeholders while the build reported SUCCESS.
+  **Mitigation = make drift LOUD, not tracked:** a pre-build oracle that fails when
+  `structures-catalog.json` `visualPrefabPath` keys do not resolve on disk. Proposed 07-15, owner's call. *(2026-07-15)*
 
 ## Builds
 - **Ship WebGL = `BuildOptions.None`** (Development is opt-in `-DevBuild` — NEVER deploy a DevBuild: Development players paint the full-screen error overlay). Desktop release still ships Development (open item). *(verified WebGLBuild.cs:124 / DesktopBuild.cs:178, 2026-07-12)*
