@@ -116,13 +116,54 @@ namespace DeNelle.Editor
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
 
-            // Internal-test signing — the dev build is installed via adb, not
-            // through the Play Store. The Seeker accepts unsigned APKs in
-            // developer mode, so no keystore is wired here. Add one if/when
-            // we ship through Saga's dApp Store or Play.
-            PlayerSettings.Android.useCustomKeystore = false;
+            // RELEASE SIGNING (owner 2026-07-16 — testers must be able to UPDATE IN PLACE, which
+            // needs a STABLE signature across builds). Read the keystore + passwords from a
+            // GITIGNORED keystore.properties at the project root (never committed); if absent, fall
+            // back to debug signing so a fresh clone / CI still builds. Passwords are set in-memory
+            // for this batchmode session only — do NOT AssetDatabase.SaveAssets() them into
+            // ProjectSettings.asset (that would leak the secret into git).
+            ApplyReleaseSigning();
 
             Debug.Log($"[AndroidBuild] PlayerSettings: id={PackageId}, IL2CPP, ARM64, minSdk=26.");
+        }
+
+        private static void ApplyReleaseSigning()
+        {
+            string propsPath = Path.Combine(Directory.GetCurrentDirectory(), "keystore.properties");
+            if (!File.Exists(propsPath))
+            {
+                PlayerSettings.Android.useCustomKeystore = false;
+                Debug.LogWarning("[AndroidBuild] keystore.properties not found — DEBUG signing (testers can't update in place).");
+                return;
+            }
+
+            var kv = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (var raw in File.ReadAllLines(propsPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                int eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                kv[line.Substring(0, eq).Trim()] = line.Substring(eq + 1).Trim();
+            }
+
+            string ksPath, alias, storePass, keyPass;
+            if (!kv.TryGetValue("keystore.path", out ksPath) || !File.Exists(ksPath) ||
+                !kv.TryGetValue("keystore.alias", out alias) ||
+                !kv.TryGetValue("keystore.storepass", out storePass) ||
+                !kv.TryGetValue("keystore.keypass", out keyPass))
+            {
+                PlayerSettings.Android.useCustomKeystore = false;
+                Debug.LogWarning("[AndroidBuild] keystore.properties incomplete/keystore missing — DEBUG signing.");
+                return;
+            }
+
+            PlayerSettings.Android.useCustomKeystore = true;
+            PlayerSettings.Android.keystoreName = ksPath;
+            PlayerSettings.Android.keystorePass = storePass;
+            PlayerSettings.Android.keyaliasName = alias;
+            PlayerSettings.Android.keyaliasPass = keyPass;
+            Debug.Log($"[AndroidBuild] RELEASE signing: keystore='{Path.GetFileName(ksPath)}' alias='{alias}' (stable signature for tester updates).");
         }
     }
 }
