@@ -47,8 +47,14 @@ namespace DeNelle.Village
         [Tooltip("Cells across X — 90 m / 3 m = 30 (±45, reaches the E/W walls + corner towers).")]
         public int gridWidth = 30;
 
-        [Tooltip("Cells across Z — 90 m / 3 m = 30 (±45, reaches the N/S walls at ±40.5 + corner towers).")]
-        public int gridHeight = 30;
+        // NORTH EXTENSION (owner 2026-07-16 "cannot go forward north"; MEASURED by BuildNorthDiag:
+        // grid north edge was Z+45.0, CastleSide_North northmost face Z+44.2 — the buildable block
+        // ended EXACTLY at the wall, and the camera clamp is the same bounds, so north dead-ended at
+        // the wall). Grown NORTH ONLY (see Awake: south edge stays fixed at -45 so existing saved
+        // CELLS keep their world position — placements persist as cells): 30 -> 40 = +10 cells /
+        // +30 m of buildable land + camera travel north of the wall. gridWidth unchanged.
+        [Tooltip("Cells across Z — 40 (south edge fixed at -45; extends NORTH to +75, ~31 m past the north wall).")]
+        public int gridHeight = 40;
 
         [Tooltip("World-space XZ of the grid's (0,0) cell-corner. Default centres the grid on the origin.")]
         public Vector3 origin = Vector3.zero;
@@ -72,9 +78,15 @@ namespace DeNelle.Village
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             EnsureGrid();
-            // Centre the grid on the configured origin if it was left at default.
+            // Centre the grid on X, but ANCHOR the south (−Z) edge at a FIXED −45 so the grid grows
+            // NORTH ONLY as gridHeight increases (owner 2026-07-16). Save-safety: placements persist
+            // as CELLS mapped by origin; keeping origin fixed (X centered, south −45 — identical to
+            // the old 30×30 runtime origin) means every existing saved structure keeps its exact
+            // world position, while the added north cells (30..gridHeight-1) appear beyond the wall.
+            // (Do NOT recompute origin.z from gridHeight — that would shift every saved cell.)
+            const float SouthEdgeZ = -45f;   // = -(original 30 cells)*3 m/2 ; the walled base's south edge
             if (origin == Vector3.zero)
-                origin = new Vector3(-gridWidth * cellSize * 0.5f, 0f, -gridHeight * cellSize * 0.5f);
+                origin = new Vector3(-gridWidth * cellSize * 0.5f, 0f, SouthEdgeZ);
         }
 
         private void OnDestroy()

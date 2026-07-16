@@ -197,10 +197,22 @@ namespace DeNelle.DialogueUI
             _videoPlayer.errorReceived += OnVideoError;
             _videoPlayer.loopPointReached += OnVideoEnded;
 
-            // Missing file → straight to fallback (don't even Prepare).
+            // Missing file → straight to fallback (don't even Prepare). But ONLY for a real LOCAL
+            // path. RCA 2026-07-16 (owner "video not playing on web" — proving line from her prod
+            // session: "Video not found at 'https://.../StreamingAssets/Video/Defenders.mp4'"):
+            // on WebGL, Application.streamingAssetsPath is an HTTP URL, and File.Exists("https://...")
+            // returns FALSE WITHOUT THROWING — so the old guard wrongly concluded "missing" and
+            // skipped Prepare() entirely, dropping every web player to the slate even though the mp4
+            // serves 200. The catch-based escape never fired because File.Exists doesn't throw here.
+            // Fix: only File.Exists a genuine local path; for a remote (http/https) URL, let
+            // VideoPlayer.Prepare() decide (its errorReceived path already handles a true failure).
+            bool isRemote = url.StartsWith("http://") || url.StartsWith("https://") || url.Contains("://");
             bool urlMissing = false;
-            try { urlMissing = !File.Exists(url); }
-            catch { urlMissing = false; }   // some platforms (WebGL) can't File.Exists StreamingAssets — let Prepare decide
+            if (!isRemote)
+            {
+                try { urlMissing = !File.Exists(url); }
+                catch { urlMissing = false; }
+            }
             if (urlMissing)
             {
                 Debug.LogWarning($"[IntroSequence] Video not found at '{url}' — falling back to slate intro.");
