@@ -43,6 +43,22 @@ namespace DeNelle.Village
         private const int PackSizeMin = 1;
         private const int PackSizeMax = 7;
 
+        // Owner balance (2026-07-16): a hero UNDER LowLevelThreshold is never swarmed — every
+        // encounter that stages against her is capped to LowLevelEnemyCap concurrent enemies.
+        // At LowLevelThreshold+ the existing (uncapped) behaviour stands. Shared by the family
+        // roll below and read by BattleArena / CampGuards through CurrentHeroLevel().
+        internal const int LowLevelThreshold = 5;
+        internal const int LowLevelEnemyCap  = 3;
+
+        /// <summary>Current hero level (HeroProgression live authority; GameState heroLevel save
+        /// field v29 as fallback; 1 if neither is up yet).</summary>
+        internal static int CurrentHeroLevel()
+        {
+            if (HeroProgression.Instance != null) return HeroProgression.Instance.Level;
+            var s = DeNelle.Core.State.GameStateService.Instance?.State;
+            return s != null ? Mathf.Max(1, s.HeroLevel) : 1;
+        }
+
         // Rep tuning. Wide aggro + a chase a touch faster than the hero (~6 base) so it
         // "means something" if you wandered into one too strong. Contact damage ZERO
         // (hook, not a combatant) -- engagement, not death, is what the rep delivers.
@@ -850,6 +866,16 @@ namespace DeNelle.Village
             int size = rng != null
                 ? rng.Next(PackSizeMin, PackSizeMax + 1)
                 : UnityEngine.Random.Range(PackSizeMin, PackSizeMax + 1);
+
+            // Owner balance (2026-07-16): a low-level hero must not be swarmed. While the hero
+            // is UNDER LowLevelThreshold, the rolled family (and thus the arena fight it stages)
+            // is capped to LowLevelEnemyCap concurrent bodies. At level 5+ the full roll stands.
+            int heroLevel = CurrentHeroLevel();
+            if (heroLevel < LowLevelThreshold && size > LowLevelEnemyCap)
+            {
+                FlowTrace.Step("Encounter", $"enemy count capped: level={heroLevel} requested={size} -> {LowLevelEnemyCap} (family roll).");
+                size = LowLevelEnemyCap;
+            }
 
             var pack = new string[size];
             pack[0] = PickLeaderFromPool(pool, rng);

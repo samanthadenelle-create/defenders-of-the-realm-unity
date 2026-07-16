@@ -38,6 +38,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Dungeons
 {
@@ -289,6 +290,8 @@ namespace DeNelle.Dungeons
             {
                 _moveTarget = hit.point;
                 _hasMoveTarget = true;
+                FlowTrace.Step("Dungeon",
+                    $"DungeonHero tap-to-move: armed walk to {hit.point} (tap screen={screenPos}).");
             }
         }
 
@@ -305,17 +308,39 @@ namespace DeNelle.Dungeons
             if (touch != null && touch.primaryTouch.press.wasPressedThisFrame)
             {
                 screenPos = touch.primaryTouch.position.ReadValue();
-                return true;
+                return IsRealPointer(screenPos);
             }
 
             var mouse = Mouse.current;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 screenPos = mouse.position.ReadValue();
-                return true;
+                return IsRealPointer(screenPos);
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Rejects a phantom / synthesized pointer that reports position (0,0). On touch
+        /// targets (incl. WebGL on iPad) there is no hover and the synthesized mouse or a
+        /// stale finger can report (0,0) — the bottom-LEFT screen corner. A tap-to-move
+        /// armed there walks the Keeper into the bottom-left corner and, if blocked, never
+        /// arrives, so it slides there forever (owner repro: dungeon, "stuck sliding to the
+        /// bottom-left, can't stop"). Mirrors BuildModeController's edge-scroll guard
+        /// (realPointer = p.x &gt; 0.5 || p.y &gt; 0.5). A real tap always clears this.
+        /// </summary>
+        private static bool IsRealPointer(Vector2 screenPos)
+        {
+            bool real = screenPos.x > 0.5f || screenPos.y > 0.5f;
+            if (!real)
+            {
+                FlowTrace.Throttle("Dungeon", "dungeon-hero-phantom-tap", 1f,
+                    "DungeonHero tap-to-move: IGNORED a phantom pointer at (0,0) — a " +
+                    "synthesized/no-hover finger would have driven the Keeper into the " +
+                    "bottom-left corner. Guarded; no tap armed.");
+            }
+            return real;
         }
 
         /// <summary>

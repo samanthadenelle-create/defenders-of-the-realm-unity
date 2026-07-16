@@ -751,6 +751,39 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// Re-seat the orbit camera directly BEHIND the current target's FACING and snap to it.
+        /// <para>Fixes the "hero faces the wrong way in the arena" bug (owner on-device 2026-07-15):
+        /// after a big warp that REORIENTS the hero (BattleArena stage-in warps the hero to face the
+        /// north enemy line), the player-authoritative pan yaw (<c>_panYaw</c>) is stale — it is seeded
+        /// once (<c>_orbitYawInit</c>) and never re-seated on a teleport, so the orbit rotates the
+        /// behind-offset by the OLD open-world yaw and the camera lands in FRONT of the hero, framing
+        /// its face while the enemies sit off-screen behind it. This resets <c>_panYaw</c> to the
+        /// target's current facing (camera behind the hero, looking INTO the fight) and snaps the seat.</para>
+        /// No-op when orbit-behind is off (world-relative offset is already correct) or the target is
+        /// invalid. Idempotent and safe to call any time after a warp.
+        /// </summary>
+        public void SnapBehindTarget()
+        {
+            if (!IsTargetValid()) return;
+            _panYaw = _orbitBehind ? _target.eulerAngles.y : 0f;
+            _orbitYawInit = true;
+            _timeSinceLastDrag = _facingRecenterDelay;   // fresh seat: don't let a recenter swing fight it
+            Vector3 seatOffset = _orbitBehind
+                ? Quaternion.Euler(_panPitch, _panYaw, 0f) * _followOffset
+                : _followOffset;
+            transform.position = _target.position + seatOffset;
+            _leadPoint   = _target.position + Vector3.up * _lookAtHeight;
+            AimAt(_leadPoint);
+            _posVelocity = Vector3.zero;
+            _leadVelocity = Vector3.zero;
+            SyncTeleportSubscription();
+            EnforceSoleCamera();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                "camera SnapBehindTarget: re-seated BEHIND hero (panYaw=" + _panYaw.ToString("0") +
+                ") — kills the stale-yaw 'hero faces away' framing on stage-in.");
+        }
+
         /// <summary>Toggles the auto-framing behaviour at runtime.</summary>
         public bool FramingEnabled
         {

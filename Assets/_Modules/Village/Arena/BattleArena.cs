@@ -386,6 +386,27 @@ namespace DeNelle.Village.Arena
             Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 9f);
             WarpHero(heroStance, Quaternion.LookRotation(Vector3.forward));
 
+            // FACING FIX (owner on-device 2026-07-15: "loading into the arena, the hero ALWAYS faces
+            // the wrong direction / away from the fight"). The hero IS warped to face NORTH (+Z) into the
+            // enemy line above — that part is correct. The wrong-facing is the CAMERA: the orbit camera
+            // (SmartMobileCamera) keeps its STALE open-world pan yaw across the ~7km warp (_panYaw is
+            // seeded once and never re-seated on a teleport), so it rotates the behind-offset by the old
+            // world yaw and lands in FRONT of the hero — framing the hero's face with the enemies off
+            // behind it. Re-seat the camera BEHIND the hero's NEW facing so the shot looks INTO the fight.
+            // Instrumented (S12) so a run PROVES the hero yaw + the re-seat instead of us guessing.
+            Guard.Try("BattleArena", "arena stage-in hero-facing + camera re-seat", () =>
+            {
+                var heroGo = GameObject.FindWithTag("Player");
+                float heroYaw = heroGo != null ? heroGo.transform.eulerAngles.y : -1f;
+                FlowTrace.Step("BattleArena",
+                    $"hero spawn facing yaw={heroYaw:0} stance={heroStance} (expect ~0 = +Z toward the NORTH enemy line).");
+                // Re-seat the orbit camera behind the hero's new facing (no-op if orbit-behind is off /
+                // no camera in a headless run). This is the actual 'wrong direction' cure — the hero
+                // rotation itself is already correct.
+                SmartMobileCamera.Instance?.SnapBehindTarget();
+                FlowTrace.Step("BattleArena", "camera re-seated BEHIND hero on stage-in (stale-yaw framing cleared).");
+            });
+
             // 4) Spawn the enemy FAMILY across the NORTH side (loose formation, 1..6).
             SpawnFamily(p);
 
@@ -1131,6 +1152,18 @@ namespace DeNelle.Village.Arena
             _familyEngaged = false;
             Transform heart = _arenaRoot.transform; // arena-centre tether; hero-aggro (DEF-224) pulls them to the hero
             int n = Mathf.Clamp(p.EnemyIds.Length, 1, 7);   // WO-556: 6 family + 1 rare boss
+
+            // Owner balance (2026-07-16): a hero UNDER the low-level threshold is never swarmed.
+            // Cap the concurrent arena attackers to the shared LowLevelEnemyCap. Belt-and-suspenders
+            // to the roll-time cap in OverworldEncounterSpawner.RollFamilyPack — this also catches
+            // arena entries whose EnemyIds were pre-built (data-driven SpawnArea / catalog) and never
+            // passed through that roll. Count-only; does not touch spawn placement/facing.
+            int heroLevel = OverworldEncounterSpawner.CurrentHeroLevel();
+            if (heroLevel < OverworldEncounterSpawner.LowLevelThreshold && n > OverworldEncounterSpawner.LowLevelEnemyCap)
+            {
+                FlowTrace.Step("Encounter", $"enemy count capped: level={heroLevel} requested={n} -> {OverworldEncounterSpawner.LowLevelEnemyCap} (arena).");
+                n = OverworldEncounterSpawner.LowLevelEnemyCap;
+            }
 
             // ── PROPER SQUAD FORMATION (owner 2026-07-03: "spawn in a proper formation") ──
             // The hero stands at the SOUTH edge (see StageRoutine: -ArenaHalfDepth+2) facing NORTH into

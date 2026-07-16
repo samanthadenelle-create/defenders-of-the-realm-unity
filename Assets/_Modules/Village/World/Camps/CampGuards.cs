@@ -67,6 +67,16 @@ namespace DeNelle.Village.World.Camps
             _root.localPosition = Vector3.zero;
 
             int count = BaseGuardCount + Mathf.Clamp(_threat / 2, 0, 3);  // 3..6 by tier
+
+            // Owner balance (2026-07-16): a hero UNDER the low-level threshold is never swarmed.
+            // Cap the camp guard pack to the shared LowLevelEnemyCap so a sub-level-5 player meets
+            // at most 3 defenders here (mirrors the arena/family encounter cap).
+            int heroLevel = OverworldEncounterSpawner.CurrentHeroLevel();
+            if (heroLevel < OverworldEncounterSpawner.LowLevelThreshold && count > OverworldEncounterSpawner.LowLevelEnemyCap)
+            {
+                FlowTrace.Step("Encounter", $"enemy count capped: level={heroLevel} requested={count} -> {OverworldEncounterSpawner.LowLevelEnemyCap} (camp guards).");
+                count = OverworldEncounterSpawner.LowLevelEnemyCap;
+            }
             // G — guard EACH spawn independently so one bad guard logs + is skipped, never
             // aborting the pack (which would leave the camp un-clearable on a single fault).
             for (int i = 0; i < count; i++)
