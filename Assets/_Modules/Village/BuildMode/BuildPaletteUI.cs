@@ -204,11 +204,15 @@ namespace DeNelle.Village
             // header row (balance | Orient | Done) over a 180px card tray. Only the
             // dock's own graphics raycast — the rest of the screen stays click-through
             // so world taps still land placements.
-            // WO-673 (always on — WO-682): the dock carries a 40px category tab row
-            // (Town / Defenses / Walls) between the header and the card tray — dock 264
-            // tall, header 0.83–1.0 (~45px), tabs 0.68–0.83 (~40px), tray 0–0.68 (~179px).
-            const float trayTop = 0.68f;
-            const float headerBottom = 0.83f;
+            // WO-673 (always on — WO-682): the dock carries a category tab row
+            // (Town / Defenses / Walls) between the header and the card tray.
+            // Band split rebalanced (owner felt-test 2026-07-15 "long thin rectangles"):
+            // the header + tab bands are tall enough (~140px at the 540-tall dock) to
+            // seat a CanonCtaHeight (132px) button WITHOUT overflowing into the tray, so
+            // the tabs + Orient/Done render as proper boxes, not full-band thin bars.
+            // header 0.74–1.0 (~140px), tabs 0.48–0.74 (~140px), tray 0–0.48 (~259px).
+            const float trayTop = 0.48f;
+            const float headerBottom = 0.74f;
 
             // Grok slice 4 (landscape density): the shop is now a LARGE landscape
             // bottom carousel, not the old 540px portrait dock — wider so more
@@ -223,7 +227,9 @@ namespace DeNelle.Village
             // Phone enlargement (owner felt-test 2026-07-14 "make it larger for
             // selection on a phone"): taller + wider dock so the shop tiles read big
             // and thumb-reachable on a small landscape phone screen (CoC shop bar).
-            drt.sizeDelta = new Vector2(1560f, 440f);
+            // Raised 440->540 (2026-07-15) so the rebalanced header/tab bands each hold
+            // a full 132px button without overflow, while the card tray stays ~259px.
+            drt.sizeDelta = new Vector2(1560f, 540f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
@@ -247,6 +253,10 @@ namespace DeNelle.Village
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.38f, 0.12f), new Vector2(0.66f, 0.88f),
                 () => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); });
+            // Pin to the consistent CTA box (owner felt-test 2026-07-15): the wide
+            // header fraction resolved to a thin bar; a fixed 360x132 box centred on
+            // the anchor keeps it a proper button.
+            PinSize(_orientBtn, ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
             _orientBtn.gameObject.SetActive(false);   // shown only while armed
 
             // Done exits Build Mode — the strip's close affordance, so it carries the
@@ -257,6 +267,8 @@ namespace DeNelle.Village
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.68f, 0.12f), new Vector2(0.97f, 0.88f),
                 () => OnExitRequested?.Invoke());
+            // Same consistent CTA box as Orient (owner felt-test 2026-07-15) — no thin bar.
+            PinSize(exitBtn, ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
             exitBtn.gameObject.name = "CloseButton";
 
             // WO — category tab row via the reusable kit component (BuildTabRow):
@@ -690,6 +702,26 @@ namespace DeNelle.Village
                 var svc = GameStateService.Instance;
                 return svc != null && svc.State != null ? svc.State.Resources.Crystals : 0;
             }
+        }
+
+        // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────
+        /// <summary>
+        /// Collapse a kit button's fraction-of-parent anchors to a POINT at the anchor
+        /// rect's centre and stamp a fixed <paramref name="w"/> x <paramref name="h"/>
+        /// pixel box, so the wide dock header can never stretch it into a thin bar.
+        /// Height must be >= ElarionUiKit.MinTouchPx so the kit touch-floor guard no-ops.
+        /// </summary>
+        private static void PinSize(Button button, float w, float h)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            Vector2 centre = (rt.anchorMin + rt.anchorMax) * 0.5f;
+            rt.anchorMin = centre;
+            rt.anchorMax = centre;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(w, h);
         }
 
         // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────

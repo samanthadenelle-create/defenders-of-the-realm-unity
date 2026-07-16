@@ -90,6 +90,19 @@ namespace DeNelle.Village
         private float   _camHeight;
         private bool    _camDragging;
         private Vector2 _camDragLastPoint;
+        // SINGLE-POINTER drag-to-pan (owner 2026-07-16 "nothing moves around" on web build mode).
+        // RCA 2026-07-16: the LeanTouch two-finger camera driver never installs on WebGL
+        // (BuildModeController.EnsureTouchInput gates on legacy Input.touchSupported == false in a
+        // browser), and UpdateBuildCameraPan had NO single-pointer path — only middle/right mouse,
+        // keys, and the d-pad. So on web a LEFT-mouse drag AND a single finger did nothing. This
+        // path pans on a left-button / single-touch DRAG (past a threshold so a tap still
+        // places/selects), gated to the idle view state so it never fights placement. Works with
+        // mouse (desktop web) and one finger (mobile web); native APK keeps the LeanTouch driver.
+        private bool    _ptrDragging;      // a qualifying single-pointer drag is actively panning
+        private bool    _ptrDown;          // pointer press seen last frame (edge detect)
+        private Vector2 _ptrDownPoint;     // where this press started (tap-vs-drag threshold)
+        private Vector2 _ptrLastPoint;     // last pan sample
+        private const float PtrPanDragThreshold = 12f;   // px of travel before a hold becomes a pan (not a tap)
         // SME camera (Grok #8): raw accumulated orbit yaw about _camFocus. Default 0 =
         // the ORIGINAL top-down-angled framing (identical to the pre-orbit ApplyBuildCamera).
         // The APPLIED framing SNAPS to 45-degree detents (SnappedYaw) so twist rotates the
@@ -2684,6 +2697,61 @@ namespace DeNelle.Village
                 float scroll = mouse.scroll.ReadValue().y;
                 if (Mathf.Abs(scroll) > 0.01f)
                     _camHeight = Mathf.Clamp(_camHeight - Mathf.Sign(scroll) * _camZoomStep, _camHeightMin, _camHeightMax);
+            }
+
+            // SINGLE-POINTER DRAG-TO-PAN (the web camera fix). Pointer.current unifies mouse-LEFT
+            // and the primary TOUCH, so this one path serves desktop web and mobile web. Gated to
+            // the IDLE view state (nothing armed, not moving a selection, no pending drop) so it can
+            // never fight placement — while armed/moving, the d-pad + two-step flow own the pointer.
+            // A tap must still place/select, so a hold only becomes a pan once it travels past
+            // PtrPanDragThreshold; a press that starts over the top HUD band is ignored (that's the
+            // wallet/tab/PLACE chrome, not the map).
+            var ptr = UnityEngine.InputSystem.Pointer.current;
+            bool ptrPanAllowed = _armed == null && !_movingSelected && !_dropPending;
+            if (ptr != null && ptrPanAllowed)
+            {
+                bool pressed = ptr.press.isPressed;
+                Vector2 pp = ptr.position.ReadValue();
+                // Don't start a pan on the HUD chrome (top 12% band = BuildHud wallet/tab/PLACE row).
+                bool startedOnHud = pp.y >= Screen.height * 0.88f;
+
+                if (pressed && !_ptrDown)              // press down this frame
+                {
+                    _ptrDown = true;
+                    _ptrDownPoint = pp;
+                    _ptrLastPoint = pp;
+                    _ptrDragging = false;
+                }
+                else if (pressed && _ptrDown)          // held
+                {
+                    if (!_ptrDragging &&
+                        !startedOnHud &&
+                        (_ptrDownPoint.y < Screen.height * 0.88f) &&
+                        (pp - _ptrDownPoint).sqrMagnitude >= PtrPanDragThreshold * PtrPanDragThreshold)
+                    {
+                        _ptrDragging = true;
+                        _ptrLastPoint = pp;            // anchor pan at threshold-cross (no jump)
+                        FlowTrace.Step("Build", "single-pointer drag-to-pan ENGAGED (web camera path) — " +
+                            "left-mouse/single-finger drag now moves the build view.");
+                    }
+                    if (_ptrDragging)
+                    {
+                        Vector2 d = pp - _ptrLastPoint;
+                        _ptrLastPoint = pp;
+                        // Grab metaphor: drag the world under the finger → subtract (same sign as middle-drag).
+                        _camFocus -= (right * d.x + fwd * d.y) * _camDragSpeed;
+                    }
+                }
+                else if (!pressed)                     // released
+                {
+                    _ptrDown = false;
+                    _ptrDragging = false;
+                }
+            }
+            else
+            {
+                _ptrDown = false;
+                _ptrDragging = false;
             }
 
             // Clamp the focus to the grid (map) bounds so the view can't leave the world.

@@ -258,7 +258,10 @@ namespace DeNelle.Core.Platform
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(1f, 1f);
             rt.anchoredPosition = new Vector2(-16f, -16f);
-            rt.sizeDelta = new Vector2(220f, 56f);
+            // Owner 2026-07-16 ("Sign in wit..." truncated on web): 220px clipped "Sign in with Pi"
+            // to an ellipsis. Widen to fit the full label; the TMP label auto-sizes (below) so it
+            // never truncates under either skin ("Connect Wallet" is shorter and also fits).
+            rt.sizeDelta = new Vector2(300f, 60f);
 
             // WO-603: under the Solana/$SKR skin this corner is a wallet-connect entry, not Pi sign-in.
             // The full wallet-connect flow lives in DeNelle.Wallet (Core cannot reference it) and is a
@@ -277,6 +280,16 @@ namespace DeNelle.Core.Platform
                     ? new Color(0.09f, 0.72f, 0.55f, 0.95f)  // Solana/Seeker teal-green over the kit glass
                     : new Color(0.43f, 0.30f, 0.78f, 0.95f); // Pi violet over the kit's rounded glass
             _label = _button.GetComponentInChildren<TMP_Text>();
+            // No ellipsis: auto-size within the widened button + single-line overflow so the full
+            // label always renders (the "Sign in wit..." truncation fix, owner 2026-07-16).
+            if (_label != null)
+            {
+                _label.enableAutoSizing = true;
+                _label.fontSizeMin = 14f;
+                _label.fontSizeMax = 22f;
+                _label.enableWordWrapping = false;
+                _label.overflowMode = TMPro.TextOverflowModes.Overflow;
+            }
         }
 
         private void SetButton(string text, bool interactable)

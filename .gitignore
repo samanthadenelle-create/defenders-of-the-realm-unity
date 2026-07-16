@@ -340,3 +340,10 @@ tools/docs/__pycache__/
 
 # Admin dashboard key (machine-local secret; set in Vercel env). Never commit.
 .admin-dash-key
+
+# GitHub PAT for the build machine (machine-local secret). Never commit.
+.github-token
+
+# webbot (Playwright) — deps + captures are local-only
+tools/webbot/node_modules/
+tools/webbot/out/

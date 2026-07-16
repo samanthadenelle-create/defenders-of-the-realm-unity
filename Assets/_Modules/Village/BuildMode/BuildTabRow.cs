@@ -75,6 +75,14 @@ namespace DeNelle.Village
                 new Vector2(xMin, 0.12f), new Vector2(xMax, 0.88f),
                 () => onSelect?.Invoke(type));
 
+            // Owner felt-test 2026-07-15 ("long thin rectangles in horizontal mode"):
+            // a tab spanning ~half the 1560px-wide band resolved to a wide-but-short
+            // bar (the touch-floor guard only grows the short side, so it stayed a
+            // 733x112 bar). Pin each tab to the consistent CTA box centred on its slot
+            // — a proper 360x132 button with even gaps between tabs. The xMin/xMax the
+            // caller passes now only carry the tab's CENTRE. Height >= MinTouchPx floor.
+            PinSize(btn, ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
+
             // Active-tab tell: a gilt underline pinned to the tab's bottom edge —
             // POSITION + SHAPE carry the meaning (owner is red/green colourblind).
             var underline = new GameObject("ActiveUnderline", typeof(RectTransform), typeof(Image));
@@ -95,6 +103,26 @@ namespace DeNelle.Village
                 TutorialHighlightRegistry.Register("build.tab_town", (RectTransform)btn.transform);
             else if (type == BuildType.Defense)
                 TutorialHighlightRegistry.Register("build.tab_defenses", (RectTransform)btn.transform);
+        }
+
+        // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────
+        /// <summary>
+        /// Collapse a kit button's fraction-of-parent anchors to a POINT at the anchor
+        /// rect's centre and stamp a fixed <paramref name="w"/> x <paramref name="h"/>
+        /// pixel box, so a wide tab band can never stretch the tab into a thin bar.
+        /// Height must be >= ElarionUiKit.MinTouchPx so the kit touch-floor guard no-ops.
+        /// </summary>
+        private static void PinSize(Button button, float w, float h)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            Vector2 centre = (rt.anchorMin + rt.anchorMax) * 0.5f;
+            rt.anchorMin = centre;
+            rt.anchorMax = centre;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(w, h);
         }
     }
 }

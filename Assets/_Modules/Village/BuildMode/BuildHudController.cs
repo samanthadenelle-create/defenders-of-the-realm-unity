@@ -34,6 +34,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -51,6 +52,18 @@ namespace DeNelle.Village
         // At the 1920x1080 landscape reference: Exit/close >= 132px shortest side,
         // every other control >= 112px shortest side (owner touch-target ruling).
         private const int SortingOrder = 906;   // above palette dock (900), below selection (910)
+
+        // ── CONSISTENT button rectangle (owner felt-test 2026-07-15: "long thin
+        //    rectangles in horizontal mode") ─────────────────────────────────────
+        // A wide landscape canvas stretches fraction-of-WIDTH anchors into thin bars
+        // (very wide, short). The fix: every HUD button gets a CONSISTENT fixed size
+        // via PinSize — height = the kit CTA height (ElarionUiKit.CanonCtaHeight, >=
+        // MinTouchPx floor) and a CAPPED width, so it stays a proper tappable box
+        // instead of a full-band bar. Standard verb 190w, primary PLACE 240w, the
+        // top-right Done 200w. Height sourced from the kit (no new magic floor).
+        private const float IntentBtnW = 190f;
+        private const float PlaceBtnW  = 240f;
+        private const float ExitBtnW   = 200f;
 
         // Callbacks into the BRAIN (BuildModeController wires these).
         private Action _onRotateLeft;
@@ -103,6 +116,9 @@ namespace DeNelle.Village
 
             BuildTopBar();
             BuildIntentBar();
+            FlowTrace.Step("BuildHud",
+                "chrome-built: consistent button sizes enforced (h=" +
+                ElarionUiKit.CanonCtaHeight + ", capped widths — no thin bars)");
 
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
@@ -127,11 +143,14 @@ namespace DeNelle.Village
                 new Vector2(0.35f, 0.1f), new Vector2(0.65f, 0.9f));
             title.raycastTarget = false;
 
-            // "X Done" exit — top-right, >=132px shortest side (163x140 at reference).
+            // "X Done" exit — top-right. Pinned to the consistent HUD button box
+            // (ExitBtnW x CanonCtaHeight) centred on its anchor, so a wide canvas can
+            // never stretch it into a thin bar.
             var exit = ElarionUiKit.BuildObsidianButton(_canvas.transform, "X Done",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.905f, 0.86f), new Vector2(0.99f, 0.99f),
                 () => _onExit?.Invoke());
+            PinSize(exit, ExitBtnW, ElarionUiKit.CanonCtaHeight);
             // Canonical close name (probe/close convention; label stays "X Done").
             exit.gameObject.name = "CloseButton";
         }
@@ -146,25 +165,33 @@ namespace DeNelle.Village
             irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
             irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
 
-            ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Left",
+            // Each verb is pinned to the consistent HUD box (PinSize) after build, so
+            // the anchor rect only carries the CENTRE — the four centres below are
+            // spaced so the fixed-width boxes sit in a row with even gaps (no overlap,
+            // no thin bars). Row is vertically centred at y=0.36.
+            var rotL = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Left",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.28f, 0.30f), new Vector2(0.375f, 0.42f),
+                new Vector2(0.233f, 0.30f), new Vector2(0.323f, 0.42f),
                 () => _onRotateLeft?.Invoke());
+            PinSize(rotL, IntentBtnW, ElarionUiKit.CanonCtaHeight);
 
-            ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Right",
+            var rotR = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Right",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.385f, 0.30f), new Vector2(0.48f, 0.42f),
+                new Vector2(0.371f, 0.30f), new Vector2(0.461f, 0.42f),
                 () => _onRotateRight?.Invoke());
+            PinSize(rotR, IntentBtnW, ElarionUiKit.CanonCtaHeight);
 
-            ElarionUiKit.BuildObsidianButton(_intentBar.transform, "PLACE",
+            var place = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "PLACE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.49f, 0.30f), new Vector2(0.61f, 0.42f),
+                new Vector2(0.524f, 0.30f), new Vector2(0.614f, 0.42f),
                 () => _onPlace?.Invoke());
+            PinSize(place, PlaceBtnW, ElarionUiKit.CanonCtaHeight);
 
             var cancel = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Cancel",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.62f, 0.30f), new Vector2(0.72f, 0.42f),
+                new Vector2(0.677f, 0.30f), new Vector2(0.767f, 0.42f),
                 () => _onCancel?.Invoke());
+            PinSize(cancel, IntentBtnW, ElarionUiKit.CanonCtaHeight);
             cancel.gameObject.name = "BuildHudPlaceCancel";
 
             _intentBar.SetActive(false);   // Placing state shows it
@@ -199,6 +226,27 @@ namespace DeNelle.Village
         public void RefreshResources()
         {
             _wallet?.Refresh();
+        }
+
+        // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────
+        /// <summary>
+        /// Collapse a kit button's fraction-of-parent anchors to a POINT at the anchor
+        /// rect's centre and stamp a fixed <paramref name="w"/> x <paramref name="h"/>
+        /// pixel box, so a wide landscape canvas can never stretch it into a thin bar.
+        /// Height must be >= ElarionUiKit.MinTouchPx so the kit touch-floor guard no-ops.
+        /// Presentation-only: does not restyle or re-wire the button.
+        /// </summary>
+        private static void PinSize(Button button, float w, float h)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            Vector2 centre = (rt.anchorMin + rt.anchorMax) * 0.5f;
+            rt.anchorMin = centre;
+            rt.anchorMax = centre;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(w, h);
         }
 
         // ── uGUI helper (BuildPaletteUI/BuildSelectionUI shape) ────────────────

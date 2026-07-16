@@ -183,9 +183,12 @@ namespace DeNelle.Onboarding
             _backdropFill.color = ElarionUiKit.ObsidianFill;
             _backdropFill.raycastTarget = true;   // eat stray taps outside the buttons
 
-            // Cover art (title text is baked into the art). AspectRatioFitter in
-            // EnvelopeParent mode reproduces the old ScaleAndCrop: the art always
-            // covers the screen, cropping the overflow edge, never letterboxing.
+            // Cover art (title text is baked into the art). FIT-TO-SCREEN (owner 2026-07-16
+            // "splash needs to fit to screen; looks awful"): EnvelopeParent scale-and-crop was
+            // slicing the baked-in "DEFENDERS OF THE REALM" title off both edges on any window
+            // whose aspect != the art's (proven on the web capture). FitInParent shows the WHOLE
+            // art — the title always reads in full — and the obsidian BackdropFill below covers
+            // the letterbox margin so the screen still never blanks.
             var artGo = new GameObject("BackdropArt", typeof(Image), typeof(AspectRatioFitter));
             artGo.transform.SetParent(_canvas.transform, false);
             Stretch(artGo);
@@ -193,7 +196,7 @@ namespace DeNelle.Onboarding
             _backdropArt.raycastTarget = false;
             _backdropArt.preserveAspect = false;
             _backdropFitter = artGo.GetComponent<AspectRatioFitter>();
-            _backdropFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            _backdropFitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
             ApplyBackdropArt(force: true);
 
             // Art-missing fallback: the kit-typography title block (canon strings).
@@ -318,12 +321,16 @@ namespace DeNelle.Onboarding
             FeatureFlags.ApplyUrlActivationOnce();
             if (!FeatureFlags.SkrPreview) return;
 
+            // TOP-LEFT corner pill (owner 2026-07-16 "SKR banner overlaps the title"): the old
+            // top-CENTER placement (x 0.34-0.66, y 0.905) sat directly on the baked-in title art.
+            // Move it to the top-left margin — clear of the centered title AND the top-right
+            // "Sign in with Pi" corner — so it reads on camera without crowding anything.
             var btn = ElarionUiKit.BuildObsidianButton(parent, "Powered with SKR",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.34f, 0.905f), new Vector2(0.66f, 0.965f),
+                new Vector2(0.015f, 0.910f), new Vector2(0.265f, 0.968f),
                 () => DeNelle.Core.UI.SkrShowcasePanel.Open());
 
-            FlowTrace.Step("Onboarding", "Title: 'Powered with SKR' grant badge shown (ff.skrpreview ON).");
+            FlowTrace.Step("Onboarding", "Title: 'Powered with SKR' grant badge shown top-left (ff.skrpreview ON).");
         }
 
         /// <summary>True when persisted progress exists — a chosen hero or a completed

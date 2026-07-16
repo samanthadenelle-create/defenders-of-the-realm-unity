@@ -49,6 +49,19 @@ namespace DeNelle.HUD
         private string _lastActionArb;    // one FlowTrace arbitration line per state change, not per repaint
         private ElarionUiKit.PortraitHandle _portrait;   // medallion portrait disc (refreshed per Repaint)
 
+        // ── CONTENT-FIT SIZING (owner F8 2026-07-16: short lines left a tall black void) ──
+        // The kit zones (header / body / footer / medallion) are all PANEL-FRACTION anchored,
+        // so we first RE-PIN them to FIXED-PIXEL bands off the panel edges (ResizeToContent),
+        // then drive the PANEL height from the measured body content. These hold the zone rects
+        // + the resize bookkeeping.
+        private RectTransform _headerZone;
+        private RectTransform _bodyZone;
+        private RectTransform _footerZone;
+        private RectTransform _portraitHost;
+        private bool _pixelBandsApplied;
+        private float _maxBodyPx = 460f;   // recomputed from the original rect height on first paint
+        private float _lastPanelH = -1f;
+
         // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
         // (mirrors RumorBoardPanel) so the click-guard classifies its TapAdvance
         // catcher as an intentional modal cover (was 7x false CLICK-BLOCKED per
@@ -150,6 +163,8 @@ namespace DeNelle.HUD
         // ── Build the bottom dialogue box ────────────────────────────────────────
         private void BuildUi()
         {
+            _pixelBandsApplied = false;   // content-fit re-pins the fresh zones on the first paint
+            _lastPanelH = -1f;
             if (_ui != null) Destroy(_ui);
             _ui = new GameObject("DialogueViewUI");
             _ui.transform.SetParent(transform, false);
@@ -222,6 +237,10 @@ namespace DeNelle.HUD
             headerZone.anchorMax = new Vector2(headerZone.anchorMax.x, 0.985f);   // was ~0.972
             if (bodyZone.anchorMax.y > 0.780f)                                    // keep body top clear of the band
                 bodyZone.anchorMax = new Vector2(bodyZone.anchorMax.x, 0.780f);
+
+            // Content-fit hooks: cache the zone rects so ResizeToContent can re-pin them to
+            // fixed-pixel bands (decoupling them from the now-variable panel height).
+            _headerZone = headerZone; _bodyZone = bodyZone; _footerZone = footerZone; _portraitHost = portraitHost;
 
             // The medallion socket hosts the SPEAKER PORTRAIT (refreshed per Repaint), not the
             // factory's generic crest emblem — hide the fallback emblem so the two never stack.
@@ -508,6 +527,136 @@ namespace DeNelle.HUD
                 _lastActionArb = arb;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", arb);
             }
+
+            // Fit the panel HEIGHT to the freshly-painted content (short line -> hug, long -> scroll).
+            ResizeToContent();
+        }
+
+        // ── CONTENT-FIT SIZING ───────────────────────────────────────────────────
+        // OWNER F8 2026-07-16: the reading panel was a FIXED tall rect (BuildUi anchors y 0.20-0.62).
+        // A one-line reply sat at the top and a large empty black void filled the rest — looked
+        // unfinished. The frame's interior zones are all PANEL-FRACTION anchored, so a naive
+        // panel-shrink would scale the header/close bands too: the fixed-px 36/26 speaker text would
+        // clip (the F8 header-band fix), and the fixed 120px shared Close (seated bottom, growing UP
+        // from a fraction of the panel) would climb into the body — undoing the F8 close-band
+        // reservation. So the FIRST visible paint RE-PINS the zones to FIXED-PIXEL bands off the
+        // panel edges (header+medallion to the top, body between, footer just above the Close band),
+        // decoupling their pixel geometry from the panel height. The shared Close keeps its own
+        // factory seat untouched — BottomBandPx is sized to clear it at every height. Then EVERY
+        // paint measures the body's preferred height and sets the PANEL height to
+        //   TopPad + HeaderPx + Gap + clamp(content, MinBodyPx, MaxBodyPx) + BottomBandPx.
+        // The panel is collapsed onto its ORIGINAL vertical CENTER so it shrinks symmetrically and
+        // never jumps or crosses a HUD control zone (MaxBodyPx is derived from the original rect
+        // height, so the MAX panel == the original fixed rect — clearance preserved at any aspect).
+        private void ResizeToContent()
+        {
+            if (_box == null || _body == null) return;
+
+            const float TopPad = 18f, HeaderPx = 150f, Gap = 10f;
+            const float BottomBandPx = 168f;   // clears the fixed 120px shared Close band + margin
+            const float MinBodyPx = 54f;       // one 30px reading line + padding
+
+            Canvas.ForceUpdateCanvases();
+
+            if (!_pixelBandsApplied)
+            {
+                // Cap the grown panel at the ORIGINAL rect height so MAX == the pre-fix fixed rect
+                // (never taller -> never crosses a HUD zone). Derived from the still-fractional rect.
+                float fracH = Mathf.Max(0.05f, _box.anchorMax.y - _box.anchorMin.y);
+                float origPanelH = fracH * CanvasLocalHeight();
+                _maxBodyPx = Mathf.Max(140f, origPanelH - (TopPad + HeaderPx + Gap + BottomBandPx));
+
+                // Panel: collapse the vertical stretch onto its original CENTER so the height is
+                // sizeDelta-driven and the box stays visually anchored (symmetric shrink about the
+                // same midline). Horizontal anchors are untouched (width unchanged).
+                float cy = (_box.anchorMin.y + _box.anchorMax.y) * 0.5f;
+                _box.anchorMin = new Vector2(_box.anchorMin.x, cy);
+                _box.anchorMax = new Vector2(_box.anchorMax.x, cy);
+                _box.pivot = new Vector2(_box.pivot.x, 0.5f);
+                _box.anchoredPosition = new Vector2(_box.anchoredPosition.x, 0f);
+
+                // Header + medallion pinned to the TOP edge (fixed px) — decoupled from panel height
+                // so the 36/26px speaker+affiliation never clip when the panel shrinks. Square
+                // portrait art letterboxes in the band via preserveAspect.
+                if (_headerZone != null)   PinTopBand(_headerZone, TopPad, HeaderPx);
+                if (_portraitHost != null) PinTopBand(_portraitHost, TopPad, HeaderPx);
+
+                // Body fills between the header band and the bottom (Close) band, in fixed px.
+                if (_bodyZone != null)
+                {
+                    float bx0 = _bodyZone.anchorMin.x, bx1 = _bodyZone.anchorMax.x;
+                    _bodyZone.anchorMin = new Vector2(bx0, 0f);
+                    _bodyZone.anchorMax = new Vector2(bx1, 1f);
+                    _bodyZone.offsetMin = new Vector2(0f, BottomBandPx);
+                    _bodyZone.offsetMax = new Vector2(0f, -(TopPad + HeaderPx + Gap));
+                }
+
+                // Footer band pinned just above the Close (host of the passive hint; the shared Close
+                // keeps its factory seat — the bottom band is sized to clear it).
+                if (_footerZone != null)
+                {
+                    float fx0 = _footerZone.anchorMin.x, fx1 = _footerZone.anchorMax.x;
+                    _footerZone.anchorMin = new Vector2(fx0, 0f);
+                    _footerZone.anchorMax = new Vector2(fx1, 0f);
+                    _footerZone.offsetMin = new Vector2(0f, BottomBandPx - 8f);
+                    _footerZone.offsetMax = new Vector2(0f, BottomBandPx + 48f);
+                }
+
+                _pixelBandsApplied = true;
+                Canvas.ForceUpdateCanvases();
+            }
+
+            // Measure the body's preferred height at its (height-independent) current width.
+            float w = _body.rectTransform.rect.width;
+            if (w < 1f) w = 380f;
+            float textPx = _body.GetPreferredValues(_body.text ?? "", w, 0f).y;
+            float optionsPx = 0f;
+            if (_vm != null && _vm.ShowingOptions && _optionsCol != null)
+                optionsPx = LayoutUtility.GetPreferredHeight(_optionsCol);
+            float contentPx = textPx + (optionsPx > 0f ? optionsPx + 12f : 0f);
+            float bodyPx = Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx);
+            float panelH = TopPad + HeaderPx + Gap + bodyPx + BottomBandPx;
+
+            if (Mathf.Abs(panelH - _lastPanelH) > 0.5f)
+            {
+                _box.sizeDelta = new Vector2(_box.sizeDelta.x, panelH);
+                _box.anchoredPosition = new Vector2(_box.anchoredPosition.x, 0f);
+                _lastPanelH = panelH;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", string.Format(
+                    "resize contentH={0:F0} (text={1:F0} opts={2:F0}) -> panelH={3:F0} (min {4:F0}/max {5:F0})",
+                    contentPx, textPx, optionsPx, panelH,
+                    TopPad + HeaderPx + Gap + MinBodyPx + BottomBandPx,
+                    TopPad + HeaderPx + Gap + _maxBodyPx + BottomBandPx));
+            }
+        }
+
+        // Re-pin a zone to a fixed-pixel band hugging the panel TOP edge (keeps its x anchors).
+        private static void PinTopBand(RectTransform rt, float topPad, float height)
+        {
+            float x0 = rt.anchorMin.x, x1 = rt.anchorMax.x;
+            rt.anchorMin = new Vector2(x0, 1f);
+            rt.anchorMax = new Vector2(x1, 1f);
+            rt.offsetMin = new Vector2(0f, -(topPad + height));
+            rt.offsetMax = new Vector2(0f, -topPad);
+        }
+
+        // Scaler-safe canvas local height (replicates the kit's PostScaleCanvasHeight for our
+        // ScaleWithScreenSize + MatchWidthOrHeight config — correct on the creation frame, where
+        // rootRt.rect.height would still read raw screen px). Fallback = kit portrait reference.
+        private float CanvasLocalHeight()
+        {
+            var scaler = _ui != null ? _ui.GetComponent<CanvasScaler>() : null;
+            float screenH = Mathf.Max(1f, (float)Screen.height);
+            float screenW = Mathf.Max(1f, (float)Screen.width);
+            if (scaler != null && scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+            {
+                float refW = Mathf.Max(1f, scaler.referenceResolution.x);
+                float refH = Mathf.Max(1f, scaler.referenceResolution.y);
+                float scale = Mathf.Pow(2f, Mathf.Lerp(
+                    Mathf.Log(screenW / refW, 2f), Mathf.Log(screenH / refH, 2f), scaler.matchWidthOrHeight));
+                if (scale > 0.0001f) return screenH / scale;
+            }
+            return 1920f;
         }
 
         private void BuildOptions()
