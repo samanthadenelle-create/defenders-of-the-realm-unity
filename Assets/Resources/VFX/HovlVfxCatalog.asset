@@ -69,6 +69,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Arcane_Aura
+    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
+    PoolSize: 3
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Frost_Projectile
     Prefab: {fileID: 6541143317491470949, guid: 208001a3c01dcb04f88030495297a6ad, type: 3}
     PoolSize: 6
@@ -195,13 +202,6 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 0
     IsLoop: 1
-  - Key: Ember_Burn
-    Prefab: {fileID: 1327569613689390, guid: 13a7c7a8d1bb29943ae2fda15a8f1e5c, type: 3}
-    PoolSize: 6
-    DefaultScale: 1
-    DefaultLifetime: 0
-    Recolorable: 1
-    IsLoop: 1
   - Key: Dash_Blink
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 6
@@ -222,4 +222,144 @@ MonoBehaviour:
     DefaultScale: 4
     DefaultLifetime: 0
     Recolorable: 0
+    IsLoop: 1
+  - Key: ARcaneTower_Projectile
+    Prefab: {fileID: 1171190231128718, guid: d9467a10b94fb3b428cc539326c9579b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: ArcaneTower-Baselevel_Projectile
+    Prefab: {fileID: 1699459221867030, guid: 2056b5f1031df8044a22500b4631ddb7, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: DefenseUp-Offhand(Shield)_Aura
+    Prefab: {fileID: 1341365785022538, guid: 49f4a2628a72b0846afe42d196c02e6c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: EnhamcingBuff_Cast
+    Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Freezing_Impact
+    Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Freezing_Projectile
+    Prefab: {fileID: 1556169196827650, guid: 4f2f9845677ab3f49be1179d6bd15b78, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: HealingFountain_Aura
+    Prefab: {fileID: 7598817718321102107, guid: 6571b8599edbfe641baf508e6a83a124, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: KnightThrust_Impact
+    Prefab: {fileID: 1873886433987638, guid: fb2df51e77abde1429eb83c0317784af, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: LongCastSpell_Cast
+    Prefab: {fileID: 1761614549529672, guid: 7ee7aea814e67034c991de25882a040b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: RangedAttack-DaggerThrow_Projectile
+    Prefab: {fileID: 1764308443362498, guid: 842e57861a7f0164fbd58b59d4e18719, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: RangedSpell-Powerful(Longcast)_Cast
+    Prefab: {fileID: 1381080491605798, guid: 6a9f6dd49fc2acf409d12adb8fe3e3b1, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: RangerTowerBaseProjectile_Projectile
+    Prefab: {fileID: 1261555563981962, guid: ca5824498d345274c9b259632f7755f0, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: RangerTowerUpgraded_Projectile
+    Prefab: {fileID: 1699459221867030, guid: 281aabf73dcc5844faf849b3dc30c1aa, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: RangerTowerlevel2Projectile_Projectile
+    Prefab: {fileID: 1580133494715678, guid: 7a4531df8185dbb468525ab8cdfae099, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: SimpleCast_Cast
+    Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: SimpleCast_Projectile
+    Prefab: {fileID: 1556169196827650, guid: 4f2f9845677ab3f49be1179d6bd15b78, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Water_Projectile
+    Prefab: {fileID: 1300573103503756, guid: 0f8db6274757dd4479c6d5db5b0d9e1a, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Weaponskillsword_Impact
+    Prefab: {fileID: 1311559214229084, guid: 5c90cac47c6d2574babbb1fb4621a467, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: softhealingaura_Aura
+    Prefab: {fileID: 1315764361558410, guid: f99c3ed97779c5b4eb026cb91d4e4933, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: subtleHealinginarea(EnemySkill-Mage)_Cast
+    Prefab: {fileID: 1612411718768874, guid: 4ef343c2fedb6884aac07e8610d65212, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
     IsLoop: 1
