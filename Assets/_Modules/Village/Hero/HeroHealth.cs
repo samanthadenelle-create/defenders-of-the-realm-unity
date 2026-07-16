@@ -114,6 +114,22 @@ namespace DeNelle.Village
         private bool    _deathTraceHasPos;
         private const float DeathTraceJumpMeters = 2f;
 
+        // -- Death-pin (F8 2026-07-16 "on death I shake back and forth, no death sequence") --
+        // The prior fix (EnterDeathFreeze) STOPPED the NavMeshAgent, yet the owner still sees the
+        // body shake. Statically the frozen agent (isStopped + updatePosition=false) cannot write
+        // the transform, so a SECOND mover is shaking the dead hero and hiding the death pose.
+        // Rather than guess which mover (agent / root motion / lock-face / a stray component), we
+        // PIN the root transform to the death pose for the down-beat: LateUpdate is the LAST writer
+        // each frame (after the agent's internal update, HeroLocomotion.Update, and OnAnimatorMove
+        // root motion), so re-asserting the pinned pose there wins over any mover and the body holds
+        // still. The visible death clip animates the HeroBody CHILD mesh (applyRootMotion=false), so
+        // pinning the ROOT never touches the death animation. LateUpdate also FAIL-logs the residual
+        // delta a mover tried to apply, so the next device capture NAMES the culprit on [Flow:HeroDeath].
+        private bool       _deathPinActive;
+        private Vector3    _deathPinPos;
+        private Quaternion _deathPinRot;
+        private int        _deathPinResidualLogs;
+
         // WO-284/285: death/revive animation routes through the canonical ActorAnimator
         // driver (Dead bool latch + DeathDir). Guarded internally — a controller without
         // a Death state is a silent no-op, never the per-frame param-spam pitfall.
@@ -330,6 +346,33 @@ namespace DeNelle.Village
         // outside the window: the first check is one static property read.
         private void LateUpdate()
         {
+            // Death-pin (F8 2026-07-16): while pinned, re-assert the death pose AFTER every other
+            // mover has run this frame so nothing can shake the body — and FAIL-log the residual a
+            // mover tried to apply so the next capture NAMES it on [Flow:HeroDeath]. Runs independent
+            // of the DeathTrace window below.
+            if (_deathPinActive)
+            {
+                Vector3 residual = transform.position - _deathPinPos;
+                float dPos = residual.magnitude;
+                float dYaw = Quaternion.Angle(transform.rotation, _deathPinRot);
+                if ((dPos > 0.001f || dYaw > 0.05f) && _deathPinResidualLogs < 5)
+                {
+                    _deathPinResidualLogs++;
+                    var a = GetComponent<UnityEngine.AI.NavMeshAgent>();
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroDeath",
+                        "RESIDUAL move fought the death pin (re-pinned): dPos=" + dPos.ToString("F3") +
+                        "m dir=" + residual + " dYaw=" + dYaw.ToString("F2") + "deg | agent=" +
+                        (a != null ? "present" : "none") + " updatePosition=" +
+                        (a != null ? a.updatePosition.ToString() : "n/a") + " isStopped=" +
+                        (a != null && a.enabled && a.isOnNavMesh ? a.isStopped.ToString() : "n/a") +
+                        " rootMotion=" + (_actor != null && _actor.Animator != null ? _actor.Animator.applyRootMotion.ToString() : "n/a") +
+                        " locoEnabled=" + (_locomotion != null && _locomotion.enabled) +
+                        " -> a mover OTHER than the frozen agent is writing a dead hero's transform.");
+                }
+                transform.position = _deathPinPos;   // hold the death pose - no shake
+                transform.rotation = _deathPinRot;
+            }
+
             if (!DeNelle.Core.Diagnostics.DeathTrace.Active) { _deathTraceHasPos = false; return; }
             // F8-15: LateUpdate runs even at Time.timeScale==0, so it is the ticker that catches a
             // hub game-over pause that was set and never restored (GameOverScreen freeze). Self-reports once.
@@ -792,9 +835,31 @@ namespace DeNelle.Village
             if (_pac == null) _pac = GetComponent<PlayerAttackController>();
             if (_pac != null) _pac.enabled = false;
 
+            // Belt-and-suspenders (F8 2026-07-16): stopping the agent alone did NOT end the shake, so
+            // ALSO neutralize the other candidate movers on a dead hero, then PIN the root pose.
+            // 1) root motion must never drive the ROOT here (it should already be off — assert it).
+            if (_actor != null && _actor.Animator != null) _actor.Animator.applyRootMotion = false;
+            // 2) drop any lock-face yaw slew so nothing keeps re-facing a target on a downed hero.
+            _locomotion?.ClearLockFace();
+            // 3) arm the death-pin: LateUpdate re-asserts this pose after every mover (see LateUpdate).
+            _deathPinPos          = transform.position;
+            _deathPinRot          = transform.rotation;
+            _deathPinActive       = true;
+            _deathPinResidualLogs = 0;
+
+            // Decisive, pullable line (break-log is errors-only on device — use Fail): captures the
+            // freeze state so the next capture proves the agent was frozen and the pin armed.
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroDeath",
+                "death freeze armed: agent=" + (agent != null ? "present" : "none") +
+                " isOnNavMesh=" + (agent != null && agent.isOnNavMesh) +
+                " updatePosition=" + (agent != null ? agent.updatePosition.ToString() : "n/a") +
+                " rootMotion=" + (_actor != null && _actor.Animator != null ? _actor.Animator.applyRootMotion.ToString() : "n/a") +
+                " pinPos=" + _deathPinPos +
+                " scene='" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + "'.");
+
             DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
-                "EnterDeathFreeze: agent stopped (updatePosition=false, velocity=0, path reset) + attack input off " +
-                $"— death pose now owns the transform (agent={(agent != null ? "present" : "none")}).");
+                "EnterDeathFreeze: agent stopped (updatePosition=false, velocity=0, path reset) + attack input off + root pinned " +
+                $"- death pose now owns the transform (agent={(agent != null ? "present" : "none")}).");
         }
 
         // Revive counterpart to EnterDeathFreeze -- hand the transform back to the agent so
@@ -802,6 +867,9 @@ namespace DeNelle.Village
         // animation-moved) transform BEFORE re-enabling writes so there is no snap.
         private void ExitDeathFreeze()
         {
+            // Release the death-pin FIRST so the revive warp + resumed locomotion below are not
+            // fought by LateUpdate re-asserting the (now stale) death pose.
+            _deathPinActive = false;
             var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent != null && agent.enabled)
             {

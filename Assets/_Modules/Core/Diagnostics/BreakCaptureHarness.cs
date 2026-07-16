@@ -53,6 +53,12 @@ namespace DeNelle.Core.Diagnostics
 
         // ---- state -------------------------------------------------------------
         static bool s_installed;
+
+        /// <summary>The live harness instance (set in Awake, cleared in OnDestroy). Lets the
+        /// on-screen mobile FLAG button (<see cref="DeNelle.Core.Dev.FlagCaptureButton"/>) fire the
+        /// SAME capture the F8 key fires, since the owner has no keyboard on the Android tester APK.
+        /// Null before install / on WebGL (Install() early-outs there).</summary>
+        public static BreakCaptureHarness Instance { get; private set; }
         [NonSerialized] bool _inHandler;       // reentrancy guard for the log handler
         readonly HashSet<string> _seen = new HashSet<string>();
         int _shotCount;
@@ -114,6 +120,7 @@ namespace DeNelle.Core.Diagnostics
 
         void Awake()
         {
+            Instance = this;                                       // mobile FLAG button entry point
             try
             {
                 _fileOk = Application.platform != RuntimePlatform.WebGLPlayer;
@@ -185,6 +192,7 @@ namespace DeNelle.Core.Diagnostics
 
         void OnDestroy()
         {
+            if (Instance == this) Instance = null;
             try
             {
                 Application.logMessageReceived -= OnLog;
@@ -433,6 +441,36 @@ namespace DeNelle.Core.Diagnostics
             Record("flagged", $"[{SafeScene()}] {note}", null, screenshot: false);  // shot already taken
             _flagCount++;
             _toastUntil = Time.realtimeSinceStartup + 1.6f;
+        }
+
+        // =====================================================================
+        // MOBILE FLAG BUTTON entry point (owner has NO keyboard on the Android
+        // tester APK, so the F8 key + its typed-note flow above are unreachable
+        // there). The on-screen tap chip (DeNelle.Core.Dev.FlagCaptureButton)
+        // calls THIS to fire the SAME capture the F8 key fires: a clean-frame PNG
+        // named exactly like FlagHere()'s (flag_<session>_NN.png) + a Record with
+        // kind="flagged" (the identical break-log.jsonl entry F8 writes) + the same
+        // per-session flag counter and confirmation toast. It just SKIPS the
+        // keyboard note step (no freeze, no typed line) since there is no keyboard.
+        // Fully guarded - a diagnostic entry point must never throw.
+        // =====================================================================
+        /// <summary>Force the same "flagged" capture the F8 key triggers (clean-frame screenshot +
+        /// break-log record), minus the keyboard note flow. For the on-screen mobile FLAG button.</summary>
+        public void FlagFromButton(string note = null)
+        {
+            try
+            {
+                // clean-frame screenshot, same naming/counter as FlagHere() (F8) so the button's
+                // shot lands in the exact same flag_/break_ evidence set.
+                try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_sessionStamp}_{_flagCount:00}.png")); }
+                catch { }
+                string msg = string.IsNullOrWhiteSpace(note) ? "on-screen FLAG button" : note.Trim();
+                Record("flagged", $"[{SafeScene()}] {msg}", null, screenshot: false);  // shot already taken
+                _flagCount++;
+                _toastUntil = Time.realtimeSinceStartup + 1.6f;
+                FlowTrace.Step("BreakCapture", $"FLAG button capture -> flagged record ({msg})");
+            }
+            catch (Exception e) { SafeWarn(e); }
         }
 
         void OnGUI()

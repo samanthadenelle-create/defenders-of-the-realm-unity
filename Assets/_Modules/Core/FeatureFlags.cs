@@ -284,6 +284,19 @@ namespace DeNelle.Core
         /// ANY PUBLIC / STORE RELEASE build.</summary>
         public static bool DevResourceTool => Get("devresourcetool", defaultOn: true);
 
+        /// <summary>MOBILE FLAG BUTTON (owner felt-tests on Android and CANNOT press F8 - no keyboard).
+        /// Gates the on-screen tap-to-capture chip <see cref="DeNelle.Core.Dev.FlagCaptureButton"/>, the
+        /// mobile equivalent of the F8 key: one tap fires the SAME
+        /// <see cref="DeNelle.Core.Diagnostics.BreakCaptureHarness"/> "flagged" capture (break-log.jsonl
+        /// entry + clean-frame PNG + the recent Flow/Guard/exception trace tail) the F8 key fires.
+        /// WHY A FLAG AND NOT Debug.isDebugBuild: the tester APK is a RELEASE build
+        /// (<c>AndroidBuild.BuildSeekerApk</c> uses <c>BuildOptions.None</c>), so Debug.isDebugBuild is
+        /// FALSE there - same reasoning as <see cref="DevResourceTool"/>. The button ALSO always shows in
+        /// the Editor and any Development build regardless of this flag. Default ON so the owner can flag
+        /// bugs on-device now ("owner is never the bug detector", CLAUDE.md 14). HIDE for a public/store
+        /// release: set PlayerPrefs "ff.flagbutton" = 0 (or flip this default to false).</summary>
+        public static bool FlagButton => Get("flagbutton", defaultOn: true);
+
         /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
         /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
         /// home hub (MainCastle_Hall) at runtime, WITHOUT hand-editing the scene: a soft glowing aura around

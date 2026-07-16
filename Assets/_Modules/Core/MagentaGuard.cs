@@ -85,7 +85,13 @@ namespace DeNelle.Core
                 var renderers = Object.FindObjectsByType<Renderer>();
                 if (renderers == null || renderers.Length == 0) return;
 
-                var seen = new HashSet<Material>();
+                // ARCANE-WHITE FIX (owner 2026-07-15, mirrors the FLOOR fix's hard-won lesson at :142):
+                // recover each unique broken SOURCE material to a FRESH URP/Lit instance ONCE, then assign
+                // that same fresh instance into every renderer slot that referenced it. A FRESH material
+                // assigned to the renderer STICKS in the built player (in-place `m.shader=...` mutation of an
+                // embedded/shared material did NOT - the exact reason the baked arcane tower recovered to
+                // white). One fresh per source preserves SRP batching + logs once per unique material.
+                var freshFor = new Dictionary<Material, Material>();
                 int recovered = 0, hiddenStray = 0;
                 foreach (var r in renderers)
                 {
@@ -184,20 +190,31 @@ namespace DeNelle.Core
                     }
 
                     // Real art that merely lost its shader in the build: recover each unique broken
-                    // material on it to URP/Lit, carrying colour/albedo/emission.
-                    foreach (var m in mats)
+                    // material to a FRESH URP/Lit (carrying colour/albedo/emission) and ASSIGN it into
+                    // the renderer's shared-materials array so it STICKS in the built player (the in-place
+                    // mutation the old path used did not stick — the arcane-tower white symptom).
+                    var work = r.sharedMaterials;   // mutable copy of this renderer's slots
+                    bool changed = false;
+                    for (int mi = 0; mi < work.Length; mi++)
                     {
+                        var m = work[mi];
                         if (m == null || !IsBrokenShader(m.shader)) continue;
-                        if (!seen.Add(m)) continue;            // each unique material once
                         string dead = m.shader != null ? m.shader.name : "<null>";
-                        RecoverMaterial(m);
-                        recovered++;
-                        // FAIL (not Step): a magenta in the shipped player IS a break — surface it in the
-                        // F8 break-log with the EXACT object so the source can be fixed at root too.
-                        FlowTrace.Fail("MagentaGuard",
-                            $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
-                            $"material '{m.name}' dead-shader '{dead}' -> URP/Lit (pink killed at runtime; fix at source).");
+                        if (!freshFor.TryGetValue(m, out var fresh))
+                        {
+                            fresh = BuildRecoveredMaterial(m);   // fresh URP/Lit, once per unique source
+                            freshFor[m] = fresh;
+                            recovered++;
+                            // FAIL (not Step): a magenta in the shipped player IS a break — surface it in the
+                            // F8 break-log with the EXACT object so the source can be fixed at root too.
+                            FlowTrace.Fail("MagentaGuard",
+                                $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
+                                $"material '{m.name}' dead-shader '{dead}' -> FRESH URP/Lit (assigned to renderer so it sticks; fix at source).");
+                        }
+                        work[mi] = fresh;
+                        changed = true;
                     }
+                    if (changed) r.sharedMaterials = work;   // assignment is what makes the recovery stick
                 }
 
                 // TERRAIN PASS (owner F8 2026-06-21 "Pink Floor", ran-from-exe): MainCastle_Hall's VISIBLE
@@ -324,28 +341,45 @@ namespace DeNelle.Core
                 || sn.Contains("Hidden/InternalError");
         }
 
-        // Swap to URP/Lit IN PLACE, carrying authored colour + albedo + emission so the recovered
-        // surface reads as close to intended as the lost shader's base properties allow.
-        private static void RecoverMaterial(Material m)
+        // Build a FRESH URP/Lit material carrying the authored colour + albedo + emission read
+        // robustly from the dead/stripped SOURCE. Returning a fresh instance (assigned to the
+        // renderer by the caller) is what makes the recovery STICK in a built player — the old
+        // in-place `src.shader = _lit` mutation of an embedded/shared material did not survive the
+        // build (the arcane-tower white symptom; same class as the FLOOR fix at :142).
+        //
+        // ROBUST READ: the authored channels are exposed when the source shader still declares them
+        // (e.g. "Standard (Specular setup)" carries _Color/_MainTex/_EmissionColor). Fall back across
+        // property names so a swatch/variant still yields its colour; if truly nothing is readable we
+        // default to white (never magenta). Preserves the LPUP tan/brown swatches on the arcane tower.
+        private static Material BuildRecoveredMaterial(Material src)
         {
-            Color col = m.HasProperty("_Color") ? m.color : Color.white;
-            Texture tex = m.HasProperty("_MainTex") ? m.mainTexture : null;
-            Color emis = m.HasProperty("_EmissionColor") ? m.GetColor("_EmissionColor") : Color.black;
+            Color col = Color.white;
+            if (src != null && src.HasProperty("_Color")) col = src.GetColor("_Color");
+            else if (src != null && src.HasProperty("_BaseColor")) col = src.GetColor("_BaseColor");
 
-            m.shader = _lit;
+            Texture tex = null;
+            if (src != null && src.HasProperty("_MainTex")) tex = src.GetTexture("_MainTex");
+            if (tex == null && src != null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
 
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", col);
-            if (m.HasProperty("_Color")) m.color = col;
+            Color emis = (src != null && src.HasProperty("_EmissionColor")) ? src.GetColor("_EmissionColor") : Color.black;
+
+            var fresh = new Material(_lit) { name = ((src != null && src.name != null) ? src.name : "Recovered") + "_MagentaFix" };
+            if (fresh.HasProperty("_BaseColor")) fresh.SetColor("_BaseColor", col);
+            if (fresh.HasProperty("_Color")) fresh.SetColor("_Color", col);
             if (tex != null)
             {
-                if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-                if (m.HasProperty("_MainTex")) m.mainTexture = tex;
+                if (fresh.HasProperty("_BaseMap")) fresh.SetTexture("_BaseMap", tex);
+                if (fresh.HasProperty("_MainTex")) fresh.SetTexture("_MainTex", tex);
             }
-            if (emis != Color.black && m.HasProperty("_EmissionColor"))
+            if (emis != Color.black && fresh.HasProperty("_EmissionColor"))
             {
-                m.SetColor("_EmissionColor", emis);
-                m.EnableKeyword("_EMISSION");
+                fresh.SetColor("_EmissionColor", emis);
+                fresh.EnableKeyword("_EMISSION");
             }
+            if (fresh.HasProperty("_Surface")) fresh.SetFloat("_Surface", 0f);   // URP: 0 = Opaque
+            if (fresh.HasProperty("_ZWrite"))  fresh.SetFloat("_ZWrite", 1f);
+            fresh.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+            return fresh;
         }
 
         // A renderer whose mesh is one of Unity's BUILT-IN PRIMITIVES (the meshes
