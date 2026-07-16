@@ -524,23 +524,20 @@ namespace DeNelle.Core.UI
         /// <summary>Canonical RpgUiCatalog sprite name for a family member ("button3_green").</summary>
         public static string ObsidianButtonSpriteName(ObsidianButtonStyle style, ObsidianButtonColor color)
         {
-            string c;
-            switch (color)
-            {
-                case ObsidianButtonColor.Green:  c = "green";  break;
-                case ObsidianButtonColor.Red:    c = "red";    break;
-                case ObsidianButtonColor.Yellow: c = "yellow"; break;
-                default:                         c = "gray";   break;
-            }
-            return "button" + (int)style + "_" + c;
+            // STANDARDIZED to GREY faces everywhere (owner 2026-07-16: "standardize all to grey and
+            // white — easier to read everywhere"; the mixed grey/green/red/brown-gold plates were
+            // inconsistent and the gold plates read poorly). One grey face + white label for every
+            // button. The color enum is kept for call-site intent + future opt-in, but all colors
+            // resolve to the grey sprite here — the single place button faces are chosen.
+            return "button" + (int)style + "_gray";
         }
 
-        /// <summary>THE contrast law for button label ink (owner is colorblind — luminance, never
-        /// hue, carries meaning): a gold/yellow plate gets DARK near-black Ink; every dark plate
-        /// (gray/green/red) gets Parchment. Lives HERE, in the one builder — never per-caller.</summary>
+        /// <summary>Button label ink — STANDARDIZED to Parchment (white) on the uniform grey plate
+        /// (owner 2026-07-16 "grey and white everywhere"). Luminance still carries all meaning
+        /// (light text on a dark plate); lives HERE in the one builder, never per-caller.</summary>
         public static Color ObsidianButtonLabelColor(ObsidianButtonColor color)
         {
-            return color == ObsidianButtonColor.Yellow ? ElarionUi.Ink : ElarionUi.Parchment;
+            return ElarionUi.Parchment;
         }
 
         /// <summary>The §1.2 back-compat shim map: legacy ButtonKind → Obsidian (style, color).
@@ -574,6 +571,49 @@ namespace DeNelle.Core.UI
         /// CONTENT colour — not tinted by the A3 chrome hook. Null art ⇒ the procedural kind button
         /// (the dual-state contract's OFF look). Prefab-mode is attempted first.
         /// </summary>
+        // ── COMMON spaced button COLUMN (owner 2026-07-16 "fix it in common") ──────────────
+        // The root cause of stacked/overlapping menu buttons (pause, help, ...) was every menu
+        // HAND-PLACING fraction-anchored buttons: the MinTouchPx(112) floor grows each button, and
+        // on a short modal body those grown rects overlap because the fraction slots are smaller
+        // than 112px. Fixed ONCE here: BuildButtonColumn lays a VerticalLayoutGroup over the body
+        // and AddColumnButton stamps a FIXED-height button into it, so the gap is guaranteed and the
+        // rows can never collide at any screen size. Menus call these instead of anchoring by hand.
+        /// <summary>Create a spaced vertical button column over a modal body. Add rows with
+        /// <see cref="AddColumnButton"/>; spacing + no-overlap are guaranteed regardless of screen.</summary>
+        public static RectTransform BuildButtonColumn(Transform body, float gapPx = 18f,
+            float sideInset = 0.06f, float topInset = 0.04f, float bottomInset = 0.04f)
+        {
+            var go = new GameObject("ButtonColumn", typeof(RectTransform), typeof(VerticalLayoutGroup));
+            go.transform.SetParent(body, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(sideInset, bottomInset);
+            rt.anchorMax = new Vector2(1f - sideInset, 1f - topInset);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var vlg = go.GetComponent<VerticalLayoutGroup>();
+            vlg.spacing = gapPx;
+            vlg.childControlWidth = true;  vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+            vlg.childAlignment = TextAnchor.UpperCenter;
+            return rt;
+        }
+
+        /// <summary>Add one fixed-height button to a <see cref="BuildButtonColumn"/> stack (returns the
+        /// Button so callers can capture/hide it). Full-stretch anchors; the LayoutElement pins the
+        /// height (>= MinTouchPx, default CanonCtaHeight) so the touch-floor can never overflow the row.</summary>
+        public static Button AddColumnButton(Transform column, string label,
+            ObsidianButtonColor color, Action onClick,
+            ObsidianButtonStyle style = ObsidianButtonStyle.Style1, float heightPx = 0f)
+        {
+            var btn = BuildObsidianButton(column, label, style, color, Vector2.zero, Vector2.one, onClick);
+            if (btn == null) return null;
+            var le = btn.gameObject.GetComponent<LayoutElement>();
+            if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = MinTouchPx;
+            le.preferredHeight = heightPx > 0f ? heightPx : CanonCtaHeight;
+            le.flexibleHeight = 0f;
+            return btn;
+        }
+
         public static Button BuildObsidianButton(Transform parent, string label,
             ObsidianButtonStyle style, ObsidianButtonColor color,
             Vector2 anchorMin, Vector2 anchorMax, Action onClick = null)

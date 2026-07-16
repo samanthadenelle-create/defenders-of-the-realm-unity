@@ -110,34 +110,29 @@ namespace DeNelle.HUD
         {
             if (_modal != null && _modal.canvas != null) return;
 
+            // Taller modal so the action rows fit without overlap (owner 2026-07-16 "layers stacked").
             _modal = ElarionUiKit.BuildObsidianModal("HelpMenuUI", "Help",
-                new Vector2(0.28f, 0.16f), new Vector2(0.72f, 0.86f), Close,
+                new Vector2(0.26f, 0.12f), new Vector2(0.74f, 0.88f), Close,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "settings");
 
             var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
                 ? _modal.chrome.layout.body.transform
                 : _modal.chrome.content.transform;
 
-            // Action rows stacked down the body well. Close is the chrome's ONE shared
-            // Close — the old bespoke "Close" row is gone (obsidian-panel-chrome canon).
-            ElarionUiKit.BuildObsidianButton(body, "Report a Bug",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.10f, 0.82f), new Vector2(0.90f, 0.94f), OnReportBug);
-            ElarionUiKit.BuildObsidianButton(body, "Controls",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.10f, 0.68f), new Vector2(0.90f, 0.80f), OnShowControls);
-            ElarionUiKit.BuildObsidianButton(body, "Reset Hero & Pet",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
-                new Vector2(0.10f, 0.54f), new Vector2(0.90f, 0.66f), OnResetProgress);
+            // Common spaced button column (ElarionUiKit) — guaranteed spacing + no overlap at any
+            // screen size (owner "fix in common"). Close is the chrome's ONE shared Close.
+            var stack = ElarionUiKit.BuildButtonColumn(body);
+            ElarionUiKit.AddColumnButton(stack, "Report a Bug",
+                ElarionUiKit.ObsidianButtonColor.Gray, OnReportBug);
+            ElarionUiKit.AddColumnButton(stack, "Controls",
+                ElarionUiKit.ObsidianButtonColor.Gray, OnShowControls);
+            ElarionUiKit.AddColumnButton(stack, "Reset Hero & Pet",
+                ElarionUiKit.ObsidianButtonColor.Red, OnResetProgress);
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-            // SECURITY (LB-11 / E-DEVTOOLS): the "Dev tools" launcher opens AdminOverlay
-            // (grant buttons) — compile-stripped from release builds with its handler.
-            // SWEEP 9413 R2 (#6): the prefab-mode gold button keeps the prefab's GOLD label —
-            // gold-on-gold (luminance law). Force dark Ink on the label wherever the build mode
-            // put it (children, else the prefab root) — same fix as the Settings selected chips.
-            var devBtn = ElarionUiKit.BuildObsidianButton(body, "Dev Tools",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.10f, 0.40f), new Vector2(0.90f, 0.52f), OnOpenDevTools);
+            // SECURITY (LB-11 / E-DEVTOOLS): "Dev tools" opens AdminOverlay — compile-stripped from
+            // release. Force dark Ink on the label (luminance law) wherever the build put it.
+            var devBtn = ElarionUiKit.AddColumnButton(stack, "Dev Tools",
+                ElarionUiKit.ObsidianButtonColor.Yellow, OnOpenDevTools);
             if (devBtn != null)
             {
                 var devLbls = devBtn.GetComponentsInChildren<TMPro.TMP_Text>(true);
@@ -148,17 +143,13 @@ namespace DeNelle.HUD
             }
             FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Obsidian card)");
 #endif
-            ElarionUiKit.BuildObsidianButton(body, "Credits",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.10f, 0.26f), new Vector2(0.90f, 0.38f), OnShowCredits);
+            ElarionUiKit.AddColumnButton(stack, "Credits",
+                ElarionUiKit.ObsidianButtonColor.Gray, OnShowCredits);
 
-            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" exists in ALL builds
-            // but stays hidden until the 5-tap title unlock. It grants ONLY resources
-            // (the AdminOverlay full-grant bundle via the same reflection seam) — the
-            // admin panel itself keeps its LB-11 release lock.
-            _grantResourcesBtn = ElarionUiKit.BuildObsidianButton(body, "Grant Resources (dev)",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.10f, 0.12f), new Vector2(0.90f, 0.24f), OnGrantResources);
+            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" exists in ALL builds but stays
+            // hidden until the 5-tap title unlock; grants ONLY resources (AdminOverlay stays locked).
+            _grantResourcesBtn = ElarionUiKit.AddColumnButton(stack, "Grant Resources (dev)",
+                ElarionUiKit.ObsidianButtonColor.Yellow, OnGrantResources);
             if (_grantResourcesBtn != null)
                 _grantResourcesBtn.gameObject.SetActive(DevUnlocked);
 
