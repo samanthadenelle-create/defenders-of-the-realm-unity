@@ -95,18 +95,22 @@ namespace DeNelle.Village.World
         private const float SkyAtmosphere     = 1.25f;   // horizon warmth thickness
         private static readonly Color SkyZenithTint  = new Color(0.42f, 0.50f, 0.72f); // deep dusk blue
         private static readonly Color SkyGroundColor = new Color(0.86f, 0.62f, 0.44f); // warm amber horizon
-        private const float SkyExposure       = 1.25f;
+        // BRIGHTNESS LIFT (tester feedback 2026-07-16 "way too dark, even day too dim"; measured
+        // baseline avg luminance 24%). The dusk "hold the last light" mood was genuinely under-lit on
+        // device. Raised sky/sun/ambient AND added a global post-exposure lift (below) so EVERY
+        // time-of-day brightens, not just this state.
+        private const float SkyExposure       = 1.55f;   // was 1.25
 
         // ---- (3) SUN -- low, warm, long shadows -------------------------------
         private const float SunPitchDeg   = 24f;    // low above the horizon = long dusk shadows
         private const float SunYawDeg     = -38f;
         private static readonly Color SunColor = new Color(1.00f, 0.84f, 0.64f); // warm gold
-        private const float SunIntensity  = 1.15f;
+        private const float SunIntensity  = 1.75f;   // was 1.15 (+52%)
 
         // ---- (4) AMBIENT -- warm trilight (replaces the cold dead grey) -------
-        private static readonly Color AmbientSky     = new Color(0.46f, 0.50f, 0.66f);
-        private static readonly Color AmbientEquator = new Color(0.62f, 0.52f, 0.44f); // warm band at eye level
-        private static readonly Color AmbientGround  = new Color(0.30f, 0.26f, 0.22f);
+        private static readonly Color AmbientSky     = new Color(0.66f, 0.70f, 0.86f);  // was 0.46/0.50/0.66
+        private static readonly Color AmbientEquator = new Color(0.82f, 0.72f, 0.62f);  // was 0.62/0.52/0.44
+        private static readonly Color AmbientGround  = new Color(0.46f, 0.42f, 0.36f);  // was 0.30/0.26/0.22
 
         // ---- (5) FOG -- gentle warm haze ---------------------------------------
         private static readonly Color FogColor = new Color(0.78f, 0.66f, 0.58f);  // warm dusk haze
@@ -122,10 +126,13 @@ namespace DeNelle.Village.World
         private const float BloomIntensity     = 4.5f;
         private const float BloomThreshold     = 1.1f;
         private const float BloomScatter       = 0.7f;
-        private const float VignetteIntensity  = 0.22f; // gentle frame darkening
+        private const float VignetteIntensity  = 0.10f; // was 0.22 — less frame darkening (brightness pass)
         private const float VignetteSmoothness = 0.42f;
         private const float GradeSaturation    = 10f;   // +10 lifts the single-tone flatness
         private const float GradeContrast      = 8f;
+        // Global post-exposure (EV) — the single "everything brighter" knob; lifts the whole rendered
+        // image at ALL times of day (independent of the sun/skybox state). +0.75 EV ~ 1.68x.
+        private const float GradePostExposure  = 0.75f;
         private static readonly Color GradeFilter = new Color(1.00f, 0.97f, 0.92f); // faint warm filter
 
         // ---- (7) MOTES -- drifting dust/pollen around the camera (open world) --
@@ -306,6 +313,7 @@ namespace DeNelle.Village.World
                 vignette.smoothness.Override(VignetteSmoothness);
 
                 var grade = _postProfile.Add<ColorAdjustments>(overrides: true);
+                grade.postExposure.Override(GradePostExposure);   // global brightness lift (all times of day)
                 grade.saturation.Override(GradeSaturation);
                 grade.contrast.Override(GradeContrast);
                 grade.colorFilter.Override(GradeFilter);

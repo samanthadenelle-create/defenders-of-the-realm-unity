@@ -40,7 +40,10 @@ namespace DeNelle.Editor
     {
         private const string OutputDir = "Builds/Android";
         private const string ApkName = "DefendersOfTheRealm.apk";
-        private const string PackageId = "com.denelle.defenders";
+        // Must MATCH the installed app so testers UPDATE IN PLACE (verified on the Seeker
+        // 2026-07-16: the live package is com.denellestudios.echoesofelarion). The old
+        // com.denelle.defenders would install as a SEPARATE app.
+        private const string PackageId = "com.denellestudios.echoesofelarion";
         private const string ProductName = "Defenders of the Realm";
         private const string CompanyName = "DeNelle";
 
