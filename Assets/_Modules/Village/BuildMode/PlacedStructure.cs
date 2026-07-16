@@ -110,16 +110,23 @@ namespace DeNelle.Village
         // same proven approach GhostPreview uses, so it never leaks a material
         // instance and restores cleanly on deselect.
 
-        private static readonly Color s_highlight = new Color(0.30f, 0.85f, 1f, 1f);
+        // Base selection tint (warm cyan). Owner felt-test 2026-07-16: the placed-structure
+        // glow was too subtle on device - the selected building should visibly GLOW. The
+        // emissive is now driven at HDR intensity (values > 1) so the project's global bloom
+        // turns it into a real glow, and Update() breathes the intensity while selected.
+        private static readonly Color s_highlight = new Color(0.35f, 0.90f, 1f, 1f);
+        private const float HighlightMinIntensity = 1.8f;   // dim end of the breathing pulse
+        private const float HighlightMaxIntensity = 3.4f;   // bright end (HDR - feeds bloom)
         private readonly List<Renderer> _renderers = new List<Renderer>();
         private MaterialPropertyBlock _mpb;
         private bool _highlighted;
 
-        /// <summary>Toggle the selection highlight (emissive tint) on this structure.</summary>
+        /// <summary>Toggle the selection highlight (HDR emissive glow) on this structure.</summary>
         public void SetHighlighted(bool on)
         {
             if (_highlighted == on) return;
             _highlighted = on;
+            FlowTrace.Step("Select", "placed-structure glow " + (on ? "ON" : "off") + " id='" + itemId + "'");
 
             if (_mpb == null) _mpb = new MaterialPropertyBlock();
             if (_renderers.Count == 0)
@@ -131,7 +138,8 @@ namespace DeNelle.Village
                 r.GetPropertyBlock(_mpb);
                 if (on)
                 {
-                    _mpb.SetColor("_EmissionColor", s_highlight);
+                    // Start bright; Update() then breathes it. HDR (>1) so bloom glows it.
+                    _mpb.SetColor("_EmissionColor", s_highlight * HighlightMaxIntensity);
                 }
                 else
                 {
@@ -144,6 +152,26 @@ namespace DeNelle.Village
             // tier accent tint. Re-apply the tier visual so the upgraded look persists.
             if (!on && TierVisual != null)
                 TierVisual.Refresh();
+        }
+
+        // Breathing pulse for the selection glow: while highlighted, ease the HDR emissive
+        // intensity between min/max so the selected building visibly "glows/pulses" rather
+        // than sitting under a flat tint. Early-outs when not selected, so only the one
+        // selected structure does any per-frame work. Unscaled time so it breathes even if
+        // Build Mode pauses gameplay time.
+        private void Update()
+        {
+            if (!_highlighted || _mpb == null || _renderers.Count == 0) return;
+            float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.0f);
+            Color emis = s_highlight * Mathf.Lerp(HighlightMinIntensity, HighlightMaxIntensity, k);
+            for (int i = 0; i < _renderers.Count; i++)
+            {
+                var r = _renderers[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_mpb);
+                _mpb.SetColor("_EmissionColor", emis);
+                r.SetPropertyBlock(_mpb);
+            }
         }
     }
 }

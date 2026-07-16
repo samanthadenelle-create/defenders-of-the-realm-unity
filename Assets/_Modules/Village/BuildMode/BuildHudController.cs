@@ -169,17 +169,35 @@ namespace DeNelle.Village
             // the anchor rect only carries the CENTRE — the four centres below are
             // spaced so the fixed-width boxes sit in a row with even gaps (no overlap,
             // no thin bars). Row is vertically centred at y=0.36.
+            // "Tap once to select location, then rotate." — a single ASCII hint line
+            // ABOVE the verb row, shown ONLY while Placing (child of the intent bar, which
+            // toggles active with the Placing state). Parchment on a near-black strip for
+            // contrast; NON-raycast on both the strip and the text so it can NEVER eat the
+            // world tap the player uses to select the drop location (owner felt-test
+            // 2026-07-16). Backing strip stays narrow/centred so the map is unobstructed.
+            var hintBack = ElarionUiKit.AddImage(_intentBar.transform, "PlaceHintBack",
+                new Vector2(0.28f, 0.455f), new Vector2(0.72f, 0.525f),
+                ElarionUiKit.ObsidianFill, rounded: true);
+            var hintBackImg = hintBack.GetComponent<Image>();
+            if (hintBackImg != null) hintBackImg.raycastTarget = false;
+            var hint = MakeText(hintBack.transform, "Tap once to select location, then rotate.",
+                22, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.03f, 0f), new Vector2(0.97f, 1f));
+            hint.raycastTarget = false;
+
             var rotL = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Left",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.233f, 0.30f), new Vector2(0.323f, 0.42f),
                 () => _onRotateLeft?.Invoke());
             PinSize(rotL, IntentBtnW, ElarionUiKit.CanonCtaHeight);
+            AllowTwoLineLabel(rotL);   // never truncate "Rotate Left" -> wrap to 2 lines
 
             var rotR = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Right",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.371f, 0.30f), new Vector2(0.461f, 0.42f),
                 () => _onRotateRight?.Invoke());
             PinSize(rotR, IntentBtnW, ElarionUiKit.CanonCtaHeight);
+            AllowTwoLineLabel(rotR);   // never truncate "Rotate Right" -> wrap to 2 lines
 
             var place = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "PLACE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -195,6 +213,31 @@ namespace DeNelle.Village
             cancel.gameObject.name = "BuildHudPlaceCancel";
 
             _intentBar.SetActive(false);   // Placing state shows it
+            FlowTrace.Step("BuildHud",
+                "intent bar built: [Rotate Left][Rotate Right][PLACE][Cancel] + tap-to-select hint " +
+                "(rotate labels wrap to 2 lines, no truncation)");
+        }
+
+        // ── Rotate labels never truncate (owner felt-test 2026-07-16) ───────────
+        /// <summary>
+        /// Opt a kit button's TMP label OUT of the kit's single-line ellipsis fit
+        /// (ElarionUiKit.FitSingleLine leaves it NoWrap + Ellipsis, which clips
+        /// "Rotate Right" to "Rotate Ri..."). We flip it to normal WRAP + Overflow so it
+        /// wraps to two lines and NEVER culls a glyph — the button is pinned tall
+        /// (CanonCtaHeight = 132) so two lines seat comfortably. Autosizing off keeps the
+        /// size deterministic (no shrink-to-nothing). Presentation-only.
+        /// </summary>
+        private static void AllowTwoLineLabel(Button button)
+        {
+            if (button == null) return;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label == null) return;
+            label.enableAutoSizing = false;
+            label.textWrappingMode = TextWrappingModes.Normal;   // wrap, do not clip
+            label.overflowMode = TextOverflowModes.Overflow;     // never ellipsis-cull a line
+            label.alignment = TextAlignmentOptions.Center;
+            FlowTrace.Step("BuildHud",
+                "rotate label '" + (label.text ?? "") + "' set to wrap (2-line, no truncate)");
         }
 
         // ── Public API the BRAIN drives ────────────────────────────────────────

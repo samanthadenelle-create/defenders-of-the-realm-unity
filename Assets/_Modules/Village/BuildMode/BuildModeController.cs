@@ -1761,6 +1761,15 @@ namespace DeNelle.Village
             // a throwing subscriber can never abort the placement it is observing).
             Guard.Try("BuildMode", "StructurePlaced event", () => StructurePlaced?.Invoke(_armed.id));
 
+            // SHOW-STOPPER (owner device felt-test 2026-07-16): a player-PLACED storefront had NO
+            // vendor NPC to Talk/trade with. The CastleVendorNpcInjector anchor poll covers only a
+            // fixed AnchorRoles table (misses workshop/lumberyard/foundry/silo/collector_* ids) and
+            // settles each role ONCE, so a freshly-placed building could get no NPC. Spawn its vendor
+            // NOW, at THIS building, reusing the injector's OWN SpawnVendor path (no parallel NPC
+            // system; the injector maps non-storefront ids to no role, so towers/walls stay NPC-free).
+            Guard.Try("BuildMode", "spawn vendor NPC for placed building",
+                () => CastleVendorNpcInjector.NotifyBuildingPlaced(_armed.id, ps.transform));
+
             // WO-612 (owner 2026-07-06): construction takes TIME — start a WO-172 timer job
             // AFTER the charge (the WO-131 seam the service documents). A null job (both
             // free slots busy / service absent) degrades to instant completion: placement

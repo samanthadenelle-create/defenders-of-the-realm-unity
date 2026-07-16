@@ -555,6 +555,13 @@ namespace DeNelle.HUD
             const float TopPad = 18f, HeaderPx = 150f, Gap = 10f;
             const float BottomBandPx = 168f;   // clears the fixed 120px shared Close band + margin
             const float MinBodyPx = 54f;       // one 30px reading line + padding
+            // OWNER F8 2026-07-16 ("the text box should use the FULL dialog box"): the kit FrameCore
+            // body zone is inset ~5.5% each side (0.055..0.945), so the text/plate read as a small
+            // box floating inside the frame. Widen the body to the frame's INNER border and keep only
+            // a small readable pad off the gilt edge. Core_Panel's medallion socket left = 0.037, so
+            // 0.040 hugs the interior without overrunning the border art (symmetric right = 0.960).
+            const float BodyInsetX = 0.040f;   // frame inner border (was the kit's 0.055 inset)
+            const float SidePad = 14f;         // small readable pad so text never kisses the gilt border
 
             Canvas.ForceUpdateCanvases();
 
@@ -581,14 +588,22 @@ namespace DeNelle.HUD
                 if (_headerZone != null)   PinTopBand(_headerZone, TopPad, HeaderPx);
                 if (_portraitHost != null) PinTopBand(_portraitHost, TopPad, HeaderPx);
 
-                // Body fills between the header band and the bottom (Close) band, in fixed px.
+                // Body FILLS the full frame interior. Vertically it spans header-band -> Close-band
+                // (fixed px); horizontally it now spans the frame's inner border (BodyInsetX) instead
+                // of the kit's inset well, so the text uses the WHOLE box width with only SidePad off
+                // each edge. The ObsidianFill ZoneBacking is a 0..1 child of this zone, so the dark
+                // plate widens with it (no separate plate to resize). Header/portrait (top band),
+                // shared Close (bottom band), and the scroll well (0..1 child) are all preserved.
                 if (_bodyZone != null)
                 {
-                    float bx0 = _bodyZone.anchorMin.x, bx1 = _bodyZone.anchorMax.x;
-                    _bodyZone.anchorMin = new Vector2(bx0, 0f);
-                    _bodyZone.anchorMax = new Vector2(bx1, 1f);
-                    _bodyZone.offsetMin = new Vector2(0f, BottomBandPx);
-                    _bodyZone.offsetMax = new Vector2(0f, -(TopPad + HeaderPx + Gap));
+                    float wasX0 = _bodyZone.anchorMin.x, wasX1 = _bodyZone.anchorMax.x;
+                    _bodyZone.anchorMin = new Vector2(BodyInsetX, 0f);
+                    _bodyZone.anchorMax = new Vector2(1f - BodyInsetX, 1f);
+                    _bodyZone.offsetMin = new Vector2(SidePad, BottomBandPx);
+                    _bodyZone.offsetMax = new Vector2(-SidePad, -(TopPad + HeaderPx + Gap));
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", string.Format(
+                        "body widened to fill frame interior: x {0:F3}-{1:F3} -> {2:F3}-{3:F3} (+/-{4:F0}px pad)",
+                        wasX0, wasX1, BodyInsetX, 1f - BodyInsetX, SidePad));
                 }
 
                 // Footer band pinned just above the Close (host of the passive hint; the shared Close

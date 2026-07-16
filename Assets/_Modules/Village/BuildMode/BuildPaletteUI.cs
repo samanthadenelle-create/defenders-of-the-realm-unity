@@ -448,14 +448,17 @@ namespace DeNelle.Village
                 img.sprite = plate;
                 img.type = Image.Type.Sliced;
                 img.fillCenter = true;
-                // Armed = gilt-tinted plate; rest = the plate's own obsidian face.
-                img.color = armed ? ElarionUi.Gilt : Color.white;
+                // WO (owner felt-test 2026-07-16, said twice): the armed card used to
+                // FLOOD the whole plate gilt — on the sliced SlotAction plate that gold
+                // wash read as "a big yellow circle drawn around the card." Removed. The
+                // plate now keeps its own obsidian face whether armed or not; the armed
+                // cue is a GLOW on the ICON (built below in BuildCard), so the selection
+                // reads as "this item is glowing," not "a ring is around it."
+                img.color = Color.white;
             }
             else
             {
-                img.color = armed
-                    ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f)
-                    : ElarionUiKit.ObsidianFill;
+                img.color = ElarionUiKit.ObsidianFill;
             }
 
             var btn = cardGo.GetComponent<Button>();
@@ -479,9 +482,12 @@ namespace DeNelle.Village
             // Unaffordable cards grey out as a whole (plate + labels).
             if (!affordable) cardGo.AddComponent<CanvasGroup>().alpha = 0.45f;
 
+            // Armed = bright gilt name (the icon glows below; the label now sits on the
+            // plate's normal obsidian face, so gilt reads — the old dark Ink assumed a
+            // gold-flooded plate that no longer exists).
             var nameLabel = MakeText(cardGo.transform,
                 string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName,
-                14, armed ? ElarionUi.Ink : ElarionUi.Parchment, FontStyles.Bold,
+                14, armed ? ElarionUi.Gilt : ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.96f));
             nameLabel.raycastTarget = false;
 
@@ -491,6 +497,26 @@ namespace DeNelle.Village
             // per-tower switch), (b) the concept-icons.json table via
             // ConceptIconResolver (data decides), (c) a procedural obsidian plate
             // carrying the entry's initial — NEVER a blank band (null-art law).
+            // -- Armed GLOW on the ICON (owner felt-test 2026-07-16, said twice) --
+            // Replaces the removed gold-flooded plate (the "big yellow circle"). A soft
+            // gilt halo is built BEFORE the art band so it renders BEHIND the icon (the
+            // light reads as emanating FROM the item), then a gentle emissive pulse
+            // (IconGlowPulse) makes the selected item visibly glow. Sprite-first (the
+            // kit rounded sprite via AddImage rounded:true) with a flat tinted-quad
+            // fallback baked into ApplyRounded — it can NEVER blank if the sprite build
+            // failed under WebGL. ASCII only; no Blink runtime refs.
+            if (armed)
+            {
+                FlowTrace.Step("BuildHud", "armed glow: soft gilt icon halo on card id=" + e.id);
+                var glowGo = ElarionUiKit.AddImage(cardGo.transform, "ArmedIconGlow",
+                    new Vector2(0.02f, 0.14f), new Vector2(0.98f, 0.82f),
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.55f),
+                    rounded: true);
+                var glowImg = glowGo.GetComponent<Image>();
+                if (glowImg != null) glowImg.raycastTarget = false;
+                glowGo.AddComponent<IconGlowPulse>();
+            }
+
             var art = ResolveEntryArt(e);
             var bandGo = new GameObject("Art", typeof(RectTransform), typeof(Image));
             bandGo.transform.SetParent(cardGo.transform, false);
@@ -504,7 +530,8 @@ namespace DeNelle.Village
             {
                 bandImg.sprite = art;
                 bandImg.preserveAspect = true;
-                bandImg.color = Color.white;
+                // Armed = the icon itself reads warm/lit (over its glow halo); rest = plain white.
+                bandImg.color = armed ? new Color(1f, 0.965f, 0.82f, 1f) : Color.white;
             }
             else
             {
@@ -743,6 +770,44 @@ namespace DeNelle.Village
             t.textWrappingMode = TextWrappingModes.Normal;
             ElarionUiKit.EnsureFont(t);
             return t;
+        }
+    }
+
+    /// <summary>
+    /// Gentle emissive pulse for the armed-card icon glow (owner felt-test 2026-07-16,
+    /// "instead of the circle use the VFX that makes the item glow"). Eases the halo's
+    /// alpha + scale up and down so the SELECTED item visibly GLOWS, rather than sitting
+    /// under a static ring/circle. Pure presentation; self-contained; ASCII only. Uses
+    /// unscaled time so the pulse breathes even if Build Mode ever pauses gameplay time.
+    /// </summary>
+    internal sealed class IconGlowPulse : MonoBehaviour
+    {
+        private Image _img;
+        private RectTransform _rt;
+        private float _baseAlpha = 0.55f;
+
+        private void Awake()
+        {
+            _img = GetComponent<Image>();
+            _rt = transform as RectTransform;
+            if (_img != null) _baseAlpha = _img.color.a;
+        }
+
+        private void Update()
+        {
+            // 0..1 eased breathing wave (~0.5 Hz).
+            float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
+            if (_img != null)
+            {
+                var c = _img.color;
+                c.a = Mathf.Lerp(_baseAlpha * 0.55f, Mathf.Min(1f, _baseAlpha + 0.30f), k);
+                _img.color = c;
+            }
+            if (_rt != null)
+            {
+                float s = Mathf.Lerp(0.94f, 1.12f, k);
+                _rt.localScale = new Vector3(s, s, 1f);
+            }
         }
     }
 }

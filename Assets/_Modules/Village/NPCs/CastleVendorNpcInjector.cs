@@ -297,6 +297,94 @@ namespace DeNelle.Village
             FlowTrace.Step("Vendor", "vendor anchor poll complete — every role has its NPC.");
         }
 
+        // ── PLACEMENT HOOK (owner device felt-test 2026-07-16, SHOW-STOPPER) ──────────
+        // A storefront the player PLACES in build mode must get its vendor NPC RIGHT NOW,
+        // not up to 2s later (the poll tick) and not never (the AnchorRoles poll misses the
+        // WO-707 palette ids workshop/lumberyard/foundry/silo/collector_*, and settles each
+        // role ONCE). BuildModeController.Place calls this the instant a placement commits;
+        // it reuses the SAME SpawnVendor path the scene-load poll uses — NO parallel NPC
+        // system, one vendor per trade.
+        /// <summary>Spawn the vendor NPC for a just-placed building, immediately. Idempotent
+        /// (skips if that role's vendor already exists — the poll or an earlier placement may
+        /// have beaten us). No-op until the injector's Awake ran (Instance null) and outside a
+        /// castle-hub scene. Reuses <see cref="SpawnVendor"/>, so a missing prefab still logs
+        /// + falls back to a placeholder rather than silently leaving the storefront vendorless.</summary>
+        public static void NotifyBuildingPlaced(string buildingId, Transform buildingTransform)
+        {
+            if (Instance == null || buildingTransform == null || string.IsNullOrEmpty(buildingId)) return;
+            Instance.SpawnVendorForPlaced(buildingId, buildingTransform);
+        }
+
+        private void SpawnVendorForPlaced(string buildingId, Transform buildingTransform)
+        {
+            using var _ = FlowTrace.Enter("NpcSeat", $"CastleVendorNpcInjector.SpawnVendorForPlaced id='{buildingId}'");
+            if (!IsCastleHubScene(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Step("NpcSeat", $"placed '{buildingId}' not in a castle-hub scene — no vendor.");
+                return;
+            }
+            string role = RoleForBuildingId(buildingId);
+            if (string.IsNullOrEmpty(role))
+            {
+                // Tower / wall / gate / decoration — not a storefront; no vendor by design.
+                FlowTrace.Step("NpcSeat", $"placed '{buildingId}' maps to no vendor role (non-storefront) — no NPC.");
+                return;
+            }
+            // Idempotent: the anchor poll (or an earlier placement of the same trade) may have
+            // already spawned this role's vendor. One vendor per trade — never stack a second.
+            if (GameObject.Find($"CastleVendor_{role}") != null ||
+                GameObject.Find($"CastleVendor_{role}_Placeholder") != null)
+            {
+                FlowTrace.Step("NpcSeat",
+                    $"vendor for role '{role}' already present — placement hook no-op (id='{buildingId}').");
+                return;
+            }
+
+            var holder = GameObject.Find(HolderName);
+            if (holder == null) holder = new GameObject(HolderName);   // poll not up yet — make the parent
+
+            // Synthetic marker at the baked front offset (local (0,0,6)) so SpawnVendor derives the
+            // building's front DISTANCE + facing exactly like the poll and the baked storefronts.
+            var marker = new GameObject($"NPC_{role}_Marker (placed)");
+            marker.transform.SetParent(buildingTransform, false);
+            marker.transform.localPosition = new Vector3(0f, 0f, 6f);
+
+            bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
+            Destroy(marker);
+
+            if (ok)
+                FlowTrace.Step("NpcSeat",
+                    $"vendor NPC spawned for placed '{buildingId}' (role '{role}') at {buildingTransform.position}.");
+            else
+                FlowTrace.Fail("NpcSeat",
+                    $"vendor NPC spawn FAILED for placed '{buildingId}' (role '{role}').");
+        }
+
+        /// <summary>Reverse of <see cref="AnchorRoles"/> (buildingId -> vendor role), PLUS the
+        /// WO-707 palette ids that carry no AnchorRoles entry but ARE storefronts the player
+        /// places (workshop/mill/lumbermill/lumberyard/foundry/silo). Returns null for
+        /// non-storefront ids (towers/walls/gates/deco) so placing those never spawns a
+        /// spurious merchant.</summary>
+        private static string RoleForBuildingId(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return null;
+            foreach (var (role, id) in AnchorRoles)
+                if (string.Equals(id, buildingId, System.StringComparison.OrdinalIgnoreCase))
+                    return role;
+            // Placeable storefront ids WO-707 grooming left out of AnchorRoles — give each a
+            // sensible vendor so every trade building gets an NPC to Talk/trade with.
+            switch (buildingId.ToLowerInvariant())
+            {
+                case "workshop":   return "Forge";       // in-world label "Forge" (weapons)
+                case "mill":       return "Windmill";
+                case "lumbermill": return "Lumbermill";
+                case "lumberyard":
+                case "foundry":
+                case "silo":       return "Marketplace"; // storage container — generic merchant
+                default:           return null;          // not a storefront -> no vendor
+            }
+        }
+
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
         // The castle centre to face NPCs toward — the Heart (world-tree). Runtime-found; CastleHubBuilder
         // places it at (0,0,12), the fallback used if the controller isn't up yet.

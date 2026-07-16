@@ -200,10 +200,13 @@ namespace DeNelle.Core.UI
             _skipAllHost = new GameObject("SkipTutorial", typeof(RectTransform), typeof(Image), typeof(Button));
             _skipAllHost.transform.SetParent(transform, false);
             var sart = (RectTransform)_skipAllHost.transform;
+            // Owner 2026-07-16: "Skip Tutorial should not be over top the Menu button." The HUD
+            // Menu/gear lives in the top-right corner; drop Skip Tutorial DOWN the right edge below
+            // it (clear of Menu above and the ability rail lower) so the two never overlap.
             sart.anchorMin = new Vector2(1f, 1f);
             sart.anchorMax = new Vector2(1f, 1f);
             sart.pivot = new Vector2(1f, 1f);
-            sart.anchoredPosition = new Vector2(-14f, -14f);
+            sart.anchoredPosition = new Vector2(-14f, -92f);   // was -14: sat on the Menu button
             sart.sizeDelta = new Vector2(180f, 44f);
             var saimg = _skipAllHost.GetComponent<Image>();
             saimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
