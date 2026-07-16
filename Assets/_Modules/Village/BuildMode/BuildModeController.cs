@@ -375,6 +375,12 @@ namespace DeNelle.Village
         // it commits to the new cells, on cancel it returns to its origin.
         private bool _movingSelected;
         private Vector2Int _moveOriginCell;   // origin to restore if a move is cancelled
+        // FIX #2 (2026-07-16) — the world target the MOVE ghost sits at. Seeded from the
+        // selected structure's position on BeginMoveSelected, then driven by EITHER the
+        // pointer (drag while pressed / desktop hover) OR the arrow keys + kit d-pad
+        // (grid-step nudge). Persisting it lets a d-pad/arrow nudge hold between frames
+        // instead of snapping back to the pointer every frame.
+        private Vector3 _moveWorldPoint;
 
         // Camera restore state.
         private Vector3 _savedCamPos;
@@ -919,6 +925,37 @@ namespace DeNelle.Village
             SelectStructure(ps);
         }
 
+        /// <summary>
+        /// FIX #1 (2026-07-16) — WEB TAP-SELECT. Resolve a single-pointer TAP (from
+        /// UpdateBuildCameraPan's press/release edge) into a selection: raycast from the tap
+        /// point (same RaycastGroundAt + GetComponentInParent&lt;PlacedStructure&gt; rule the
+        /// idle UpdateSelectLoop uses) and SELECT the structure under it, or CLEAR the current
+        /// selection on empty ground. A tap over UI (shop dock / panels) is ignored so a tap
+        /// meant for a control never selects the world behind it. Every branch self-names (§12).
+        /// </summary>
+        private void TryTapSelectAt(Vector2 screenPoint)
+        {
+            if (IsPointOverUi(screenPoint) || PointerOverPickableUI(screenPoint, out _))
+            {
+                FlowTrace.Step("Build", "tap-select: miss — tap point is over UI (shop/panel), world select suppressed.");
+                return;
+            }
+            if (!RaycastGroundAt(screenPoint, out RaycastHit hit))
+            {
+                FlowTrace.Step("Build", $"tap-select: miss — ground raycast missed at {screenPoint}, nothing under the tap.");
+                return;
+            }
+            var ps = hit.collider != null ? hit.collider.GetComponentInParent<PlacedStructure>() : null;
+            if (ps != null)
+            {
+                FlowTrace.Step("Build", $"tap-select: hit — SELECTS '{ps.itemId}' (web pointer path).");
+                SelectStructure(ps);
+                return;
+            }
+            FlowTrace.Step("Build", $"tap-select: miss — tap hit '{(hit.collider != null ? hit.collider.gameObject.name : "<no collider>")}' (no PlacedStructure). {(_selected != null ? "Clearing selection." : "Nothing selected.")}");
+            if (_selected != null) ClearSelection();
+        }
+
         /// <summary>CREATE mode: the original armed-entry ghost-follow place loop (P1).</summary>
         private void UpdatePlaceLoop()
         {
@@ -1165,6 +1202,43 @@ namespace DeNelle.Village
                 $"pending ghost NUDGED by d-pad {dpad} -> {_dropWorldPoint}");
         }
 
+        /// <summary>
+        /// FIX #2 (2026-07-16) — the combined MOVE nudge axis: keyboard WASD/arrows PLUS the
+        /// kit d-pad (ReadHudDpadMove). While moving a selected structure these NUDGE the move
+        /// ghost (UpdateMoveLoop) instead of panning the camera (UpdateBuildCameraPan zeroes the
+        /// SAME sources when _movingSelected). x = strafe, y = forward; the caller rotates it
+        /// into camera space. Zero on desktop when no key/pad is pressed.
+        /// </summary>
+        private static Vector2 ReadMoveNudgeAxis()
+        {
+            Vector2 v = Vector2.zero;
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb != null)
+            {
+                if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    v.y += 1f;
+                if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  v.y -= 1f;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) v.x += 1f;
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  v.x -= 1f;
+            }
+            Vector2 dpad = ReadHudDpadMove();
+            if (dpad.sqrMagnitude > DpadDeadZone * DpadDeadZone) v += dpad;
+            return v;
+        }
+
+        /// <summary>
+        /// FIX #2 — clamp the MOVE target to the grid (map) bounds so a key/d-pad nudge can't
+        /// walk the ghost off the world. Mirrors the pending-drop and camera-focus clamps.
+        /// </summary>
+        private void ClampMoveWorldToGrid()
+        {
+            if (_grid == null) return;
+            float halfW = _grid.gridWidth  * _grid.cellSize * 0.5f;
+            float halfH = _grid.gridHeight * _grid.cellSize * 0.5f;
+            Vector3 mapCentre = _grid.origin + new Vector3(halfW, 0f, halfH);
+            _moveWorldPoint.x = Mathf.Clamp(_moveWorldPoint.x, mapCentre.x - halfW, mapCentre.x + halfW);
+            _moveWorldPoint.z = Mathf.Clamp(_moveWorldPoint.z, mapCentre.z - halfH, mapCentre.z + halfH);
+        }
+
         /// <summary>True when the armed catalog entry is a tower (gets the rotate panel).</summary>
         private static bool IsTowerEntry(CatalogEntry entry)
             => entry != null && entry.type == CatalogType.Tower;
@@ -1252,7 +1326,42 @@ namespace DeNelle.Village
 
             PollRotateIntents();   // WO-673 L5 — ±45° rotate, free during a move too
 
-            if (!RaycastGround(out RaycastHit hit))
+            // FIX #2 (2026-07-16) — the move ghost follows EITHER the pointer OR the arrow
+            // keys / kit d-pad. A key/d-pad press NUDGES _moveWorldPoint (camera-relative
+            // grid-step, mirrors NudgePendingDropFromDpad) and the view holds still; when no
+            // nudge is pressed the pointer drives it (desktop hover, or an ACTIVE touch press
+            // on mobile/web — a released finger no longer stomps the nudge back). The nudge
+            // persists in _moveWorldPoint between frames so fine positioning sticks.
+            Vector2 nudge = ReadMoveNudgeAxis();
+            bool hasNudge = nudge.sqrMagnitude > DpadDeadZone * DpadDeadZone;
+            if (hasNudge && _camera != null)
+            {
+                nudge = Vector2.ClampMagnitude(nudge, 1f);
+                Vector3 nfwd = _camera.transform.forward; nfwd.y = 0f;
+                nfwd = nfwd.sqrMagnitude > 1e-4f ? nfwd.normalized : Vector3.forward;
+                Vector3 nright = _camera.transform.right; nright.y = 0f;
+                nright = nright.sqrMagnitude > 1e-4f ? nright.normalized : Vector3.right;
+                _moveWorldPoint += (nright * nudge.x + nfwd * nudge.y) *
+                    (_camPanSpeed * PendingNudgeScale * Time.unscaledDeltaTime);
+                ClampMoveWorldToGrid();
+                FlowTrace.Throttle("Build", "move-nudge", 0.5f,
+                    $"move ghost NUDGED by keys/d-pad {nudge} -> {_moveWorldPoint} (camera held)");
+            }
+            else
+            {
+                // Pointer follow: desktop hover always, but on a touchscreen only while a press
+                // is active (else a released finger's last point would stomp the nudge).
+                bool touchActive = UnityEngine.InputSystem.Touchscreen.current != null;
+                var ptr = UnityEngine.InputSystem.Pointer.current;
+                bool pointerActive = !touchActive || (ptr != null && ptr.press.isPressed);
+                if (pointerActive && RaycastGround(out RaycastHit ptrHit))
+                    _moveWorldPoint = ptrHit.point;
+            }
+
+            // Resolve the ground surface at the (possibly nudged) target via a straight-down
+            // probe — supplies the surface hit/normal IsValidPlacement needs even on a frame
+            // driven purely by keys (no pointer ray). Off-map -> hide the ghost.
+            if (!RaycastGroundBelow(_moveWorldPoint, out RaycastHit hit))
             {
                 _ghost.Hide();
                 return;
@@ -2059,6 +2168,10 @@ namespace DeNelle.Village
             }
 
             _moveOriginCell = _selected.gridCell;
+            // FIX #2 (2026-07-16) — seed the move target at the structure's current spot so
+            // an arrow/d-pad nudge starts from where it stands (not from the last pointer
+            // point). The pointer/keys drive _moveWorldPoint from here in UpdateMoveLoop.
+            _moveWorldPoint = _selected.transform.position;
             // WO-673 L5 — seed the eighth-step yaw from the structure's persisted facing
             // (quarter-steps ×2 + the 45° half-step from yawOffset). Old pieces
             // (yawOffset 0) seed exactly as before.
@@ -2617,8 +2730,14 @@ namespace DeNelle.Village
             Vector3 fwd = _camera.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
             Vector3 right = _camera.transform.right; right.y = 0f; right = right.sqrMagnitude > 1e-4f ? right.normalized : Vector3.right;
 
+            // FIX #2 (2026-07-16) — while MOVING a selected structure, the arrow keys +
+            // d-pad NUDGE the move ghost (UpdateMoveLoop), NOT the camera. Zero both from the
+            // pan vector here (mirrors how dpadNudgesPending diverts the pad for a pending
+            // drop) so one press can't pan the view AND nudge the building. The view holds.
+            bool nudgingMovedStructure = _movingSelected;
+
             Vector2 move = Vector2.zero;   // x = strafe, y = forward
-            if (kb != null)
+            if (kb != null && !nudgingMovedStructure)
             {
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    move.y += 1f;
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  move.y -= 1f;
@@ -2636,7 +2755,9 @@ namespace DeNelle.Village
             // the d-pad NUDGES the pending ghost (NudgePendingDropFromDpad) instead of
             // panning the view — skip the camera merge so one press can't do both.
             bool dpadNudgesPending = _armed != null && _dropPending && !_movingSelected;
-            Vector2 dpad = dpadNudgesPending ? Vector2.zero : ReadHudDpadMove();
+            // FIX #2 — also zero the pad from the camera when moving a structure (it nudges
+            // the ghost in UpdateMoveLoop instead).
+            Vector2 dpad = (dpadNudgesPending || nudgingMovedStructure) ? Vector2.zero : ReadHudDpadMove();
             if (dpad.sqrMagnitude > DpadDeadZone * DpadDeadZone)
             {
                 move += dpad;
@@ -2744,6 +2865,20 @@ namespace DeNelle.Village
                 }
                 else if (!pressed)                     // released
                 {
+                    // FIX #1 (2026-07-16) WEB TAP-SELECT: a release that was a TAP (a press was
+                    // seen and it never crossed PtrPanDragThreshold into a pan) whose press
+                    // started on the MAP (not the top HUD band) SELECTS the structure under the
+                    // press point. The raw world-tap confirm (DesktopBuildInput.PlaceOrSelect) is
+                    // unreliable on WebGL — placement got the on-screen PLACE button but selection
+                    // had no reliable path, so "tap a placed building, nothing happens". This rides
+                    // the SAME dependable pointer edge as the drag-to-pan. Only reached in the idle
+                    // view state (ptrPanAllowed), so it never fights placement; a real drag (pan)
+                    // never selects. Belt-and-braces alongside UpdateSelectLoop.
+                    if (_ptrDown && !_ptrDragging && _ptrDownPoint.y < Screen.height * 0.88f)
+                    {
+                        FlowTrace.Step("Build", "tap-select: TAP released on map (web pointer path) — resolving structure under press point.");
+                        TryTapSelectAt(_ptrDownPoint);
+                    }
                     _ptrDown = false;
                     _ptrDragging = false;
                 }

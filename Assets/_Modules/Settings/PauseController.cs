@@ -22,6 +22,7 @@
 
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
 using DeNelle.Core;
 using DeNelle.Core.UI;
 
@@ -131,8 +132,14 @@ namespace DeNelle.Settings
 
             // Chrome Close = Resume. Sits above gameplay panels (31000), below
             // Settings (32000) so the settings screen opens over the top.
+            // Owner 2026-07-16: "spacing between these regardless of device or screen size, and
+            // all items must fit inside the container." The buttons had 0.06 fraction gaps, but the
+            // kit's MinTouchPx(112) floor grew each fraction-slot button to 112px and ate the gaps
+            // on a short modal (they read as flush). Fix: a taller modal + a VerticalLayoutGroup with
+            // a FIXED pixel gap and fixed-height buttons, so the spacing is guaranteed at any screen
+            // size and the stack always fits inside the frame.
             _modal = ElarionUiKit.BuildObsidianModal("PauseUI", "Paused",
-                new Vector2(0.34f, 0.24f), new Vector2(0.66f, 0.76f), Resume,
+                new Vector2(0.34f, 0.18f), new Vector2(0.66f, 0.82f), Resume,
                 sortingOrder: 31500,
                 frameName: RpgUiCatalog.FrameOptions, medallionIcon: "settings");
 
@@ -141,21 +148,47 @@ namespace DeNelle.Settings
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
-            ElarionUiKit.BuildObsidianButton(body, "Resume",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.10f, 0.74f), new Vector2(0.90f, 0.92f), Resume);
+            // Vertical stack: fixed gap between items, centered, fits inside the body zone.
+            var stackGo = new GameObject("PauseButtonStack", typeof(RectTransform), typeof(VerticalLayoutGroup));
+            stackGo.transform.SetParent(body, false);
+            var stackRt = (RectTransform)stackGo.transform;
+            stackRt.anchorMin = new Vector2(0.08f, 0.06f);
+            stackRt.anchorMax = new Vector2(0.92f, 0.94f);
+            stackRt.offsetMin = Vector2.zero; stackRt.offsetMax = Vector2.zero;
+            var vlg = stackGo.GetComponent<VerticalLayoutGroup>();
+            vlg.spacing = 18f;                          // the guaranteed inter-button gap (pixels)
+            vlg.childControlWidth = true;  vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+            vlg.childAlignment = TextAnchor.UpperCenter;
+
+            AddPauseButton(stackGo.transform, "Resume",
+                ElarionUiKit.ObsidianButtonColor.Green, Resume);
             // Settings button only when a settings screen is wired — never a dead control.
             if (_settings != null)
-            {
-                ElarionUiKit.BuildObsidianButton(body, "Settings",
-                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.10f, 0.50f), new Vector2(0.90f, 0.68f), OnSettingsClicked);
-            }
-            ElarionUiKit.BuildObsidianButton(body, "Quit to Title",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
-                new Vector2(0.10f, 0.26f), new Vector2(0.90f, 0.44f), OnQuitClicked);
+                AddPauseButton(stackGo.transform, "Settings",
+                    ElarionUiKit.ObsidianButtonColor.Gray, OnSettingsClicked);
+            AddPauseButton(stackGo.transform, "Quit to Title",
+                ElarionUiKit.ObsidianButtonColor.Red, OnQuitClicked);
 
             _modal.canvas.SetActive(false);   // built hidden; Pause shows it
+        }
+
+        /// <summary>Build one pause button as a fixed-height VerticalLayoutGroup child so the
+        /// stack spacing + containment are guaranteed at any screen size (owner 2026-07-16).</summary>
+        private void AddPauseButton(Transform stack, string label,
+            ElarionUiKit.ObsidianButtonColor color, System.Action onClick)
+        {
+            // Full-stretch anchors — the VerticalLayoutGroup (childControlWidth/Height) drives the
+            // real size; the LayoutElement pins the height so min-touch can't overflow the slot.
+            var btn = ElarionUiKit.BuildObsidianButton(stack, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1, color,
+                Vector2.zero, Vector2.one, onClick);
+            if (btn == null) return;
+            var le = btn.gameObject.GetComponent<LayoutElement>();
+            if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = ElarionUiKit.MinTouchPx;          // never below the touch floor
+            le.preferredHeight = ElarionUiKit.CanonCtaHeight; // canonical CTA height
+            le.flexibleHeight = 0f;
         }
 
         // =====================================================================
