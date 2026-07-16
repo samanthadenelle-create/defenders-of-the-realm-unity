@@ -11,7 +11,7 @@
 
 ## How to review (two surfaces — use either)
 - **LIVE WEB PREVIEW (best — this is the demo):**
-  https://defenders-of-the-realm-v2-psdvw6e46.vercel.app/?x-vercel-protection-bypass=z5Q9cJNC4JpMoxgXDsddkK8oe7BFGlyP&x-vercel-set-bypass-cookie=true
+  https://defenders-of-the-realm-v2-5t3t72r1q.vercel.app/?x-vercel-protection-bypass=z5Q9cJNC4JpMoxgXDsddkK8oe7BFGlyP&x-vercel-set-bypass-cookie=true
   - Open on your **phone** (Pi Browser / any mobile browser) to felt-test the CoC build HUD landscape.
   - The bypass param defeats the team SSO wall (`ssoProtection: all_except_custom_domains`) and does
     NOT expire like a dashboard share link. Verified: the `_vercel_jwt` cookie carries the 127.9 MB
