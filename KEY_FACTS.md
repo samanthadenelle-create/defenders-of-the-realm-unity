@@ -100,6 +100,18 @@
   `structures-catalog.json` `visualPrefabPath` keys do not resolve on disk. Proposed 07-15, owner's call. *(2026-07-15)*
 
 ## Builds
+- **PROD (current) = the 07-16 six-fix build** — `q2v5vj86g`, promoted 2026-07-16, public, on
+  `defenders-of-the-realm-v2.vercel.app`. Rollback target recorded in `Builds/PROD_ROLLBACK.txt`
+  (prior prod `44dellx2j`). Commit `77e927be` (pushed to origin). *(2026-07-16)*
+- **Web-build self-test = `tools/webbot/`** (Playwright): `webbot.js` drives the DEPLOYED build for
+  screenshots + live browser-console `[Flow:*]` capture + a drag-pan engage check; `introtest.js`
+  clicks Play Intro. CAVEAT: synthetic clicks do NOT reliably fire Unity uGUI buttons in WebGL — the
+  bot verifies boot/render/console + asset serving, but button-driven flows (Play Intro, into Build
+  mode) need owner felt-test or the codec/HTTP determinants. Pass the SSO bypass param in the URL. *(2026-07-16)*
+- **Intro video plays on web** (owner Q 2026-07-16): determinants all green — `StreamingAssets/Video/
+  Defenders.mp4` serves 200 (`video/mp4`, 4MB), codec = **H.264 avc1 + AAC mp4a** (browser-compatible;
+  Unity copies StreamingAssets raw so codec IS the web risk), `IntroSequencePlayer` uses VideoPlayer
+  **URL source** (not VideoClip) with the WebGL `audioOutputMode=Direct` fix. *(2026-07-16)*
 - **Ship WebGL = `BuildOptions.None`** (Development is opt-in `-DevBuild` — NEVER deploy a DevBuild: Development players paint the full-screen error overlay). Desktop release still ships Development (open item). *(verified WebGLBuild.cs:124 / DesktopBuild.cs:178, 2026-07-12)*
 - Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
 - Fleet baseline: DataRegression = 3 known pre-existers (arena ground, B2 dual-wallet, pet-slot) **+ 3 expected CoreSave fail-by-design reds** (Tribes/Wards/Arena). *(2026-07-12)*
