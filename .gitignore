@@ -337,3 +337,6 @@ terminals/
 
 tools/docs/__pycache__/
 .env*
+
+# Admin dashboard key (machine-local secret; set in Vercel env). Never commit.
+.admin-dash-key

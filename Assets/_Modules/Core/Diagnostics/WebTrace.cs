@@ -8,11 +8,19 @@
 // local break-log.jsonl — it ADDS a remote path, it does NOT change local
 // behaviour.
 //
-// DORMANT BY DEFAULT — ships now, fires later. Two independent gates:
-//   1. FeatureFlags.WebTrace must be ON (default OFF; PlayerPrefs ff.webtrace
-//      or the WebGL ?trace=1 query-param for a single support session).
-//   2. TraceEndpoint must be non-empty. It is EMPTY until the backend lands, so
-//      with nothing configured the sink no-ops (one local note, then silent).
+// ⚠ THIS SINK IS LIVE — the "dormant by default" claim below WAS FALSE and cost a
+// session on 2026-07-15 (a CLI read it, believed prod was untraced, and wrote a bogus
+// WO instead of reading the data that was already in the DB). Verified from CODE:
+//   1. FeatureFlags.WebTrace — FeatureFlags.cs:117 is `Get("webtrace", defaultOn: TRUE)`.
+//      It is ON by default. (?trace=1 / PlayerPrefs ff.webtrace can also flip it per session.)
+//   2. TraceEndpoint — line ~63 is SET to the prod /api/trace URL, not empty.
+// BOTH GATES ARE OPEN, so a shipped WebGL player streams its FlowTrace to Neon
+// (analytics_events, event_name='web_trace') right now. FlowTrace.Enabled defaults OFF in a
+// release player (PII), and this sink sets it TRUE on activation (see Install) — that is the
+// ONLY reason a ship build traces at all.
+// READ PATH: the `[sig]` echo in Vercel runtime logs (api/trace.js logs each signal line), or
+// the key-gated admin endpoint api/admin/db.js (?view=traces&session=...&order=asc) —
+// DATABASE_URL is sensitive and cannot be pulled.
 //
 // Design rules (mirrors BreakCaptureHarness + §12 INSTRUMENT-don't-guess):
 //   * Subscribes to Application.logMessageReceived (Log/Warning/Error/Exception
@@ -134,7 +142,7 @@ namespace DeNelle.Core.Diagnostics
                 s_instance = this;
 
                 _sessionId = MakeSessionId();
-                _buildId   = string.IsNullOrEmpty(Application.version) ? "unknown" : Application.version;
+                _buildId   = MakeBuildId();
 
                 // Endpoint gate: empty until the backend lands → no-op, one local note.
                 if (string.IsNullOrEmpty(TraceEndpoint))
@@ -362,6 +370,37 @@ namespace DeNelle.Core.Diagnostics
             return Guard.Try("WebTrace", "session id",
                 () => "wt-" + Guid.NewGuid().ToString("N").Substring(0, 12),
                 fallback: "wt-anon");
+        }
+
+        /// <summary>
+        /// Build identity for a trace batch: <c>&lt;version&gt;@&lt;host&gt;</c> on web, bare version elsewhere.
+        /// </summary>
+        /// <remarks>
+        /// WHY THE HOST (2026-07-15, the magenta-ground triage): <see cref="TraceEndpoint"/> is
+        /// hardcoded to the PROD domain, so EVERY build — prod and every preview — posts into the
+        /// same analytics_events table. This id was <c>Application.version</c> alone, which is
+        /// "1.0" for all of them, so all 20 recorded sessions read <c>build=1.0</c> and a session
+        /// could NOT be attributed to a deployment. Concretely: a preview whose ground rendered
+        /// MAGENTA and a healthy prod were indistinguishable in the data, so the trace could not
+        /// answer "is prod affected?" — the question that actually mattered.
+        /// Qualifying with the host the player actually loaded makes every row attributable
+        /// without changing where traces are POSTed (the hardcoded endpoint is deliberate — it
+        /// always resolves, even from a host that has no /api/trace of its own).
+        /// STILL NO PII (WO-429): a deployment hostname is not a user. Off-web
+        /// <c>Application.absoluteURL</c> is empty → bare version, so desktop/editor are unchanged.
+        /// Guarded: an unparseable URL must never throw out of Install and kill the sink.
+        /// </remarks>
+        private static string MakeBuildId()
+        {
+            string ver = string.IsNullOrEmpty(Application.version) ? "unknown" : Application.version;
+            string host = Guard.Try("WebTrace", "build host",
+                () =>
+                {
+                    string url = Application.absoluteURL;
+                    return string.IsNullOrEmpty(url) ? null : new Uri(url).Host;
+                },
+                fallback: null);
+            return string.IsNullOrEmpty(host) ? ver : ver + "@" + host;
         }
 
         private static long NowUtcMs()

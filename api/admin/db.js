@@ -43,6 +43,15 @@ function clampLimit(raw, def, max) {
     return Math.min(n, max);
 }
 
+// Paging offset for the traces view. Bounded like clampLimit so a hostile/garbled
+// value can never become an unbounded scan: non-numeric/negative -> 0, hard ceiling
+// so OFFSET stays sane (the largest real session seen is ~2840 batches).
+function clampOffset(raw) {
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.min(n, 100000);
+}
+
 module.exports = async (req, res) => {
     // CORS: the viewer is a local file (Origin "null") fetching cross-origin.
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -171,18 +180,59 @@ module.exports = async (req, res) => {
         if (view === 'traces') {
             const limit = clampLimit(q.limit, 20, 50);
             if (q.session) {
-                const rows = await sql`
-                    SELECT event_id, received_at,
-                           properties->>'build'   AS build,
-                           properties->>'session' AS session,
-                           jsonb_array_length(COALESCE(properties->'lines', '[]'::jsonb)) AS line_count,
-                           properties->'lines'    AS lines
+                // PAGING (2026-07-15 — the magenta-ground triage): this view was
+                // ORDER BY received_at DESC LIMIT 20 with no offset, so a long session
+                // (one real session ran 2840 batches / 153k lines) could only ever be read
+                // from its TAIL — which is gameplay spam. The lines that actually diagnose a
+                // bug — scene load: TERRAINDIAG, MagentaGuard/FloorDiag, catalog + Resources
+                // resolution — are emitted in the FIRST batches and were unreachable. The
+                // trace pipe recorded the answer and the reader could not see it.
+                // order=asc  -> oldest first = the scene-load head (use this to triage).
+                // offset=N   -> page deeper in either direction.
+                const offset = clampOffset(q.offset);
+                const asc = String(q.order || 'desc').toLowerCase() === 'asc';
+                // ORDER BY direction cannot be parameterized in a tagged template (same
+                // constraint the table probes above call out), so the two directions are
+                // separate literal queries rather than interpolated SQL.
+                const rows = asc
+                    ? await sql`
+                        SELECT event_id, received_at,
+                               properties->>'build'   AS build,
+                               properties->>'session' AS session,
+                               jsonb_array_length(COALESCE(properties->'lines', '[]'::jsonb)) AS line_count,
+                               properties->'lines'    AS lines
+                        FROM analytics_events
+                        WHERE event_name = 'web_trace'
+                          AND properties->>'session' = ${String(q.session)}
+                        ORDER BY received_at ASC
+                        OFFSET ${offset} LIMIT ${limit}`
+                    : await sql`
+                        SELECT event_id, received_at,
+                               properties->>'build'   AS build,
+                               properties->>'session' AS session,
+                               jsonb_array_length(COALESCE(properties->'lines', '[]'::jsonb)) AS line_count,
+                               properties->'lines'    AS lines
+                        FROM analytics_events
+                        WHERE event_name = 'web_trace'
+                          AND properties->>'session' = ${String(q.session)}
+                        ORDER BY received_at DESC
+                        OFFSET ${offset} LIMIT ${limit}`;
+                // Total batches for the session, so a caller knows how far it can page
+                // instead of guessing where the session ends.
+                const totalRow = await sql`
+                    SELECT COUNT(*)::bigint AS batches
                     FROM analytics_events
                     WHERE event_name = 'web_trace'
-                      AND properties->>'session' = ${String(q.session)}
-                    ORDER BY received_at DESC
-                    LIMIT ${limit}`;
-                return res.status(200).json({ view: 'traces', session: String(q.session), limit: limit, rows: rows });
+                      AND properties->>'session' = ${String(q.session)}`;
+                const total = totalRow && totalRow[0] ? Number(totalRow[0].batches) : null;
+                return res.status(200).json({
+                    view: 'traces', session: String(q.session),
+                    order: asc ? 'asc' : 'desc', offset: offset, limit: limit,
+                    total_batches: total,
+                    returned: rows.length,
+                    has_more: total != null ? (offset + rows.length) < total : null,
+                    rows: rows,
+                });
             }
             // No session given → latest sessions summary so the owner can pick one.
             const rows = await sql`
