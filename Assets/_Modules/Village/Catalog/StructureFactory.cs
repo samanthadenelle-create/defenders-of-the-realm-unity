@@ -699,6 +699,12 @@ namespace DeNelle.Village
                     // the roster (null-safe: a headless / controller-less scene just skips it).
                     var controller = Object.FindAnyObjectByType<VillageController>();
                     if (controller != null) controller.RegisterBuilding(b);
+
+                    // Owner 2026-07-15 "arcane towers should have an aura": the arcane-tower
+                    // landmark (this GameplayBuilding path replays it from BaseLayout) holds a
+                    // persistent magic-circle aura. Idempotent; colorblind-safe (motion, not hue).
+                    if (string.Equals(entry.id, "arcane-tower", System.StringComparison.OrdinalIgnoreCase))
+                        ArcaneAura.Ensure(root);
                     break;
                 }
 

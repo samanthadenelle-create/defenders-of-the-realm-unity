@@ -41,7 +41,9 @@ namespace DeNelle.Core.Catalog
         /// Resources texture FORCED onto the skinned visual's materials when the model's
         /// embedded material lost its texture link and would render colorless (e.g. the
         /// 'Structures/arcane tower' Tripo FBX — its owner-dialed swap row carried
-        /// texPath "Structures/arcane tower/arcane tower"). Applied by
+        /// texPath "Structures/ArcaneTower_Albedo" -- the atlas was moved OUT of the nested
+        /// "arcane tower/" folder whose name collided with the sibling "arcane tower.fbx"
+        /// (that collision made Resources.Load return null and left the spire pure white)). Applied by
         /// StructureFactory.Create after the skin; null (default) = untouched.
         /// JSON deserializes "visualTexturePath" straight in.
         /// </summary>

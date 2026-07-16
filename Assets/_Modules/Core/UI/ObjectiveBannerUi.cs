@@ -121,10 +121,16 @@ namespace DeNelle.Core.UI
             var plate = new GameObject("Plate", typeof(RectTransform), typeof(Image));
             plate.transform.SetParent(transform, false);
             var prt = (RectTransform)plate.transform;
-            prt.anchorMin = new Vector2(0.5f, 1f);
-            prt.anchorMax = new Vector2(0.5f, 1f);
+            // Owner 2026-07-16: the step-instruction strip sat ON TOP of the compass — both
+            // parked top-centre. The HUD-kit compass lives in the Status "crown" area, which
+            // HudAreasHost anchors at screen-fraction y 0.845..0.990 (top ~15%). Anchor this
+            // banner to that crown's exact LOWER edge (0.845) so it hangs just BELOW the compass
+            // in both orientations (a screen fraction is the same physical y on this
+            // ConstantPixelSize canvas as on the kit's ScaleWithScreenSize canvas).
+            prt.anchorMin = new Vector2(0.5f, 0.845f);
+            prt.anchorMax = new Vector2(0.5f, 0.845f);
             prt.pivot = new Vector2(0.5f, 1f);
-            prt.anchoredPosition = new Vector2(0f, -14f);
+            prt.anchoredPosition = new Vector2(0f, -6f);
             prt.sizeDelta = new Vector2(BannerWidth, BannerHeight);
             var pimg = plate.GetComponent<Image>();
             // Obsidian plate: the single ObsidianFill hue at a translucent alpha so the
@@ -206,8 +212,11 @@ namespace DeNelle.Core.UI
             sart.anchorMin = new Vector2(1f, 1f);
             sart.anchorMax = new Vector2(1f, 1f);
             sart.pivot = new Vector2(1f, 1f);
-            sart.anchoredPosition = new Vector2(-14f, -92f);   // was -14: sat on the Menu button
-            sart.sizeDelta = new Vector2(180f, 44f);
+            // Owner 2026-07-16 "Skip Tutorial is tiny vs everything else" — size it to the HUD button
+            // scale (was 180x44, dwarfed by Menu + the action bar). Pushed further down so the taller
+            // box clears the Menu button above it.
+            sart.anchoredPosition = new Vector2(-14f, -116f);   // was -92: clear the taller box under Menu
+            sart.sizeDelta = new Vector2(248f, 72f);            // was 180x44 — HUD-consistent
             var saimg = _skipAllHost.GetComponent<Image>();
             saimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
                                     ElarionUiKit.ObsidianFill.b, 0.90f);
@@ -237,7 +246,7 @@ namespace DeNelle.Core.UI
             satxrt.offsetMax = Vector2.zero;
             var sat = saTextGo.AddComponent<TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(sat);
-            sat.fontSize = 20f;   // mobile-readable text floor (>=20px) — no 0-glyph casualty
+            sat.fontSize = 26f;   // HUD-consistent (owner 2026-07-16); >=20px mobile floor
             sat.color = ElarionUi.Parchment;
             sat.alignment = TextAlignmentOptions.Center;
             sat.text = "Skip Tutorial";   // ASCII only (no glyphs in TMP)

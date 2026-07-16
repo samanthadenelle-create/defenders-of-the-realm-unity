@@ -76,6 +76,7 @@ namespace DeNelle.Village
         private GameObject _intentBar;       // shown only in Placing
         private BuildWalletRow _wallet;
         private BuildHudState _state = BuildHudState.Browse;
+        private TextMeshProUGUI _placeName;  // "Placing: <name>" — folded into the intent cluster
 
         /// <summary>
         /// Create the HUD host (one per session). <paramref name="parent"/> is the
@@ -143,79 +144,97 @@ namespace DeNelle.Village
                 new Vector2(0.35f, 0.1f), new Vector2(0.65f, 0.9f));
             title.raycastTarget = false;
 
-            // "X Done" exit — top-right. Pinned to the consistent HUD button box
-            // (ExitBtnW x CanonCtaHeight) centred on its anchor, so a wide canvas can
-            // never stretch it into a thin bar.
+            // "X Done" exit — the ONE exit affordance (the palette's duplicate "Done" is
+            // removed). Seated in the top band RIGHT-OF-CENTRE, NOT the screen corner:
+            // the FTUE Skip Tutorial + HUD Menu/gear both hug the top-right SCREEN corner
+            // (ObjectiveBannerUi anchors Skip Tutorial to (1,1) at y -92), so a corner Done
+            // collided with them. Centre ~0.735 keeps Done inside the HUD's own dark band,
+            // large + tappable, and clear of that right-edge column on every screen ratio.
+            // Pinned to the consistent HUD box (ExitBtnW x CanonCtaHeight) so a wide canvas
+            // can never stretch it into a thin bar.
             var exit = ElarionUiKit.BuildObsidianButton(_canvas.transform, "X Done",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.905f, 0.86f), new Vector2(0.99f, 0.99f),
+                new Vector2(0.685f, 0.86f), new Vector2(0.785f, 0.99f),
                 () => _onExit?.Invoke());
             PinSize(exit, ExitBtnW, ElarionUiKit.CanonCtaHeight);
+            FlowTrace.Step("BuildHud",
+                "single exit 'X Done' seated right-of-centre in the top band (clear of the " +
+                "right-edge Skip Tutorial / Menu column)");
             // Canonical close name (probe/close convention; label stays "X Done").
             exit.gameObject.name = "CloseButton";
         }
 
         private void BuildIntentBar()
         {
-            // Centred, ABOVE the shop dock — shown only in Placing. Each button
-            // >=112px shortest side (182x130 / PLACE 230x130 at reference).
+            // The ONE control cluster shown while Placing, hugging the BOTTOM edge (CoC).
+            // Because BuildPaletteUI.Collapse now hides EVERY dock background, the whole
+            // map/ghost ABOVE this row is visible — no black wall. The bar's own rect
+            // carries NO Image (fully transparent) and the pill below is non-raycast, so
+            // world taps used to set the drop location pass straight through; only the four
+            // buttons eat a tap.
             _intentBar = new GameObject("BuildIntentBar", typeof(RectTransform));
             _intentBar.transform.SetParent(_canvas.transform, false);
             var irt = (RectTransform)_intentBar.transform;
             irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
             irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
 
-            // Each verb is pinned to the consistent HUD box (PinSize) after build, so
-            // the anchor rect only carries the CENTRE — the four centres below are
-            // spaced so the fixed-width boxes sit in a row with even gaps (no overlap,
-            // no thin bars). Row is vertically centred at y=0.36.
-            // "Tap once to select location, then rotate." — a single ASCII hint line
-            // ABOVE the verb row, shown ONLY while Placing (child of the intent bar, which
-            // toggles active with the Placing state). Parchment on a near-black strip for
-            // contrast; NON-raycast on both the strip and the text so it can NEVER eat the
-            // world tap the player uses to select the drop location (owner felt-test
-            // 2026-07-16). Backing strip stays narrow/centred so the map is unobstructed.
+            // ── Slim "Placing: <name>" + one-line hint pill, folded into this cluster
+            //    (owner: "at most a THIN label, or fold that into the intent bar"). Narrow +
+            //    centred + rounded so it reads as a pill, NEVER a wall. Sits just ABOVE the
+            //    verb row (both in the bottom third) so the drop zone (screen centre) stays
+            //    clear. NON-raycast on the pill AND both text lines so it can never eat the
+            //    world tap. The name line is filled by SetPlacingLabel() on Arm/move. ──────
             var hintBack = ElarionUiKit.AddImage(_intentBar.transform, "PlaceHintBack",
-                new Vector2(0.28f, 0.455f), new Vector2(0.72f, 0.525f),
+                new Vector2(0.30f, 0.185f), new Vector2(0.70f, 0.305f),
                 ElarionUiKit.ObsidianFill, rounded: true);
             var hintBackImg = hintBack.GetComponent<Image>();
             if (hintBackImg != null) hintBackImg.raycastTarget = false;
-            var hint = MakeText(hintBack.transform, "Tap once to select location, then rotate.",
-                22, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
-                new Vector2(0.03f, 0f), new Vector2(0.97f, 1f));
-            hint.raycastTarget = false;
+            _placeName = MakeText(hintBack.transform, "Placing: structure",
+                22, ElarionUi.Gilt, FontStyles.Bold, TextAlignmentOptions.Center,
+                new Vector2(0.04f, 0.50f), new Vector2(0.96f, 0.98f));
+            _placeName.raycastTarget = false;
+            var placeHint = MakeText(hintBack.transform, "Tap to set location, then rotate.",
+                18, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.50f));
+            placeHint.raycastTarget = false;
 
+            // ── ONE verb row hugging the bottom edge. Each button is PinSize'd to a FIXED
+            //    box centred on its anchor, so a wide LANDSCAPE canvas never stretches it
+            //    into a thin bar AND a narrow PORTRAIT canvas scales it proportionally
+            //    (fraction anchors + fixed PinSize = the SAME relative row in both
+            //    orientations, never truncated/crammed). Centres spread 0.18/0.38/0.60/0.82
+            //    so the four boxes seat with even gaps. Row centred at y=0.095 (bottom). ────
             var rotL = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Left",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.233f, 0.30f), new Vector2(0.323f, 0.42f),
+                new Vector2(0.14f, 0.035f), new Vector2(0.22f, 0.155f),
                 () => _onRotateLeft?.Invoke());
             PinSize(rotL, IntentBtnW, ElarionUiKit.CanonCtaHeight);
             AllowTwoLineLabel(rotL);   // never truncate "Rotate Left" -> wrap to 2 lines
 
             var rotR = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Right",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.371f, 0.30f), new Vector2(0.461f, 0.42f),
+                new Vector2(0.34f, 0.035f), new Vector2(0.42f, 0.155f),
                 () => _onRotateRight?.Invoke());
             PinSize(rotR, IntentBtnW, ElarionUiKit.CanonCtaHeight);
             AllowTwoLineLabel(rotR);   // never truncate "Rotate Right" -> wrap to 2 lines
 
             var place = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "PLACE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.524f, 0.30f), new Vector2(0.614f, 0.42f),
+                new Vector2(0.55f, 0.035f), new Vector2(0.65f, 0.155f),
                 () => _onPlace?.Invoke());
             PinSize(place, PlaceBtnW, ElarionUiKit.CanonCtaHeight);
 
             var cancel = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Cancel",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.677f, 0.30f), new Vector2(0.767f, 0.42f),
+                new Vector2(0.78f, 0.035f), new Vector2(0.86f, 0.155f),
                 () => _onCancel?.Invoke());
             PinSize(cancel, IntentBtnW, ElarionUiKit.CanonCtaHeight);
             cancel.gameObject.name = "BuildHudPlaceCancel";
 
             _intentBar.SetActive(false);   // Placing state shows it
             FlowTrace.Step("BuildHud",
-                "intent bar built: [Rotate Left][Rotate Right][PLACE][Cancel] + tap-to-select hint " +
-                "(rotate labels wrap to 2 lines, no truncation)");
+                "intent bar rebuilt: bottom-edge [Rotate Left][Rotate Right][PLACE][Cancel] row " +
+                "+ slim Placing pill above; map/ghost stays visible (dock fully collapsed)");
         }
 
         // ── Rotate labels never truncate (owner felt-test 2026-07-16) ───────────
@@ -263,6 +282,20 @@ namespace DeNelle.Village
             // (Selected verbs render on BuildSelectionUI's bar, owned by the brain).
             if (_intentBar != null && _intentBar.activeSelf != (state == BuildHudState.Placing))
                 _intentBar.SetActive(state == BuildHudState.Placing);
+        }
+
+        /// <summary>
+        /// Fold the "Placing: &lt;name&gt;" label into the intent cluster (owner redesign:
+        /// "at most a thin label, or fold that into the intent bar"). Called by the brain on
+        /// Arm / begin-move so the collapsed shop needs no black summary panel of its own.
+        /// ASCII only; presentation-only; safe before the bar is built (no-op).
+        /// </summary>
+        public void SetPlacingLabel(string displayName)
+        {
+            if (_placeName == null) return;
+            string n = string.IsNullOrEmpty(displayName) ? "structure" : displayName;
+            _placeName.text = "Placing: " + n;
+            FlowTrace.Step("BuildHud", "placing label folded into intent bar: " + n);
         }
 
         /// <summary>Re-read the live wallet (called by the brain on transitions).</summary>

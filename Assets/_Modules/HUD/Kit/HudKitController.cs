@@ -868,8 +868,13 @@ namespace DeNelle.HUD.Kit
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
             for (int i = 0; i < kinds.Length; i++)
             {
+                // OWNER 2026-07-15 (colorblind): in THIS resource strip Gold must read the SAME
+                // size + color as Wood/Iron/Food/Crystal — the earlier primary:Gold gave it gilt
+                // digits + FontHead (bigger) + bold (ElarionUiKitObsidian CurrencyChip:850-853),
+                // so it stood out. All five chips are peers here; the icon carries identity, never
+                // color/size. primary:false makes every chip uniform (Parchment, FontLabel, normal).
                 _resChips[i] = ElarionUiKit.CurrencyChip(_resExpandedRow.transform, kinds[i],
-                    Vector2.zero, Vector2.one, primary: kinds[i] == ElarionUiKit.CurrencyKind.Gold,
+                    Vector2.zero, Vector2.one, primary: false,
                     tag: tags[i]);
                 var le = _resChips[i].root.AddComponent<LayoutElement>();
                 le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;

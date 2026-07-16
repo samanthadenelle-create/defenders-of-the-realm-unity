@@ -680,9 +680,16 @@ namespace DeNelle.Pets
             {
                 // No rig on this mesh — nothing to drive (a static decimated echo). Not a failure,
                 // but trace it so a "pet doesn't move" report can be split from a T-pose binding gap.
-                FlowTrace.Step("Pets", $"WirePetAnimator: '{def?.Species}' mesh has no Animator — static (no rig to drive).");
+                // A rig-less static mesh renders in its authored pose and CANNOT be un-T-posed at
+                // runtime (the founding Echo needs a rigged model or an idle-baked pose to settle).
+                FlowTrace.Step("Echo", $"echo animator wired: NONE — '{def?.Species}' mesh has no Animator (static, no rig to drive).");
                 return;
             }
+
+            // T-POSE CAUSE #2 (a DISABLED Animator never poses the rig): force it on and keep it
+            // animating even when the follow camera frames just past the Echo, so it never re-freezes.
+            anim.enabled = true;
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             string species = def != null ? def.Species : null;
             RuntimeAnimatorController ctrl = null;
@@ -690,6 +697,12 @@ namespace DeNelle.Pets
                 ctrl = Resources.Load<RuntimeAnimatorController>("Pets/" + species);
             if (ctrl == null)
                 ctrl = Resources.Load<RuntimeAnimatorController>("Pets/Pet");
+            if (ctrl == null)
+                // SHARED DROP-IN IDLE (founding Echo T-pose fix, 2026-07-16): one generic idle
+                // controller an artist drops at Resources/Pets/PetIdle.controller un-T-poses EVERY
+                // controllerless pet/Echo at once. Tried after the per-species/Pet controllers but
+                // before the per-FBX embedded-clip path, so a hand-authored idle always wins.
+                ctrl = Resources.Load<RuntimeAnimatorController>("Pets/PetIdle");
 
             if (ctrl != null)
             {
@@ -703,12 +716,11 @@ namespace DeNelle.Pets
                 // controller bound is the happy path; a missing/invalid avatar self-reports here so a
                 // capture splits "no controller" from "bound-but-can't-pose".
                 bool avatarOk = anim.avatar != null && anim.avatar.isValid;
+                FlowTrace.Step("Echo", $"echo animator wired: controller={ctrl.name} avatar={(avatarOk ? "valid" : "MISSING")} species={species} enabled={anim.enabled}.");
                 if (!avatarOk)
                     FlowTrace.Warn("Pets",
                         $"WirePetAnimator: bound controller '{ctrl.name}' on '{species}' but its Animator has " +
                         "no valid Avatar — the rig may freeze in a T-pose. Check the FBX rig import.");
-                else
-                    FlowTrace.Step("Pets", $"WirePetAnimator: bound controller '{ctrl.name}' on '{species}' (avatar valid).");
                 return;
             }
 
@@ -724,6 +736,7 @@ namespace DeNelle.Pets
                 var player = anim.gameObject.GetComponent<PetClipPlayer>();
                 if (player == null) player = anim.gameObject.AddComponent<PetClipPlayer>();
                 player.Initialize(anim, clip);
+                FlowTrace.Step("Echo", $"echo animator wired: controller=<none> embeddedClip={clip.name} species={species} (PetClipPlayer PlayableGraph fallback).");
                 FlowTrace.Step("Pets",
                     "WirePetAnimator: no .controller for pet '" + (species ?? "?") +
                     "' — playing its embedded clip '" + clip.name +
@@ -732,12 +745,13 @@ namespace DeNelle.Pets
             }
             else
             {
-                FlowTrace.Fail("Pets",
-                    "WirePetAnimator: no AnimatorController at Resources/Pets/" +
-                    (species ?? "<species>") + ".controller (nor Resources/Pets/Pet" +
-                    ".controller) AND no embedded clip on the FBX — pet '" +
-                    (species ?? "?") + "' will NOT animate (T-pose). Build a " +
-                    "per-species controller from its embedded clips.");
+                FlowTrace.Fail("Echo",
+                    "echo animator wired: NONE — no AnimatorController at Resources/Pets/" +
+                    (species ?? "<species>") + ".controller, Resources/Pets/Pet.controller, nor the shared " +
+                    "Resources/Pets/PetIdle.controller, AND no loadable embedded clip on the FBX — pet/Echo '" +
+                    (species ?? "?") + "' STAYS IN T-POSE. FIX (asset): drop a shared idle at " +
+                    "Resources/Pets/PetIdle.controller (covers every controllerless pet) or a per-species " +
+                    "controller built from its embedded clips.");
             }
         }
 

@@ -161,6 +161,9 @@ namespace DeNelle.Village
         {
             if (_hp < 0f) _hp = _maxHp;
             EnsureContactCollider();
+            // Owner 2026-07-15 "arcane towers should have an aura" - a persistent magic-circle
+            // aura loop (colorblind-safe: motion/luminance, not hue). Idempotent + self-managing.
+            ArcaneAura.Ensure(gameObject);
         }
 
         /// <summary>

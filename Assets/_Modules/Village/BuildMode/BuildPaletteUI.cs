@@ -117,13 +117,14 @@ namespace DeNelle.Village
         private Button _orientBtn;            // shown only while an entry is armed
         private string _armedId;
 
-        // Grok slice 4 (collapse-on-place, owner "minimize on select"): while an entry
-        // is armed the shop collapses to a compact "armed card" summary. These refs let
-        // Collapse()/Expand() swap the card tray + tab row for the summary line.
+        // Collapse-on-place (owner "minimize on select" + 2026-07-16 redesign): while an
+        // entry is armed the shop FULLY minimizes — EVERY dock background is hidden so no
+        // black wall covers the map. These refs let Collapse()/Expand() toggle the header
+        // band, the tab row, and the card tray. The "Placing: <name>" label is folded into
+        // the HUD intent bar (BuildHudController.SetPlacingLabel) — no summary panel here.
+        private GameObject _topBarGo;         // the dock header band (hidden while collapsed)
         private GameObject _trayGo;           // the scroll well (hidden while collapsed)
         private GameObject _tabRowGo;         // the category tab band (hidden while collapsed)
-        private GameObject _summaryGo;        // the compact placing summary (shown while collapsed)
-        private TextMeshProUGUI _summaryLabel;
 
         // WO-673 category switcher (always on — WO-682): the owner-ruled three build
         // categories — Town / Defenses / Walls — as a tab row between the header and
@@ -232,8 +233,11 @@ namespace DeNelle.Village
             drt.sizeDelta = new Vector2(1560f, 540f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
+            // Held as _topBarGo so Collapse() can hide the whole header band (it was the
+            // "giant black pane" left standing during placement — owner device screenshots).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
                 new Vector2(0f, headerBottom), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
+            _topBarGo = topBar;
             var rule = ElarionUiKit.AddImage(topBar.transform, "GoldRule",
                 new Vector2(0f, 0f), new Vector2(1f, 0f), ElarionUiKit.ObsidianTrim, rounded: false);
             var rrt = rule.GetComponent<RectTransform>();
@@ -249,27 +253,22 @@ namespace DeNelle.Village
                 new Vector2(0.04f, 0.10f), new Vector2(0.36f, 0.90f));
 
             // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
-            _orientBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Orient",
+            // DEV-ONLY (UpdateOrientButton gate). Parented to the DOCK (not the header band)
+            // and pinned TOP-RIGHT of the dock so it SURVIVES Collapse: it is only ever
+            // meaningful while an entry is armed (= placing = header hidden), so it must not
+            // vanish with the header. Small box, no wall; sits clear of the centred bottom
+            // intent cluster. Top-right slot is free now that the duplicate "Done" is gone.
+            _orientBtn = ElarionUiKit.BuildObsidianButton(dock.transform, "Orient",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.38f, 0.12f), new Vector2(0.66f, 0.88f),
+                new Vector2(0.78f, 0.80f), new Vector2(0.98f, 0.98f),
                 () => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); });
-            // Pin to the consistent CTA box (owner felt-test 2026-07-15): the wide
-            // header fraction resolved to a thin bar; a fixed 360x132 box centred on
-            // the anchor keeps it a proper button.
-            PinSize(_orientBtn, ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
-            _orientBtn.gameObject.SetActive(false);   // shown only while armed
+            PinSize(_orientBtn, 300f, ElarionUiKit.CanonCtaHeight);
+            _orientBtn.gameObject.SetActive(false);   // shown only while armed (+ dev)
 
-            // Done exits Build Mode — the strip's close affordance, so it carries the
-            // canonical close name while keeping its "Done" label. Sized to the kit
-            // scale family (~156x33 in the 540-wide dock — narrower than a card),
-            // not the old fifth-of-the-screen gold slab.
-            var exitBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Done",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.68f, 0.12f), new Vector2(0.97f, 0.88f),
-                () => OnExitRequested?.Invoke());
-            // Same consistent CTA box as Orient (owner felt-test 2026-07-15) — no thin bar.
-            PinSize(exitBtn, ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
-            exitBtn.gameObject.name = "CloseButton";
+            // NOTE (2026-07-16 redesign): the palette's own "Done" exit was REMOVED to end
+            // the duplicate-exit problem — the ONE exit is BuildHudController's top-band
+            // "X Done" (always visible while Build Mode is open). OnExitRequested stays on
+            // the API for back-compat but is no longer raised from this strip.
 
             // WO — category tab row via the reusable kit component (BuildTabRow):
             // Town / Defenses / Walls (Walls gated by FeatureFlags.WallsTab). Each tab
@@ -320,16 +319,11 @@ namespace DeNelle.Village
 
             _stripContent = contentGo.transform;
 
-            // Grok slice 4 collapse summary: a compact "armed card" line shown IN PLACE
-            // of the tray + tabs while placing (Collapse/Expand). Spans the tray band,
-            // near-black backing (WO-562), hidden until Collapse().
-            _summaryGo = ElarionUiKit.AddImage(dock.transform, "PlacingSummary",
-                new Vector2(0f, 0f), new Vector2(1f, headerBottom),
-                ElarionUiKit.ObsidianFill, rounded: false);
-            _summaryLabel = MakeText(_summaryGo.transform, "Placing", 18, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Center, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
-            _summaryLabel.raycastTarget = false;
-            _summaryGo.SetActive(false);
+            // (2026-07-16 redesign) The old full-dock "PlacingSummary" ObsidianFill panel
+            // was REMOVED — spanning 0..headerBottom of the dock, it WAS the black wall that
+            // covered the map during placement. The "Placing: <name>" text now lives as a
+            // slim pill in the HUD intent cluster (BuildHudController.SetPlacingLabel), so
+            // Collapse just hides every dock background and leaves the map fully visible.
 
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
@@ -337,27 +331,31 @@ namespace DeNelle.Village
         // ── Grok slice 4: collapse-on-place (owner "minimize on select") ──────────
 
         /// <summary>
-        /// Collapse the shop to the compact armed-card summary while placing: hide the
-        /// card tray + tab row, show a "Placing: &lt;name&gt;" line. Called from
-        /// BuildModeController.Arm. Safe before the palette is built (no-op).
+        /// FULLY minimize the shop while placing (owner redesign 2026-07-16): hide EVERY
+        /// dock background — the header band, the tab row, AND the card tray — so NO black
+        /// wall covers the map/ghost. The "Placing: &lt;name&gt;" label is folded into the
+        /// HUD intent cluster (BuildHudController.SetPlacingLabel), so the dock shows no
+        /// summary panel of its own. The dev-only Orient button (a DOCK child, not a header
+        /// child) stays reachable — UpdateOrientButton keeps its armed+dev gate. Called from
+        /// BuildModeController.Arm. <paramref name="armedDisplayName"/> is retained for API
+        /// compat (the label is now owned by the HUD). Safe before build (no-op).
         /// </summary>
         public void Collapse(string armedDisplayName)
         {
             if (_canvas == null) return;
+            if (_topBarGo != null) _topBarGo.SetActive(false);
             if (_trayGo != null) _trayGo.SetActive(false);
             if (_tabRowGo != null) _tabRowGo.SetActive(false);
-            if (_summaryLabel != null)
-                _summaryLabel.text = "Placing: " +
-                    (string.IsNullOrEmpty(armedDisplayName) ? "structure" : armedDisplayName) +
-                    "  (drop, adjust, then PLACE)";
-            if (_summaryGo != null) _summaryGo.SetActive(true);
+            UpdateOrientButton();   // keep the dev Orient button correct while armed
+            FlowTrace.Step("BuildHud",
+                "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar");
         }
 
-        /// <summary>Expand the shop back to the full carousel + tabs (called from CancelArmed).</summary>
+        /// <summary>Expand the shop back to the full header + tabs + carousel (called from CancelArmed).</summary>
         public void Expand()
         {
             if (_canvas == null) return;
-            if (_summaryGo != null) _summaryGo.SetActive(false);
+            if (_topBarGo != null) _topBarGo.SetActive(true);
             if (_tabRowGo != null) _tabRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
         }

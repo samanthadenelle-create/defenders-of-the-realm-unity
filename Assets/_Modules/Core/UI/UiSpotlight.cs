@@ -35,9 +35,13 @@ namespace DeNelle.Core.UI
     public sealed class UiSpotlight : MonoBehaviour
     {
         private const float FadeSeconds = 0.2f;          // eased in/out ~200ms (unscaled)
-        private const float DimAlpha = 0.62f;            // screen dim strength
-        private const float HolePadding = 34f;           // px beyond the target rect
-        private const float MinHoleDiameter = 110f;      // px — never a pin-prick
+        // Owner 2026-07-16 "instead of the circle have a GLOW to the button": the affordance was a
+        // full-screen DIM with a hard circular ring cutout (read as "a circle around the button").
+        // Now it is a soft GLOW halo ON the target, no screen dim. DimAlpha=0 removes the scrim; the
+        // ring sprite is a wide feathered glow (see RingSprite). Nothing else dims the screen.
+        private const float DimAlpha = 0f;               // was 0.62 — no screen dim; glow-on-target only
+        private const float HolePadding = 46f;           // px beyond the target rect (glow reach)
+        private const float MinHoleDiameter = 120f;      // px — never a pin-prick
         private const float RingPulsePeriod = 1.4f;      // gold rim breathing (s)
         private const int CanvasSortOrder = 4200;        // above HUD, below modal dialogs
         private const int HoleTexSize = 256;             // generated cutout/ring texture size
@@ -275,14 +279,17 @@ namespace DeNelle.Core.UI
             return _holeSprite;
         }
 
-        /// <summary>Thin feathered ring at the circle rim (the gold pulse).</summary>
+        /// <summary>Soft GLOW halo (owner 2026-07-16 "glow to the button, not a circle"): a wide
+        /// feathered gold fill, brightest around the target edge and fading smoothly outward, so it
+        /// reads as light emanating from the button rather than a hard ring drawn around it.</summary>
         private static Sprite RingSprite()
         {
             if (_ringSprite != null) return _ringSprite;
             _ringSprite = MakeRadialSprite((dist01) =>
             {
-                float band = 1f - Mathf.Clamp01(Mathf.Abs(dist01 - 0.94f) / 0.035f);
-                return band * band;
+                // Peak near the target edge (~0.72), soft falloff both directions = a glowing halo.
+                float g = 1f - Mathf.Clamp01(Mathf.Abs(dist01 - 0.72f) / 0.55f);
+                return g * g;   // smooth, no hard rim
             });
             return _ringSprite;
         }

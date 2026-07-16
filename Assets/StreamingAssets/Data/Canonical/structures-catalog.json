@@ -812,7 +812,7 @@
    "type": "Resource",
    "kind": "Cell",
    "visualPrefabPath": "Structures/arcane tower",
-   "visualTexturePath": "Structures/arcane tower/arcane tower",
+   "visualTexturePath": "Structures/ArcaneTower_Albedo",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,

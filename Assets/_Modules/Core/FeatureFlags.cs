@@ -271,6 +271,19 @@ namespace DeNelle.Core
         /// and are unaffected by this flag.</summary>
         public static bool DevHotkeys => Get("devhotkeys", defaultOn: false);
 
+        /// <summary>DEV RESOURCE TOOL (owner 2026-07-16: "on this APK can you add a resource devtool ...
+        /// since its only local"). Gates the on-screen touch grant overlay
+        /// <see cref="DeNelle.Village.Dev.ResourceDevTool"/> (per-currency +100/+1k/+10k/+1M buttons for
+        /// Gold/Wood/Iron/Food/Crystals). WHY A FLAG AND NOT Debug.isDebugBuild: the tester APK is a
+        /// RELEASE build — <c>AndroidBuild.BuildSeekerApk</c> uses <c>BuildOptions.None</c>, so
+        /// Debug.isDebugBuild is FALSE and the whole DeNelle.DevTools assembly is stripped on the APK.
+        /// This flag is what surfaces the tool on that local build. The tool ALSO always shows in the
+        /// Editor and in any Development build regardless of this flag. Default ON so it appears on the
+        /// local tester APK the owner ships now ("since its only local"). SECURITY: it grants unlimited
+        /// resources — SET PlayerPrefs "ff.devresourcetool" = 0 (or flip this default to false) BEFORE
+        /// ANY PUBLIC / STORE RELEASE build.</summary>
+        public static bool DevResourceTool => Get("devresourcetool", defaultOn: true);
+
         /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
         /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
         /// home hub (MainCastle_Hall) at runtime, WITHOUT hand-editing the scene: a soft glowing aura around

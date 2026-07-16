@@ -94,6 +94,12 @@ namespace DeNelle.Editor
             { "Arcane_Projectile",      new Pick(AAA + "Projectile VFX loop/Projectile 17 nova violet.prefab", isLoop: true) },
             { "Arcane_Cast",            new Pick(AAA + "Flash and hits/Flash 17 nova violet.prefab") },
             { "Arcane_Impact",          new Pick(AAA + "Flash and hits/Hit 17 nova violet.prefab") },
+            // Arcane TOWER ambient aura (owner 2026-07-15 "arcane towers should have an aura") — a
+            // looping magic circle held at the spire base. Reads by MOTION + LUMINANCE (a slow
+            // rotating rune ring), colorblind-safe; the violet tint is only a hint. Same prefab as
+            // Poi_NodeAura (known-imported), recolorable ON so ArcaneAura's HDR violet applies. Loop
+            // -> PlayKey returns a VFXHandle ArcaneAura.cs Stop()s on destroy.
+            { "Arcane_Aura",            new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
 
             // ── Frost (fly + impact) ──────────────────────────────────────────
             { "Frost_Projectile",       new Pick(AAA + "Projectile VFX loop/Projectile 26 blue diamond.prefab", isLoop: true) },

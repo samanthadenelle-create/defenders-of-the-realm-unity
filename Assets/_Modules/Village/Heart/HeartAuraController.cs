@@ -1,0 +1,245 @@
+// =============================================================================
+// HeartAuraController -- the persistent sacred aura around the Heart of Elarion.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// PRESENTATION (read-only): a gentle, always-on aura that makes the Heart read as
+// "the sacred thing you defend". This is the "add an aura effect to the tree" half
+// of the owner request. It ONLY READS HeartController.Hp -- it never heals or
+// mutates the Heart (that is HeartRegen's job). Presentation stays a separate layer.
+//
+// REUSE: plays the canonical VFXType.Aura_HeartPulse loop ("Heart of Elarion
+// ambient pulse -- nucleus loop") through the existing VFXManager pool -- the enum
+// value already existed for exactly this and was previously unwired. No new art is
+// authored; if no prefab is catalogued the manager's procedural aura loop fills in.
+//
+// COLOR-FREE HEALTH TELL (the owner is colorblind -- never encode meaning by color
+// alone; use motion / shape / luminance):
+//   * SHAPE/SIZE   -- the aura swells when the Heart is healthy, shrinks when hurt.
+//   * LUMINANCE    -- a soft light glows bright when healthy, dim when hurt.
+//   * MOTION       -- a slow calm "breath" when healthy accelerates into a fast
+//                     anxious flicker as HP falls.
+// The light hue is a fixed neutral warm-white and NEVER changes with health, so no
+// information is carried by color. A player who sees no color at all still reads the
+// Heart's condition from size + brightness + pulse rate.
+//
+// ATTACH: self-bootstraps onto the HeartController GameObject at runtime (the
+// canonical reactive-bridge pattern used by HeartwoodAmbientController) so no
+// curated .unity scene is hand-edited.
+//
+// INSTRUMENTATION (CLAUDE.md section 12): FlowTrace.Step on aura start + on each
+// health-tier transition (Healthy / Strained / Critical); FlowTrace.Once/Warn when
+// the VFX loop cannot start so a missing manager/catalog self-reports instead of
+// the Heart just looking auraless.
+// =============================================================================
+
+using UnityEngine;
+using DeNelle.Core.Diagnostics;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Drives the Heart's persistent sacred aura -- a pooled Aura_HeartPulse loop plus
+    /// a soft glow light, whose size / brightness / pulse-rate read the Heart's health
+    /// without relying on color. Read-only: it never mutates <see cref="HeartController"/>.
+    /// </summary>
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(HeartController))]
+    public sealed class HeartAuraController : MonoBehaviour
+    {
+        // Health tier, for Step-tracing a color-free readout transition (not for color).
+        private enum AuraTier { Unknown, Healthy, Strained, Critical }
+
+        [Header("Heart (auto-wired to the HeartController on this GameObject)")]
+        [SerializeField] private HeartController _heart;
+
+        [Header("Aura placement")]
+        [Tooltip("Local offset from the Heart pivot where the aura + glow sit (mid-trunk).")]
+        [SerializeField] private Vector3 _auraOffset = new Vector3(0f, 1.5f, 0f);
+
+        [Header("Color-free health tell (size)")]
+        [Tooltip("Aura scale when the Heart is critically hurt (HP 0).")]
+        [SerializeField, Min(0.1f)] private float _scaleHurt = 0.7f;
+        [Tooltip("Aura scale when the Heart is fully healthy (HP 100).")]
+        [SerializeField, Min(0.1f)] private float _scaleHealthy = 1.15f;
+
+        [Header("Color-free health tell (luminance)")]
+        [Tooltip("Glow light intensity when the Heart is critically hurt.")]
+        [SerializeField, Min(0f)] private float _lightHurt = 0.6f;
+        [Tooltip("Glow light intensity when the Heart is fully healthy.")]
+        [SerializeField, Min(0f)] private float _lightHealthy = 2.2f;
+        [Tooltip("Glow light range (world units). Constant -- unaffected by the size pulse.")]
+        [SerializeField, Min(0f)] private float _lightRange = 9f;
+
+        [Header("Color-free health tell (motion)")]
+        [Tooltip("Pulse frequency (Hz) when healthy -- a slow, calm breath.")]
+        [SerializeField, Min(0f)] private float _pulseHzHealthy = 0.5f;
+        [Tooltip("Pulse frequency (Hz) when hurt -- a fast, anxious flicker.")]
+        [SerializeField, Min(0f)] private float _pulseHzHurt = 2.2f;
+        [Tooltip("Pulse depth (fraction) when healthy -- barely breathing.")]
+        [SerializeField, Range(0f, 1f)] private float _pulseDepthHealthy = 0.12f;
+        [Tooltip("Pulse depth (fraction) when hurt -- a hard flicker.")]
+        [SerializeField, Range(0f, 1f)] private float _pulseDepthHurt = 0.5f;
+
+        // Fixed neutral warm-white -- the ONE thing that never changes with health, so no
+        // meaning is ever carried by color. (Colorblind-safe: hue is a constant.)
+        private static readonly Color GlowColor = new Color(1f, 0.96f, 0.9f);
+
+        // HP tier cut points for the Step-traced readout (mirrors HeartwoodAmbient tiers).
+        private const float HealthyMin  = 75f;
+        private const float StrainedMin = 40f;
+        private const float FullHp      = 100f;
+
+        private Transform _pivot;
+        private Light _light;
+        private VFXHandle _handle;
+        private AuraTier _tier = AuraTier.Unknown;
+        private float _pulsePhase;   // accumulated so a frequency change never snaps the wave
+
+        // -- Self-bootstrap (attach onto the Heart at runtime; no scene edit) -----
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedStatic;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedStatic;
+            AttachToHearts();
+        }
+
+        private static void OnSceneLoadedStatic(
+            UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode mode)
+            => AttachToHearts();
+
+        private static void AttachToHearts()
+        {
+            var hearts = Object.FindObjectsByType<HeartController>();
+            foreach (var heart in hearts)
+            {
+                if (heart == null) continue;
+                if (heart.GetComponent<HeartAuraController>() == null)
+                    heart.gameObject.AddComponent<HeartAuraController>();
+            }
+        }
+
+        private void Reset() => _heart = GetComponent<HeartController>();
+
+        private void Awake()
+        {
+            if (_heart == null) _heart = GetComponent<HeartController>();
+        }
+
+        private void Start()
+        {
+            BuildAura();
+        }
+
+        private void OnDestroy()
+        {
+            _handle?.Stop(immediate: true);
+            _handle = null;
+        }
+
+        // -- Aura construction ---------------------------------------------------
+
+        private void BuildAura()
+        {
+            using var _ = FlowTrace.Enter("Heart", $"HeartAura BuildAura on '{name}'");
+
+            // A pivot child hosts the glow + owns the size pulse, so scaling the aura
+            // never pollutes the pooled VFX GameObject's own localScale.
+            var pivotGo = new GameObject("[HeartAuraPivot]");
+            _pivot = pivotGo.transform;
+            _pivot.SetParent(transform, false);
+            _pivot.localPosition = _auraOffset;
+
+            // Soft neutral glow -- the luminance channel of the health tell.
+            _light = pivotGo.AddComponent<Light>();
+            _light.type = LightType.Point;
+            _light.color = GlowColor;
+            _light.range = _lightRange;
+            _light.intensity = _lightHealthy;
+            _light.shadows = LightShadows.None;
+
+            // Reuse the canonical Heart pulse aura loop through the pooled VFXManager.
+            if (VFXManager.Instance == null)
+            {
+                FlowTrace.Once("Heart", $"aura-nomanager:{name}",
+                    $"HeartAura '{name}': VFXManager.Instance is null -- the pooled Aura_HeartPulse loop " +
+                    "will not appear (the glow light still reads the health tell).");
+            }
+            else
+            {
+                _handle = VFXManager.Instance.PlayAura(VFXType.Aura_HeartPulse, transform);
+                if (_handle != null)
+                {
+                    _handle.SetParent(_pivot, worldPositionStays: false);
+                    FlowTrace.Step("Heart",
+                        $"HeartAura '{name}': Aura_HeartPulse loop started + parented to pivot (offset {_auraOffset}).");
+                }
+                else
+                {
+                    FlowTrace.Warn("Heart",
+                        $"HeartAura '{name}': PlayAura(Aura_HeartPulse) returned a NULL handle -- loop did not start " +
+                        "(loop-cap hit or missing catalog prefab + failed procedural fallback); glow light still active.");
+                }
+            }
+
+            // Seed the readout so tier one is traced from the first frame.
+            ApplyHealthTell(force: true);
+        }
+
+        // -- Per-frame color-free health tell ------------------------------------
+
+        private void Update()
+        {
+            if (_heart == null) return;
+            ApplyHealthTell(force: false);
+        }
+
+        private void ApplyHealthTell(bool force)
+        {
+            float hp = _heart != null ? _heart.Hp : 0f;
+            float hpFrac = Mathf.Clamp01(hp / FullHp);
+
+            // Motion: pulse rate + depth accelerate/deepen as HP falls. Advance the phase
+            // by the CURRENT frequency so a rate change is smooth, not a snap.
+            float hz    = Mathf.Lerp(_pulseHzHurt,    _pulseHzHealthy,    hpFrac);
+            float depth = Mathf.Lerp(_pulseDepthHurt, _pulseDepthHealthy, hpFrac);
+            _pulsePhase += Time.deltaTime * hz;
+            float pulse = 1f + Mathf.Sin(_pulsePhase * 2f * Mathf.PI) * depth;
+
+            // Luminance: baseline brightness scales with HP, then the pulse rides on top.
+            if (_light != null)
+            {
+                float baseIntensity = Mathf.Lerp(_lightHurt, _lightHealthy, hpFrac);
+                _light.intensity = Mathf.Max(0f, baseIntensity * pulse);
+            }
+
+            // Shape/size: the aura swells with health; a gentle share of the pulse "breathes".
+            if (_pivot != null)
+            {
+                float baseScale = Mathf.Lerp(_scaleHurt, _scaleHealthy, hpFrac);
+                float breath = 1f + (pulse - 1f) * 0.15f;
+                _pivot.localScale = Vector3.one * (baseScale * breath);
+            }
+
+            // Step-trace only on a tier transition (color-free readout), not per frame.
+            AuraTier next = TierForHp(hp);
+            if (force || next != _tier)
+            {
+                _tier = next;
+                FlowTrace.Step("Heart",
+                    $"HeartAura readout -> {next} at HP {hp:F1}/100 " +
+                    $"(size x{Mathf.Lerp(_scaleHurt, _scaleHealthy, hpFrac):F2}, " +
+                    $"glow {Mathf.Lerp(_lightHurt, _lightHealthy, hpFrac):F2}, pulse {hz:F2}Hz) -- color-free.");
+            }
+        }
+
+        private static AuraTier TierForHp(float hp)
+        {
+            if (hp >= HealthyMin)  return AuraTier.Healthy;
+            if (hp >= StrainedMin) return AuraTier.Strained;
+            return AuraTier.Critical;
+        }
+    }
+}

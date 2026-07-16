@@ -720,7 +720,14 @@ namespace DeNelle.Village
                 }
                 var pet = deployer.SummonAt(origin, DeNelle.Pets.PetMode.Defend);
                 if (pet != null)
-                    FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — pet body spawned at the Echo Hollow {origin} (PetHeroLeash walks it to the hero).");
+                {
+                    // PO creative call (2026-07-16): the founding Echo becomes an ethereal
+                    // FLOATING SPIRIT (keeps its baked bind pose) -- attach the presentation-only
+                    // hover/drift/aura layer to the Hollow-born instance (skeleton untouched).
+                    if (pet.GetComponent<EchoSpiritPresentation>() == null)
+                        pet.gameObject.AddComponent<EchoSpiritPresentation>();
+                    FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — pet body spawned at the Echo Hollow {origin} (PetHeroLeash walks it to the hero; EchoSpiritPresentation floating-spirit layer attached).");
+                }
                 else
                     FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — SummonAt returned null (visual birth skipped; roster grant still applies).");
             });

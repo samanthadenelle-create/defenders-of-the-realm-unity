@@ -1851,6 +1851,7 @@ namespace DeNelle.Village
             string armedLabel = entry != null && !string.IsNullOrEmpty(entry.displayName)
                 ? entry.displayName : entry?.id;
             _palette?.Collapse(armedLabel);
+            _hud?.SetPlacingLabel(armedLabel);   // fold "Placing: <name>" into the HUD intent bar
             _hud?.SetState(BuildHudState.Placing);
             _hud?.RefreshResources();
         }
@@ -2195,6 +2196,10 @@ namespace DeNelle.Village
 
             _movingSelected = true;
             _selectionUi?.Hide();
+            // Fold "Placing: <name>" into the HUD intent bar for the move loop too, so the
+            // collapsed shop needs no summary panel (the palette stays hidden during a move).
+            _hud?.SetPlacingLabel(entry != null && !string.IsNullOrEmpty(entry.displayName)
+                ? entry.displayName : _selected.itemId);
         }
 
         /// <summary>
