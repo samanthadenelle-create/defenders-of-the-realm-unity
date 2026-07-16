@@ -322,6 +322,15 @@ namespace DeNelle.Core
         /// "ff.homereturnportal" = 0 to hide/disable.</summary>
         public static bool HomeReturnPortal => Get("homereturnportal", defaultOn: true);
 
+        /// <summary>GATE TRAVERSAL (owner on-device 2026-07-15: "on approaching a door, should navigate to
+        /// the other side of the door") — when ON, <see cref="DeNelle.Village.World.GateTraversalInjector"/>
+        /// authors a paired inner/outer warp at each of the 4 castle gates (N/S/E/W) on the merged overworld,
+        /// so a hero walking OUT through a gate opening is carried just past the archway (facing outward), and
+        /// walking IN is carried just inside (facing inward). Runtime-authored (no scene edit, no rebake),
+        /// NavMesh-seated, and kept INSIDE the HomeReturnPortal outer ring (r~72) so the two never fight.
+        /// Default ON. PlayerPrefs "ff.gatetraversal" = 0 to disable.</summary>
+        public static bool GateTraversal => Get("gatetraversal", defaultOn: true);
+
         /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
         /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
         /// RuntimeRegionGate south deck, splitting the south navmesh -> spawn->gate PathPartial. South now

@@ -519,6 +519,10 @@ namespace DeNelle.Village
                 _deathTraceHasPos  = true;
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
                 PlayDeathAnim();
+                // Freeze the NavMeshAgent IMMEDIATELY (before HandleDeath's down-beat / the
+                // deferred-battle wait) so the death pose settles instead of the agent shaking
+                // the body in place. Covers every HandleDeath branch (defer / respawn / evac).
+                EnterDeathFreeze();
                 OnDeath?.Invoke();
                 OnDied?.Invoke();   // legacy event kept for existing listeners
                 StartCoroutine(HandleDeath());
@@ -709,6 +713,9 @@ namespace DeNelle.Village
             // for this explicit warp, throttled outside the window).
             DeNelle.Core.Diagnostics.DeathTrace.HeroMoved(transform.position, position,
                 "HeroHealth.Respawn", "in-place respawn at spawn anchor", always: true);
+            // Undo the death freeze first (restore updatePosition) so the warp + resumed
+            // locomotion drive the agent normally again.
+            ExitDeathFreeze();
             var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent != null && agent.enabled && agent.isOnNavMesh)
                 agent.Warp(position);
@@ -751,6 +758,65 @@ namespace DeNelle.Village
         {
             _lastDamageSourceWorld = null;
             _actor?.Revive();
+        }
+
+        // ── Death freeze (F8 on-device "hero dies -> stands in place and shakes") ──
+        // ROOT CAUSE: the hero is a kinematically-driven NavMeshAgent (HeroLocomotion
+        // calls agent.Move each frame; the agent keeps updatePosition=true, Unity's
+        // default). On death HandleDeath disables the HeroLocomotion COMPONENT, but the
+        // agent itself is left ENABLED and still owns the transform — so while the death
+        // pose/clip tries to settle (and any residual root motion / adjacent enemy nudges
+        // the body), the agent snaps the transform back to its nextPosition every frame.
+        // That agent-vs-pose tug is the visible "shakes in place" — and it hides the death
+        // animation because the body never comes to rest. Freezing the agent (stop the
+        // path, zero velocity, and stop it writing the transform) hands the body cleanly to
+        // ActorAnimator.Die's Death state. Also suppress the attack controller so a dead
+        // hero can't swing. Restored on revive (ExitDeathFreeze).
+        private void EnterDeathFreeze()
+        {
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled)
+            {
+                if (agent.isOnNavMesh)
+                {
+                    agent.ResetPath();
+                    agent.velocity  = Vector3.zero;
+                    agent.isStopped = true;
+                }
+                agent.updatePosition = false;   // let the death animation own the transform (kills the jitter)
+            }
+
+            // Suppress the primary-attack input on the same GameObject so a downed hero
+            // can't keep swinging during the down-beat (locomotion/abilities are disabled
+            // in HandleDeath; this covers the remaining input surface).
+            if (_pac == null) _pac = GetComponent<PlayerAttackController>();
+            if (_pac != null) _pac.enabled = false;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                "EnterDeathFreeze: agent stopped (updatePosition=false, velocity=0, path reset) + attack input off " +
+                $"— death pose now owns the transform (agent={(agent != null ? "present" : "none")}).");
+        }
+
+        // Revive counterpart to EnterDeathFreeze -- hand the transform back to the agent so
+        // the revived hero walks again. Warps the agent's internal position to the (possibly
+        // animation-moved) transform BEFORE re-enabling writes so there is no snap.
+        private void ExitDeathFreeze()
+        {
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled)
+            {
+                agent.updatePosition = true;
+                if (agent.isOnNavMesh)
+                {
+                    agent.Warp(transform.position);   // resync internal pos to the transform (no snap-back)
+                    agent.isStopped = false;
+                }
+            }
+            if (_pac == null) _pac = GetComponent<PlayerAttackController>();
+            if (_pac != null) _pac.enabled = true;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                "ExitDeathFreeze: agent resumed (updatePosition=true) + attack input on - hero controllable again.");
         }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
@@ -814,6 +880,7 @@ namespace DeNelle.Village
                 _isDead = false;
                 _cooldown = 0f;
                 ClearDeathAnim();
+                ExitDeathFreeze();   // re-enable the agent + attack input frozen on death
                 if (_locomotion != null) _locomotion.enabled = true;
                 if (_abilities  != null) _abilities.enabled  = true;
             }
