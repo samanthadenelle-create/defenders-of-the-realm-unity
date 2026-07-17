@@ -232,6 +232,23 @@ namespace DeNelle.Village
             return entry.visualPrefabPath;
         }
 
+        /// <summary>The FORCED albedo (Resources path) a structure wears at <paramref name="level"/>:
+        /// repo.upgradeTexturePath[level-2] when authored (L2 = [0], L3 = [1] - same contract as
+        /// upgradeVisualPath), else the base visualTexturePath (which itself may be null). WO-719
+        /// upgrade-tier fix: an upgraded spire (ArcaneSpire_2/_3) is a Tripo FBX whose only Color map
+        /// is buried in its .fbm folder — it does NOT survive a player build (renders WHITE, exactly
+        /// like L1 did before its fix). ReskinForLevel routes this flat Resources albedo through the
+        /// FRESH TripoMaterialFixer the tier reskin adds, so the upgraded model keeps its colour.</summary>
+        public static string TexturePathForLevel(CatalogEntry entry, int level)
+        {
+            if (entry == null) return null;
+            var ladder = entry.repo != null ? entry.repo.upgradeTexturePath : null;
+            if (level >= 2 && ladder != null && ladder.Length >= level - 1
+                && !string.IsNullOrEmpty(ladder[level - 2]))
+                return ladder[level - 2];
+            return entry.visualTexturePath;
+        }
+
         /// <summary>
         /// Swap the skinned visual to the per-tier model for <paramref name="level"/>.
         /// Returns TRUE only when a real per-tier model (different from the base path) is
@@ -270,6 +287,21 @@ namespace DeNelle.Village
                 FlowTrace.Fail("Structure", $"'{entry.id}': tier-{level} visual '{path}' failed to " +
                     "skin — keeping the previous visual (structure never blanks).");
                 return false;
+            }
+
+            // WO-719 (upgrade-tier albedo): the tier reskin's VisualFactory.Skin just added a FRESH
+            // TripoMaterialFixer to this new model with NO forced texture — so an upgraded Tripo spire
+            // (ArcaneSpire_2/_3), whose only Color map is buried in its .fbm folder (does NOT survive a
+            // player build), would render WHITE exactly like L1 did before its fix. Route the per-tier
+            // flat Resources albedo THROUGH that fixer BEFORE its next-frame Start (identical to the L1
+            // path in Create) so the forced map is baked into the fixer's single-pass URP/Lit rebuild
+            // and STICKS in the build. Covers BOTH the live upgrade (BuildModeController) AND save/
+            // reload (BaseLayoutLoader) — both funnel through this one reskin path.
+            string texPath = TexturePathForLevel(entry, level);
+            if (!string.IsNullOrEmpty(texPath))
+            {
+                var fixer = visual?.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
+                fixer?.SetForcedTexture(texPath);
             }
 
             // Orientation entries are authored against the BASE visualPrefabPath model (the

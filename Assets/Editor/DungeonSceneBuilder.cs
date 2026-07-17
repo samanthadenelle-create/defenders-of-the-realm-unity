@@ -98,6 +98,30 @@ namespace DeNelle.Editor
         private const string HalloweenRoot =
             "Assets/Models/KayKit/KayKit Halloween Bits 1.0/Assets/fbx(unity)/";
 
+        // -- Owned KayKit CHARACTER packs (art-finish, DUNGEON_ART_FINISH_AUDIT) --
+        // Bryn + the Hollow-One mini-boss were capsule stand-ins. These owned,
+        // rigged HUMANOID FBX give them a real animated body, retargeted through
+        // an existing shared Humanoid controller. Gitignored like every KayKit
+        // pack -- a missed path falls back to the emissive capsule, never blocks.
+        //  - Rogue_Hooded (Adventurers 2.0)  = Bryn, the hooded apothecary wanderer.
+        //  - Skeleton_Mage (Skeletons 1.1)   = the Hollow-One apprentice caster; it
+        //    is the EXACT model EnemyAnimatorFactory maps to SkeletonHumanoid, so
+        //    the mesh + controller pairing is already code-proven.
+        private const string AdventurersRoot =
+            "Assets/Models/KayKit/KayKit Adventurers 2.0/Characters/fbx/";
+        private const string SkeletonsRoot =
+            "Assets/Models/KayKit/KayKit Skeletons 1.1/characters/fbx/";
+
+        // Shared Humanoid animator controllers reused for the swapped character
+        // bodies. Bryn idles through the Village ambient-NPC controller (default
+        // state = Idle); the Hollow-One reuses the enemy SkeletonHumanoid
+        // controller (default state = Locomotion blend, idle at Speed 0). Both
+        // carry Humanoid clips that retarget onto any valid Humanoid avatar.
+        private const string BrynIdleControllerPath =
+            "Assets/_Modules/Village/NPCs/Animators/AC_AmbientNPC_Tob.controller";
+        private const string MiniBossControllerPath =
+            "Assets/Resources/Enemies/SkeletonHumanoid.controller";
+
         // ── Dungeon MonoBehaviour / SO type names (resolved by reflection) ───
         private const string NsDungeons = "DeNelle.Dungeons";
         private const string TypeDungeonController = NsDungeons + ".DungeonController";
@@ -167,6 +191,7 @@ namespace DeNelle.Editor
         private static int _floorCount;
         private static int _propCount;
         private static int _lightCount;
+        private static int _characterCount;   // rigged KayKit character bodies (Bryn, Hollow-One)
 
         // =====================================================================
         //  Entry point
@@ -188,6 +213,7 @@ namespace DeNelle.Editor
             _floorCount = 0;
             _propCount = 0;
             _lightCount = 0;
+            _characterCount = 0;
 
             EnsureFolder(ScenesDir);
             AssetDatabase.Refresh();
@@ -1248,19 +1274,31 @@ namespace DeNelle.Editor
             brynGo.transform.SetParent(parent, false);
             brynGo.transform.position = new Vector3(bx, YGround, bz);
 
-            // A simple visual stand-in — Bryn's character prefab is wired by the
-            // playable build; the dungeon scene needs the placement + line.
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "BrynBody";
-            body.transform.SetParent(brynGo.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1f, 0f);
-            body.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
-            StripColliders(body);
-            // PILL FIX (owner): a flat slate ApplyTint washes to near-white under
-            // the bright lantern light right where Bryn stands (Garden Approach).
-            // Make Bryn's stand-in emissive teal-slate so the wanderer reads as a
-            // tinted body, not a white pill, regardless of nearby light intensity.
-            ApplyEmissive(body, HexColor("5a7a86"), 0.5f);
+            // Art-finish (DUNGEON_ART_FINISH_AUDIT item 10): Bryn renders as an
+            // owned, rigged KayKit hooded wanderer (Rogue_Hooded, Adventurers 2.0)
+            // idling through the shared NPC Humanoid controller -- not a teal pill.
+            // ONLY the visual body changed; the SpeechBubbleAnchor + Bryn component +
+            // dialogue wiring below are untouched. Faces +X (yaw 90) toward the
+            // cottage / the Keeper's approach. Falls back to the emissive capsule
+            // stand-in if the Adventurers pack is not imported (gitignored).
+            var body = BuildCharacterVisual(
+                brynGo.transform, AdventurersRoot + "Rogue_Hooded.fbx",
+                BrynIdleControllerPath, "BrynBody",
+                Vector3.zero, 1f, 90f);
+            if (body == null)
+            {
+                body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.name = "BrynBody";
+                body.transform.SetParent(brynGo.transform, false);
+                body.transform.localPosition = new Vector3(0f, 1f, 0f);
+                body.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
+                StripColliders(body);
+                // PILL FIX (owner): a flat slate ApplyTint washes to near-white under
+                // the bright lantern light right where Bryn stands (Garden Approach).
+                // Make Bryn's stand-in emissive teal-slate so the wanderer reads as a
+                // tinted body, not a white pill, regardless of nearby light intensity.
+                ApplyEmissive(body, HexColor("5a7a86"), 0.5f);
+            }
 
             // World-space speech-bubble anchor. The WandererBubble component
             // (DeNelle.Dungeons — added by reflection) IS the run-time bubble: a
@@ -1308,14 +1346,29 @@ namespace DeNelle.Editor
             bossGo.transform.SetParent(parent, false);
             bossGo.transform.position = new Vector3(bx, YGround, bz);
 
-            // A clearly-labelled visual stand-in — the Hollow-One enemy prefab is
-            // supplied by the battle/enemy module, not by this scene builder.
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "BossBody";
-            body.transform.SetParent(bossGo.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1.1f, 0f);
-            body.transform.localScale = new Vector3(1.15f, 1.2f, 1.15f);
-            ApplyEmissive(body, HexColor("5e8c86"), 0.8f);
+            // Art-finish (DUNGEON_ART_FINISH_AUDIT item 11): the Hollow-One mini-boss
+            // renders as an owned, rigged KayKit skeleton MAGE (the apothecary-
+            // apprentice caster read) driven by the shared SkeletonHumanoid enemy
+            // controller -- not a teal capsule. Skeleton_Mage is the EXACT model
+            // EnemyAnimatorFactory maps to SkeletonHumanoid, so the mesh+controller
+            // pairing is code-proven. This is a pure VISUAL stand-in; the fighting
+            // Hollow-One enemy is still spawned by the battle/enemy module at run
+            // time (the HARD-LOCKED spec child names below are untouched). Scaled
+            // 1.2x for a mini-boss read, facing -X (yaw 270) toward the entrance.
+            // Falls back to the emissive capsule if the Skeletons pack is not imported.
+            var body = BuildCharacterVisual(
+                bossGo.transform, SkeletonsRoot + "Skeleton_Mage.fbx",
+                MiniBossControllerPath, "BossBody",
+                Vector3.zero, 1.2f, 270f);
+            if (body == null)
+            {
+                body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.name = "BossBody";
+                body.transform.SetParent(bossGo.transform, false);
+                body.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+                body.transform.localScale = new Vector3(1.15f, 1.2f, 1.15f);
+                ApplyEmissive(body, HexColor("5e8c86"), 0.8f);
+            }
 
             // The HARD-LOCKED mini-boss spec is baked into child GameObject
             // names so it survives any build (no Editor-only component is
@@ -1766,6 +1819,92 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// Art-finish (DUNGEON_ART_FINISH_AUDIT items 10-11): swaps a CHARACTER
+        /// capsule stand-in for an owned, rigged KayKit humanoid FBX driven by an
+        /// existing shared Humanoid animator controller, so Bryn + the Hollow-One
+        /// read as real animated characters instead of pills. Instantiated at EDIT
+        /// time (the same path every other dungeon mesh takes); the FBX + controller
+        /// resolve via AssetDatabase. Returns the instantiated body, or NULL if the
+        /// FBX is missing (gitignored on a fresh clone) so the caller falls back to
+        /// its emissive capsule -- the build NEVER blocks.
+        ///
+        /// Humanoid clips retarget across any valid Humanoid avatar, so an NPC idle
+        /// controller / the skeleton-enemy controller drives the KayKit rig with no
+        /// per-model authoring. The FBX imports (animationType Humanoid, auto-avatar)
+        /// with an Animator + avatar on its root; this stamps the controller +
+        /// AlwaysAnimate so the character idles rather than holding the bind pose.
+        /// </summary>
+        private static GameObject BuildCharacterVisual(
+            Transform parent, string fbxPath, string controllerPath, string bodyName,
+            Vector3 localPos, float scale, float yaw)
+        {
+            var model = LoadModel(fbxPath);
+            if (model == null)
+            {
+                Debug.LogWarning(
+                    $"[DungeonSceneBuilder] Character FBX missing '{fbxPath}' -- falling back to " +
+                    $"the capsule stand-in for {bodyName} (pack gitignored / not imported?).");
+                return null;
+            }
+
+            var body = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            if (body == null)
+            {
+                Debug.LogWarning(
+                    $"[DungeonSceneBuilder] InstantiatePrefab returned null for '{fbxPath}' -- " +
+                    $"falling back to the capsule stand-in for {bodyName}.");
+                return null;
+            }
+            body.name = bodyName;
+            body.transform.SetParent(parent, false);
+            body.transform.localPosition = localPos;
+            body.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            if (!Mathf.Approximately(scale, 1f))
+                body.transform.localScale = new Vector3(scale, scale, scale);
+
+            // The visual mesh must NOT collide -- the Bryn / mini-boss ANCHOR owns the
+            // interaction + encounter volumes; a skinned-mesh collider would fight
+            // them (the capsule stand-in was collider-stripped for the same reason).
+            StripColliders(body);
+
+            var anim = body.GetComponentInChildren<Animator>();
+            if (anim == null) anim = body.AddComponent<Animator>();
+            anim.applyRootMotion = false;
+            // These are scene-placed statics (no NavMeshAgent / Enemy.cs driving
+            // culling), so animate regardless of the camera -- never freeze at bind
+            // pose when off-screen.
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            var ctrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(controllerPath);
+            if (ctrl != null)
+            {
+                anim.runtimeAnimatorController = ctrl;
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"[DungeonSceneBuilder] Animator controller missing '{controllerPath}' for " +
+                    $"{bodyName} -- the KayKit mesh renders but holds its bind pose (no idle).");
+            }
+
+            // sec 12 self-report: a Humanoid clip can ONLY pose the rig through a valid
+            // Humanoid avatar. If the FBX imported without one, warn LOUDLY (the mesh
+            // still renders -- never hidden) so a rebuild log names the un-mapped model
+            // instead of shipping a silent T-pose.
+            if (anim.avatar == null || !anim.avatar.isValid)
+            {
+                Debug.LogWarning(
+                    $"[DungeonSceneBuilder] {bodyName} FBX '{fbxPath}' imported WITHOUT a valid " +
+                    "Humanoid avatar -- a Humanoid clip cannot pose it (T-pose risk). Re-import the " +
+                    "FBX as Humanoid (animationType 2) with auto-avatar mapping.");
+            }
+
+            _modelCount++;
+            _characterCount++;
+            return body;
+        }
+
+        /// <summary>
         /// Drops a clearly-labelled placeholder cube for a feature the KayKit
         /// pack ships no mesh for (ladder, trapdoor, sarcophagus, water puddle,
         /// lantern post). Logged + tallied — never blocks.
@@ -2205,6 +2344,8 @@ namespace DeNelle.Editor
             sb.AppendLine($"  KayKit model instances: {_modelCount} " +
                           $"(walls {_wallCount}, floor tiles {_floorCount}, props {_propCount}).");
             sb.AppendLine($"  Static lights: {_lightCount}  (ambient floor {AmbientIntensity}).");
+            sb.AppendLine($"  Rigged KayKit character bodies: {_characterCount} " +
+                          "(Bryn Rogue_Hooded + Hollow-One Skeleton_Mage; capsule fallback if a pack is not imported).");
             sb.AppendLine($"  Placeholder primitives: {_placeholderCount}.");
             foreach (var p in _placeholders) sb.AppendLine($"    - {p}");
             sb.AppendLine("  Entry point: DeNelle.Editor.DungeonSceneBuilder.BuildHealersCottage");

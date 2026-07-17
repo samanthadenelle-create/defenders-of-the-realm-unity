@@ -870,6 +870,10 @@
      "Structures/ArcaneSpire_2",
      "Structures/ArcaneSpire_3"
     ],
+    "upgradeTexturePath": [
+     "Structures/ArcaneSpire_2_Albedo",
+     "Structures/ArcaneSpire_3_Albedo"
+    ],
     "navSurface": "Blocker",
     "visualHeight": 6.0,
     "range": 16.0,

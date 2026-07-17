@@ -14,6 +14,13 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
 
+- **2026-07-16 delta — BARRACKS 7-TROOP TIER-UNLOCKED ROSTER (program WO-732→737, VERIFIED):** the army is a
+  **7-type roster trained at the Barracks**, gated by Barracks building tier — Footman + Archer day-one (tier 1),
+  then Spearman (T2) · Shieldguard (T3) · Outrider (T4) · Battlemage (T5) · Echo Legionnaire (T6). Data-driven
+  (`troops.json` `unlockBarracksTier` + `TroopUnlock` gate; barracks `building-tiers.json` T2–6 announce each unit);
+  headless `TroopRosterRegression` (in `DataRegression.RunAll`) locks the ladder + dual-copy. **Not** "two troops
+  forever." (`ff.barracks` default unchanged; CoC raid consume-loop = WO-726, separate.)
+
 - **2026-07-13 delta — STRATEGIC PLACEMENT LOCKED ON (WO-695, ex-682 "strategic placement lock on"):**
   `ff.strategicplacement` is **REMOVED from the codebase** — the WO-673 player-defined town (Build →
   Town/Defenses/Walls palette tabs, movable functional storefronts, 260w/210i core-kit new-game seed,

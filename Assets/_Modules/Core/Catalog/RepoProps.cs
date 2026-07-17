@@ -85,6 +85,21 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public string[] upgradeVisualPath = null;
 
+        /// <summary>
+        /// S5 visual (WO-719 upgrade-tier albedo) - OPTIONAL per-level FORCED texture, indexed
+        /// the SAME way as <see cref="upgradeVisualPath"/>: <c>upgradeTexturePath[0]</c> = the
+        /// Resources-relative albedo forced onto the L2 tier model, <c>upgradeTexturePath[1]</c> =
+        /// at L3. The base <see cref="CatalogEntry.visualTexturePath"/> is always L1. This is the
+        /// per-tier twin of that field: when a <see cref="upgradeVisualPath"/> tier model is a Tripo
+        /// FBX whose only Color map lives buried in its <c>.fbm</c> folder (does NOT survive a player
+        /// build -> renders WHITE, exactly like the L1 spire before its fix), the reskin routes this
+        /// flat Resources albedo through the fresh <c>TripoMaterialFixer.SetForcedTexture</c> so the
+        /// upgraded model keeps its colour in the build. NULL / empty / too-short for the requested
+        /// level -> falls back to the base <see cref="CatalogEntry.visualTexturePath"/> (which itself
+        /// may be null = no forced texture). JSON deserializes "upgradeTexturePath" straight in.
+        /// </summary>
+        public string[] upgradeTexturePath = null;
+
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;
 

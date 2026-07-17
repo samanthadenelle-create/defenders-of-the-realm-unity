@@ -230,6 +230,8 @@ namespace DeNelle.Editor
             if (!VillageEconomyRegression.Run(out var villEconReason)) failures.Add(villEconReason); else log.AppendLine("[village-econ] " + villEconReason);
             if (!ArenaCatalogRegression.Run(out var arenaCatReason)) failures.Add(arenaCatReason); else log.AppendLine("[arena-cat] " + arenaCatReason);
             if (!CompanionRosterRegression.Run(out var compRosterReason)) failures.Add(compRosterReason); else log.AppendLine("[companion-roster] " + compRosterReason);
+            // --- WO-736: Barracks 7-type troop roster + tier-unlock ladder (program 732-737 close) ---
+            if (!TroopRosterRegression.Run(out var troopRosterReason)) failures.Add(troopRosterReason); else log.AppendLine("[troop-roster] " + troopRosterReason);
             if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
             if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);
