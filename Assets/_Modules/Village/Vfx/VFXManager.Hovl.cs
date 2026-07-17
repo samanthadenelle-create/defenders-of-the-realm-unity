@@ -337,7 +337,25 @@ namespace DeNelle.Village
             var follower = go.GetComponent<HovlVfxFollower>();
             if (follower != null) follower.EndFollow();
 
-            go.transform.SetParent(_poolRoot, false);
+            // Reparent the pooled loop back under the pool root so it tracks nothing while dormant.
+            // GUARDED (owner F8 2026-07-17 spam): Transform.SetParent THROWS "Cannot set the parent
+            // ... while activating or deactivating the parent" when the CURRENT parent (e.g. an Arcane
+            // Spire being deactivated by a tier reskin, or a scene unload) is mid-(de)activation —
+            // Unity forbids reparenting during activate/deactivate. StopAura->ReturnHovlToPool ran on
+            // OnDisable and threw ~6x. If the safe reparent is illegal, leave the object where it is
+            // and just deactivate it IN PLACE — it still rejoins the pool queue below, and AcquireHovl
+            // re-seats its parent lazily on next use (and tolerates it being destroyed with the tower:
+            // it drops null entries and instantiates fresh). Never throws.
+            if (go.transform.parent != _poolRoot)
+            {
+                bool reparented = Guard.Try("VFXManager", $"return hovl '{key}' to pool root",
+                    () => go.transform.SetParent(_poolRoot, false));
+                if (!reparented)
+                    FlowTrace.Warn("VFXManager",
+                        $"ReturnHovlToPool('{key}'): reparent to pool root skipped — current parent is " +
+                        "mid-(de)activation or the app is quitting. Deactivated in place; it rejoins the " +
+                        "pool lazily on next Acquire (illegal-reparent guard, no throw).");
+            }
             go.transform.localScale = Vector3.one;   // clear any scale override for reuse
             go.SetActive(false);
 

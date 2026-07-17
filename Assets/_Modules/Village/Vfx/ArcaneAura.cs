@@ -27,6 +27,7 @@
 // Defenders/VFX/Generate Hovl VFX Catalog -> HOVL_VFX_CATALOG_OK).
 // =============================================================================
 
+using System.Collections;        // tier idle-pulse coroutine (WO tower-vfx escalation)
 using UnityEngine;
 using DeNelle.Core.Combat;       // IDamageableStructure - owner-liveness orphan guard (Village -> Core, section 5)
 using DeNelle.Core.Diagnostics;
@@ -55,6 +56,44 @@ namespace DeNelle.Village
         private VFXHandle _handle;
         private bool _started;
 
+        // ── Tier escalation (owner felt-test 2026-07-17: "more/better VFX at higher tower
+        // levels" — upgrading must FEEL rewarding). The idle aura visibly ESCALATES with the
+        // tower's level: a bigger ring at L2, and a bigger ring PLUS a slow rising idle PULSE
+        // at L3. COLORBLIND-SAFE (owner red/green): escalation reads by SIZE + MOTION + an extra
+        // luminous layer, NEVER by hue. Driven by ApplyLevel(level), called on placement +
+        // upgrade from Tower.Upgrade / StructureFactory.ReskinForLevel via the EscalateTo seam.
+        //
+        // Clean level->VFX table IN CODE (not JSON): the tower-vfx config does not currently
+        // live in data, so per the owner directive a well-commented in-code tier table is the
+        // right call (avoids a new loader + Data/Canonical dual-copy risk). L1 keeps the current
+        // serialized baseline look. Extra idle layers are ONE-SHOTS (cap-40, auto-return) not new
+        // loops, so a wall of L3 towers can never blow the global loop cap (20).
+        private int _level = 1;
+        private Coroutine _pulseCo;
+
+        private readonly struct Tier
+        {
+            public readonly float  AuraScale;      // uniform scale of the held aura loop
+            public readonly float  PulseInterval;  // seconds between idle pulses (0 = none)
+            public readonly string PulseKey;       // Hovl one-shot key for the idle pulse
+            public readonly float  PulseScale;     // scale of the idle pulse one-shot
+            public Tier(float auraScale, float pulseInterval, string pulseKey, float pulseScale)
+            {
+                AuraScale = auraScale; PulseInterval = pulseInterval;
+                PulseKey = pulseKey; PulseScale = pulseScale;
+            }
+        }
+
+        /// <summary>Per-level idle-aura recipe. L1 ~= the serialized baseline (2.2) so a freshly
+        /// placed tower is unchanged; L2 grows the ring; L3 grows it further AND adds a slow rising
+        /// pulse one-shot (LevelUp_Burst) so a maxed tower reads as dramatically empowered.</summary>
+        private static Tier TierFor(int level) => level switch
+        {
+            >= 3 => new Tier(3.8f, 3.5f, "LevelUp_Burst", 1.2f),
+            2    => new Tier(3.0f, 0f,   null,            0f),
+            _    => new Tier(2.2f, 0f,   null,            0f),
+        };
+
         // ORPHAN GUARD (F8 owner felt-test 2026-07-15 "i see a vfx but no tower, maybe
         // destroyed?"): the aura is a POOLED Hovl loop parented to the tower. OnDisable/
         // OnDestroy cover the DESTROY + DISABLE death paths, but a tower that BREAKS to an
@@ -80,7 +119,7 @@ namespace DeNelle.Village
         {
             // Re-acquire on re-enable (only after the first Start so we do not spawn
             // before the transform is seated). Idempotent via the handle guard.
-            if (_started) StartAura();
+            if (_started) { StartAura(); RestartPulse(TierFor(_level)); }
         }
 
         // Immediate stop on every lifecycle teardown: the pooled loop returns to the pool
@@ -151,9 +190,81 @@ namespace DeNelle.Village
 
         private void StopAura(bool immediate = false)
         {
+            // Stop the L3 idle pulse first so it can't fire against a torn-down aura.
+            if (_pulseCo != null) { StopCoroutine(_pulseCo); _pulseCo = null; }
             if (_handle == null) return;
             _handle.Stop(immediate);
             _handle = null;
+        }
+
+        // ── Tier escalation API ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Set the tower's VFX tier (1..3) and re-apply the idle aura to match: the held aura
+        /// loop is restarted at the tier's scale, and the L3 idle pulse is (re)armed. Called on
+        /// placement + on each upgrade via <see cref="EscalateTo"/>. Idempotent; safe to call
+        /// before Start (Start's StartAura then picks up the tier scale). Reads by SIZE + MOTION,
+        /// colorblind-safe (§7 owner red/green).
+        /// </summary>
+        public void ApplyLevel(int level)
+        {
+            _level = Mathf.Clamp(level, 1, 3);
+            var tier = TierFor(_level);
+            _scale = tier.AuraScale;
+
+            // Live restart at the new scale ONLY when a loop is currently held (a live tower).
+            // If none is held we leave StartAura (via Start/OnEnable) to spawn it at _scale, and
+            // never respawn over a stopped/orphaned shell.
+            if (_handle != null) { StopAura(immediate: true); StartAura(); }
+
+            RestartPulse(tier);
+
+            FlowTrace.Step("TowerVfx",
+                $"'{name}' idle aura level={_level} aura='{_auraKey}' scale={_scale:0.0} " +
+                $"pulse={(tier.PulseInterval > 0f && !string.IsNullOrEmpty(tier.PulseKey) ? $"'{tier.PulseKey}'@{tier.PulseInterval:0.0}s" : "none")}");
+        }
+
+        /// <summary>The single seam the tower upgrade/placement paths call to escalate a tower's
+        /// idle aura to <paramref name="level"/>. When <paramref name="ensure"/> is true and the
+        /// tower has no aura yet, one is attached first (mage/arcane/wizard/spire towers); otherwise
+        /// only an aura that already exists is escalated. Null-safe (no-op on a null root or a tower
+        /// with no aura when ensure is false).</summary>
+        public static void EscalateTo(GameObject root, int level, bool ensure)
+        {
+            if (root == null) return;
+            var aura = root.GetComponentInChildren<ArcaneAura>(true);
+            if (aura == null)
+            {
+                if (!ensure) return;
+                Ensure(root);
+                aura = root.GetComponentInChildren<ArcaneAura>(true);
+            }
+            aura?.ApplyLevel(level);
+        }
+
+        // (Re)arm the L3 idle pulse coroutine. Stops any existing pulse first; starts a new one
+        // only when the tier defines a pulse and this component is live.
+        private void RestartPulse(in Tier tier)
+        {
+            if (_pulseCo != null) { StopCoroutine(_pulseCo); _pulseCo = null; }
+            if (tier.PulseInterval > 0f && !string.IsNullOrEmpty(tier.PulseKey) && isActiveAndEnabled)
+                _pulseCo = StartCoroutine(PulseLoop(tier.PulseInterval, tier.PulseKey, tier.PulseScale));
+        }
+
+        // A slow rising idle pulse (L3 only) — a ONE-SHOT (cap-safe, auto-returns) fired every
+        // PulseInterval so a maxed tower reads as continuously empowered. Guarded so a bad key
+        // logs + skips (never blanks/kills the tower). Skips while the aura loop is not alive.
+        private IEnumerator PulseLoop(float interval, string key, float scale)
+        {
+            var wait = new WaitForSeconds(interval);
+            while (true)
+            {
+                yield return wait;
+                if (_handle == null || !_handle.IsAlive) continue;   // aura gone -> no pulse
+                Guard.Try("TowerVfx", $"idle pulse '{key}'", () =>
+                    VFXManager.PlayKey(key, transform.position + Vector3.up * _height,
+                                       Quaternion.identity, null, _tint, scale));
+            }
         }
 
         /// <summary>
