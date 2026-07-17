@@ -48,5 +48,28 @@ Model-swap for hub buildings (738), more perks/synergies, offline income, tower 
 ## 4. Also attempted overnight (see §5 for final status)
 WO-736 close · dungeon Bryn/Hollow-One capsule -> rigged KayKit character swaps · L2/L3 arcane-spire albedo (so upgraded spires don't build-white, mirroring the L1 fix).
 
-## 5. Final overnight status
-(updated at end of overnight run — see the last commit + this section for what actually shipped vs deferred.)
+## 5. Final overnight status — ALL DELIVERED (commits 7dfa0e0d + 14953276, pushed)
+
+Everything attempted overnight LANDED, gated, built, and pushed. Two fresh Windows builds cut.
+- **WO-736 roster close** — DONE. New `TroopRosterRegression` oracle wired into `DataRegression`; ran headless: `[troop-roster] TROOP_ROSTER_OK` (7 ids, unlock ladder, models+icons, tier copy, gate all pass). Roster program **732–737 COMPLETE**. Canon one-liner in `PIPELINE_STATE.md`.
+- **Bryn + Hollow-One** — DONE + baked. Bryn = KayKit Rogue_Hooded (idle controller); Hollow-One = Skeleton_Mage (code-proven `SkeletonHumanoid` rig — won't T-pose). Dungeon rebuilt: "Rigged KayKit character bodies: 2". Eyeball in Play.
+- **L2/L3 arcane spire albedo** — DONE. `upgradeTexturePath` mechanism + flat `ArcaneSpire_2/3_Albedo` so upgraded spires don't build-white (upgrade + reload covered).
+
+### Pre-existing regression reds (NOT from tonight — flagging for your awareness)
+`DataRegression.RunAll` shows 8 non-roster reds, all pre-existing / fail-by-design. Worth a look when convenient (none block the build; all predate this session):
+1. **DATAWEB dual-copy DRIFT** (real, worth fixing): `armor.json` (StreamingAssets 20130B vs Resources 12897B, + version 1 vs 2), `weapons.json` (266592B vs 19765B — big drift), `daily-quests.json`, `stake-rewards.json`, `tower-perks.json`. Resources wins at runtime; the StreamingAssets copies are stale. (My files — troops/building-tiers/structures — are byte-identical, verified.)
+2. **BUILD ECONOMY**: `fountain_healing` upgradeVisualPath L2/L3 models (`Structures/Fountain_L2/L3`) load NULL from Resources — the fountain's upgrade meshes are missing (same class as the spire albedo, different structure).
+3. **CORESAVE / GLIMMER (fail-by-design)**: `GameState.Tribes`, `.Wards`, `.Arena` W/L, and pet active-slot have no persisted save field — they RESET on reload. Threading these through SaveSchema (+ version bump) clears the reds.
+4. **COMBAT (fail-by-design)**: orc-raider has two stat blocks (spawner Hp 95 vs garrison Hp 170) — unify the Wildlands roster.
+5. **arena prefab**: `ForestClearingArena` ground material binds no base texture (flat/untextured).
+6. **VILLAGE ECONOMY**: plain `Grant(wood)` moves the shop pool but not the upgrade ledger — route income through `GrantSpendable` or unify the pools.
+7. **HUDUI**: 5 pre-existing HUD failures (not detailed here).
+8. **ui-obsidian WARN** (report-only): 4 hand-rolled UI files bypass ElarionUiKit — incl. the dev tools I added (FlagCaptureButton, ResourceDevTool). Report-only, not gating; worth kit-converting if we ever HardFailOnNew.
+
+Also: `ProjectSettings/TagManager.asset` has a tolerated empty-tag-slot parse warning (pre-existing since 7/13, every build succeeds through it).
+
+### What I deliberately did NOT do overnight (needs you)
+- **WO-726 deploy loop** — the CoC milestone; needs your felt-verify, left as the clear next pickup.
+- **Headed dungeon-camera capture rig** — not worth building for a deterministic fix; felt-verify the framing (cap is tunable).
+- **Speculative features** (#24 Echo engagement, #25 talk-glow, #32 Quick Setup) — held for your direction.
+- **The pre-existing regression reds above** — not mine; the DATAWEB drift + fountain models are the most worth a quick fix, but I didn't guess which JSON copy is canonical.
