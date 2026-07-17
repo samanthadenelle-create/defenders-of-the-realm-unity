@@ -138,13 +138,25 @@ namespace DeNelle.Village
                     });
                 }
 
-                // WO-707 texPath escape hatch (ported verbatim from HubStructureVisualInjector's
-                // swap table): force a Resources texture onto the skinned materials when the
-                // model's embedded material lost its map link (renders colorless — the arcane
-                // tower FBX). The Tripo fixer reads the SOURCE material's _MainTex/_BaseMap, so
-                // a model whose FBX material lost that link needs it forced here, same ordering
-                // as the proven swap path (after Skin added the fixer). G: guarded — a missing
-                // texture logs + leaves the untinted mesh, never aborts the create.
+                // WO-719 (arcane spire renders WHITE): route the forced albedo THROUGH the Tripo
+                // fixer VisualFactory.Skin just added, BEFORE its next-frame Start. The fixer bakes
+                // the texture into its single-pass URP/Lit rebuild and ASSIGNS it to the renderer, so
+                // it STICKS in the built player (MagentaGuard durability) and is RACE-FREE. This
+                // replaces the old post-skin ApplyForcedTexture below as the primary path: that
+                // mutated per-instance materials in the SAME frame, which the fixer's rebuild then
+                // replaced a frame later (and it only carried a source map, never overrode a broken/
+                // white extracted one) - the proven reason the colored albedo never reached the spire.
+                if (!string.IsNullOrEmpty(entry.visualTexturePath))
+                {
+                    var fixer = visual?.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
+                    fixer?.SetForcedTexture(entry.visualTexturePath);
+                }
+
+                // WO-707 texPath escape hatch (retained as a belt-and-suspenders secondary; the
+                // WO-719 fixer route above is the durable primary). Force a Resources texture onto
+                // the skinned materials when the model's embedded material lost its map link
+                // (renders colorless — the arcane tower FBX). G: guarded — a missing texture logs +
+                // leaves the untinted mesh, never aborts the create.
                 if (!string.IsNullOrEmpty(entry.visualTexturePath))
                     Guard.Try("Structure", $"force texture '{entry.id}'",
                         () => ApplyForcedTexture(visual, entry.visualTexturePath, entry.id));

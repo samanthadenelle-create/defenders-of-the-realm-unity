@@ -104,6 +104,7 @@ namespace DeNelle.Core
         private static int Id(Texture t) => t != null ? t.GetInstanceID() : 0;
 
         [SerializeField] private string _fallbackTextureName;
+        [SerializeField] private string _forcedTextureName;   // WO-719: UNCONDITIONAL albedo override (see SetForcedTexture)
         [SerializeField] private Color _fallbackTint = Color.white;
         [SerializeField] private bool _hasFallbackTint;
         [SerializeField] private float _smoothness = 0.15f;
@@ -129,6 +130,19 @@ namespace DeNelle.Core
             _fallbackTextureName = resourcesPath;
             _fallbackOptional = optional;
         }
+
+        /// <summary>
+        /// WO-719 (arcane spire renders WHITE): FORCE a Resources texture as the _BaseMap on
+        /// EVERY rebuilt material, UNCONDITIONALLY - overriding whatever the source material
+        /// carries (unlike SetFallbackTexture, which only fills in when the source has no map).
+        /// The arcane-tower Tripo FBX ('Structures/arcane tower') ships an extracted material
+        /// whose bound map renders white; forcing the authored albedo here bakes it into the
+        /// fixer's SINGLE-PASS URP/Lit rebuild that is ASSIGNED to the renderer, so it STICKS in
+        /// the built player (the MagentaGuard "fresh material assigned to renderer" durability)
+        /// and is RACE-FREE - no post-skin material mutation for the next-frame rebuild to stomp.
+        /// Opt-in: only callers that set this are affected; default (null) = no change.
+        /// </summary>
+        public void SetForcedTexture(string resourcesPath) => _forcedTextureName = resourcesPath;
 
         /// <summary>
         /// Forces a solid fallback colour on every material rebuilt by this
@@ -209,8 +223,24 @@ namespace DeNelle.Core
                         $"'{gameObject.name}': fallback texture '{_fallbackTextureName}' did not load from Resources — " +
                         "rebuilt materials will fall back to tint/source only.");
             }
+            // WO-719: the UNCONDITIONAL forced albedo (arcane spire). Loaded once, applied to every
+            // slot below regardless of the source's own map. A miss is a hard Fail (break-log) because
+            // a set-but-unresolved force = the spire stays white (the exact symptom being fixed).
+            Texture2D forcedTex = null;
+            if (!string.IsNullOrEmpty(_forcedTextureName))
+            {
+                forcedTex = HeroTextureLoader.Load(_forcedTextureName, false);
+                if (forcedTex == null)
+                    FlowTrace.Fail("TripoMatFix",
+                        $"'{gameObject.name}': FORCED texture '{_forcedTextureName}' did NOT resolve (Addressables/Resources) - " +
+                        "materials keep their (white) source map; the forced-albedo override is a no-op this run.");
+                else
+                    FlowTrace.Step("TripoMatFix",
+                        $"'{gameObject.name}': FORCED albedo '{_forcedTextureName}' loaded - overriding every slot's _BaseMap (WO-719).");
+            }
+
             FlowTrace.Step("TripoMatFix",
-                $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, tintActive={_hasFallbackTint}");
+                $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, forced={forcedTex != null}, tintActive={_hasFallbackTint}");
 
             int renderers = 0, slotsRebuilt = 0;
             foreach (var r in GetComponentsInChildren<Renderer>(true))
@@ -253,6 +283,9 @@ namespace DeNelle.Core
                     if (col.a < 0.05f || (col.r + col.g + col.b) < 0.05f)
                         col = Color.white;
                     if (tex == null && fallbackTex != null) tex = fallbackTex;
+                    // WO-719: forced albedo WINS over source + fallback (the extracted arcane-tower
+                    // source map renders white). Baked into this shared rebuild -> sticks in the build.
+                    if (forcedTex != null) tex = forcedTex;
                     // Owner 2026-05-20 ("still grey"): the fallback tint was
                     // only applied when tex == null, but Tripo's source
                     // material often has a _MainTex reference pointing at a

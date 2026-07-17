@@ -60,6 +60,13 @@ namespace DeNelle.Village
 
         private const string HolderName = "BarracksNPC (runtime)";
 
+        // WO-724: the unlock (ff.barracks + founding-complete) can flip true LIVE while the
+        // player is standing in the hub - the FTUE completes IN-scene (the town wave loop
+        // kicks with no reload; TutorialFlow.FinishFlow). A cheap 1 Hz poll surfaces the
+        // Barracks the moment founding completes, without waiting for the next hub load.
+        private const float UnlockPollInterval = 1f;
+        private float _nextPollAt;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -89,12 +96,42 @@ namespace DeNelle.Village
             if (IsCastleHubScene(scene.name)) Inject();
         }
 
+        // WO-724: 1 Hz watch for the unlock flipping true LIVE (founding completes in-hub
+        // with no scene reload). When it does, surface the baked Barracks building (the
+        // visual injector reactivates + skins it) and then place the drillmaster. Guarded
+        // so it only fires once per surfacing (no re-spawn while the holder already stands).
+        private void Update()
+        {
+            if (Time.unscaledTime < _nextPollAt) return;
+            _nextPollAt = Time.unscaledTime + UnlockPollInterval;
+
+            if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) return;
+            if (!DeNelle.Village.BarracksUnlock.IsUnlocked) return;
+            if (GameObject.Find(HolderName) != null) return;   // already surfaced this scene
+
+            FlowTrace.Step("Barracks",
+                "unlock flipped true in-hub (ff.barracks + founding-complete) - surfacing the Barracks live (1 Hz poll).");
+            // Reactivate + skin the baked CastleBarracks the lock had deactivated, then place the NPC.
+            HubStructureVisualInjector.EnsureBarracksSurfaced();
+            Inject();
+        }
+
         private void Inject()
         {
             using var _ = FlowTrace.Enter("Village", "BarracksNpcInjector.Inject");
 
-            // Owner 2026-07-10: the whole Barracks feature is hidden for V1 — no drillmaster NPC.
-            if (!DeNelle.Core.FeatureFlags.Barracks) return;
+            // WO-724 unlock rule (charter OPTION A): the drillmaster only exists when the
+            // feature flag is ON (ff.barracks, default OFF) AND founding is complete
+            // (GameState.Onboarded). Single source of truth = BarracksUnlock.IsUnlocked;
+            // ff.barracks OFF => fully hidden (regression), founding-incomplete => not yet.
+            if (!DeNelle.Village.BarracksUnlock.IsUnlocked)
+            {
+                FlowTrace.Step("Barracks",
+                    $"Inject stand-down - Barracks locked (ff.barracks={DeNelle.Core.FeatureFlags.Barracks}, " +
+                    $"foundingComplete={DeNelle.Village.BarracksUnlock.FoundingComplete}); no drillmaster.");
+                return;
+            }
+            FlowTrace.Step("Barracks", "Inject - Barracks unlocked (flag ON + founding-complete); placing the drillmaster.");
 
             // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn.
             var prior = GameObject.Find(HolderName);

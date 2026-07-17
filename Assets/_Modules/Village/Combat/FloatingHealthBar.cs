@@ -159,6 +159,21 @@ namespace DeNelle.Village
         /// Damage is auto-detected, but callers can force a reveal too.</summary>
         public void MarkEngaged() => _lastEngaged = Time.time;
 
+        /// <summary>
+        /// External teardown (structure-death cleanup, owner felt-test 2026-07-15):
+        /// destroy the world-space bar (its canvas child) and this component so a
+        /// destroyed structure never leaves an empty 0-HP chip floating over its shell.
+        /// The canvas is a separate child GameObject, so it is destroyed explicitly
+        /// (destroying this component alone would strand a frozen, still-visible bar).
+        /// Safe to call more than once.
+        /// </summary>
+        public void Teardown()
+        {
+            if (_canvas != null) { Destroy(_canvas.gameObject); _canvas = null; }
+            enabled = false;
+            Destroy(this);
+        }
+
         // Sane clamp for the head offset. Callers derive this from world-space
         // renderer bounds, and a mis-scaled / displaced (e.g. Tripo) mesh can report
         // a bounds.max.y metres away from its pivot — which would fling the bar far

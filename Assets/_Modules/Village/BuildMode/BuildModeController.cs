@@ -1869,6 +1869,14 @@ namespace DeNelle.Village
             }
             // Grok slice 4: expand the shop back to the full carousel when disarming.
             _palette?.Expand();
+            // Owner device felt-test 2026-07-16 ("after i select place the cancel should
+            // close out and the selection bar opens back up"): capture the
+            // placement -> cancel -> selection-bar-reopened transition. _armed is now null,
+            // so the next Update re-derives the HUD state as Browse (intent bar hides) while
+            // BuildPaletteUI.Expand has just brought the carousel back = "choosing a building".
+            FlowTrace.Step("BuildHud",
+                "Cancel: placement aborted (armed disarmed) -> selection bar re-opened " +
+                "(palette Expand); next frame returns to Browse = choosing a building");
         }
 
         // =====================================================================

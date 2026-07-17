@@ -47,6 +47,15 @@ namespace DeNelle.Village.Hero
         private RectTransform _bodyZone;              // chrome.layout.body — the ONE content well
         private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
 
+        /// <summary>
+        /// WO-725: true while the camp-select list owns the screen (reflects the _ui
+        /// lifetime — set in <see cref="OpenInternal"/>, cleared in <see cref="Close"/> /
+        /// <see cref="OnDestroy"/>). Polled by the Arena Herald (Path A entry) to suppress
+        /// its world "Enter Arena" proximity prompt while the list is up and to emit the
+        /// Arena open/close FlowTrace edge. Static so it survives a scene-change destroy.
+        /// </summary>
+        public static bool IsScreenOpen { get; private set; }
+
         // Card pixel height in the scroll list (tall plaque — banner + badge + time + reward).
         private const float CardHeightPx = 168f;
         private const float CardGapPx    = 10f;
@@ -109,6 +118,7 @@ namespace DeNelle.Village.Hero
 
             BuildCards();
 
+            IsScreenOpen = true;   // WO-725: arm the Herald's prompt-suppression + close-edge trace
             Debug.Log("[RaidSelectionScreen] Opened — raid card grid.");
         }
 
@@ -305,11 +315,13 @@ namespace DeNelle.Village.Hero
             _ui = null;
             _bodyZone = null;
             _scroll = null;
+            IsScreenOpen = false;   // WO-725: lets the Herald re-arm + fires its Arena close trace
         }
 
         private void OnDestroy()
         {
             if (_ui != null) Destroy(_ui);
+            IsScreenOpen = false;   // WO-725: scene-change safety — never leave the static stuck true
         }
     }
 }

@@ -93,6 +93,21 @@ namespace DeNelle.Village
             _handle = null;
         }
 
+        /// <summary>
+        /// External teardown (structure-death cleanup, owner felt-test 2026-07-15:
+        /// "tower was destroyed ... but the vfx ... still exist"). Because the tower
+        /// goes to a broken SHELL on death (no Destroy/disable of the root), this
+        /// component's OnDisable/OnDestroy never fire and the aura loop would keep
+        /// running. The break observer calls this to Stop the loop and disable the
+        /// component so OnEnable cannot re-acquire it over a dead shell. Re-enable the
+        /// component (on repair) to bring the aura back.
+        /// </summary>
+        public void StopAndDisable()
+        {
+            StopAura();
+            enabled = false;
+        }
+
         /// <summary>Attach an <see cref="ArcaneAura"/> to <paramref name="root"/> once
         /// (idempotent - skips if one already lives in the hierarchy). The single seam the
         /// arcane-tower spawn paths call so the aura wiring stays in one place.</summary>

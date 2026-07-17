@@ -27,6 +27,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Hero
 {
@@ -52,6 +53,10 @@ namespace DeNelle.Village.Hero
 
         public void Open()
         {
+            // WO-724: instrument the train-UI open path (acceptance #5). The panel is only
+            // reachable once the Barracks is unlocked (ff.barracks + founding-complete).
+            FlowTrace.Step("Barracks", "TroopTrainingPanel.Open - building the train UI (kit chrome, no UXML).");
+
             Close();
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin sortingOrder
@@ -189,6 +194,14 @@ namespace DeNelle.Village.Hero
             MakeText(_detailHost, "Owned:  " + owned, 14, InkDim, FontStyles.Normal,
                 TextAlignmentOptions.Center, new Vector2(0.08f, 0.80f), new Vector2(0.92f, 0.87f));
 
+            // WO-724: wounded/recovering readout - wounded troops are blocked from deploy
+            // (PlayerTroop.IsDeployable == !Wounded, consumed by ArmyStorage.GetDeployable);
+            // surface how many of this type are recovering so the state is readable, not silent.
+            int woundedOfType = WoundedCount(army, def.Id);
+            if (woundedOfType > 0)
+                MakeText(_detailHost, "Recovering:  " + woundedOfType, 13, InkBad, FontStyles.Italic,
+                    TextAlignmentOptions.Center, new Vector2(0.08f, 0.755f), new Vector2(0.92f, 0.81f));
+
             // Army-cap indicator (SlotsUsed / MaxArmySize).
             string capLine;
             if (army == null) capLine = "Army:  —";
@@ -271,6 +284,17 @@ namespace DeNelle.Village.Hero
             int n = 0;
             foreach (var t in army.Owned)
                 if (t != null && t.TroopDefId == troopId) n++;
+            return n;
+        }
+
+        // WO-724: count owned troops of this type currently wounded (recovering) - blocked
+        // from deploy until ArmyStorage.TickRecovery clears the flag.
+        private static int WoundedCount(ArmyStorage army, string troopId)
+        {
+            if (army == null || army.Owned == null) return 0;
+            int n = 0;
+            foreach (var t in army.Owned)
+                if (t != null && t.TroopDefId == troopId && t.Wounded) n++;
             return n;
         }
 

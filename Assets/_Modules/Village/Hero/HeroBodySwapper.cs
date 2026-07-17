@@ -1240,6 +1240,25 @@ namespace DeNelle.Village
         private static Texture SheetAlbedo(Material m)
         {
             if (m == null) return null;
+            // GUARD the benign console error (owner device capture 2026-07-16): a built-in Standard/Legacy
+            // shader material has no '_BaseMap', so Material.GetTexture("_BaseMap") logs
+            // "Material '<name>' with Shader 'Standard' doesn't have a texture property '_BaseMap'" on a
+            // real GPU. This fires when an un-recovered weapon prop (e.g. 'LowPolyWeaponMegaPack' on the
+            // Standard shader) is swept into the body hierarchy by GetComponentsInChildren. Short-circuit
+            // those by shader NAME (name is serialized, so it holds in the -nographics fleet too) — returns
+            // null exactly like an unbound URP slot. The URP sheet-read below is UNCHANGED, so the
+            // -nographics TEXTURE-WINS contract for real body materials is preserved. (Note: with the
+            // EquipmentController weapon-material recovery, the weapon arrives as URP/Lit and never trips
+            // this guard — this is defense-in-depth for any residual Standard-shader prop.)
+            Shader sh = m.shader;
+            if (sh != null)
+            {
+                string sn = sh.name;
+                if (sn == "Standard" || sn == "Standard (Specular setup)"
+                    || sn.StartsWith("Legacy Shaders/")
+                    || sn.IndexOf("InternalError", System.StringComparison.Ordinal) >= 0)
+                    return null;
+            }
             Texture t = m.GetTexture("_BaseMap");   // sheet read — deliberately NOT HasProperty-gated
             if (t == null) t = m.GetTexture("_MainTex");
             return t;

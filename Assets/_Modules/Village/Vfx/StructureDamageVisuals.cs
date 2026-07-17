@@ -199,6 +199,7 @@ namespace DeNelle.Village
             public int PendingTier;     // this eval's desired tier (pre-cap)
             public bool WasBroken;
             public bool Observed;       // first eval done (no burst for arrived-broken shells)
+            public bool CleanedUpOnBreak; // structure-death cleanup done (bar torn down + aura stopped)
         }
 
         private readonly Dictionary<GameObject, Tracked> _tracked =
@@ -394,16 +395,57 @@ namespace DeNelle.Village
                 bool broken = rec.Broken != null && rec.Broken();
                 if (broken) hp = 0f;   // a broken shell always reads as empty
 
-                // Health bar — attach lazily on first damage (hideAtFull keeps it
-                // invisible again at full HP; the shell case pins it empty, so the
-                // isDead delegate is a constant false: the shell persists, WO-672).
-                if (!rec.BarAttached && (broken || hp < 0.999f))
+                // Structure-death cleanup (owner felt-test 2026-07-15: "tower was
+                // destroyed ... but the vfx and 0 health bar still exist"). A DESTROYED
+                // (broken) shell tears its HP bar down and STOPS any arcane aura loop -
+                // this reverses WO-672's "pin the empty bar on the shell", because the
+                // root is NOT destroyed on break (Tower/ArcaneTower go to a broken shell,
+                // so ArcaneAura.OnDisable/OnDestroy never fire and the aura keeps looping).
+                // A still-standing damaged structure gets the lazy first-damage bar as
+                // before; a repaired structure restores both.
+                if (broken)
                 {
-                    FloatingHealthBar.Attach(rec.Host, rec.Hp, () => false,
-                        heightOffset: rec.BarOffset, hideAtFull: true, destroyOnDead: false);
-                    rec.BarAttached = true;
-                    FlowTrace.Step("DamageVis",
-                        $"bar attached: '{rec.Name}' ({rec.TypeKey}) hp={hp:0.00} broken={broken}");
+                    if (!rec.CleanedUpOnBreak)
+                    {
+                        rec.CleanedUpOnBreak = true;
+
+                        var bar = rec.Host.GetComponent<FloatingHealthBar>();
+                        bool hadBar = bar != null;
+                        if (hadBar) bar.Teardown();
+                        rec.BarAttached = false;
+
+                        var aura = rec.Host.GetComponentInChildren<ArcaneAura>(true);
+                        bool hadAura = aura != null;
+                        if (hadAura) aura.StopAndDisable();
+
+                        FlowTrace.Step("StructureDeath",
+                            $"cleanup '{rec.Name}' ({rec.TypeKey}): HP bar {(hadBar ? "TORN-DOWN" : "none")} + " +
+                            $"arcane aura {(hadAura ? "STOPPED" : "n/a")} - dead shell shows no empty 0-bar, no aura loop.");
+                    }
+                }
+                else
+                {
+                    if (rec.CleanedUpOnBreak)
+                    {
+                        // Repaired / standing again - restore the aura we stopped on break
+                        // (symmetric cleanup so a repaired spire does not lose its aura).
+                        var aura = rec.Host.GetComponentInChildren<ArcaneAura>(true);
+                        if (aura != null && !aura.enabled) aura.enabled = true;
+                        rec.CleanedUpOnBreak = false;
+                        FlowTrace.Step("StructureDeath",
+                            $"restore '{rec.Name}' ({rec.TypeKey}): repaired - aura {(aura != null ? "re-enabled" : "n/a")}.");
+                    }
+
+                    // Health bar - attach lazily on first damage (hideAtFull keeps it
+                    // invisible again at full HP).
+                    if (!rec.BarAttached && hp < 0.999f)
+                    {
+                        FloatingHealthBar.Attach(rec.Host, rec.Hp, () => false,
+                            heightOffset: rec.BarOffset, hideAtFull: true, destroyOnDead: false);
+                        rec.BarAttached = true;
+                        FlowTrace.Step("DamageVis",
+                            $"bar attached: '{rec.Name}' ({rec.TypeKey}) hp={hp:0.00}");
+                    }
                 }
 
                 // Break transition — one-shot burst at the moment it broke. A shell

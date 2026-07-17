@@ -3,22 +3,26 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Arena
 //
-// THE GAP IT CLOSES: the Arena MVP (ArenaPanel.Open / ArenaMode) was fully built
-// but NOTHING opened it -- it was unreachable. This places a discoverable "Arena
-// Herald" marker (a code-built glowing banner) near the village Heart and, when the
-// hero comes close, offers an Interact prompt that calls ArenaPanel.Open(). The
-// player walks up to it and taps to open the opponent-select / wager screen.
+// THE GAP IT CLOSES: the settlement-attack loop was built but nothing DISCOVERABLE
+// opened it from the hub. This places the "Arena Herald" landmark (the colosseum when
+// ff.colosseum is ON, else a code-built procedural monument) near the village Heart and,
+// when the hero comes close, offers an Interact prompt.
+//
+// WO-725 RETARGET (charter WO-723 §2, Path A is the product spine): the prompt now opens
+// the PRODUCT attack UI -- the AI camp / raid LIST (RaidSelectionScreen -> RaidDeployScreen
+// -> SceneRouter.GoRaid into a RaidBase_* plate). It NO LONGER opens the parked Path B
+// ArenaPanel (its ATTACK launched the 50-pt ArenaAttackRecruitController SKR squad). The
+// camp list never touches the SKR wallet, so free PvE camps never hard-block on an empty
+// balance. This is the ONE primary hub entry (gap #1); ff.arena OFF removes it entirely.
 //
 // PATTERN REUSE (CLAUDE.md SS9 -- no new system, no scene bake):
 //   * Self-bootstraps via RuntimeInitializeOnLoadMethod(AfterSceneLoad) -- NO scene
 //     edit, NO prefab dependency, NO bake. Mirrors DungeonWorldPortalSpawner /
 //     CampSystem / NodeDiscoverySystem exactly.
-//   * Proximity interaction reuses the SHARED MobileInteractButton (touch) plus the
-//     desktop [F] key -- the same dual-input affordance every village structure uses
-//     (DEF-203). Suppressed automatically in Build Mode + while a modal panel is open
-//     (MobileInteractButton.Suppressed / PanelManager.AnyOpen).
-//   * Panel lifecycle MIRRORS ShopPanel's entry (NPCCommandBridge.CmdOpenShop):
-//     FindAnyObjectByType<ArenaPanel>() or create a host GameObject, then Open().
+//   * Proximity interaction reuses the SHARED MobileInteractButton (touch). While the
+//     camp-select owns the screen, RaidSelectionScreen.IsScreenOpen gates the re-request
+//     (the list is not a PanelManager modal, so the herald suppresses it explicitly).
+//   * Entry MIRRORS the HUD raid-icon path (RaidEntryBridge): RaidSelectionScreen.Open().
 //
 // DDOL singleton: Destroy(this), NOT the host (CLAUDE.md "singleton dedup destroys
 // host"). Village -> Core only; cross-module reads are null-conditional.
@@ -31,9 +35,9 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village.Arena
 {
     /// <summary>
-    /// Places a discoverable "Arena Herald" marker in the village and opens
-    /// <see cref="ArenaPanel"/> when the hero interacts with it (touch button or [F]).
-    /// Self-bootstrapping; reuses MobileInteractButton + the ShopPanel open pattern.
+    /// Places a discoverable "Arena Herald" landmark in the hub and opens the Path A
+    /// camp-select list (<see cref="DeNelle.Village.Hero.RaidSelectionScreen"/>) when the
+    /// hero interacts with it. Self-bootstrapping; reuses the shared MobileInteractButton.
     /// </summary>
     public sealed class ArenaHeraldSpawner : MonoBehaviour
     {
@@ -57,20 +61,24 @@ namespace DeNelle.Village.Arena
         private float _retryTimer;
         private Transform _heraldRoot;
         private Transform _hero;
-        private ArenaPanel _panel;
+
+        // WO-725: tracks the Path A camp-select (RaidSelectionScreen) open->closed edge so
+        // the Arena close FlowTrace fires when the list tears down (the Close lives inside
+        // RaidSelectionScreen, so the herald polls its static IsScreenOpen here).
+        private bool _campSelectOpenPrev;
 
         // ── Arena-screen suppression (DEF: herald button lingered over the Arena UI) ──
-        // While ANY arena screen owns the display, the world "Enter Arena" prompt must
-        // not re-arm. ArenaPanel has its own overlay (polled via ArenaPanel.IsOpen); the
-        // attack-recruit / defense-setup authoring modes CLOSE the panel and run their own
-        // fullscreen overlay, so we track those via their existing static signals
-        // (RecruitModeChanged / SetupModeChanged). We do NOT add a new global — these are
-        // the controllers' own published events. AnyArenaScreenOpen gates the re-request.
+        // While ANY arena screen owns the display, the world "Enter Arena" prompt must not
+        // re-arm. WO-725: the primary is the Path A camp-select (polled via
+        // RaidSelectionScreen.IsScreenOpen). The parked Path B attack-recruit / defense-setup
+        // authoring modes are still tracked via their existing static signals
+        // (RecruitModeChanged / SetupModeChanged) so suppression holds if they are ever
+        // entered by other means. AnyArenaScreenOpen gates the re-request.
         private bool _recruitActive;
         private bool _setupActive;
 
         private bool AnyArenaScreenOpen =>
-            _recruitActive || _setupActive || (_panel != null && _panel.IsOpen);
+            _recruitActive || _setupActive || DeNelle.Village.Hero.RaidSelectionScreen.IsScreenOpen;
 
         // =====================================================================
         // Self-bootstrap (no scene edit). Runs after every scene load; idempotent.
@@ -134,6 +142,16 @@ namespace DeNelle.Village.Arena
 
             EnsureHero();
             TickProximity();
+
+            // WO-725: emit the Arena CLOSE trace on the camp-select's open->closed edge so a
+            // capture shows the entry both opening (OpenArena) and closing (returned to free
+            // roam). Polled here because the Close button lives inside RaidSelectionScreen; a
+            // clean close leaves no BattleLock (the list never starts a raid) and restores
+            // free roam the moment its scrim tears down.
+            bool campOpenNow = DeNelle.Village.Hero.RaidSelectionScreen.IsScreenOpen;
+            if (_campSelectOpenPrev && !campOpenNow)
+                FlowTrace.Step("Arena", "camp-select closed -> returned to free roam (no BattleLock, input unlocked)");
+            _campSelectOpenPrev = campOpenNow;
         }
 
         // =====================================================================
@@ -150,10 +168,12 @@ namespace DeNelle.Village.Arena
 
             _heraldRoot = BuildHerald(HeraldOffset);
             // The colosseum (HubStructureVisualInjector, placed at the same 15,0,6 spot) is the arena
-            // visual now — hide this procedural "ArenaMonument" (dais/banner/runes/aura) so the two
-            // don't overlap. The root + its proximity Interact prompt stay live, so the colosseum IS
-            // the Enter-Arena entrance.
-            HideHeraldVisual(_heraldRoot);
+            // visual when ff.colosseum is ON — hide this procedural "ArenaMonument" (dais/banner/runes/
+            // aura) then so the two don't overlap; the root + its proximity Interact prompt stay live,
+            // so the colosseum IS the Enter-Arena entrance. WO-725: when ff.colosseum is OFF there is
+            // NO colosseum model, so KEEP the procedural monument visible — the Arena entry must always
+            // have a discoverable landmark whenever ff.arena is ON (one primary entry, WO-725 gap #1).
+            if (DeNelle.Core.FeatureFlags.Colosseum) HideHeraldVisual(_heraldRoot);
             _placed = true;
             FlowTrace.Step("ArenaHerald", $"herald placed at {_heraldRoot.position} (proximity Interact live)");
             Debug.Log($"[ArenaHeraldSpawner] Arena herald placed at {_heraldRoot.position}. " +
@@ -186,24 +206,24 @@ namespace DeNelle.Village.Arena
         }
 
         // =====================================================================
-        // Open the Arena — MIRRORS ShopPanel's entry (NPCCommandBridge.CmdOpenShop):
-        // find-or-create the panel host, then Open().
+        // Open the Arena — WO-725 (CoC offense Path A per charter WO-723 §2):
+        // the Herald opens the PRODUCT attack UI, the AI camp / raid LIST
+        // (RaidSelectionScreen -> RaidDeployScreen -> SceneRouter.GoRaid into a
+        // RaidBase_* plate). This REPLACES the parked Path B ArenaPanel, whose ATTACK
+        // launched the 50-pt ArenaAttackRecruitController SKR squad. The camp list never
+        // touches ArenaWalletService, so free PvE camps never hard-block on an empty SKR
+        // balance (WO-725 gap #3 — the wager is bypassed at the entry, not gated). The
+        // full deploy-into-plate wiring is WO-726; here we only open + cancel clean.
         // =====================================================================
         private void OpenArena()
         {
-            if (_panel == null) _panel = FindAnyObjectByType<ArenaPanel>();
-            if (_panel == null)
-            {
-                var host = new GameObject("ArenaPanelHost");
-                _panel = host.AddComponent<ArenaPanel>();
-            }
-            FlowTrace.Step("ArenaHerald", "hero interacted — opening Arena panel");
-            _panel.Open();
-            // Dismiss the world "Enter Arena" prompt the moment the panel opens so it
-            // can't linger over the Arena UI. The proximity loop's AnyArenaScreenOpen
-            // gate (ArenaPanel.IsOpen) then keeps it suppressed until the panel closes.
+            FlowTrace.Step("Arena", "herald interacted -> opening Path A camp-select (RaidSelectionScreen)");
+            DeNelle.Village.Hero.RaidSelectionScreen.Open();
+            // Dismiss the world "Enter Arena" prompt the instant the list opens so it can't
+            // linger over the camp-select. The proximity loop's AnyArenaScreenOpen gate
+            // (RaidSelectionScreen.IsScreenOpen) then keeps it suppressed until the list closes.
             MobileInteractButton.Release(this);
-            Debug.Log("[ArenaHeraldSpawner] Opened the Arena panel.");
+            Debug.Log("[ArenaHeraldSpawner] Opened Path A camp-select (RaidSelectionScreen).");
         }
 
         // =====================================================================

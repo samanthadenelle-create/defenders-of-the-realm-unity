@@ -828,6 +828,19 @@ namespace DeNelle.Village
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
+            // ── WEAPON MATERIAL RECOVERY (deal-breaker fix 2026-07-16 "knight starts with no weapon") ──
+            // The knight_starter prop (sword_A / Sword1h_01) carries material 'LowPolyWeaponMegaPack' on the
+            // BUILT-IN STANDARD shader (that pack is gitignored; Standard is a Built-in-RP shader). Under URP a
+            // Standard-shader material renders MAGENTA in-editor and is STRIPPED from the built player (its
+            // shader resolves to Hidden/InternalErrorShader -> invisible/pink), so the weapon attaches + passes
+            // VerifyWeaponRendersNow (enabled renderer + mesh + parented) yet is NOT VISIBLE in the hand — the
+            // owner's "no weapon". MagentaGuard recovers exactly this class, but it only sweeps on scene-LOAD and
+            // this prop is instantiated at RUNTIME (equip) AFTER that sweep, so the guard never reaches it. Recover
+            // the prop's broken materials HERE, at attach time (mirrors MagentaGuard's fresh-URP/Lit-assigned-to-
+            // renderer pattern — a fresh instance assigned into sharedMaterials STICKS in the build; an in-place
+            // shader mutation of the shared asset does not). Idempotent: an already-URP prop is left untouched.
+            RecoverWeaponMaterialsToUrp(prop, weaponId);
+
             // Seat via a grip root.
             //  • WO-478 (default): NATIVE props (Blink grip-at-origin, e.g. knight_starter/sword_A)
             //    trust SeatNative — scale to heldLength, preserve authored pivot/orientation.
@@ -2735,6 +2748,110 @@ namespace DeNelle.Village
                 if (!any) { bounds = lb; any = true; } else bounds.Encapsulate(lb);
             }
             return any;
+        }
+
+        // ── WEAPON MATERIAL RECOVERY HELPERS (deal-breaker fix 2026-07-16) ────────────
+        // Cached URP/Lit shader for the runtime weapon-material recovery. Shader.Find is not free,
+        // so resolve once (mirrors MagentaGuard._lit). Null on a broken build => recovery no-ops loudly.
+        private static Shader _urpLit;
+
+        // A shader that renders MAGENTA (or nothing) under URP, or is missing/stripped in the build.
+        // Same predicate MagentaGuard.IsBrokenShader uses — kept local so this silo never edits MagentaGuard.
+        private static bool IsBrokenPropShader(Shader sh)
+        {
+            if (sh == null) return true;
+            string sn = sh.name;
+            if (string.IsNullOrEmpty(sn)) return true;
+            return sn == "Standard"
+                || sn == "Standard (Specular setup)"
+                || sn.StartsWith("Legacy Shaders/")
+                || sn.IndexOf("InternalError", System.StringComparison.Ordinal) >= 0;
+        }
+
+        // Recover every broken-shader material on the just-attached weapon prop to a FRESH URP/Lit
+        // (carrying colour + albedo + emission), assigned back into the renderer's sharedMaterials so
+        // the recovery STICKS in the built player. Idempotent + null-guarded (a valid-URP prop is a no-op).
+        private static void RecoverWeaponMaterialsToUrp(GameObject prop, string weaponId)
+        {
+            if (prop == null) return;
+            if (_urpLit == null) _urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            if (_urpLit == null)
+            {
+                FlowTrace.Warn("HeroWeapon",
+                    $"no URP/Lit shader found — cannot recover weapon '{weaponId ?? "<null>"}' material (may render magenta/invisible).");
+                return;
+            }
+
+            var freshFor = new Dictionary<Material, Material>();
+            int scanned = 0, recovered = 0;
+            foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var work = r.sharedMaterials;
+                if (work == null) continue;
+                bool changed = false;
+                for (int i = 0; i < work.Length; i++)
+                {
+                    var m = work[i];
+                    if (m == null) continue;
+                    scanned++;
+                    if (!IsBrokenPropShader(m.shader)) continue;   // valid URP/Unlit -> leave it alone
+                    string dead = m.shader != null ? m.shader.name : "<null>";
+                    if (!freshFor.TryGetValue(m, out var fresh))
+                    {
+                        fresh = BuildRecoveredWeaponMaterial(m);   // fresh URP/Lit, once per unique source
+                        freshFor[m] = fresh;
+                        recovered++;
+                        // FAIL (not Step): an invisible/magenta weapon in the shipped player IS a break —
+                        // surface it in the F8 break-log with the exact material + dead shader.
+                        FlowTrace.Fail("HeroWeapon",
+                            $"weapon '{weaponId ?? "<null>"}' material '{m.name}' on dead shader '{dead}' -> FRESH URP/Lit " +
+                            "(assigned to renderer so it sticks in the build) — was invisible/magenta in the hand.");
+                    }
+                    work[i] = fresh;
+                    changed = true;
+                }
+                if (changed) r.sharedMaterials = work;   // the assignment is what makes the recovery stick
+            }
+            FlowTrace.Step("HeroWeapon",
+                $"weapon '{weaponId ?? "<null>"}' material recovery: scanned {scanned} slot(s), recovered {recovered} " +
+                "broken-shader material(s) to URP/Lit (0 recovered = prop already valid URP).");
+        }
+
+        // Build a FRESH URP/Lit carrying the authored colour + albedo + emission read robustly off the
+        // dead/stripped SOURCE (mirrors MagentaGuard.BuildRecoveredMaterial). HasProperty-gated reads are
+        // safe here: this runs on the owner's real GPU where the shader table resolves; the -nographics
+        // fleet never equips a real weapon prop through this path. Defaults to white, never magenta.
+        private static Material BuildRecoveredWeaponMaterial(Material src)
+        {
+            Color col = Color.white;
+            if (src != null && src.HasProperty("_Color")) col = src.GetColor("_Color");
+            else if (src != null && src.HasProperty("_BaseColor")) col = src.GetColor("_BaseColor");
+
+            Texture tex = null;
+            if (src != null && src.HasProperty("_MainTex")) tex = src.GetTexture("_MainTex");
+            if (tex == null && src != null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
+
+            Color emis = (src != null && src.HasProperty("_EmissionColor")) ? src.GetColor("_EmissionColor") : Color.black;
+
+            var fresh = new Material(_urpLit)
+            { name = ((src != null && src.name != null) ? src.name : "Weapon") + "_UrpRecovered" };
+            if (fresh.HasProperty("_BaseColor")) fresh.SetColor("_BaseColor", col);
+            if (fresh.HasProperty("_Color")) fresh.SetColor("_Color", col);
+            if (tex != null)
+            {
+                if (fresh.HasProperty("_BaseMap")) fresh.SetTexture("_BaseMap", tex);
+                if (fresh.HasProperty("_MainTex")) fresh.SetTexture("_MainTex", tex);
+            }
+            if (emis != Color.black && fresh.HasProperty("_EmissionColor"))
+            {
+                fresh.SetColor("_EmissionColor", emis);
+                fresh.EnableKeyword("_EMISSION");
+            }
+            if (fresh.HasProperty("_Surface")) fresh.SetFloat("_Surface", 0f);   // URP: 0 = Opaque
+            if (fresh.HasProperty("_ZWrite"))  fresh.SetFloat("_ZWrite", 1f);
+            fresh.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+            return fresh;
         }
     }
 

@@ -144,6 +144,35 @@ namespace DeNelle.Village
             if (HubScenes.IsHub(scene.name)) ApplyAll();
         }
 
+        /// <summary>
+        /// WO-724: re-surface the baked CastleBarracks LIVE when the unlock flips true
+        /// mid-session (founding completes in-hub with no scene reload). The scene-load
+        /// swap ran while locked and deactivated the building, so <see cref="FindByName"/>
+        /// (active-only) can no longer see it - this scans INCLUDING inactive, reactivates
+        /// it, then re-runs its swap to skin the lightweight model + fit its collider.
+        /// Idempotent + gated: a no-op unless the barracks is genuinely unlocked now.
+        /// Called by <see cref="BarracksNpcInjector"/>'s 1 Hz poll.
+        /// </summary>
+        public static void EnsureBarracksSurfaced()
+        {
+            if (!BarracksUnlock.IsUnlocked) return;
+
+            Transform barracks = null;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.name == "CastleBarracks") { barracks = t; break; }
+            if (barracks == null) return;   // not in this scene (pack not imported / not a hub)
+
+            if (!barracks.gameObject.activeSelf)
+            {
+                barracks.gameObject.SetActive(true);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks",
+                    "EnsureBarracksSurfaced - reactivated the baked CastleBarracks (unlock flipped true live).");
+            }
+
+            for (int i = 0; i < Swaps.Length; i++)
+                if (Swaps[i].bakedName == "CastleBarracks") { TrySwap(Swaps[i]); break; }
+        }
+
         private static void ApplyAll()
         {
             for (int i = 0; i < Swaps.Length; i++) TrySwap(Swaps[i]);
@@ -233,10 +262,14 @@ namespace DeNelle.Village
                     $"standdown {s.bakedName} (migrated -> BaseLayout '{migratedId}').");
                 return;
             }
-            // Owner 2026-07-10: the whole Barracks is hidden for V1 (ff.barracks OFF) — deactivate the
-            // baked structure entirely (not just re-skin renderers) so the building, its tap-dialogue,
-            // and the drillmaster anchor all disappear; the NPC injector then finds nothing and no-ops.
-            if (s.bakedName == "CastleBarracks" && !DeNelle.Core.FeatureFlags.Barracks)
+            // WO-724 unlock rule (charter OPTION A): the baked Barracks surfaces only when
+            // BarracksUnlock.IsUnlocked (ff.barracks ON - default OFF - AND founding-complete).
+            // While locked, deactivate the baked structure ENTIRELY (not just re-skin renderers)
+            // so the building, its tap-dialogue, and the drillmaster anchor all disappear; the NPC
+            // injector then finds nothing and no-ops. ff.barracks OFF => permanently hidden
+            // (regression); founding incomplete => hidden until the FTUE completes, at which point
+            // BarracksNpcInjector's poll calls EnsureBarracksSurfaced() to reactivate + skin it live.
+            if (s.bakedName == "CastleBarracks" && !BarracksUnlock.IsUnlocked)
             {
                 target.gameObject.SetActive(false);
                 return;

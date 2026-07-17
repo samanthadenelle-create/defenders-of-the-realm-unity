@@ -259,9 +259,19 @@ namespace DeNelle.Village
             // Text labels carry the meaning, never color alone (owner colorblind).
             // Grok slice 2 (KILL the duplicate rotate): the Rotate Left/Right pair that
             // used to live HERE is REMOVED — rotate now has exactly ONE home, the Build
-            // HUD's single intent bar (BuildHudController → RequestUiRotateQuarter). This
-            // touch bar keeps only Cancel (the touch-safe back-out + the fleet's
-            // AssertTouchVerbBarRenderable probe seam) and the WO-683 kit d-pad.
+            // HUD's single intent bar (BuildHudController → RequestUiRotateQuarter).
+            //
+            // DUPLICATE-CANCEL FIX (owner device felt-test 2026-07-16 "why are there two
+            // cancel buttons on build"): this touch-bar Cancel rendered ON TOP OF (above-
+            // and-right of) the Build HUD intent bar's OWN "Cancel" — two identical yellow
+            // "Cancel" buttons on screen at once during placement. The ONE cancel now lives
+            // in the HUD intent bar (BuildHudController → RequestUiCancel → CancelArmed,
+            // which aborts the placement AND re-opens the selection bar via
+            // BuildPaletteUI.Expand). So this button is BUILT-BUT-HIDDEN: kept ONLY as the
+            // stable anchor the fleet's AssertTouchVerbBarRenderable probe scans for (that
+            // probe walks INACTIVE children — GetComponentsInChildren<Button>(true) — so an
+            // inactive Cancel still proves the bar is code-built uGUI with no PanelSettings),
+            // and it never draws a second Cancel on device.
             var cancelBtn = DeNelle.Core.UI.ElarionUiKit.BuildObsidianButton(_barRoot.transform, "Cancel",
                 DeNelle.Core.UI.ElarionUiKit.ObsidianButtonStyle.Style1,
                 DeNelle.Core.UI.ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -270,6 +280,12 @@ namespace DeNelle.Village
             // Stable name — the fleet's AssertTouchVerbBarRenderable probe finds the bar
             // by this GO name (DevTools has no TMPro ref to read the label).
             cancelBtn.gameObject.name = "BuildTouchCancel";
+            // Hidden so it never renders a SECOND Cancel over the HUD intent bar's Cancel
+            // (owner "two cancel buttons"); the GO survives inactive as the probe anchor.
+            cancelBtn.gameObject.SetActive(false);
+            FlowTrace.Step("BuildHud", "TouchBar: duplicate Cancel BUILT-BUT-HIDDEN — the ONE " +
+                "cancel is the HUD intent bar's (BuildHudController.RequestUiCancel); this GO " +
+                "kept inactive only for the AssertTouchVerbBarRenderable probe.");
 
             // ── WO-683: THE kit d-pad on the build screen ─────────────────────
             // Owner ruling 2026-07-12: the d-pad from the combat/friendly HUD must

@@ -173,6 +173,10 @@ namespace DeNelle.Village
         // Holder so re-injection (idempotent) is trivial: clear the prior holder, respawn.
         private const string HolderName = "CastleVendorNPCs (runtime)";
 
+        // The body SpawnVendor/SpawnPlaceholder most recently produced — read by the
+        // placement hook to tag the building's VendorSeatMarker (per-building idempotency).
+        private GameObject _lastSpawnedVendor;
+
         private void Inject()
         {
             // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn,
@@ -311,32 +315,63 @@ namespace DeNelle.Village
         /// + falls back to a placeholder rather than silently leaving the storefront vendorless.</summary>
         public static void NotifyBuildingPlaced(string buildingId, Transform buildingTransform)
         {
-            if (Instance == null || buildingTransform == null || string.IsNullOrEmpty(buildingId)) return;
+            if (Instance == null || buildingTransform == null || string.IsNullOrEmpty(buildingId))
+            {
+                // SHOW-STOPPER RCA (owner "still no NPC", 2026-07-16): this guard was FULLY SILENT.
+                // A placement that fired the notify before the injector bootstrapped (Instance null)
+                // produced ZERO trace, reading to the owner as "no NPC" with an EMPTY errors-only
+                // break-log. Fail-loud (lands in break-log) so the next capture names the dead
+                // precondition instead of vanishing. Instance is normally set by the AfterSceneLoad
+                // Bootstrap, so a null here means the placement beat the injector's Awake.
+                FlowTrace.Fail("NpcSeat",
+                    $"NotifyBuildingPlaced NO-OP: injectorReady={(Instance != null)}, hasTransform={(buildingTransform != null)}, " +
+                    $"id='{buildingId ?? "<null>"}' — vendor NPC NOT spawned for the placed building.");
+                return;
+            }
             Instance.SpawnVendorForPlaced(buildingId, buildingTransform);
         }
 
         private void SpawnVendorForPlaced(string buildingId, Transform buildingTransform)
         {
             using var _ = FlowTrace.Enter("NpcSeat", $"CastleVendorNpcInjector.SpawnVendorForPlaced id='{buildingId}'");
-            if (!IsCastleHubScene(SceneManager.GetActiveScene().name))
+            string activeScene = SceneManager.GetActiveScene().name;
+            if (!IsCastleHubScene(activeScene))
             {
-                FlowTrace.Step("NpcSeat", $"placed '{buildingId}' not in a castle-hub scene — no vendor.");
+                // Build mode only runs in a buildable (castle-hub) scene, so a placement whose ACTIVE
+                // scene isn't a hub is anomalous — Warn (lands in the errors-only break-log) naming the
+                // scene, so a scene-name drift (e.g. OuterWorld active instead of Main_Castle_Overworld)
+                // is captured instead of silently dropping every placed vendor.
+                FlowTrace.Warn("NpcSeat",
+                    $"placed '{buildingId}' — active scene '{activeScene}' is NOT a castle-hub scene " +
+                    $"(expected '{TargetScene}' or '{MergedTargetScene}') — no vendor spawned. If the owner IS in the " +
+                    "hub, the hub scene name drifted; add it to IsCastleHubScene.");
                 return;
             }
             string role = RoleForBuildingId(buildingId);
             if (string.IsNullOrEmpty(role))
             {
-                // Tower / wall / gate / decoration — not a storefront; no vendor by design.
-                FlowTrace.Step("NpcSeat", $"placed '{buildingId}' maps to no vendor role (non-storefront) — no NPC.");
+                // Tower / wall / gate / mine / fountain / decoration are storefront-less BY DESIGN
+                // (quiet Step). But an UNRECOGNIZED placeable id (a real building the mapping forgot)
+                // is the "no NPC" bug class — Warn it (captured) so the missing id names itself.
+                if (IsKnownNonStorefront(buildingId))
+                    FlowTrace.Step("NpcSeat", $"placed '{buildingId}' is a non-storefront (tower/wall/gate/deco) — no NPC by design.");
+                else
+                    FlowTrace.Warn("NpcSeat",
+                        $"placed '{buildingId}' maps to NO vendor role but is NOT a known non-storefront — " +
+                        "UNMAPPED building id, so it gets no NPC. Add it to RoleForBuildingId/AnchorRoles.");
                 return;
             }
-            // Idempotent: the anchor poll (or an earlier placement of the same trade) may have
-            // already spawned this role's vendor. One vendor per trade — never stack a second.
-            if (GameObject.Find($"CastleVendor_{role}") != null ||
-                GameObject.Find($"CastleVendor_{role}_Placeholder") != null)
+            // PER-BUILDING idempotency (owner "every building in town needs an NPC as the speaker"):
+            // the old check was per-ROLE-GLOBAL — it no-op'd whenever that trade already had a vendor
+            // ANYWHERE (market/silo/foundry/lumberyard all map to "Marketplace"; forge/workshop ->
+            // "Forge"), so a freshly-placed second building of a shared trade got NO NPC. Now we only
+            // skip if THIS building already carries a live vendor (double-notify guard), so every
+            // placed building gets its own speaker while a re-notify of the same building can't stack one.
+            var seated = buildingTransform.GetComponent<VendorSeatMarker>();
+            if (seated != null && seated.Vendor != null)
             {
                 FlowTrace.Step("NpcSeat",
-                    $"vendor for role '{role}' already present — placement hook no-op (id='{buildingId}').");
+                    $"building '{buildingId}' already has its vendor ('{seated.Vendor.name}') — placement hook no-op.");
                 return;
             }
 
@@ -349,12 +384,19 @@ namespace DeNelle.Village
             marker.transform.SetParent(buildingTransform, false);
             marker.transform.localPosition = new Vector3(0f, 0f, 6f);
 
+            _lastSpawnedVendor = null;
             bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
             Destroy(marker);
 
             if (ok)
+            {
+                // Tag the building so a re-notify (double placement event) can't stack a second vendor,
+                // and so the tag self-clears if the vendor is ever destroyed (Vendor -> Unity fake-null).
+                if (seated == null) seated = buildingTransform.gameObject.AddComponent<VendorSeatMarker>();
+                seated.Vendor = _lastSpawnedVendor;
                 FlowTrace.Step("NpcSeat",
                     $"vendor NPC spawned for placed '{buildingId}' (role '{role}') at {buildingTransform.position}.");
+            }
             else
                 FlowTrace.Fail("NpcSeat",
                     $"vendor NPC spawn FAILED for placed '{buildingId}' (role '{role}').");
@@ -375,14 +417,27 @@ namespace DeNelle.Village
             // sensible vendor so every trade building gets an NPC to Talk/trade with.
             switch (buildingId.ToLowerInvariant())
             {
-                case "workshop":   return "Forge";       // in-world label "Forge" (weapons)
-                case "mill":       return "Windmill";
-                case "lumbermill": return "Lumbermill";
+                case "workshop":        return "Forge";       // in-world label "Forge" (weapons)
+                case "mill":            return "Windmill";
+                case "lumbermill":      return "Lumbermill";
+                case "collector_forge": return "Forge";       // structures-catalog id AnchorRoles missed -> was NPC-less
                 case "lumberyard":
                 case "foundry":
-                case "silo":       return "Marketplace"; // storage container — generic merchant
-                default:           return null;          // not a storefront -> no vendor
+                case "silo":            return "Marketplace"; // storage container — generic merchant
+                default:                return null;          // not a storefront -> no vendor
             }
+        }
+
+        /// <summary>True for the storefront-less placeable ids (towers/walls/gates/mines/fountains/
+        /// decorations/repair) that legitimately get NO vendor — so <see cref="SpawnVendorForPlaced"/>
+        /// stays quiet for those but WARNS (captures) on an UNRECOGNIZED building id it forgot to map.</summary>
+        private static bool IsKnownNonStorefront(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return true;
+            string id = buildingId.ToLowerInvariant();
+            return id.StartsWith("tower_") || id.StartsWith("wall_") || id.StartsWith("gate_") ||
+                   id.StartsWith("mine_")  || id.StartsWith("deco_") || id.StartsWith("fountain_") ||
+                   id.StartsWith("repair_");
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
@@ -499,6 +554,7 @@ namespace DeNelle.Village
             if (agent != null) { agent.enabled = false; }
 
             AttachInteraction(go, v, hero);
+            _lastSpawnedVendor = go;
             return true;
         }
 
@@ -521,6 +577,7 @@ namespace DeNelle.Village
             if (col != null) col.isTrigger = true;
 
             AttachInteraction(go, v, hero);
+            _lastSpawnedVendor = go;
             return true;
         }
 
@@ -621,6 +678,20 @@ namespace DeNelle.Village
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }
+    }
+
+    // =========================================================================
+    // VendorSeatMarker — a lightweight tag added to a PLACED building once its vendor
+    // NPC exists, so the placement hook is idempotent PER BUILDING (never stacks a
+    // second vendor on a double placement event) without falling back to the old
+    // per-role-global check that starved same-trade buildings of their own speaker.
+    // Vendor is a UnityEngine.Object reference: if the NPC is ever destroyed it becomes
+    // fake-null, so the building naturally re-qualifies for a fresh vendor.
+    // =========================================================================
+    [DisallowMultipleComponent]
+    public sealed class VendorSeatMarker : MonoBehaviour
+    {
+        public GameObject Vendor;
     }
 
     // =========================================================================

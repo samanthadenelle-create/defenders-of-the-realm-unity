@@ -39,6 +39,17 @@ namespace DeNelle.Village
         // OpenShop/OpenCraft/OpenEquip verb pattern.
         public static void ShowTrainingUI()
         {
+            // WO-724 regression guard (defense-in-depth): the barracks NPC/building are already
+            // hidden when locked, so this verb is normally unreachable then - but never open the
+            // train UI unless the Barracks is genuinely unlocked (ff.barracks ON + founding-complete).
+            if (!BarracksUnlock.IsUnlocked)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks",
+                    $"ShowTrainingUI refused - Barracks locked (ff.barracks={DeNelle.Core.FeatureFlags.Barracks}, " +
+                    $"foundingComplete={BarracksUnlock.FoundingComplete}).");
+                return;
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks", "ShowTrainingUI - opening the train panel (unlocked).");
             var panel = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Hero.TroopTrainingPanel>();
             if (panel == null)
                 panel = new GameObject("TroopTrainingPanelHost")

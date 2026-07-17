@@ -165,7 +165,7 @@ PlayerSettings:
   androidMaxAspectRatio: 2.4
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Android: com.denelle.defenders
+    Android: com.denellestudios.echoesofelarion
   buildNumber:
     Standalone: 0
     VisionOS: 0
@@ -268,8 +268,8 @@ PlayerSettings:
   AndroidAllowedArchitectures: -1
   AndroidSplashScreenScale: 0
   androidSplashScreen: {fileID: 0}
-  AndroidKeystoreName: 
-  AndroidKeyaliasName: 
+  AndroidKeystoreName: D:/eoa/dotr-release.keystore
+  AndroidKeyaliasName: dotr
   AndroidEnableArmv9SecurityFeatures: 0
   AndroidEnableArm64MTE: 0
   AndroidBuildApkPerCpuArchitecture: 0
@@ -281,7 +281,7 @@ PlayerSettings:
   AndroidEnableTango: 0
   androidEnableBanner: 1
   androidUseLowAccuracyLocation: 0
-  androidUseCustomKeystore: 0
+  androidUseCustomKeystore: 1
   m_AndroidBanners:
   - width: 320
     height: 180
@@ -348,11 +348,13 @@ PlayerSettings:
     m_Icons:
     - m_Textures:
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 432
       m_Height: 432
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 324
       m_Height: 324
@@ -360,11 +362,13 @@ PlayerSettings:
       m_SubKind: 
     - m_Textures:
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 216
       m_Height: 216
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 162
       m_Height: 162
@@ -372,11 +376,13 @@ PlayerSettings:
       m_SubKind: 
     - m_Textures:
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 108
       m_Height: 108
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
+      - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       - {fileID: 2800000, guid: 15c1fb92d599e884cad99925fad35dca, type: 3}
       m_Width: 81
       m_Height: 81

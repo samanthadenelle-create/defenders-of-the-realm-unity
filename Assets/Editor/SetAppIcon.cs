@@ -67,10 +67,20 @@ namespace DeNelle.Editor
                 {
                     var icons = PlayerSettings.GetPlatformIcons(BuildTargetGroup.Android, kind);
                     if (icons == null) continue;
+                    int layersSet = 0;
                     for (int i = 0; i < icons.Length; i++)
-                        icons[i].SetTexture(tex, 0);
+                    {
+                        // Owner 2026-07-16: launcher showed "game art WITH the Unity symbol on top".
+                        // CAUSE: adaptive icons have TWO layers (0=background, 1=foreground); the prior
+                        // code set only layer 0, so the FOREGROUND stayed Unity's default logo and the
+                        // launcher composited it over our background art. FIX: set EVERY layer (fore +
+                        // back) to the key art so no Unity default remains on any layer/kind.
+                        int layers = icons[i].maxLayerCount;
+                        if (layers < 1) layers = 1;
+                        for (int L = 0; L < layers; L++) { icons[i].SetTexture(tex, L); layersSet++; }
+                    }
                     PlayerSettings.SetPlatformIcons(BuildTargetGroup.Android, kind, icons);
-                    Debug.Log($"[SetAppIcon] Android adaptive kind set ({icons.Length} slot(s)).");
+                    Debug.Log($"[SetAppIcon] Android {kind} icons set ({icons.Length} slot(s), {layersSet} layer(s) incl. foreground).");
                 }
             }
             catch (System.Exception e)
