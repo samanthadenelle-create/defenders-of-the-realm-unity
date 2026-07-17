@@ -5,18 +5,20 @@
 //
 // A small Obsidian modal (master factory: ElarionUiKit.BuildObsidianModal +
 // FrameCore -- UI_BLINK_TEMPLATE_CANON SS2, ONE shared Close) that introduces an
-// Echo and hosts the WO-658 lane picker. The View reads NOTHING from services --
-// every string/state comes from EchoCardVM; the only outbound call is
-// vm.AssignLane on a chip tap. PanelManager-registered (one modal at a time;
-// battle-lock respected -- a rejected open never shows a half-card).
+// Echo (real name/element/flavor/portrait from EchoRosterCatalog) and hosts the
+// WO-738 functional lane picker (harvest/crafting/defense/exploration). The View
+// reads NOTHING from services -- every string/state/sprite comes from EchoCardVM;
+// the only outbound call is vm.AssignLane on a lane tap. PanelManager-registered
+// (one modal at a time; battle-lock respected -- a rejected open never shows a half-card).
 //
 // Layout mirrors EchoWorkforceHud's fraction-in-content approach (same kit, same
-// chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). Chip row keeps
-// its bottom edge above the shared Close band (>= 0.25, the WO-555 clearance
-// lesson documented in EchoWorkforceHud.Build).
+// chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). The vertical lane
+// picker keeps its bottom edge above the shared Close band (>= 0.25, the WO-555
+// clearance lesson documented in EchoWorkforceHud.Build). Defense + Exploration lanes
+// carry an HONEST "passive - active in raids/dungeons" note (TEXT-carried, never hue).
 //
-// Opened via the static EchoCard.Open(echoIndex) entry (EchoInteractable calls
-// it after the first-meeting beat). Singleton view host on a DDOL GameObject.
+// Reached via a TAP on an OWNED roster card (EchoRosterView) -> EchoCard.Open(echoIndex).
+// Singleton view host on a DDOL GameObject.
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
@@ -130,17 +132,17 @@ namespace DeNelle.Village
             _modal = built.canvas;
             var content = built.chrome.content.transform;
 
-            // Portrait socket (sprite-first, null-fallback -- absent art just skips the image).
+            // Portrait socket (sprite-first, null-fallback -- the VM owns the roster-catalog load;
+            // absent art just skips the image so the card is never blank).
             var portraitSprite = Guard.Try("Echo", "load echo portrait",
-                () => Resources.Load<Sprite>(_vm != null ? _vm.PortraitResourcePath : "Portraits/pet-house"),
-                fallback: null);
+                () => _vm != null ? _vm.Portrait : null, fallback: null);
             if (portraitSprite != null)
             {
                 var pg = new GameObject("EchoPortrait", typeof(Image));
                 pg.transform.SetParent(content, false);
                 var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.06f, 0.72f);
-                prt.anchorMax = new Vector2(0.20f, 0.90f);
+                prt.anchorMin = new Vector2(0.06f, 0.80f);
+                prt.anchorMax = new Vector2(0.22f, 0.93f);
                 prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
                 _portrait = pg.GetComponent<Image>();
                 _portrait.sprite = portraitSprite;
@@ -149,34 +151,35 @@ namespace DeNelle.Village
             }
 
             // Name line (gilt header weight), offset right of the portrait socket.
-            _nameLabel = ElarionUiKit.Label(content, "", 0.76f, 0.88f,
+            _nameLabel = ElarionUiKit.Label(content, "", 0.885f, 0.945f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
-                0.22f, 0.94f, bold: true);
+                0.24f, 0.94f, bold: true);
             ElarionUiKit.FitSingleLine(_nameLabel);
 
-            // WHAT line -- the two-sentence introduction (wraps).
-            _whatLabel = ElarionUiKit.Label(content, "", 0.56f, 0.74f,
+            // WHAT line -- the spirit's element + authored flavor (wraps).
+            _whatLabel = ElarionUiKit.Label(content, "", 0.71f, 0.86f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: false);
             _whatLabel.textWrappingMode = TextWrappingModes.Normal;   // project TMP API (not the obsolete enableWordWrapping)
 
-            // STATE line -- live gather state as TEXT (colorblind-safe; no hue-only cue).
-            _stateLabel = ElarionUiKit.Label(content, "", 0.46f, 0.55f,
+            // STATE line -- live lane/level/bonus as TEXT (colorblind-safe; no hue-only cue).
+            _stateLabel = ElarionUiKit.Label(content, "", 0.635f, 0.70f,
                 new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: true);
             ElarionUiKit.FitSingleLine(_stateLabel);
 
             // The one ask.
-            _askLabel = ElarionUiKit.Label(content, "", 0.37f, 0.45f,
+            _askLabel = ElarionUiKit.Label(content, "", 0.585f, 0.63f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: false);
 
-            // Chip row host (transparent layout host -- no chrome of its own, SS6).
-            var rowGo = new GameObject("LaneChips", typeof(RectTransform));
+            // Lane-picker list host (transparent layout host -- no chrome of its own, SS6).
+            // Vertical stack of the four functional lanes; bottom >= 0.25 clears the shared Close band.
+            var rowGo = new GameObject("LanePicker", typeof(RectTransform));
             rowGo.transform.SetParent(content, false);
             var rowRt = rowGo.GetComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.06f, 0.25f);   // bottom >= 0.25: clears the shared Close band
-            rowRt.anchorMax = new Vector2(0.94f, 0.36f);
+            rowRt.anchorMin = new Vector2(0.08f, 0.26f);
+            rowRt.anchorMax = new Vector2(0.92f, 0.575f);
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
             _chipRow = rowGo.transform;
         }
@@ -203,35 +206,44 @@ namespace DeNelle.Village
             var chips = _vm.LaneChips();
             int n = Mathf.Max(1, chips.Length);
             int index = 0;
-            // Guard.TryEach: one bad chip logs + skips, never blanks the row (SS12.2).
+            // Guard.TryEach: one bad chip logs + skips, never blanks the picker (SS12.2).
             Guard.TryEach("Echo", "build lane chip", chips, chip =>
             {
                 int i = index++;
-                float pad = 0.02f;
-                float w = 1f / n;
-                var min = new Vector2(i * w + pad, 0f);
-                var max = new Vector2((i + 1) * w - pad, 1f);
+                // Vertical stack: row 0 at the top, each row a full-width slice of the host.
+                float rowH = 1f / n;
+                float gap = 0.03f;
+                float y1 = 1f - i * rowH;
+                float y0 = y1 - rowH + gap;
+
+                // Row container holds the tappable lane button + an honesty/preferred note under it.
+                var rowGo = new GameObject("LaneRow_" + chip.Id, typeof(RectTransform));
+                rowGo.transform.SetParent(_chipRow, false);
+                var rrt = rowGo.GetComponent<RectTransform>();
+                rrt.anchorMin = new Vector2(0f, y0);
+                rrt.anchorMax = new Vector2(1f, y1);
+                rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+                _chips.Add(rowGo);
 
                 string laneId = chip.Id;   // capture for the closure
-                // Selected chip = Gold (plus the "(now)" TEXT cue -- never hue alone).
-                var kind = chip.Selected ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
-                var btn = ElarionUiKit.Button(_chipRow, chip.Label, kind, min, max,
-                    () => OnChipTapped(laneId));
-                if (btn == null) return;
-                _chips.Add(btn.gameObject);
+                bool hasNote = !string.IsNullOrEmpty(chip.Note);
+                // Button fills the top band (whole row when there is no note).
+                float btnBottom = hasNote ? 0.42f : 0f;
 
-                // Mirrored currency icon left of the label (RpgUi/currency/*; null-safe).
-                var icon = RpgUiCatalog.Get("currency", "currency_" + laneId);
-                if (icon != null)
+                // Selected lane = Gold (plus the "(now)" TEXT cue -- never hue alone).
+                var kind = chip.Selected ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
+                var btn = ElarionUiKit.Button(rowGo.transform, chip.Label, kind,
+                    new Vector2(0f, btnBottom), new Vector2(1f, 1f),
+                    () => OnChipTapped(laneId));
+
+                // Honesty / preferred note UNDER the button (TEXT-carried; Defense/Exploration say
+                // "passive - active in raids/dungeons" so the player is never misled -- never hue alone).
+                if (hasNote)
                 {
-                    var ig = new GameObject("LaneIcon", typeof(Image));
-                    ig.transform.SetParent(btn.transform, false);
-                    var irt = ig.GetComponent<RectTransform>();
-                    irt.anchorMin = new Vector2(0.04f, 0.20f);
-                    irt.anchorMax = new Vector2(0.26f, 0.80f);
-                    irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
-                    var img = ig.GetComponent<Image>();
-                    img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
+                    var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 0.40f,
+                        chip.Preferred ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+                        ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: false);
+                    note.textWrappingMode = TextWrappingModes.Normal;
                 }
             });
         }

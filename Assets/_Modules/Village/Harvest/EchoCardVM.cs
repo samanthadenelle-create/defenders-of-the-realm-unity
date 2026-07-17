@@ -9,14 +9,19 @@
 // (SESSION_CANON_LOADER "MVVM strict"; ARCHITECTURE_PRINCIPLES SS2 presentation
 // never touches the objects).
 //
-// STATE line semantics (WO-681 spec 1): live from the workforce --
-//   assigned lane -> "Gathering wood - +N/min"   (per-echo share of the pooled
-//                    EchoService.RatePerSecond; accrual math itself untouched)
+// STATE line semantics (WO-738): live from the shared EchoBonusCalculator --
+//   assigned lane -> "Harvest - Lv 3 - +65%"   (lane label + level + current
+//                    specialization bonus %; the readout math lives in the calculator)
 //   idle          -> "Idle - waiting for your word."
+// Identity (name / element / flavor / portrait) is read from EchoRosterCatalog.ByIndex
+// (the six named spirits), NOT hardcoded. The lane picker offers the four functional
+// lanes; Defense + Exploration carry an HONEST "passive - active in raids/dungeons" tag
+// so the player is never misled that they pay off now (full agency, honestly labeled).
 // ASCII-only separators ('-' not the middle-dot) -- glyph-safe on the shipped TMP
 // font; states read as TEXT, never by color alone (colorblind owner).
 // =============================================================================
 using System;
+using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 
@@ -29,15 +34,20 @@ namespace DeNelle.Village
     /// </summary>
     public sealed class EchoCardVM : IDisposable
     {
-        /// <summary>One pickable gather lane for the "What should you gather?" row.</summary>
+        /// <summary>One pickable functional lane for the "What should this Echo focus on?" picker
+        /// (WO-738: harvest / crafting / defense / exploration). All four are fully assignable;
+        /// Defense + Exploration are HONESTLY labeled (via <see cref="Note"/>) as passive bonuses that
+        /// only pay off in offline raids / dungeons -- state carried in TEXT, never hue (colorblind owner).</summary>
         public readonly struct LaneChip
         {
-            public readonly string Id;        // "wood" / "iron" / "food"
-            public readonly string Label;     // display text (selected state appended as TEXT)
-            public readonly bool Selected;    // this echo currently gathers this lane
-            public LaneChip(string id, string label, bool selected)
+            public readonly string Id;        // functional lane token ("harvest"/"crafting"/"defense"/"exploration")
+            public readonly string Label;     // main lane name (+ " (now)" when selected -- TEXT cue, never hue)
+            public readonly string Note;      // honesty + preferred subtext (ASCII; may be "")
+            public readonly bool Selected;    // this echo is currently assigned to this lane
+            public readonly bool Preferred;   // this lane is the echo's element-preferred lane (its +bonus lands here)
+            public LaneChip(string id, string label, string note, bool selected, bool preferred)
             {
-                Id = id; Label = label; Selected = selected;
+                Id = id; Label = label; Note = note; Selected = selected; Preferred = preferred;
             }
         }
 
@@ -64,54 +74,118 @@ namespace DeNelle.Village
 
         // ── Displayed strings (View binds verbatim; ASCII only) ────────────────
 
-        /// <summary>Card header name, e.g. "Echo 2 of 4 - Spirit of the Tree".</summary>
+        /// <summary>Card header name, e.g. "Echo 2 of 4 - Verdant Stag (Nature Echo)" -- the REAL
+        /// spirit identity from the roster catalog (WO-738; no longer the stale "Spirit of the Tree").</summary>
         public string NameText
         {
             get
             {
                 var svc = EchoService.Instance;
                 int count = svc != null ? svc.EchoCount : 1;
-                return $"Echo {EchoIndex + 1} of {count} - Spirit of the Tree";
+                var entry = EchoRosterCatalog.ByIndex(EchoIndex);
+                string name = entry != null ? entry.DisplayName : "Echo";
+                return $"Echo {EchoIndex + 1} of {count} - {name}";
             }
         }
 
-        /// <summary>The WHAT line (WO-681 spec 1; final copy = owner pass, kept diegetic + ASCII).</summary>
-        public string WhatText =>
-            "An Echo - a spirit of the Tree. It gathers for Elarion while you fight, even while you're away.";
+        /// <summary>The element subtitle for this Echo ("Ice Elemental"), from the roster catalog.</summary>
+        public string ElementText
+        {
+            get
+            {
+                var entry = EchoRosterCatalog.ByIndex(EchoIndex);
+                return entry != null ? entry.Element : "";
+            }
+        }
 
-        /// <summary>The live STATE line: gathering lane + per-echo rate, or the idle ask.</summary>
+        /// <summary>The WHAT line: the spirit's own element + authored flavor (WO-738 diegetic identity, ASCII).</summary>
+        public string WhatText
+        {
+            get
+            {
+                var entry = EchoRosterCatalog.ByIndex(EchoIndex);
+                string flavor = entry != null ? entry.Flavor : "";
+                string element = entry != null ? entry.Element : "";
+                if (string.IsNullOrEmpty(flavor))
+                    return "An Echo -- a spirit of Elarion. It works for you while you fight, even while you are away.";
+                return element + " -- " + flavor;
+            }
+        }
+
+        /// <summary>The live STATE line: assigned lane + level + current specialization bonus % (from the
+        /// shared EchoBonusCalculator), or the idle ask. State carried in TEXT (colorblind-safe).</summary>
         public string StateText
         {
             get
             {
-                string lane = EchoAssignments.LaneOf(EchoIndex);
-                if (lane == EchoAssignments.LaneIdle)
+                var ro = EchoBonusCalculator.ReadoutFor(EchoIndex);
+                if (ro.Lane == LaneType.Idle)
                     return "Idle - waiting for your word.";
-                double perMin = PerEchoRatePerMinute();
-                return $"Gathering {lane} - +{perMin:0.#}/min";
+                string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(EchoIndex));
+                string s = $"{laneLabel} - Lv {ro.Level} - +{Mathf.RoundToInt(ro.BonusPct)}%";
+                if (ro.PreferredMatch) s += " (best -- this Echo's calling)";
+                return s;
             }
         }
 
         /// <summary>The action-row prompt (one ask, one row).</summary>
-        public string AskText => "What should you gather?";
+        public string AskText => "What should this Echo focus on?";
 
-        /// <summary>Resources path of the portrait sprite for the medallion/portrait socket
-        /// (sprite-first, null-fallback at the View -- the Echo shares the Hollow's art).</summary>
-        public string PortraitResourcePath => "Portraits/pet-house";
+        /// <summary>The Echo's portrait sprite (roster catalog -> Sprite.Create; null-safe, cached).
+        /// The View binds this to the portrait socket and skips the image when null.</summary>
+        public Sprite Portrait
+        {
+            get
+            {
+                var entry = EchoRosterCatalog.ByIndex(EchoIndex);
+                return entry != null ? EchoRosterCatalog.LoadPortrait(entry.PortraitName) : null;
+            }
+        }
 
-        /// <summary>The pickable lane chips (wood/iron/food) with the selected state AS TEXT.</summary>
+        /// <summary>The four functional lane chips (harvest/crafting/defense/exploration). Selected state,
+        /// the element-preferred "best" tag, and the Defense/Exploration passive-honesty tags are all
+        /// carried AS TEXT (never hue) so the picker never misleads a colorblind player about what pays off now.</summary>
         public LaneChip[] LaneChips()
         {
             string current = EchoAssignments.LaneOf(EchoIndex);
+            var entry = EchoRosterCatalog.ByIndex(EchoIndex);
             var lanes = EchoAssignments.Lanes;
             var chips = new LaneChip[lanes.Length];
             for (int i = 0; i < lanes.Length; i++)
             {
-                bool sel = lanes[i] == current;
-                string label = EchoAssignments.LabelFor(lanes[i]) + (sel ? " (now)" : "");
-                chips[i] = new LaneChip(lanes[i], label, sel);
+                string lane = lanes[i];
+                bool sel = lane == current;
+                bool preferred = entry != null && entry.PreferredLane == LaneTypeFor(lane);
+                string label = EchoAssignments.LabelFor(lane) + (sel ? " (now)" : "");
+                chips[i] = new LaneChip(lane, label, NoteFor(lane, preferred), sel, preferred);
             }
             return chips;
+        }
+
+        /// <summary>The honesty + preferred subtext for a lane chip (ASCII, TEXT-carried). Defense +
+        /// Exploration are passive bonuses that only pay off in offline raids / dungeons -- say so plainly.</summary>
+        private static string NoteFor(string lane, bool preferred)
+        {
+            string honesty = "";
+            if (lane == EchoAssignments.LaneDefense)          honesty = "passive - active in raids";
+            else if (lane == EchoAssignments.LaneExploration) honesty = "passive - active in dungeons";
+
+            if (preferred)
+                return string.IsNullOrEmpty(honesty) ? "best for this Echo" : "best for this Echo - " + honesty;
+            return honesty;
+        }
+
+        /// <summary>Map a functional lane token to its LaneType (unknown/idle -> Idle).</summary>
+        private static LaneType LaneTypeFor(string lane)
+        {
+            switch (lane)
+            {
+                case EchoAssignments.LaneHarvest:     return LaneType.Harvest;
+                case EchoAssignments.LaneCrafting:    return LaneType.Crafting;
+                case EchoAssignments.LaneDefense:     return LaneType.Defense;
+                case EchoAssignments.LaneExploration: return LaneType.Exploration;
+                default:                              return LaneType.Idle;
+            }
         }
 
         // ── The assign verb (the ONLY mutation this card performs) ─────────────
@@ -150,16 +224,5 @@ namespace DeNelle.Village
             FlowTrace.Step("Echo", "First-meeting beat marked seen (one-shot, SeenTutorials).");
         }
 
-        // ── Internals ───────────────────────────────────────────────────────────
-
-        /// <summary>This Echo's share of the pooled rate, per minute (display only --
-        /// the pooled accrual itself is untouched, WO-681 "what NOT to touch").</summary>
-        private double PerEchoRatePerMinute()
-        {
-            var svc = EchoService.Instance;
-            if (svc == null) return 0.0;
-            int count = Math.Max(1, svc.EchoCount);
-            return svc.RatePerSecond / count * 60.0;
-        }
     }
 }

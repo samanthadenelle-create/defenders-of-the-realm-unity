@@ -10,9 +10,11 @@
 // PIPELINE_STATE S8) showing all 6 canonical spirits (EchoRosterCatalog) as
 // portrait cards:
 //   - OWNED spirits (index < EchoService.EchoCount): portrait lit + name + element
-//     + live gather status (EchoAssignments.LaneOf -> "Gathering Wood" / "Idle").
+//     + live specialization readout (EchoBonusCalculator.ReadoutFor -> lane + level +
+//     current bonus %, e.g. "Harvest - Lv 3 - +65%"). TAPPABLE -> EchoCard.Open(index)
+//     opens the per-echo lane picker (WO-738 reachability + agency).
 //   - LOCKED spirits: dimmed silhouette + "Locked -- wave X" (the real cadence,
-//     (order-1) * WavesPerEcho).
+//     (order-1) * WavesPerEcho). Non-interactive (only earned spirits are pickable).
 // Header shows "Echoes N/6", the "Next Echo in M waves" ETA + a progress bar (real
 // EchoService fields, not faked), and the HONEST shared perk: each Echo multiplies
 // the WHOLE workforce's harvest speed (WO-709 quadratic), now xN.
@@ -243,7 +245,25 @@ namespace DeNelle.Village
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
             var cbg = cardGo.GetComponent<Image>();
             cbg.color = owned ? OwnedGlass : LockedGlass;
-            cbg.raycastTarget = false;
+            // OWNED cards are TAPPABLE -> open the per-echo lane picker for this index
+            // (WO-738 reachability: the roster grid is now the picker's entry point).
+            // LOCKED cards stay inert (no raycast, no handler) so only earned spirits are pickable.
+            if (owned)
+            {
+                cbg.raycastTarget = true;
+                var tapBtn = cardGo.AddComponent<UnityEngine.UI.Button>();
+                tapBtn.targetGraphic = cbg;
+                int tapIndex = index;   // capture for the closure
+                tapBtn.onClick.AddListener(() =>
+                {
+                    FlowTrace.Step("Echo", $"Roster card tapped -> open picker for echo {tapIndex}.");
+                    EchoCard.Open(tapIndex);
+                });
+            }
+            else
+            {
+                cbg.raycastTarget = false;
+            }
             var card = cardGo.transform;
 
             // Portrait (top ~55%). Locked -> dark silhouette tint.
@@ -276,15 +296,24 @@ namespace DeNelle.Village
                 TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
             ElarionUiKit.FitSingleLine(nameLabel);
 
-            // Status line: owned -> element + live gather lane; locked -> unlock wave.
+            // Status line: owned -> element + lane/level/bonus readout; locked -> unlock wave.
+            // Colorblind-safe: the lane, level, and bonus are carried in TEXT, never hue alone.
             string status;
             if (owned)
             {
-                string lane = EchoAssignments.LaneOf(index);
-                string laneText = lane == EchoAssignments.LaneIdle
-                    ? "Idle -- awaiting orders"
-                    : "Gathering " + EchoAssignments.LabelFor(lane);
-                status = entry.Element + "\n" + laneText;
+                var ro = EchoBonusCalculator.ReadoutFor(index);
+                string line2;
+                if (ro.Lane == LaneType.Idle)
+                {
+                    line2 = "Idle -- tap to assign";
+                }
+                else
+                {
+                    string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
+                    line2 = laneLabel + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
+                    if (ro.PreferredMatch) line2 += " (best)";
+                }
+                status = entry.Element + "\n" + line2;
             }
             else
             {
