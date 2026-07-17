@@ -1,0 +1,334 @@
+{
+    "picks": [
+        {
+            "id": "blink_axe1h_12",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe1h_14",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe1h_16",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe1h_18",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe1h_20",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe1h_24",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_04",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_09",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_12",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_15",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_20",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_22",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_23",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_24",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_axe2h_25",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_01",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_03",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_04",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_05",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_08",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_09",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_13",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_17",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_18",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_19",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_20",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_21",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_23",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_24",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_bow2h_25",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_01",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_02",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_03",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_04",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_05",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_06",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_07",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_08",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_09",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_12",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_15",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_16",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_18",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_19",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_20",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_21",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_24",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_shield1h_25",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_01",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_02",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_03",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_07",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_10",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_11",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_12",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_14",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_16",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_21",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword1h_22",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_01",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_09",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_10",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_22",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_24",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "blink_sword2h_25",
+            "included": true,
+            "iconPath": ""
+        },
+        {
+            "id": "tripo_sword_g",
+            "included": false,
+            "iconPath": ""
+        }
+    ]
+}
