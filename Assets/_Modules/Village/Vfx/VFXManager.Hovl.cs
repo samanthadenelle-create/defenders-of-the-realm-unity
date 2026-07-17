@@ -338,24 +338,22 @@ namespace DeNelle.Village
             if (follower != null) follower.EndFollow();
 
             // Reparent the pooled loop back under the pool root so it tracks nothing while dormant.
-            // GUARDED (owner F8 2026-07-17 spam): Transform.SetParent THROWS "Cannot set the parent
-            // ... while activating or deactivating the parent" when the CURRENT parent (e.g. an Arcane
-            // Spire being deactivated by a tier reskin, or a scene unload) is mid-(de)activation —
-            // Unity forbids reparenting during activate/deactivate. StopAura->ReturnHovlToPool ran on
-            // OnDisable and threw ~6x. If the safe reparent is illegal, leave the object where it is
-            // and just deactivate it IN PLACE — it still rejoins the pool queue below, and AcquireHovl
-            // re-seats its parent lazily on next use (and tolerates it being destroyed with the tower:
-            // it drops null entries and instantiates fresh). Never throws.
-            if (go.transform.parent != _poolRoot)
-            {
-                bool reparented = Guard.Try("VFXManager", $"return hovl '{key}' to pool root",
-                    () => go.transform.SetParent(_poolRoot, false));
-                if (!reparented)
-                    FlowTrace.Warn("VFXManager",
-                        $"ReturnHovlToPool('{key}'): reparent to pool root skipped — current parent is " +
-                        "mid-(de)activation or the app is quitting. Deactivated in place; it rejoins the " +
-                        "pool lazily on next Acquire (illegal-reparent guard, no throw).");
-            }
+            // Unity LOGS AN ERROR (it does NOT throw) from Transform.SetParent when the current parent
+            // is mid-(de)activation — e.g. an Arcane Spire being deactivated by a tier reskin, or a
+            // scene unload. Because it never throws, the old Guard.Try wrapper caught nothing and the
+            // LogError still reached the F8 recorder: proven by data — the guard was in place at
+            // 06:03 yet the error fired 55 min later at 06:58, across 22 captures (owner F8 2026-07-17).
+            //
+            // The tell for "parent is mid-(de)activation" is exactly `!activeInHierarchy` — during the
+            // deactivation propagation the child reads inactive-in-hierarchy while OnDisable runs. So we
+            // reparent ONLY when the object is still active (the normal loop-stop, where returning to the
+            // pool root keeps things tidy) and DEACTIVATE IN PLACE otherwise. This never issues the
+            // illegal call, so nothing to log. AcquireHovl re-seats the parent on next use regardless
+            // (SetParent(null) then SetParent(newParent), lines ~242/252) and tolerates the object being
+            // destroyed with its tower (drops null entries, instantiates fresh) — so leaving a dormant
+            // loop parented under a torn-down tower is harmless.
+            if (go.activeInHierarchy && go.transform.parent != _poolRoot)
+                go.transform.SetParent(_poolRoot, false);
             go.transform.localScale = Vector3.one;   // clear any scale override for reuse
             go.SetActive(false);
 
