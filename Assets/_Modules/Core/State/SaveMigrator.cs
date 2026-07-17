@@ -69,6 +69,7 @@ namespace DeNelle.Core.State
                 { 30, MigrateToV30 },
                 { 31, MigrateToV31 },
                 { 32, MigrateToV32 },
+                { 33, MigrateToV33 },
             };
 
         /// <summary>
@@ -467,6 +468,18 @@ namespace DeNelle.Core.State
         private static PersistedState MigrateToV32(PersistedState s)
         {
             if (s.FreeBuildsUsed == null) s.FreeBuildsUsed = new System.Collections.Generic.List<string>();
+            return s;
+        }
+
+        // v33 (WO-738) — the echoLanes token grew from a bare lane ("wood") to a
+        // "lane:level" grammar ("harvest:3,idle,crafting:1"). This is backward-compatible
+        // READ-migrated by EchoAssignments at parse time (a legacy wood/iron/food token
+        // reads as the Harvest lane at level 1; idle stays idle), so no field transform is
+        // needed here. The step exists only to keep the version triple aligned
+        // (SaveMigrator top step == SaveSchema.CurrentVersion) per the CORE_SAVE oracle —
+        // the same reason recent additive bumps each carry a pass-through step.
+        private static PersistedState MigrateToV33(PersistedState s)
+        {
             return s;
         }
 

@@ -259,6 +259,9 @@ namespace DeNelle.Editor
             // --- WO-676 skill-tree strategic redesign — §C gates G1-G3 (data/dual-copy/
             // vocabulary + StatSum stacking/clamps + NO DEAD NODES consumer registry) ---
             if (!TalentStrategyRegression.Run(out var talentStratReason)) failures.Add(talentStratReason); else log.AppendLine("[talent-strategy] " + talentStratReason);
+            // --- WO-738 echo per-echo specialization — §2c permission gate (roster identity +
+            // balance dual-copy + token/legacy round-trip + bonus math + save v33 + EchoLaneBonuses) ---
+            if (!EchoSpecializationRegression.Run(out var echoSpecReason)) failures.Add(echoSpecReason); else log.AppendLine("[echo-spec] " + echoSpecReason);
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
