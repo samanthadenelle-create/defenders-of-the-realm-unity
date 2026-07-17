@@ -25,10 +25,34 @@
 // null") -- see LoadPortrait, Guard-wrapped so a missing image logs + skips.
 // =============================================================================
 using UnityEngine;
+using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
+    /// <summary>The six canonical Echo elements (WO-738 identity axis). Distinct from the
+    /// human-readable <see cref="EchoRosterEntry.Element"/> subtitle string, which stays for display.</summary>
+    public enum ElementType
+    {
+        Nature,
+        Shadow,
+        Storm,
+        Earth,
+        Fire,
+        Frost,
+    }
+
+    /// <summary>The functional Echo lanes (WO-738). Idle == unassigned. These are the AGENCY picks;
+    /// the string lane vocabulary in <see cref="EchoAssignments"/> mirrors these tokens.</summary>
+    public enum LaneType
+    {
+        Idle,
+        Harvest,
+        Crafting,
+        Defense,
+        Exploration,
+    }
+
     /// <summary>One canonical Echo spirit's card identity (immutable data row).</summary>
     public sealed class EchoRosterEntry
     {
@@ -46,6 +70,16 @@ namespace DeNelle.Village
         public string Flavor;
         /// <summary>Extended lore revealed by the dialogue's "Tell me more" button (ASCII).</summary>
         public string Lore;
+
+        // ── WO-738 specialization identity (derived, non-tunable -- element identity,
+        //    NOT a balance knob; the tunable numbers live in echoes-balance.json). ──
+        /// <summary>This spirit's element (WO-738 identity axis).</summary>
+        public ElementType ElementType;
+        /// <summary>The lane this spirit is best at -- a match here earns the affinity bonus.</summary>
+        public LaneType PreferredLane;
+        /// <summary>For a Harvest-preferred spirit, the real resource it favors (the DumpSilos split
+        /// weight). Null for a non-Harvest spirit (n/a). Maps to a real GameState wallet field.</summary>
+        public ResourceType? HarvestResource;
     }
 
     /// <summary>
@@ -64,6 +98,7 @@ namespace DeNelle.Village
                 PortraitName = "Frosthowl",
                 Flavor = "The ancient spirit awakens, its icy breath whispering secrets of the frozen wastes...",
                 Lore = "Frosthowl prowled the glacier reaches long before Elarion had a name. Bound to your cause, the cold works FOR you -- every harvest hastened by winter's patience.",
+                ElementType = ElementType.Frost, PreferredLane = LaneType.Exploration, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-verdant-stag", Order = 2,
@@ -71,6 +106,7 @@ namespace DeNelle.Village
                 PortraitName = "VerdantStag",
                 Flavor = "Antlers of living wood break the loam, and the green spirit lifts its head to your call...",
                 Lore = "The Verdant Stag remembers every seed the forest ever sowed. Where it walks the land gives freely -- growth answering to your command.",
+                ElementType = ElementType.Nature, PreferredLane = LaneType.Harvest, HarvestResource = ResourceType.Wood,
             },
             new EchoRosterEntry {
                 Id = "echo-voidwing-raven", Order = 3,
@@ -78,6 +114,7 @@ namespace DeNelle.Village
                 PortraitName = "VoidwingRaven",
                 Flavor = "A shadow with wings unfurls from nothing, its hollow eyes fixed upon your intent...",
                 Lore = "The Voidwing Raven slipped between worlds when the first star guttered out. It gathers what others cannot reach, carrying spoils across the dark.",
+                ElementType = ElementType.Shadow, PreferredLane = LaneType.Exploration, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stormcoil-serpent", Order = 4,
@@ -85,6 +122,7 @@ namespace DeNelle.Village
                 PortraitName = "StormcoilSerpent",
                 Flavor = "Thunder coils and tightens, and a serpent of lightning tastes the charged air...",
                 Lore = "The Stormcoil Serpent was born of a sky that would not stop raging. Its restless energy drives the whole workforce faster than any whip could.",
+                ElementType = ElementType.Storm, PreferredLane = LaneType.Defense, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stonewarden-bear", Order = 5,
@@ -92,6 +130,10 @@ namespace DeNelle.Village
                 PortraitName = "StonewardenBear",
                 Flavor = "The mountain shifts, stands, and shakes the dust of ages from its granite shoulders...",
                 Lore = "The Stonewarden Bear slept beneath the roots of the world. Tireless and unbreakable, it hauls the heaviest loads without complaint.",
+                // Owner-final map says "Stone", but Stone is RETIRED (DEF-121) and NOT in ResourceType
+                // {Iron,Wood,Food,AetherCrystal}; the WO's reconciled table maps this Earth spirit to
+                // Iron ("hauls the heaviest loads" = ore). Real-resource-only, no invented type.
+                ElementType = ElementType.Earth, PreferredLane = LaneType.Harvest, HarvestResource = ResourceType.Iron,
             },
             new EchoRosterEntry {
                 Id = "echo-ember-phoenix", Order = 6,
@@ -99,6 +141,7 @@ namespace DeNelle.Village
                 PortraitName = "EmberPhoenix",
                 Flavor = "From a single spark the firebird rises, wings scattering embers like falling stars...",
                 Lore = "The Ember Phoenix has burned and risen a thousand times. Its fervor sets the entire workforce alight -- fastest when the work is hardest.",
+                ElementType = ElementType.Fire, PreferredLane = LaneType.Crafting, HarvestResource = null,
             },
         };
 

@@ -863,7 +863,7 @@ namespace DeNelle.Core.State
             s.HeroXp = 0f;                                    // F8-47 — no banked XP yet.
             s.HeroLifetimeXp = 0f;                            // F8-47 — no lifetime XP yet.
             s.StrategicPlacementMigrated = true;              // WO-682 — New Game: nothing to migrate (no auto-placed town was ever granted); marker SET so the one-shot writer never runs and the bake standdown activates = the blank template. Existing saves still migrate via the marker-false path (SaveMigrator v30 seeds false).
-            s.EchoLanes = "wood";                             // WO-681/658 — New Game: the starter Echo is auto-assigned to Wood; later Echoes idle until assigned.
+            s.EchoLanes = "harvest:1";                        // WO-738 — New Game: the starter Echo (Frosthowl, index 0) is assigned to the Harvest lane at level 1, so it visibly gathers from turn one (its PREFERRED lane is the stubbed Exploration, but the owner ruling is the first echo must gather). Later Echoes idle until assigned. Richer "lane:level" token grammar.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             s.FreeBuildsUsed = new List<string>();            // v32 — New Game: every catalog id's one-time FREE first build is live again (per-save flags; they replace the retired wood/iron founding seed).
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "_authoringNotes": "WORK_ORDER_738 -- Echo per-echo agency + specialization balance. Tunable knobs the owner re-tunes in playtest with NO recompile (loaded via CanonicalJson; the Resources copy wins, StreamingAssets is the desktop source -- keep the two byte-identical). Identity (name/element/preferred-lane/harvest-resource) stays in the EchoRosterCatalog CODE table; ONLY the numbers live here. maxLevel bounds the EchoAssignments level clamp. Defaults are sensible placeholders; owner fine-tunes.",
+  "maxLevel": 8,
+  "preferredLaneMatchBonus": 0.75,
+  "baseContributionPerEcho": 0.15,
+  "sixSetBonusGlobalHarvest": 0.20,
+  "levelCurve": "linear",
+  "perLevelBonus": 0.05,
+  "perEchoBaseRate": {
+    "echo-frosthowl": 1.0,
+    "echo-verdant-stag": 1.1,
+    "echo-voidwing-raven": 1.0,
+    "echo-stormcoil-serpent": 1.05,
+    "echo-stonewarden-bear": 1.15,
+    "echo-ember-phoenix": 1.1
+  },
+  "crossBonuses": []
+}
