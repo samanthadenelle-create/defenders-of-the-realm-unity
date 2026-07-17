@@ -26,7 +26,7 @@
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
 ## Persistence / save
-- Save schema **v30** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673). *(verified from SaveSchema.cs 2026-07-12)*
+- Save schema **v33** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token, WO-738). Every bump 21→33 carries a `SaveMigrator` step (additive ones are pass-throughs) so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs/SaveMigrator.cs 2026-07-17)*
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
 - Local save = PlayerPrefs `dotr-save`, signed (LB-3 HMAC, tamper-rejected); server save/load nonce-auth is built but `BackendAuthConfig.Enforced` = **OFF**. *(2026-07-12)*
 
@@ -35,6 +35,7 @@
 - **Gear ruling:** the SMALL curated set is deliberate ("only a few prefabs — nothing decent to use yet") → **Resources is truth for weapons/armor**; sync Resources → StreamingAssets. The 433-weapon StreamingAssets copy is the stale side. *(owner 2026-07-12)*
 - Drifted pairs found (sync pending): weapons, armor, daily-quests, skin, stake-rewards, tower-perks. *(2026-07-12)*
 - The "six StreamingAssets-only WebGL-broken catalogs" are **already mirrored** (that risk-ledger line is stale). *(2026-07-12)*
+- **Echo model (WO-738, owner Path-B ruling):** 6 collectible spirits (identity in the `EchoRosterCatalog` CODE TABLE — no ScriptableObjects, WebGL-safety ruling), balance in `echoes-balance.json` (dual-copy). Each echo has element + level (max 8) + one assigned functional lane (Harvest/Crafting/Defense/Exploration). `EchoBonusCalculator` is the single math source (economy + UI + `EchoSpecializationRegression` oracle all read it). Echoes NEVER fight: Defense = passive offline city-raid bonus, Exploration = dungeons-only — both STUBBED (write to Core `EchoLaneBonuses`, hosts read when they land); **Harvest + Crafting are the felt-now lanes.** Picker reachable via roster-card tap (the wisp-injector path is dead). *(2026-07-17)*
 
 ## Backend / web
 - **`api/` lives IN THIS REPO and is git-TRACKED** (not gitignored, not a separate React repo). Deploys ride any `vercel deploy` from C:\EOA. *(2026-07-12)*
