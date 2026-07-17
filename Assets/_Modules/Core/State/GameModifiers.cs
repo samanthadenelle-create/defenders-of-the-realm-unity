@@ -45,6 +45,14 @@ namespace DeNelle.Core.State
         [JsonProperty("resourceEfficiencyMult")] public float ResourceEfficiencyMult = 1f; // Forge
         [JsonProperty("offlineBonusMult")] public float OfflineBonusMult = 1f;
 
+        // ── Phase-2 WC3 building capstones (owner-named cheap levers) ─────────
+        // ArmyCapBonus: SUMMED across owned perks/tiers (int, default 0 = no-op);
+        // folds into ArmyStorage.MaxArmySize (base 10 + bonus). "Barracks: more troops."
+        [JsonProperty("armyCapBonus")] public int ArmyCapBonus = 0;
+        // AutoCollect: OR-ed flag; when true a ticking service auto-taps CollectAll so
+        // resources bank without a manual tap. "Lumbermill: auto-gather capstone."
+        [JsonProperty("autoCollect")] public bool AutoCollect = false;
+
         // ── Tier-4 unique abilities (flags; the "wow" moment per building) ──
         [JsonProperty("arcaneOverload")] public bool ArcaneOverload = false; // once/wave empower all towers 15s
         [JsonProperty("battleForged")]   public bool BattleForged   = false; // deployed troops +25% stats 60s
@@ -62,6 +70,7 @@ namespace DeNelle.Core.State
             TroopDamageMult = TroopDamageMult, TroopHealthMult = TroopHealthMult,
             WoodProductionMult = WoodProductionMult, FoodProductionMult = FoodProductionMult,
             ResourceEfficiencyMult = ResourceEfficiencyMult, OfflineBonusMult = OfflineBonusMult,
+            ArmyCapBonus = ArmyCapBonus, AutoCollect = AutoCollect,
             ArcaneOverload = ArcaneOverload, BattleForged = BattleForged, Forgefire = Forgefire,
             EternalGrove = EternalGrove, WindsOfPlenty = WindsOfPlenty,
         };

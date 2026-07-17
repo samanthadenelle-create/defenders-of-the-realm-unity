@@ -131,6 +131,8 @@ namespace DeNelle.Core.State
             r.FoodProductionMult     *= m.FoodProductionMult;
             r.ResourceEfficiencyMult *= m.ResourceEfficiencyMult;
             r.OfflineBonusMult       *= m.OfflineBonusMult;
+            r.ArmyCapBonus  += m.ArmyCapBonus;   // additive: +5 troops per owning perk/tier
+            r.AutoCollect   |= m.AutoCollect;    // OR: any owning perk enables auto-gather
             r.ArcaneOverload |= m.ArcaneOverload;
             r.BattleForged   |= m.BattleForged;
             r.Forgefire      |= m.Forgefire;

@@ -26,6 +26,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.State
 {
@@ -44,8 +45,32 @@ namespace DeNelle.Core.State
         /// <summary>The owned-troop roster (saved). Never null after construction.</summary>
         [JsonProperty("owned")] public List<PlayerTroop> Owned = new List<PlayerTroop>();
 
-        /// <summary>Army population cap — total troop slots. Fresh = 10; barracks raise it later.</summary>
-        [JsonProperty("maxArmySize")] public int MaxArmySize = DefaultMaxArmySize;
+        /// <summary>Last army cap value we emitted a [Flow:Perk] line for (change-only logging).</summary>
+        private static int s_lastLoggedCap = -1;
+
+        /// <summary>
+        /// Army population cap — total troop slots. DYNAMIC: base 10
+        /// (<see cref="DefaultMaxArmySize"/>) + the SUMMED <c>armyCapBonus</c> from the
+        /// active perk contract (the "Barracks: more troops" capstone). Null-safe — with no
+        /// modifier it stays the base 10. Derived, so NOT serialized (the old stored
+        /// "maxArmySize" key on legacy saves is harmlessly ignored on load).
+        /// </summary>
+        [JsonIgnore] public int MaxArmySize
+        {
+            get
+            {
+                int bonus = 0;
+                var mods = ModifierService.Active;               // never null (Compute() returns fresh)
+                if (mods != null && mods.ArmyCapBonus > 0) bonus = mods.ArmyCapBonus;
+                int cap = DefaultMaxArmySize + bonus;
+                if (cap != s_lastLoggedCap)
+                {
+                    s_lastLoggedCap = cap;
+                    FlowTrace.Step("Perk", "army cap -> " + cap);
+                }
+                return cap;
+            }
+        }
 
         /// <summary>
         /// Monotonic id counter for minting stable <see cref="PlayerTroop.Id"/> values

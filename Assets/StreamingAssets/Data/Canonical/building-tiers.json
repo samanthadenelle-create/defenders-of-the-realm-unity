@@ -38,7 +38,7 @@
         { "tier": 2, "name": "Drill Yard", "effect": "Troop health +8%", "costWood": 1900, "costFood": 1600, "costCrystal": 450, "requiresVillageTier": 1, "modifiers": { "troopHealthMult": 1.08 },
           "perks": [ { "id": "barracks-combat-drill", "name": "Basic Combat Drill", "effect": "Troop damage +8%, health +5%", "goldCost": 800, "iconId": "Barracks_T1_Basic_Combat_Drill", "isSignature": false, "modifiers": { "troopDamageMult": 1.08, "troopHealthMult": 1.05 } } ] },
         { "tier": 3, "name": "War College", "effect": "Troop damage +12%, health +10%", "costWood": 3800, "costFood": 3200, "costCrystal": 1000, "requiresVillageTier": 2, "modifiers": { "troopDamageMult": 1.12, "troopHealthMult": 1.10 },
-          "perks": [ { "id": "barracks-expanded-capacity", "name": "Expanded Capacity", "effect": "Troop health +10%", "goldCost": 1600, "iconId": "Barracks_T1_Expanded_Capacity", "isSignature": true, "modifiers": { "troopHealthMult": 1.10 } } ] },
+          "perks": [ { "id": "barracks-expanded-capacity", "name": "Expanded Capacity", "effect": "Army size +5", "goldCost": 1600, "iconId": "Barracks_T1_Expanded_Capacity", "isSignature": true, "modifiers": { "armyCapBonus": 5 } } ] },
         { "tier": 4, "name": "Standing Army", "effect": "Troop damage +18%, health +18%", "costWood": 7000, "costFood": 5600, "costCrystal": 2000, "requiresVillageTier": 3, "modifiers": { "troopDamageMult": 1.18, "troopHealthMult": 1.18 } },
         { "tier": 5, "name": "Warhost", "effect": "Troop damage +26%, health +26%", "costWood": 10500, "costFood": 8500, "costCrystal": 3200, "requiresVillageTier": 3, "modifiers": { "troopDamageMult": 1.26, "troopHealthMult": 1.26 } },
         { "tier": 6, "name": "Legion of Elarion", "effect": "Troop damage +38%, health +38%", "costWood": 16000, "costFood": 13000, "costCrystal": 4800, "requiresVillageTier": 3, "modifiers": { "troopDamageMult": 1.38, "troopHealthMult": 1.38 } }
@@ -67,7 +67,8 @@
           "perks": [ { "id": "lumber-efficient-processing", "name": "Efficient Processing", "effect": "Wood production +15%", "goldCost": 500, "iconId": "Lumber_Mill_T1_Efficient_Processing", "isSignature": false, "modifiers": { "woodProductionMult": 1.15 } } ] },
         { "tier": 3, "name": "Automated Saws", "effect": "Wood +35%, offline bucket holds more", "costWood": 3200, "costFood": 1200, "costCrystal": 400, "requiresVillageTier": 2, "modifiers": { "woodProductionMult": 1.35, "offlineBonusMult": 1.15 },
           "perks": [ { "id": "lumber-construction-aid", "name": "Construction Aid", "effect": "Wood +10%, offline bucket +8%", "goldCost": 1000, "iconId": "Lumber_Mill_T1_Construction_Aid", "isSignature": true, "modifiers": { "woodProductionMult": 1.10, "offlineBonusMult": 1.08 } } ] },
-        { "tier": 4, "name": "Eternal Grove", "effect": "Wood +50%, Eternal Grove unlocked", "costWood": 6000, "costFood": 2500, "costCrystal": 1000, "requiresVillageTier": 3, "modifiers": { "woodProductionMult": 1.50, "offlineBonusMult": 1.15, "eternalGrove": true } }
+        { "tier": 4, "name": "Eternal Grove", "effect": "Wood +50%, Eternal Grove unlocked", "costWood": 6000, "costFood": 2500, "costCrystal": 1000, "requiresVillageTier": 3, "modifiers": { "woodProductionMult": 1.50, "offlineBonusMult": 1.15, "eternalGrove": true },
+          "perks": [ { "id": "lumber-ancient-sawmill", "name": "Ancient Sawmill", "effect": "Auto-gathers wood over time", "goldCost": 2000, "iconId": "Lumber_Mill_T1_Construction_Aid", "isSignature": true, "modifiers": { "autoCollect": true } } ] }
       ]
     },
     {
