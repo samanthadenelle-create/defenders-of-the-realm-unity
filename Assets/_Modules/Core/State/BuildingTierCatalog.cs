@@ -58,6 +58,14 @@ namespace DeNelle.Core.State
         /// <summary>WO-432 tech-gate — this tier (and its research) is locked until the global Village/
         /// Stronghold Tier (Heart of Elarion) reaches this value. 0 = no gate (always available).</summary>
         [JsonProperty("requiresVillageTier")] public int RequiresVillageTier;
+        /// <summary>STRUCTURE-HP bonus this tier grants (owner 2026-07-17: "buildings ... maybe add more HP
+        /// to structure"). CUMULATIVE-ABSOLUTE fraction over the building's BASE max HP AT this tier
+        /// (0.20 = +20%, i.e. max-HP multiplier 1.20) — NOT stacked on the lower tiers, exactly like the
+        /// tier's <see cref="Modifiers"/> (each tier states its total). Read PER-BUILDING by
+        /// ModifierService.StructureHpMultFor and applied via Building.ApplyStructureHpMultiplier; the
+        /// same value is ALSO written into <see cref="Effect"/> as a plain "Structure HP +N%" clause so the
+        /// upgrade panel shows it with no View/VM change. 0 (default) = no HP change at this tier. Owner-tunable.</summary>
+        [JsonProperty("structureHpBonusPct")] public float StructureHpBonusPct;
         /// <summary>One-line concrete player-facing effect ("Wood +35%, offline bucket holds more") —
         /// shown on the perk-grid tile (owner verbiage law 2026-07-02). Authored in building-tiers.json v4.</summary>
         [JsonProperty("effect")] public string Effect;

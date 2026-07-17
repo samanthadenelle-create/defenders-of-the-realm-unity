@@ -303,6 +303,7 @@ namespace DeNelle.Dungeons
             ConfigureCrafting();
             ConfigureDungeonHud();
             DressTraversalLinks();
+            SweepPlaceholderCubes();
             StartAmbientAudio();
 
             // Settle any in-flight ATB encounter — the dungeon module's side of
@@ -877,6 +878,20 @@ namespace DeNelle.Dungeons
 
             // ── DOORS — one pair per doorway wall segment (deduped: the same
             //    doorway is listed in BOTH rooms' wall arrays). ────────────────
+            //
+            // ALIGN FIX (owner F8 "open door not aligned with door location"):
+            // the visible door GAP is cut by DungeonSceneBuilder from its OWN
+            // hardcoded RoomDef door offsets, quantized to 4u wall segments —
+            // which DRIFT from this layout JSON's doorway coords (garden<->
+            // entrance: mesh gap ~z=2 vs JSON mid z=6 => a ~4u sideways offset,
+            // so the 'Open Door' prompt fired well off the door mouth). We anchor
+            // each side's port at that ROOM'S OWN built 'wall_doorway' mesh
+            // (its transform IS the gap centre) instead of the JSON midpoint, so
+            // the prompt sits where the Keeper actually sees the door. Runtime
+            // only — no scene edit. Falls back to the JSON mid if a mesh is
+            // missing (e.g. the pack was not imported -> placeholder box).
+            var doorMeshByRoom = CollectDoorMeshes();
+
             var done = new System.Collections.Generic.HashSet<string>();
             foreach (var room in Layout.rooms)
             {
@@ -910,9 +925,21 @@ namespace DeNelle.Dungeons
                     Vector3 n = new Vector3(dir.z, 0f, -dir.x);
                     Vector3 intoA = Vector3.Dot(n, room.bounds.Center - mid) >= 0f ? n : -n;
 
+                    // Seat each side at that room's OWN door mesh (falls back to
+                    // the JSON midpoint when no built doorway mesh is found).
+                    Vector3 gapA = NearestDoorMeshXZ(room.id, mid, doorMeshByRoom, out bool haveA);
+                    Vector3 gapB = NearestDoorMeshXZ(other.id, mid, doorMeshByRoom, out bool haveB);
+
+                    // PROVE the offset (section 12): mesh gap vs the old JSON anchor.
+                    FlowTrace.Step("Dungeon",
+                        $"DoorAlign '{room.id}<->{other.id}': jsonMid={mid:F2} " +
+                        $"gapA[{(haveA ? "mesh" : "fallback")}]={gapA:F2} " +
+                        $"gapB[{(haveB ? "mesh" : "fallback")}]={gapB:F2} " +
+                        $"deltaA={(gapA - mid).magnitude:F2} deltaB={(gapB - mid).magnitude:F2}.");
+
                     float yA = LevelYFor(room), yB = LevelYFor(other);
-                    Vector3 posA = mid + intoA * 1.5f + Vector3.up * yA;
-                    Vector3 posB = mid - intoA * 1.5f + Vector3.up * yB;
+                    Vector3 posA = gapA + intoA * 1.5f + Vector3.up * yA;
+                    Vector3 posB = gapB - intoA * 1.5f + Vector3.up * yB;
 
                     BuildPair($"Door_{room.id}__{other.id}", "Open Door",
                         posA, room.id, posB, other.id);
@@ -948,6 +975,132 @@ namespace DeNelle.Dungeons
 
             FlowTrace.Step("Dungeon",
                 $"DressTraversalLinks: {built} traversal pair(s) authored ({built * 2} port links).");
+        }
+
+        /// <summary>
+        /// Buckets every built <c>wall_doorway</c> mesh in the scene by the room
+        /// it lives under (walking parents to the enclosing <c>Room_&lt;id&gt;</c>
+        /// node). Used to seat each door port at the visible gap rather than the
+        /// JSON midpoint (the two authorings drift — see DressTraversalLinks).
+        /// </summary>
+        private System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<Transform>> CollectDoorMeshes()
+        {
+            var byRoom = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<Transform>>();
+            Guard.Try("Dungeon", "collect door meshes", () =>
+            {
+                foreach (var t in Object.FindObjectsByType<Transform>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (t == null) continue;
+                    string n = t.name;
+                    if (string.IsNullOrEmpty(n)) continue;
+                    // The KayKit doorway piece instantiates as "wall_doorway";
+                    // exclude illusory walls and our own PortLink markers.
+                    if (n.IndexOf("doorway", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (n.StartsWith("[ILLUSORY]", System.StringComparison.Ordinal)) continue;
+                    if (n.StartsWith("PortLink", System.StringComparison.Ordinal)) continue;
+
+                    string rid = OwningRoomId(t);
+                    if (rid == null) continue;
+                    if (!byRoom.TryGetValue(rid, out var list))
+                    {
+                        list = new System.Collections.Generic.List<Transform>();
+                        byRoom[rid] = list;
+                    }
+                    list.Add(t);
+                }
+            });
+            return byRoom;
+        }
+
+        /// <summary>
+        /// The XZ (floor-plane, y=0) of the door mesh in <paramref name="roomId"/>
+        /// nearest <paramref name="near"/>; <paramref name="found"/> is false and
+        /// the JSON point is returned when the room has no built doorway mesh.
+        /// </summary>
+        private Vector3 NearestDoorMeshXZ(string roomId, Vector3 near,
+            System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<Transform>> byRoom,
+            out bool found)
+        {
+            found = false;
+            Vector3 result = new Vector3(near.x, 0f, near.z);
+            if (byRoom != null && byRoom.TryGetValue(roomId, out var list) && list != null)
+            {
+                float best = float.MaxValue;
+                foreach (var t in list)
+                {
+                    if (t == null) continue;
+                    Vector3 p = t.position;
+                    float dx = p.x - near.x, dz = p.z - near.z;
+                    float d = dx * dx + dz * dz;
+                    if (d < best)
+                    {
+                        best = d;
+                        result = new Vector3(p.x, 0f, p.z);
+                        found = true;
+                    }
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Walks up from <paramref name="t"/> to the enclosing
+        /// <c>Room_&lt;id&gt;</c> node and returns its id, or null if none.</summary>
+        private static string OwningRoomId(Transform t)
+        {
+            for (Transform p = t; p != null; p = p.parent)
+            {
+                if (p.name != null && p.name.StartsWith("Room_", System.StringComparison.Ordinal))
+                    return p.name.Substring(5);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Hides leftover WHITE placeholder primitive boxes — DungeonSceneBuilder's
+        /// MakePlaceholderCube fallback for a KayKit prop whose mesh failed to load
+        /// (owner F8: "white placeholder cube on the dungeon floor"). Only NEAR-WHITE
+        /// primitive cubes named "[PLACEHOLDER] ..." are swept; the deliberately-
+        /// tinted stand-ins (hearth/rug/water) render in colour and are LEFT ALONE.
+        /// Runtime-only (no scene edit); idempotent (a re-imported mesh leaves no box).
+        /// </summary>
+        private void SweepPlaceholderCubes()
+        {
+            using var _flow = FlowTrace.Enter("Dungeon", "SweepPlaceholderCubes");
+            int hidden = 0;
+            Guard.Try("Dungeon", "sweep placeholder cubes", () =>
+            {
+                foreach (var t in Object.FindObjectsByType<Transform>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (t == null || !t.gameObject.activeSelf) continue;
+                    if (!t.name.StartsWith("[PLACEHOLDER]", System.StringComparison.Ordinal)) continue;
+
+                    // Only raw primitive boxes (built-in "Cube" mesh) — never a real FBX.
+                    var mf = t.GetComponent<MeshFilter>();
+                    if (mf == null || mf.sharedMesh == null || mf.sharedMesh.name != "Cube") continue;
+
+                    // Keep the tinted stand-ins; hide only the untinted white/magenta boxes.
+                    var r = t.GetComponent<Renderer>();
+                    Color c = Color.white;
+                    if (r != null && r.sharedMaterial != null)
+                    {
+                        var m = r.sharedMaterial;
+                        if (m.HasProperty("_BaseColor")) c = m.GetColor("_BaseColor");
+                        else if (m.HasProperty("_Color")) c = m.color;
+                    }
+                    bool nearWhite = c.r > 0.85f && c.g > 0.85f && c.b > 0.85f;
+                    if (!nearWhite) continue;
+
+                    FlowTrace.Step("Dungeon",
+                        $"SweepPlaceholderCubes: hiding white placeholder '{t.name}' at " +
+                        $"{t.position:F2} (missing KayKit mesh -> default-material box).");
+                    t.gameObject.SetActive(false);
+                    hidden++;
+                }
+            });
+            FlowTrace.Step("Dungeon",
+                $"SweepPlaceholderCubes: {hidden} white placeholder box(es) hidden.");
         }
 
         // ── Audio ────────────────────────────────────────────────────────────

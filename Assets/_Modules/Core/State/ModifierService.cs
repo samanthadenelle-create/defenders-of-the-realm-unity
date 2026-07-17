@@ -64,6 +64,24 @@ namespace DeNelle.Core.State
             }
         }
 
+        /// <summary>
+        /// STRUCTURE-HP multiplier for a specific building at ITS current tier (owner 2026-07-17). Reads
+        /// the building's own tier def's <see cref="BuildingTierDef.StructureHpBonusPct"/> (cumulative-
+        /// absolute at that tier) and returns the max-HP multiplier (1 + pct); 1.0 (no-op) for a locked
+        /// building (tier 0) or one not in the catalog. This is PER-BUILDING (unlike the global Active
+        /// contract) — the generic HP applier (Building.ApplyStructureHpMultiplier) multiplies the
+        /// building's base max HP by this. Data-driven: one path for all 6 upgradable buildings.
+        /// </summary>
+        public static float StructureHpMultFor(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return 1f;
+            int tier = TierOf(buildingId);
+            if (tier < 1) return 1f;
+            var def = BuildingTierCatalog.TierOf(buildingId, tier);
+            float pct = def?.StructureHpBonusPct ?? 0f;
+            return pct > 0f ? 1f + pct : 1f;
+        }
+
         /// <summary>Force the active modifiers to a fixed contract (dev menu / scene override). Pass null to clear.</summary>
         public static void SetOverride(GameModifiers modifiers)
         {

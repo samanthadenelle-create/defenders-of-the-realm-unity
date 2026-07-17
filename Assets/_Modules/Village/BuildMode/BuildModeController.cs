@@ -1148,9 +1148,17 @@ namespace DeNelle.Village
                 {
                     FlowTrace.Step("Build", $"Two-step COMMIT at PENDING cell ({cell.x},{cell.y}) — PLACE latch consumed, routing through Place().");
                     Place(cell, footprint, seatSnapped, wallMounted);
-                    // STAY-ARMED is preserved; the NEXT copy starts back in hover state
-                    // (drop again to position it). Yaw persists across copies.
-                    _dropPending = false;
+                    // Owner felt-test 2026-07-16/17 (verbatim: "still screen not closing
+                    // issue, should go back to carousel after placement, otherwise no reason
+                    // to be there"): a SUCCESSFUL placement RETURNS to the building-selection
+                    // carousel — it does NOT silently stay-armed to place another copy. Reuse
+                    // the SAME teardown as the cancel path (CancelArmed): disarm (_armed=null,
+                    // so the next Update re-derives BuildHudState.Browse and the intent bar
+                    // hides), drop any pending drop (_dropPending=false), hide the ghost, and
+                    // _palette.Expand() so the shop chrome + card tray reappear — ready for the
+                    // next pick. afterPlacement=true swaps the FlowTrace line to the placed ->
+                    // carousel transition (below) instead of the "placement aborted" cancel line.
+                    CancelArmed(afterPlacement: true);
                 }
                 else
                 {
@@ -1856,7 +1864,11 @@ namespace DeNelle.Village
             _hud?.RefreshResources();
         }
 
-        private void CancelArmed()
+        // <paramref name="afterPlacement"/> = true when a SUCCESSFUL placement is returning
+        // to the carousel (owner 2026-07-16/17), so the teardown is identical to a cancel but
+        // the captured FlowTrace line reflects "placed -> returned to carousel" rather than
+        // "placement aborted". Defaults false so every existing cancel caller is unchanged.
+        private void CancelArmed(bool afterPlacement = false)
         {
             _armed = null;
             _dropPending = false;   // two-step: drop any pending (uncommitted) drop with the arm
@@ -1870,13 +1882,17 @@ namespace DeNelle.Village
             // Grok slice 4: expand the shop back to the full carousel when disarming.
             _palette?.Expand();
             // Owner device felt-test 2026-07-16 ("after i select place the cancel should
-            // close out and the selection bar opens back up"): capture the
-            // placement -> cancel -> selection-bar-reopened transition. _armed is now null,
-            // so the next Update re-derives the HUD state as Browse (intent bar hides) while
-            // BuildPaletteUI.Expand has just brought the carousel back = "choosing a building".
-            FlowTrace.Step("BuildHud",
-                "Cancel: placement aborted (armed disarmed) -> selection bar re-opened " +
-                "(palette Expand); next frame returns to Browse = choosing a building");
+            // close out and the selection bar opens back up"): capture the transition. _armed
+            // is now null, so the next Update re-derives the HUD state as Browse (intent bar
+            // hides) while BuildPaletteUI.Expand has just brought the carousel back = "choosing
+            // a building". The line differs by entry point (placed vs cancelled) but the
+            // resulting state — carousel back, Browse next frame — is the SAME.
+            if (afterPlacement)
+                FlowTrace.Step("BuildHud", "placed -> returned to carousel");
+            else
+                FlowTrace.Step("BuildHud",
+                    "Cancel: placement aborted (armed disarmed) -> selection bar re-opened " +
+                    "(palette Expand); next frame returns to Browse = choosing a building");
         }
 
         // =====================================================================
@@ -1990,23 +2006,67 @@ namespace DeNelle.Village
         /// </summary>
         private void UpgradeSelected()
         {
-            if (_selected == null) return;
+            // §12 INSTRUMENT-FIRST (owner F8 2026-07-17 "Upgrade ... does NOTHING"): this
+            // handler used to emit only Debug.Log on its SUCCESS paths, so the F8 harvest saw
+            // NO [Flow] line whether or not it fired — the dead step was invisible. Every
+            // branch below now traces [Flow:BuildUpgrade] and pops a BuildFeedbackToast, so the
+            // next build's capture pinpoints the taken path and the player FEELS the result.
             var ps = _selected;
-            var entry = CatalogRegistry.Get(ps.itemId);
+            if (ps == null)
+            {
+                FlowTrace.Warn("BuildUpgrade", "Upgrade tapped but no structure is selected.");
+                return;
+            }
 
+            var entry = CatalogRegistry.Get(ps.itemId);
             int level = Mathf.Max(1, ps.level);
             int maxLevel = MaxLevelFor(entry);
+
+            // ROUTE BY KIND (owner F8 2026-07-17): a CITY/RESOURCE building upgrades through the
+            // WC3-style perk/tier PANEL (BuildingUpgradePanelMvvm, WO-675/680); a DEFENSE TOWER
+            // (e.g. tower_arcane_spire — the Arcane Spire in the shot) upgrades INLINE by stepping
+            // its towers.json tier (range/damage). Tower ids are NOT in BuildingTierCatalog nor
+            // ResourceBuildingProgression, so opening the panel for one would target an empty /
+            // default building — the panel is the WRONG surface for a tower.
+            bool panelBuilding =
+                DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(ps.itemId) ||
+                DeNelle.Village.Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(ps.itemId);
+
+            FlowTrace.Step("BuildUpgrade",
+                $"click id='{ps.itemId}' lvl={level}/{maxLevel} panelBuilding={panelBuilding} " +
+                $"panelFlag={DeNelle.Core.FeatureFlags.BuildingUpgradePanel} buildTimers={DeNelle.Core.FeatureFlags.BuildTimers}");
+
+            if (panelBuilding)
+            {
+                if (!DeNelle.Core.FeatureFlags.BuildingUpgradePanel)
+                {
+                    FlowTrace.Warn("BuildUpgrade", $"panel flag OFF (kill-switch) for building '{ps.itemId}' — no upgrade surface.");
+                    BuildFeedbackToast.Show("Upgrades unavailable.");
+                    return;
+                }
+                // Canonical guarded open (same path HudKitController uses): routes to the
+                // registered BuildingUpgradePanelMvvm.Open(buildingId) for THIS building.
+                bool opened = DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.BuildingUpgrade, ps.itemId);
+                if (opened)
+                    FlowTrace.Step("BuildUpgrade", $"opened BuildingUpgrade panel for building '{ps.itemId}'.");
+                else
+                    FlowTrace.Fail("BuildUpgrade", $"PanelRouter.Open(BuildingUpgrade,'{ps.itemId}') returned false — panel did NOT open.");
+                return;
+            }
+
+            // ── DEFENSE TOWER inline tier-bump (towers.json range/damage step) ──
             if (level >= maxLevel)
             {
-                Debug.Log($"[BuildMode] '{ps.itemId}' already at max tier ({maxLevel}) — no upgrade.");
+                FlowTrace.Step("BuildUpgrade", $"'{ps.itemId}' already at max tier ({maxLevel}) — no upgrade.");
+                BuildFeedbackToast.Show("Max tier reached.");
                 return;
             }
 
             DeNelle.Core.Catalog.ResourceCost cost = UpgradeCostFor(entry, level);
             if (!CanAfford(cost))
             {
-                Debug.Log($"[BuildMode] Not enough resources to upgrade '{ps.itemId}' to tier {level + 1} " +
-                          $"(needs {Describe(cost)}).");
+                FlowTrace.Warn("BuildUpgrade", $"'{ps.itemId}' UNAFFORDABLE at tier {level + 1} — needs {Describe(cost)}.");
+                BuildFeedbackToast.Show(ShortfallMessage(cost));
                 // Re-show so the button reflects the (still-unaffordable) state.
                 ShowSelectionPanel(ps);
                 return;
@@ -2024,16 +2084,16 @@ namespace DeNelle.Village
                 if (timerSvc.IsBuilding(jobKey))
                 {
                     double rem = timerSvc.RemainingSeconds(jobKey);
-                    FlowTrace.Warn("BuildTimer", $"upgrade '{jobKey}' REJECTED (busy: {rem:0}s)");
-                    Debug.Log($"[BuildMode] '{ps.itemId}' is under construction ({rem:0}s left) — upgrade locked.");
+                    FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' REJECTED (busy: {rem:0}s)");
+                    BuildFeedbackToast.Show($"Under construction ({rem:0}s).");
                     ShowSelectionPanel(ps);
                     return;
                 }
                 if (!timerSvc.HasFreeSlot)
                 {
-                    FlowTrace.Warn("BuildTimer",
+                    FlowTrace.Warn("BuildUpgrade",
                         $"upgrade '{jobKey}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
-                    Debug.Log($"[BuildMode] All build slots are busy — finish a construction first.");
+                    BuildFeedbackToast.Show("All build slots busy.");
                     ShowSelectionPanel(ps);
                     return;
                 }
@@ -2048,28 +2108,36 @@ namespace DeNelle.Village
             // applies at timer COMPLETION (BuildTimerService.CompleteJob -> CompletedUpgrade
             // Applier -> ApplyUpgradeLevel; offline-fair). Scaffold + countdown = the same
             // WO-612 affordance placement uses. A null job here (service raced away) degrades
-            // to the instant apply below so a paid charge is never lost.
-            if (timerSvc != null)
+            // to the instant apply below so a paid charge is never lost. GUARDED (§12) so a
+            // throw self-reports via FlowTrace.Fail instead of vanishing into the button click.
+            bool handled = Guard.Try("BuildUpgrade", $"start/apply upgrade '{jobKey}' -> tier {newLevel}", () =>
             {
-                var job = timerSvc.StartUpgrade(jobKey, newLevel);
-                if (job != null)
+                if (timerSvc != null)
                 {
-                    UnderConstructionVisual.Attach(ps, jobKey);
-                    Debug.Log($"[BuildMode] Upgrading '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
-                              $"to tier {newLevel}/{maxLevel} — charged {Describe(cost)}, completes in " +
-                              $"{timerSvc.RemainingSeconds(jobKey):0}s.");
-                    ShowSelectionPanel(ps);
-                    return;
+                    var job = timerSvc.StartUpgrade(jobKey, newLevel);
+                    if (job != null)
+                    {
+                        UnderConstructionVisual.Attach(ps, jobKey);
+                        FlowTrace.Step("BuildUpgrade",
+                            $"'{ps.itemId}' tier {newLevel}/{maxLevel} timer STARTED " +
+                            $"({timerSvc.RemainingSeconds(jobKey):0}s), charged {Describe(cost)}.");
+                        BuildFeedbackToast.Show($"Upgrading to tier {newLevel} ({timerSvc.RemainingSeconds(jobKey):0}s)...");
+                        ShowSelectionPanel(ps);
+                        return;
+                    }
                 }
-            }
 
-            ApplyUpgradeLevel(ps, newLevel);
+                ApplyUpgradeLevel(ps, newLevel);
+                FlowTrace.Step("BuildUpgrade",
+                    $"'{ps.itemId}' upgraded INSTANTLY to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
+                BuildFeedbackToast.Show($"Upgraded to tier {newLevel}.");
+                // Re-show the panel at the new tier (refreshed cost / Max-tier state).
+                ShowSelectionPanel(ps);
+            });
 
-            Debug.Log($"[BuildMode] Upgraded '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
-                      $"to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
-
-            // Re-show the panel at the new tier (refreshed cost / Max-tier state).
-            ShowSelectionPanel(ps);
+            if (!handled)
+                FlowTrace.Fail("BuildUpgrade",
+                    $"upgrade apply for '{ps.itemId}' THREW after charge — see Guard log (charged {Describe(cost)}).");
         }
 
         /// <summary>

@@ -33,7 +33,7 @@
     "projectileStyle": "bolt",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 2.5,
+     "footprint": 1.75,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -82,7 +82,7 @@
     "projectileStyle": "bolt",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 2.0,
+     "footprint": 1.4,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -133,7 +133,7 @@
     "projectileStyle": "bolt",
     "placement": {
      "mustSitOn": "WallWalk",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -180,7 +180,7 @@
     "element": "None",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.5,
+     "footprint": 2.45,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -235,7 +235,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -290,7 +290,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -330,7 +330,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 4.0,
+     "footprint": 2.8,
      "noOverlap": true,
      "minDistanceFromGate": 8.0,
      "checkAffordable": true
@@ -371,7 +371,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -417,7 +417,7 @@
     "singleton": true,
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -498,7 +498,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 7.0,
+     "footprint": 4.9,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -538,7 +538,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -579,7 +579,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 8.0,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -621,7 +621,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -661,7 +661,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -702,7 +702,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 7.0,
+     "footprint": 4.9,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -743,7 +743,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -784,7 +784,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -826,7 +826,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 12.0,
+     "footprint": 8.4,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -887,7 +887,7 @@
     "splashFraction": 0.7,
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.0,
+     "footprint": 2.1,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -929,7 +929,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 8.0,
+     "footprint": 5.6,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -971,7 +971,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 7.0,
+     "footprint": 4.9,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -1013,7 +1013,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -1057,7 +1057,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -1101,7 +1101,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }
@@ -1145,7 +1145,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 3.4,
+     "footprint": 2.38,
      "noOverlap": true,
      "checkAffordable": true
     }

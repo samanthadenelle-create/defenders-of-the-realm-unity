@@ -176,7 +176,13 @@ namespace DeNelle.Village.Buildings.Progression
             // offline-fair). A null job here (raced) degrades to the instant apply below so a
             // paid charge is never lost.
             if (timerSvc != null && timerSvc.StartUpgrade(buildingId, next) != null)
+            {
+                // F8 (owner 2026-07-17): CoC-style on-building countdown for a resource-building
+                // upgrade too (reuses the WO-612 scaffold + world countdown; Guard-wrapped inside,
+                // a no-match is a traced no-op and never blocks the buy).
+                DeNelle.Village.UnderConstructionVisual.AttachToBuildingId(buildingId);
                 return UpgradeResult.Started;
+            }
 
             ApplyCompletedUpgrade(buildingId, next);
             return UpgradeResult.Upgraded;

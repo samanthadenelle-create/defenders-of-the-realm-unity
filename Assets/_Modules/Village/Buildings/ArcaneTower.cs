@@ -75,6 +75,21 @@ namespace DeNelle.Village
         // wall-mounted. A MULTIPLIER on EffectiveRange so it survives tier upgrades. Bounded.
         public float ElevationRangeMult = 1f;
 
+        // ── Tower-VFX tier (owner felt-test 2026-07-17: "more/better VFX at higher tower levels") ──
+        // The arcane spire has no runtime level field (its stats come from Modifier/perk services,
+        // not a per-instance level), so StructureFactory.ReskinForLevel pushes the upgrade level in
+        // here via SetVfxLevel. Scales the cast + detonation bursts so an upgraded ornate spire's
+        // shot reads as stronger. 1 until first upgrade. Reads by SIZE + an L3 extra blast layer
+        // (colorblind-safe, never hue). The idle aura escalates in parallel via ArcaneAura.ApplyLevel.
+        private int _vfxLevel = 1;
+
+        /// <summary>Set the spire's firing-VFX tier (1..3). Called by StructureFactory.ReskinForLevel
+        /// on placement/upgrade. Bigger cast + impact bursts at higher tiers.</summary>
+        public void SetVfxLevel(int level) => _vfxLevel = Mathf.Clamp(level, 1, 3);
+
+        /// <summary>Uniform Hovl VFX scale for the current firing tier (L1 1.0, L2 1.3, L3 1.7).</summary>
+        private float VfxScale => _vfxLevel >= 3 ? 1.7f : _vfxLevel == 2 ? 1.3f : 1.0f;
+
         // ── IDamageableStructure — the marching-enemy siege target (F8-41) ─────
         // ROOT of F8-41 (DefenseTargetableRegression): like DefenseTower, this component did NOT
         // implement IDamageableStructure, so Enemy.SweepForNearestStructure's
@@ -357,7 +372,11 @@ namespace DeNelle.Village
             // WO-VFX-TOWERS: Hovl arcane cast burst at the muzzle, layered on top of the
             // legacy Casting_Fire_2 (null-safe no-op if the key/prefab is missing). Reads by
             // MOTION (violet gather-and-flash) so it's colorblind-legible; BlastColor is a hint.
-            VFXManager.PlayKey("Arcane_Cast", muzzle, default, null, BlastColor);
+            // TIER ESCALATION: scale the cast by the upgrade tier so a maxed spire winds up bigger.
+            Guard.Try("TowerVfx", "arcane muzzle cast", () =>
+                VFXManager.PlayKey("Arcane_Cast", muzzle, default, null, BlastColor, VfxScale));
+            FlowTrace.Throttle("TowerVfx", $"arcane-fire:{GetInstanceID()}", 1f,
+                $"arcane spire level={_vfxLevel} fire cast='Arcane_Cast' scale={VfxScale:0.0}");
 
             // Flying body: Projectile_Fire_3 (hero fireball bolt) via SpawnFlying(Flame).
             // URP heal runs at spawn (FixUrpShaders).
@@ -428,7 +447,13 @@ namespace DeNelle.Village
             // WO-VFX-TOWERS: Hovl arcane detonation burst at the impact point, layered on top of
             // the legacy explosion (null-safe no-op on a missing key). The following-bolt trail is
             // stopped by the arrival closure in FireBlast before this runs.
-            VFXManager.PlayKey("Arcane_Impact", impact, default, null, BlastColor);
+            // TIER ESCALATION: scale the detonation by tier, and stack a heavier Cleave blast at L3
+            // so an upgraded spire's hits land harder (reads by SIZE + extra layer, colorblind-safe).
+            Guard.Try("TowerVfx", "arcane impact", () =>
+                VFXManager.PlayKey("Arcane_Impact", impact, default, null, BlastColor, VfxScale));
+            if (_vfxLevel >= 3)
+                Guard.Try("TowerVfx", "arcane impact L3 cleave", () =>
+                    VFXManager.PlayKey("Cleave_Impact", impact, default, null, BlastColor, 0.9f));
 
             float aoeSq = AoeRadius * AoeRadius;
             float splash = Mathf.Clamp01(SplashDamageFraction);

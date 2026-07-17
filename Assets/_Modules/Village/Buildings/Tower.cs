@@ -876,6 +876,16 @@ namespace DeNelle.Village
 
             // DEF-75 — visual feedback fires AFTER the model swap.
             TriggerUpgradeVFX();
+
+            // TOWER-VFX TIER ESCALATION (owner felt-test 2026-07-17: "more/better VFX at higher tower
+            // levels"). The idle aura grows with the tower level so upgrading FEELS rewarding. Only
+            // mage/arcane/wizard/spire towers get an aura ENSURED (a ballista stays aura-free); other
+            // towers escalate an aura only if one already exists. Firing/impact escalation is handled
+            // live by TowerCombat (it reads CurrentLevel). Null-safe / colorblind-safe (size+motion).
+            string tn = _data != null && _data.towerName != null ? _data.towerName.ToLowerInvariant() : "";
+            bool mageLike = tn.Contains("arcane") || tn.Contains("wizard") || tn.Contains("mage") || tn.Contains("spire");
+            ArcaneAura.EscalateTo(gameObject, _currentLevel, ensure: mageLike);
+
             var audio = FindAnyObjectByType<TowerAudioController>();
             if (audio != null) audio.PlayUpgrade();
 

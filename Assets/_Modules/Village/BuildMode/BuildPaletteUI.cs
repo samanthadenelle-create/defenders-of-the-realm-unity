@@ -146,12 +146,26 @@ namespace DeNelle.Village
                 svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
                 svc.ResourcesChanged.AddListener(OnResourcesChanged);
             }
+            // LIVE affordability (owner felt-test 2026-07-17 "should update the price... not
+            // only when reselecting"): also listen to EconomyService.OnChanged. TrySpend's
+            // NotifyChanged() fires OnChanged but NOT GameState.ResourcesChanged for a
+            // Wood/Iron-only spend (EconomyService.cs:289), so a wood-priced build would
+            // never re-tint the palette off ResourcesChanged alone. OnChanged catches EVERY
+            // wallet mutation so each card's cost/affordability refreshes on the spot.
+            var econ = EconomyService.Instance;
+            if (econ != null)
+            {
+                econ.OnChanged -= OnEconomyChanged;
+                econ.OnChanged += OnEconomyChanged;
+            }
         }
 
         private void OnDisable()
         {
             var svc = GameStateService.Instance;
             if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+            var econ = EconomyService.Instance;
+            if (econ != null) econ.OnChanged -= OnEconomyChanged;
         }
 
         private void OnDestroy()
@@ -160,6 +174,13 @@ namespace DeNelle.Village
         }
 
         private void OnResourcesChanged()
+        {
+            if (_canvas != null && _canvas.activeSelf) Render();
+        }
+
+        /// <summary>EconomyService.OnChanged bridge — re-render so per-card cost/affordability
+        /// stays live on Wood/Iron-only spends that GameState.ResourcesChanged misses.</summary>
+        private void OnEconomyChanged(ResourceSnapshot _)
         {
             if (_canvas != null && _canvas.activeSelf) Render();
         }
@@ -351,13 +372,29 @@ namespace DeNelle.Village
                 "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar");
         }
 
-        /// <summary>Expand the shop back to the full header + tabs + carousel (called from CancelArmed).</summary>
+        /// <summary>
+        /// Expand the shop back to the full header + tabs + carousel (called from CancelArmed,
+        /// i.e. every return-to-carousel: after a placement OR a cancel). Owner felt-test
+        /// 2026-07-17 fixes both palette defects at the ONE return point:
+        ///  - GLOW: clear <see cref="_armedId"/> so the last-picked card's gilt icon halo does
+        ///    not "just stay on" — the carousel comes back with NO card armed, so the glow is
+        ///    the truthful single-selection cue (exactly one armed card, or none), never stuck.
+        ///  - PRICE: RE-RENDER so every card recomputes its CURRENT cost live. A just-placed
+        ///    building's first-build freebie is now consumed, so its card flips FREE -> real
+        ///    cost on close (not only on reselect). A freebie placement mutates no wallet, so
+        ///    neither ResourcesChanged nor OnChanged would otherwise fire this refresh.
+        /// </summary>
         public void Expand()
         {
             if (_canvas == null) return;
             if (_topBarGo != null) _topBarGo.SetActive(true);
             if (_tabRowGo != null) _tabRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
+            _armedId = null;
+            if (_canvas.activeSelf) Render();
+            else UpdateOrientButton();
+            FlowTrace.Step("BuildPalette",
+                "expand: armed cleared + cards re-rendered (live cost + single-card glow refresh)");
         }
 
         /// <summary>
@@ -506,8 +543,11 @@ namespace DeNelle.Village
             if (armed)
             {
                 FlowTrace.Step("BuildHud", "armed glow: soft gilt icon halo on card id=" + e.id);
+                // Inset within the card (owner felt-test 2026-07-17): the glow + its pulse must
+                // stay ON this one card. The old 0.02..0.98 halo pulsing to 1.12 scale bled onto
+                // the neighbour card, reading as "two cards glowing." Kept comfortably inside.
                 var glowGo = ElarionUiKit.AddImage(cardGo.transform, "ArmedIconGlow",
-                    new Vector2(0.02f, 0.14f), new Vector2(0.98f, 0.82f),
+                    new Vector2(0.14f, 0.16f), new Vector2(0.86f, 0.80f),
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.55f),
                     rounded: true);
                 var glowImg = glowGo.GetComponent<Image>();
@@ -803,7 +843,9 @@ namespace DeNelle.Village
             }
             if (_rt != null)
             {
-                float s = Mathf.Lerp(0.94f, 1.12f, k);
+                // Gentle breath that stays within the card (owner 2026-07-17): the old 1.12
+                // peak overflowed the halo onto the neighbouring card ("two cards glowing").
+                float s = Mathf.Lerp(0.96f, 1.05f, k);
                 _rt.localScale = new Vector3(s, s, 1f);
             }
         }

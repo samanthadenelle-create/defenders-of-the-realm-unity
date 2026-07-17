@@ -87,6 +87,11 @@ namespace DeNelle.Village
         [Tooltip("Upgrade level. Drives upgrade-cost lookups in Week 4.")]
         [SerializeField, Min(1)] private int _level = 1;
 
+        // Owner 2026-07-17 STRUCTURE-HP-per-tier: the building's UN-multiplied base max HP (the value
+        // authored in the inspector / buildings.json), captured once so the tier HP bonus recomputes
+        // idempotently as max = base * mult — a repeated apply never compounds. 0 = not yet captured.
+        private float _baseMaxHp;
+
         [Header("Footprint")]
         [Tooltip("AABB blocker so enemies path AROUND the building (village-layout.md section 6).")]
         [SerializeField] private BoxCollider _blocker;
@@ -179,8 +184,12 @@ namespace DeNelle.Village
             // name flows through _displayNameKey -> CanonStrings at the UI layer.
             _maxHp = Mathf.Max(1f, def.MaxHp);
             _hp = Mathf.Clamp(def.Hp, 0f, _maxHp);
+            // This is the authored BASE max HP — reset the capture so the tier bonus recomputes from it.
+            _baseMaxHp = _maxHp;
             EnsureBlocker();
             HpChanged?.Invoke(_hp, _maxHp);
+            // Owner 2026-07-17: fold in the current tier's STRUCTURE-HP bonus (no-op at tier 0 / non-city).
+            SelfApplyTierHp(healToFull: false);
         }
 
         /// <summary>
@@ -236,6 +245,88 @@ namespace DeNelle.Village
         private void Awake()
         {
             if (_blocker == null) _blocker = GetComponent<BoxCollider>();
+        }
+
+        private void Start()
+        {
+            // Owner 2026-07-17 STRUCTURE-HP-per-tier: on spawn, a building whose id is in the city-tier
+            // catalog reads ITS current tier's HP bonus and raises max HP. Covers inspector-authored
+            // buildings (Configure(type,id,label) leaves the default max HP) and reload of a saved tier.
+            // Proportional (not heal-to-full) so a wave-damaged, saved building isn't silently topped off.
+            SelfApplyTierHp(healToFull: false);
+        }
+
+        // ── STRUCTURE-HP-per-tier (owner 2026-07-17) ────────────────────────────
+
+        /// <summary>
+        /// The city-upgrade catalog id this building maps to (lumbermill / armorer / forge / arcane-tower /
+        /// barracks / windmill), or null if it is not an upgradable city building. Mirrors
+        /// BuildingInteractable.StructureHookIdFor so the HP bonus keys off the SAME id the upgrade panel
+        /// uses. Resolves by explicit BuildingId first, then the GameObject name, then the BuildingType.
+        /// </summary>
+        public string UpgradeCatalogId
+        {
+            get
+            {
+                string id = (_buildingId ?? "").ToLowerInvariant();
+                if (string.IsNullOrEmpty(id)) id = gameObject != null ? gameObject.name.ToLowerInvariant() : "";
+                if (id.Length > 0)
+                {
+                    if (id.Contains("lumbermill")) return "lumbermill";
+                    if (id.Contains("armorer")) return "armorer";
+                    if (id == "forge" || id.Contains("forge")) return "forge";
+                    if (id.Contains("barracks")) return "barracks";
+                    if (id.Contains("windmill")) return "windmill";
+                    if (id.Contains("arcane")) return "arcane-tower";
+                }
+                switch (_type)
+                {
+                    case BuildingType.Lumbermill: return "lumbermill";
+                    case BuildingType.Forge:      return "forge";
+                    case BuildingType.Armorer:    return "armorer";
+                    case BuildingType.ArcaneTower: return "arcane-tower";
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Raises this building's max HP to base * <paramref name="mult"/> (idempotent — always computed
+        /// from the captured base, never compounded). On <paramref name="healToFull"/> the HP is topped to
+        /// the new max (an upgrade is a completed construction — CoC buildings finish full — so the boost is
+        /// immediately visible); otherwise the current HP keeps its fraction of max (spawn / reload). A
+        /// non-positive mult is treated as 1.0 (no-op). Fires <see cref="HpChanged"/> so HUD/bars refresh.
+        /// </summary>
+        public void ApplyStructureHpMultiplier(float mult, bool healToFull)
+        {
+            if (_baseMaxHp <= 0f) _baseMaxHp = _maxHp > 0f ? _maxHp : 1f;
+            if (mult <= 0f) mult = 1f;
+            float newMax = Mathf.Max(1f, _baseMaxHp * mult);
+            float oldMax = _maxHp;
+            if (healToFull)
+            {
+                _maxHp = newMax;
+                _hp = newMax;
+            }
+            else
+            {
+                float frac = oldMax > 0f ? Mathf.Clamp01(_hp / oldMax) : 1f;
+                _maxHp = newMax;
+                _hp = Mathf.Clamp(frac * newMax, 0f, newMax);
+            }
+            HpChanged?.Invoke(_hp, _maxHp);
+        }
+
+        /// <summary>
+        /// Look up THIS building's current-tier HP multiplier from the catalog (via
+        /// ModifierService.StructureHpMultFor) and apply it. Null-safe no-op for a non-city building.
+        /// </summary>
+        private void SelfApplyTierHp(bool healToFull)
+        {
+            string cid = UpgradeCatalogId;
+            if (string.IsNullOrEmpty(cid)) return;
+            float mult = DeNelle.Core.State.ModifierService.StructureHpMultFor(cid);
+            ApplyStructureHpMultiplier(mult, healToFull);
         }
 
         /// <summary>

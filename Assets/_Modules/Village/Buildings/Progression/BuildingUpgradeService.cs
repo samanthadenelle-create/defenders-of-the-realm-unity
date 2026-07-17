@@ -19,7 +19,10 @@
 // not model mechanics). Village -> Core is a legal asmdef edge.
 // =============================================================================
 
+using System;
+using UnityEngine;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Buildings.Progression
 {
@@ -82,7 +85,15 @@ namespace DeNelle.Village.Buildings.Progression
                     // offline-fair). A null job (raced) degrades to the instant apply so a
                     // paid charge is never lost.
                     if (timerSvc != null && timerSvc.StartUpgrade(id, targetTier) != null)
+                    {
+                        // F8 (owner 2026-07-17 "an upgrade timer that doesn't tell"): show the
+                        // CoC-style on-building countdown so the player SEES the upgrade working —
+                        // the tabbed panel's status text is gone the moment it closes. Reuses the
+                        // WO-612 scaffold + world countdown, keyed by the SAME id the job uses.
+                        // Guard-wrapped inside; a no-match is a traced no-op, never blocks the buy.
+                        DeNelle.Village.UnderConstructionVisual.AttachToBuildingId(id);
                         return true;
+                    }
 
                     ApplyTier(id, targetTier);
                     return true;
@@ -112,6 +123,37 @@ namespace DeNelle.Village.Buildings.Progression
             state.BuildingTiers[id] = targetTier;
             svc.Save();
             ModifierService.Recompute();
+
+            // Owner 2026-07-17 STRUCTURE-HP-per-tier: raise the LIVE building's max HP NOW (not next
+            // scene load) so the tier's HP bonus is felt immediately. One generic path for all 6
+            // upgradable buildings — data-driven off StructureHpMultFor; heals to full (an upgrade is
+            // a completed construction) so the bigger bar is visible. Guarded so a bad entry logs+skips
+            // and never zeroes a building's HP.
+            ApplyStructureHp(id, targetTier);
+        }
+
+        /// <summary>
+        /// Push the current-tier STRUCTURE-HP bonus onto every live <see cref="Building"/> whose
+        /// <see cref="Building.UpgradeCatalogId"/> matches <paramref name="id"/>. Heals to full on the
+        /// upgrade moment. Null-safe / Guard-wrapped; a no-match (building not spawned, or arcane-tower
+        /// realised as a Tower rather than a Building) is a silent no-op — the spawn path (Building.Start)
+        /// will apply it later. Traces each raise as [Flow:BuildHp] "<id> tier=N maxHp <old>-><new>".
+        /// </summary>
+        private static void ApplyStructureHp(string id, int targetTier)
+        {
+            Guard.Try("BuildHp", $"apply structure HP for '{id}' tier {targetTier}", () =>
+            {
+                float mult = ModifierService.StructureHpMultFor(id);
+                var buildings = UnityEngine.Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
+                if (buildings == null) return;
+                foreach (var b in buildings)
+                {
+                    if (b == null || !string.Equals(b.UpgradeCatalogId, id, StringComparison.Ordinal)) continue;
+                    float oldMax = b.MaxHp;
+                    b.ApplyStructureHpMultiplier(mult, healToFull: true);
+                    FlowTrace.Step("BuildHp", $"{id} tier={targetTier} maxHp {oldMax:0}->{b.MaxHp:0}");
+                }
+            });
         }
     }
 }

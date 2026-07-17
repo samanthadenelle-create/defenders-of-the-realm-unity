@@ -23,6 +23,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;   // FlowTrace — instrument the Upgrade tap path (owner F8 2026-07-17, S12)
 
 namespace DeNelle.Village
 {
@@ -105,9 +106,20 @@ namespace DeNelle.Village
                     else
                     {
                         if (_upgradeLabel != null) _upgradeLabel.text = "Upgrade (" + Mathf.Max(0, upgradeCostTotal) + ")";
-                        _upgradeBtn.interactable = canAffordUpgrade;
+                        // Owner F8 2026-07-17 — "Upgrade does NOTHING": the button was
+                        // HARD-DISABLED when unaffordable (interactable = canAffordUpgrade),
+                        // so a tap raised no click, ran no handler, and emitted no trace =
+                        // a silent dead button. Keep it TAPPABLE (matches the place path):
+                        // the handler (UpgradeSelected) is the single gate and pops a
+                        // "Not enough X" toast when the player can't yet pay.
+                        _upgradeBtn.interactable = true;
                     }
                 }
+                FlowTrace.Step("BuildUpgrade",
+                    "Show '" + (string.IsNullOrEmpty(structureName) ? "?" : structureName) +
+                    "' lvl=" + lvl + "/" + max + " cost=" + Mathf.Max(0, upgradeCostTotal) +
+                    " afford=" + canAffordUpgrade + " btnActive=" + (max > 1) +
+                    " interactable=" + _upgradeBtn.interactable);
             }
 
             _canvas.SetActive(true);
@@ -166,7 +178,12 @@ namespace DeNelle.Village
             _upgradeBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Upgrade",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0.275f, 0.10f), new Vector2(0.495f, 0.56f),
-                () => OnUpgradeRequested?.Invoke());
+                () =>
+                {
+                    // Proves the click FIRES (only reached when interactable + raycast lands).
+                    FlowTrace.Step("BuildUpgrade", "Upgrade button tapped -> raise OnUpgradeRequested.");
+                    OnUpgradeRequested?.Invoke();
+                });
             _upgradeLabel = _upgradeBtn.GetComponentInChildren<TMP_Text>(true);
 
             _sellBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Sell",

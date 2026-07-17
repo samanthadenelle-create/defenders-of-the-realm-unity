@@ -265,14 +265,27 @@ namespace DeNelle.Village
             transform.localScale = Vector3.one * _heartScale;
         }
 
-        // Spire base footprint for the walk-through blocker (world units).
-        private const float BlockerRadius = 2.0f;
+        // Central reliquary base footprint for the walk-through blocker (LOCAL units;
+        // world footprint = radius * lossyScale). Owner F8 2026-07-17 (combat arena):
+        // "something preventing me from moving through the middle of the arena." RCA: the
+        // arena hero is a NavMeshAgent (HeroLocomotion), so it is stopped ONLY by the
+        // NavMesh being carved, never by a raw physics collider. In the arena the NavMesh
+        // is RUNTIME-baked (ArenaNavMeshBaker, useGeometry=PhysicsColliders) AFTER this
+        // collider is added in Awake -- and the Heart is scaled ~2x, so the old radius 2.0
+        // became a ~4m-radius (8m-diameter) INVISIBLE capsule that CARVED a wide no-walk
+        // hole dead-centre (far wider than the visible brazier base). Right-sized to ~the
+        // visible reliquary base (1.0 local -> ~2m world radius at 2x) so the centre bakes
+        // walkable up to the brazier edge, while you still cannot walk through the fire.
+        // VILLAGE IS UNAFFECTED: this collider is added at RUNTIME (Awake), so it is NOT
+        // part of the pre-baked village NavMesh -- shrinking it changes only the runtime-
+        // baked arena carve. Owner felt-tunable (drop to ~0 for fully-passable decor).
+        private const float BlockerRadius = 1.0f;   // was 2.0f -- halves the central arena carve (F8 2026-07-17)
         private const float BlockerHeight = 8.0f;
 
         /// <summary>
-        /// Adds a solid (non-trigger) collider at the spire base so the hero can't
-        /// walk through the Heart. isTrigger MUST be false — HeroLocomotion's
-        /// CapsuleCast uses QueryTriggerInteraction.Ignore. Idempotent.
+        /// Adds a solid (non-trigger) collider at the reliquary base. In the arena this
+        /// collider is what the runtime NavMesh bake carves, so its world footprint == the
+        /// central no-walk hole the NavMeshAgent hero must clear. Idempotent.
         /// </summary>
         private void EnsureBlockerCollider()
         {
@@ -283,6 +296,25 @@ namespace DeNelle.Village
             col.radius = BlockerRadius;
             col.height = BlockerHeight;
             col.center = new Vector3(0f, BlockerHeight * 0.5f, 0f); // feet at y=0
+        }
+
+        private void Start()
+        {
+            // S12 PROOF (owner F8 2026-07-17 arena-centre blocker): report the Heart blocker's
+            // FINAL world footprint (after the ~2x scale is applied in Awake) so a headless/felt
+            // run PROVES the central no-walk carve is right-sized. The arena NavMesh is runtime-
+            // baked over this collider, so its world radius == the central hole the hero clears.
+            // Near-zero cost when FlowTrace is disabled; ASCII-only.
+            var col = GetComponent<Collider>();
+            if (col != null)
+            {
+                Bounds b = col.bounds; // world-space AABB (post-scale)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Structure",
+                    "Heart blocker FINAL world footprint: boundsSize=" + b.size.ToString("0.0") +
+                    " centre=" + b.center.ToString("0.0") + " lossyScale=" + transform.lossyScale.ToString("0.00") +
+                    " (central carve into the runtime-baked arena NavMesh; radius right-sized 2.0 -> " +
+                    BlockerRadius.ToString("0.0") + " so the hero can cross the middle).");
+            }
         }
 
         // ── IDamageableStructure ─────────────────────────────────────────────

@@ -366,7 +366,20 @@ namespace DeNelle.Village
             // VFXType muzzle flash (fallback stays). Keyed off the shot's element (Aether when
             // empowered/base). Null-safe — PlayKey no-ops on a null/unknown key (Ice/None have
             // no cast key, so those fall back to the VFXType flash alone). Reads by motion.
-            VFXManager.PlayKey(CastKeyFor(element), firePos);
+            //
+            // TIER ESCALATION (owner felt-test 2026-07-17: "more/better VFX at higher tower levels"):
+            // the muzzle burst SCALES with the tower level (bigger flash as it upgrades), and at L3
+            // an extra arcane cast layer is stacked so a maxed tower's shot reads as dramatically
+            // stronger. Reads by SIZE + an extra layer (colorblind-safe), never hue. Guarded so a
+            // bad key logs + skips (never blanks the shot).
+            float muzzleScale = TierVfxScale(level);
+            Guard.Try("TowerVfx", "muzzle cast", () =>
+                VFXManager.PlayKey(CastKeyFor(element), firePos, default, null, null, muzzleScale));
+            if (level >= 3)
+                Guard.Try("TowerVfx", "muzzle L3 extra", () =>
+                    VFXManager.PlayKey("Arcane_Cast", firePos, default, null, null, muzzleScale * 0.8f));
+            FlowTrace.Throttle("TowerVfx", "fire", 1f,
+                $"level={level} fire cast='{CastKeyFor(element)}' scale={muzzleScale:0.0}{(level >= 3 ? " +L3 arcane layer" : "")}");
 
             // DEF-183: tower fire SFX through the existing audio surface
             // (CoreServices.Audio, null-guarded inside). Mixed low — many towers
@@ -467,6 +480,13 @@ namespace DeNelle.Village
             }
         }
 
+        // TIER -> Hovl VFX scale multiplier (owner felt-test 2026-07-17: bigger firing/impact FX at
+        // higher tower levels). L1 = 1.0 (baseline, unchanged), L2 = 1.3, L3 = 1.7. Escalation reads
+        // by SIZE (+ extra L3 layers at the call sites), colorblind-safe. Kept beside the key tables
+        // so the whole tower-vfx tier mapping lives in one place.
+        private static float TierVfxScale(int level) =>
+            level >= 3 ? 1.7f : level == 2 ? 1.3f : 1.0f;
+
         private static string ImpactKeyFor(DamageElement element)
         {
             switch (element)
@@ -563,8 +583,19 @@ namespace DeNelle.Village
             // WO-VFX-TOWERS: Hovl impact burst LAYERED on top of the legacy VFXType impact.
             // The shot's element mirrors FireAt (Aether when empowered, else Physical/None -> a
             // Spear impact). Null-safe — no-ops on an unknown key. Reads by shape/motion.
+            //
+            // TIER ESCALATION (owner felt-test 2026-07-17): the impact SCALES with tower level, and
+            // at L3 a heavier Cleave detonation is stacked on top so an upgraded tower's hits land
+            // harder. Reads by SIZE + an extra blast layer (colorblind-safe). Guarded per spawn.
             DamageElement element = _isEmpowered ? AbilityToElement(_empowerment) : DamageElement.None;
-            VFXManager.PlayKey(ImpactKeyFor(element), hitPosition);
+            float impactScale = TierVfxScale(level);
+            Guard.Try("TowerVfx", "impact", () =>
+                VFXManager.PlayKey(ImpactKeyFor(element), hitPosition, default, null, null, impactScale));
+            if (level >= 3)
+                Guard.Try("TowerVfx", "impact L3 cleave", () =>
+                    VFXManager.PlayKey("Cleave_Impact", hitPosition, default, null, null, 0.9f));
+            FlowTrace.Throttle("TowerVfx", "impact", 1f,
+                $"level={level} impact key='{ImpactKeyFor(element)}' scale={impactScale:0.0}{(level >= 3 ? " +L3 cleave" : "")}");
 
             // WO-371: projectile impact SFX through the existing audio surface
             // (CoreServices.Audio, null-guarded inside GameSfx). The tower-fire "pew"

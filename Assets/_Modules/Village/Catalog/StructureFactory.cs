@@ -260,6 +260,24 @@ namespace DeNelle.Village
         public static bool ReskinForLevel(GameObject root, CatalogEntry entry, int level)
         {
             if (root == null || entry == null) return false;
+
+            // TOWER-VFX TIER ESCALATION (owner felt-test 2026-07-17: "more/better VFX at higher tower
+            // levels"). Drive the idle aura + firing bursts off the NEW level so an upgraded tower's
+            // VFX visibly escalate. Done FIRST — before the tier-model early-returns below — so the
+            // escalation fires on EVERY upgrade, even when a structure has no authored tier model
+            // (the level still changed). Runs on the live BuildMode upgrade AND on save/reload
+            // (BaseLayoutLoader), which both funnel through this one path. Null-safe / colorblind-safe
+            // (§7: size/motion, not hue). We only READ the level here; the build-mode upgrade path
+            // (BuildModeController) is untouched.
+            bool towerLike = entry.id != null &&
+                (entry.id.IndexOf("arcane", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 entry.id.IndexOf("wizard", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 entry.id.IndexOf("spire",  System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 entry.id.IndexOf("mage",   System.StringComparison.OrdinalIgnoreCase) >= 0);
+            ArcaneAura.EscalateTo(root, level, ensure: towerLike);   // idle aura grows with the tier
+            var arcaneSpire = root.GetComponent<ArcaneTower>();
+            if (arcaneSpire != null) arcaneSpire.SetVfxLevel(level);  // firing bursts grow with the tier
+
             string path = VisualPathForLevel(entry, level);
             if (string.IsNullOrEmpty(path) || path == entry.visualPrefabPath)
                 return false;   // no authored tier model — legacy scale/tint applies

@@ -44,10 +44,75 @@ namespace DeNelle.Village
 
         /// <summary>Attach the scaffold to a freshly placed / freshly loaded structure.</summary>
         public static void Attach(PlacedStructure ps, string key)
+            => Attach(ps != null ? ps.gameObject : null, key);
+
+        /// <summary>
+        /// Attach the scaffold + world-space countdown to ANY structure/building GameObject
+        /// (F8 owner 2026-07-17). Idempotent — a host already scaffolded is a no-op. Used by
+        /// placement (through the <see cref="PlacedStructure"/> overload) and by the building
+        /// -upgrade seams (through <see cref="AttachToBuildingId"/>).
+        /// </summary>
+        public static void Attach(GameObject host, string key)
         {
-            if (ps == null || string.IsNullOrEmpty(key)) return;
-            if (ps.GetComponent<UnderConstructionVisual>() != null) return;   // already scaffolded
-            ps.gameObject.AddComponent<UnderConstructionVisual>().Bind(key);
+            if (host == null || string.IsNullOrEmpty(key)) return;
+            if (host.GetComponent<UnderConstructionVisual>() != null) return;   // already scaffolded
+            host.AddComponent<UnderConstructionVisual>().Bind(key);
+        }
+
+        /// <summary>
+        /// F8 (owner 2026-07-17 "an upgrade timer that doesn't tell"): show the CoC-style
+        /// on-building countdown for a CITY / RESOURCE building upgrade. Those upgrades run
+        /// through the tabbed MVVM panel / Yarn (BuildingUpgradeService / ResourceBuildingState),
+        /// whose only feedback was a panel status line that vanished when the panel closed —
+        /// nothing PERSISTENT told the player the upgrade was in flight. This reuses the WO-612
+        /// scaffold + world countdown (dim + "M:SS" label) on the LIVE building(s) whose timer is
+        /// keyed by <paramref name="buildingId"/> (the SAME id BuildTimerService.StartUpgrade used,
+        /// and the SAME id BuildingUpgradeService.ApplyStructureHp targets). The label self-heals to
+        /// reveal + the tier/HP applies when the timer completes.
+        ///
+        /// Matches the building by UpgradeCatalogId (city ids), then BuildingId, then a gameObject
+        /// -name contains (resource ids farm / lumbermill / forge). Guard-wrapped so a bad match
+        /// logs + skips and NEVER blocks the upgrade; a no-match is a traced no-op (the timer still
+        /// runs — only the visual is absent, e.g. the building isn't spawned in this scene).
+        /// </summary>
+        public static void AttachToBuildingId(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return;
+            Guard.Try("BuildTimerUI", $"attach upgrade countdown for '{buildingId}'", () =>
+            {
+                var buildings = UnityEngine.Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
+                if (buildings == null) return;
+
+                string want = buildingId.ToLowerInvariant();
+                int attached = 0;
+                foreach (var b in buildings)
+                {
+                    if (b == null || !BuildingMatches(b, want)) continue;
+                    Attach(b.gameObject, buildingId);
+                    attached++;
+                }
+
+                var svc = BuildTimerService.Instance;
+                double rem = svc != null ? svc.RemainingSeconds(buildingId) : 0;
+                if (attached > 0)
+                    FlowTrace.Step("BuildTimerUI",
+                        $"upgrade '{buildingId}' countdown attached to {attached} building(s) remaining={rem:0}s");
+                else
+                    FlowTrace.Warn("BuildTimerUI",
+                        $"upgrade '{buildingId}' countdown found NO live building to anchor (timer still runs) remaining={rem:0}s");
+            });
+        }
+
+        // Match a live Building to an upgrade-timer id: city catalog id first (same match
+        // ApplyStructureHp uses), then the raw BuildingId, then a name contains (resource ids).
+        private static bool BuildingMatches(Building b, string wantLower)
+        {
+            string cat = b.UpgradeCatalogId;
+            if (!string.IsNullOrEmpty(cat) && cat.ToLowerInvariant() == wantLower) return true;
+            string bid = b.BuildingId;
+            if (!string.IsNullOrEmpty(bid) && bid.ToLowerInvariant() == wantLower) return true;
+            var go = b.gameObject;
+            return go != null && go.name.ToLowerInvariant().Contains(wantLower);
         }
 
         private void Bind(string key)
@@ -116,6 +181,8 @@ namespace DeNelle.Village
             if (_label != null)
             {
                 double s = svc.RemainingSeconds(_key);
+                // F8 (owner 2026-07-17): headless proof the countdown SHOWS + TICKS (~1/s).
+                FlowTrace.Throttle("BuildTimerUI", _key, 1f, $"'{_key}' remaining={s:0}s");
                 _label.text = s >= 60 ? $"{(int)(s / 60)}:{(int)(s % 60):00}" : $"{(int)s}s";
                 var cam = Camera.main;
                 if (cam != null)

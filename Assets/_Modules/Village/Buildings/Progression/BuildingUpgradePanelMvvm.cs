@@ -1,40 +1,40 @@
 // =============================================================================
 // BuildingUpgradePanelMvvm — the building ENHANCEMENT panel VIEW (MVVM).
-// A DUMB SKIN over ElarionUiKit chrome that BINDS a BuildingUpgradeVM. ALL
+// A DUMB SKIN over clean uGUI chrome that BINDS a BuildingUpgradeVM. ALL
 // state/logic (affordability, unlock, tier gating, perks) lives in the VM — the
 // View never reads game state.  Namespace: DeNelle.Village.Buildings.Progression
 // Assembly: DeNelle.Village
 //
-// TABBED REDESIGN (owner directive 2026-07-16 — "i dont understand the upgrade
-// screen ... should be an upgrade tab, then skills at that level, its not just
-// for forge its for all upgradable buildings").  BUILDING-AGNOSTIC: the title is
-// composed from the live building name (_vm.Title + " Enhancements"), so ONE
-// panel serves every upgradable building (Forge/Barracks/CrystalMine/... + the
-// legacy resource buildings).  Two tabs, both bound to the SAME BuildingUpgradeVM
-// (which already sources tiers from BuildingTierCatalog + perks from
-// BuildingPerkService / building-tiers.json — no data invented here):
+// MASTER-DETAIL REDESIGN (owner-approved mockup 2026-07-17, Screenshot 060241 —
+// supersedes the vertical Tier-1/2/3 list AND the ornate carved-stone frame that
+// made the panel read as a mess).  The owner wants the OBSIDIAN palette (dark
+// near-black panel + runic gold + green accents) rendered CLEAN — a flat rounded
+// dark rectangle with thin subtle borders, NOT the ornate FrameTalent stone
+// chrome.  So this View builds its OWN clean container (code-built uGUI, no UXML,
+// no BuildObsidianPanel) and only borrows the kit's clean primitives (Label,
+// AddImage/ApplyRounded, StyleButtonColors, FitSingleLine/FitBlock).
 //
-//   UPGRADE tab  -> the tier ladder.  Each tier is ONE full-width ROW:
-//       crown icon | "Tier n - Name" + one-line effect | inline COST chips
-//       (icon + number, colorblind-safe) | STATE:
-//         * OWNED    -> "OWNED" tag, no cost, no button.
-//         * NEXT     -> a grey "Upgrade" button (enabled only if affordable).
-//         * LOCKED   -> greyed row + a one-line reason (no cost dumped on top).
-//       The synthetic "Unlock Village Tier" control rides the TOP of this tab as
-//       its own row (it is the tech-gate that opens higher tiers AND perks).
+// LAYOUT (matches 060241 exactly, BUILDING-AGNOSTIC — every field is VM data):
+//   HEADER   : shield medallion top-left + centered GOLD "<Building> Enhancements".
+//   CURRENCY : a row of pill chips (icon left, value right) — the spendable set.
+//   TABS     : "Upgrade" (gold-filled when selected) | "Skills" (dark). 50/50.
+//   BODY (Upgrade tab) = TWO COLUMNS master-detail:
+//     LEFT  "ENHANCEMENT PATH" — a HORIZONTAL row of tier CARDS (arrows between),
+//           each: "TIER n" + a per-tier BUILDING ILLUSTRATION (grows/changes per
+//           tier) + perk NAME + one-line EFFECT + a button (gold Upgrade when
+//           available / lock "Unlock '<prev>'" when locked / "Unlocked" when owned).
+//           Arrow before a reachable tier is gold, grey otherwise.
+//     RIGHT  DETAIL pane for the SELECTED tier — perk NAME + "TIER n - SELECTED"
+//           + a BENEFIT LIST (green-check active vs dim-box locked, colorblind
+//           law: glyph + luminance + text, never hue alone) + "UPGRADE COST" chips
+//           + a big gold Upgrade CTA + a small Hotkeys row.
+//   BODY (Skills tab) = the per-tier RESEARCH PERKS as a scroll list (unchanged
+//           row grammar), so the Skills side keeps its existing content/behaviour.
+//   FOOTER   : one centered gold-bordered "Close".
 //
-//   SKILLS tab   -> the per-tier RESEARCH PERKS.  Same ROW grammar: perk icon |
-//       name + effect | Gold cost | OWNED / "Research" button / LOCKED-with-reason.
-//       Locked perks are SHOWN (not hidden) with their specific reason so the
-//       gate is legible even while the Village-Tier ladder is unmet (WO-460 gap).
-//
-// FIXES the old 3-column grid: no detached/overlapping wallet-vs-cost row, no
-// truncated tier tile, full panel width used.  Wallet rides a TOP strip (clearly
-// "your resources"), distinct from the per-row costs below.
-//
-// Chrome = BuildObsidianPanel(FrameTalent) landscape frame + ONE shared Close.
-// Works landscape + portrait (fraction-anchored, vertical scroll per tab).
-// Code-built uGUI ONLY (no UXML).  Eased open/close via PanelOpenCloseFx.
+// Tapping a tier card SELECTS it (right pane repaints); the CTA / card Upgrade
+// button routes the SAME vm.Select(id) command.  ONE panel serves EVERY upgradable
+// building (city tiers + legacy resource buildings) — nothing here is per-building.
 // SHIPS behind FeatureFlags.BuildingUpgradePanel (default ON since WO-476).
 // =============================================================================
 
@@ -51,39 +51,54 @@ namespace DeNelle.Village.Buildings.Progression
     [DisallowMultipleComponent]
     public sealed class BuildingUpgradePanelMvvm : MonoBehaviour, IPanelView
     {
-        // Owned (lit) row tint — warm gilt lift over the slot plate.
-        private static readonly Color OwnedTint = new Color(1.18f, 1.12f, 0.92f, 1f);
-        // Locked row dim — the plate greys down + drops alpha.
-        private static readonly Color LockedTint = new Color(0.52f, 0.52f, 0.55f, 0.80f);
+        // ── Clean obsidian palette (dark near-black + runic gold + green accent) ──
+        private static readonly Color PanelFill    = new Color(0.043f, 0.041f, 0.049f, 0.985f); // near-black obsidian
+        private static readonly Color SubPanelFill = new Color(0.055f, 0.052f, 0.060f, 1f);      // left/right body sub-panels
+        private static readonly Color CardFill     = new Color(0.078f, 0.073f, 0.066f, 1f);      // normal tier card
+        private static readonly Color CardFillLit  = new Color(0.140f, 0.108f, 0.048f, 1f);      // selected / available card (warm)
+        private static readonly Color CardFillDim  = new Color(0.052f, 0.050f, 0.055f, 1f);      // locked tier card
+        private static readonly Color TabDark      = new Color(0.085f, 0.082f, 0.078f, 1f);      // unselected tab
+        private static readonly Color PillFill     = new Color(0.062f, 0.059f, 0.055f, 1f);      // currency pill
+        private static readonly Color BorderDim    = new Color(0.42f, 0.40f, 0.36f, 0.45f);      // subtle rule
+        private static readonly Color BorderGold   = new Color(0.831f, 0.686f, 0.216f, 1f);      // gold rim (selected)
+        private static readonly Color BorderGoldDim= new Color(0.58f, 0.48f, 0.22f, 0.75f);      // gold rim (available)
 
-        // Sprite-first row plate (canon §5) — the talent slot plate, ungated. Fallback procedural.
-        private const string SlotTalentPlate = "slot_talent_1";
         // Committed currency-icon role folder (Resources/RpgUi/currency/currency_*).
         private const string CurrencyRole = "currency";
 
         private BuildingUpgradeVM _vm;
 
         private GameObject _ui;
-        private RectTransform _bodyHost;          // content host (below wallet + tab row)
-        private RectTransform _upgradeContent;    // Upgrade-tab scroll content (tier rows)
+        private RectTransform _bodyHost;          // content host (below tab row)
+        private GameObject _upgradePage;          // Upgrade page root (two-column master-detail)
+        private GameObject _skillsPage;           // Skills page root (scroll list)
+        private RectTransform _pathCardsHost;     // LEFT column — tier cards + arrows (rebuilt on select)
+        private RectTransform _detailHost;        // RIGHT column — selected-tier detail (rebuilt on select)
         private RectTransform _skillsContent;     // Skills-tab scroll content (perk rows)
-        private GameObject _upgradePage;          // Upgrade page root (toggled)
-        private GameObject _skillsPage;           // Skills page root (toggled)
-        private ElarionUiKit.TabRowHandle _tabRow;
         private int _activeTab;                   // 0 = Upgrade, 1 = Skills
 
-        // Top wallet strip chips (built once; count-tweened on each Render).
-        private struct ChipRef { public ElarionUiKit.CurrencyKind Kind; public ElarionUiKit.CurrencyChipHandle Handle; }
-        private readonly List<ChipRef> _chips = new List<ChipRef>();
+        // Selection state — which tier card the right detail pane is showing.
+        private string _selectedTierId;
+
+        // Custom clean currency pills (built once; values refreshed on each Render).
+        private struct PillRef { public ElarionUiKit.CurrencyKind Kind; public TMPro.TextMeshProUGUI Value; }
+        private readonly List<PillRef> _pills = new List<PillRef>();
+
+        // Tab visuals (restyled per active tab).
+        private struct TabRef { public Image Fill; public TMPro.TextMeshProUGUI Label; }
+        private readonly List<TabRef> _tabs = new List<TabRef>();
 
         // Status is transient: toast only NEW statuses, never the open-time baseline.
         private string _lastStatus;
+
+        // Building-portrait cache (portraits import as plain Texture2D — wrap once).
+        private static readonly Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>();
 
         private PanelHandle _panelHandle;
 
         public bool IsOpen => _ui != null;
 
-        private const float RowHeightPx   = 132f;
+        private const float RowHeightPx   = 132f;   // Skills-tab perk row height
         private const float RowGapPx      = 12f;
         private const float ButtonFadeSec = 0.12f;   // hover/press transition — never snap
 
@@ -119,13 +134,14 @@ namespace DeNelle.Village.Buildings.Progression
             // VM FIRST — it resolves the default building + economy handle itself, so this
             // View never touches a service, and the chrome's title composes from the name.
             _vm = BuildingUpgradeVM.CreateDefault(buildingId, Close);
+            _selectedTierId = null;   // fresh open -> default-select the next upgradeable tier
 
             BuildChrome();
 
             Bind(_vm);
 
             FlowTrace.Step("UpgradeUI", "open '" + (_vm != null ? _vm.Title : "?")
-                + "' tabbed (Upgrade+Skills), tab=" + _activeTab);
+                + "' master-detail (Upgrade+Skills), tab=" + _activeTab);
 
             // Arbiter closes any other open panel first + applies the battle-lock.
             if (!PanelManager.NotifyOpened(_panelHandle))
@@ -157,9 +173,10 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_vm == null) return;
 
-            // Refresh the top wallet chips (count-tween; no red/green flash).
-            for (int i = 0; i < _chips.Count; i++)
-                _chips[i].Handle?.SetAmount(WalletValue(_chips[i].Kind));
+            // Refresh the currency pills (plain set — no red/green flash, colorblind law).
+            for (int i = 0; i < _pills.Count; i++)
+                if (_pills[i].Value != null)
+                    _pills[i].Value.text = ElarionUi.CompactNumber(WalletValue(_pills[i].Kind));
 
             // Status is transient — pop a toast only when it CHANGES to a new, non-empty message.
             string status = _vm.Status;
@@ -169,11 +186,13 @@ namespace DeNelle.Village.Buildings.Progression
                 BuildFeedbackToast.Show(status);
             }
 
-            RebuildTabs();
+            RebuildUpgrade();
+            RebuildSkills();
+            RestyleTabs();
             ApplyTabVisibility();
         }
 
-        // ── Chrome — MASTER FRAME + wallet strip + tab row + two scroll pages ─────
+        // ── Chrome — CLEAN flat dark panel (no ornate frame) + zones ──────────────
 
         private void BuildChrome()
         {
@@ -184,77 +203,165 @@ namespace DeNelle.Village.Buildings.Progression
 
             string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
 
-            // LANDSCAPE Talent frame (mirror HeroSkillTreePanelMvvm's sizing).
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
-                new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => _vm?.Close(),
-                headerX0: 0.04f, headerX1: 0.74f,
-                frameName: RpgUiCatalog.FrameTalent, medallionIcon: "hammer");
+            // CLEAN flat obsidian panel: a rounded near-black rectangle with a thin subtle
+            // gold rim + corner rivets (mockup 060241) — NOT the ornate stone frame.
+            RectTransform panel = RoundedCard(_ui.transform, "Panel",
+                new Vector2(0.035f, 0.05f), new Vector2(0.965f, 0.95f),
+                PanelFill, new Color(BorderGold.r, BorderGold.g, BorderGold.b, 0.32f), 2.5f);
+            AddCornerRivets(panel);
 
-            // Frame path returns layout; procedural fallback synthesizes an equivalent body zone.
-            RectTransform body = chrome.layout != null && chrome.layout.body != null
-                ? chrome.layout.body
-                : MakeZone(chrome.content.transform, "Zone_Body", new Vector2(0.04f, 0.13f), new Vector2(0.96f, 0.855f));
+            // HEADER — shield medallion (top-left) + centered gold title.
+            BuildMedallion(panel);
+            var title = ElarionUiKit.Label(panel, titleText, 0.905f, 0.995f,
+                ElarionUi.Gilt, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center,
+                0.11f, 0.89f, bold: true);
+            title.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(title);
 
-            SoftenButton(chrome.close);
+            // CURRENCY pill row.
+            var walletStrip = MakeZone(panel, "CurrencyRow", new Vector2(0.012f, 0.815f), new Vector2(0.988f, 0.888f));
+            BuildCurrencyPills(walletStrip);
 
-            // TOP: wallet strip ("your resources") — clearly separate from the per-row costs below.
-            var walletStrip = MakeZone(body, "WalletStrip", new Vector2(0f, 0.885f), new Vector2(1f, 1f));
-            BuildWalletStrip(walletStrip);
+            // TAB row: Upgrade | Skills.
+            var tabHost = MakeZone(panel, "TabRow", new Vector2(0.012f, 0.720f), new Vector2(0.988f, 0.800f));
+            BuildTabs(tabHost);
 
-            // TAB ROW under the wallet: Upgrade | Skills (the ONE kit tab row).
-            var tabHost = MakeZone(body, "TabRow", new Vector2(0.02f, 0.785f), new Vector2(0.98f, 0.872f));
-            _tabRow = ElarionUiKit.BuildTabRow(tabHost, new[] { "Upgrade", "Skills" }, OnTab, _activeTab);
-
-            // CONTENT host (below tabs): two toggled scroll pages, same row grammar.
-            _bodyHost = MakeZone(body, "ContentHost", new Vector2(0f, 0f), new Vector2(1f, 0.775f));
-            _upgradePage = BuildScrollPage(_bodyHost, "UpgradePage", out _upgradeContent);
-            _skillsPage  = BuildScrollPage(_bodyHost, "SkillsPage",  out _skillsContent);
+            // BODY host (below tabs, above footer).
+            _bodyHost = MakeZone(panel, "BodyHost", new Vector2(0.012f, 0.095f), new Vector2(0.988f, 0.705f));
+            _upgradePage = BuildUpgradePage(_bodyHost);
+            _skillsPage  = BuildScrollPage(_bodyHost, "SkillsPage", out _skillsContent);
             ApplyTabVisibility();
+
+            // FOOTER — one centered gold-bordered Close.
+            BuildCloseButton(panel);
 
             // Capture the open-time status as the toast baseline (do NOT toast the idle hint).
             _lastStatus = _vm != null ? _vm.Status : null;
 
-            // Eased open: scale 0.92->1 + fade 0->1, ease-out.
+            // Eased open: scale 0.92->1 + fade 0->1, ease-out (scale the outer card incl. border).
             var fx = _ui.AddComponent<PanelOpenCloseFx>();
-            fx.PlayOpen(chrome.root != null ? chrome.root.transform as RectTransform : null);
+            fx.PlayOpen((panel.parent as RectTransform) ?? panel);
         }
 
-        private void OnTab(int index)
+        // Small shield medallion disc, top-left (mockup 060241).
+        private void BuildMedallion(RectTransform panel)
         {
-            _activeTab = Mathf.Clamp(index, 0, 1);
-            FlowTrace.Step("UpgradeUI", "tab -> " + (_activeTab == 0 ? "Upgrade" : "Skills"));
-            ApplyTabVisibility();
+            RectTransform disc = RoundedCard(panel, "Medallion",
+                new Vector2(0.014f, 0.905f), new Vector2(0.058f, 0.985f),
+                new Color(0.10f, 0.075f, 0.03f, 1f), BorderGoldDim, 2.5f);
+            var shield = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
+            if (shield != null)
+            {
+                var g = new GameObject("Shield", typeof(Image));
+                g.transform.SetParent(disc, false);
+                var rt = g.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.18f, 0.18f); rt.anchorMax = new Vector2(0.82f, 0.82f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                var img = g.GetComponent<Image>();
+                img.sprite = shield; img.preserveAspect = true; img.raycastTarget = false;
+                img.color = ElarionUi.Gilt;
+            }
+            else
+            {
+                var glyph = ElarionUiKit.Label(disc, ElarionUi.CrestGlyph, 0.10f, 0.90f,
+                    ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+                glyph.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(glyph);
+            }
         }
 
-        private void ApplyTabVisibility()
+        // Four subtle corner rivet dots (mockup 060241 flat-panel detail).
+        private static void AddCornerRivets(RectTransform panel)
         {
-            if (_upgradePage != null) _upgradePage.SetActive(_activeTab == 0);
-            if (_skillsPage  != null) _skillsPage.SetActive(_activeTab == 1);
+            var pts = new[]
+            {
+                new Vector2(0.012f, 0.972f), new Vector2(0.988f, 0.972f),
+                new Vector2(0.012f, 0.020f), new Vector2(0.988f, 0.020f)
+            };
+            foreach (var p in pts)
+            {
+                var go = ElarionUiKit.AddImage(panel, "Rivet",
+                    new Vector2(p.x - 0.006f, p.y - 0.010f), new Vector2(p.x + 0.006f, p.y + 0.010f),
+                    new Color(0.30f, 0.28f, 0.25f, 0.9f));
+                go.GetComponent<Image>().raycastTarget = false;
+            }
         }
 
-        // ── Top wallet strip ──────────────────────────────────────────────────────
-        // ONE ElarionUiKit.CurrencyChip per spendable currency, count-tweened. The set is
-        // derived from the VM's cost strings (presentation read of VM data — no game state).
-
-        private void BuildWalletStrip(RectTransform strip)
+        private void BuildCloseButton(RectTransform panel)
         {
-            _chips.Clear();
+            RectTransform frame = RoundedCard(panel, "Close",
+                new Vector2(0.40f, 0.018f), new Vector2(0.60f, 0.082f),
+                new Color(0.10f, 0.095f, 0.088f, 1f), BorderGold, 2.5f);
+            var host = frame.parent as RectTransform ?? frame;   // bordered outer carries the button
+            var b = host.gameObject.AddComponent<Button>();
+            b.targetGraphic = host.GetComponent<Image>();
+            ElarionUiKit.StyleButtonColors(b);
+            SoftenButton(b);
+            b.onClick.AddListener(() => { FlowTrace.Step("UpgradeUI", "close"); _vm?.Close(); });
+            var lbl = ElarionUiKit.Label(frame, "Close", 0.10f, 0.90f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
+        // ── Currency pill row (clean: dark rounded pill, icon left, value right) ──
+
+        private void BuildCurrencyPills(RectTransform strip)
+        {
+            _pills.Clear();
             if (strip == null) return;
 
             var kinds = DeriveSpendableCurrencies();
             int n = kinds.Count;
             if (n == 0) return;
 
-            const float gap = 0.008f;
+            const float gap = 0.01f;
             for (int i = 0; i < n; i++)
             {
-                float x0 = (float)i / n + gap;
-                float x1 = (float)(i + 1) / n - gap;
-                bool primary = kinds[i] == ElarionUiKit.CurrencyKind.Gold;
-                var handle = ElarionUiKit.CurrencyChip(strip, kinds[i],
-                    new Vector2(x0, 0.14f), new Vector2(x1, 0.86f),
-                    primary: primary, tag: CurrencyTag(kinds[i]));
-                _chips.Add(new ChipRef { Kind = kinds[i], Handle = handle });
+                float x0 = (float)i / n + (i == 0 ? 0f : gap * 0.5f);
+                float x1 = (float)(i + 1) / n - (i == n - 1 ? 0f : gap * 0.5f);
+                BuildCurrencyPill(strip, kinds[i], x0, x1);
+            }
+        }
+
+        private void BuildCurrencyPill(RectTransform strip, ElarionUiKit.CurrencyKind kind, float x0, float x1)
+        {
+            RectTransform pill = RoundedCard(strip, "Pill_" + kind,
+                new Vector2(x0, 0.06f), new Vector2(x1, 0.94f), PillFill, BorderDim, 1.5f);
+
+            float textX0 = 0.08f;
+            var icon = RpgUiCatalog.Get(CurrencyRole, CurrencyIconName(kind));
+            if (icon != null)
+            {
+                var g = new GameObject("Icon", typeof(Image));
+                g.transform.SetParent(pill, false);
+                var rt = g.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.06f, 0.18f); rt.anchorMax = new Vector2(0.26f, 0.82f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                var img = g.GetComponent<Image>();
+                img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
+                textX0 = 0.30f;
+            }
+
+            long v = WalletValue(kind);
+            Color valColor = kind == ElarionUiKit.CurrencyKind.Gold ? ElarionUi.Gilt : ElarionUi.Parchment;
+            var val = ElarionUiKit.Label(pill, ElarionUi.CompactNumber(v), 0.10f, 0.90f,
+                valColor, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineRight, textX0, 0.92f, bold: true);
+            val.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(val);
+            _pills.Add(new PillRef { Kind = kind, Value = val });
+        }
+
+        private static string CurrencyIconName(ElarionUiKit.CurrencyKind kind)
+        {
+            switch (kind)
+            {
+                case ElarionUiKit.CurrencyKind.Gold:    return "currency_gold";
+                case ElarionUiKit.CurrencyKind.Wood:    return "currency_wood";
+                case ElarionUiKit.CurrencyKind.Food:    return "currency_food";
+                case ElarionUiKit.CurrencyKind.Iron:    return "currency_iron";
+                case ElarionUiKit.CurrencyKind.Crystal: return "currency_crystal";
+                default:                                return "currency_gold";
             }
         }
 
@@ -290,23 +397,9 @@ namespace DeNelle.Village.Buildings.Progression
                 list.Add(ElarionUiKit.CurrencyKind.Gold);
                 list.Add(ElarionUiKit.CurrencyKind.Wood);
                 list.Add(ElarionUiKit.CurrencyKind.Food);
-                list.Add(ElarionUiKit.CurrencyKind.Iron);
                 list.Add(ElarionUiKit.CurrencyKind.Crystal);
             }
             return list;
-        }
-
-        private static string CurrencyTag(ElarionUiKit.CurrencyKind kind)
-        {
-            switch (kind)
-            {
-                case ElarionUiKit.CurrencyKind.Gold:    return "Gold";
-                case ElarionUiKit.CurrencyKind.Wood:    return "Wood";
-                case ElarionUiKit.CurrencyKind.Food:    return "Food";
-                case ElarionUiKit.CurrencyKind.Iron:    return "Iron";
-                case ElarionUiKit.CurrencyKind.Crystal: return "Crystals";
-                default:                                return kind.ToString();
-            }
         }
 
         private long WalletValue(ElarionUiKit.CurrencyKind kind)
@@ -323,40 +416,540 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
-        // ── Tab content: split vm.Perks by id into the two pages ──────────────────
-        // "perk:*" -> Skills tab; "villagetier" + "tier-*" -> Upgrade tab. Both pages
-        // use the SAME full-width row builder; the VM data alone decides each row's state.
+        // ── Tab row (Upgrade gold-filled when selected, Skills dark) ───────────────
 
-        private void RebuildTabs()
+        private void BuildTabs(RectTransform host)
         {
-            if (_vm == null || _upgradeContent == null || _skillsContent == null) return;
+            _tabs.Clear();
+            string[] labels = { "Upgrade", "Skills" };
+            const float gap = 0.012f;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                float x0 = (float)i / labels.Length + (i == 0 ? 0f : gap * 0.5f);
+                float x1 = (float)(i + 1) / labels.Length - (i == labels.Length - 1 ? 0f : gap * 0.5f);
+                RectTransform fill = RoundedCard(host, "Tab_" + labels[i],
+                    new Vector2(x0, 0.06f), new Vector2(x1, 0.94f), TabDark, BorderDim, 1.5f);
+                var root = fill.parent as RectTransform;   // bordered outer carries the button
+                var btn = root.gameObject.AddComponent<Button>();
+                btn.targetGraphic = root.GetComponent<Image>();
+                ElarionUiKit.StyleButtonColors(btn);
+                SoftenButton(btn);
+                int idx = i;
+                btn.onClick.AddListener(() => OnTab(idx));
+                var lbl = ElarionUiKit.Label(fill, labels[i], 0.10f, 0.90f,
+                    ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+                lbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(lbl);
+                _tabs.Add(new TabRef { Fill = fill.GetComponent<Image>(), Label = lbl });
+            }
+            RestyleTabs();
+        }
 
-            ClearChildren(_upgradeContent);
+        private void RestyleTabs()
+        {
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                bool sel = i == _activeTab;
+                if (_tabs[i].Fill != null)
+                    _tabs[i].Fill.color = sel ? ElarionUi.GoldButton : TabDark;
+                if (_tabs[i].Label != null)
+                    _tabs[i].Label.color = sel ? ElarionUi.Ink : ElarionUi.Parchment;
+            }
+        }
+
+        private void OnTab(int index)
+        {
+            _activeTab = Mathf.Clamp(index, 0, 1);
+            FlowTrace.Step("UpgradeUI", "tab -> " + (_activeTab == 0 ? "Upgrade" : "Skills"));
+            RestyleTabs();
+            ApplyTabVisibility();
+        }
+
+        private void ApplyTabVisibility()
+        {
+            if (_upgradePage != null) _upgradePage.SetActive(_activeTab == 0);
+            if (_skillsPage  != null) _skillsPage.SetActive(_activeTab == 1);
+        }
+
+        // ── Upgrade page — TWO-COLUMN master-detail (left path, right detail) ─────
+
+        private GameObject BuildUpgradePage(Transform parent)
+        {
+            var page = new GameObject("UpgradePage", typeof(RectTransform));
+            page.transform.SetParent(parent, false);
+            var prt = (RectTransform)page.transform;
+            prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one;
+            prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+
+            // LEFT sub-panel (~65%) — "ENHANCEMENT PATH".
+            RectTransform left = RoundedCard(page.transform, "PathPanel",
+                new Vector2(0f, 0f), new Vector2(0.655f, 1f), SubPanelFill, BorderDim, 1.5f);
+            var pathTitle = ElarionUiKit.Label(left, "ENHANCEMENT PATH", 0.905f, 0.985f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            pathTitle.characterSpacing = 6f;
+            pathTitle.raycastTarget = false;
+            _pathCardsHost = MakeZone(left, "CardsHost", new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.885f));
+
+            // RIGHT sub-panel (~35%) — DETAIL for the selected tier.
+            RectTransform right = RoundedCard(page.transform, "DetailPanel",
+                new Vector2(0.668f, 0f), new Vector2(1f, 1f), SubPanelFill, BorderDim, 1.5f);
+            _detailHost = MakeZone(right, "DetailHost", new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.985f));
+
+            return page;
+        }
+
+        // Repaint the whole Upgrade tab from vm.* + the current selection.
+        private void RebuildUpgrade()
+        {
+            if (_vm == null || _pathCardsHost == null || _detailHost == null) return;
+
+            var tiers = new List<ItemVM>();
+            foreach (var item in _vm.Perks)
+                if (item.Id != null && item.Id.StartsWith("tier-"))
+                    tiers.Add(item);
+
+            _selectedTierId = ResolveSelected(tiers);
+
+            ClearChildren(_pathCardsHost);
+            ClearChildren(_detailHost);
+
+            if (tiers.Count == 0)
+            {
+                EmptyNote(_pathCardsHost, "This building has no enhancement path yet.");
+                return;
+            }
+
+            BuildPathCards(tiers);
+            BuildDetail(tiers);
+        }
+
+        // Keep the current selection if still valid; else default to the next upgradeable tier.
+        private string ResolveSelected(List<ItemVM> tiers)
+        {
+            if (_selectedTierId != null)
+                foreach (var t in tiers) if (t.Id == _selectedTierId) return _selectedTierId;
+
+            string firstNonOwned = null, firstAvailable = null, last = null;
+            foreach (var t in tiers)
+            {
+                last = t.Id;
+                if (!t.Equipped && firstNonOwned == null) firstNonOwned = t.Id;
+                if (!t.Equipped && !t.Locked && firstAvailable == null) firstAvailable = t.Id;
+            }
+            return firstAvailable ?? firstNonOwned ?? last;
+        }
+
+        // ── LEFT column: horizontal tier cards with arrows between ────────────────
+
+        private void BuildPathCards(List<ItemVM> tiers)
+        {
+            int n = tiers.Count;
+            const float pad = 0.012f;
+            float arrowFrac = n > 1 ? 0.05f : 0f;
+            float cardFrac = (1f - 2f * pad - arrowFrac * (n - 1)) / n;
+            if (cardFrac <= 0f) cardFrac = (1f - 2f * pad) / n;
+
+            float x = pad;
+            for (int i = 0; i < n; i++)
+            {
+                BuildTierCard(tiers, i, x, x + cardFrac);
+                x += cardFrac;
+                if (i < n - 1)
+                {
+                    // Arrow before a reachable tier is gold; grey until the prior tier is reached.
+                    bool gold = !tiers[i].Locked;   // owned OR the next-available tier
+                    var arrow = ElarionUiKit.Label(_pathCardsHost, ">", 0.42f, 0.62f,
+                        gold ? ElarionUi.Gilt : new Color(0.42f, 0.42f, 0.42f, 1f),
+                        ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, x, x + arrowFrac, bold: true);
+                    arrow.raycastTarget = false;
+                    x += arrowFrac;
+                }
+            }
+        }
+
+        private void BuildTierCard(List<ItemVM> tiers, int index, float xMin, float xMax)
+        {
+            ItemVM item = tiers[index];
+            bool selected  = item.Id == _selectedTierId;
+            bool owned     = item.Equipped;
+            bool locked    = item.Locked;
+            bool available = !locked && !owned;   // the next upgradeable tier (gold affordance)
+            float dim = locked ? 0.55f : 1f;
+
+            Color fill   = (selected || available) ? CardFillLit : (locked ? CardFillDim : CardFill);
+            Color border = selected ? BorderGold : (available ? BorderGoldDim : BorderDim);
+            float borderPx = selected ? 3f : (available ? 2f : 1.5f);
+
+            RectTransform card = RoundedCard(_pathCardsHost, "TierCard_" + item.Id,
+                new Vector2(xMin, 0.03f), new Vector2(xMax, 0.97f), fill, border, borderPx);
+
+            // Whole card selects it (right pane repaints).
+            var root = card.parent as RectTransform;
+            var selBtn = root.gameObject.AddComponent<Button>();
+            selBtn.targetGraphic = root.GetComponent<Image>();
+            ElarionUiKit.StyleButtonColors(selBtn);
+            SoftenButton(selBtn);
+            string id = item.Id;
+            selBtn.onClick.AddListener(() => { _selectedTierId = id; FlowTrace.Step("UpgradeUI", "select " + id); RebuildUpgrade(); });
+
+            // "TIER n" header.
+            var head = ElarionUiKit.Label(card, TierHeader(item), 0.865f, 0.955f,
+                new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            head.characterSpacing = 4f;
+            head.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(head);
+
+            // BUILDING ICON — the SAME building art at the SAME size on EVERY tier (owner
+            // 2026-07-17: buildings do NOT visually change per tier; a tier upgrade just unlocks
+            // perks + maybe structure HP). Nothing here implies the model grows. The "TIER n"
+            // header is the tier badge. (BuildingArt keeps a per-tier variant lookup that is a
+            // NO-OP for buildings — no -2/-3 portraits exist — and only serves TOWERS if they are
+            // later routed to this panel, since towers DO carry real per-tier art.)
+            int tierNum = TierNumber(item.Id);
+            var art = BuildingArt(tierNum);
+            if (art != null)
+            {
+                var g = new GameObject("Building", typeof(Image));
+                g.transform.SetParent(card, false);
+                var rt = g.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.16f, 0.44f); rt.anchorMax = new Vector2(0.84f, 0.82f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                var img = g.GetComponent<Image>();
+                img.sprite = art; img.preserveAspect = true; img.raycastTarget = false;
+                img.color = new Color(1f, 1f, 1f, dim);
+            }
+            else
+            {
+                // Consistent neutral placeholder (identical on every tier — no growth): a crest glyph.
+                var gl = ElarionUiKit.Label(card, ElarionUi.CrestGlyph, 0.44f, 0.82f,
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.7f * dim),
+                    ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.16f, 0.84f, bold: true);
+                gl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(gl);
+            }
+
+            // Perk NAME.
+            var nameLbl = ElarionUiKit.Label(card, CardName(item), 0.26f, 0.38f,
+                new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            nameLbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(nameLbl);
+
+            // One-line EFFECT.
+            string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
+            if (!string.IsNullOrEmpty(effect))
+            {
+                var eff = ElarionUiKit.Label(card, effect, 0.135f, 0.255f,
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                eff.raycastTarget = false;
+                ElarionUiKit.FitBlock(eff);
+            }
+
+            // BUTTON.
+            if (owned)
+            {
+                var tag = ElarionUiKit.Label(card, "Unlocked", 0.03f, 0.115f,
+                    ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+                tag.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(tag);
+            }
+            else if (available)
+            {
+                BuildGoldButton(card, "Upgrade", item.Affordable, 0.14f, 0.86f, 0.02f, 0.125f,
+                    () => { FlowTrace.Step("UpgradeUI", "upgrade " + id); _vm?.Select(id); });
+            }
+            else
+            {
+                // Locked — a dim lock button carrying the requirement (colorblind: glyph + text, not hue).
+                string reason = !string.IsNullOrEmpty(item.LockReason) ? item.LockReason : "Locked";
+                BuildLockButton(card, reason, 0.06f, 0.94f, 0.02f, 0.125f,
+                    () => { _selectedTierId = id; RebuildUpgrade(); });
+            }
+        }
+
+        // ── RIGHT column: the selected tier's detail pane ─────────────────────────
+
+        private void BuildDetail(List<ItemVM> tiers)
+        {
+            ItemVM sel = default;
+            bool found = false;
+            int selNum = 0;
+            for (int i = 0; i < tiers.Count; i++)
+                if (tiers[i].Id == _selectedTierId) { sel = tiers[i]; found = true; selNum = TierNumber(tiers[i].Id); }
+            if (!found) return;
+
+            // NAME + subtitle.
+            var name = ElarionUiKit.Label(_detailHost, CardName(sel), 0.905f, 0.98f,
+                ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            name.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(name);
+
+            var sub = ElarionUiKit.Label(_detailHost, TierHeader(sel) + " - SELECTED", 0.852f, 0.902f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            sub.characterSpacing = 4f;
+            sub.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(sub);
+
+            // BENEFIT LIST — active (green check) up to the selected tier, locked (dim box) above.
+            var lines = new List<(bool active, string text)>();
+            // The selected tier's own name + concrete effect read as its delivered benefits.
+            string selName = CardName(sel);
+            if (!string.IsNullOrEmpty(selName)) lines.Add((true, selName));
+            string selEffect = _vm != null ? _vm.EffectFor(sel.Id) : "";
+            if (!string.IsNullOrEmpty(selEffect)) lines.Add((true, selEffect));
+            // Lower owned tiers below the selected one contribute their effect as active benefits.
+            foreach (var t in tiers)
+            {
+                int num = TierNumber(t.Id);
+                if (num < selNum && t.Equipped)
+                {
+                    string e = _vm.EffectFor(t.Id);
+                    if (!string.IsNullOrEmpty(e)) lines.Add((true, e));
+                }
+            }
+            // Higher tiers are future/locked previews.
+            foreach (var t in tiers)
+            {
+                int num = TierNumber(t.Id);
+                if (num > selNum)
+                {
+                    string e = _vm.EffectFor(t.Id);
+                    string preview = "Opens " + CardName(t) + (string.IsNullOrEmpty(e) ? "" : " (" + e + ")");
+                    lines.Add((false, preview));
+                }
+            }
+
+            const float listTop = 0.845f, listBot = 0.455f, rowH = 0.092f;
+            int maxRows = Mathf.Max(1, Mathf.FloorToInt((listTop - listBot) / rowH));
+            int shown = Mathf.Min(lines.Count, maxRows);
+            for (int i = 0; i < shown; i++)
+            {
+                float yTop = listTop - i * rowH;
+                float yBot = yTop - (rowH - 0.012f);
+                BuildBenefitRow(_detailHost, yBot, yTop, lines[i].active, lines[i].text);
+            }
+
+            // Divider.
+            var div = ElarionUiKit.AddImage(_detailHost, "Divider",
+                new Vector2(0.03f, 0.437f), new Vector2(0.97f, 0.443f), BorderDim);
+            div.GetComponent<Image>().raycastTarget = false;
+
+            // UPGRADE COST.
+            var costLbl = ElarionUiKit.Label(_detailHost, "UPGRADE COST", 0.372f, 0.428f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            costLbl.characterSpacing = 4f;
+            costLbl.raycastTarget = false;
+
+            var costZone = MakeZone(_detailHost, "CostZone", new Vector2(0.04f, 0.255f), new Vector2(0.96f, 0.362f));
+            string cost = _vm != null ? _vm.CostFor(sel.Id) : "";
+            BuildCostChips(costZone, cost, 0.04f, 0.96f);
+
+            // BIG CTA — Upgrade / Raise Village Tier / Unlocked / Locked reason.
+            BuildDetailCta(_detailHost, tiers, sel, selNum);
+
+            // Hotkeys row (decorative hint per mockup).
+            var hk = ElarionUiKit.Label(_detailHost, "Hotkeys", 0.02f, 0.09f,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.02f, 0.50f);
+            hk.raycastTarget = false;
+            BuildKeyBadge(_detailHost, "B", 0.55f, 0.72f);
+            BuildKeyBadge(_detailHost, "^", 0.75f, 0.92f);
+        }
+
+        private void BuildDetailCta(RectTransform host, List<ItemVM> tiers, ItemVM sel, int selNum)
+        {
+            // The NEXT reachable tier = first non-owned tier in the ladder.
+            string nextId = null;
+            foreach (var t in tiers) { if (!t.Equipped) { nextId = t.Id; break; } }
+
+            const float x0 = 0.04f, x1 = 0.96f, yb = 0.115f, yt = 0.235f;
+            string selId = sel.Id;
+
+            if (sel.Equipped)
+            {
+                BuildGoldButton(host, "Unlocked", false, x0, x1, yb, yt, null);
+                return;
+            }
+            if (sel.Id == nextId)
+            {
+                string gate = _vm != null ? _vm.GateFor(sel.Id) : "";
+                if (gate == BuildingUpgradeVM.GateVillage)
+                {
+                    // Village-gated next tier: the CTA raises the global Village Tier (the mechanism
+                    // that opens this tier). Routes to the SOLE VillageTierService caller in the VM.
+                    BuildGoldButton(host, "Raise Village Tier", true, x0, x1, yb, yt,
+                        () => { FlowTrace.Step("UpgradeUI", "raise-village from " + selId); _vm?.Select(BuildingUpgradeVM.VillageTierRowId); });
+                    return;
+                }
+                BuildGoldButton(host, "Upgrade", sel.Affordable, x0, x1, yb, yt,
+                    () => { FlowTrace.Step("UpgradeUI", "upgrade " + selId); _vm?.Select(selId); });
+                return;
+            }
+            // Further-out locked tier — disabled CTA carrying the requirement.
+            string reason = !string.IsNullOrEmpty(sel.LockReason) ? sel.LockReason : "Locked";
+            BuildLockButton(host, reason, x0, x1, yb, yt, null);
+        }
+
+        // One benefit line: colorblind-safe glyph (green filled box = active / dim empty box =
+        // locked) + luminance + text. Never hue alone.
+        private void BuildBenefitRow(RectTransform parent, float yBot, float yTop, bool active, string text)
+        {
+            var glyphSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement,
+                active ? RpgUiCatalog.ElementToggleBoxOn : RpgUiCatalog.ElementToggleBoxOff);
+            var g = new GameObject(active ? "Check" : "Lock", typeof(Image));
+            g.transform.SetParent(parent, false);
+            var grt = g.GetComponent<RectTransform>();
+            grt.anchorMin = new Vector2(0.0f, yBot); grt.anchorMax = new Vector2(0.075f, yTop);
+            grt.offsetMin = Vector2.zero; grt.offsetMax = Vector2.zero;
+            var gimg = g.GetComponent<Image>();
+            if (glyphSprite != null)
+            {
+                gimg.sprite = glyphSprite; gimg.preserveAspect = true;
+                gimg.color = active ? ElarionUi.Affordable : new Color(0.55f, 0.53f, 0.50f, 0.9f);
+            }
+            else
+            {
+                gimg.color = active ? ElarionUi.Affordable : new Color(0.40f, 0.38f, 0.36f, 0.9f);
+                ElarionUiKit.ApplyRounded(gimg);
+            }
+            gimg.raycastTarget = false;
+
+            var lbl = ElarionUiKit.Label(parent, text, yBot, yTop,
+                active ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, 0.10f, 1f);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitBlock(lbl);
+        }
+
+        private void BuildKeyBadge(RectTransform parent, string key, float x0, float x1)
+        {
+            RectTransform badge = RoundedCard(parent, "Key_" + key,
+                new Vector2(x0, 0.02f), new Vector2(x1, 0.088f), TabDark, BorderDim, 1.5f);
+            var lbl = ElarionUiKit.Label(badge, key, 0.05f, 0.95f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
+        // ── Shared clean buttons (gold CTA + dim lock) ────────────────────────────
+
+        private void BuildGoldButton(Transform parent, string label, bool enabled,
+            float x0, float x1, float y0, float y1, System.Action onClick)
+        {
+            var go = ElarionUiKit.AddImage(parent, "GoldBtn", new Vector2(x0, y0), new Vector2(x1, y1),
+                enabled ? ElarionUi.GoldButton : new Color(0.30f, 0.28f, 0.22f, 1f));
+            var img = go.GetComponent<Image>();
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = img;
+            ElarionUiKit.StyleButtonColors(btn);
+            SoftenButton(btn);
+            btn.interactable = enabled && onClick != null;
+            if (onClick != null) btn.onClick.AddListener(() => onClick());
+            var lbl = ElarionUiKit.Label(go.transform, label, 0.06f, 0.94f,
+                enabled ? ElarionUi.Ink : ElarionUi.ParchmentDim,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
+        private void BuildLockButton(Transform parent, string reason, float x0, float x1, float y0, float y1, System.Action onClick)
+        {
+            var go = ElarionUiKit.AddImage(parent, "LockBtn", new Vector2(x0, y0), new Vector2(x1, y1),
+                new Color(0.11f, 0.105f, 0.10f, 1f));
+            var img = go.GetComponent<Image>();
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = img;
+            ElarionUiKit.StyleButtonColors(btn);
+            SoftenButton(btn);
+            btn.interactable = onClick != null;
+            btn.transition = Selectable.Transition.None;
+            if (onClick != null) btn.onClick.AddListener(() => onClick());
+
+            // Lock glyph (empty toggle box reads "not yet" — colorblind-safe shape) + text.
+            var glyph = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementToggleBoxOff);
+            float textX0 = 0.06f;
+            if (glyph != null)
+            {
+                var g = new GameObject("LockGlyph", typeof(Image));
+                g.transform.SetParent(go.transform, false);
+                var rt = g.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.04f, 0.22f); rt.anchorMax = new Vector2(0.16f, 0.78f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                var gi = g.GetComponent<Image>();
+                gi.sprite = glyph; gi.preserveAspect = true; gi.raycastTarget = false;
+                gi.color = new Color(0.62f, 0.60f, 0.56f, 1f);
+                textX0 = 0.18f;
+            }
+            var lbl = ElarionUiKit.Label(go.transform, reason, 0.06f, 0.94f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, textX0, 0.96f);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitBlock(lbl);
+        }
+
+        // ── Building illustration resolver (per-tier portrait; real art) ──────────
+        // The building's Portraits/<slug>[-tier] sprite. Towers carry -2/-3 tier variants;
+        // resource/city buildings reuse their single portrait (grown per tier by the card).
+        private Sprite BuildingArt(int tierNum)
+        {
+            string title = _vm != null ? _vm.Title : "";
+            if (string.IsNullOrEmpty(title)) return null;
+            string t = title.Trim().ToLowerInvariant().Replace("'", "");
+            string nospace = t.Replace(" ", "");
+            string dash = t.Replace(' ', '-');
+
+            if (tierNum >= 2)
+            {
+                var v = LoadPortrait(dash + "-" + tierNum);
+                if (v == null) v = LoadPortrait(nospace + "-" + tierNum);
+                if (v != null) return v;
+            }
+            var s = LoadPortrait(nospace);
+            if (s == null) s = LoadPortrait(dash);
+            return s;
+        }
+
+        // Portraits import as plain Texture2D (mirror BuildPaletteUI.LoadPortrait) — wrap once, cache.
+        private static Sprite LoadPortrait(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            string path = "Portraits/" + key;
+            if (_portraitCache.TryGetValue(path, out var cached)) return cached;
+
+            Sprite sprite = Resources.Load<Sprite>(path);
+            if (sprite == null)
+            {
+                var tex = Resources.Load<Texture2D>(path);
+                if (tex != null)
+                    sprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            }
+            _portraitCache[path] = sprite;   // cache nulls too — one lookup per miss
+            return sprite;
+        }
+
+        // ── Skills tab — the per-tier RESEARCH PERKS as a scroll list (unchanged) ──
+
+        private void RebuildSkills()
+        {
+            if (_vm == null || _skillsContent == null) return;
+
             ClearChildren(_skillsContent);
 
             bool anyPerk = false;
             foreach (var item in _vm.Perks)
             {
-                bool isPerk = item.Id != null && item.Id.StartsWith("perk:");
-                if (isPerk)
+                if (item.Id != null && item.Id.StartsWith("perk:"))
                 {
                     CreateRow(_skillsContent, item);
                     anyPerk = true;
-                }
-                else
-                {
-                    CreateRow(_upgradeContent, item);   // villagetier + tier-*
                 }
             }
 
             if (!anyPerk)
                 EmptyNote(_skillsContent, "No research skills for this building yet.");
 
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_upgradeContent);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_skillsContent);
         }
-
-        // ── One scroll page (viewport + clamped ScrollRect + vertical row stack) ──
 
         private GameObject BuildScrollPage(Transform parent, string name, out RectTransform content)
         {
@@ -409,10 +1002,7 @@ namespace DeNelle.Village.Buildings.Progression
             return page;
         }
 
-        // ── One full-width ROW (presentation; data from the bound ItemVM) ─────────
-        // Layout:  icon | name + one-line effect | (purchasable: cost chips + CTA)
-        //                                          (owned: "OWNED") (locked: reason)
-
+        // One full-width perk ROW (Skills tab): icon | name + effect | cost chips + CTA / OWNED / reason.
         private void CreateRow(Transform parent, ItemVM item)
         {
             var row = new GameObject("Row_" + item.Id, typeof(Image), typeof(Button));
@@ -427,12 +1017,12 @@ namespace DeNelle.Village.Buildings.Progression
             if (item.Equipped)
             {
                 var c = plate.color;
-                plate.color = new Color(c.r * OwnedTint.r, c.g * OwnedTint.g, c.b * OwnedTint.b, c.a);
+                plate.color = new Color(c.r * 1.12f, c.g * 1.08f, c.b * 0.9f, c.a);
             }
             else if (item.Locked)
             {
                 var c = plate.color;
-                plate.color = new Color(c.r * LockedTint.r, c.g * LockedTint.g, c.b * LockedTint.b, c.a * LockedTint.a);
+                plate.color = new Color(c.r * 0.52f, c.g * 0.52f, c.b * 0.55f, c.a * 0.8f);
                 dim = 0.6f;
             }
 
@@ -442,14 +1032,11 @@ namespace DeNelle.Village.Buildings.Progression
             btn.targetGraphic = plate;
             ElarionUiKit.StyleButtonColors(btn);
             SoftenButton(btn);
-            // The whole row is a large touch target ONLY when purchasable; owned/locked read
-            // as settled state (no hover highlight, no action).
             btn.interactable = purchasable;
             if (!purchasable) btn.transition = Selectable.Transition.None;
             string id = item.Id;
             btn.onClick.AddListener(() => { FlowTrace.Step("UpgradeUI", "row-tap " + id); _vm?.Select(id); });
 
-            // ICON (left) — crown for a tier/village row, perk sprite for a skill, glyph fallback.
             Sprite icon = IconFor(item);
             if (icon != null)
             {
@@ -466,14 +1053,13 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else
             {
-                var g = ElarionUiKit.Label(row.transform, TierGlyph(item.Id), 0.14f, 0.86f,
+                var g = ElarionUiKit.Label(row.transform, ElarionUi.CrestGlyph, 0.14f, 0.86f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.015f, 0.11f, bold: true);
                 g.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(g);
             }
 
-            // NAME (line 1) + EFFECT (line 2) — the concrete payoff, VM-relayed.
             var nameLbl = ElarionUiKit.Label(row.transform, item.Name, 0.50f, 0.90f,
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft, 0.135f, 0.49f, bold: true);
@@ -490,7 +1076,6 @@ namespace DeNelle.Village.Buildings.Progression
                 ElarionUiKit.FitSingleLine(effLbl);
             }
 
-            // RIGHT region — state.
             if (item.Equipped)
             {
                 var owned = ElarionUiKit.Label(row.transform, "OWNED", 0.30f, 0.70f,
@@ -500,7 +1085,6 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else if (item.Locked)
             {
-                // Colorblind law: locked reason is TEXT, never hue. No cost dumped on a locked row.
                 string reason = !string.IsNullOrEmpty(item.LockReason) ? item.LockReason : "Locked";
                 var req = ElarionUiKit.Label(row.transform, reason, 0.14f, 0.86f,
                     ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.50f, 0.985f);
@@ -509,24 +1093,19 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else
             {
-                // Purchasable — inline cost chips (icon + number) + a grey Upgrade/Research CTA.
                 string cost = _vm != null ? _vm.CostFor(item.Id) : "";
                 BuildCostChips(row.transform, cost, 0.50f, 0.795f);
-
-                bool isPerk = item.Id != null && item.Id.StartsWith("perk:");
-                string cta = isPerk ? "Research" : "Upgrade";
-                BuildRowCta(row.transform, cta, item.Affordable,
-                    () => { FlowTrace.Step("UpgradeUI", (isPerk ? "research " : "upgrade ") + id); _vm?.Select(id); });
+                BuildRowCta(row.transform, "Research", item.Affordable,
+                    () => { FlowTrace.Step("UpgradeUI", "research " + id); _vm?.Select(id); });
             }
         }
 
-        // ── Inline cost chips (icon + number) — colorblind-safe, reuse chip grammar ──
+        // ── Inline cost chips (icon + number) — colorblind-safe ───────────────────
 
         private void BuildCostChips(Transform parent, string costText, float x0, float x1)
         {
             if (string.IsNullOrEmpty(costText)) return;
-            // "700 Wood - 450 Food" (VM joins parts with a U+00B7 middle-dot); split/trim/drop-empty.
-            var raw = costText.Split('\u00B7');
+            var raw = costText.Split('·');   // VM joins cost parts with U+00B7 middle-dot
             var tokens = new List<string>();
             foreach (var r in raw)
             {
@@ -536,7 +1115,7 @@ namespace DeNelle.Village.Buildings.Progression
             int n = tokens.Count;
             if (n == 0) return;
 
-            const float gap = 0.008f;
+            const float gap = 0.02f;
             float span = x1 - x0;
             float cw = (span - gap * (n - 1)) / n;
             if (cw <= 0f) cw = span / n;
@@ -549,33 +1128,15 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void BuildCostChip(Transform parent, string token, float x0, float x1)
         {
-            var go = new GameObject("CostChip", typeof(Image));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(x0, 0.30f); rt.anchorMax = new Vector2(x1, 0.70f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var plate = go.GetComponent<Image>();
-            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementStat);
-            if (plateSprite != null)
-            {
-                plate.sprite = plateSprite;
-                plate.type = Image.Type.Sliced;
-                plate.color = Color.white;
-            }
-            else
-            {
-                plate.color = ElarionUiKit.Cell;
-                ElarionUiKit.ApplyRounded(plate);
-            }
-            plate.raycastTarget = false;
+            RectTransform chip = RoundedCard(parent, "CostChip",
+                new Vector2(x0, 0.28f), new Vector2(x1, 0.72f), PillFill, BorderDim, 1.5f);
 
             Sprite ic = CurrencyIconFor(token);
             float textX0 = 0.10f;
             if (ic != null)
             {
                 var ig = new GameObject("Icon", typeof(Image));
-                ig.transform.SetParent(go.transform, false);
+                ig.transform.SetParent(chip, false);
                 var irt = ig.GetComponent<RectTransform>();
                 irt.anchorMin = new Vector2(0.06f, 0.16f); irt.anchorMax = new Vector2(0.40f, 0.84f);
                 irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
@@ -584,10 +1145,8 @@ namespace DeNelle.Village.Buildings.Progression
                 textX0 = 0.44f;
             }
 
-            // With an icon the chip shows the NUMBER only (icon carries identity); without art,
-            // the whole token (number + name) so a chip is never a naked number.
             string shown = ic != null ? LeadingNumber(token) : token;
-            var lbl = ElarionUiKit.Label(go.transform, shown, 0f, 1f,
+            var lbl = ElarionUiKit.Label(chip, shown, 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontLabel,
                 ic != null ? TMPro.TextAlignmentOptions.MidlineLeft : TMPro.TextAlignmentOptions.Center,
                 textX0, 0.94f, bold: true);
@@ -595,39 +1154,18 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.FitSingleLine(lbl);
         }
 
-        // Grey/white kit CTA seated at the row's right edge. Built manually (NOT ElarionUiKit.Button)
-        // so the 112px min-touch guard cannot grow it out of the row; the row height is the target.
+        // Grey/white kit CTA seated at the row's right edge (Skills rows).
         private void BuildRowCta(Transform parent, string label, bool enabled, System.Action onClick)
         {
-            var go = new GameObject("RowCta", typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.815f, 0.16f); rt.anchorMax = new Vector2(0.985f, 0.84f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
+            var go = ElarionUiKit.AddImage(parent, "RowCta", new Vector2(0.815f, 0.16f), new Vector2(0.985f, 0.84f),
+                new Color(0.13f, 0.125f, 0.115f, 1f));
             var plate = go.GetComponent<Image>();
-            var gray = RpgUiCatalog.Get(RpgUiCatalog.RoleButton,
-                ElarionUiKit.ObsidianButtonSpriteName(ElarionUiKit.ObsidianButtonStyle.Style1,
-                                                      ElarionUiKit.ObsidianButtonColor.Gray));
-            if (gray != null)
-            {
-                plate.sprite = gray; plate.type = Image.Type.Sliced; plate.color = Color.white;
-            }
-            else
-            {
-                plate.color = ElarionUiKit.Cell;
-                ElarionUiKit.ApplyRounded(plate);
-                var outline = go.AddComponent<Outline>();
-                outline.effectColor = ElarionUiKit.ObsidianTrim;
-                outline.effectDistance = new Vector2(2f, 2f);
-            }
-
-            var btn = go.GetComponent<Button>();
+            var btn = go.AddComponent<Button>();
             btn.targetGraphic = plate;
             ElarionUiKit.StyleButtonColors(btn);
             SoftenButton(btn);
-            btn.interactable = enabled;   // disabled state greys via StyleButtonColors.disabledColor
-            btn.onClick.AddListener(() => onClick?.Invoke());
+            btn.interactable = enabled;
+            if (onClick != null) btn.onClick.AddListener(() => onClick());
 
             var lbl = ElarionUiKit.Label(go.transform, label, 0.05f, 0.95f,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
@@ -649,12 +1187,10 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.FitBlock(lbl);
         }
 
-        // ── Icon / glyph helpers ──────────────────────────────────────────────────
+        // ── Icon / string helpers ─────────────────────────────────────────────────
 
         private Sprite IconFor(ItemVM item)
         {
-            if (item.Id == BuildingUpgradeVM.VillageTierRowId)
-                return RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, "tier3");
             if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
                 return Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
             if (item.IconRole == BuildingUpgradeVM.IconRoleTier
@@ -670,19 +1206,25 @@ namespace DeNelle.Village.Buildings.Progression
             return 1;
         }
 
-        private static string TierGlyph(string id)
+        // "Tier 2 — Reinforced Blades" -> "Reinforced Blades"; "Level 3" -> "Level 3".
+        private static string CardName(ItemVM item)
         {
-            // "tier-3" -> "3"; anything else -> the crest glyph.
-            if (id != null && id.StartsWith("tier-"))
-            {
-                int dash = id.LastIndexOf('-');
-                string n = dash >= 0 && dash < id.Length - 1 ? id.Substring(dash + 1) : "";
-                return string.IsNullOrEmpty(n) ? "-" : n;
-            }
-            return ElarionUi.CrestGlyph;
+            string n = item.Name ?? "";
+            int em = n.IndexOf('—');   // em-dash the VM composes tier names with
+            if (em >= 0 && em < n.Length - 1) return n.Substring(em + 1).Trim();
+            int hy = n.IndexOf(" - ");
+            if (hy >= 0 && hy < n.Length - 3) return n.Substring(hy + 3).Trim();
+            return n;
         }
 
-        // The leading number of a cost token ("700 Wood" -> "700", "1.2m Crystals" -> "1.2m").
+        // "TIER 2" for a city tier / "LEVEL 3" for a resource level — derived from the VM's name.
+        private static string TierHeader(ItemVM item)
+        {
+            string n = item.Name ?? "";
+            if (n.StartsWith("Level")) return "LEVEL " + TierNumber(item.Id);
+            return "TIER " + TierNumber(item.Id);
+        }
+
         private static string LeadingNumber(string token)
         {
             if (string.IsNullOrEmpty(token)) return token;
@@ -690,7 +1232,6 @@ namespace DeNelle.Village.Buildings.Progression
             return sp > 0 ? token.Substring(0, sp) : token;
         }
 
-        // The currency icon for a cost token — the FIRST currency it names. Null when nothing matches.
         private static Sprite CurrencyIconFor(string costText)
         {
             if (string.IsNullOrEmpty(costText)) return null;
@@ -713,8 +1254,7 @@ namespace DeNelle.Village.Buildings.Progression
         private static void DressRowPlate(Image plateImg)
         {
             if (plateImg == null) return;
-            // Sprite-first ALWAYS (canon §5): the talent slot plate, ungated.
-            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, SlotTalentPlate);
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_talent_1");
             if (plate != null)
             {
                 plateImg.sprite = plate;
@@ -722,18 +1262,30 @@ namespace DeNelle.Village.Buildings.Progression
                 plateImg.color  = Color.white;
                 return;
             }
-            // Procedural fallback (art absent) — the row never blanks.
-            plateImg.color = ElarionUiKit.Cell;
+            plateImg.color = new Color(0.078f, 0.073f, 0.066f, 1f);
             ElarionUiKit.ApplyRounded(plateImg);
         }
 
-        // Smooth hover/press: keep the kit ColorTint block but give it a real fade (never snap).
         private static void SoftenButton(Button btn)
         {
             if (btn == null || btn.transition != Selectable.Transition.ColorTint) return;
             var colors = btn.colors;
             colors.fadeDuration = ButtonFadeSec;
             btn.colors = colors;
+        }
+
+        // ── Shared primitive: a clean rounded card = border image + inset fill image ──
+        // Returns the FILL RectTransform (content host); the bordered outer image is its parent.
+        private static RectTransform RoundedCard(Transform parent, string name, Vector2 min, Vector2 max,
+            Color fill, Color border, float borderPx)
+        {
+            var b = ElarionUiKit.AddImage(parent, name, min, max, border);   // outer = border ring
+            var f = ElarionUiKit.AddImage(b.transform, "Fill", Vector2.zero, Vector2.one, fill);
+            var frt = (RectTransform)f.transform;
+            frt.offsetMin = new Vector2(borderPx, borderPx);
+            frt.offsetMax = new Vector2(-borderPx, -borderPx);
+            f.GetComponent<Image>().raycastTarget = false;
+            return frt;
         }
 
         // ── Teardown ──────────────────────────────────────────────────────────────
@@ -753,22 +1305,22 @@ namespace DeNelle.Village.Buildings.Progression
             Unbind();
             _vm?.Dispose();
             _vm = null;
-            _chips.Clear();
+            _pills.Clear();
+            _tabs.Clear();
             _lastStatus = null;
             if (_ui != null)
             {
-                // Eased close: the dying canvas fades/scales out then destroys itself.
                 var fx = _ui.GetComponent<PanelOpenCloseFx>();
                 if (fx != null && fx.isActiveAndEnabled) fx.PlayCloseAndDestroy();
                 else Destroy(_ui);
             }
             _ui = null;
             _bodyHost = null;
-            _upgradeContent = null;
-            _skillsContent = null;
             _upgradePage = null;
             _skillsPage = null;
-            _tabRow = null;
+            _pathCardsHost = null;
+            _detailHost = null;
+            _skillsContent = null;
             PanelManager.NotifyClosed(_panelHandle);
         }
 
