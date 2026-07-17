@@ -104,11 +104,23 @@ namespace DeNelle.Village
             int nextWaves = svc != null ? svc.WavesUntilNextEcho : 0;
             float progress = svc != null ? svc.NextEchoProgress : 0f;
             double mult = svc != null ? svc.GlobalHarvestMultiplier : 1.0;
+            int perEcho = svc != null ? Mathf.Max(1, svc.WavesPerEcho) : 5;
 
-            // Header count + next-echo ETA.
-            string etaText = owned >= max
-                ? $"Echoes {owned}/{max}   -   Roster complete!"
-                : $"Echoes {owned}/{max}   -   Next Echo in {nextWaves} wave{(nextWaves == 1 ? "" : "s")}";
+            // Empty or just-the-starter -> lead FRIENDLY (never a cold/blank/broken grid).
+            bool firstRun = owned <= 1;
+            // The cadence the invite copy names: the real "waves until next", but never 0
+            // (fall back to the per-echo cadence when the service is absent so the invitation
+            // always shows a real, honest number -- read from EchoService, not hardcoded).
+            int wavesToNext = nextWaves > 0 ? nextWaves : perEcho;
+
+            // Header count + next-echo ETA. First-run reads as an inviting GOAL, not a cold stat.
+            string etaText;
+            if (owned >= max)
+                etaText = $"Echoes {owned}/{max}   -   Roster complete!";
+            else if (firstRun)
+                etaText = $"Echoes {owned}/{max}   -   {wavesToNext} more wave{(wavesToNext == 1 ? "" : "s")} to your next spirit";
+            else
+                etaText = $"Echoes {owned}/{max}   -   Next Echo in {nextWaves} wave{(nextWaves == 1 ? "" : "s")}";
             ElarionUiKit.Label(content, etaText, 0.905f, 0.965f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
@@ -117,15 +129,40 @@ namespace DeNelle.Village
                 new Vector2(0.12f, 0.862f), new Vector2(0.88f, 0.895f), withValue: false);
             if (bar.fill != null) { bar.fill.color = LifeGreen; bar.fill.fillAmount = progress; }
 
-            // Honest shared perk (WO-709 quadratic): each Echo speeds ALL harvest.
-            ElarionUiKit.Label(content,
-                $"Each Echo speeds ALL harvest -- now x{mult:0.#} to every node's yield.",
-                0.805f, 0.855f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                TextAlignmentOptions.Center, 0.04f, 0.96f, bold: false);
+            // Honest shared perk (WO-709 quadratic): each Echo speeds ALL harvest. Hidden in the
+            // true-empty state (no live multiplier to boast yet -- the hero hint carries the promise).
+            if (owned > 0)
+            {
+                ElarionUiKit.Label(content,
+                    $"Each Echo speeds ALL harvest -- now x{mult:0.#} to every node's yield.",
+                    0.805f, 0.855f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                    TextAlignmentOptions.Center, 0.04f, 0.96f, bold: false);
+            }
 
-            // 3x2 grid of the 6 spirits.
+            // TRUE-EMPTY branch (owned == 0). Defensive: EchoService.EchoCount floors at 1 TODAY so
+            // this is unreachable now, but the owner may later let Echoes start at 0 -- when that
+            // happens we must show a single centered, friendly awaken hint as the hero element, NOT
+            // a bare grid of 6 locked cards that reads as broken.
+            if (owned <= 0)
+            {
+                FlowTrace.Step("Echo", "Roster EMPTY (owned 0) -- showing centered awaken hint (no bare locked grid).");
+                BuildEmptyHint(content, wavesToNext, perEcho);
+                return;
+            }
+
+            // FIRST-RUN (owned == 1): lead with an inviting hint banner, then the grid below it.
+            float gridTop = 0.775f;
+            if (firstRun)
+            {
+                var starter = EchoRosterCatalog.ByIndex(owned - 1);
+                string starterName = starter != null ? starter.DisplayName : "Your first spirit";
+                FlowTrace.Step("Echo", $"Roster FIRST-RUN (owned {owned}) -- leading with awaken hint above the grid.");
+                BuildFirstRunHint(content, starterName, wavesToNext);
+                gridTop = 0.62f;   // slide the grid down into the free lower space to make room
+            }
+
+            // 3x2 grid of the 6 spirits (kept intact for when Echoes ARE owned).
             var roster = EchoRosterCatalog.All;
-            int perEcho = svc != null ? Mathf.Max(1, svc.WavesPerEcho) : 5;
             Guard.TryEach("Echo", "build roster card", roster, entry =>
             {
                 int index = entry.Order - 1;                 // 0-based
@@ -133,12 +170,66 @@ namespace DeNelle.Village
                 int row = index / 3;
                 float x0 = 0.05f + col * 0.315f;
                 float x1 = x0 + 0.29f;
-                float y1 = 0.775f - row * 0.275f;            // row0 top
+                float y1 = gridTop - row * 0.275f;            // row0 top
                 float y0 = y1 - 0.245f;
                 bool isOwned = index < owned;
                 BuildCard(content, entry, index, isOwned, perEcho,
                           new Vector2(x0, y0), new Vector2(x1, y1));
             });
+        }
+
+        // -- friendly empty / first-run hints -----------------------------------
+
+        /// <summary>First-run banner (owned == 1): warm, inviting copy that frames the "next
+        /// Echo" as a goal, sitting ABOVE the compressed grid. State carried in TEXT, never hue
+        /// (colorblind-safe). Cadence number is read live, never hardcoded.</summary>
+        private void BuildFirstRunHint(Transform content, string starterName, int wavesToNext)
+        {
+            var panel = ElarionUiKit.Panel(content,
+                new Vector2(0.07f, 0.635f), new Vector2(0.93f, 0.80f), deep: false, innerRim: true);
+            var t = panel.transform;
+
+            ElarionUiKit.Label(t, starterName + " has answered your call.",
+                0.58f, 0.94f, ElarionUi.Gilt, ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+
+            string body = "It gathers for you now. Hold the line at Elarion -- clear "
+                        + wavesToNext + " more wave" + (wavesToNext == 1 ? "" : "s")
+                        + " and the Heart will awaken your next Echo to speed every harvest.";
+            var b = ElarionUiKit.Label(t, body, 0.06f, 0.56f,
+                ElarionUi.Parchment, ElarionUi.FontLabel,
+                TextAlignmentOptions.Center, 0.06f, 0.94f, bold: false);
+            b.textWrappingMode = TextWrappingModes.Normal;
+        }
+
+        /// <summary>True-empty hero hint (owned == 0): one centered, inviting card telling the
+        /// player HOW to earn their first Echo -- shown INSTEAD of a bare locked grid so the panel
+        /// never reads as broken. Cadence numbers read live from EchoService, never hardcoded.</summary>
+        private void BuildEmptyHint(Transform content, int wavesToNext, int perEcho)
+        {
+            var panel = ElarionUiKit.Panel(content,
+                new Vector2(0.14f, 0.30f), new Vector2(0.86f, 0.74f), deep: true, innerRim: true);
+            var t = panel.transform;
+
+            ElarionUiKit.Label(t, "The Tree sleeps.",
+                0.74f, 0.93f, ElarionUi.Gilt, ElarionUi.FontHead,
+                TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+
+            string body = "Defend Elarion's waves and the Heart will awaken a spirit to gather for you. "
+                        + "Clear " + wavesToNext + " wave" + (wavesToNext == 1 ? "" : "s")
+                        + " to call your first Echo.";
+            var b = ElarionUiKit.Label(t, body, 0.24f, 0.70f,
+                ElarionUi.Parchment, ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0.08f, 0.92f, bold: false);
+            b.textWrappingMode = TextWrappingModes.Normal;
+
+            var faint = ElarionUiKit.Label(t,
+                "Six spirits wait beyond the veil -- one awakens for every " + perEcho + " waves you hold.",
+                0.06f, 0.22f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                TextAlignmentOptions.Center, 0.06f, 0.94f, bold: false);
+            faint.textWrappingMode = TextWrappingModes.Normal;
+
+            FlowTrace.Step("Echo", $"Empty-hint built (call first Echo in {wavesToNext} waves; cadence {perEcho}).");
         }
 
         private void BuildCard(Transform content, EchoRosterEntry entry, int index,
@@ -215,7 +306,11 @@ namespace DeNelle.Village
         private static int OwnedCount()
         {
             var svc = EchoService.Instance;
-            return svc != null ? Mathf.Clamp(svc.EchoCount, 1, MaxEchoes()) : 1;
+            // Clamp the LOW bound to 0 (not 1) so a future 0-owned state (the owner may later let
+            // Echoes start at 0) flows into the friendly empty hint instead of a bare grid.
+            // EchoService.EchoCount floors at 1 today, so this is byte-identical now -- purely
+            // defensive per the empty-state contract. Null service still defaults to 1 (show starter).
+            return svc != null ? Mathf.Clamp(svc.EchoCount, 0, MaxEchoes()) : 1;
         }
 
         private static int MaxEchoes()
