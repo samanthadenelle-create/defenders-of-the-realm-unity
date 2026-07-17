@@ -110,6 +110,18 @@ namespace DeNelle.Editor
             // holds. COLORBLIND-SAFE (owner red/green): reads by MOTION + LUMINANCE (a slow
             // rotating rune ring), the violet is only a hint. Attached in DungeonWorldPortalSpawner.
             { "Dungeon_Portal_Gate",    new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
+            // Heart-of-Elarion + founding-Echo ambient AURA (owner 2026-07-16 "the aura on the
+            // tree/echo renders as ugly white squares"). VFXType.Aura_HeartPulse BRIDGES to this
+            // key (VFXManager._hovlKeyForType), so BOTH HeartAuraController (the tree nucleus) and
+            // EchoSpiritPresentation (the floating spirit) render this REAL soft glow loop instead of
+            // the textureless procedural billboard-square fallback. "Buff white twist" is the
+            // documented companion-ambient aura (Docs/VFX/HovlStudio_Inventory.md #25) -- a soft
+            // NEUTRAL-WHITE VOLUMETRIC glow (not a flat ground rune ring), so it fits an airborne
+            // nucleus better than the Magic-circle loop. COLORBLIND-SAFE (owner red/green): reads by
+            // MOTION + LUMINANCE (a slow rising glow), neutral white carries no color meaning (matches
+            // HeartAuraController's fixed warm-white law). Recolorable ON but PlayAura passes no tint,
+            // so it stays neutral. Loop -> PlayKey returns a VFXHandle each controller Stop()s.
+            { "Aura_HeartPulse",        new Pick(RPG + "Buff white twist.prefab", poolSize: 4, recolorable: true, isLoop: true) },
 
             // ── Frost (fly + impact) ──────────────────────────────────────────
             { "Frost_Projectile",       new Pick(AAA + "Projectile VFX loop/Projectile 26 blue diamond.prefab", isLoop: true) },

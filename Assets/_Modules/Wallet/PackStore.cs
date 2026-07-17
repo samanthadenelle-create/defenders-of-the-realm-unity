@@ -142,8 +142,9 @@ namespace DeNelle.Wallet
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("Store", "EnsureBuilt (kit modal)");
 
+            // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
             _modal = ElarionUiKit.BuildObsidianModal("PackStoreUI", "Realm Store",
-                new Vector2(0.14f, 0.05f), new Vector2(0.86f, 0.95f), CloseStore,
+                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, CloseStore,
                 frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
 
             if (_modal == null || _modal.canvas == null)

@@ -354,8 +354,10 @@ namespace DeNelle.Village.Hero
             // on 16:9 ≈ 672x1004px (aspect ~0.669) renders the frame TALL like template.png; the body
             // content below is fraction-anchored inside layout.body, so the two columns re-flow into
             // tall/narrow portrait columns automatically.
+            // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
+            // These portrait values ARE the shared StorePanel rect the kit exposes.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Party Shop",
-                new Vector2(0.325f, 0.035f), new Vector2(0.675f, 0.965f), () => _vm?.Close(),
+                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "sword");
             var panel = chrome.content.transform;

@@ -483,6 +483,26 @@ namespace DeNelle.Village
                 }
             }
 
+            // Bridge: some VFXType loops have NO VFXType-catalog prefab but DO have a
+            // curated Hovl loop wired by string key (Aura_HeartPulse -> "Aura_HeartPulse",
+            // a soft glow loop). Prefer the real pooled Hovl effect over the textureless
+            // procedural fallback (which renders as bare additive billboard SQUARES, not a
+            // glow). BOTH the Heart-of-Elarion tree aura and the founding-Echo aura route
+            // here via PlayAura(Aura_HeartPulse), so this one bridge fixes both.
+            if (TryGetHovlKeyForType(type, out var hovlKey))
+            {
+                var bridged = PlayKeyInternal(hovlKey, position, default, parent, null, 0f, 0f, null);
+                if (bridged != null)
+                {
+                    FlowTrace.Step("VFXManager",
+                        $"PlayLoop('{type}') resolved via Hovl key '{hovlKey}' (real pooled glow loop, not procedural).");
+                    return bridged;
+                }
+                FlowTrace.Warn("VFXManager",
+                    $"PlayLoop('{type}'): Hovl bridge key '{hovlKey}' present but PlayKey returned null " +
+                    "(loop cap hit or catalog/prefab missing) -- falling to the soft procedural loop.");
+            }
+
             // Procedural fallback for loop — create a placeholder and return a handle to it.
             var fallback = ProceduralLoopFallback(type, position, parent);
             return fallback != null ? new VFXHandle(fallback, type) : null;
@@ -1160,6 +1180,18 @@ namespace DeNelle.Village
                 {
                     var glowMat = new Material(glowShader) { name = $"EchoAura_{type}_URP" };
                     AbilityVfxKit.ConfigureUrpParticleTransparency(glowMat, additive: true);
+                    // SQUARE-BILLBOARD FIX: a bare additive material with NO texture draws each
+                    // particle as a hard WHITE/tinted SQUARE quad (the reported "ugly white squares"),
+                    // not a glow. Feed the shared soft round glow sprite so the fallback reads as a
+                    // soft radial glow. Mirror ApplyParticleMaterial's _BaseMap handling (URP
+                    // Particles/Unlit samples _BaseMap and has no _MainTex -> writing the alias spams
+                    // the console). Primary fix is the Hovl bridge above; this only runs if that misses.
+                    var softDot = AbilityVfxKit.SoftDotTexture;
+                    if (softDot != null)
+                    {
+                        if (glowMat.HasProperty("_BaseMap")) glowMat.SetTexture("_BaseMap", softDot);
+                        else glowMat.mainTexture = softDot;
+                    }
                     psr.material = glowMat;
                 }
                 else

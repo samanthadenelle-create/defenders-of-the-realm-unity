@@ -288,8 +288,9 @@ namespace DeNelle.Village.Hero
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
             // Replaces the old backdrop + brown PanelFramed + per-vendor solidFill. The header text
             // comes from the VM (vm.Title) — set after Bind in Render via _headerLabel.
+            // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Vendor Wares",
-                new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
+                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "coin");
             var panel = chrome.content.transform;

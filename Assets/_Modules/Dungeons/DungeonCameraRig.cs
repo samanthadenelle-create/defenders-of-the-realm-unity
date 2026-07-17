@@ -28,6 +28,7 @@
 // No async flows — camera framing is per-frame, handled by Cinemachine itself.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -45,9 +46,22 @@ namespace DeNelle.Dungeons
         // ── Tuning — isometric framing ───────────────────────────────────────
 
         [Header("Isometric framing")]
-        [Tooltip("World-space offset of the camera from the Keeper. The default " +
-                 "is high and pulled back along -Z for the spec's top-down tilt.")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 13f, -9f);
+        [Tooltip("World-space offset of the camera from the Keeper. Pulled back " +
+                 "along -Z and up for the spec's top-down tilt. NOTE: the rooms are " +
+                 "enclosed with a ~4u-tall ceiling (DungeonSceneBuilder.WallHeight), " +
+                 "so a very high offset floats the camera far ABOVE the roof and reads " +
+                 "as 'looking over the top'. The height is capped at bind time by " +
+                 "MaxHeightAboveHero so a stale/high serialized value is brought in " +
+                 "to a framed dungeon-iso view (owner felt-test 2026-07-16).")]
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 9f, -6.25f);
+
+        [Tooltip("Hard cap on how far ABOVE the Keeper the camera may sit (world " +
+                 "units). Rooms have a ~4u ceiling; ~9u keeps the rig just over the " +
+                 "roofline for a framed dungeon-iso look instead of a distant bird's " +
+                 "-eye. When the authored offset exceeds this, the whole offset is " +
+                 "scaled down proportionally so the iso ANGLE is preserved — only the " +
+                 "distance tightens. Owner-tunable; raise for a wider room view.")]
+        [SerializeField] private float _maxHeightAboveHero = 9f;
 
         [Tooltip("Camera pitch in degrees — the isometric down-tilt. ~52° looks " +
                  "down at the floor while keeping wall faces and the hero readable.")]
@@ -164,13 +178,23 @@ namespace DeNelle.Dungeons
             // Fixed down-tilt: with no Aim stage Cinemachine preserves this.
             transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
 
-            // Seat the camera at the authored offset immediately so the first
+            // Cap the height so the rig never floats far above the ~4u room
+            // ceiling (the "camera stays overtop / too high" felt-bug). Preserves
+            // the iso angle by scaling the whole offset down proportionally.
+            Vector3 off = EffectiveOffset();
+
+            // Seat the camera at the (capped) offset immediately so the first
             // frame is already framed (no visible snap-in on scene load).
-            transform.position = hero.position + _followOffset;
+            transform.position = hero.position + off;
+
+            FlowTrace.Step("DungeonCam",
+                $"ApplyFraming: target='{hero.name}' authored={_followOffset} " +
+                $"effective={off} (cap={_maxHeightAboveHero}) pitch={_pitch} yaw={_yaw} " +
+                $"heroPos={hero.position} camPos={transform.position}.");
 
             if (_follow != null)
             {
-                _follow.FollowOffset = _followOffset;
+                _follow.FollowOffset = off;
 
                 // Position damping for a steady chase. Binding mode is left at
                 // the CinemachineFollow default; a WorldSpace override is a
@@ -179,6 +203,24 @@ namespace DeNelle.Dungeons
                 settings.PositionDamping = _positionDamping;
                 _follow.TrackerSettings = settings;
             }
+        }
+
+        /// <summary>
+        /// The authored offset with its height capped at
+        /// <see cref="_maxHeightAboveHero"/>. When the authored height exceeds the
+        /// cap the whole offset is scaled down uniformly, so the isometric ANGLE is
+        /// preserved and only the distance tightens — the fix for a rig floating far
+        /// above the low room ceiling ("camera overtop / too high", owner 2026-07-16).
+        /// </summary>
+        private Vector3 EffectiveOffset()
+        {
+            Vector3 o = _followOffset;
+            if (_maxHeightAboveHero > 0.01f && o.y > _maxHeightAboveHero)
+            {
+                float scale = _maxHeightAboveHero / o.y;
+                o = new Vector3(o.x * scale, _maxHeightAboveHero, o.z * scale);
+            }
+            return o;
         }
 
         /// <summary>Pushes the FOV / projection choice into the camera lens.</summary>

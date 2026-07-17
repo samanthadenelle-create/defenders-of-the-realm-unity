@@ -83,6 +83,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: Aura_HeartPulse
+    Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
+    PoolSize: 4
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Frost_Projectile
     Prefab: {fileID: 6541143317491470949, guid: 208001a3c01dcb04f88030495297a6ad, type: 3}
     PoolSize: 6

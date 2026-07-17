@@ -254,8 +254,9 @@ namespace DeNelle.HUD
             // PORTRAIT sizing (UI review 05): Merchant_Panel is a PORTRAIT frame (~1005x1507). Anchor
             // to a narrow, tall center column so the rendered aspect matches the template instead of
             // stretching the ornate frame into a landscape slab.
+            // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
             _modal = ElarionUiKit.BuildObsidianModal("CosmeticShopUI", "Cosmetic Shop",
-                new Vector2(0.33f, 0.05f), new Vector2(0.67f, 0.95f), CloseOverlay,
+                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, CloseOverlay,
                 frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
 
             var layout = _modal.chrome.layout;

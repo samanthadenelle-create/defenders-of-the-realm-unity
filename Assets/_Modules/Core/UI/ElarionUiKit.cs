@@ -492,6 +492,18 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// SHARED store/shop modal rect — EVERY purchase panel (Realm Store, Vendor Wares,
+        /// Party Shop/Forge, Cosmetic Shop) opens at THIS one size so they all match (owner
+        /// felt-test 2026-07-15: "all stores the same size, scaled to matching Y height").
+        /// Portrait ~0.35w x 0.93h (aspect ~0.667) to match the shared FrameMerchant art:
+        /// BuildObsidianPanel draws the frame Image.Type.Simple (stretched to the rect), so a
+        /// wide rect stretches the portrait art into a landscape slab. Reference these two
+        /// constants instead of per-panel literals so the store sizes can never drift apart.
+        /// </summary>
+        public static readonly Vector2 StorePanelAnchorMin = new Vector2(0.325f, 0.035f);
+        public static readonly Vector2 StorePanelAnchorMax = new Vector2(0.675f, 0.965f);
+
+        /// <summary>
         /// THE canonical panel chrome: a near-black panel with a GOLD TRIM border, a gold header
         /// title, and ONE standard Close button — created here ONCE and reused by every panel (DRY).
         /// Parent it under your modal canvas (build that with <see cref="BuildModalCanvas"/> +

@@ -110,6 +110,27 @@ namespace DeNelle.Village
         private readonly Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient> _hovlAuthoredStartColor
             = new Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient>();
 
+        // ── VFXType -> Hovl string-key bridge (aura wiring) ──────────────────────
+        // A few VFXType LOOPS have no VFXType-catalog (VFXCatalog.asset) prefab but a
+        // curated Hovl loop wired by string key in the HovlVfxCatalog. PlayLoop consults
+        // this map BEFORE the procedural fallback, so the real pooled Hovl glow plays
+        // instead of the textureless additive billboard SQUARES the procedural system
+        // draws. Aura_HeartPulse is shared by BOTH HeartAuraController (the Heart-of-
+        // Elarion tree nucleus) and EchoSpiritPresentation (the founding-Echo spirit) --
+        // both call PlayAura(Aura_HeartPulse) -- so one bridge row fixes both auras.
+        // Add a row here (+ the matching key in HovlVfxCatalogGenerator.Map + a catalog
+        // regen) to route any other unwired VFXType loop to a Hovl prefab.
+        private static readonly Dictionary<VFXType, string> _hovlKeyForType
+            = new Dictionary<VFXType, string>
+            {
+                { VFXType.Aura_HeartPulse, "Aura_HeartPulse" },
+            };
+
+        /// <summary>True + the Hovl catalog key when <paramref name="type"/> should
+        /// resolve through the string-keyed Hovl path instead of the VFXType pool.</summary>
+        private static bool TryGetHovlKeyForType(VFXType type, out string key)
+            => _hovlKeyForType.TryGetValue(type, out key);
+
         // ── Catalog load / pool pre-warm ─────────────────────────────────────────
 
         private void EnsureHovlCatalog()

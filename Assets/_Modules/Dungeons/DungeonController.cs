@@ -122,12 +122,23 @@ namespace DeNelle.Dungeons
         [SerializeField] private float _heroBaselineMana = 60f;
 
         [Header("Camera framing (top-down isometric)")]
-        [Tooltip("Camera offset from the hero, world units. The default gives the " +
-                 "spec's top-down isometric tilt (high, pulled back, looking down).")]
-        [SerializeField] private Vector3 _cameraOffset = new Vector3(0f, 13f, -9f);
+        [Tooltip("Camera offset from the hero, world units. Gives the spec's " +
+                 "top-down isometric tilt (pulled back + up, looking down). Capped " +
+                 "at bind time by CameraMaxHeightAboveHero so the rig sits just over " +
+                 "the ~4u room ceiling, not far above it (owner felt-test 2026-07-16).")]
+        [SerializeField] private Vector3 _cameraOffset = new Vector3(0f, 9f, -6.25f);
 
         [Tooltip("Camera pitch in degrees — the isometric down-tilt.")]
         [SerializeField] private float _cameraPitch = 52f;
+
+        /// <summary>
+        /// Hard cap on how far above the hero the inline follow camera may sit
+        /// (world units). The rooms carry a ~4u ceiling (DungeonSceneBuilder.
+        /// WallHeight); ~9u keeps the rig just over the roofline for a framed
+        /// dungeon-iso look. Mirrors DungeonCameraRig._maxHeightAboveHero so both
+        /// camera paths behave identically. Owner-tunable via that rig field.
+        /// </summary>
+        private const float CameraMaxHeightAboveHero = 9f;
 
         [Header("Audio")]
         [Tooltip("Looping dungeon ambient BGM source — echoes-beneath-elarion.mp3 " +
@@ -414,10 +425,13 @@ namespace DeNelle.Dungeons
         {
             if (_hero == null) return;
 
-            // Preferred path: the camera rig component self-configures.
+            // Preferred path: the camera rig component self-configures (it owns
+            // the ceiling-aware height cap — see DungeonCameraRig.EffectiveOffset).
             if (_cameraRig != null)
             {
                 _cameraRig.Bind(_hero);
+                FlowTrace.Step("DungeonCam",
+                    $"ConfigureCamera: bound via DungeonCameraRig (target='{_hero.name}').");
             }
             else if (_followCamera != null)
             {
@@ -427,16 +441,30 @@ namespace DeNelle.Dungeons
                 // for (no orbit, no free-look — that is the village rig).
                 _followCamera.LookAt = null;
 
-                // Seat the camera at the authored isometric offset behind + above
+                // Cap the height so the camera never floats far above the ~4u room
+                // ceiling ("camera overtop / too high", owner 2026-07-16). Scale the
+                // whole offset uniformly so the iso ANGLE holds and only distance tightens.
+                Vector3 off = _cameraOffset;
+                if (off.y > CameraMaxHeightAboveHero && off.y > 0.01f)
+                {
+                    float scale = CameraMaxHeightAboveHero / off.y;
+                    off = new Vector3(off.x * scale, CameraMaxHeightAboveHero, off.z * scale);
+                }
+
+                // Seat the camera at the (capped) isometric offset behind + above
                 // the hero, tilted down. CinemachineFollow eases it along.
                 var camTransform = _followCamera.transform;
-                camTransform.position = _hero.position + _cameraOffset;
+                camTransform.position = _hero.position + off;
                 camTransform.rotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+
+                FlowTrace.Step("DungeonCam",
+                    $"ConfigureCamera: inline follow — authored={_cameraOffset} effective={off} " +
+                    $"(cap={CameraMaxHeightAboveHero}) pitch={_cameraPitch} target='{_hero.name}'.");
 
                 var follow = _followCamera.GetComponent<CinemachineFollow>();
                 if (follow != null)
                 {
-                    follow.FollowOffset = _cameraOffset;
+                    follow.FollowOffset = off;
                     var settings = follow.TrackerSettings;
                     settings.PositionDamping = new Vector3(1.4f, 1.4f, 1.4f);
                     follow.TrackerSettings = settings;
