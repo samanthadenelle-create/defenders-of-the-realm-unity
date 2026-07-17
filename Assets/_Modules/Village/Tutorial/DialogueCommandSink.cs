@@ -150,6 +150,9 @@ namespace DeNelle.Village
                 // ── Pets → PetDeployer / PetAcquisitionService ────────────────────
                 case "spawn_starting_pet": EnsurePetDeployer()?.DeployStarterPets(); break;
                 case "spawn_named_pet":    SpawnNamedPet(a0); break;
+                // Pet engagement task pick (Harvest/Repair) — the "pet_task" verb fires from
+                // the code-built PetTaskController prompt; route the choice back to the pet.
+                case "pet_task":           PetTaskController.ApplyEngagementChoice(a0); break;
 
                 // ── Camera → SmartMobileCamera (synchronous; no auto-restore hold) ─
                 case "camera_focus":

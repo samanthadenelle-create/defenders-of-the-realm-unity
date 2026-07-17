@@ -128,6 +128,15 @@ namespace DeNelle.Village
         /// <summary>(Re)spawn the wisp ring when the active scene is a hub. Idempotent per count.</summary>
         private void RebuildIfHub(string reason)
         {
+            // SCRAPPED (owner felt-test 2026-07-17): "Echoes are portrait-card spirits, NOT 3D
+            // models." The visible floating wisp BODIES are retired -- echoes now live as portrait
+            // cards (EchoUnlockDialogue + EchoRosterView, opened by the HUD "Pets" button). We keep
+            // this injector inert (never spawns a body) rather than deleting it, so the abstract
+            // EchoService workforce/silo is untouched. Any previously-built wisps are cleared.
+            Clear();
+            FlowTrace.Step("Echo", $"WispInjector: wisp bodies SCRAPPED (echoes are portrait cards now); no 3D echo body spawned ({reason}).");
+            return;
+#pragma warning disable CS0162 // unreachable-by-design: the spawn path is retained (dormant) for reference only
             string scene = SceneManager.GetActiveScene().name;
             if (!HubScenes.IsHub(scene)) { Clear(); return; }
             var svc = EchoService.Instance;
@@ -148,6 +157,7 @@ namespace DeNelle.Village
             _builtForCount = count;
             FlowTrace.Step("Echo",
                 $"WispInjector: {built}/{count} echo wisp(s) spawned in '{scene}' ({reason}).");
+#pragma warning restore CS0162
         }
 
         private void Clear()

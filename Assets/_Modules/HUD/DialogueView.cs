@@ -61,6 +61,7 @@ namespace DeNelle.HUD
         private bool _pixelBandsApplied;
         private float _maxBodyPx = 460f;   // recomputed from the original rect height on first paint
         private float _lastPanelH = -1f;
+        private bool _reserveCloseBand;    // set per-Repaint: true only when the shared Close is visible
 
         // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
         // (mirrors RumorBoardPanel) so the click-guard classifies its TapAdvance
@@ -520,6 +521,10 @@ namespace DeNelle.HUD
             bool showClose = !_vm.ShowingOptions && !showContinue;
             if (_tapHint != null) _tapHint.SetActive(showContinue);
             if (_close != null) _close.gameObject.SetActive(showClose);
+            // ResizeToContent reserves the tall Close band ONLY when the Close is actually shown —
+            // a normal passage (close=False) collapses it to a thin margin so the box hugs the text
+            // instead of leaving a 132px empty void below it (owner F8 2026-07-17 "empty box").
+            _reserveCloseBand = showClose;
             string arb = "action arb: continue=" + showContinue + " close=" + showClose +
                 " options=" + _vm.ShowingOptions;
             if (arb != _lastActionArb)
@@ -559,7 +564,19 @@ namespace DeNelle.HUD
             // 36 speaker + 26 affiliation + letterboxed portrait; footer: the 120px shared Close +
             // margin) so the BODY is the dominant zone of the box.
             const float TopPad = 18f, HeaderPx = 108f, Gap = 10f;
-            const float BottomBandPx = 132f;   // clears the fixed 120px shared Close band + 12px margin
+            const float BottomBandPx = 132f;   // clears the fixed 120px shared Close band + 12px margin (Close SHOWN)
+            // OWNER F8 2026-07-17 ("still scroll issue in window" + big empty box): for a normal
+            // passage the Close is HIDDEN (action arb close=False), so the 132px band below the text
+            // was an empty black void (~39% of a 336px box). Collapse it to a thin border margin when
+            // the Close is not shown so the text well fills the box.
+            const float BottomMarginPx = 24f;  // clears the frame's bottom border art (~5% of panel)
+            // OWNER F8 2026-07-17 ("still scroll issue"): the scroll WELL's content is the raw text
+            // PLUS the kit scroll column's own vertical padding (MakeScrollZone padding:8 -> 8 top +
+            // 8 bottom = 16px). Sizing the viewport to the bare text left the content 16px taller than
+            // the viewport, so a 2-line reply scrolled + clipped its 2nd line (break-log: resize
+            // contentH=68 -> 68px viewport while the well content was ~84px). Add the pad (+4px so the
+            // content can never equal/exceed the viewport -> the auto-hide scrollbar stays hidden).
+            const float BodyWellPadPx = 20f;   // 16px MakeScrollZone padding + 4px no-overflow margin
             const float MinBodyPx = 54f;       // one 30px reading line + padding
             // OWNER F8 2026-07-16 ("the text box should use the FULL dialog box"): the kit FrameCore
             // body zone is inset ~5.5% each side (0.055..0.945), so the text/plate read as a small
@@ -635,16 +652,27 @@ namespace DeNelle.HUD
                 Canvas.ForceUpdateCanvases();
             }
 
-            // Measure the body's preferred height at its (height-independent) current width.
+            // Measure the body's preferred height at its (height-independent) current width, then add
+            // the scroll well's own padding so the VIEWPORT is sized to the FULL well content (text +
+            // padding) — otherwise the content overflows the viewport by the padding and the auto-hide
+            // scrollbar appears + clips the last line (the recurring defect; break-log proof above).
             float w = _body.rectTransform.rect.width;
             if (w < 1f) w = 380f;
             float textPx = _body.GetPreferredValues(_body.text ?? "", w, 0f).y;
+            float textWellPx = textPx > 0f ? textPx + BodyWellPadPx : 0f;
             float optionsPx = 0f;
             if (_vm != null && _vm.ShowingOptions && _optionsCol != null)
                 optionsPx = LayoutUtility.GetPreferredHeight(_optionsCol);
-            float contentPx = textPx + (optionsPx > 0f ? optionsPx + 12f : 0f);
+            float contentPx = textWellPx + (optionsPx > 0f ? optionsPx + 12f : 0f);
             float bodyPx = Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx);
-            float panelH = TopPad + HeaderPx + Gap + bodyPx + BottomBandPx;
+
+            // Bottom band: reserve the tall Close band ONLY when the Close is shown; a normal passage
+            // collapses it to a thin margin so the box hugs the text (no empty void). Re-pin the body
+            // zone's bottom inset to match so the viewport (= body zone) grows into the reclaimed space.
+            float band = _reserveCloseBand ? BottomBandPx : BottomMarginPx;
+            if (_bodyZone != null && Mathf.Abs(_bodyZone.offsetMin.y - band) > 0.5f)
+                _bodyZone.offsetMin = new Vector2(_bodyZone.offsetMin.x, band);
+            float panelH = TopPad + HeaderPx + Gap + bodyPx + band;
 
             if (Mathf.Abs(panelH - _lastPanelH) > 0.5f)
             {
@@ -652,9 +680,9 @@ namespace DeNelle.HUD
                 _box.anchoredPosition = new Vector2(_box.anchoredPosition.x, 0f);
                 _lastPanelH = panelH;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", string.Format(
-                    "resize contentH={0:F0} (text={1:F0} opts={2:F0}) -> panelH={3:F0} (min {4:F0}/max {5:F0})",
-                    contentPx, textPx, optionsPx, panelH,
-                    TopPad + HeaderPx + Gap + MinBodyPx + BottomBandPx,
+                    "resize contentH={0:F0} (text={1:F0} well={2:F0} opts={3:F0}) -> panelH={4:F0} band={5:F0} (min {6:F0}/max {7:F0})",
+                    contentPx, textPx, textWellPx, optionsPx, panelH, band,
+                    TopPad + HeaderPx + Gap + MinBodyPx + BottomMarginPx,
                     TopPad + HeaderPx + Gap + _maxBodyPx + BottomBandPx));
             }
         }

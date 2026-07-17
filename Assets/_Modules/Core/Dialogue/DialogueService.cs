@@ -68,6 +68,39 @@ namespace DeNelle.Core.Dialogue
             return true;
         }
 
+        /// <summary>
+        /// Play a CODE-BUILT dialogue def directly, without a DialogueCatalog id (the
+        /// def is constructed in code — e.g. a runtime pet-engagement prompt). Same
+        /// flow as <see cref="Play"/>: the View (subscribed to <see cref="Opened"/>)
+        /// builds + binds its panel BEFORE the first line fires; commands route through
+        /// the registered sink exactly as for a catalog dialogue. Returns false on a
+        /// null def. Additive — the catalog <see cref="Play"/> path is unchanged, and
+        /// this reuses the SAME DialogueView (no new UI, no UXML).
+        /// </summary>
+        public static bool PlayDef(DialogueDef def)
+        {
+            if (def == null)
+            {
+                FlowTrace.Warn("Dialogue", "PlayDef: null def.");
+                return false;
+            }
+            var vm = new DialogueViewModel();
+            ActiveVm = vm;
+            string dialogueId = string.IsNullOrEmpty(def.Id) ? "runtime" : def.Id;
+            vm.Closed += () =>
+            {
+                if (ReferenceEquals(ActiveVm, vm)) ActiveVm = null;
+                Ended?.Invoke();
+                EndedWithId?.Invoke(dialogueId);
+            };
+
+            FlowTrace.Step("Dialogue", $"PlayDef '{dialogueId}' (runtime code-built def).");
+            Opened?.Invoke(vm);              // View builds + binds BEFORE the first line fires
+            Started?.Invoke();               // engine-wide "dialogue on" signal (input suppression etc.)
+            vm.Begin(def, _sink, _cond);     // enters the entry node -> first line -> vm.Changed -> render
+            return true;
+        }
+
         /// <summary>Stop the active dialogue (synchronous, race-free).</summary>
         public static void Stop() => ActiveVm?.Close();
     }

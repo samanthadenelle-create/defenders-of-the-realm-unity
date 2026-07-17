@@ -714,31 +714,14 @@ namespace DeNelle.Village
                     ? def.Id : "pet-" + StarterPetSpecies;
             }
 
-            // 2) Visible birth at the Hollow (never blocks the grant).
-            Guard.Try("Tutorial", "starter-pet visible birth at the Echo Hollow", () =>
-            {
-                Vector3 origin = ResolveHollowPosition();
-                var deployer = FindAnyObjectByType<DeNelle.Pets.PetDeployer>();
-                if (deployer == null)
-                {
-                    var host = new GameObject("PetDeployer (tutorial runtime)");
-                    deployer = host.AddComponent<DeNelle.Pets.PetDeployer>();
-                    var heart = FindAnyObjectByType<HeartController>();
-                    deployer.SetHeartPosition(heart != null ? heart.transform.position : Vector3.zero);
-                }
-                var pet = deployer.SummonAt(origin, DeNelle.Pets.PetMode.Defend);
-                if (pet != null)
-                {
-                    // PO creative call (2026-07-16): the founding Echo becomes an ethereal
-                    // FLOATING SPIRIT (keeps its baked bind pose) -- attach the presentation-only
-                    // hover/drift/aura layer to the Hollow-born instance (skeleton untouched).
-                    if (pet.GetComponent<EchoSpiritPresentation>() == null)
-                        pet.gameObject.AddComponent<EchoSpiritPresentation>();
-                    FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — pet body spawned at the Echo Hollow {origin} (PetHeroLeash walks it to the hero; EchoSpiritPresentation floating-spirit layer attached).");
-                }
-                else
-                    FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — SummonAt returned null (visual birth skipped; roster grant still applies).");
-            });
+            // 2) SCRAPPED (owner felt-test 2026-07-17): "Echoes are portrait-card spirits, NOT
+            // 3D models -- scrap giving them a model." The founding-echo VISIBLE BIRTH (the
+            // PetDeployer.SummonAt aether-sprite body + the EchoSpiritPresentation floating-spirit
+            // layer, PO's superseded 2026-07-16 call) is retired -- the founding Echo now awakens
+            // as a PORTRAIT CARD (EchoUnlockDialogue) and lives in the pet roster (EchoRosterView),
+            // no 3D echo body in the world. The DATA grant below (StarterPetId + roster Acquire) is
+            // UNCHANGED, and the abstract EchoService silo/workforce is untouched.
+            FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — visible echo MODEL birth SCRAPPED (echoes are portrait cards now); roster grant + StarterPetId still applied.");
 
             // 3) Roster grant (the single funnel — Acquire saves, covering StarterPetId too).
             var petSvc = DeNelle.Pets.PetAcquisitionService.Instance;

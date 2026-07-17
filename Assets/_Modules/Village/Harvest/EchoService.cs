@@ -55,9 +55,10 @@ namespace DeNelle.Village
 
         // -- Tunables (owner-tunable in playtest) ------------------------------
         [Header("Workforce")]
-        [Tooltip("Hard cap on owned Echoes (owner model: 5 = 3 organic + 2 flex, memory echo-workforce-drag-drop; " +
-                 "PopulationService unlocks the flex slots via milestones, the wave hook the organic ones).")]
-        [Min(1)] public int MaxEchoes = 5;
+        [Tooltip("Hard cap on owned Echoes. 6 = the full canonical Echo roster (EchoRosterCatalog: " +
+                 "Frosthowl/Verdant Stag/Voidwing Raven/Stormcoil Serpent/Stonewarden Bear/Ember Phoenix). " +
+                 "The wave hook earns them one per WavesPerEcho clears; the roster/unlock dialogue reads this cap.")]
+        [Min(1)] public int MaxEchoes = 6;
 
         [Tooltip("Waves cleared per Echo unlock (owner model: every 5 = 4 normal + 1 boss).")]
         [Min(1)] public int WavesPerEcho = 5;
@@ -132,6 +133,40 @@ namespace DeNelle.Village
         public float FillFraction
         {
             get { double cap = SiloCapacity; return cap > 0.0 ? Mathf.Clamp01((float)(Silo / cap)) : 0f; }
+        }
+
+        /// <summary>Waves cleared so far (the Echo-unlock counter). 0 when state is absent.</summary>
+        public int WavesCompleted
+        {
+            get { var s = State; return s != null ? s.WavesCompleted : 0; }
+        }
+
+        /// <summary>
+        /// Waves remaining until the NEXT Echo unlock (roster/pet-box readout). Computed from
+        /// the REAL cadence: WavesPerEcho - (WavesCompleted % WavesPerEcho). Returns 0 once every
+        /// roster spirit is owned (EchoCount &gt;= MaxEchoes) so the UI can show "roster complete".
+        /// </summary>
+        public int WavesUntilNextEcho
+        {
+            get
+            {
+                if (EchoCount >= MaxEchoes) return 0;
+                int per = Mathf.Max(1, WavesPerEcho);
+                int into = WavesCompleted % per;
+                return per - into;   // 1..per (never 0 while more spirits remain)
+            }
+        }
+
+        /// <summary>Progress 0..1 toward the next Echo unlock (for a pet-box progress bar).
+        /// 1 when the roster is already full.</summary>
+        public float NextEchoProgress
+        {
+            get
+            {
+                if (EchoCount >= MaxEchoes) return 1f;
+                int per = Mathf.Max(1, WavesPerEcho);
+                return Mathf.Clamp01((WavesCompleted % per) / (float)per);
+            }
         }
 
         // =====================================================================
