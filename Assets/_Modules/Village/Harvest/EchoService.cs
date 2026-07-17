@@ -105,12 +105,19 @@ namespace DeNelle.Village
         /// (x4 total), 4 = x4 each (x16 total vs one echo's base). Tune BaseRatePerHour down
         /// to compensate. Displayed on the workforce HUD as the "xN ALL HARVEST" medallion.
         /// </summary>
+        // WO-738: this stays the count-quadratic SPINE (the public value the HUD/UI reads for
+        // the "xN ALL HARVEST" medallion). The value ACTUALLY APPLIED to income is
+        // EchoBonusCalculator.AggregateHarvestMultiplier(), which folds THIS spine in ONCE and
+        // layers per-echo specialization on top -- so RatePerSecond multiplies by the aggregate
+        // INSTEAD OF this property (never both). Do not add a second global multiplier here.
         public double GlobalHarvestMultiplier => EchoCount;
 
         /// <summary>Total resources/sec the workforce produces right now (echoCount x base
-        /// x the WO-709 global multiplier = quadratic in count, scaled by the STEWARD
-        /// `harvestRate` talent sum — WO-676 Provider's Bond; x1 at sum 0).</summary>
-        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * GlobalHarvestMultiplier * (1.0 + HarvestRateBonus());
+        /// x the WO-738 AggregateHarvestMultiplier = the count-quadratic spine folded with
+        /// per-echo Harvest-lane specialization, scaled by the STEWARD `harvestRate` talent
+        /// sum — WO-676 Provider's Bond; x1 at sum 0). The aggregate REPLACES the bare
+        /// GlobalHarvestMultiplier factor (it already contains the spine — no double-apply).</summary>
+        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * EchoBonusCalculator.AggregateHarvestMultiplier() * (1.0 + HarvestRateBonus());
 
         // WO-676 §2b: ONE registry read at the existing rate calc (this property feeds the
         // online Update tick AND the offline ClaimOffline integral). StatSum is internally
@@ -126,8 +133,13 @@ namespace DeNelle.Village
             return bonus;
         }
 
-        /// <summary>The silo's absolute capacity in resources = capHours x ratePerHour x echoCount.</summary>
-        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount;
+        /// <summary>The silo's absolute capacity in resources = capHours x ratePerHour x echoCount
+        /// x GlobalHarvestMultiplier (WO-738 cadence fix, owner pin #7). Rate is quadratic in count
+        /// (RatePerSecond folds the count-quadratic spine) while capacity WAS only linear, so a full
+        /// roster used to fill in ~40 min. Scaling capacity by the same GlobalHarvestMultiplier keeps
+        /// fill-time ~constant (~SiloCapHours) as the roster grows WITHOUT touching the WO-709 power
+        /// spike (rate is unchanged). Only the buffer ceiling scales.</summary>
+        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount * GlobalHarvestMultiplier;
 
         /// <summary>Silo fill fraction 0..1 (silo / capacity). 0 when capacity is 0.</summary>
         public float FillFraction
@@ -179,15 +191,36 @@ namespace DeNelle.Village
             // (CLAUDE.md memory: singleton-dedup-destroys-host).
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+
+            // WO-738: keep the Core EchoLaneBonuses contract current whenever a lane assignment
+            // changes (the picker writes through EchoAssignments). Count changes recompute in
+            // OnWaveCleared/GrantEcho; the first compute happens once in Start.
+            EchoAssignments.Changed += OnAssignmentsChanged;
         }
 
         private void OnDestroy()
         {
-            if (Instance == this) Instance = null;
+            if (Instance == this)
+            {
+                EchoAssignments.Changed -= OnAssignmentsChanged;
+                Instance = null;
+            }
+        }
+
+        /// <summary>Assignment-change handler (WO-738): recompute the passive lane bonuses off the
+        /// event, NOT per frame, then notify the HUD so the harvest medallion reflects the new mix.</summary>
+        private void OnAssignmentsChanged()
+        {
+            EchoBonusCalculator.Recompute();
+            Changed?.Invoke();
         }
 
         private void Start()
         {
+            // WO-738: populate EchoLaneBonuses once at boot from the persisted assignment so hosts
+            // (and the harvest faucet) see current multipliers before any change event fires.
+            EchoBonusCalculator.Recompute();
+
             // Deferred one frame so GameStateService (loads the save in its Awake) and
             // OfflineHarvestService are up before we read LastHarvestClaimMs.
             StartCoroutine(OfflineCatchUpNextFrame());
@@ -300,13 +333,44 @@ namespace DeNelle.Village
                 return 0;
             }
 
-            // V1 split: the pooled silo divides evenly across Wood / Iron / Food (the
-            // three build harvestables; Crystals stays a premium/reward currency). The
-            // remainder lands in Wood so no fraction is lost.
-            int third = pool / 3;
-            int wood = third + (pool - third * 3);   // remainder -> wood
-            int iron = third;
-            int food = third;
+            // WO-738 split: the pooled silo divides across Wood / Iron / Food by the
+            // Harvest-lane echoes' element->resource WEIGHTS (EchoBonusCalculator), replacing
+            // the old even-thirds. Crystals/Aether stay premium (never auto-split). Uses
+            // LARGEST-REMAINDER apportionment so the integer split sums to the EXACT pool (no
+            // unit created or lost); leftover units go to the largest fractional shares (the
+            // top-share resource), preserving the old "no fraction lost" invariant.
+            var weights = EchoBonusCalculator.HarvestResourceWeights();
+            double wW = weights.TryGetValue(DeNelle.Core.ResourceType.Wood, out var vw) ? vw : 0.0;
+            double wI = weights.TryGetValue(DeNelle.Core.ResourceType.Iron, out var vi) ? vi : 0.0;
+            double wF = weights.TryGetValue(DeNelle.Core.ResourceType.Food, out var vf) ? vf : 0.0;
+            double totalW = wW + wI + wF;
+            if (totalW <= 0.0) { wW = 1.0; wI = 1.0; wF = 1.0; totalW = 3.0; }   // defensive even split
+
+            double[] exact = { pool * (wW / totalW), pool * (wI / totalW), pool * (wF / totalW) };
+            int[] alloc = new int[3];
+            double[] fracs = new double[3];
+            int used = 0;
+            for (int k = 0; k < 3; k++)
+            {
+                alloc[k] = (int)Math.Floor(exact[k]);
+                fracs[k] = exact[k] - alloc[k];
+                used += alloc[k];
+            }
+            int remainder = pool - used;   // in {0,1,2}: sum of fractional parts < 3
+            for (int r = 0; r < remainder; r++)
+            {
+                int best = -1; double bestFrac = -1.0;
+                for (int k = 0; k < 3; k++) { if (fracs[k] > bestFrac) { bestFrac = fracs[k]; best = k; } }
+                if (best < 0) break;
+                alloc[best] += 1;
+                fracs[best] = -1.0;   // consume so each leftover unit lands on a distinct top share
+            }
+            int wood = alloc[0];
+            int iron = alloc[1];
+            int food = alloc[2];
+            FlowTrace.Step("Echo",
+                $"DumpSilos split (pool {pool}) by harvest weights [W {wW:0.##}/I {wI:0.##}/F {wF:0.##}] -> " +
+                $"wood {wood}, iron {iron}, food {food} (sum {wood + iron + food}).");
 
             var eco = EconomyService.Instance;
             if (eco != null)
@@ -362,6 +426,7 @@ namespace DeNelle.Village
             {
                 s.EchoCount += 1;
                 if (gs != null) gs.Save();
+                EchoBonusCalculator.Recompute();   // WO-738: count changed -> refresh passive lane bonuses.
                 FlowTrace.Step("Echo", $"New Echo joined! count now {s.EchoCount}/{MaxEchoes} (at {s.WavesCompleted} waves).");
                 EchoUnlocked?.Invoke(s.EchoCount);
                 Changed?.Invoke();
@@ -392,6 +457,7 @@ namespace DeNelle.Village
 
             s.EchoCount += 1;
             if (gs != null) gs.Save();
+            EchoBonusCalculator.Recompute();   // WO-738: count changed -> refresh passive lane bonuses.
             FlowTrace.Step("Echo", $"GrantEcho('{reason}'): New Echo joined! count now {s.EchoCount}/{MaxEchoes}.");
             EchoUnlocked?.Invoke(s.EchoCount);
             Changed?.Invoke();
