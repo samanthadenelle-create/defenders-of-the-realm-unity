@@ -538,7 +538,7 @@
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
-     "footprint": 7.0,
+     "footprint": 3.4,
      "noOverlap": true,
      "checkAffordable": true
     },
@@ -855,6 +855,7 @@
    "type": "Tower",
    "kind": "Cell",
    "visualPrefabPath": "Structures/ArcaneSpire_1",
+   "visualTexturePath": "Structures/ArcaneSpire_Albedo",
    "repo": {
     "behaviorId": "ArcaneTower",
     "buildCost": 200,

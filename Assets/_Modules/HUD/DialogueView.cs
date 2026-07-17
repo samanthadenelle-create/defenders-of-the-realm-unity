@@ -552,8 +552,14 @@ namespace DeNelle.HUD
         {
             if (_box == null || _body == null) return;
 
-            const float TopPad = 18f, HeaderPx = 150f, Gap = 10f;
-            const float BottomBandPx = 168f;   // clears the fixed 120px shared Close band + margin
+            // OWNER F8 2026-07-16 ("utilize the area not a tiny area and scrollbar"): the header
+            // (150) + footer (168) bands ate ~318px of a ~420-486px landscape panel, leaving the
+            // reading area a ~140px sliver so any line past ~5 rows scrolled in a tiny window while
+            // the bands sat empty. Trim both to the minimum that still seats their content (header:
+            // 36 speaker + 26 affiliation + letterboxed portrait; footer: the 120px shared Close +
+            // margin) so the BODY is the dominant zone of the box.
+            const float TopPad = 18f, HeaderPx = 108f, Gap = 10f;
+            const float BottomBandPx = 132f;   // clears the fixed 120px shared Close band + 12px margin
             const float MinBodyPx = 54f;       // one 30px reading line + padding
             // OWNER F8 2026-07-16 ("the text box should use the FULL dialog box"): the kit FrameCore
             // body zone is inset ~5.5% each side (0.055..0.945), so the text/plate read as a small
@@ -567,11 +573,19 @@ namespace DeNelle.HUD
 
             if (!_pixelBandsApplied)
             {
-                // Cap the grown panel at the ORIGINAL rect height so MAX == the pre-fix fixed rect
-                // (never taller -> never crosses a HUD zone). Derived from the still-fractional rect.
-                float fracH = Mathf.Max(0.05f, _box.anchorMax.y - _box.anchorMin.y);
-                float origPanelH = fracH * CanvasLocalHeight();
-                _maxBodyPx = Mathf.Max(140f, origPanelH - (TopPad + HeaderPx + Gap + BottomBandPx));
+                // OWNER F8 2026-07-16 ("utilize the area not a tiny area and scrollbar"): the old
+                // cap == the authored 0.42 rect, which minus the chrome bands left only ~140px of
+                // reading area (long lines scrolled in a sliver). Let the panel GROW for long
+                // passages up to a HUD-SAFE height (symmetric about the panel's vertical centre)
+                // so the text fills the box before it ever scrolls. HUD clearance: top stays under
+                // TargetInfo (bottom y=0.660) and bottom stays above the action bar (top y=0.150).
+                float cyFrac = (_box.anchorMin.y + _box.anchorMax.y) * 0.5f;      // authored centre (~0.41)
+                float halfSafe = Mathf.Min(0.655f - cyFrac, cyFrac - 0.155f);     // HUD-safe half-height
+                float maxFrac = Mathf.Max(_box.anchorMax.y - _box.anchorMin.y, 2f * halfSafe);
+                float maxPanelH = maxFrac * CanvasLocalHeight();
+                // Floor keeps a generous reading area on a small canvas; the derived value wins on
+                // real phones (~220-300px body, up from the pre-fix ~140px sliver).
+                _maxBodyPx = Mathf.Max(180f, maxPanelH - (TopPad + HeaderPx + Gap + BottomBandPx));
 
                 // Panel: collapse the vertical stretch onto its original CENTER so the height is
                 // sizeDelta-driven and the box stays visually anchored (symmetric shrink about the

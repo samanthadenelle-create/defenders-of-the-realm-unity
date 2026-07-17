@@ -88,6 +88,16 @@ namespace DeNelle.Editor
         private const string PackRoot =
             "Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/Assets/fbx(unity)/";
 
+        // ── Adjacent owned KayKit packs (art-finish, WO-324) ─────────────────
+        // The Dungeon Remastered pack ships no lantern / coffin mesh, but two
+        // other OWNED KayKit packs do — RPG Tools Bits (a real hand lantern) and
+        // Halloween Bits (a stone coffin / sarcophagus). Loading cross-pack keeps
+        // the Cottage dressed from owned assets instead of labelled cubes.
+        private const string RpgToolsRoot =
+            "Assets/Models/KayKit/KayKit RPG Tools Bits 1.0/Assets/fbx(unity)/";
+        private const string HalloweenRoot =
+            "Assets/Models/KayKit/KayKit Halloween Bits 1.0/Assets/fbx(unity)/";
+
         // ── Dungeon MonoBehaviour / SO type names (resolved by reflection) ───
         private const string NsDungeons = "DeNelle.Dungeons";
         private const string TypeDungeonController = NsDungeons + ".DungeonController";
@@ -638,9 +648,9 @@ namespace DeNelle.Editor
                     Prop(dress, "rocks_small.fbx", cx - 4f, y, cz + 2f, 0f);
                     Prop(dress, "rocks.fbx", cx + 3f, y, cz - 3f, 40f);
                     Prop(dress, "barrel_small.fbx", r.MaxX - 3f, y, r.MinZ + 3f, 0f);
-                    Placeholder(dress, "lantern_post (no KayKit mesh)",
-                        new Vector3(cx - 5f, y, cz - 4f), HexColor("ffcf6b"),
-                        new Vector3(0.4f, 2.2f, 0.4f));
+                    // WO-324 art finish: lantern post -> real KayKit RPG-Tools
+                    // lantern (owned adjacent pack). Was a labelled cube.
+                    PropFrom(dress, RpgToolsRoot, "lantern.fbx", cx - 5f, y, cz - 4f, 0f);
                     LitFixture(lightRoot, "GardenSky", new Vector3(cx, y + 5f, cz),
                         HexColor("fff2cc"), 1.1f, 14f); // partial daylight (§7 exception)
                     break;
@@ -652,9 +662,9 @@ namespace DeNelle.Editor
                     Placeholder(dress, "rug over hidden trapdoor",
                         new Vector3(cx + 4f, y + 0.02f, cz + 3f), HexColor("8a5a3a"),
                         new Vector3(3.5f, 0.05f, 3.5f));
-                    Placeholder(dress, "trapdoor (lantern-revealed, no KayKit mesh)",
-                        new Vector3(cx + 4f, y + 0.04f, cz + 3f), HexColor("5a3a22"),
-                        new Vector3(2.2f, 0.1f, 2.2f));
+                    // WO-324 art finish: trapdoor -> KayKit iron floor grate (a
+                    // hatch read). Sits under the rug; the lantern reveals it.
+                    Prop(dress, "floor_tile_big_grate.fbx", cx + 4f, y + 0.02f, cz + 3f, 0f);
                     LitFixture(lightRoot, "EntranceCandle",
                         new Vector3(r.MinX + 2f, y + 1.4f, cz), HexColor("ffd98a"), 2.0f, 4f);
                     break;
@@ -670,9 +680,10 @@ namespace DeNelle.Editor
                     Placeholder(dress, "hearth fireplace (no KayKit mesh)",
                         new Vector3(r.MaxX - 1.5f, y + 1.5f, cz), HexColor("6b4226"),
                         new Vector3(2f, 3f, 3f));
-                    Placeholder(dress, "ladder up to the Loft (no KayKit mesh)",
-                        new Vector3(r.MinX + 1.5f, y + 3f, r.MinZ + 6f), HexColor("a07840"),
-                        new Vector3(0.4f, 6f, 1.6f));
+                    // WO-324 art finish: ladder -> KayKit scaffold frame (a
+                    // climbable timber frame; the pack ships no true ladder mesh).
+                    // Paired with the stairs_wood Main->Loft connector.
+                    Prop(dress, "scaffold_frame_large.fbx", r.MinX + 1.5f, y, r.MinZ + 6f, 0f);
                     LitFixture(lightRoot, "HearthFire",
                         new Vector3(r.MaxX - 2.5f, y + 1.4f, cz), HexColor("ff9a4a"), 3.0f, 6f);
                     break;
@@ -739,9 +750,9 @@ namespace DeNelle.Editor
                     Placeholder(dress, "water puddle (no KayKit mesh)",
                         new Vector3(r.MaxX - 4f, y + 0.02f, r.MinZ + 4f), HexColor("3a5a6a"),
                         new Vector3(3f, 0.05f, 3f));
-                    Placeholder(dress, "stair down from Main Room (cellar entry)",
-                        new Vector3(r.MinX + 2f, y + 1f, cz), HexColor("6b6b6b"),
-                        new Vector3(2f, 2f, 4f));
+                    // WO-324 art finish: cellar-entry stair -> KayKit walled
+                    // stair piece (the pack ships stairs). Was a labelled cube.
+                    Prop(dress, "stairs_walled.fbx", r.MinX + 2f, y, cz, 0f);
                     break;
 
                 case "storage":
@@ -758,9 +769,10 @@ namespace DeNelle.Editor
                     Prop(dress, "floor_tile_big_grate.fbx", cx, y + 0.05f, cz - 4f, 0f);
                     Prop(dress, "pillar_decorated.fbx", r.MinX + 2.5f, y, cz, 0f);
                     Prop(dress, "pillar_decorated.fbx", r.MaxX - 2.5f, y, cz, 0f);
-                    Placeholder(dress, "stone sarcophagus (no KayKit mesh)",
-                        new Vector3(cx, y + 0.6f, r.MaxZ - 4f), HexColor("777067"),
-                        new Vector3(3f, 1.2f, 6f));
+                    // WO-324 art finish: sarcophagus -> KayKit Halloween-Bits
+                    // decorated stone coffin (owned adjacent pack). Was a cube.
+                    PropFrom(dress, HalloweenRoot, "coffin_decorated.fbx",
+                        cx, y, r.MaxZ - 4f, 0f);
                     break;
 
                 case "hidden-vault":
@@ -1724,6 +1736,26 @@ namespace DeNelle.Editor
             float yaw)
         {
             var model = LoadModel(PackRoot + fbx);
+            var go = InstantiateModel(model, fbx, $"prop {fbx}");
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(x, y, z);
+            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            EnsureCollider(go);
+            _propCount++;
+            if (model != null) _modelCount++;
+        }
+
+        /// <summary>
+        /// Instantiates a prop FBX from an EXPLICIT owned pack root (RPG Tools /
+        /// Halloween Bits) — the art-finish path for meshes the Dungeon Remastered
+        /// pack does not ship (a real lantern, a stone coffin). Same fallback
+        /// behaviour as <see cref="Prop"/>: a missed path drops a labelled
+        /// placeholder cube + logs, never blocks.
+        /// </summary>
+        private static void PropFrom(Transform parent, string packRoot, string fbx,
+            float x, float y, float z, float yaw)
+        {
+            var model = LoadModel(packRoot + fbx);
             var go = InstantiateModel(model, fbx, $"prop {fbx}");
             go.transform.SetParent(parent, false);
             go.transform.position = new Vector3(x, y, z);

@@ -258,3 +258,130 @@ auto-gather" perk).
   spells/ultimates/Feast/Realm Echo, and per-tier model swaps. Prioritized in section 5;
   **`armyCapBonus` (companions) and `autoCollect` (auto-gather) are the two cheap,
   highest-value builds to greenlight first.**
+
+---
+
+# Rev 2 — 6-building mapping (2026-07-16, conforms to `BUILDING_UPGRADE_TREES.md` rev 2)
+
+Rev 1 above assumed a 4-building canon. **Rev 2 is the current canon: 6 buildings, Tier 0→3**,
+mapped 1:1 onto the six live ids — **no rename, no id reconciliation needed** (the section-3
+"open question" above is CLOSED: ids are `lumbermill`, `windmill`, `forge`, `armorer`,
+`barracks`, `arcane-tower`). The live `building-tiers.json` still carries tiers 1–4 (barracks
+1–6); the spec's T0 = base/placed, T1–T3 = the first three research tiers. Effect palette,
+`GameModifiers` fields, and the resource-pool findings from Rev 1 §§1–2 are unchanged and still
+authoritative (still just **8 committable mults**: tower dmg/range, troop dmg/health, wood/food/
+resource-efficiency production, offline bucket).
+
+## R2.1 — Per-tier effect → mapping (every effect in the 6-building spec)
+
+Legend: **MAPS-TODAY** = a live `GameModifiers` field (list which). **NEEDS-NEW** = system to build.
+
+### Lumbermill (`lumbermill`)
+| Tier | Effect (spec) | Mapping |
+|---|---|---|
+| T1 | +40% wood gather rate | **MAPS-TODAY** `woodProductionMult` |
+| T1 | reinforced wooden towers (higher HP) | **NEEDS-NEW** structure-armor/HP axis (no tower-HP modifier) + tower type |
+| T2 | auto-gather from medium range | **NEEDS-NEW** `autoCollect` flag + ticking collector service |
+| T2 | −25% construction time (all buildings) | **NEEDS-NEW** `buildSpeedMult` → BuildMode timer |
+| T2 | mobile barricades (temp defenses) | **NEEDS-NEW** deployable temp-structure system |
+| T3 | global wood income +25% | **MAPS-TODAY** `woodProductionMult` |
+| T3 | wood spendable mid-wave for emergency repairs | **NEEDS-NEW** mid-wave repair-spend hook |
+| T3 | **Synergy:** Armorer+Barracks units 15% cheaper | **NEEDS-NEW** cross-building cost modifier |
+
+### Windmill (`windmill`)
+| Tier | Effect | Mapping |
+|---|---|---|
+| T0 | small tower health-regen aura | **NEEDS-NEW** tower-regen aura |
+| T1 | +50% food rate | **MAPS-TODAY** `foodProductionMult` |
+| T1 | +1 max active companions | **NEEDS-NEW** `armyCapBonus` (int → `ArmyStorage.MaxArmySize`) — XS |
+| T1 | "Bounty" short gather boost | **NEEDS-NEW** timed-buff system (permanent version MAPS via `foodProductionMult`) |
+| T2 | passive offline food | **NEEDS-NEW** offline-generation service (bucket size MAPS via `offlineBonusMult`) |
+| T2 | sustain towers (Life Totem heals) | **NEEDS-NEW** new tower type + heal aura |
+| T2 | companions minor regen while gathering | **NEEDS-NEW** companion-regen tick |
+| T3 | massive food surplus | **MAPS-TODAY** `foodProductionMult` |
+| T3 | global tower+hero health regen | **NEEDS-NEW** regen system |
+| T3 | **Synergy:** boosts Barracks train speed + Forge essence conversion | **NEEDS-NEW** cross-building modifiers |
+
+### Forge (`forge`)
+| Tier | Effect | Mapping |
+|---|---|---|
+| T0 | rune upgrades for towers | numeric MAPS via `towerDamageMult`; rune system = **NEEDS-NEW** |
+| T1 | +60% essence rate | **MAPS-TODAY** `resourceEfficiencyMult` (forge pool) |
+| T1 | elemental tower enchantments (fire/ice) | numeric MAPS (`towerDamageMult`/`towerRangeMult`); elemental TYPING = **NEEDS-NEW** (catalog `element` unused by combat) |
+| T2 | hero spells + area-effect runes | **NEEDS-NEW** hero/ability + AoE-rune system |
+| T2 | −20% spell cooldowns | **NEEDS-NEW** cooldown system |
+| T3 | global abilities ("Realm Shield") | **NEEDS-NEW** global-ability system (nearest inert hook: `forgefire` flag — wire it) |
+| T3 | essence powers super-towers mid-wave | **NEEDS-NEW** wave-burst super-tower |
+| T3 | **Synergy:** +Arcane-Tower dmg, +Armorer gear quality | **NEEDS-NEW** cross-building modifiers |
+
+### Armorer (`armorer`)
+| Tier | Effect | Mapping |
+|---|---|---|
+| T0 | metal for tower armor upgrades | tower ARMOR/HP = **NEEDS-NEW** (no tower-HP modifier) |
+| T1 | +45% metal rate | **NEEDS-NEW** — no `ironProductionMult`/`metalProductionMult` field exists (add one, or route via generic yield) |
+| T1 | armored towers (better resistance) + basic hero gear | **NEEDS-NEW** tower-armor axis + hero equipment |
+| T2 | advanced weapons (piercing, splash) | numeric MAPS via `troopDamageMult`/`towerDamageMult`; discrete weapon mechanics = **NEEDS-NEW** |
+| T2 | hero combat bonuses during gathering runs | companion proxy MAPS (`troopDamageMult`/`troopHealthMult`); real hero gear = **NEEDS-NEW** |
+| T3 | epic gear sets + salvage (drops → metal) | **NEEDS-NEW** gear-set + salvage/drop loop |
+| T3 | permanent tower damage boost | **MAPS-TODAY** `towerDamageMult` |
+| T3 | **Synergy:** Barracks units tankier + Forge runes stronger | **NEEDS-NEW** cross-building modifiers |
+
+### Barracks (`barracks`)
+| Tier | Effect | Mapping |
+|---|---|---|
+| T0 | basic companion (scout) | companion stats MAPS (`troopHealthMult`); unit-TYPE unlock = **NEEDS-NEW** |
+| T1 | melee/ranged companions; +1 companion slot | slot = **NEEDS-NEW** `armyCapBonus` (already authored at T3 `armyCapBonus:5`); unit types = **NEEDS-NEW** |
+| T2 | improved stats + abilities (taunt, heal); reinforcements mid-wave | stats MAPS (`troop*Mult`); abilities + mid-wave reinforcement = **NEEDS-NEW** |
+| T3 | heroic companions with ultimates; auto-defend when idle | **NEEDS-NEW** ability/ultimate + idle-defend AI |
+| T3 | **Synergy:** Lumbermill/Windmill reduce training costs | **NEEDS-NEW** cross-building cost modifier |
+
+### Arcane-Tower (`arcane-tower`)
+| Tier | Effect | Mapping |
+|---|---|---|
+| T0 | basic magic damage tower | **MAPS-TODAY** `towerDamageMult` |
+| T1 | chain lightning / slow; +dmg vs magic-immune | numeric MAPS (`towerDamageMult`/`towerRangeMult`); chain/slow mechanics = **NEEDS-NEW** (note: placed `tower_arcane_spire` already has `slowSeconds`/`aoeRadius` in catalog — reusable) |
+| T2 | area-denial runes + mana abilities; empower nearby towers | **NEEDS-NEW** area-denial + tower-buff-aura system |
+| T3 | orbital strikes / global slow / wave-clear bursts | **NEEDS-NEW** global-ability + wave-burst (inert `arcaneOverload` flag is the hook to wire) |
+| T3 | **Synergy:** Forge amplifies effects; Armorer adds durability | **NEEDS-NEW** cross-building modifiers |
+
+**Ships-now summary:** every **numeric/economic** lever maps to a live mult (wood/food/essence
+yield, tower dmg+range, troop dmg+health, offline bucket) — committable in the Rev 1 §6 JSON
+style under the real ids. Everything **qualitative** (synergies, new tower/unit types, auto-
+gather, offline gen, armor, cooldowns, abilities/ultimates, salvage, elemental typing, mid-wave
+mechanics, model swaps) is NEEDS-NEW and phased below.
+
+## R2.2 — Schema gaps to open first
+- **`costIron`** on `BuildingTierDef` (`BuildingTierCatalog.cs:55-57`) — so Armorer tiers can cost Metal. (Rev 1 §2 flag, still open.)
+- **`armyCapBonus`** already exists as a modifier and is authored (barracks T3) → `ArmyStorage.MaxArmySize` consumer still NEEDS wiring.
+- **`autoCollect`** already authored (lumbermill T4 "Ancient Sawmill") → still INERT (no consumer).
+- No `ironProductionMult`/`metalProductionMult` field — Armorer's "+45% metal" has no home yet.
+
+## R2.3 — Phased WO plan (needs-new systems)
+
+**Numbering note:** the task named WO-732 as next-free, but `CLI_LANES_WO_NUMBERS.md` (refresh
+2026-07-16c) shows **732–737 already consumed** (barracks roster program + train layout). **Next
+free = WO-738.** Slotted accordingly; confirm against the banner before minting.
+
+Ordered by value (economy/synergy + model-swap first — they unlock the felt progression cheapest).
+Effort: XS/S/M/L.
+
+| WO | Scope (one line) | Effort | Depends on |
+|---|---|---|---|
+| **WO-738** Tier model-swap for hub buildings | Extend `HubStructureVisualInjector` to pick modelPath by the building's live `BuildingUpgradeService` tier (per-tier rows), so a bought mesh drops in per tier; falls back to `StructureTierVisual` scale+tint when no mesh. Wire Arcane-Tower T1/T2 to existing `ArcaneSpire_2/3`. | M | model-swap wiring doc; art optional (degrades) |
+| **WO-739** Cheap economy levers (`armyCapBonus` + `autoCollect`) | Wire the two already-authored-but-inert flags: `armyCapBonus`→`ArmyStorage.MaxArmySize`; `autoCollect`→a ticking collector service. Owner's named WC3 fantasies, both small. | S | none |
+| **WO-740** `costIron` + `metalProductionMult` schema | Add `costIron` to `BuildingTierDef` (Metal-priced tiers) + a metal/iron production mult so Armorer's "+45% metal" has a home. | S | none |
+| **WO-741** Building synergies + cross-building cost | Cross-building modifier layer (Lumbermill→cheaper Armorer/Barracks units; Windmill→Barracks train speed/Forge conversion; Forge→Arcane dmg; Armorer→Barracks tankiness). The tree's whole "buildings boost each other" pillar. | M | ModifierService |
+| **WO-742** Offline income + bigger bucket generation | True offline food/wood generation service (beyond the `offlineBonusMult` bucket size). | S | none |
+| **WO-743** Structure armor / tower-HP axis | `structureArmorMult`/tower-HP modifier → reinforced towers/outposts (Lumbermill T1, Windmill sustain, Armorer T0/T1). | S | combat damage path |
+| **WO-744** Construction-time + repair-speed + mid-wave repair | `buildSpeedMult` (Lumbermill T2 −25% build), `repairSpeedMult`, and wood-spend mid-wave emergency repair hook. | M | WallRepairController, BuildMode timer |
+| **WO-745** New tower types | Reinforced wooden tower, armored tower, Life Totem (sustain/heal aura), + the tower-buff-aura ("empower nearby towers"). | L | WO-743 (armor), tower factory |
+| **WO-746** Elemental typing + tower mechanics | Element damage axis (catalog `element` → combat), chain-lightning/slow (reuse `tower_arcane_spire` `slowSeconds`/`aoeRadius`), piercing/splash. | M | combat path |
+| **WO-747** Timed buffs + mobile barricades | Buff-timer system (Windmill "Bounty", wood→temp-defense buffs) + deployable temp-barricade structures. | M | none |
+| **WO-748** New companion units + reinforcements + auto-defend | Companion unit TYPES (scout/melee/ranged/heroic), mid-wave reinforcements, idle auto-defend AI. | L | armyCapBonus (WO-739) |
+| **WO-749** Hero equipment + salvage + gear sets | Hero equip slots + gear, salvage (enemy drops→metal), epic/legendary gear sets. | L | drop system |
+| **WO-750** Abilities: hero spells / ultimates / Feast / Realm Echo / Overload | Ability + cooldown system; wire inert `arcaneOverload`/`forgefire` flags to wave hooks; Forge spells, Barracks/Forge ultimates, Windmill Feast heal, Arcane orbital/global-slow bursts. | L | ModifierService, wave hooks |
+
+**Do-first cluster (unlocks felt progression cheapest):** WO-738 (model swap — the owner's whole
+"grow grander" ask), WO-739 (army cap + auto-gather), WO-741 (synergies). Everything downstream is
+new mechanics that can queue behind those.
+

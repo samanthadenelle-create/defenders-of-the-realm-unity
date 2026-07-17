@@ -100,6 +100,16 @@ namespace DeNelle.Editor
             // Poi_NodeAura (known-imported), recolorable ON so ArcaneAura's HDR violet applies. Loop
             // -> PlayKey returns a VFXHandle ArcaneAura.cs Stop()s on destroy.
             { "Arcane_Aura",            new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
+            // Dungeon-ENTRANCE portal gateway (owner felt-test 2026-07-15 "the dungeon
+            // portal arch looks plain -- can creative make it magical?"). A looping magic
+            // circle laid as a glowing rune ring at the overworld arch base so the entrance
+            // reads as an ACTIVE arcane gateway ("step here, it's magical"). Same URP-clean,
+            // proven-imported Hovl magic-circle prefab the Arcane_Aura / Poi_NodeAura keys
+            // use (guaranteed present). Recolorable ON so DungeonWorldPortalSpawner's HDR
+            // arcane-violet tint applies; loop -> PlayKey returns a VFXHandle the spawner
+            // holds. COLORBLIND-SAFE (owner red/green): reads by MOTION + LUMINANCE (a slow
+            // rotating rune ring), the violet is only a hint. Attached in DungeonWorldPortalSpawner.
+            { "Dungeon_Portal_Gate",    new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
 
             // ── Frost (fly + impact) ──────────────────────────────────────────
             { "Frost_Projectile",       new Pick(AAA + "Projectile VFX loop/Projectile 26 blue diamond.prefab", isLoop: true) },

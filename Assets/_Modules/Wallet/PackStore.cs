@@ -396,46 +396,49 @@ namespace DeNelle.Wallet
                 FontStyles.Normal, TextAlignmentOptions.TopLeft,
                 new Vector2(0.03f, 0.04f), new Vector2(0.68f, 0.28f));
 
-            // Per-currency rail chips — SOL / USDC / SKR (the React "currency rail
-            // tabs"), small Obsidian buttons; the selected rail is Yellow.
-            var rails = new[] { CurrencyKind.Sol, CurrencyKind.Usdc, CurrencyKind.Skr };
-            for (int i = 0; i < rails.Length; i++)
-            {
-                var rail = rails[i]; // capture
-                bool selected = SelectedCurrency(pack.Sku) == rail;
-                float x0 = 0.70f + i * 0.096f;
-                float x1 = x0 + 0.088f;
-                ElarionUiKit.BuildObsidianButton(card, pack.AmountLabel(rail),
-                    ElarionUiKit.ObsidianButtonStyle.Style1,
-                    selected ? ElarionUiKit.ObsidianButtonColor.Yellow
-                             : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(x0, 0.60f), new Vector2(x1, 0.94f),
-                    () =>
-                    {
-                        _selectedCurrency[pack.Sku] = rail;
-                        Render();
-                    });
-            }
-
-            // Buy / Owned control.
+            // ── ONE right-anchored Buy button per row (store buy-column fix 2026-07-16) ──
+            // WAS: three SOL/USDC/SKR rail chips (0.088 card-width ≈ 50px each) PLUS a Buy button,
+            // all crammed into the right third. Every kit button's shortest side is force-grown to
+            // MinTouchPx(112) by ClampMinTouch, so the sub-112px chips + button INFLATED past their
+            // authored rects and overlapped, stacking across rows into the grey-plate "shelf" the
+            // owner saw clip the frame — while each label auto-sized to FontBody(50) rendered giant.
+            // FIX: a single SKR Buy button authored ABOVE the 112px touch floor (so ClampMinTouch is
+            // a no-op — no inflation, no overlap) with a modest label cap so the text reads as a CTA.
+            // NOTE (PO): per-row SOL/USDC selection is dropped — SKR is the canonical rail
+            // (_defaultCurrency); re-introduce alt-rails as a global toggle if that's wanted.
+            //
+            // Rect: right column 0.70–0.985 (x) × 0.06–0.94 (y). On the 132px card that resolves to
+            // ~116px tall and ~150px+ wide — BOTH sides > MinTouchPx(112), so the button keeps this
+            // size and sits cleanly inside its row, in front of the card plate.
+            var buyMin = new Vector2(0.70f, 0.06f);
+            var buyMax = new Vector2(0.985f, 0.94f);
             if (IsOwned(pack.Sku))
             {
-                MakeText(card, "Owned", 15, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
-                    TextAlignmentOptions.Center, new Vector2(0.70f, 0.10f), new Vector2(0.985f, 0.52f));
+                MakeText(card, "Owned", 20, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
+                    TextAlignmentOptions.Center, buyMin, buyMax);
             }
             else
             {
-                var selectedRail = SelectedCurrency(pack.Sku);
+                var rail = SelectedCurrency(pack.Sku);   // SKR by default (_defaultCurrency)
                 var buy = ElarionUiKit.BuildObsidianButton(card,
-                    $"Buy - {pack.AmountLabel(selectedRail)}",
+                    $"Buy {pack.AmountLabel(rail)}",
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
                                       : ElarionUiKit.ObsidianButtonColor.Yellow,
-                    new Vector2(0.70f, 0.10f), new Vector2(0.985f, 0.52f),
+                    buyMin, buyMax,
                     () => Purchase(pack, SelectedCurrency(pack.Sku)).Forget());
-                buy.interactable = !_purchaseInFlight;
+                if (buy != null) buy.interactable = !_purchaseInFlight;
+
+                // Cap the label so it reads as a CTA, not the giant FontBody(50) auto-size that
+                // overflowed the plate. 20–26 ref px matches this panel's small-body scale (the left
+                // column runs 12–16); FitSingleLine hard-floors at FontHardFloor(20), so it can only
+                // shrink to fit, never grow back to giant.
+                var buyLabel = buy != null ? buy.GetComponentInChildren<TMP_Text>(true) : null;
+                if (buyLabel != null)
+                    ElarionUiKit.FitSingleLine(buyLabel, 20f, 26f);
             }
 
+            FlowTrace.Step("Store", $"BuildPackCard '{pack.Sku}': one right-anchored SKR Buy button (rect 0.70-0.985 / 0.06-0.94, label cap 20-26px).");
             return cardGo;
         }
 

@@ -3,11 +3,15 @@
 **Status:** READY TO IMPLEMENT (after WO-723)  
 **Priority:** P0  
 **Silo:** World / UI  
-**Depends on:** WO-723  
+**Depends on:** WO-723 (**DONE** — RESULT pins Path A + Herald entry)  
 **Blocks:** WO-726  
 **Program:** `WORK_ORDER_PROGRAM_723_731_coc_arena_barracks.md`  
 **Effort:** M  
 **Parallel-safe with:** WO-724  
+
+> **723 RESULT amendment (binding):** Herald must **not** open Path B (`ArenaAttackRecruitController`).  
+> Retarget to **AI camp select → Path A** (`GoRaid` / `RaidBase_*` + `RaidDeployController`).  
+> Visible landmark: **colosseum** (`ff.colosseum` ON at close). See `WORK_ORDER_723_….RESULT.md` §2.  
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "_comment": "Owner-tweakable castle wall collider tuning (task #14, owner 2026-07-15 'see how im in the wall'). CastleWallNavObstacleInstaller carves the castle perimeter walls (CastleSide_* masonry) out of the LIVE NavMesh so the NavMeshAgent hero cannot walk INTO a wall, while leaving the archway/gate opening passable. Hand-edit the numbers below; no recompile needed (values are read at scene load). Increase thicknessPadding if the hero still clips a thin wall; raise archwayHalfClear ONLY if a doorway ever pinches (0 = trust the wall geometry's own gate gap). Per-side inset nudges that side's whole obstacle wall toward (-) or away from (+) the castle centre in metres.",
+  "enabled": true,
+  "thicknessPadding": 0.4,
+  "minHeight": 6.0,
+  "archwayHalfClear": 0.0,
+  "sides": [
+    { "side": "South", "inset": 0.0 },
+    { "side": "North", "inset": 0.0 },
+    { "side": "East",  "inset": 0.0 },
+    { "side": "West",  "inset": 0.0 }
+  ]
+}

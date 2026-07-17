@@ -185,6 +185,24 @@ namespace DeNelle.Village
                     "hub game-over (hero-fell) STAND-DOWN — battle in progress; arena Defeat flow owns this death.");
                 return;
             }
+
+            // OPEN-WORLD FIELD DEATH (F8 2026-07-16 "rspawned in world not town"): the merged
+            // Main_Castle_Overworld is BOTH the home hub AND the explorable world. Dying to a field
+            // mob out there is NOT a hub-defense loss — it must NOT pause+reload via this defense-
+            // fail screen. The Time.timeScale=0 pause froze HeroHealth's scaled-time respawn down-
+            // beat, and the Retry scene-reload dropped the hero back out in the world. Stand down
+            // (mirroring the BattleArena stand-down above) so HeroHealth respawns the hero at the
+            // TOWN courtyard and HeroDeathEndState shows the non-pausing "rise again" sting. The
+            // HEART-death (defense fail) path — ShowHeartFell — is UNTOUCHED and still owns the
+            // overworld Heart breach.
+            string overworldScene = SceneManager.GetActiveScene().name;
+            if (HubScenes.IsOverworld(overworldScene))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Respawn",
+                    "hub game-over (hero-fell) STAND-DOWN in overworld '" + overworldScene +
+                    "' -> HeroHealth town-respawn + HeroDeathEndState sting own open-world death (no pause/reload).");
+                return;
+            }
             Show(
                 "YOU HAVE FALLEN",
                 "The dark takes you, but Elarion still needs its defender.\nRise, and try again.",

@@ -101,6 +101,26 @@ namespace DeNelle.Village.World
             string active = SceneManager.GetActiveScene().name;
             if (!DeNelle.Core.HubScenes.IsOverworld(active)) return;   // overworld-only authoring
 
+            // MERGED-WORLD SKIP (owner F8 2026-07-16, Main_Castle_Overworld, verbatim:
+            // "should not have a enter elarion screen. that is wrong and needs to go").
+            // Under ff.mergedworld the courtyard and the outer ring are ONE seamless scene
+            // -- the hero NEVER leaves Elarion, so a "way back IN" gate is meaningless here
+            // and the four "Enter Elarion" arches/prompts read as wrong (you are already in
+            // Elarion; just walk back to the courtyard). WO-602 solved the TWO-SCENE problem
+            // (leaving the standalone castle scene had no discoverable return seam); the merge
+            // removes that problem, so these return portals are authored ONLY on the legacy
+            // two-scene path. Navigation is unaffected under merge: the courtyard is walkable
+            // from anywhere on the same navmesh. Reversible: turn ff.mergedworld OFF (or this
+            // is a no-op there) to restore the WO-602 portals.
+            if (DeNelle.Core.FeatureFlags.MergedWorld)
+            {
+                FlowTrace.Once("HomeReturn", "merged-skip",
+                    "ff.mergedworld ON -- 'Enter Elarion' return portals NOT authored (one seamless " +
+                    "scene; already in Elarion, walk back to the courtyard). WO-602 portals are " +
+                    "legacy-two-scene only (owner F8 2026-07-16: the screen is wrong, removed).");
+                return;
+            }
+
             if (!DeNelle.Core.FeatureFlags.HomeReturnPortal)
             {
                 FlowTrace.Once("HomeReturn", "flag-off",

@@ -1140,6 +1140,36 @@ namespace DeNelle.Village
             if (parent != null) host.transform.SetParent(parent, true);
 
             var ps = host.AddComponent<ParticleSystem>();
+
+            // MAGENTA FIX (founding-Echo aura + Heart of Elarion aura, both route here):
+            // a runtime AddComponent<ParticleSystem> leaves its ParticleSystemRenderer on
+            // Unity's BUILT-IN default particle material (a LEGACY built-in particle shader).
+            // URP has no subshader for that, so it is drawn with Hidden/InternalErrorShader =
+            // opaque MAGENTA billboard quads -- the broken pink squares trailing the pale Echo.
+            // This is the same class as the runtime-equipped weapon: MagentaGuard's scene-load
+            // sweep already ran, and this loop is spawned AT RUNTIME (after PlayAura), so it is
+            // never caught. Assign a URP-valid ADDITIVE particle material so the aura reads as a
+            // soft glow -- in the editor AND in a built player: AbilityVfxKit.ResolveParticleShader
+            // (WO-420) is build-strip-safe and, critically, never falls through to the magenta
+            // default silently (it widens the fallback chain and FlowTrace.Warns on a miss).
+            var psr = host.GetComponent<ParticleSystemRenderer>();
+            if (psr != null)
+            {
+                var glowShader = AbilityVfxKit.ResolveParticleShader();
+                if (glowShader != null)
+                {
+                    var glowMat = new Material(glowShader) { name = $"EchoAura_{type}_URP" };
+                    AbilityVfxKit.ConfigureUrpParticleTransparency(glowMat, additive: true);
+                    psr.material = glowMat;
+                }
+                else
+                {
+                    FlowTrace.Warn("VFXManager",
+                        $"ProceduralLoopFallback('{type}'): no URP particle shader resolved -- " +
+                        "renderer left unassigned (skipped) rather than rendered magenta.");
+                }
+            }
+
             var m  = ps.main;
             m.loop           = true;
             m.duration       = 1f;

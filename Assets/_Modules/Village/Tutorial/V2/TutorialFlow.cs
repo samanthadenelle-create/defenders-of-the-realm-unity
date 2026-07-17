@@ -658,11 +658,19 @@ namespace DeNelle.Village
         //  WO-702 — grant.starterPet (the Echo Hollow's reward: the pet emerges)
         // =====================================================================
 
-        /// <summary>Starter pet species the founding-arc Hollow placement grants —
-        /// "ice-wolf", the project's canonical default starter (the same species
-        /// PetDeployer.DefaultStarterSpecies resolves when no pick is recorded;
-        /// the PetSelect screen is bypassed under ff.bypasspetselect).</summary>
-        private const string StarterPetSpecies = "ice-wolf";
+        /// <summary>Starter pet species the founding-arc Hollow placement grants --
+        /// "aether-sprite", the ETHEREAL SPIRIT (owner call 2026-07-16: the founding
+        /// Echo must read as an ethereal spirit, NOT the quadruped ice-wolf that
+        /// T-posed). Of the three starter models this is the only ethereal/spirit one
+        /// (element "aether", archetype "Heart-Ward", fairy/sprite body) and the only
+        /// HUMANOID rig (AccuRig CC_Base_* skeleton) -- so a humanoid idle controller
+        /// dropped at Resources/Pets/aether-sprite.controller (or the shared
+        /// Resources/Pets/PetIdle.controller) binds via PetDeployer.WirePetAnimator
+        /// and settles it out of the bind pose. The floating-spirit hover/drift/aura
+        /// (EchoSpiritPresentation) reads ethereal even before that idle exists.
+        /// PetSelect is bypassed under ff.bypasspetselect, so this default is what the
+        /// founding Echo becomes.</summary>
+        private const string StarterPetSpecies = "aether-sprite";
 
         /// <summary>
         /// WO-702: grants the starter pet on COMPLETION of the founding_hollow step —

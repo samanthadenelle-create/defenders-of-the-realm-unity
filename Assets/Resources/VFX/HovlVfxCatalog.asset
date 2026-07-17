@@ -76,6 +76,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: Dungeon_Portal_Gate
+    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
+    PoolSize: 3
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Frost_Projectile
     Prefab: {fileID: 6541143317491470949, guid: 208001a3c01dcb04f88030495297a6ad, type: 3}
     PoolSize: 6

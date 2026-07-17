@@ -3,11 +3,13 @@
 **Status:** READY TO IMPLEMENT (after WO-723)  
 **Priority:** P0  
 **Silo:** Buildings / UI / State  
-**Depends on:** WO-723  
+**Depends on:** WO-723 — **DONE** (read RESULT only; Path A locked)  
 **Blocks:** WO-726  
 **Program:** `WORK_ORDER_PROGRAM_723_731_coc_arena_barracks.md`  
+**Related (roster ladder):** WO-732–737 — prefer green or in-flight before felt-pass  
 **Effort:** M  
 **Parallel-safe with:** WO-725  
+**Queue:** **CoC implement START** — do not wait on re-opening 723  
 
 ---
 

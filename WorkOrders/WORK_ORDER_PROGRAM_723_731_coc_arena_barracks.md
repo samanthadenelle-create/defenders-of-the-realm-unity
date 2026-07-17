@@ -1,8 +1,10 @@
 # PROGRAM — WO-723 → WO-731 · CoC Arena + Barracks → AI Camps → Async PvP
 
-**Status:** MINTED 2026-07-16 (owner-approved plan)  
-**Numbering:** `CLI_LANES_WO_NUMBERS.md` (next free after this block = **732**)  
-**Canon:** `docs/ARENA_SOLUTION.md` · `docs/COMBAT_PIVOT_NORTHSTAR.md` · `docs/NORTH_STAR.md`
+**Status:** MINTED 2026-07-16 · **WO-723 DONE** (start implement at **724**)  
+**Numbering:** next free after roster/layout = **738** (`CLI_LANES_WO_NUMBERS.md`)  
+**Canon:** `docs/ARENA_SOLUTION.md` · `docs/COMBAT_PIVOT_NORTHSTAR.md` · `docs/NORTH_STAR.md`  
+**Claude packet:** `WorkOrders/CLAUDE_HANDOFF_2026-07-16_barracks_coc_roster.md`  
+**723 RESULT (binding):** `WorkOrders/WORK_ORDER_723_coc_offense_path_charter.RESULT.md` — Path A + Herald → Path A camp select
 
 ---
 
@@ -35,44 +37,47 @@ Reuse Barracks + `ArmyStorage` + `RaidDeploy` + `EnemyOutpost`/`ArenaMode`; conn
 ## Dependency graph
 
 ```
-723 charter ──► 724 Barracks ──┐
-              └► 725 Arena entry ─┴► 726 Attack loop ──► 727 AI recipes
-                                                              │
-                                              ┌───────────────┼───────────────┐
-                                              ▼               ▼               ▼
-                                           728 economy     729 defend      730 PvP I/O
-                                              └───────────────┬───────────────┘
-                                                              ▼
-                                                           731 close + flags
+723 charter ✅ DONE
+       │
+       ▼
+724 Barracks ──┐
+725 Arena entry ─┴► 726 Attack loop ──► 727 AI recipes
+                                              │
+                              ┌───────────────┼───────────────┐
+                              ▼               ▼               ▼
+                           728 economy     729 defend      730 PvP I/O
+                              └───────────────┬───────────────┘
+                                              ▼
+                                           731 close + flags
 ```
 
 | Parallel-safe | Serial spine |
 |---------------|--------------|
-| 724 ∥ 725 (after 723) | 724 → 726 → 727 → 728 → 731 |
+| **724 ∥ 725** (start here) | 724 → 726 → 727 → 728 → 731 |
 | 729 ∥ 730 (after 727) | |
 
 ---
 
 ## Work orders
 
-| WO | Title | File |
-|----|-------|------|
-| **723** | CoC Offense Path Charter + Flag Map | `WORK_ORDER_723_coc_offense_path_charter.md` |
-| **724** | Barracks Live: Train → ArmyStorage | `WORK_ORDER_724_barracks_live_train_army.md` |
-| **725** | Settlement Arena Entry Live | `WORK_ORDER_725_settlement_arena_entry_live.md` |
-| **726** | AI Camp Attack Loop (Deploy → Clear → Return) | `WORK_ORDER_726_ai_camp_attack_loop.md` |
-| **727** | Recipe AI Settlements (Tiered BaseLayout camps) | `WORK_ORDER_727_recipe_ai_settlements.md` |
-| **728** | Repeatable Raid Economy (Cooldown, Stars, Loot) | `WORK_ORDER_728_repeatable_raid_economy.md` |
-| **729** | Defend & Watch (AI attacks player base) | `WORK_ORDER_729_defend_and_watch.md` |
-| **730** | Async PvP Foundation (Snapshot I/O, no live netcode) | `WORK_ORDER_730_async_pvp_foundation.md` |
-| **731** | Felt-Complete Vertical + Flag Flip + Canon | `WORK_ORDER_731_coc_felt_complete_close.md` |
+| WO | Status | Title | File |
+|----|--------|-------|------|
+| **723** | **DONE** | CoC Offense Path Charter + Flag Map | RESULT: `WORK_ORDER_723_coc_offense_path_charter.RESULT.md` |
+| **724** | **START** | Barracks Live: Train → ArmyStorage | `WORK_ORDER_724_barracks_live_train_army.md` |
+| **725** | READY | Settlement Arena Entry Live (Path A retarget) | `WORK_ORDER_725_settlement_arena_entry_live.md` |
+| **726** | READY | AI Camp Attack Loop (Deploy → Clear → Return) | `WORK_ORDER_726_ai_camp_attack_loop.md` |
+| **727** | READY | Recipe AI Settlements (Tiered BaseLayout camps) | `WORK_ORDER_727_recipe_ai_settlements.md` |
+| **728** | READY | Repeatable Raid Economy (Cooldown, Stars, Loot) | `WORK_ORDER_728_repeatable_raid_economy.md` |
+| **729** | READY | Defend & Watch (AI attacks player base) | `WORK_ORDER_729_defend_and_watch.md` |
+| **730** | READY | Async PvP Foundation (Snapshot I/O, no live netcode) | `WORK_ORDER_730_async_pvp_foundation.md` |
+| **731** | READY | Felt-Complete Vertical + Flag Flip + Canon | `WORK_ORDER_731_coc_felt_complete_close.md` |
 
 ---
 
-## Mint order
+## Implement order (723 closed)
 
-1. **723** first — owner pins Path A/B + entry story.  
-2. **724 + 725** in parallel.  
+1. ~~**723**~~ **DONE** — Path A + Herald entry locked in RESULT. Do not re-charter.  
+2. **724 + 725** in parallel (**start here**).  
 3. **726** when both green.  
 4. **727 → 728** serially.  
 5. **729 ∥ 730** after 727.  
@@ -80,14 +85,14 @@ Reuse Barracks + `ArmyStorage` + `RaidDeploy` + `EnemyOutpost`/`ArenaMode`; conn
 
 ---
 
-## Path decision (WO-723 must lock)
+## Path decision (LOCKED by WO-723 RESULT)
 
-| Path A (recommended product spine) | Path B (park or thin optional) |
-|------------------------------------|--------------------------------|
+| Path A (**product spine**) | Path B (**parked**) |
+|----------------------------|---------------------|
 | Barracks → `ArmyStorage` → `RaidDeployController` | `ArenaAttackRecruitController` 50-pt budget squad |
 | CoC tap-deploy on raid plate | Hero-leashed attack squad in `ArenaMode` |
 
-**Do not ship both as first-class.** Recommendation: Path A; retarget `ArenaMode` to consume army deploy.
+**Do not ship both as first-class.** Herald retargets to Path A camp select (not Path B recruit panel).
 
 ---
 
@@ -110,3 +115,16 @@ Reuse Barracks + `ArmyStorage` + `RaidDeploy` + `EnemyOutpost`/`ArenaMode`; conn
 - `ArenaMode` · `ArenaPanel` · `ArenaHeraldSpawner` · `ArenaCatalog`  
 - `EnemyOutpost` · `GarrisonController` · `RaidOutpostSystem`  
 - `BaseLayout` / Realize · `ArenaNavMeshBaker` · `ProceduralSiegeArenaBuilder`
+
+---
+
+## Related program (owner 2026-07-16)
+
+**Troop roster + upgrade unlocks** = **WO-732 → WO-736**  
+Index: `WorkOrders/WORK_ORDER_PROGRAM_732_736_barracks_troop_roster.md`
+
+Prefer green (or in-flight) **before WO-724 felt-pass** so Barracks is not “two troops forever.”
+
+| Default (T1) | Unlock ladder (Barracks T2→T6) |
+|--------------|--------------------------------|
+| Footman, Archer | Spearman → Shieldguard → Outrider → Battlemage → Echo Legionnaire |

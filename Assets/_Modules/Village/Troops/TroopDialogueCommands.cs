@@ -47,6 +47,10 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks",
                     $"ShowTrainingUI refused - Barracks locked (ff.barracks={DeNelle.Core.FeatureFlags.Barracks}, " +
                     $"foundingComplete={BarracksUnlock.FoundingComplete}).");
+                // WO-737 toast coverage: the feature-locked case gets player feedback (Danger tone),
+                // not a silent no-op — normally unreachable (the NPC/building are hidden when locked).
+                DeNelle.Core.UI.ElarionUiKit.ShowToast("The Barracks is not built yet.",
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Danger);
                 return;
             }
             DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks", "ShowTrainingUI - opening the train panel (unlocked).");
@@ -85,6 +89,27 @@ namespace DeNelle.Village
                 return 0;
             }
 
+            // WO-733 HARD UNLOCK GATE (before any spend): resolve the def and refuse a
+            // troop the Barracks tier has not yet unlocked. TroopUnlock is the ONE tier
+            // authority (no magic numbers here). A refused train mutates nothing + spends
+            // nothing — it returns 0 BEFORE the TrainNow loop. Covers every path (panel,
+            // <<StartTraining>> Yarn verb) because they all funnel through this method.
+            var gateDef = TroopCatalog.Find(troopId);
+            if (gateDef == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("TroopTrain",
+                    "refuse-unknown id=" + troopId);
+                return 0;
+            }
+            if (!TroopUnlock.IsTrainable(gateDef))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("TroopTrain",
+                    "refuse-locked id=" + troopId +
+                    " needTier=" + gateDef.UnlockBarracksTier +
+                    " haveTier=" + TroopUnlock.EffectiveBarracksTier());
+                return 0;   // NO spend, NO army mutation
+            }
+
             int trained = 0;
             for (int i = 0; i < qty; i++)
             {
@@ -95,6 +120,9 @@ namespace DeNelle.Village
                 if (t == null) break;   // cap full OR unaffordable — TrainNow mutated nothing
                 trained++;
             }
+            if (trained > 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("TroopTrain",
+                    "train-ok id=" + troopId + " qty=" + trained);
             return trained;
         }
 

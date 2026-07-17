@@ -28,6 +28,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Combat;       // IDamageableStructure - owner-liveness orphan guard (Village -> Core, section 5)
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
@@ -54,9 +55,24 @@ namespace DeNelle.Village
         private VFXHandle _handle;
         private bool _started;
 
+        // ORPHAN GUARD (F8 owner felt-test 2026-07-15 "i see a vfx but no tower, maybe
+        // destroyed?"): the aura is a POOLED Hovl loop parented to the tower. OnDisable/
+        // OnDestroy cover the DESTROY + DISABLE death paths, but a tower that BREAKS to an
+        // inoperable shell keeps its root ACTIVE (no lifecycle event fires), and a body that
+        // failed to spawn / rendered invisible leaves the ring seated over nothing. There is
+        // NO Unity lifecycle callback for either, so a throttled owner-liveness + visible-body
+        // self-check is the catch-all that guarantees the aura can never outlive the tower.
+        private const float OwnerCheckInterval = 0.5f;   // throttle for the self-check
+        private const float FirstCheckGrace    = 1.5f;   // let the body model spawn / re-skin first
+        private IDamageableStructure _owner;             // null for a pure landmark (no HP model)
+        private float _checkTimer;
+        private bool  _bodyConfirmed;                    // a visible body was seen at least once
+
         private void Start()
         {
             _started = true;
+            _owner = GetComponentInParent<IDamageableStructure>();
+            _checkTimer = FirstCheckGrace;
             StartAura();
         }
 
@@ -67,8 +83,55 @@ namespace DeNelle.Village
             if (_started) StartAura();
         }
 
-        private void OnDisable() => StopAura();
-        private void OnDestroy() => StopAura();
+        // Immediate stop on every lifecycle teardown: the pooled loop returns to the pool
+        // NOW (no 2.5s graceful strand that could linger as a detached, still-playing loop).
+        private void OnDisable() => StopAura(immediate: true);
+        private void OnDestroy() => StopAura(immediate: true);
+
+        private void Update()
+        {
+            // Only a live handle can be orphaned; skip the walk entirely otherwise.
+            if (_handle == null || !_handle.IsAlive) return;
+
+            _checkTimer -= Time.deltaTime;
+            if (_checkTimer > 0f) return;
+            _checkTimer = OwnerCheckInterval;
+
+            // The tower is a broken/dead shell (root still active, so no OnDisable/OnDestroy)?
+            bool ownerDead = _owner != null && !_owner.IsAlive;
+            // The body mesh never spawned / is disabled (ring seated over nothing)? Cache the
+            // first positive so a healthy tower stops paying for the renderer walk.
+            if (!_bodyConfirmed) _bodyConfirmed = HasVisibleBody();
+            bool noBody = !_bodyConfirmed;
+
+            if (ownerDead || noBody)
+            {
+                // Section 12 smoking gun: Fail lands in the errors-only break-log. This single
+                // line disambiguates the cause on the next capture: ownerDead => broken-shell
+                // not torn down; noVisibleBody => body failed to spawn / invisible; owner absent
+                // => pure landmark whose body vanished.
+                FlowTrace.Fail("ArcaneAura",
+                    $"'{name}' ORPHAN aura STOPPED: aura loop was playing with no live tower body " +
+                    $"(ownerDead={ownerDead}, ownerPresent={_owner != null}, noVisibleBody={noBody}) - " +
+                    "matches F8 'i see a vfx but no tower'.");
+                StopAura(immediate: true);
+            }
+        }
+
+        /// <summary>True when a non-particle body renderer (the tower mesh) is live under this
+        /// structure. ParticleSystemRenderers are excluded so the aura's OWN VFX (and any other
+        /// effect) never counts as the body.</summary>
+        private bool HasVisibleBody()
+        {
+            var rends = GetComponentsInChildren<Renderer>(false);
+            for (int i = 0; i < rends.Length; i++)
+            {
+                var r = rends[i];
+                if (r == null || r is ParticleSystemRenderer) continue;
+                if (r.enabled && r.gameObject.activeInHierarchy) return true;
+            }
+            return false;
+        }
 
         private void StartAura()
         {
@@ -86,10 +149,10 @@ namespace DeNelle.Village
                                  : "no-op (VFXManager/catalog not ready or key unauthored) - aura will appear once the row exists."));
         }
 
-        private void StopAura()
+        private void StopAura(bool immediate = false)
         {
             if (_handle == null) return;
-            _handle.Stop();
+            _handle.Stop(immediate);
             _handle = null;
         }
 
@@ -104,7 +167,7 @@ namespace DeNelle.Village
         /// </summary>
         public void StopAndDisable()
         {
-            StopAura();
+            StopAura(immediate: true);
             enabled = false;
         }
 

@@ -98,8 +98,13 @@ namespace DeNelle.Village.UI
         {
             string scene = SceneManager.GetActiveScene().name;
 
-            // Hub scenes: GameOverScreen owns the death flow (pause + Retry/Leave).
-            if (HubScenes.IsHub(scene)) return;
+            // Hub scenes: GameOverScreen owns the death flow (pause + Retry/Leave) -- EXCEPT the
+            // merged overworld (Main_Castle_Overworld), where open-world field death is a town-
+            // respawn, not a hub-defense loss. There GameOverScreen's hero-fell path stands down
+            // (see GameOverScreen.ShowHeroFell, F8 2026-07-16), so THIS non-pausing defeat sting
+            // narrates HeroHealth's town-respawn -- exactly the dungeon/outpost/raid/open-world
+            // case this bootstrap was built for.
+            if (HubScenes.IsHub(scene) && !HubScenes.IsOverworld(scene)) return;
 
             // Arena battle: BattleArena's loss flow shows the Defeat end-state itself.
             if (BattleArena.AnyBattleInProgress) return;

@@ -144,6 +144,7 @@ namespace DeNelle.Village.World
             public Renderer[] Renderers;
             public Color[] BaseColors;
             public float FadeT;       // 0..1 reveal progress (1 = done)
+            public VFXHandle GateVfx; // looping magic-circle rune ring at the arch base (null until attached)
         }
 
         private readonly List<Portal> _portals = new List<Portal>();
@@ -365,6 +366,13 @@ namespace DeNelle.Village.World
             ApplyDim(entry, entry.Discovered ? 1f : UndiscoveredDim);
             _portals.Add(entry);
 
+            // Owner felt-test 2026-07-15 ("the dungeon portal arch looks plain -- make it
+            // magical"): a portal already found in a prior session (persisted Discovered)
+            // gets its arcane rune-ring immediately so it reads as an active gateway on
+            // load; a fresh (undiscovered) portal blooms it on when the hero finds it
+            // (Discover()), preserving the fog-of-war reveal.
+            if (entry.Discovered) AttachGateVfx(entry);
+
             FlowTrace.Step("DungeonPortals",
                 $"BuildPortal: '{def.ResolveName()}' portal committed at {pos} " +
                 $"(discovered={entry.Discovered}, liveRenderers={liveRenderers}).");
@@ -422,7 +430,14 @@ namespace DeNelle.Village.World
             for (int i = _portals.Count - 1; i >= 0; i--)
             {
                 var p = _portals[i];
-                if (p == null || p.Root == null) { _portals.RemoveAt(i); continue; }
+                if (p == null || p.Root == null)
+                {
+                    // Release the pooled rune-ring loop back to the shared VFX pool so a
+                    // torn-down portal never leaves an orphaned looping effect behind.
+                    p?.GateVfx?.Stop(true);
+                    _portals.RemoveAt(i);
+                    continue;
+                }
 
                 if (!p.Discovered)
                 {
@@ -448,7 +463,43 @@ namespace DeNelle.Village.World
             p.FadeT = 0f;
             PlayerPrefs.SetInt(p.Key, 1);
             PlayerPrefs.Save();
+            // Bloom the arcane rune ring on as the hero finds it -- the discovery reads
+            // as the gateway "activating" (owner felt-test: make the entrance magical).
+            AttachGateVfx(p);
             Debug.Log($"[DungeonWorldPortals] Hero discovered a hidden dungeon portal (key {p.Key}).");
+        }
+
+        // =====================================================================
+        // Magical portal VFX (owner felt-test 2026-07-15 "the dungeon portal arch looks
+        // plain -- can creative make it magical?"). Reuses the EXISTING Hovl magic-circle
+        // loop through the shared VFXManager pool (catalog key "Dungeon_Portal_Gate") as a
+        // glowing arcane rune ring seated at the arch base -- so the entrance reads as an
+        // ACTIVE magical gateway ("step here"), on top of the arch's own PortalVFXController
+        // glow. ONE pooled looping system per portal (mobile-cheap, returned to the pool on
+        // teardown). COLORBLIND-SAFE (owner red/green): the read is MOTION + LUMINANCE (a slow
+        // rotating rune ring), the arcane-violet tint is only a hint. No new particle art.
+        // =====================================================================
+        private static readonly Color GateTint = new Color(0.6f, 0.35f, 1f, 1f); // HDR arcane violet -- a hint only
+        private const string GateVfxKey  = "Dungeon_Portal_Gate";
+        private const float  GateVfxScale = 2.6f;  // frames the ~1.8 m arch opening as a threshold ring
+
+        private void AttachGateVfx(Portal p)
+        {
+            if (p == null || p.Root == null) return;
+            if (p.GateVfx != null) return;   // already holding the loop (idempotent)
+
+            // Seat the ring just above the arch base so it reads as a floor threshold
+            // without z-fighting the ground. Parent to the arch so it tracks + tears down with it.
+            Vector3 ringPos = p.Root.position + Vector3.up * 0.15f;
+            p.GateVfx = VFXManager.PlayKey(
+                GateVfxKey, ringPos, Quaternion.identity, p.Root,
+                GateTint, GateVfxScale);
+
+            FlowTrace.Step("Portal",
+                $"AttachGateVfx: '{GateVfxKey}' rune-ring " +
+                (p.GateVfx != null
+                    ? $"spawned at ({ringPos.x:F1}, {ringPos.y:F1}, {ringPos.z:F1}) (loop held) -- entrance now reads as an active arcane gateway."
+                    : "no-op (VFXManager/catalog not ready or key unauthored -- regen the Hovl catalog) -- procedural glow remains."));
         }
 
         private static void ApplyDim(Portal p, float brightness)

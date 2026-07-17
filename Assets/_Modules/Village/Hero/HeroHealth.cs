@@ -728,6 +728,29 @@ namespace DeNelle.Village
                 yield break;
             }
 
+            // OVERWORLD / HUB death -> respawn at the TOWN (castle courtyard), NOT the frozen
+            // per-hero _spawnPosition anchor (F8 2026-07-16 "rspawned in world not town").
+            // Main_Castle_Overworld is ONE merged scene holding BOTH the town (castle courtyard
+            // at origin) AND the surrounding open world; _spawnPosition is captured ONCE in Awake
+            // (the DDOL hero's HeroHealth Awake runs a single time), so it can be anywhere the hero
+            // first got HeroHealth -- out in the field -- and an in-place respawn there drops the
+            // hero in the WORLD. Route hub/overworld deaths to the canonical town spawn instead
+            // (HeroStartPoint_PlayerSpawn marker, else the courtyard centre (0, castle.liftY, 0) --
+            // the same navmesh-proven point HomeReturnPortalInjector warps home to). Enemy-owned
+            // scenes already EVAC'd above; Village2 (enemy-owned hub) took that branch, so it never
+            // reaches here -- only the player-owned home hub / merged overworld does.
+            string activeScene = SceneManager.GetActiveScene().name;
+            if (DeNelle.Core.HubScenes.IsHub(activeScene))
+            {
+                Vector3 townSpawn = ResolveTownSpawn();
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Respawn",
+                    "HandleDeath: down-beat elapsed -> TOWN respawn (hub/overworld '" + activeScene +
+                    "') target=" + townSpawn + " (was in-place _spawnPosition=" + _spawnPosition +
+                    ") -- hero returns to the castle courtyard, not the world.");
+                Respawn(townSpawn);
+                yield break;
+            }
+
             DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
                 "HandleDeath: down-beat elapsed -> in-place respawn branch.");
 
@@ -742,6 +765,22 @@ namespace DeNelle.Village
                     target = heart.transform.position + heart.transform.forward * 4f;
             }
             Respawn(target);
+        }
+
+        /// <summary>
+        /// The canonical TOWN spawn in a hub/overworld scene: the baked
+        /// <c>HeroStartPoint_PlayerSpawn</c> marker (its renderer is hidden but the transform
+        /// is kept -- CastleSpawnMarkerHider) if present, else the castle courtyard centre
+        /// (0, castle.liftY, 0) -- the same navmesh-proven point HomeReturnPortalInjector warps
+        /// home to. <see cref="Respawn"/>'s agent.Warp re-samples this onto the courtyard navmesh.
+        /// </summary>
+        private static Vector3 ResolveTownSpawn()
+        {
+            var marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
+            if (marker == null) marker = GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
+            if (marker != null) return marker.transform.position;
+            float liftY = UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f);
+            return new Vector3(0f, liftY, 0f);
         }
 
         /// <summary>
@@ -793,8 +832,32 @@ namespace DeNelle.Village
             var dir = CombatDeathDirection.Resolve(
                 transform.position, transform.forward, _lastDamageSourceWorld);
             _actor.Die(dir);
-            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
-                $"death anim DeathDir={(int)dir} source={(_lastDamageSourceWorld.HasValue ? _lastDamageSourceWorld.Value.ToString() : "none")}");
+            // Prove the death CLIP will actually play (complaint "see death sequence"): name the
+            // live animator + its controller and whether the canonical Dead bool is declared. If
+            // hasDeadParam is false the controller has no Death latch -> Die() no-ops and the body
+            // holds idle (reads as "no death sequence"); every hero controller (incl. KnightMocap)
+            // declares Dead + a Death state, so this should log WILL-play on the next capture.
+            var anim = _actor.Animator;
+            bool hasDead = AnimatorHasParam(anim, "Dead");
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroDeath",
+                "PlayDeathAnim: DeathDir=" + (int)dir +
+                " animator=" + (anim != null ? anim.name : "NONE") +
+                " ctrl=" + (anim != null && anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NONE") +
+                " hasDeadParam=" + hasDead +
+                " -> " + (hasDead ? "Death state WILL play" : "NO Dead param -> death anim NO-OP (body holds idle)") +
+                " source=" + (_lastDamageSourceWorld.HasValue ? _lastDamageSourceWorld.Value.ToString() : "none"));
+        }
+
+        /// <summary>True if <paramref name="anim"/> declares an animator parameter named
+        /// <paramref name="name"/> -- used to PROVE the Death latch exists before claiming the
+        /// death clip plays (no per-frame cost; called once on death).</summary>
+        private static bool AnimatorHasParam(Animator anim, string name)
+        {
+            if (anim == null) return false;
+            var ps = anim.parameters;
+            for (int i = 0; i < ps.Length; i++)
+                if (ps[i] != null && ps[i].name == name) return true;
+            return false;
         }
 
         private void ClearDeathAnim()

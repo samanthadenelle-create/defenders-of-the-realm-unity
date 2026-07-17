@@ -1,63 +1,61 @@
-# Building Upgrade Trees — Design Canon (owner-authored, 2026-07-16)
+# Building Upgrade Trees — Design Canon (owner-authored, rev 2 · 2026-07-16)
 
-**Status:** AUTHORITATIVE design (owner-provided). WC3-style building tech-tree.
-**Supersedes** any free-form perk invention. All perk/tier authoring conforms to THIS.
-**Related:** memory `building-upgrades-warcraft3-style`; existing backend WO-432/460
-(BuildingPerkService, building-tiers.json, ModifierService); tabbed Upgrade+Skills panel.
+**Status:** AUTHORITATIVE. WC3-style tech tree. **Rev 2 supersedes the 4-building draft** —
+it is now **6 buildings, Tier 0 -> 3**, mapped 1:1 onto the SIX existing building ids (no
+rename). Constraints from owner: **NO YarnSpinner** (upgrade UI is code-built uGUI, already
+compliant); **models are owner-sourced** — CLI produces the per-tier model list, owner creates/buys.
+**Related:** memory `building-upgrades-warcraft3-style`; backend WO-432/460; tabbed Upgrade/Skills panel (built);
+`docs/design/BUILDING_PERKS_DESIGN.md` (effect mapping).
 
----
+## Overview
+- **Tier 0** = basic starting version; **Tiers 1-3** = sequential upgrades. Each tier improves
+  efficiency, unlocks new abilities/units/towers, and gives passive bonuses.
+- **Synergies:** buildings boost each other (upgraded Lumbermill makes Barracks/Armorer units cheaper, etc.).
+- **Visuals:** buildings grow grander per tier (Tripo3D/KayKit assets — owner sources models).
+- **Strategic paths:** can't rush everything; players pick military vs magic vs economy focus.
 
-## Core philosophy (WC3 style)
+## Building id map (1:1, no rename)
+Lumbermill=`lumbermill` · Windmill=`windmill` · Forge=`forge` · Armorer=`armorer` · Barracks=`barracks` · Arcane-Tower=`arcane-tower`.
 
-- Buildings start at **Tier 0 (Basic)**; upgrade sequentially **Tier 0 -> 1 -> 2** using resources + time.
-- Each upgrade **unlocks new capabilities**, improves efficiency, and feeds **tower defense + gathering**.
-- Upgrades are **permanent per campaign/season**, cost **increasing** resources.
-- Ties directly into procedural gathering, tower placement, and wave survival.
-- **Visual progression:** buildings physically upgrade (model swaps) using KayKit/Tripo assets.
-- **Mutual dependencies** (WC3 tech gating): e.g. Granary T1 required before Forge T2.
-- Upgrades take **time (build queue, WC3-style)** and/or gathered resources.
+## 1. Lumbermill (Wood / Construction) — id `lumbermill`
+- **T0 Basic Lumber Camp:** slow wood income; basic walls.
+- **T1 Sawmill:** +40% wood gather rate; unlocks reinforced wooden towers (higher HP).
+- **T2 Timber Hall:** auto-gathers from medium range; -25% construction time for ALL buildings; unlocks mobile barricades (temp defenses).
+- **T3 Ancient Grove Mill:** global wood income +25%; wood spendable mid-wave for emergency repairs. **Synergy:** Armorer + Barracks units 15% cheaper.
 
-## The four buildings & upgrade trees
+## 2. Windmill (Food / Sustain) — id `windmill`
+- **T0 Simple Windmill:** basic food; small tower health-regen aura.
+- **T1 Harvest Windmill:** +50% food rate; +1 max active companions; unlocks "Bounty" (short gather boost).
+- **T2 Grand Mill:** passive offline food; unlocks sustain towers (Life Totem heals defenders); companions minor regen while gathering.
+- **T3 Eternal Winds:** massive food surplus; global tower+hero health regen. **Synergy:** boosts Barracks training speed + Forge essence conversion.
 
-### 1. Lumbermill — Wood / Construction
-Role: primary wood gatherer + outpost expansion.
-- **T0 (Basic Hut):** slow wood income from nearby nodes; basic walls/terrain clearing.
-- **T1 (Sawmill):** +50% wood gathering speed; unlocks stronger basic towers (wooden barricades); faster outpost repairs.
-- **T2 (Ancient Sawmill):** auto-gathers from distant nodes; unlocks advanced construction (better companion paths, reinforced outposts that reduce wave damage); wood -> temporary defense buffs.
+## 3. Forge (Essence / Magic Tech) — id `forge`
+- **T0 Basic Forge:** slow essence processing; basic rune upgrades for towers.
+- **T1 Arcane Forge:** +60% essence rate; unlocks elemental tower enchantments (fire/ice).
+- **T2 Rune Crucible:** unlocks hero spells + area-effect runes; -20% spell cooldowns.
+- **T3 Elarion Eternal Forge:** high-tier magic (global abilities like "Realm Shield"); essence powers super-towers mid-wave. **Synergy:** improves Arcane-Tower damage + Armorer gear quality.
 
-### 2. Granary — Food / Population & Sustain
-Role: food production + hero/companion support.
-- **T0 (Root Cellar):** basic food to sustain a few companions; small health-regen aura for nearby towers.
-- **T1 (Harvest Granary):** increases max companion count; food-based buffs (e.g. "Bounty": boosts gathering yield for one run).
-- **T2 (Eternal Granary):** passive food income even offline; unlocks high-tier support towers (life-giving totems) and hero ability "Feast" (heal all towers + companions mid-wave).
+## 4. Armorer (Metal / Defense & Gear) — id `armorer`
+- **T0 Makeshift Armory:** basic metal for tower armor upgrades.
+- **T1 Field Armorer:** +45% metal rate; unlocks armored towers (better resistance) + basic hero gear.
+- **T2 Master Smithy:** unlocks advanced weapons (piercing, splash); heroes get combat bonuses during gathering runs.
+- **T3 Legendary Armory:** epic gear sets + salvage (enemy drops -> metal); permanent tower damage boost. **Synergy:** Barracks units tankier + Forge runes stronger.
 
-### 3. Smithy — Metal / Military
-Role: weapon/armor crafting for towers & heroes.
-- **T0 (Forge Shed):** basic metal for simple tower upgrades (damage/armor).
-- **T1 (Armory Smithy):** unlocks tower weapon tiers (Iron -> Steel); heroes get better gear for gathering runs.
-- **T2 (Rune-Forged Smithy):** legendary upgrades (magic damage, chain lightning); epic towers + permanent hero equipment slots; salvage enemy drops into metal.
+## 5. Barracks (Companions / Military Units) — id `barracks`
+- **T0 Training Grounds:** basic companion (scout) for gathering.
+- **T1 Warrior Barracks:** unlocks melee/ranged companions; +1 max companion slot.
+- **T2 Veteran Hall:** improved companion stats + abilities (taunt, heal); call reinforcements mid-wave.
+- **T3 Elite Legion Hall:** heroic companions with ultimates; auto-defend outpost when idle. **Synergy:** Lumbermill/Windmill reduce training costs.
 
-### 4. Forge — Magic / Essence (Aether)
-Role: magic-resource (Aether/Essence) processing + spell tech.
-- **T0 (Basic Anvil):** converts essence into basic spell runes for towers.
-- **T1 (Arcane Forge):** elemental tower upgrades + companion spells (e.g. firestorm during defense).
-- **T2 (Elarion Forge):** master magic (global cooldown reductions, hero ultimates); "Realm Echo" mechanics (temporary super-towers / wave-clear abilities); ties into lore.
+## 6. Arcane-Tower (Specialized Magic Defense) — id `arcane-tower`
+- **T0 Basic Arcane Spire:** basic magic damage tower.
+- **T1 Enchanted Spire:** chain lightning / slow effects; higher damage vs magic-immune foes.
+- **T2 Mystic Obelisk:** area-denial runes + mana abilities; can empower nearby towers.
+- **T3 Elarion Arcane Nexus:** ultimate power (orbital strikes / global slow / wave-clear bursts); campaign centerpiece. **Synergy:** Forge amplifies all effects; Armorer adds durability.
 
-## Resource economy tie-in
-- **Wood** (Lumbermill) -> construction & basic towers.
-- **Food** (Granary) -> sustain & population.
-- **Metal** (Smithy) -> military power.
-- **Essence/Aether** (Forge) -> magic & special abilities.
-- Gathering runs feed all four -> meaningful choices ("rush Smithy for defense or Granary for more heroes?").
+## Progression arc
+Early = Lumbermill + Windmill (economy). Mid = Armorer + Barracks (defense/teams). Late = Forge + Arcane-Tower (epic waves/bosses).
 
-## Loop integration
-- **Gathering phase:** upgraded buildings let companions harvest faster/safer/deeper (Smithy gear reduces risk).
-- **Defense phase:** higher tiers = stronger towers, synergies (Lumbermill wood + Smithy metal = hybrid towers), emergency powers.
-- **Progression feel:** early = survive on basics; mid = tech-rush one building for a strategy; late = fully-upgraded, personalized outpost.
-
-## Implementation note (CLI — phasing)
-Some effects map to EXISTING modifiers (gather speed, tower damage/armor, army/companion cap, cost/yield);
-these author into `building-tiers.json` now. Others are NEW SYSTEMS to scope as their own work:
-tower weapon-tier unlocks, hero equipment slots, salvage, offline/passive income, auto-gather distant nodes,
-"Feast"/hero ultimates, "Realm Echo" super-towers, and per-tier building MODEL SWAPS. Flag each as
-maps-today vs needs-new-system; ship the panel + the today-effects first, phase the rest.
+## Implementation phasing (CLI)
+- **DONE (this build):** tabbed Upgrade/Skills panel; the existing numeric perks (tower/troop/production mults); army-cap (Barracks more troops) + auto-harvest (Lumbermill capstone); Village-Tier raise so perks are buyable.
+- **Phase-2 (needs new systems, per-effect mapping in BUILDING_PERKS_DESIGN.md):** synergies (cross-building cost/speed), new tower types (reinforced/armored/sustain/Life Totem/mobile barricades), construction-time reduction, offline income, emergency mid-wave repairs, elemental typing, hero spells/ultimates/cooldowns, salvage, new companion units + reinforcements + auto-defend, Arcane-Tower ability tiers, and **per-tier building MODEL SWAPS** (owner sources models). Add `costIron` so Armorer tiers can cost Metal.

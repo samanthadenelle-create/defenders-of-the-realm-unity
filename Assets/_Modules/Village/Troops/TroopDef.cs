@@ -67,5 +67,19 @@ namespace DeNelle.Village
         [JsonProperty("costFood")] public int CostFood;
         /// <summary>Seconds to build this troop in the (later) training queue.</summary>
         [JsonProperty("buildSeconds")] public float BuildSeconds;
+
+        // ── Barracks progression (WO-732) ──
+        /// <summary>
+        /// Minimum Barracks building tier required to train this troop.
+        /// 1 = default/day-one. Compared to ModifierService.TierOf("barracks")
+        /// (0 if barracks never upgraded — treat as tier 1 once barracks exists;
+        /// see WO-733 for the exact tier resolution rule). Additive + defaults to 1
+        /// so older troops.json (no field) keep resolving as day-one troops.
+        /// </summary>
+        [JsonProperty("unlockBarracksTier")] public int UnlockBarracksTier = 1;
+        /// <summary>One-line blurb for the train detail pane (WO-733/735). Optional; may be empty day-one.</summary>
+        [JsonProperty("shortDescription")] public string ShortDescription;
+        /// <summary>Resources icon key for the tray/portrait (WO-735). Optional; may be empty day-one.</summary>
+        [JsonProperty("iconId")] public string IconId;
     }
 }
