@@ -16,6 +16,11 @@ namespace DeNelle.Core.UI.Mvvm
         public readonly string IconRole;
         /// <summary>RpgUiCatalog name for the icon sprite.</summary>
         public readonly string IconName;
+        /// <summary>Optional direct Resources icon path (e.g. a GearIconCatalog-resolved sprite key),
+        /// used when the icon does not live under an RpgUiCatalog role+name. Null when unused — the
+        /// View prefers IconRole+IconName and falls back to IconPath. Keeps the contract Unity-UI-free
+        /// (still a plain string; the View resolves it). (MVVM migration Phase 0 / GearIconCatalog seam.)</summary>
+        public readonly string IconPath;
         public readonly int Price;
         /// <summary>Currency identifier this price is denominated in (e.g. "gold").</summary>
         public readonly string CurrencyId;
@@ -31,7 +36,8 @@ namespace DeNelle.Core.UI.Mvvm
 
         public ItemVM(string id, string name, string iconRole, string iconName, int price,
                       string currencyId, bool affordable, string rarity = null,
-                      bool equipped = false, bool locked = false, string lockReason = null)
+                      bool equipped = false, bool locked = false, string lockReason = null,
+                      string iconPath = null)
         {
             Id = id;
             Name = name;
@@ -44,6 +50,7 @@ namespace DeNelle.Core.UI.Mvvm
             Equipped = equipped;
             Locked = locked;
             LockReason = lockReason;
+            IconPath = iconPath;
         }
     }
 }
