@@ -5,6 +5,7 @@
         "DeNelle.EditorRegression",
         "DeNelle.Core",
         "DeNelle.Data",
+        "DeNelle.Dungeons",
         "DeNelle.Sandbox",
         "OffsetForge.Runtime",
         "Unity.InputSystem",
