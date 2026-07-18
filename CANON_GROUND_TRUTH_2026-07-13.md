@@ -1,5 +1,9 @@
 # CANON GROUND TRUTH — 2026-07-13 (midday sync handoff)
 
+> ⚠ **SUPERSEDED 2026-07-18** by `CANON_GROUND_TRUTH_2026-07-18.md`. Major state changes since: Pi
+> Hackathon WON (demo framing retired); the whole-game MVVM migration (WO-744) landed; Room Forge
+> merged to mainline (WO-740–745); save schema v33. Read the 07-18 anchor for current reality.
+
 > **Purpose:** the single anchor of *current reality*, verified from the working tree, HEAD, the
 > boards, and owner rulings given live this session. **Supersedes `CANON_GROUND_TRUTH_2026-07-12.md`**
 > (bannered). If a doc contradicts a line here, the doc is STALE.

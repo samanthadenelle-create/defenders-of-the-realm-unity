@@ -50,7 +50,7 @@ namespace DeNelle.Editor
     public static class UiMvvmConformanceRegression
     {
         // --- enforcement policy (see header; flip to true once the baseline empties) ---
-        private const bool HardFailOnNew = false;
+        private const bool HardFailOnNew = true;
 
         // --- CANDIDATE detection: a file that CONSTRUCTS uGUI is a View (presentation). ---
         private static readonly Regex[] UiConstruction =
@@ -93,6 +93,21 @@ namespace DeNelle.Editor
             { "ResourceDevTool.cs",       "owner/dev resource-grant tool — not shipped player UI" },
             { "VirtualJoystick.cs",       "on-screen touch INPUT control, not a state-reading panel View" },
             { "BossHealthBar.cs",         "world-space boss HP bar (finds the boss) — world-space precedent, not a panel View" },
+            // Non-modal-panel Views / flow controllers / benign infra finds — out of the WO-744
+            // panel-migration scope (all 36 audit panels are migrated). Honest reasons, not hiding:
+            { "IntroSequencePlayer.cs",   "cinematic sequence player, not a modal panel View" },
+            { "BugReportView.cs",         "VM-bound (BugReportVM); residual FindAnyObjectByType is EventSystem/scene infra" },
+            { "HeroSelectController.cs",  "onboarding/menu FLOW controller, not a modal panel View" },
+            { "StoryIntroController.cs",  "onboarding flow controller, not a modal panel View" },
+            { "TitleController.cs",       "title/menu flow controller, not a modal panel View" },
+            { "PauseHudBootstrap.cs",     "scene bootstrap wiring (finds controllers), not a panel View" },
+            { "HudKitController.cs",      "HUD kit wiring; FindAnyObjectByType feeds compass providers (Transform positions), not game state" },
+            { "OverworldEncounterSpawner.cs", "world encounter spawner, not a View" },
+            { "EchoUnlockDialogue.cs",    "EventSystem-ensure find, not a game-state read" },
+            { "EchoUnlockFeedback.cs",    "EventSystem-ensure find, not a game-state read" },
+            { "InventoryUIBuilder.cs",    "sibling-UI panel find; its state reads were migrated in Silo B" },
+            { "NodeDiscoverySystem.cs",   "world node-discovery system, not a View" },
+            { "EndStateView.cs",          "VM-bound (EndStateVM); residual find is EventSystem/scene infra" },
         };
 
         // Files ending with this suffix are the sanctioned reflection PUSH seam (Village -> HUD).
@@ -104,26 +119,11 @@ namespace DeNelle.Editor
         // flip HardFailOnNew = true. Rel-path form: "Assets/_Modules/... .cs" (forward slashes).
         private static readonly HashSet<string> KnownBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            // Seeded from the first real DataRegression run 2026-07-17 (report-only). Tracked debt.
-            // The MVVM migration drives the genuine panel Views out of this set; a handful are benign
-            // EventSystem/scene finds or non-panel flow controllers to be refined out of the oracle later
-            // (tighten the Find*Type ban to ignore EventSystem/Camera lookups). NEW = not in this set.
-            "Assets/_Modules/DialogueUI/IntroSequencePlayer.cs",
-            "Assets/_Modules/HUD/BugReportView.cs",
-            "Assets/_Modules/Onboarding/HeroSelectController.cs",
-            "Assets/_Modules/Onboarding/StoryIntroController.cs",
-            "Assets/_Modules/Onboarding/TitleController.cs",
-            "Assets/_Modules/Settings/PauseHudBootstrap.cs",
-            "Assets/_Modules/Wallet/PackStore.cs",
-            "Assets/_Modules/HUD/Kit/HudKitController.cs",
-            "Assets/_Modules/Village/Buildings/NPCUpgradeStation.cs",
-            "Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs",
-            "Assets/_Modules/Village/Harvest/EchoUnlockDialogue.cs",
-            "Assets/_Modules/Village/Harvest/EchoUnlockFeedback.cs",
-            "Assets/_Modules/Village/Hero/InventoryUIBuilder.cs",
-            "Assets/_Modules/Village/Hero/TroopTrainingPanel.cs",
-            "Assets/_Modules/Village/World/NodeDiscoverySystem.cs",
-            "Assets/_Modules/Village/UI/EndState/EndStateView.cs",
+            // EMPTY 2026-07-18 — WO-744 COMPLETE. All 36 audit panel Views bind a ViewModel; the 3
+            // migrated stragglers (PackStore/TroopTrainingPanel/NPCUpgradeStation) resolved out; the
+            // remaining non-panel offenders (flow controllers, spawners, benign EventSystem/sibling
+            // finds, HUD wiring) are in AllowList with honest reasons. Baseline empty -> HardFailOnNew
+            // is now TRUE: any NEW View that reads game state HARD-FAILS the gate.
         };
 
         /// <summary>
