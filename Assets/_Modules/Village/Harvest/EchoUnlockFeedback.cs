@@ -30,6 +30,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
@@ -55,7 +56,16 @@ namespace DeNelle.Village
                 svc.Changed += RefreshPip;
                 svc.EchoUnlocked += OnEchoUnlocked;
             }
-            FlowTrace.Step("Echo", "EchoUnlockFeedback built (persistent pip + Pets pet-box button + unlock dialogue armed)");
+
+            // HUD-LEAK GATE (owner F8 2026-07-18): this host is a DontDestroyOnLoad object
+            // spawned by EchoWorkforceBootstrap on cold launch (first scene = Title), so the
+            // pip + Pets button would paint over the TITLE / HeroSelect / PetSelect menus and
+            // persist. EchoService stays global + ticking; only the VISUAL is scene-gated to
+            // gameplay scenes. Set initial visibility from the active scene, then follow scene
+            // changes.
+            ApplySceneVisibility(SceneManager.GetActiveScene().name);
+            SceneManager.activeSceneChanged += OnActiveSceneChanged;
+            FlowTrace.Step("Echo", "EchoUnlockFeedback built (persistent pip + Pets pet-box button + unlock dialogue armed; scene-gated)");
         }
 
         private void OnDestroy()
@@ -65,6 +75,43 @@ namespace DeNelle.Village
             {
                 svc.Changed -= RefreshPip;
                 svc.EchoUnlocked -= OnEchoUnlocked;
+            }
+            SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+        }
+
+        // -- HUD-leak scene gate (visibility only; service stays global) -----------
+        private void OnActiveSceneChanged(Scene from, Scene to)
+        {
+            ApplySceneVisibility(to.name);
+        }
+
+        /// <summary>Show the pip + Pets button only in gameplay scenes; hide them on the
+        /// menu / front-door scenes so gameplay HUD chrome never leaks onto the title.</summary>
+        private void ApplySceneVisibility(string sceneName)
+        {
+            bool show = IsGameplayScene(sceneName);
+            if (_pipCanvas != null && _pipCanvas.activeSelf != show)
+                _pipCanvas.SetActive(show);
+            FlowTrace.Step("Echo", $"EchoUnlockFeedback pip/Pets visibility={(show ? "SHOWN" : "hidden")} for scene '{sceneName ?? "<null>"}'");
+        }
+
+        /// <summary>FALSE for the menu / non-HUD scenes (Title, HeroSelect, PetSelect,
+        /// ATBBattle), TRUE for everything else. A small deny-list of menu scenes (not an
+        /// allow-list) so new gameplay scenes -- hub/village/raid/dungeon -- default to SHOWING
+        /// the pip. Matches SceneRouter constants: Title="Title", HeroSelect="HeroSelect",
+        /// PetSelect="PetSelect", ATBBattle="ATBBattle".</summary>
+        private static bool IsGameplayScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            switch (sceneName)
+            {
+                case "Title":
+                case "HeroSelect":
+                case "PetSelect":
+                case "ATBBattle":
+                    return false;
+                default:
+                    return true;
             }
         }
 

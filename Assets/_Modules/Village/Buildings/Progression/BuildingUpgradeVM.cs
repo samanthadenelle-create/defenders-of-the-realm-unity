@@ -105,7 +105,13 @@ namespace DeNelle.Village.Buildings.Progression
 
         public BuildingUpgradeVM(string buildingId, IEconomy economy, Action onClose)
         {
-            _buildingId = buildingId ?? "";
+            // COLLECTOR ID RESOLUTION (collector bug fix): a placed collector opens this panel under
+            // its catalog id ("collector_lumbermill"/"collector_farm"), but its tier/level ladder is
+            // keyed on the bare collectorBuildingId ("lumbermill"/"farm"). Normalize HERE so EVERY
+            // open path (BuildMode, CastleVendorNpc, HudKit) resolves to the right ladder -- without
+            // it a collector id classified as neither city nor resource and rendered an empty grid.
+            // Unchanged for every non-collector id (ResolveUpgradeId is a pass-through there).
+            _buildingId = DeNelle.Core.Catalog.CatalogRegistry.ResolveUpgradeId(buildingId ?? "");
             _economy = economy;
             _onClose = onClose;
 

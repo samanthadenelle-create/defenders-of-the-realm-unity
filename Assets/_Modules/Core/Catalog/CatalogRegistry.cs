@@ -43,6 +43,22 @@ namespace DeNelle.Core.Catalog
         public static CatalogEntry Get(string id) =>
             (id != null && _byId.TryGetValue(id, out var e)) ? e : null;
 
+        /// <summary>
+        /// Resolve a placed structure's catalog id to the id its UPGRADE ladder is keyed on.
+        /// A resource COLLECTOR is registered under its catalog id (e.g. "collector_lumbermill")
+        /// but its tier/level data lives under the bare <c>collectorBuildingId</c> ("lumbermill",
+        /// per building-tiers.json + ResourceBuildingProgression). Every non-collector id (and any
+        /// unknown id) returns UNCHANGED. Mirrors the existing
+        /// <c>repo.collectorBuildingId ?? entry.id</c> resolution in StructureFactory /
+        /// WallRepairController so the upgrade path agrees with placement.
+        /// </summary>
+        public static string ResolveUpgradeId(string id)
+        {
+            var e = Get(id);
+            var cbid = (e != null && e.repo != null) ? e.repo.collectorBuildingId : null;
+            return !string.IsNullOrEmpty(cbid) ? cbid : id;
+        }
+
         /// <summary>All entries of a type (palette tab). Empty if none.</summary>
         public static IReadOnlyList<CatalogEntry> OfType(CatalogType type) =>
             _byType.TryGetValue(type, out var list)

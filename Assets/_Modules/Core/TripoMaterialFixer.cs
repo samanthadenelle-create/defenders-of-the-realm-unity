@@ -105,7 +105,13 @@ namespace DeNelle.Core
 
         [SerializeField] private string _fallbackTextureName;
         [SerializeField] private string _forcedTextureName;   // WO-719: UNCONDITIONAL albedo override (see SetForcedTexture)
-        [SerializeField] private Color _fallbackTint = Color.white;
+        // WHITE-STREAK FIX (fleet triage 2026-07-18): default was Color.white, so a texture
+        // MISS (missing basecolor/albedo atlas) with the tint path active rendered the whole
+        // body SOLID WHITE — the recurring "white line/streak" in the party stack. Default to
+        // a neutral MID-GREY instead, so a miss degrades to an UNLIT GREY body (the intended
+        // degrade per HeroTextureLoader) rather than broken pure-white. Explicit SetFallbackTint
+        // callers pass their own colour and are unaffected.
+        [SerializeField] private Color _fallbackTint = new Color(0.5f, 0.5f, 0.5f, 1f);
         [SerializeField] private bool _hasFallbackTint;
         [SerializeField] private float _smoothness = 0.15f;
         [SerializeField] private float _metallic = 0f;

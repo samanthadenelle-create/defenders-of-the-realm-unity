@@ -100,6 +100,28 @@ namespace DeNelle.Village.Arena
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
 
+        // SELF-HEAL WATCHDOG grace (overworld-wedge fix): how long the hero may read as OUTSIDE the
+        // staged arena during a LIVE fight before we force-resolve to un-freeze the home reps. Long
+        // enough that a legit mid-warp frame — the hero is briefly between home and the ~7km arena
+        // during the staged WarpHero — never trips it, short enough that a real failed warp-in or an
+        // orphaned _battlePaused self-heals in ~2-3s instead of waiting out the 240s battle timeout.
+        private const float HeroOutOfArenaGraceSeconds = 2.5f;
+
+        // FLED-PACK LEASH + DISENGAGE (fled-enemy fix — same non-resolution class as the wedge): the
+        // OPENING FTUE fight can stage an Orc Warband that kites/retreats OUT of reach (combo stays 0,
+        // _liveEnemies never empties, BattleLock + the HUD + hero inputs pin for up to 240s).
+        //  • LeashRadius     — how far a staged enemy may drift from the hero before we pull it back.
+        //    Generous vs the ~10m kite band (EnemyBrain KiterTactics) so NORMAL kiting is untouched;
+        //    only a true flee past this is clamped so the foe stays reachable ("turn and fight").
+        //  • EngageContactRadius — kept > LeashRadius so a leashed (still-in-play) enemy always reads
+        //    as in-contact; the disengage timer therefore only elapses when the pack is genuinely
+        //    unreachable (leash failed / off-mesh island / hero not truly present).
+        //  • DisengageResolveSeconds — no-contact window before we break off the encounter (loss).
+        //    Well under the 240s timeout so the HUD/BattleLock release promptly, not on hero death.
+        private const float LeashRadius             = 16f;
+        private const float EngageContactRadius     = 18f;
+        private const float DisengageResolveSeconds = 7f;
+
         // ── SQUAD FORMATION spacing (owner-adjustable — 2026-07-03 "spawn in a proper formation") ──
         // Three ranks laid out on the NORTH side facing the SOUTH-standing hero: TANKS front (nearest
         // the hero), DPS/ranged mid, HEALERS rear. Tune these by eye — they are the whole formation
@@ -218,6 +240,18 @@ namespace DeNelle.Village.Arena
         private BattleArenaHud _hud;
         private FamilyLeader _familyLeader;   // WO-146 MonsterFamily — the orc pack's leader
         private bool _familyEngaged;          // disbanded-on-arrival latch (formation -> real 1vN)
+
+        // SELF-HEAL WATCHDOG transients (overworld-wedge fix — reset per battle in WatchToResolution).
+        // _heroOutOfArenaSince: Time.time the hero was FIRST seen OUTSIDE the staged arena during a live
+        //   fight; -1 = hero in-arena / not tracking. Drives the out-of-arena grace timer.
+        // _marchPosLogged: one-shot latch so the §12 post-warp HERO-POS capture in MaybeDisbandOnArrival
+        //   fires once per battle (proves warp-in landed the hero in the arena, or did not).
+        // _lastCloseContactTime: Time.time a live enemy was last within engage range of the hero; drives
+        //   the DISENGAGE-RESOLVE path (a scattered/fled pack releases the HUD instead of pinning it 240s).
+        private float _heroOutOfArenaSince = -1f;
+        private bool  _marchPosLogged;
+        private float _lastCloseContactTime;
+
         private string _activeBiome;          // WO-499 resolved biome (backdrop + particles)
         private ArenaDeathCam _deathCam;      // WO-493 #4 climactic death-camera hold
 
@@ -319,6 +353,15 @@ namespace DeNelle.Village.Arena
             MaybeAddBoss(p);
 
             FlowTrace.Step("BattleArena", $"BeginEncounter: family=[{string.Join(",", p.EnemyIds)}] threat={p.Threat} theme='{p.BackdropContext}' return='{p.ReturnScene}'.");
+
+            // §12 ROOT-CAUSE CAPTURE (overworld-wedge): log WHERE the hero is at encounter start so the
+            // NEXT occurrence tells us whether the warp-in FAILED (candidate A: hero starts home and never
+            // reaches the arena) or this is an ORPHANED _battlePaused carried from a prior encounter
+            // (candidate B: hero already reads in-arena / elsewhere before this stage even runs).
+            var beHero = GameObject.FindWithTag("Player");
+            FlowTrace.Step("BattleArena",
+                $"BeginEncounter HERO-POS: pos={(beHero != null ? beHero.transform.position.ToString() : "<no Player>")} inArena={(beHero != null && IsArenaPosition(beHero.transform.position))} centre={ArenaCentre}.");
+
             StartCoroutine(StageRoutine(p));
             return true;
         }
@@ -1243,6 +1286,20 @@ namespace DeNelle.Village.Arena
             if (_familyEngaged || _familyLeader == null) return;
             var heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return;
+
+            // §12 ROOT-CAUSE CAPTURE (overworld-wedge): one-shot POST-WARP hero position on the first
+            // march tick. With BeginEncounter's pre-stage capture this pins the culprit: if the hero
+            // still reads OUTSIDE the arena here, the warp-in FAILED (candidate A) and the family can
+            // never close the 4.5m disband gate (the leader is ~7km away); if in-arena, the warp landed
+            // and any non-resolution is a fled/scattered pack (candidate B) instead.
+            if (!_marchPosLogged)
+            {
+                _marchPosLogged = true;
+                Vector3 hp = heroGo.transform.position;
+                FlowTrace.Step("BattleArena",
+                    $"MARCH HERO-POS (post-warp): pos={hp} inArena={IsArenaPosition(hp)} leader={_familyLeader.transform.position} centre={ArenaCentre}.");
+            }
+
             float dist = Vector3.Distance(_familyLeader.transform.position, heroGo.transform.position);
             FlowTrace.Throttle("BattleArena", "march-dist", 1f, $"MARCH leader dist={dist:0.0}m to hero (4.5m gate).");
             if (dist <= 4.5f)
@@ -1470,10 +1527,70 @@ namespace DeNelle.Village.Arena
         private IEnumerator WatchToResolution()
         {
             float deadline = Time.time + BattleTimeoutSeconds;
+            // Reset the self-heal transients for THIS battle (see field decls).
+            _heroOutOfArenaSince = -1f;
+            _marchPosLogged      = false;
+            _lastCloseContactTime = Time.time;
             while (!_resolved)
             {
                 // Pack approaches in formation, then breaks to fight when it reaches the hero.
                 MaybeDisbandOnArrival();
+
+                // ── SELF-HEAL WATCHDOGS (overworld-wedge + fled-pack fix) ─────────────────────────
+                // A staged battle freezes EVERY home rep (RepEngageWatcher.PauseAll in BeginEncounter)
+                // and only ResumeAll()s on Resolve. Two failure modes leave the battle unable to
+                // resolve on its own — the home reps then stay frozen mid-aggro (and the HUD + hero
+                // inputs stay locked on BattleLock) for the full 240s timeout. Both self-heal here by
+                // force-resolving, which runs ResumeAll():
+                //   (A) HERO NOT IN THE ARENA — a failed warp-in, or an ORPHANED _battlePaused from a
+                //       prior encounter: the family can never reach the 4.5m disband gate (~7km away),
+                //       so the fight never ends. Grace-timered so a legit mid-warp frame never trips it.
+                //   (B) SCATTERED / FLED PACK — the hero IS in the arena but the enemies kited/fled out
+                //       of reach (combo stays 0, _liveEnemies never empties). We LEASH them back within
+                //       reach, and if none is reachable for a sustained window we break off the encounter.
+                var watchHeroGo = GameObject.FindWithTag("Player");
+                Vector3 heroPos = watchHeroGo != null ? watchHeroGo.transform.position : Vector3.zero;
+                bool heroInArena = watchHeroGo != null && IsArenaPosition(heroPos);
+
+                if (watchHeroGo != null && !heroInArena)
+                {
+                    // (A) hero out of arena — accumulate grace, then force-resolve to ResumeAll() reps.
+                    if (_heroOutOfArenaSince < 0f) _heroOutOfArenaSince = Time.time;
+                    float outFor = Time.time - _heroOutOfArenaSince;
+                    if (outFor >= HeroOutOfArenaGraceSeconds)
+                    {
+                        FlowTrace.Fail("BattleArena",
+                            $"WATCHDOG: hero OUT of arena {outFor:0.0}s (pos={heroPos} centre={ArenaCentre}) - failed warp-in / orphaned battle; force-resolving to ResumeAll() reps.");
+                        Resolve(false);
+                        yield break;
+                    }
+                }
+                else
+                {
+                    _heroOutOfArenaSince = -1f;   // in-arena (or hero briefly absent) — reset the grace timer
+
+                    // (B) leash + disengage apply only AFTER the family has broken formation to fight
+                    // (_familyEngaged). Before that, the pack is legitimately marching in from the far
+                    // rank (~30m+) and must NOT be leashed or counted as "out of contact" — that is the
+                    // intended approach, not a flee. Post-engage is when a scatter/flee is the failure.
+                    if (heroInArena && _familyEngaged)
+                    {
+                        // Leash the pack to the hero so a kiter/retreater can't flee out of reach, then
+                        // track the last time ANY live enemy was within engage range.
+                        LeashStagedEnemies(heroPos);
+                        if (AnyEnemyWithin(heroPos, EngageContactRadius))
+                        {
+                            _lastCloseContactTime = Time.time;
+                        }
+                        else if (Time.time - _lastCloseContactTime >= DisengageResolveSeconds)
+                        {
+                            FlowTrace.Fail("BattleArena",
+                                $"WATCHDOG: no live enemy within {EngageContactRadius:0}m for {DisengageResolveSeconds:0}s post-engage - pack scattered/unreachable; breaking off encounter (loss).");
+                            Resolve(false);
+                            yield break;
+                        }
+                    }
+                }
 
                 // WO-512 slice 2: keep the lock-on camera framed on the CURRENT locked foe. The
                 // lock can switch (HUD cycle/tap) or auto-drop (target died) without BattleArena
@@ -1514,6 +1631,47 @@ namespace DeNelle.Village.Arena
 
                 yield return new WaitForSeconds(0.25f);
             }
+        }
+
+        // FLED-PACK LEASH (fled-enemy fix): clamp any staged enemy that has drifted BEYOND LeashRadius
+        // from the hero back to just inside that radius, so a kiter / low-HP retreater stays reachable
+        // ("turn and fight") and the normal win condition can resolve. Normal kiting (~10m band) is
+        // untouched — only a true flee past LeashRadius is pulled back, and the per-tick correction is
+        // small and NavMesh-projected (never an off-mesh teleport). Contained to BattleArena; the enemy
+        // AI is not modified. Called only while the hero is confirmed in-arena.
+        private void LeashStagedEnemies(Vector3 heroPos)
+        {
+            for (int i = 0; i < _liveEnemies.Count; i++)
+            {
+                var e = _liveEnemies[i];
+                if (e == null || e.IsDead) continue;
+                Vector3 pos = e.transform.position;
+                Vector3 flat = pos - heroPos; flat.y = 0f;
+                float dist = flat.magnitude;
+                if (dist <= LeashRadius || dist < 0.001f) continue;
+
+                Vector3 clamped = heroPos + flat.normalized * (LeashRadius * 0.95f);
+                clamped.y = pos.y;
+                if (NavMesh.SamplePosition(clamped, out NavMeshHit hit, 4f, NavMesh.AllAreas)) clamped = hit.position;
+                e.transform.position = clamped;
+                FlowTrace.Throttle("BattleArena", "leash", 1f,
+                    $"LEASH: pulled '{e.name}' from {dist:0.0}m back to ~{LeashRadius * 0.95f:0.0}m of hero (fled-pack guard).");
+            }
+        }
+
+        // True if ANY live (non-dead) staged enemy is within <paramref name="radius"/> of the hero
+        // (flat XZ). Drives the disengage-resolve no-contact timer in WatchToResolution.
+        private bool AnyEnemyWithin(Vector3 heroPos, float radius)
+        {
+            float r2 = radius * radius;
+            for (int i = 0; i < _liveEnemies.Count; i++)
+            {
+                var e = _liveEnemies[i];
+                if (e == null || e.IsDead) continue;
+                Vector3 flat = e.transform.position - heroPos; flat.y = 0f;
+                if (flat.sqrMagnitude <= r2) return true;
+            }
+            return false;
         }
 
         // WO-493 #4: run the climactic death-camera hold and WAIT for it before teardown/return.
@@ -1974,11 +2132,17 @@ namespace DeNelle.Village.Arena
         // threat. Returns the equipped item's display name, or null on no drop. Fake-null-safe.
         private static string TryGrantArenaGear(int threat, int stars)
         {
-            const float baseChance = 0.30f;
-            const float perTier    = 0.05f;
-            const float maxChance  = 0.85f;   // WO-556: raised so the star bonus has headroom
-            // WO-556 ITEM 4: more stars = better gear odds. Bonus per star ABOVE 1 (a 1-star win
-            // gets the threat-only odds; 3 stars adds +0.20). Owner-tunable (GearDropPerStar).
+            // GEAR IS RARE (owner directive 2026-07-18): weapons/armor must feel like a special
+            // find, ~2% of arena wins — NOT the old 30-85% (dropped on nearly every win). Flat
+            // ~2%: no threat scaling, and the hard cap holds it at ~2% even with the star bonus.
+            // ONE knob to tune -> baseChance. NOTE: on a hit the roll splits ~50/50 weapon vs
+            // armor, so 0.02 here == ~1% armor + ~1% weapon; set to 0.04 for a full ~2% PER slot.
+            // Materials/consumables (loot-tables.json) are UNAFFECTED - this only gates gear.
+            const float baseChance = 0.02f;   // ~2% (GEAR RARE)
+            const float perTier    = 0.00f;   // no threat scaling - stays rare
+            const float maxChance  = 0.02f;   // hard cap: gear never exceeds ~2% (star bonus clamped away)
+            // WO-556 ITEM 4 star bonus is retained for reference but clamped by maxChance above,
+            // so extra stars no longer raise the gear-drop odds (gear stays rare regardless of stars).
             float starBonus = GearDropPerStar * Mathf.Max(0, stars - 1);
             float chance = Mathf.Min(maxChance, baseChance + perTier * Mathf.Max(0, threat) + starBonus);
             FlowTrace.Step("BattleArena", $"TryGrantArenaGear: stars={stars} threat={threat} -> dropChance={chance:0.00}.");

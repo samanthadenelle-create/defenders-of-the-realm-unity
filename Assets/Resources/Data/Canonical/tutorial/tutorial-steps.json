@@ -111,7 +111,8 @@
       "highlight": [],
       "completion": { "signal": "hero.reached:hub_anchor" },
       "skippable": true,
-      "objective": { "text": "Return home through the gate" }
+      "objective": { "text": "Return home through the gate" },
+      "_note": "STALE-COPY: 'through the gate' is stale for the single merged Main_Castle_Overworld (no separate hub<->outer scene transition now). Completion is real Heart-of-Elarion proximity (hub_anchor -> live HeartController, TutorialWorldAnchors); rewrite the copy to 'Return home to the Heart' in the next copy pass. The mechanical anchor fix (drop the Vector3.zero fallback) is the priority and is done."
     },
     {
       "id": "freedom",

@@ -2036,6 +2036,14 @@ namespace DeNelle.Village
             int level = Mathf.Max(1, ps.level);
             int maxLevel = MaxLevelFor(entry);
 
+            // COLLECTOR ID RESOLUTION (collector bug fix): a placed collector's itemId is the
+            // catalog id ("collector_lumbermill"/"collector_farm"), but its tier/level ladder is
+            // keyed on the bare collectorBuildingId ("lumbermill"/"farm", building-tiers.json +
+            // ResourceBuildingProgression). Resolve to the upgrade-keyed id (unchanged for every
+            // non-collector) so the panel predicate + open target the right ladder -- else a
+            // collector fell through to the tower inline path and toasted "Max tier reached".
+            string upgradeId = CatalogRegistry.ResolveUpgradeId(ps.itemId);
+
             // ROUTE BY KIND (owner F8 2026-07-17): a CITY/RESOURCE building upgrades through the
             // WC3-style perk/tier PANEL (BuildingUpgradePanelMvvm, WO-675/680); a DEFENSE TOWER
             // (e.g. tower_arcane_spire — the Arcane Spire in the shot) upgrades INLINE by stepping
@@ -2043,11 +2051,11 @@ namespace DeNelle.Village
             // ResourceBuildingProgression, so opening the panel for one would target an empty /
             // default building — the panel is the WRONG surface for a tower.
             bool panelBuilding =
-                DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(ps.itemId) ||
-                DeNelle.Village.Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(ps.itemId);
+                DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(upgradeId) ||
+                DeNelle.Village.Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(upgradeId);
 
             FlowTrace.Step("BuildUpgrade",
-                $"click id='{ps.itemId}' lvl={level}/{maxLevel} panelBuilding={panelBuilding} " +
+                $"click id='{ps.itemId}' upgradeId='{upgradeId}' lvl={level}/{maxLevel} panelBuilding={panelBuilding} " +
                 $"panelFlag={DeNelle.Core.FeatureFlags.BuildingUpgradePanel} buildTimers={DeNelle.Core.FeatureFlags.BuildTimers}");
 
             if (panelBuilding)
@@ -2060,11 +2068,11 @@ namespace DeNelle.Village
                 }
                 // Canonical guarded open (same path HudKitController uses): routes to the
                 // registered BuildingUpgradePanelMvvm.Open(buildingId) for THIS building.
-                bool opened = DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.BuildingUpgrade, ps.itemId);
+                bool opened = DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.BuildingUpgrade, upgradeId);
                 if (opened)
-                    FlowTrace.Step("BuildUpgrade", $"opened BuildingUpgrade panel for building '{ps.itemId}'.");
+                    FlowTrace.Step("BuildUpgrade", $"opened BuildingUpgrade panel for building '{upgradeId}'.");
                 else
-                    FlowTrace.Fail("BuildUpgrade", $"PanelRouter.Open(BuildingUpgrade,'{ps.itemId}') returned false — panel did NOT open.");
+                    FlowTrace.Fail("BuildUpgrade", $"PanelRouter.Open(BuildingUpgrade,'{upgradeId}') returned false — panel did NOT open.");
                 return;
             }
 

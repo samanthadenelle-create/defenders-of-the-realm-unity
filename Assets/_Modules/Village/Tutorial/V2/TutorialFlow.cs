@@ -337,6 +337,13 @@ namespace DeNelle.Village
             if (step.Grant != null && step.Grant.PrepaidTower)
                 ApplyPrepaidTowerGrant(step);
 
+            // PART 2 (guided-build tolerance): a build step whose demanded structure is
+            // ALREADY placed (free-carousel player, or a tower dropped before the step
+            // armed) must not burn the 120s watchdog. If BaseLayout already satisfies the
+            // completion signal, complete NOW down the normal path (grants + outro + advance)
+            // instead of clearing the latch and waiting on an event that already fired.
+            if (TryAutoCompleteAlreadyBuilt(step)) return;
+
             // CLEAR the completion latch BEFORE the intro plays: a stale earlier raise
             // must not complete the step, but a raise DURING the intro must (e.g. a
             // dialogue.ended completion that IS the intro's own end).
@@ -391,6 +398,75 @@ namespace DeNelle.Village
                 else if (!CoreDialogue.DialogueService.Play(step.Dialogue.Intro))
                     FlowTrace.Warn("Tutorial", $"step '{step.Id}' intro dialogue '{step.Dialogue.Intro}' unknown — continuing without it.");
             }
+        }
+
+        // ── PART 2: guided-build tolerance — auto-complete an already-built step ──
+        // A founding-arc build step whose completion is a BUILD signal must not strand for
+        // the full watchdog when the player ALREADY placed the demanded structure. On
+        // EnterStep, if GameState.BaseLayout already satisfies the await signal, complete
+        // the step immediately down the SAME completion path a real signal takes (grants,
+        // outro, seen-mark, advance) — never clear-the-latch-and-wait on an event that fired
+        // before the step armed. Chains cleanly: each auto-complete advances to the next
+        // step, which re-checks (a carousel player who placed pet-house + lumberyard + a
+        // tower up front walks through all three build steps at once).
+        //
+        // Signal -> BaseLayout presence:
+        //   build.tower_placed          -> ANY Tower/Gate (defense) structure present
+        //   build.structure_placed:<id> -> that itemId present (collector ids: lumberyard, pet-house)
+
+        /// <summary>Auto-complete the entering step if BaseLayout already satisfies its build
+        /// completion signal. Returns true when it consumed the step (caller returns without
+        /// arming AwaitCompletion). No-op for any non-build step.</summary>
+        private bool TryAutoCompleteAlreadyBuilt(TutorialStepDef step)
+        {
+            if (string.IsNullOrEmpty(_awaitSignal)) return false;
+            if (!BaseLayoutSatisfiesBuildSignal(_awaitSignal)) return false;
+
+            FlowTrace.Step("Tutorial", $"STEP-AUTOCOMPLETE :: {step.Id} — completion signal '{_awaitSignal}' " +
+                "already satisfied by an existing structure in BaseLayout; completing without waiting (guided-build tolerance).");
+            CompleteCurrentStep(skipped: false);   // normal path: grants + outro + seen-mark + advance
+            return true;
+        }
+
+        /// <summary>Maps a build completion signal to a GameState.BaseLayout presence check.
+        /// False for any non-build signal (proximity / dialogue / wave / arena steps are never
+        /// auto-completed this way) and when nothing is placed yet.</summary>
+        private static bool BaseLayoutSatisfiesBuildSignal(string signal)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null || state.BaseLayout == null || state.BaseLayout.Count == 0) return false;
+
+            // build.structure_placed:<id> — a specific catalog itemId must already be placed.
+            if (signal.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string wantId = signal.Substring(TutorialSignals.StructurePlacedPrefix.Length);
+                if (string.IsNullOrEmpty(wantId)) return false;
+                foreach (var rec in state.BaseLayout)
+                    if (string.Equals(rec.itemId, wantId, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                return false;
+            }
+
+            // build.tower_placed — ANY tower/defense structure already present.
+            if (string.Equals(signal, TutorialSignals.TowerPlaced, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var rec in state.BaseLayout)
+                    if (IsDefenseStructure(rec.itemId)) return true;
+                return false;
+            }
+
+            return false;   // not a build signal
+        }
+
+        /// <summary>True when a placed itemId resolves to a Tower/Gate (Defense) in the catalog
+        /// — the "any tower/defense structure present" rule for build.tower_placed.</summary>
+        private static bool IsDefenseStructure(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return false;
+            var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(itemId);
+            if (entry == null) return false;
+            return entry.type == DeNelle.Core.Catalog.CatalogType.Tower
+                || entry.type == DeNelle.Core.Catalog.CatalogType.Gate;
         }
 
         // ── WO-702: deferred step-intro (dialogue/builder truce) ──────────────

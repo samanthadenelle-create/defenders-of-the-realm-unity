@@ -368,6 +368,22 @@ namespace DeNelle.Village
                 && BuildTimerService.Instance.IsBuilding(UnderConstructionVisual.KeyFor(data)))
                 UnderConstructionVisual.Attach(ps, UnderConstructionVisual.KeyFor(data));
 
+            // WO (owner device felt-test 2026-07-17): RELOAD/hub-enter path had NO vendor NPC for
+            // collector buildings (Farm/Lumbermill/Forge). Fresh placement spawns one via
+            // BuildModeController.Place -> NotifyBuildingPlaced, but this reload path recreated the
+            // structure via StructureFactory.Create ALONE and never notified the injector — and the
+            // injector's AnchorVendorsToPlacedBuildings poll only enumerates Building components, which
+            // collectors do NOT carry (they attach a ResourceCollector, no Building), so the poll
+            // awaited them forever. Notify HERE, symmetric with fresh placement: data.itemId is the
+            // catalog id RoleForBuildingId maps (collector_farm->Windmill, etc). NotifyBuildingPlaced
+            // is hub-scene-gated + idempotent per-building via VendorSeatMarker, so it will NOT
+            // double-spawn on the GameplayBuildings the poll already handles. Guarded like the Place
+            // site so a throwing injector can never abort the layout Rebuild loop.
+            FlowTrace.Step("Vendor",
+                $"reload-notify vendor for placed structure id='{data.itemId}' (BaseLayoutLoader.Spawn).");
+            Guard.Try("BaseLayout", "spawn vendor NPC for reloaded building",
+                () => CastleVendorNpcInjector.NotifyBuildingPlaced(data.itemId, ps.transform));
+
             return ps;
         }
 

@@ -224,11 +224,17 @@ namespace DeNelle.Village
                     return null;
                 }
             }
-            else if (_activeOneshots >= _maxActiveOneshots)
+            else
             {
-                FlowTrace.Throttle("VFXManager", "hovl-oneshot-cap", 1f,
-                    $"PlayKey('{key}') SKIPPED — active oneshots {_activeOneshots}/{_maxActiveOneshots} (cap hit).");
-                return null;
+                // Leak-proof: derived + prune-on-read count, shared with the VFXType path
+                // (VFXManager.ActiveOneshotCount). A missed return can no longer pin it at cap.
+                int activeOneshots = ActiveOneshotCount();
+                if (activeOneshots >= _maxActiveOneshots)
+                {
+                    FlowTrace.Throttle("VFXManager", "hovl-oneshot-cap", 1f,
+                        $"PlayKey('{key}') SKIPPED — active oneshots {activeOneshots}/{_maxActiveOneshots} (cap hit).");
+                    return null;
+                }
             }
 
             var go = AcquireHovl(key, row);
@@ -274,10 +280,13 @@ namespace DeNelle.Village
                 return new VFXHandle(go, key);
             }
 
-            _activeOneshots++;
             float life = lifetime > 0f ? lifetime
                        : row.DefaultLifetime > 0f ? row.DefaultLifetime
                        : DetectDuration(go) + 0.3f;
+            // Leak-proof: register the checked-out Hovl oneshot in the shared live set + a deadline
+            // (instead of a raw ++), so a host destroyed on enemy-death / scene-change before
+            // ReturnHovlToPool runs cannot pin _activeOneshots at cap. SweepOneshots reclaims it.
+            RegisterOneshot(go, VFXType.None, key, life);
             StartCoroutine(ReturnHovlAfterSeconds(go, key, life));
             // Oneshot auto-returns; a handle is intentionally not surfaced (would risk a
             // double-return if the caller also Stop()'d it).
@@ -364,7 +373,7 @@ namespace DeNelle.Village
 
             bool wasLoop = _hovlLoopObjects.Remove(go);
             if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
-            else         { if (_activeOneshots > 0) _activeOneshots--; }
+            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
         }
 
         /// <summary>Defer a Hovl pool return by <paramref name="delay"/> seconds (graceful loop stop).</summary>

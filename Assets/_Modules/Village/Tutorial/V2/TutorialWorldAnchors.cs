@@ -74,10 +74,18 @@ namespace DeNelle.Village
                 }
                 case "hub_anchor":
                 {
-                    // Home = the Heart of Elarion (scene centre 0,0,0 by canon §7);
-                    // prefer the live HeartController, fall back to the canon origin.
+                    // Home = the Heart of Elarion. STALE-FIX: the old "scene centre 0,0,0
+                    // by canon" comment is WRONG for the merged Main_Castle_Overworld, whose
+                    // castle content is offset (~5000,0,5000) -- the Heart is NOT at world
+                    // origin. Resolve the LIVE HeartController's real transform (it is baked
+                    // active+enabled into Main_Castle_Overworld, so FindAnyObjectByType finds
+                    // it). If NO Heart resolves, return "no anchor" (false) so the proximity
+                    // probe reports false -- NEVER strand the return_home step at (0,0,0),
+                    // which in the offset world is thousands of metres from the hero (the old
+                    // Vector3.zero fallback made return_home un-completable there).
                     var heart = FindAnyObjectByType<HeartController>();
-                    pos = heart != null ? heart.transform.position : Vector3.zero;
+                    if (heart == null) return false;
+                    pos = heart.transform.position;
                     return true;
                 }
                 default:

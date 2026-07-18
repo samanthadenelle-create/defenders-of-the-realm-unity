@@ -184,6 +184,19 @@ namespace DeNelle.Village
             return AbilityCatalog.Find(_heroClass, slot);
         }
 
+        /// <summary>
+        /// PUBLIC facade over <see cref="Resolve"/> — returns EXACTLY the AbilityDef this hero
+        /// will CAST for <paramref name="slot"/>: the loadout-equipped ability (by id) on W/E/R
+        /// when one is set, else this component's class stock def, resolved through THIS hero's
+        /// own <see cref="HeroLoadout"/> + <c>_heroClass</c> (the same lookup <see cref="TryCast"/>
+        /// uses). The HUD ability medallions resolve their ICON through this so the icon shown is
+        /// always the ability actually cast — one source of truth. Previously the icon re-derived
+        /// class + loadout through a DIFFERENT lookup (HeroLoadoutAccess.Current + a hardcoded
+        /// class) that could disagree with the cast (E showed a taunt icon while E cast a heal).
+        /// Null only when the class has no def for the slot at all.
+        /// </summary>
+        public AbilityDef ResolvedDef(AbilitySlot slot) => Resolve(slot);
+
         /// <summary>0..1 cooldown fill for the HUD — 1 = ready, 0 = just cast.</summary>
         public float CooldownFraction(AbilitySlot slot)
         {
@@ -462,18 +475,22 @@ namespace DeNelle.Village
 
             // F8 "movement interrupts casting": route spells with a wind-up (CastSeconds > 0) through the
             // interruptible routine; instant skills (CastSeconds <= 0) commit immediately as before.
-            // Variant 0 = the generic cast clip (the per-variant Q/W/E/R clips are slot-keyed).
+            // PER-ABILITY CAST ANIMATION (fix): the extra bar previously always passed variant 0 (the
+            // generic cast), so an assigned hot-swap skill never played ITS animation. Resolve the extra
+            // skill's own cast variant from its def (explicit castAnim > effect shape); the extra bar has
+            // no Q/W/E/R slot, so generic (0) is the terminal fallback.
+            int extraVariant = ResolveAnimVariant(def, 0);
             if (def.CastSeconds > 0f)
             {
                 _casting = true;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
-                    $"cast-start extra '{abilityId}' windup={def.CastSeconds:0.00}s (interruptible).");
-                _castRoutine = StartCoroutine(CastRoutine(def, 0, -1, abilityId, scaledCooldown));
+                    $"cast-start extra '{abilityId}' windup={def.CastSeconds:0.00}s variant={extraVariant} (interruptible).");
+                _castRoutine = StartCoroutine(CastRoutine(def, extraVariant, -1, abilityId, scaledCooldown));
             }
             else
             {
-                CastResolved(def, 0);
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "extra-skill cast " + abilityId + " FIRED");
+                CastResolved(def, extraVariant);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "extra-skill cast " + abilityId + " FIRED (variant " + extraVariant + ")");
             }
             return true;
         }
@@ -589,7 +606,16 @@ namespace DeNelle.Village
             string fxRaw = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
             bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime";
             if (!isHealCast) actor?.PlayAttack(0);
-            actor?.PlayCast(castVariant);
+            // PER-ABILITY CAST ANIMATION (fix "swapped/equipped ability plays the wrong cast clip"):
+            // the animation was selected by the pressed SLOT (castVariant == slot+1), so an ability
+            // equipped into a slot played that slot's STOCK clip while the EFFECT was the equipped
+            // ability's. Derive the cast-clip variant from the RESOLVED ability instead — its explicit
+            // castAnim key > its effect SHAPE's canonical keyword > the pressed slot as last-resort —
+            // so the animation matches what the ability actually DOES, not which button fired it. The
+            // slot the caller passed is the fallback, so a stock loadout is unchanged where the effect
+            // maps back to its own slot clip. VFX keeps the caller's (slot) keyword — unchanged.
+            int animVariant = ResolveAnimVariant(def, castVariant);
+            actor?.PlayCast(animVariant);
 
             Vector3 origin = transform.position;
 
@@ -1326,6 +1352,95 @@ namespace DeNelle.Village
         // ([1] q → skill1, [2] w → skill2, [3] e → castHeal; [4] r has no registry keyword yet —
         // null = silent until the vocabulary grows a row for it). Variant 0 = generic cast.
         private static readonly string[] CastVariantKeyword = { "cast", "skill1", "skill2", "castHeal", null };
+
+        // ── PER-ABILITY CAST ANIMATION (fix "swapped ability plays the wrong cast clip") ──────
+        // The cast animation is chosen at runtime ONLY by the CastVariant int handed to
+        // ActorAnimator.PlayCast — the baked controller carries one state per variant (0 generic
+        // Cast, 1 Cast_q/skill1, 2 Cast_w/skill2, 3 Cast_e/castHeal, 4 Cast_r) whose CLIP was
+        // registry-resolved at build time through MotionCastings' closed keyword vocabulary (the
+        // ActionKeywords skill1/skill2/castHeal seam). There is NO runtime clip swap (arch §3), so
+        // the fix is to pick the VARIANT from the RESOLVED ability rather than the pressed slot.
+        // Priority mirrors the shared keyword seam: explicit per-ability anim key
+        // (AbilityDef.CastAnim) > the effect SHAPE's canonical keyword > the pressed slot's own clip
+        // as a last-resort fallback (so nothing regresses where a matching state/clip is missing).
+
+        /// <summary>Resolves the CastVariant int for the RESOLVED ability: explicit
+        /// <see cref="AbilityDef.CastAnim"/> key > effect-shape keyword > the pressed slot fallback.</summary>
+        private static int ResolveAnimVariant(AbilityDef def, int slotFallbackVariant)
+        {
+            if (def == null) return slotFallbackVariant;
+            // 1) explicit ability anim key (abilities.json "castAnim") wins.
+            int v = VariantForAnimKey(def.CastAnim);
+            if (v >= 0) return v;
+            // 2) else the effect SHAPE's canonical anim keyword.
+            v = VariantForAnimKey(AnimKeyForEffect(def));
+            if (v >= 0) return v;
+            // 3) last resort: the pressed slot's own clip (no regression where a clip is missing).
+            return slotFallbackVariant;
+        }
+
+        /// <summary>Maps a resolved ability's effect SHAPE to its canonical cast-anim keyword. Shapes
+        /// with no dedicated rig clip yet (dash/knockback/taunt/blink) return an INTENT keyword that
+        /// <see cref="VariantForAnimKey"/> leaves unmapped, so the caller keeps the slot clip until art
+        /// imports a leap/slam/shout/blink clip (see the content/mocap WO).</summary>
+        private static string AnimKeyForEffect(AbilityDef def)
+        {
+            string fx = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            switch (fx)
+            {
+                case "heal":         return "castHeal";               // instant heal/ward -> Cast_e
+                case "strike":
+                case "snare":        return "skill1";                 // single-target strike -> Cast_q
+                case "aoe":
+                case "cleave":
+                case "meteor":       return "skill2";                 // area/sweep -> Cast_w
+                case "dot":
+                case "healovertime": return "cast";                  // channel -> generic Cast
+                // Shapes with no dedicated clip yet (content/mocap WO): intent keywords that
+                // fall through VariantForAnimKey to the slot-clip fallback.
+                case "dash":         return "leap";
+                case "knockback":    return "slam";
+                case "taunt":        return "shout";
+                case "blink":        return "blink";
+                default:             return "cast";
+            }
+        }
+
+        /// <summary>Maps a cast-anim keyword (explicit or effect-derived) to the CastVariant int whose
+        /// baked state carries that clip. Accepts the canonical ActionKeywords cast/skill vocabulary,
+        /// the abstract category aliases, and the raw q/w/e/r slot letters. Returns -1 for an unknown /
+        /// not-yet-built keyword (leap/slam/shout/blink) so the caller falls back to the pressed slot.</summary>
+        private static int VariantForAnimKey(string key)
+        {
+            switch ((key ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "cast":
+                case "castchannel":
+                case "generic":
+                    return 0;
+                case "attack":
+                case "strike":
+                case "skill1":
+                case "q":
+                    return 1;
+                case "area-cast":
+                case "areacast":
+                case "skill2":
+                case "w":
+                    return 2;
+                case "cast-heal":
+                case "castheal":
+                case "heal":
+                case "e":
+                    return 3;
+                case "heavy":
+                case "ult":
+                case "r":
+                    return 4;
+                default:
+                    return -1;   // leap/slam/shout/blink/unknown -> keep the pressed slot's clip
+            }
+        }
 
         /// <summary>The registry casting target for this hero. Combat pivot canon = single
         /// Knight north star; revisit when a second playable class ships.</summary>

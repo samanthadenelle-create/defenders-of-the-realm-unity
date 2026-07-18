@@ -927,11 +927,17 @@ namespace DeNelle.Village
         }
 
         // Upgradable = city tiers (BuildingTierCatalog) OR legacy resource buildings — same test
-        // BuildingInteractable uses, so the building's own interact and its NPC agree.
-        private static bool IsUpgradableId(string id) =>
-            !string.IsNullOrEmpty(id) &&
-            (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(id) ||
-             Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(id));
+        // BuildingInteractable uses, so the building's own interact and its NPC agree. A collector's
+        // catalog id ("collector_lumbermill"/"collector_farm") is first resolved to its bare
+        // upgrade-keyed id ("lumbermill"/"farm") so a collector NPC's upgrade fallback fires
+        // (ResolveUpgradeId is a pass-through for every non-collector id).
+        private static bool IsUpgradableId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            string upg = DeNelle.Core.Catalog.CatalogRegistry.ResolveUpgradeId(id);
+            return DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(upg) ||
+                   Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(upg);
+        }
 
         // Shoppable = the catalog entry opts in (buildings.json isShoppable). A shoppable vendor's
         // Talk press opens the Buy/Sell/Leave dialogue (StructureMenu), never the upgrade panel —

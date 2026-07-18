@@ -105,6 +105,17 @@ namespace DeNelle.Village
         /// </summary>
         [JsonProperty("castSeconds")] public float CastSeconds;
 
+        /// <summary>
+        /// OPTIONAL per-ability cast-ANIMATION key (fix: the cast animation was keyed by the pressed
+        /// Q/W/E/R SLOT, so an ability swapped into a slot played that slot's stock clip). Names the
+        /// canonical cast-anim keyword this ability should ALWAYS play, independent of the slot it is
+        /// equipped in — one of the shared ActionKeywords cast/skill vocabulary ("cast", "skill1",
+        /// "skill2", "castHeal") or a q/w/e/r slot letter. Empty (the default) = derive the animation
+        /// from the effect SHAPE (see <see cref="DeNelle.Village.HeroAbilities"/>.ResolveAnimVariant).
+        /// Additive — an absent field leaves the effect-shape fallback in charge.
+        /// </summary>
+        [JsonProperty("castAnim")] public string CastAnim;
+
         // ── WO-614 extra tuning fields (default 0 when absent — backward-compatible) ──
         /// <summary>dot effect — burn damage-per-second applied after the initial strike.</summary>
         [JsonProperty("dotDamage")] public float DotDamage;

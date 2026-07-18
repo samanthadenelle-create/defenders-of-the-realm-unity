@@ -157,12 +157,40 @@ namespace DeNelle.Village
             = new Dictionary<VFXType, Queue<GameObject>>();
 
         // Tracking how many active effects we currently have.
-        private int _activeOneshots;
+        // WO-VFX oneshot-leak fix: the oneshot count is NO LONGER a raw ++/-- int (which pinned at
+        // the cap when a return never ran) - it is DERIVED from _oneshotSlots (the live checked-out
+        // set) via ActiveOneshotCount(). _activeLoops stays an int (loops are held by long-lived
+        // VFXHandles with no deadline) but SweepOneshots still reclaims loops whose host GameObject
+        // was destroyed, so neither bucket can pin at its cap.
         private int _activeLoops;
         // bug-triage P1: track which pooled objects are loops so ReturnToPool decrements the
         // RIGHT counter (the old code guessed oneshot-first, drifting counters until VFX of a
         // class hit their cap and were silently skipped — combat went quiet mid-run).
         private readonly HashSet<GameObject> _loopObjects = new HashSet<GameObject>();
+
+        // ── Leak-proof oneshot accounting (WO-VFX) ────────────────────────────
+        // ROOT CAUSE the old code hit: PlayOneshot did _activeOneshots++ then relied on a return
+        // coroutine calling ReturnToPool to do _activeOneshots--. When the effect's host transform
+        // was destroyed FIRST (enemy death / scene change), ReturnToPool's `if (go == null) return;`
+        // early-outed BEFORE the decrement, so the budget slot was never given back. Enough of those
+        // and _activeOneshots pinned at _maxActiveOneshots and EVERY oneshot (heal, Arcane_Cast,
+        // Dash_Blink, Impact_Physical) was skipped for the rest of the session.
+        //
+        // FIX: every checked-out oneshot (BOTH the VFXType pool AND the Hovl string-key pool) is
+        // registered here with its host GameObject + a hard deadline. The active count is DERIVED
+        // from this live set (prune-on-read), and SweepOneshots (per frame) force-reclaims any slot
+        // whose host was destroyed or whose deadline elapsed. So a missed return can no longer pin.
+        private struct OneshotSlot
+        {
+            public GameObject Go;       // host instance (Unity-null once destroyed)
+            public float      Deadline; // Time.time past which the slot is force-reclaimed
+            public VFXType    Type;     // VFXType-pool return key (the Hovl path leaves this None)
+            public string     HovlKey;  // Hovl string-key-pool return key (non-null => Hovl path)
+        }
+        private readonly List<OneshotSlot> _oneshotSlots = new List<OneshotSlot>();
+        // Backstop grace on top of a oneshot's own lifetime before the sweep force-returns a still-
+        // alive-but-never-returned slot (the coroutine is the timely path; this only covers a lost one).
+        private const float ONESHOT_RECLAIM_GRACE = 2f;
 
         // WO-59: dungeon mode flag — ApplyDungeonMode() toggles this.
         private bool _dungeonMode = false;
@@ -388,10 +416,11 @@ namespace DeNelle.Village
             // T+U §12: a cap hit means combat VFX go SILENTLY quiet mid-fight (the classic
             // "screen stops popping" bug). Throttle-report the drop so a capped run self-detects
             // instead of looking like nothing fired. Hot path → Throttle (~1/sec per cause).
-            if (_activeOneshots >= _maxActiveOneshots)
+            int activeOneshots = ActiveOneshotCount();   // derived + prune-on-read (leak-proof)
+            if (activeOneshots >= _maxActiveOneshots)
             {
                 FlowTrace.Throttle("VFXManager", "oneshot-cap", 1f,
-                    $"PlayOneshot('{type}') SKIPPED — active oneshots {_activeOneshots}/{_maxActiveOneshots} " +
+                    $"PlayOneshot('{type}') SKIPPED — active oneshots {activeOneshots}/{_maxActiveOneshots} " +
                     "(cap hit; combat VFX dropping). Counter-leak or too-low cap?");
                 return;
             }
@@ -424,11 +453,13 @@ namespace DeNelle.Village
                     go.SetActive(true);
                     VerifyHasParticles(go, type, "oneshot");
                     PlayAllParticles(go);
-                    _activeOneshots++;
-
                     float lifetime = entry.LifetimeOverride > 0f
                         ? entry.LifetimeOverride
                         : DetectDuration(go) + 0.3f;   // 0.3 s buffer after last particle
+                    // Leak-proof: register the checked-out oneshot in the live set + a hard deadline
+                    // (instead of a raw ++), so a host destroyed before ReturnAfterSeconds runs cannot
+                    // pin the count - SweepOneshots reclaims the orphaned slot.
+                    RegisterOneshot(go, type, null, lifetime);
                     StartCoroutine(ReturnAfterSeconds(go, type, lifetime));
                     return;
                 }
@@ -831,7 +862,7 @@ namespace DeNelle.Village
             // and drifting until a class hit its cap and went silent.
             bool wasLoop = _loopObjects.Remove(go);
             if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
-            else         { if (_activeOneshots > 0) _activeOneshots--; }
+            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
         }
 
         /// <summary>Defer pool return by <paramref name="delay"/> seconds (for graceful stop).</summary>
@@ -845,6 +876,119 @@ namespace DeNelle.Village
         {
             yield return new WaitForSeconds(delay);
             ReturnToPool(go, type);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── Leak-proof oneshot registry + per-frame sweep (WO-VFX) ────────────
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Per-frame backstop that keeps the DERIVED oneshot count honest and reclaims the loop
+        // bucket. Cheap: both collections are tiny (<= cap + grace) and it early-outs when empty.
+        private void Update()
+        {
+            SweepOneshots();
+        }
+
+        /// <summary>Live oneshot count, DERIVED from the tracked slot set after pruning any whose
+        /// host GameObject was destroyed. Prune-on-read means the cap check can never see a stale,
+        /// leaked count - a destroyed host frees its budget slot the instant we look.</summary>
+        private int ActiveOneshotCount()
+        {
+            PruneDeadOneshots();
+            return _oneshotSlots.Count;
+        }
+
+        /// <summary>Register a freshly checked-out oneshot so its slot - not a paired ++/-- - owns the
+        /// count. A non-null <paramref name="hovlKey"/> marks the Hovl string-key pool return path.</summary>
+        private void RegisterOneshot(GameObject go, VFXType type, string hovlKey, float lifetime)
+        {
+            if (go == null) return;
+            _oneshotSlots.Add(new OneshotSlot
+            {
+                Go       = go,
+                Deadline = Time.time + Mathf.Max(0.1f, lifetime) + ONESHOT_RECLAIM_GRACE,
+                Type     = type,
+                HovlKey  = hovlKey,
+            });
+        }
+
+        /// <summary>Drop the slot for a normally-returned oneshot (called from ReturnToPool /
+        /// ReturnHovlToPool). Removing the slot IS the decrement - the count derives from the set.</summary>
+        private void UnregisterOneshot(GameObject go)
+        {
+            if (go == null) return;
+            for (int i = _oneshotSlots.Count - 1; i >= 0; i--)
+                if (ReferenceEquals(_oneshotSlots[i].Go, go)) _oneshotSlots.RemoveAt(i);
+        }
+
+        /// <summary>Remove slots whose host GameObject was destroyed before its return ran (the leak
+        /// itself). Each removal frees a oneshot budget slot. Section 12: FlowTrace when any are freed.</summary>
+        private void PruneDeadOneshots()
+        {
+            int reclaimed = 0;
+            for (int i = _oneshotSlots.Count - 1; i >= 0; i--)
+            {
+                if (_oneshotSlots[i].Go == null)   // Unity-overloaded ==: true once destroyed
+                {
+                    _oneshotSlots.RemoveAt(i);
+                    reclaimed++;
+                }
+            }
+            if (reclaimed > 0)
+                FlowTrace.Step("VFXManager",
+                    "SweepOneshots: reclaimed " + reclaimed + " leaked oneshot slot(s) whose host was " +
+                    "destroyed before return (active now " + _oneshotSlots.Count + "/" + _maxActiveOneshots +
+                    ") - the counter can no longer pin at cap.");
+        }
+
+        /// <summary>Per-frame sweep: (1) prune destroyed-host oneshots (the leak), (2) force-return any
+        /// oneshot past its deadline (defense against a lost return coroutine), (3) reclaim loops whose
+        /// host was destroyed before Stop(). Keeps BOTH budget buckets from pinning at their cap.</summary>
+        private void SweepOneshots()
+        {
+            PruneDeadOneshots();
+
+            float now = Time.time;
+            for (int i = _oneshotSlots.Count - 1; i >= 0; i--)
+            {
+                var slot = _oneshotSlots[i];
+                if (slot.Go == null) { _oneshotSlots.RemoveAt(i); continue; }
+                if (now < slot.Deadline) continue;
+
+                _oneshotSlots.RemoveAt(i);   // remove first so the return's Unregister is a no-op
+                FlowTrace.Throttle("VFXManager", "oneshot-reclaim", 1f,
+                    "SweepOneshots: force-returning a oneshot past its deadline (Type='" + slot.Type +
+                    "', key='" + (slot.HovlKey ?? "-") + "') - its return coroutine never fired. Slot reclaimed.");
+                if (!string.IsNullOrEmpty(slot.HovlKey)) ReturnHovlToPool(slot.Go, slot.HovlKey);
+                else                                     ReturnToPool(slot.Go, slot.Type);
+            }
+
+            ReclaimDestroyedLoops();
+        }
+
+        /// <summary>Reclaim loop budget for any aura/trail whose host GameObject was destroyed before
+        /// its VFXHandle.Stop() ran (the loop-bucket twin of the oneshot leak). Section 12 FlowTrace on free.</summary>
+        private void ReclaimDestroyedLoops()
+        {
+            int freed = PruneDestroyedFromSet(_loopObjects) + PruneDestroyedFromSet(_hovlLoopObjects);
+            if (freed > 0)
+            {
+                _activeLoops = Mathf.Max(0, _activeLoops - freed);
+                FlowTrace.Step("VFXManager",
+                    "SweepOneshots: reclaimed " + freed + " loop slot(s) whose host was destroyed before " +
+                    "Stop() (active loops now " + _activeLoops + "/" + _maxActiveLoops + ").");
+            }
+        }
+
+        /// <summary>Remove every Unity-destroyed GameObject from <paramref name="set"/>; returns how
+        /// many were dropped. A destroyed GO keeps its managed hash, so RemoveWhere matches it via the
+        /// overloaded == null.</summary>
+        private static int PruneDestroyedFromSet(HashSet<GameObject> set)
+        {
+            if (set == null || set.Count == 0) return 0;
+            int before = set.Count;
+            set.RemoveWhere(go => go == null);
+            return before - set.Count;
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────

@@ -64,6 +64,11 @@ namespace DeNelle.Dungeons
         private Camera _faceCamera;
         private bool _visible;
         private bool _built;
+        // TextMesh bounds aren't valid until it renders (a frame or two after .text is
+        // set), so a same-frame ResizePanelToText reads stale bounds and the text spills
+        // outside the panel (DEF-107). Re-measure for a few frames after Show to catch
+        // the real glyph extents once they exist.
+        private int _resizePending;
 
         // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -76,6 +81,14 @@ namespace DeNelle.Dungeons
         private void LateUpdate()
         {
             if (!_visible || _root == null) return;
+
+            // Re-fit the panel once TextMesh bounds become valid (DEF-107) — a few
+            // frames of re-measure catches the real glyph extents post-render.
+            if (_resizePending > 0)
+            {
+                ResizePanelToText();
+                _resizePending--;
+            }
 
             // Billboard the bubble to the active camera so it stays readable
             // under the dungeon's fixed isometric tilt.
@@ -103,7 +116,45 @@ namespace DeNelle.Dungeons
                 ? body
                 : speakerName + "\n" + body;
 
+            // Resize the panel to fit the actual text so long lines (Bryn speaks the
+            // game's longest bubble) are never clipped outside the parchment. The
+            // TextMesh renderer's world-space bounds reflect the rendered glyph extents
+            // once .text is assigned; re-measure over the next frames until they settle.
+            ResizePanelToText();
+            _resizePending = 3;
+
             SetVisible(true);
+        }
+
+        /// <summary>
+        /// Measures the TextMesh renderer bounds and expands the bubble panel quad
+        /// to fit, preserving a padding margin. World-space positioning is unchanged
+        /// — only the quad's scale (visual width/height) adjusts.
+        /// </summary>
+        private void ResizePanelToText()
+        {
+            if (_text == null || _panelRenderer == null) return;
+
+            // TextMesh reports bounds in world space relative to _root. Since _root
+            // may be rotated (billboard), use the mesh renderer's bounds size — the
+            // text GameObject is already scaled, so world-space bounds are in metres.
+            var textRenderer = _text.GetComponent<Renderer>();
+            if (textRenderer == null) return;
+
+            // Add horizontal and vertical padding so the text doesn't butt up against
+            // the parchment edges.
+            const float PadX = 0.4f;
+            const float PadY = 0.35f;
+
+            float requiredWidth  = textRenderer.bounds.size.x + PadX * 2f;
+            float requiredHeight = textRenderer.bounds.size.y + PadY * 2f;
+
+            // Never shrink below the inspector-configured minimums so a single short
+            // word still produces a visible bubble.
+            float newWidth  = Mathf.Max(requiredWidth,  _panelWidth);
+            float newHeight = Mathf.Max(requiredHeight, _panelHeight);
+
+            _panelRenderer.transform.localScale = new Vector3(newWidth, newHeight, 1f);
         }
 
         /// <summary>Hides the bubble.</summary>

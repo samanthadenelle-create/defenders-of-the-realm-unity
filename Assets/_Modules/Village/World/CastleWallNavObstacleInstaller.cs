@@ -29,11 +29,14 @@
 //   wall masonry collider, cutting a hole in the LIVE NavMesh so the wall blocks the
 //   agent regardless of what the bake did.
 //
-//   ARCHWAY STAYS PASSABLE: we SKIP every "Gate*" piece (the arch mesh) and never
-//   carve the central doorway gap between the two DoorJamb flank boxes -- no masonry
-//   sits there, so the opening stays walkable. Result: the wall is SOLID except at the
-//   actual archway, which is the owner's ask verbatim. GateTraversalInjector still
-//   warps the hero through the opening.
+//   ARCHWAY STAYS PASSABLE (task #14b, owner 2026-07-17 "extend the walls to the edge of
+//   the entrances so the only passable spot is the actual gate opening"): the arch is one
+//   symmetric MeshCollider that SPANS its own side-masonry AND the opening. Skipping the
+//   WHOLE arch (the first cut) left that side-masonry uncarved -> the hero walked THROUGH
+//   the wall BESIDE the opening. We now SPLIT the arch AABB into two flank carve-boxes
+//   around its centre, leaving only the central doorway (+/-doorwayHalf) open -- the arch
+//   side-masonry is carved, so the ONLY passable spot is the true opening. DoorJamb flank
+//   boxes still carve as solid masonry. GateTraversalInjector still warps the hero through.
 //
 // OWNER-TWEAKABLE OFFSETS (owner: "I can hand edit those if you want to do offsets"):
 //   Resources/Data/castle-wall-collider-offsets.json -- thicknessPadding, minHeight,
@@ -194,7 +197,15 @@ namespace DeNelle.Village.World
             {
                 Collider col = colliders[i];
                 if (col == null) continue;
-                if (IsArchway(col.transform, sideRoot)) continue;   // leave the arch opening passable
+                if (IsArchway(col.transform, sideRoot))
+                {
+                    // OWNER 2026-07-17 "extend the walls to the edge of the entrances so the only
+                    // passable spot is the actual gate opening": do NOT leave the whole arch uncarved
+                    // -- that leaves the arch's OWN side-masonry passable, so the hero walks THROUGH
+                    // the wall BESIDE the opening. Carve the arch's flanks, keeping only the doorway.
+                    added += CarveArchFlanks(col, side, inset);
+                    continue;
+                }
 
                 if (TryFitObstacle(col, side, inset, gateCentres)) added++;
             }
@@ -229,8 +240,7 @@ namespace DeNelle.Village.World
             Bounds b = col.bounds;                // world-space AABB
             Vector3 centre = b.center;
 
-            // Per-side inset: nudge the obstacle toward (-) / away from (+) the castle centre along
-            // the horizontal direction from origin to the wall. Lets the owner tune the wall in/out.
+            // Per-side inset preview (AddCarveBox re-applies the real inset) for the archwayHalfClear test.
             Vector3 horiz = new Vector3(centre.x, 0f, centre.z);
             if (Mathf.Abs(inset) > 0.001f && horiz.sqrMagnitude > 0.0001f)
                 centre += horiz.normalized * inset;
@@ -253,13 +263,88 @@ namespace DeNelle.Village.World
                 }
             }
 
+            return AddCarveBox(b, side, col.gameObject.name, inset);
+        }
+
+        /// <summary>
+        /// Carve the ARCH piece's side-masonry, leaving only the central doorway (+/-doorwayHalf of the
+        /// arch centre) passable. The arch is one symmetric MeshCollider whose world-AABB centre IS the
+        /// opening centre, so we split that AABB into two flank boxes along the wall tangent -- cardinal
+        /// castle sides make the tangent axis-aligned (south/north run along X, east/west along Z). This
+        /// closes the "walk through beside the opening" gap WITHOUT blocking the actual archway.
+        /// Idempotent (guards the collider id like TryFitObstacle). Returns the count of flank boxes added.
+        /// </summary>
+        private int CarveArchFlanks(Collider col, string side, float inset)
+        {
+            int id = col.GetInstanceID();
+            if (!_carved.Add(id)) return 0;   // already handled this collider
+
+            Bounds b = col.bounds;            // world-space AABB of the whole arch
+            float doorHalf = Mathf.Max(0.5f, _cfg.doorwayHalf);
+
+            // Wall tangent (the axis the wall runs along) is perpendicular to outward(origin->arch).
+            // For cardinal sides this is exactly +/-X (south/north) or +/-Z (east/west): a bigger |z|
+            // component on the outward direction => the wall runs along X, so split along X.
+            bool splitAlongX = Mathf.Abs(b.center.z) >= Mathf.Abs(b.center.x);
+
+            // §12 capture: log the REAL measured arch span + the chosen doorway so the owner can tune
+            // doorwayHalf (castle-wall-collider-offsets.json) from data rather than a guessed width.
+            FlowTrace.Step("WallCollider",
+                $"side={side} arch AABB X[{b.min.x:F1}..{b.max.x:F1}] Z[{b.min.z:F1}..{b.max.z:F1}] " +
+                $"centre={b.center} splitAlongX={splitAlongX} doorwayHalf={doorHalf:F2} -- carving arch " +
+                "side-masonry, leaving only the central doorway passable.");
+
+            int added = 0;
+            if (splitAlongX)
+            {
+                float leftMax  = b.center.x - doorHalf;
+                float rightMin = b.center.x + doorHalf;
+                if (leftMax  > b.min.x + 0.05f && AddCarveBox(SubBounds(b, b.min.x, leftMax, true),  side, col.gameObject.name + "_ArchL", inset)) added++;
+                if (rightMin < b.max.x - 0.05f && AddCarveBox(SubBounds(b, rightMin, b.max.x, true),  side, col.gameObject.name + "_ArchR", inset)) added++;
+            }
+            else
+            {
+                float leftMax  = b.center.z - doorHalf;
+                float rightMin = b.center.z + doorHalf;
+                if (leftMax  > b.min.z + 0.05f && AddCarveBox(SubBounds(b, b.min.z, leftMax, false), side, col.gameObject.name + "_ArchL", inset)) added++;
+                if (rightMin < b.max.z - 0.05f && AddCarveBox(SubBounds(b, rightMin, b.max.z, false), side, col.gameObject.name + "_ArchR", inset)) added++;
+            }
+            return added;
+        }
+
+        /// <summary>Copy of <paramref name="b"/> clamped to [axisMin,axisMax] on one horizontal axis
+        /// (X when <paramref name="axisIsX"/>, else Z), keeping the other axes. Used to slice the arch
+        /// AABB into flank boxes.</summary>
+        private static Bounds SubBounds(Bounds b, float axisMin, float axisMax, bool axisIsX)
+        {
+            Vector3 min = b.min, max = b.max;
+            if (axisIsX) { min.x = axisMin; max.x = axisMax; }
+            else         { min.z = axisMin; max.z = axisMax; }
+            var nb = new Bounds();
+            nb.SetMinMax(min, max);
+            return nb;
+        }
+
+        /// <summary>Add one box-shaped carving NavMeshObstacle sized to a world-space AABB, parented
+        /// under the identity holder so the world AABB maps 1:1 to a unit-scaled box. Applies the
+        /// per-side inset, thickness padding and min height. Always adds; returns true.</summary>
+        private bool AddCarveBox(Bounds b, string side, string label, float inset)
+        {
+            Vector3 centre = b.center;
+
+            // Per-side inset: nudge the obstacle toward (-) / away from (+) the castle centre along
+            // the horizontal direction from origin to the wall. Lets the owner tune the wall in/out.
+            Vector3 horiz = new Vector3(centre.x, 0f, centre.z);
+            if (Mathf.Abs(inset) > 0.001f && horiz.sqrMagnitude > 0.0001f)
+                centre += horiz.normalized * inset;
+
             Vector3 size = b.size;
             size.x += _cfg.thicknessPadding;      // grow the footprint so a thin wall fully blocks
             size.z += _cfg.thicknessPadding;
             size.y = Mathf.Max(size.y, _cfg.minHeight);
 
             var holder = EnsureHolder();
-            var go = new GameObject("CastleWallObstacle_" + side + "_" + col.gameObject.name);
+            var go = new GameObject("CastleWallObstacle_" + side + "_" + label);
             go.transform.SetParent(holder, false);
             go.transform.position   = centre;
             go.transform.rotation   = Quaternion.identity;   // AABB is axis-aligned; identity holder => lossyScale 1
@@ -315,6 +400,12 @@ namespace DeNelle.Village.World
             public float thicknessPadding = 0.4f;
             public float minHeight        = 6.0f;
             public float archwayHalfClear = 0.0f;
+            // Half-width (m) of the passable doorway kept open at each gate. The arch's own
+            // side-masonry OUTSIDE this half is carved so the hero can NOT walk through beside the
+            // opening (owner 2026-07-17 "extend the walls to the edge of the entrances"). Lower =
+            // tighter doorway/more wall; higher = wider opening. The arch's REAL measured span is
+            // logged each scan ([Flow:WallCollider] arch AABB ...) so this can be tuned from data.
+            public float doorwayHalf      = 2.0f;
             public SideOffset[] sides;
 
             [Serializable]

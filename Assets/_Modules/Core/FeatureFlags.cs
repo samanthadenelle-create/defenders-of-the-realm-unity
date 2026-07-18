@@ -600,6 +600,23 @@ namespace DeNelle.Core
         // ff.strategicplacement is REMOVED — strategic building placement (WO-673) is
         // ALWAYS ON in every build. All former call sites are the unconditional TRUE path.
 
+        /// <summary>DUNGEON CAMERA — FIRST-PERSON (owner 2026-07-17, dungeon camera felt-test: the
+        /// top-down iso rig floated near the ~4u ceiling so the room could not be seen; we moved to an
+        /// OVER-THE-SHOULDER dungeon camera as the DEFAULT and left first-person as the easy A/B). When ON,
+        /// <see cref="DeNelle.Dungeons.DungeonCameraRig"/> seats the camera at the Keeper's eyeline looking
+        /// forward down the corridor (an FPV STUB — camera placement only; it rides the movement heading and
+        /// does NOT yet add independent mouse/touch look or hide the hero body — see the rig header for what a
+        /// full FPV needs). Default OFF => the over-the-shoulder rig. PlayerPrefs "ff.dungeonfpv" = 1 to
+        /// preview first-person.</summary>
+        public static bool DungeonFpv => Get("dungeonfpv", defaultOn: false);
+
+        /// <summary>DUNGEON CAMERA — LEGACY TOP-DOWN ISO escape hatch (owner 2026-07-17). When ON, the
+        /// dungeon rig restores the pre-2026-07-17 fixed top-down isometric framing (pitch ~52, height-capped
+        /// for the ~4u ceiling) instead of the new over-the-shoulder default. Kept so the old look is one
+        /// PlayerPref away for an A/B. <see cref="DungeonFpv"/> wins over this if both are set. Default OFF.
+        /// PlayerPrefs "ff.dungeoniso" = 1 to restore the top-down rig.</summary>
+        public static bool DungeonCameraIso => Get("dungeoniso", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

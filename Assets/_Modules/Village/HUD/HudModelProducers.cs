@@ -397,7 +397,7 @@ namespace DeNelle.Village.Hud
             {
                 var slot = (AbilitySlot)i;
                 string key = slot.ToString();
-                AbilityDef def = ResolveSlotDef(slot, cls);
+                AbilityDef def = ResolveSlotDef(slot, cls, _abilities);
                 bool equipped = def != null;
                 float total = equipped ? def.Cooldown : 0f;
                 float remaining = _abilities != null ? _abilities.CooldownRemaining(slot) : 0f;
@@ -449,8 +449,22 @@ namespace DeNelle.Village.Hud
             Model.Abilities.SetSlots(slots);
         }
 
-        private static AbilityDef ResolveSlotDef(AbilitySlot slot, string cls)
+        private static AbilityDef ResolveSlotDef(AbilitySlot slot, string cls, HeroAbilities abilities)
         {
+            // SINGLE SOURCE OF TRUTH (E-medallion-vs-cast fix): resolve the slot through the
+            // SAME path the cast uses — HeroAbilities.ResolvedDef -> the hero's OWN HeroLoadout
+            // + _heroClass — so the ICON shown is always the ability actually CAST. The old path
+            // re-derived class (a hardcoded "knight") + loadout via HeroLoadoutAccess.Current, a
+            // DIFFERENT lookup that could disagree with the cast: for E it returned null/empty and
+            // fell back to the class stock def (Knight "Defender's Call" taunt / shield icon) while
+            // the cast resolved the equipped HEAL. Routing both through the hero collapses the fork
+            // (class + loadout come from the one component) so the equipped heal's icon renders.
+            // Fall back to the class catalog ONLY when no hero exists at all.
+            if (abilities != null)
+            {
+                var def = abilities.ResolvedDef(slot);
+                if (def != null) return def;
+            }
             if (slot == AbilitySlot.Q) return AbilityCatalog.Find(cls, slot);
             var lo = HeroLoadoutAccess.Current;
             string id = lo != null ? lo.AbilityIdForSlot(slot) : null;
