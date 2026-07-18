@@ -75,6 +75,8 @@ namespace DeNelle.Core.UI
             s._targetId = highlightId;
             s._worldAnchor = null;
             s._visible = true;
+            s._tracedTarget = null;   // BM-3: re-log the resolved target/rect for the new id
+            Diagnostics.FlowTrace.Step("Spotlight", $"show highlightId={highlightId}");
         }
 
         /// <summary>Spotlight a world-space anchor (projected via the main camera).</summary>
@@ -93,6 +95,7 @@ namespace DeNelle.Core.UI
             _instance._visible = false;
             _instance._targetId = null;
             _instance._worldAnchor = null;
+            _instance._tracedTarget = null;   // BM-3: forget the last resolved target
         }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -197,13 +200,44 @@ namespace DeNelle.Core.UI
             if (!string.IsNullOrEmpty(_targetId))
             {
                 var t = TutorialHighlightRegistry.Resolve(_targetId);
-                if (t.Rect != null) { rect = ScreenRectOf(t.Rect); return true; }
-                if (t.World != null) return TryWorldToScreen(t.World.position, out rect);
+                if (t.Rect != null)
+                {
+                    // BM-3 (WO-746): FOLLOW the target's liveness. A registered card whose tray
+                    // is collapsed (palette minimized while placing) or that was rebuilt this
+                    // frame is INACTIVE — its RectTransform still returns stale world corners, so
+                    // without this guard the glow floats at the last on-screen position (owner
+                    // sighting: halo stranded over "Rotate Right"). Inactive => treat as
+                    // unresolved => the overlay hides (Update sets alpha 0); it re-acquires when
+                    // the card re-registers active.
+                    if (!t.Rect.gameObject.activeInHierarchy) return false;
+                    rect = ScreenRectOf(t.Rect);
+                    TraceResolved(t.Rect.name, rect);
+                    return true;
+                }
+                if (t.World != null && TryWorldToScreen(t.World.position, out rect))
+                {
+                    TraceResolved(t.World.name, rect);
+                    return true;
+                }
                 return false;
             }
             if (_worldAnchor != null)
                 return TryWorldToScreen(_worldAnchor.position, out rect);
             return false;
+        }
+
+        // BM-3 (WO-746) instrumentation: log the resolved target + screen rect ONCE per
+        // (id, target) so the §12 capture proves which element the spotlight actually sits on
+        // (wrong-target vs stale-rect split), without a per-frame line. Re-armed by Show/Hide.
+        private string _tracedTarget;
+        private void TraceResolved(string targetName, Rect rect)
+        {
+            string key = (_targetId ?? "") + "|" + (targetName ?? "");
+            if (_tracedTarget == key) return;
+            _tracedTarget = key;
+            Diagnostics.FlowTrace.Step("Spotlight",
+                $"show highlightId={_targetId} target={targetName} " +
+                $"rect=({rect.x:F0},{rect.y:F0},{rect.width:F0},{rect.height:F0})");
         }
 
         private static Rect ScreenRectOf(RectTransform rt)

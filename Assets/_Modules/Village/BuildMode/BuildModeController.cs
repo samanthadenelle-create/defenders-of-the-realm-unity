@@ -1056,15 +1056,10 @@ namespace DeNelle.Village
                 // yawOffset canonically from _armedYawEighths.
                     FlowTrace.Step("Build", $"Two-step COMMIT at HOVER cell ({cell.x},{cell.y}) — PLACE with no prior drop (desktop convenience).");
                     Place(cell, footprint, seatSnapped, wallMounted);
-
-                    // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
-                    // ghost after a place. The same entry stays armed so the next drop+PLACE
-                    // lands ANOTHER copy (lay a wall/fence run without re-selecting), and
-                    // _armedYawEighths is kept so the run holds its rotation. Each copy still
-                    // re-validates + re-charges inside Place(). The player stops by Cancel/
-                    // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
-                    // or by arming a different palette item (Arm() resets state). Do not add
-                    // a disarm here.
+                    // BM-1 (WO-746): a successful commit RETURNS to the carousel. That
+                    // teardown now lives at the END of Place() itself (the single return
+                    // point for every commit path), so no per-caller disarm is needed here.
+                    // Multi-place-in-a-row is a future per-row opt-in (repo.multiPlace, OFF).
                 }
                 else
                 {
@@ -1148,17 +1143,10 @@ namespace DeNelle.Village
                 {
                     FlowTrace.Step("Build", $"Two-step COMMIT at PENDING cell ({cell.x},{cell.y}) — PLACE latch consumed, routing through Place().");
                     Place(cell, footprint, seatSnapped, wallMounted);
-                    // Owner felt-test 2026-07-16/17 (verbatim: "still screen not closing
-                    // issue, should go back to carousel after placement, otherwise no reason
-                    // to be there"): a SUCCESSFUL placement RETURNS to the building-selection
-                    // carousel — it does NOT silently stay-armed to place another copy. Reuse
-                    // the SAME teardown as the cancel path (CancelArmed): disarm (_armed=null,
-                    // so the next Update re-derives BuildHudState.Browse and the intent bar
-                    // hides), drop any pending drop (_dropPending=false), hide the ghost, and
-                    // _palette.Expand() so the shop chrome + card tray reappear — ready for the
-                    // next pick. afterPlacement=true swaps the FlowTrace line to the placed ->
-                    // carousel transition (below) instead of the "placement aborted" cancel line.
-                    CancelArmed(afterPlacement: true);
+                    // BM-1 (WO-746): the return-to-carousel teardown moved INTO Place() (the
+                    // single point covering every commit path), so it is no longer invoked per
+                    // caller here — Place() disarms, expands the palette, and flips the HUD to
+                    // Browse on a successful commit.
                 }
                 else
                 {
@@ -1793,6 +1781,20 @@ namespace DeNelle.Village
             }
 
             Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}°, charged {(freeBuild ? "nothing (first-build FREE)" : Describe(cost))}.");
+
+            // BM-1 (WO-746, owner 2026-07-18 "should go back to carousel after placement"):
+            // a SUCCESSFUL commit RETURNS to the building-selection carousel — the Placing
+            // intent bar must not linger. This is the SINGLE return point for EVERY commit
+            // path (hover PLACE, two-step PLACE, the dormant rotate-confirm). It runs only
+            // AFTER the charge + BaseLayout append + StructurePlaced signal above, so the
+            // tutorial placement grant is never bypassed. CancelArmed(afterPlacement:true)
+            // disarms (_armed=null) + _palette.Expand() (carousel back, armed glow cleared,
+            // and singleton cards re-render as Built — BM-2); then the HUD returns to Browse
+            // so the intent bar hides. Multi-place-in-a-row (lay a wall run) is a future
+            // per-row opt-in (repo.multiPlace, default OFF); today every row returns to Browse.
+            CancelArmed(afterPlacement: true);
+            _hud?.SetState(BuildHudState.Browse);
+            FlowTrace.Step("BuildHud", "state -> Browse (placement committed; intent bar hidden, carousel restored)");
         }
 
         // =====================================================================
@@ -1827,18 +1829,30 @@ namespace DeNelle.Village
         /// path never re-arms/re-Places, it repositions the existing record. Containers
         /// (Lumberyard/Foundry/Silo) are deliberately not singleton.
         /// </summary>
-        private static bool SingletonAlreadyBuilt(CatalogEntry entry)
+        /// <summary>
+        /// BM-2 (WO-746) — QUIET shared query: is <paramref name="entry"/> a singleton row
+        /// that already has a standing BaseLayout record? Hoisted to <c>internal static</c> so
+        /// the palette (same assembly) can render placed singletons as a non-armable "Built"
+        /// card instead of offering a card that can only fail at arm time. No trace here (it is
+        /// polled per-card per-render); the arm/commit enforcement path traces via the
+        /// <see cref="SingletonAlreadyBuilt"/> wrapper below — WO-707 semantics unchanged.
+        /// </summary>
+        internal static bool IsSingletonBuilt(CatalogEntry entry)
         {
             if (entry?.repo == null || !entry.repo.singleton) return false;
             var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (st?.BaseLayout == null) return false;
             for (int i = 0; i < st.BaseLayout.Count; i++)
                 if (st.BaseLayout[i].itemId == entry.id)   // struct rows — no null element possible
-                {
-                    FlowTrace.Step("Build", $"singleton gate: '{entry.id}' already recorded — arm/place refused (WO-707)");
                     return true;
-                }
             return false;
+        }
+
+        private static bool SingletonAlreadyBuilt(CatalogEntry entry)
+        {
+            if (!IsSingletonBuilt(entry)) return false;
+            FlowTrace.Step("Build", $"singleton gate: '{entry.id}' already recorded — arm/place refused (WO-707)");
+            return true;
         }
 
         private void Arm(CatalogEntry entry)

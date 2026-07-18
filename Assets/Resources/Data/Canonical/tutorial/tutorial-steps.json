@@ -34,7 +34,7 @@
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_stores" },
-      "highlight": ["hud.build_button"],
+      "highlight": ["build.card.lumberyard"],
       "completion": { "signal": "build.structure_placed:lumberyard" },
       "skippable": true,
       "objective": { "text": "Place your Lumberyard where you can defend it", "count": 1 }

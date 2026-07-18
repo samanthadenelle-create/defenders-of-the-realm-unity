@@ -125,6 +125,7 @@ namespace DeNelle.Core.UI
             "world.gate_direction", // TutorialWorldAnchors resolver (nearest gate to hero)
             "build.tab_town",       // WO-702 — BuildPaletteUI Town category tab (registers when the palette builds)
             "build.tab_defenses",   // WO-702 — BuildPaletteUI Defenses category tab (founding_defense beat)
+            "build.card.lumberyard",// WO-746 BM-3 — founding_stores anchors its spotlight to the Lumberyard card (registered per Render as build.card.<entryId>)
         };
     }
 }

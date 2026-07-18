@@ -421,7 +421,13 @@ namespace DeNelle.Village
             bool freebie = card.Freebie;
             DeNelle.Core.Catalog.ResourceCost cost = card.EffectiveCost;
             bool affordable = card.Affordable;
-            bool armed = card.Id == _armedId;
+            // BM-2 (WO-746): a singleton row whose one copy is already placed renders as a
+            // non-armable "Built" card (desaturated + a Built chip, no cost) instead of a
+            // buyable that can only fail at arm time. Presentation-only — the query is the
+            // quiet twin of the WO-707 arm/commit gate (BuildModeController.IsSingletonBuilt);
+            // enforcement semantics are unchanged. Non-singleton rows always compute false.
+            bool built = BuildModeController.IsSingletonBuilt(e);
+            bool armed = !built && card.Id == _armedId;
 
             // Slot-plate card: the Blink "slot_action" plate as the face (Obsidian fill
             // fallback when the mirrored art is absent), a Button over the whole plate.
@@ -430,6 +436,15 @@ namespace DeNelle.Village
             var rt = cardGo.GetComponent<RectTransform>();
             rt.sizeDelta = new Vector2(260f, 0f);
             cardGo.GetComponent<LayoutElement>().preferredWidth = 260f;
+
+            // BM-3 (WO-746): register this card under a STABLE tutorial-spotlight id
+            // ("build.card.<entryId>") every Render(), so a step can anchor its glow to the
+            // exact card it asks the player to build. Re-registering on each rebuild re-arms
+            // the registry (idempotent), and the destroyed old RectTransform is dropped by
+            // TutorialHighlightRegistry.Resolve's fake-null guard. UiSpotlight follows the
+            // card's liveness (hides while the tray is collapsed/inactive, re-acquires here).
+            TutorialHighlightRegistry.Register("build.card." + e.id, rt);
+            FlowTrace.Step("Build", $"card-register id=build.card.{e.id} entryId={e.id}");
 
             var img = cardGo.GetComponent<Image>();
             var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
@@ -453,9 +468,21 @@ namespace DeNelle.Village
 
             var btn = cardGo.GetComponent<Button>();
             btn.targetGraphic = img;
-            btn.interactable = affordable;
+            // BM-2: a Built singleton stays TAPPABLE (so the tap can explain via the toast)
+            // but never arms; an unaffordable non-built card greys out + is non-interactable.
+            btn.interactable = built || affordable;
             btn.onClick.AddListener(() =>
             {
+                // BM-2 (WO-746): the singleton's one copy is already placed — arming is
+                // refused; the tap surfaces the SAME "Already built - your town has one" toast
+                // the WO-707 arm/commit gate uses, so the card stays discoverable but reads as
+                // not-buyable. (Enforcement semantics unchanged — presentation + this tap only.)
+                if (built)
+                {
+                    FlowTrace.Step("Build", $"palette: tapped BUILT singleton card '{e.id}' — arm refused, Singleton toast (WO-746 BM-2).");
+                    BuildFeedbackToast.Show(BuildRejectReason.Singleton);
+                    return;
+                }
                 // WO-352 — if a preview subscriber is attached, defer arming: raise
                 // OnCardTapped so the controller shows the Structure Info Preview panel
                 // (it calls SetArmed on "Place"). Otherwise keep the legacy immediate-arm.
@@ -469,8 +496,11 @@ namespace DeNelle.Village
                 Render();   // refresh the armed highlight
             });
 
-            // Unaffordable cards grey out as a whole (plate + labels).
-            if (!affordable) cardGo.AddComponent<CanvasGroup>().alpha = 0.45f;
+            // Built singletons AND unaffordable cards read as dimmed (built a touch stronger so
+            // "already placed" is unmistakable); meaning is also carried by the Built chip / the
+            // cost word, never colour alone (owner is red/green colourblind).
+            if (built) cardGo.AddComponent<CanvasGroup>().alpha = 0.5f;
+            else if (!affordable) cardGo.AddComponent<CanvasGroup>().alpha = 0.45f;
 
             // Armed = bright gilt name (the icon glows below; the label now sits on the
             // plate's normal obsidian face, so gilt reads — the old dark Ink assumed a
@@ -523,8 +553,10 @@ namespace DeNelle.Village
             {
                 bandImg.sprite = art;
                 bandImg.preserveAspect = true;
-                // Armed = the icon itself reads warm/lit (over its glow halo); rest = plain white.
-                bandImg.color = armed ? new Color(1f, 0.965f, 0.82f, 1f) : Color.white;
+                // Armed = the icon reads warm/lit (over its glow halo); a BUILT singleton reads
+                // desaturated ("already placed"); rest = plain white.
+                bandImg.color = built ? new Color(0.62f, 0.62f, 0.62f, 1f)
+                    : (armed ? new Color(1f, 0.965f, 0.82f, 1f) : Color.white);
             }
             else
             {
@@ -537,13 +569,30 @@ namespace DeNelle.Village
                     TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
             }
 
-            // A live freebie says "FREE" in so many words — the WORD carries the meaning
-            // (owner is red/green colorblind; never color-alone). After the one-shot flag
-            // is consumed the label reverts to the normal per-resource cost. ASCII only.
-            var costLabel = MakeText(cardGo.transform, freebie ? "FREE" : CostLabel(cost), 13,
-                affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
-            costLabel.raycastTarget = false;
+            if (built)
+            {
+                // BM-2 (WO-746): a "Built" chip (WORD + a rounded shape plate) replaces the
+                // cost — the singleton is placed, so there is nothing to buy. Text + shape carry
+                // the meaning, never colour alone (owner is red/green colourblind). ASCII only.
+                var chipBack = ElarionUiKit.AddImage(cardGo.transform, "BuiltChip",
+                    new Vector2(0.20f, 0.03f), new Vector2(0.80f, 0.22f),
+                    ElarionUiKit.ObsidianFill, rounded: true);
+                var chipImg = chipBack.GetComponent<Image>();
+                if (chipImg != null) chipImg.raycastTarget = false;
+                var chipLabel = MakeText(chipBack.transform, "Built", 13, ElarionUi.Gilt,
+                    FontStyles.Bold, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+                chipLabel.raycastTarget = false;
+            }
+            else
+            {
+                // A live freebie says "FREE" in so many words — the WORD carries the meaning
+                // (owner is red/green colorblind; never color-alone). After the one-shot flag
+                // is consumed the label reverts to the normal per-resource cost. ASCII only.
+                var costLabel = MakeText(cardGo.transform, freebie ? "FREE" : CostLabel(cost), 13,
+                    affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
+                    TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
+                costLabel.raycastTarget = false;
+            }
 
             // ── Targeting tag (towers only) — at-a-glance anti-air read ─────────
             // A compact "Land / Air / Land+Air" caption pinned to the bottom of the art
