@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building Enhancements — Obsidian UI Template</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Alata&family=Acme&display=swap');
+  :root{
+    /* ElarionUi semantic tokens (Obsidian theme) */
+    --gold:#f0b428;          /* accents & content ONLY — never chrome outline */
+    --gold-bright:#ffd45e;
+    --gold-dim:#a97c1a;
+    --parchment:#e6e2d3;
+    --parchment-dim:#9b9b93;
+    --affordable:#7ddc8a;
+    --danger:#e07a6a;
+    --aether:#39d6b0;
+    --disabled:#5a5a55;
+    /* forged steel chrome */
+    --steel-hi:#7d8188;
+    --steel:#4a4d53;
+    --steel-mid:#33363b;
+    --steel-lo:#1b1d20;
+    --obsidian:#0b0b0d;
+    --font-title:'Merriweather',Georgia,serif;
+    --font-body:'Alata','Trebuchet MS',sans-serif;
+    --font-stamp:'Acme','Arial Narrow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(ellipse at 50% 30%, #101014 0%, #050506 70%);
+    font-family:var(--font-body);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:100vh;padding:24px;gap:14px;
+  }
+
+  /* demo-only building switcher (not part of the in-game screen) */
+  .demo-switch{display:flex;align-items:center;gap:10px}
+  .demo-switch .lbl{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#6f6f68}
+  .demo-switch button{
+    font-family:var(--font-body);font-size:14px;cursor:pointer;border-radius:4px;
+    padding:5px 14px;color:var(--parchment-dim);border:1px solid #34363b;
+    background:linear-gradient(180deg,#17181b,#0e0e10);
+  }
+  .demo-switch button.on{color:var(--gold-bright);border-color:#565960;
+    background:linear-gradient(180deg,#2a2d32,#191b1e)}
+
+  /* ============ THE OBSIDIAN FRAME (the chrome IS the frame) ============ */
+  .frame{
+    width:1180px;max-width:100%;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.03), transparent 55%),
+      linear-gradient(180deg,#141417 0%,#0b0b0d 55%,#0e0e11 100%);
+    border:2px solid #43464c;
+    border-radius:12px;
+    box-shadow:
+      0 0 0 1px #08080a, 0 0 0 4px #26282c, 0 0 0 5px #0a0a0c,
+      0 24px 70px rgba(0,0,0,.95),
+      inset 0 1px 0 rgba(255,255,255,.08),
+      inset 0 0 110px rgba(0,0,0,.8);
+    position:relative;
+    padding:20px 26px 20px;
+  }
+  .frame::before{
+    content:"";position:absolute;inset:7px;border-radius:8px;pointer-events:none;
+    border:1px solid rgba(160,166,176,.18);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 -1px 0 rgba(0,0,0,.6);
+  }
+  .corner{
+    position:absolute;width:34px;height:34px;pointer-events:none;
+    background:linear-gradient(135deg,#4c4f55,#26282c 70%);
+    border:1px solid #55585e;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.7);
+  }
+  .corner::after{
+    content:"";position:absolute;width:9px;height:9px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#9da1a8,#4a4d53 55%,#141518);
+    box-shadow:0 1px 2px rgba(0,0,0,.9);
+    top:50%;left:50%;transform:translate(-50%,-50%);
+  }
+  .corner.tl{top:-3px;left:-3px;border-radius:12px 3px 10px 3px}
+  .corner.tr{top:-3px;right:-3px;border-radius:3px 12px 3px 10px}
+  .corner.bl{bottom:-3px;left:-3px;border-radius:3px 10px 3px 12px}
+  .corner.br{bottom:-3px;right:-3px;border-radius:10px 3px 12px 3px}
+
+  /* ============ HEADER PLATE + MEDALLION + CLOSE NOTCH ============ */
+  .header{display:flex;align-items:center;gap:16px;margin:2px 0 14px;position:relative;height:64px}
+  .medallion{
+    width:64px;height:64px;flex:none;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 32% 28%, #3b3e44, #17181b 70%);
+    border:3px solid #4c4f55;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.85), 0 2px 6px rgba(0,0,0,.7), inset 0 -1px 0 rgba(255,255,255,.06);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .medallion::before{
+    content:"";position:absolute;inset:-7px;border-radius:50%;pointer-events:none;
+    border:1px solid rgba(160,166,176,.25);
+  }
+  .medallion svg{width:40px;height:40px}
+  .header-plate{
+    flex:1;height:54px;position:relative;
+    background:linear-gradient(180deg,#26282d 0%,#17181b 55%,#1d1f23 100%);
+    border:1px solid #43464c;border-radius:6px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.09), inset 0 -6px 12px rgba(0,0,0,.5), 0 2px 5px rgba(0,0,0,.6);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .header-plate::before,.header-plate::after{
+    content:"";position:absolute;top:50%;width:8px;height:8px;border-radius:50%;transform:translateY(-50%);
+    background:radial-gradient(circle at 35% 30%,#9da1a8,#4a4d53 55%,#141518);
+    box-shadow:0 1px 2px rgba(0,0,0,.9);
+  }
+  .header-plate::before{left:12px}
+  .header-plate::after{right:12px}
+  h1{
+    font-family:var(--font-title);font-weight:900;
+    font-size:29px;letter-spacing:.5px;color:var(--gold);
+    text-shadow:0 2px 0 #000, 0 0 22px rgba(240,180,40,.18);
+  }
+  .close-notch{
+    width:44px;height:44px;flex:none;border-radius:8px;cursor:pointer;
+    background:linear-gradient(180deg,#33363c,#1a1c1f);
+    border:1px solid #4c4f55;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 2px 5px rgba(0,0,0,.7);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .close-notch:hover{filter:brightness(1.25)}
+  .close-notch:active{filter:brightness(.85)}
+  .close-notch svg{width:16px;height:16px}
+
+  /* ============ WALLET ROW (CurrencyChip / BuildWalletRow) ============ */
+  .resources{display:flex;gap:10px;margin-bottom:14px}
+  .res{
+    flex:1;display:flex;align-items:center;gap:8px;
+    background:linear-gradient(180deg,#101013,#0a0a0c);
+    border:1px solid #3a3d42;border-radius:6px;
+    padding:6px 12px;
+    box-shadow:inset 0 2px 8px rgba(0,0,0,.75), inset 0 -1px 0 rgba(255,255,255,.04);
+  }
+  .res svg{width:22px;height:22px;flex:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.8))}
+  .res span{margin-left:auto;font-size:19px;color:var(--parchment);text-shadow:0 1px 0 #000;letter-spacing:.5px}
+  .res.gold span{color:var(--gold-bright);font-size:22px}
+
+  /* ============ TABS (BuildTabRow — plate + underline, never hue alone) ============ */
+  .tabs{display:flex;gap:12px;margin-bottom:16px}
+  .tab{
+    flex:1;text-align:center;padding:9px 0 11px;font-size:19px;border-radius:5px;
+    border:1px solid #34363b;color:var(--parchment-dim);
+    background:linear-gradient(180deg,#141416,#0d0d0f);
+    cursor:pointer;letter-spacing:1px;position:relative;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .tab.active{
+    color:var(--gold-bright);
+    background:linear-gradient(180deg,#2a2d32 0%,#191b1e 60%,#202226 100%);
+    border-color:#565960;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 2px 6px rgba(0,0,0,.6);
+    text-shadow:0 1px 0 #000;
+  }
+  .tab.active::after{
+    content:"";position:absolute;left:14%;right:14%;bottom:4px;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,transparent,var(--gold) 25%,var(--gold) 75%,transparent);
+    box-shadow:0 0 8px rgba(240,180,40,.5);
+  }
+
+  /* ============ MAIN ============ */
+  .main{display:flex;gap:16px}
+  .stage{
+    flex:1;
+    background:linear-gradient(180deg,#0c0c0e,#08080a);
+    border:1px solid #2e3034;border-radius:8px;
+    padding:18px 14px 16px;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,.8), inset 0 0 50px rgba(0,0,0,.6);
+    position:relative;
+  }
+  .stage-title{
+    text-align:center;color:var(--parchment-dim);font-family:var(--font-stamp);
+    font-size:15px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;
+  }
+  .tiers{display:flex;align-items:stretch;gap:0}
+  .tier{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding:12px 8px 14px;border-radius:8px;position:relative;
+    border:1px solid transparent;cursor:pointer;
+  }
+  .tier .art{width:100%;max-width:225px}
+  .tier .art svg{width:100%;filter:drop-shadow(0 10px 12px rgba(0,0,0,.7))}
+  .tier-label{font-family:var(--font-stamp);font-size:15px;letter-spacing:3px;color:var(--parchment-dim);text-transform:uppercase}
+  .tier-name{font-family:var(--font-title);font-weight:700;font-size:18px;color:var(--parchment);text-shadow:0 1px 0 #000;text-align:center}
+  .tier-bonus{font-size:14.5px;color:var(--gold);text-align:center;min-height:38px}
+  /* OWNED state: green plate (Affordable alpha .22) + built chip */
+  .tier.owned{
+    background:linear-gradient(180deg,rgba(125,220,138,.07),rgba(125,220,138,.02));
+    border:1px solid rgba(125,220,138,.35);
+  }
+  /* UNLOCKABLE hero state: gold plate alpha ~.2 + gold rim glow (canon) */
+  .tier.selected{
+    background:linear-gradient(180deg,rgba(240,180,40,.08),rgba(240,180,40,.02));
+    border:1px solid rgba(240,180,40,.55);
+    box-shadow:0 0 24px rgba(240,180,40,.14), inset 0 0 30px rgba(240,180,40,.05);
+  }
+  .tier.selected .tier-label{color:var(--gold)}
+  /* previewing a locked tier: steel rim, no gold */
+  .tier.preview{border:1px solid #565960;background:rgba(255,255,255,.02)}
+  /* LOCKED: desaturate + dim, keep mostly in color to sell progression */
+  .tier.locked .art svg{filter:grayscale(.35) brightness(.75) drop-shadow(0 10px 12px rgba(0,0,0,.7))}
+  .tier.locked .tier-name{color:#8b8b84}
+  .tier.locked .tier-bonus{color:#7d6c3c}
+
+  .arrow{align-self:center;flex:none;width:34px;opacity:.7;margin:0 -6px;padding-bottom:70px}
+
+  /* ============ OBSIDIAN BUTTONS ============ */
+  .btn{
+    font-family:var(--font-body);font-size:17px;letter-spacing:.5px;cursor:pointer;
+    border-radius:5px;padding:9px 26px;
+    color:var(--parchment);border:1px solid #4c4f55;
+    background:linear-gradient(180deg,#3a3d43,#1e2023);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16), 0 2px 4px rgba(0,0,0,.6);
+    text-shadow:0 1px 1px rgba(0,0,0,.7);
+  }
+  .btn:hover{filter:brightness(1.15)}
+  .btn:active{filter:brightness(.85)}
+  .btn.gold{
+    color:#221803;font-weight:700;border:1px solid #6b5410;
+    background:linear-gradient(180deg,var(--gold-bright) 0%,#d9a422 45%,#b8860f 100%);
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+    box-shadow:0 0 16px rgba(240,180,40,.3), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 4px rgba(90,60,0,.45);
+  }
+  .btn.disabled{
+    cursor:not-allowed;color:#77756c;
+    background:linear-gradient(180deg,#26282c,#17181b);
+    border:1px solid #34363b;box-shadow:none;filter:none;
+  }
+  .lock-chip{
+    display:flex;align-items:center;gap:7px;
+    font-size:13px;color:#98958a;text-align:center;
+    background:linear-gradient(180deg,#17181b,#101113);
+    border:1px solid #34363b;border-radius:4px;
+    padding:7px 12px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .lock-chip svg{width:14px;height:14px;flex:none}
+  .built-chip{
+    display:flex;align-items:center;gap:7px;font-size:13px;color:var(--affordable);
+    background:linear-gradient(180deg,#12211a,#0c1712);
+    border:1px solid #2c4a36;border-radius:4px;padding:7px 12px;
+  }
+  .built-chip svg{width:14px;height:14px;flex:none}
+
+  /* ============ SIDE PANEL ============ */
+  .side{
+    width:296px;flex:none;
+    background:linear-gradient(180deg,#101013,#0a0a0c);
+    border:1px solid #34363b;border-radius:8px;
+    padding:16px;display:flex;flex-direction:column;gap:12px;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,.75);
+  }
+  .side h2{font-family:var(--font-title);font-weight:700;font-size:20px;color:var(--gold);text-align:center;text-shadow:0 1px 0 #000}
+  .side .sub{font-family:var(--font-stamp);font-size:12.5px;color:var(--parchment-dim);text-align:center;margin-top:-8px;letter-spacing:2px;text-transform:uppercase}
+  .divider{height:2px;position:relative;
+    background:linear-gradient(90deg,transparent,#3d3f44,transparent);
+  }
+  .divider::after{content:"";position:absolute;left:0;right:0;top:1px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent)}
+  .benefits{display:flex;flex-direction:column;gap:7px}
+  .benefits .b{display:flex;gap:8px;font-size:14px;color:#cfcdc2;line-height:1.35}
+  .benefits .b svg{width:15px;height:15px;flex:none;margin-top:2px}
+  .benefits .b.future{color:#6f6f68}
+  .cost-title{font-family:var(--font-stamp);font-size:12.5px;letter-spacing:2.5px;text-transform:uppercase;color:var(--parchment-dim);text-align:center}
+  .costs{display:flex;gap:8px}
+  .cost{
+    flex:1;display:flex;align-items:center;gap:7px;justify-content:center;
+    background:linear-gradient(180deg,#131316,#0b0b0d);
+    border:1px solid #3a3d42;border-radius:5px;padding:7px 8px;
+    font-size:18px;color:var(--parchment);text-shadow:0 1px 0 #000;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.7), inset 0 -1px 0 rgba(255,255,255,.04);
+  }
+  .cost svg{width:20px;height:20px}
+  .cost .ok{color:var(--affordable)}
+  .cost .short{color:var(--danger)}
+  .afford-note{font-size:11.5px;text-align:center;margin-top:-6px;letter-spacing:.5px;color:var(--affordable)}
+  .afford-note.short{color:var(--danger)}
+  .side .btn{width:100%;padding:12px 0;font-size:19px}
+  .keyline{font-family:var(--font-stamp);font-size:11.5px;letter-spacing:2px;
+    text-transform:uppercase;color:var(--parchment-dim);text-align:center}
+
+  /* ============ FOOTER STRIP ============ */
+  .footer{
+    display:flex;justify-content:center;margin-top:18px;padding-top:14px;position:relative;
+  }
+  .footer::before{
+    content:"";position:absolute;top:0;left:6%;right:6%;height:2px;
+    background:linear-gradient(90deg,transparent,#3d3f44,transparent);
+  }
+  .btn.close{
+    font-size:20px;padding:10px 64px;color:var(--parchment);
+    background:linear-gradient(180deg,#3a3d43,#1b1d20);
+    border:1px solid #55585e;
+  }
+</style>
+</head>
+<body>
+
+<!-- DEMO ONLY: proves the template is generic — same screen, different building JSON -->
+<div class="demo-switch">
+  <span class="lbl">Template Demo &mdash; building JSON:</span>
+  <button id="sw-lumbermill" class="on" onclick="render('lumbermill')">Lumbermill</button>
+  <button id="sw-windmill" onclick="render('windmill')">Windmill</button>
+  <button id="sw-forge" onclick="render('forge')">Forge</button>
+  <button id="sw-armorer" onclick="render('armorer')">Armorer</button>
+  <button id="sw-arcane-tower" onclick="render('arcane-tower')">Arcane Tower</button>
+</div>
+
+<div class="frame">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+
+  <div class="header">
+    <div class="medallion" id="medallion"></div>
+    <div class="header-plate"><h1 id="title"></h1></div>
+    <div class="close-notch" title="Close">
+      <svg viewBox="0 0 16 16"><path d="M3 3 L13 13 M13 3 L3 13" stroke="#c9c6b8" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <div class="resources" id="wallet"></div>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="main">
+    <div class="stage">
+      <div class="stage-title">Enhancement Path</div>
+      <div class="tiers" id="tiers"></div>
+    </div>
+    <div class="side" id="side"></div>
+  </div>
+
+  <div class="footer"><button class="btn close">Close</button></div>
+</div>
+
+<script>
+/* =====================================================================
+   GENERIC UPGRADE PANEL — one template, any building.
+   In-engine mapping: BuildingUpgradePanelMvvm builds the chrome once via
+   ElarionUiKit.BuildObsidianPanel(frameName), then binds a BuildingUpgradeVM
+   hydrated from building-tiers.json. This mockup mirrors that contract:
+   render(configId) is the "VM bind"; CONFIGS[x] is the building's JSON row.
+   ===================================================================== */
+
+/* ---------- shared resource icon set (CurrencyChip icons stay ours) ---------- */
+const ICONS = {
+  gold:`<svg viewBox="0 0 24 24"><circle cx="9" cy="14" r="6" fill="#f0b428" stroke="#8a5f0c"/><circle cx="14" cy="11" r="6" fill="#ffd45e" stroke="#8a5f0c"/><circle cx="14" cy="11" r="3.2" fill="none" stroke="#c8901c"/></svg>`,
+  wood:`<svg viewBox="0 0 24 24"><rect x="3" y="8" width="16" height="4" rx="2" fill="#9a6a35" stroke="#5d3c15"/><rect x="5" y="13" width="16" height="4" rx="2" fill="#b07c40" stroke="#5d3c15"/><circle cx="19" cy="10" r="1.4" fill="#e0b884"/><circle cx="21" cy="15" r="1.4" fill="#e0b884"/></svg>`,
+  sap:`<svg viewBox="0 0 24 24"><path d="M12 3 C12 3 8 9 8 13 a4.5 4.5 0 0 0 9 0 C17 9 12 3 12 3 Z" fill="#3fae4e" stroke="#1c5f26"/><path d="M12 6 C12 6 10 10 10 13 a2.5 2.5 0 0 0 3 2.4" fill="#7fdc8a" opacity=".7"/></svg>`,
+  crystal:`<svg viewBox="0 0 24 24"><path d="M12 2 L17 8 L14.5 21 H9.5 L7 8 Z" fill="#4db8f0" stroke="#1c5f8a"/><path d="M12 2 L14 8 L12 20 Z" fill="#a8e2ff" opacity=".8"/></svg>`,
+  food:`<svg viewBox="0 0 24 24"><path d="M12 21 V8" stroke="#c9a84c" stroke-width="2"/><g fill="#e0c46a" stroke="#8a6d20"><ellipse cx="12" cy="5.6" rx="2.2" ry="3.4"/><ellipse cx="8.6" cy="9" rx="2" ry="3" transform="rotate(-30 8.6 9)"/><ellipse cx="15.4" cy="9" rx="2" ry="3" transform="rotate(30 15.4 9)"/><ellipse cx="7.6" cy="13" rx="2" ry="3" transform="rotate(-35 7.6 13)"/><ellipse cx="16.4" cy="13" rx="2" ry="3" transform="rotate(35 16.4 13)"/></g></svg>`,
+  iron:`<svg viewBox="0 0 24 24"><path d="M4 15 h7 l1.5 4 H2.5 Z" fill="#9ea1a7" stroke="#54565a"/><path d="M13 15 h7 l1.5 4 H11.5 Z" fill="#b9bdc4" stroke="#54565a"/><path d="M8.5 9 h7 l1.5 4 H7 Z" fill="#c9ccd2" stroke="#54565a"/></svg>`,
+  aether:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#124a3c" stroke="#39d6b0" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="#5ff0cc"/></svg>`
+};
+const check = `<svg viewBox="0 0 15 15"><path d="M2 8 l4 4 L13 3" stroke="#7ddc8a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const lock  = c=>`<svg viewBox="0 0 15 15"><rect x="2.5" y="6.5" width="10" height="7" rx="1.5" fill="${c}"/><path d="M4.5 6.5 V5 a3 3 0 0 1 6 0 v1.5" stroke="${c}" stroke-width="1.8" fill="none"/></svg>`;
+
+/* ---------- per-building tier art (content, dropped into the body zone) ---------- */
+const ART = {
+  mill_t1:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="88" ry="14" fill="#000" opacity=".45"/><rect x="30" y="150" width="160" height="16" rx="4" fill="#4c3a24" stroke="#2a1f11"/><g stroke="#4a2f12"><rect x="18" y="140" width="52" height="11" rx="5.5" fill="#8a5a28"/><rect x="22" y="129" width="52" height="11" rx="5.5" fill="#9a6830"/><rect x="30" y="118" width="44" height="11" rx="5.5" fill="#8a5a28"/><circle cx="70" cy="145.5" r="5" fill="#c89858"/><circle cx="74" cy="134.5" r="5" fill="#d8a868"/><circle cx="74" cy="123.5" r="5" fill="#c89858"/></g><rect x="78" y="86" width="94" height="66" fill="#7a5528" stroke="#3d2810" stroke-width="2"/><g stroke="#5a3c18" stroke-width="1.5"><line x1="78" y1="100" x2="172" y2="100"/><line x1="78" y1="114" x2="172" y2="114"/><line x1="78" y1="128" x2="172" y2="128"/><line x1="78" y1="142" x2="172" y2="142"/></g><rect x="120" y="104" width="30" height="9" fill="#9a7440" transform="rotate(-6 135 108)" stroke="#5a3c18"/><rect x="94" y="116" width="24" height="36" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><circle cx="113" cy="134" r="2" fill="#c8a860"/><path d="M70 88 L125 46 L180 88 Z" fill="#5c4a30" stroke="#2e2314" stroke-width="2"/><path d="M70 88 L125 46 L133 52 L82 90 Z" fill="#6e5a3a"/><path d="M148 63 l16 12 -7 9 -14 -11 Z" fill="#473926"/><g transform="translate(158,132)"><circle r="21" fill="#8f9298" stroke="#54565a" stroke-width="2"/><g fill="#6e7176"><path d="M0-21 l4 7 h-8 Z"/><path d="M0 21 l4 -7 h-8 Z"/><path d="M-21 0 l7 4 v-8 Z"/><path d="M21 0 l-7 4 v-8 Z"/><path d="M-14.8-14.8 l7.7 2.1 -5.6 5.6 Z"/><path d="M14.8 14.8 l-7.7 -2.1 5.6 -5.6 Z"/><path d="M14.8-14.8 l-2.1 7.7 -5.6 -5.6 Z"/><path d="M-14.8 14.8 l2.1 -7.7 5.6 5.6 Z"/></g><circle r="6" fill="#54565a"/><circle r="2.4" fill="#26272a"/></g><circle cx="104" cy="97" r="4" fill="#ffd45e"/><circle cx="104" cy="97" r="9" fill="#ffd45e" opacity=".25"/></svg>`,
+  mill_t2:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="90" ry="14" fill="#000" opacity=".45"/><rect x="26" y="150" width="168" height="16" rx="4" fill="#4c3a24" stroke="#2a1f11"/><rect x="70" y="128" width="104" height="26" fill="#6e7076" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.4" fill="none"><line x1="70" y1="141" x2="174" y2="141"/><line x1="92" y1="128" x2="92" y2="141"/><line x1="126" y1="128" x2="126" y2="141"/><line x1="156" y1="128" x2="156" y2="141"/><line x1="80" y1="141" x2="80" y2="154"/><line x1="112" y1="141" x2="112" y2="154"/><line x1="142" y1="141" x2="142" y2="154"/></g><rect x="76" y="74" width="92" height="56" fill="#8a6130" stroke="#3d2810" stroke-width="2"/><g stroke="#5a3c18" stroke-width="1.5"><line x1="76" y1="88" x2="168" y2="88"/><line x1="76" y1="102" x2="168" y2="102"/><line x1="76" y1="116" x2="168" y2="116"/></g><rect x="76" y="80" width="92" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="76" y="118" width="92" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="92" y="98" width="22" height="32" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><rect x="92" y="98" width="22" height="5" fill="#9ea1a7" stroke="#54565a" stroke-width="1"/><path d="M66 76 L122 34 L178 76 Z" fill="#66543a" stroke="#2e2314" stroke-width="2"/><path d="M66 76 L122 34 L130 40 L78 78 Z" fill="#7a6848"/><rect x="64" y="72" width="116" height="6" fill="#9ea1a7" stroke="#54565a"/><line x1="122" y1="34" x2="122" y2="16" stroke="#3a2c16" stroke-width="3"/><path d="M122 16 l20 5 -20 6 Z" fill="#2e7d32" stroke="#174d1b"/><g transform="translate(48,116)"><circle r="30" fill="none" stroke="#5c4326" stroke-width="6"/><circle r="30" fill="none" stroke="#7a5c34" stroke-width="3"/><g stroke="#7a5c34" stroke-width="4"><line x1="-30" y1="0" x2="30" y2="0"/><line x1="0" y1="-30" x2="0" y2="30"/><line x1="-21" y1="-21" x2="21" y2="21"/><line x1="-21" y1="21" x2="21" y2="-21"/></g><circle r="6" fill="#4a3620" stroke="#2a1e10"/></g><g transform="translate(156,112)"><circle r="24" fill="#c2c6cd" stroke="#6d7076" stroke-width="2.5"/><g fill="#9599a0"><path d="M0-24 l4.5 8 h-9 Z"/><path d="M0 24 l4.5 -8 h-9 Z"/><path d="M-24 0 l8 4.5 v-9 Z"/><path d="M24 0 l-8 4.5 v-9 Z"/><path d="M-17-17 l8.8 2.4 -6.4 6.4 Z"/><path d="M17 17 l-8.8 -2.4 6.4 -6.4 Z"/><path d="M17-17 l-2.4 8.8 -6.4 -6.4 Z"/><path d="M-17 17 l2.4 -8.8 6.4 6.4 Z"/></g><circle r="7" fill="#6d7076"/><circle r="2.8" fill="#2c2d30"/><path d="M-16 -10 a19 19 0 0 1 22 -8" stroke="#fff" stroke-width="3" fill="none" opacity=".55" stroke-linecap="round"/></g></svg>`,
+  mill_t3:`<svg viewBox="0 0 220 190"><defs><radialGradient id="tg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#39d6b0" stop-opacity=".8"/><stop offset="100%" stop-color="#39d6b0" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="92" ry="14" fill="#000" opacity=".45"/><ellipse cx="110" cy="150" rx="92" ry="26" fill="url(#tg1)" opacity=".4"/><rect x="24" y="150" width="172" height="16" rx="4" fill="#4c3a24" stroke="#2a1f11"/><rect x="64" y="124" width="112" height="30" fill="#7a7d84" stroke="#3a3b3f" stroke-width="2"/><g stroke="#54565c" stroke-width="1.4" fill="none"><line x1="64" y1="139" x2="176" y2="139"/><line x1="88" y1="124" x2="88" y2="139"/><line x1="120" y1="124" x2="120" y2="139"/><line x1="152" y1="124" x2="152" y2="139"/><line x1="76" y1="139" x2="76" y2="154"/><line x1="106" y1="139" x2="106" y2="154"/><line x1="138" y1="139" x2="138" y2="154"/><line x1="164" y1="139" x2="164" y2="154"/></g><rect x="72" y="58" width="96" height="66" fill="#96702f" stroke="#3d2810" stroke-width="2"/><g stroke="#5a3c18" stroke-width="1.5"><line x1="72" y1="74" x2="168" y2="74"/><line x1="72" y1="90" x2="168" y2="90"/><line x1="72" y1="106" x2="168" y2="106"/></g><rect x="72" y="64" width="96" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="72" y="112" width="96" height="5" fill="#b9bdc4" stroke="#6d7076"/><circle cx="120" cy="86" r="13" fill="#0e2a24" stroke="#39d6b0" stroke-width="2.5"/><circle cx="120" cy="86" r="19" fill="url(#tg1)"/><path d="M120 78 v16 M113 82 l14 8 M127 82 l-14 8" stroke="#39d6b0" stroke-width="2" stroke-linecap="round"/><rect x="86" y="94" width="20" height="30" rx="2" fill="#123830" stroke="#39d6b0" stroke-width="2"/><path d="M62 60 L120 18 L178 60 Z" fill="#6e5c42" stroke="#2e2314" stroke-width="2"/><path d="M62 60 L120 18 L128 24 L74 62 Z" fill="#82704e"/><rect x="60" y="56" width="120" height="6" fill="#b9bdc4" stroke="#6d7076"/><path d="M120 2 L127 14 L120 26 L113 14 Z" fill="#5ff0cc" stroke="#1f8f72" stroke-width="2"/><circle cx="120" cy="14" r="14" fill="url(#tg1)"/><rect x="148" y="28" width="12" height="24" fill="#5a5c62" stroke="#3a3b3f"/><circle cx="156" cy="20" r="5" fill="#9aa0a8" opacity=".5"/><circle cx="162" cy="12" r="6.5" fill="#9aa0a8" opacity=".35"/><g transform="translate(46,110)"><circle r="17" fill="#8d9198" stroke="#54565a" stroke-width="2"/><g fill="#6d7076"><rect x="-3.5" y="-23" width="7" height="8" rx="1.5"/><rect x="-3.5" y="15" width="7" height="8" rx="1.5"/><rect x="-23" y="-3.5" width="8" height="7" rx="1.5"/><rect x="15" y="-3.5" width="8" height="7" rx="1.5"/><rect x="-18.5" y="-18.5" width="8" height="7" rx="1.5" transform="rotate(45)"/><rect x="10.5" y="-18.5" width="8" height="7" rx="1.5" transform="rotate(45)"/></g><circle r="6" fill="#54565a"/><circle r="2.5" fill="#26272a"/></g><g transform="translate(154,108)"><circle r="22" fill="#d4d8de" stroke="#6d7076" stroke-width="2.5"/><circle r="27" fill="url(#tg1)" opacity=".7"/><g fill="#a4a8b0"><path d="M0-22 l4 7.5 h-8 Z"/><path d="M0 22 l4 -7.5 h-8 Z"/><path d="M-22 0 l7.5 4 v-8 Z"/><path d="M22 0 l-7.5 4 v-8 Z"/><path d="M-15.5-15.5 l8 2.2 -5.8 5.8 Z"/><path d="M15.5 15.5 l-8 -2.2 5.8 -5.8 Z"/><path d="M15.5-15.5 l-2.2 8 -5.8 -5.8 Z"/><path d="M-15.5 15.5 l2.2 -8 5.8 5.8 Z"/></g><circle r="6.5" fill="#39d6b0"/><circle r="2.6" fill="#0e2a24"/></g></svg>`,
+  tower_t1:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="80" ry="13" fill="#000" opacity=".45"/><rect x="60" y="146" width="100" height="18" rx="3" fill="#5a5c62" stroke="#33343a" stroke-width="2"/><rect x="74" y="60" width="72" height="90" fill="#6e7076" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="74" y1="82" x2="146" y2="82"/><line x1="74" y1="104" x2="146" y2="104"/><line x1="74" y1="126" x2="146" y2="126"/><line x1="96" y1="60" x2="96" y2="82"/><line x1="122" y1="82" x2="122" y2="104"/><line x1="96" y1="104" x2="96" y2="126"/><line x1="122" y1="126" x2="122" y2="146"/></g><rect x="98" y="118" width="24" height="32" rx="2" fill="#2c2416" stroke="#1a1408" stroke-width="2"/><path d="M98 118 a12 12 0 0 1 24 0 Z" fill="#2c2416" stroke="#1a1408" stroke-width="2"/><rect x="100" y="70" width="20" height="26" rx="10" fill="#1c2b38" stroke="#33434f" stroke-width="2"/><path d="M66 60 L110 30 L154 60 Z" fill="#4a3d63" stroke="#2a2138" stroke-width="2"/><path d="M66 60 L110 30 L118 36 L78 62 Z" fill="#5d4d7a"/><circle cx="110" cy="24" r="6" fill="#8f7ab8" stroke="#4a3d63" stroke-width="2"/></svg>`,
+  tower_t2:`<svg viewBox="0 0 220 190"><defs><radialGradient id="rg2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#a08cd0" stop-opacity=".7"/><stop offset="100%" stop-color="#a08cd0" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="84" ry="13" fill="#000" opacity=".45"/><rect x="56" y="146" width="108" height="18" rx="3" fill="#5a5c62" stroke="#33343a" stroke-width="2"/><rect x="72" y="52" width="76" height="98" fill="#75777e" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="72" y1="76" x2="148" y2="76"/><line x1="72" y1="100" x2="148" y2="100"/><line x1="72" y1="124" x2="148" y2="124"/><line x1="96" y1="52" x2="96" y2="76"/><line x1="124" y1="76" x2="124" y2="100"/><line x1="96" y1="100" x2="96" y2="124"/><line x1="124" y1="124" x2="124" y2="146"/></g><rect x="72" y="70" width="76" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="72" y="118" width="76" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="98" y="116" width="24" height="34" rx="2" fill="#2c2416" stroke="#1a1408" stroke-width="2"/><path d="M98 116 a12 12 0 0 1 24 0 Z" fill="#2c2416" stroke="#1a1408" stroke-width="2"/><circle cx="110" cy="88" r="11" fill="#241b38" stroke="#8f7ab8" stroke-width="2.5"/><path d="M110 81 v14 M104 84 l12 8 M116 84 l-12 8" stroke="#a08cd0" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="88" r="17" fill="url(#rg2)"/><path d="M62 52 L110 20 L158 52 Z" fill="#54468a" stroke="#2a2138" stroke-width="2"/><path d="M62 52 L110 20 L118 26 L74 54 Z" fill="#6a58a5"/><rect x="60" y="48" width="100" height="6" fill="#9ea1a7" stroke="#54565a"/><path d="M110 4 L116 14 L110 24 L104 14 Z" fill="#b9a5ea" stroke="#54468a" stroke-width="2"/><circle cx="110" cy="14" r="12" fill="url(#rg2)"/></svg>`,
+  tower_t3:`<svg viewBox="0 0 220 190"><defs><radialGradient id="rg3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#39d6b0" stop-opacity=".8"/><stop offset="100%" stop-color="#39d6b0" stop-opacity="0"/></radialGradient><radialGradient id="rg3p" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#a08cd0" stop-opacity=".8"/><stop offset="100%" stop-color="#a08cd0" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="88" ry="13" fill="#000" opacity=".45"/><ellipse cx="110" cy="152" rx="88" ry="24" fill="url(#rg3)" opacity=".35"/><rect x="52" y="146" width="116" height="18" rx="3" fill="#6a6d74" stroke="#33343a" stroke-width="2"/><rect x="70" y="42" width="80" height="108" fill="#7d8087" stroke="#3a3b3f" stroke-width="2"/><g stroke="#54565c" stroke-width="1.3" fill="none"><line x1="70" y1="68" x2="150" y2="68"/><line x1="70" y1="94" x2="150" y2="94"/><line x1="70" y1="120" x2="150" y2="120"/><line x1="96" y1="42" x2="96" y2="68"/><line x1="126" y1="68" x2="126" y2="94"/><line x1="96" y1="94" x2="96" y2="120"/><line x1="126" y1="120" x2="126" y2="146"/></g><rect x="70" y="60" width="80" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="70" y="114" width="80" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="98" y="114" width="24" height="36" rx="2" fill="#0e2a24" stroke="#39d6b0" stroke-width="2"/><path d="M98 114 a12 12 0 0 1 24 0 Z" fill="#0e2a24" stroke="#39d6b0" stroke-width="2"/><circle cx="110" cy="82" r="12" fill="#241b38" stroke="#a08cd0" stroke-width="2.5"/><path d="M110 74 v16 M103 78 l14 8 M117 78 l-14 8" stroke="#b9a5ea" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="82" r="19" fill="url(#rg3p)"/><g stroke="#39d6b0" stroke-width="2" fill="none" opacity=".8"><path d="M80 130 q-10 -8 -6 -20"/><path d="M140 130 q10 -8 6 -20"/></g><path d="M58 42 L110 10 L162 42 Z" fill="#5d4d94" stroke="#2a2138" stroke-width="2"/><path d="M58 42 L110 10 L118 16 L70 44 Z" fill="#7565b5"/><rect x="56" y="38" width="108" height="6" fill="#b9bdc4" stroke="#6d7076"/><path d="M110 -8 L118 6 L110 20 L102 6 Z" fill="#5ff0cc" stroke="#1f8f72" stroke-width="2"/><circle cx="110" cy="6" r="16" fill="url(#rg3)"/><g fill="#5ff0cc"><circle cx="88" cy="30" r="2.2"/><circle cx="134" cy="26" r="1.8"/><circle cx="146" cy="60" r="2"/><circle cx="74" cy="64" r="1.8"/></g></svg>`
+,
+  wind_t1:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="78" ry="13" fill="#000" opacity=".45"/><rect x="64" y="152" width="92" height="12" rx="3" fill="#4c3a24" stroke="#2a1f11"/><path d="M86 152 L96 76 H124 L134 152 Z" fill="#8a6130" stroke="#3d2810" stroke-width="2"/><g stroke="#5a3c18" stroke-width="1.4"><line x1="90" y1="130" x2="130" y2="130"/><line x1="92" y1="110" x2="128" y2="110"/><line x1="94" y1="92" x2="126" y2="92"/></g><rect x="102" y="126" width="16" height="26" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><path d="M92 76 L110 60 L128 76 Z" fill="#5c4a30" stroke="#2e2314" stroke-width="2"/><g transform="translate(110,74)"><g stroke="#6e5a3a" stroke-width="2.5" fill="#d9cba0" fill-opacity=".9"><path d="M0 0 L38 -38 L48 -28 L10 8 Z" transform="rotate(0)"/><path d="M0 0 L38 -38 L48 -28 L10 8 Z" transform="rotate(90)"/><path d="M0 0 L38 -38 L48 -28 L10 8 Z" transform="rotate(180)"/><path d="M0 0 L38 -38 L48 -28 L10 8 Z" transform="rotate(270)"/></g><g stroke="#8a7448" stroke-width="1.2" opacity=".8"><line x1="8" y1="-14" x2="22" y2="-28"/><line x1="14" y1="-8" x2="30" y2="-24"/><line x1="-8" y1="-14" x2="-22" y2="-28" transform="rotate(90)"/></g><circle r="6" fill="#4a3620" stroke="#2a1e10" stroke-width="2"/></g></svg>`,
+  wind_t2:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="84" ry="13" fill="#000" opacity=".45"/><rect x="58" y="150" width="104" height="14" rx="3" fill="#5a5c62" stroke="#33343a" stroke-width="2"/><rect x="76" y="132" width="68" height="20" fill="#6e7076" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="76" y1="142" x2="144" y2="142"/><line x1="96" y1="132" x2="96" y2="142"/><line x1="122" y1="132" x2="122" y2="142"/></g><path d="M84 132 L94 66 H126 L136 132 Z" fill="#96702f" stroke="#3d2810" stroke-width="2"/><rect x="90" y="120" width="40" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="93" y="88" width="34" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="102" y="122" width="16" height="30" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><path d="M90 66 L110 50 L130 66 Z" fill="#66543a" stroke="#2e2314" stroke-width="2"/><line x1="110" y1="50" x2="110" y2="36" stroke="#3a2c16" stroke-width="3"/><path d="M110 36 l16 4 -16 5 Z" fill="#2e7d32" stroke="#174d1b"/><g transform="translate(110,64)"><g stroke="#54565a" stroke-width="2.5" fill="#e4d8ae" fill-opacity=".95"><path d="M0 0 L42 -42 L53 -31 L11 9 Z" transform="rotate(0)"/><path d="M0 0 L42 -42 L53 -31 L11 9 Z" transform="rotate(90)"/><path d="M0 0 L42 -42 L53 -31 L11 9 Z" transform="rotate(180)"/><path d="M0 0 L42 -42 L53 -31 L11 9 Z" transform="rotate(270)"/></g><circle r="7" fill="#54565a" stroke="#2c2d30" stroke-width="2"/><circle r="2.6" fill="#26272a"/></g></svg>`,
+  wind_t3:`<svg viewBox="0 0 220 190"><defs><radialGradient id="wg3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#39d6b0" stop-opacity=".8"/><stop offset="100%" stop-color="#39d6b0" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="88" ry="13" fill="#000" opacity=".45"/><ellipse cx="110" cy="152" rx="88" ry="22" fill="url(#wg3)" opacity=".35"/><rect x="54" y="148" width="112" height="16" rx="3" fill="#6a6d74" stroke="#33343a" stroke-width="2"/><rect x="72" y="128" width="76" height="22" fill="#7a7d84" stroke="#3a3b3f" stroke-width="2"/><path d="M82 128 L92 58 H128 L138 128 Z" fill="#a07a34" stroke="#3d2810" stroke-width="2"/><rect x="88" y="116" width="44" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="91" y="82" width="38" height="5" fill="#b9bdc4" stroke="#6d7076"/><circle cx="110" cy="100" r="9" fill="#0e2a24" stroke="#39d6b0" stroke-width="2"/><path d="M110 94 v12 M105 97 l10 6 M115 97 l-10 6" stroke="#39d6b0" stroke-width="1.6" stroke-linecap="round"/><rect x="102" y="122" width="16" height="28" rx="2" fill="#123830" stroke="#39d6b0" stroke-width="2"/><path d="M88 58 L110 42 L132 58 Z" fill="#6e5c42" stroke="#2e2314" stroke-width="2"/><path d="M110 30 L115 38 L110 46 L105 38 Z" fill="#5ff0cc" stroke="#1f8f72" stroke-width="2"/><circle cx="110" cy="38" r="11" fill="url(#wg3)"/><g transform="translate(110,58)"><circle r="30" fill="url(#wg3)" opacity=".5"/><g stroke="#39d6b0" stroke-width="2.5" fill="#dff5ec" fill-opacity=".9"><path d="M0 0 L44 -44 L56 -32 L12 10 Z" transform="rotate(0)"/><path d="M0 0 L44 -44 L56 -32 L12 10 Z" transform="rotate(90)"/><path d="M0 0 L44 -44 L56 -32 L12 10 Z" transform="rotate(180)"/><path d="M0 0 L44 -44 L56 -32 L12 10 Z" transform="rotate(270)"/></g><circle r="7" fill="#39d6b0"/><circle r="2.6" fill="#0e2a24"/></g><g stroke="#5ff0cc" stroke-width="1.6" fill="none" opacity=".7"><path d="M52 120 q-8 -10 0 -20"/><path d="M168 120 q8 -10 0 -20"/></g></svg>`,
+  forge_t1:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="84" ry="13" fill="#000" opacity=".45"/><rect x="48" y="150" width="124" height="14" rx="3" fill="#4c3a24" stroke="#2a1f11"/><rect x="60" y="100" width="100" height="52" fill="#6e7076" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="60" y1="126" x2="160" y2="126"/><line x1="84" y1="100" x2="84" y2="126"/><line x1="116" y1="100" x2="116" y2="126"/><line x1="140" y1="126" x2="140" y2="152"/><line x1="100" y1="126" x2="100" y2="152"/></g><path d="M54 100 L110 66 L166 100 Z" fill="#5c4a30" stroke="#2e2314" stroke-width="2"/><rect x="132" y="66" width="12" height="28" fill="#5a5c62" stroke="#33343a"/><circle cx="140" cy="58" r="5" fill="#9aa0a8" opacity=".5"/><circle cx="146" cy="50" r="6" fill="#9aa0a8" opacity=".35"/><path d="M92 152 v-24 a14 14 0 0 1 28 0 v24 Z" fill="#2a1408" stroke="#1a0c04" stroke-width="2"/><path d="M98 152 v-18 a8 8 0 0 1 16 0 v18 Z" fill="#e8891f"/><path d="M102 152 v-13 a5 5 0 0 1 10 0 v13 Z" fill="#ffd45e"/><g transform="translate(52,138)"><rect x="-14" y="6" width="28" height="8" fill="#54565a" stroke="#2c2d30"/><path d="M-16 -2 h20 a8 8 0 0 1 8 8 h-36 a10 6 0 0 1 8 -8 Z" fill="#8f9298" stroke="#54565a"/></g></svg>`,
+  forge_t2:`<svg viewBox="0 0 220 190"><defs><radialGradient id="fg2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e8891f" stop-opacity=".7"/><stop offset="100%" stop-color="#e8891f" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="88" ry="13" fill="#000" opacity=".45"/><rect x="44" y="150" width="132" height="14" rx="3" fill="#5a5c62" stroke="#33343a" stroke-width="2"/><rect x="56" y="92" width="108" height="60" fill="#75777e" stroke="#3a3b3f" stroke-width="2"/><rect x="56" y="98" width="108" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="56" y="140" width="108" height="5" fill="#9ea1a7" stroke="#54565a"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="60" y1="122" x2="160" y2="122"/><line x1="86" y1="103" x2="86" y2="122"/><line x1="118" y1="103" x2="118" y2="122"/></g><path d="M50 92 L110 56 L170 92 Z" fill="#66543a" stroke="#2e2314" stroke-width="2"/><rect x="128" y="54" width="13" height="32" fill="#5a5c62" stroke="#33343a"/><rect x="84" y="60" width="12" height="26" fill="#5a5c62" stroke="#33343a"/><circle cx="136" cy="46" r="5" fill="#9aa0a8" opacity=".5"/><circle cx="90" cy="52" r="5" fill="#9aa0a8" opacity=".5"/><circle cx="110" cy="112" r="10" fill="#3a1c08" stroke="#e8891f" stroke-width="2"/><path d="M110 106 v12 M105 109 l10 6 M115 109 l-10 6" stroke="#ffb45e" stroke-width="1.6" stroke-linecap="round"/><path d="M88 152 v-26 a15 15 0 0 1 30 0 v26 Z" fill="#2a1408" stroke="#1a0c04" stroke-width="2"/><ellipse cx="103" cy="146" rx="16" ry="12" fill="url(#fg2)"/><path d="M95 152 v-19 a8.5 8.5 0 0 1 17 0 v19 Z" fill="#f09a2f"/><path d="M99 152 v-13 a5 5 0 0 1 10 0 v13 Z" fill="#ffe08a"/><g transform="translate(158,136)"><rect x="-14" y="8" width="28" height="8" fill="#54565a" stroke="#2c2d30"/><path d="M-16 0 h20 a8 8 0 0 1 8 8 h-36 a10 6 0 0 1 8 -8 Z" fill="#a8acb2" stroke="#54565a"/><path d="M-4 0 l6 -12 4 2 -5 10 Z" fill="#7a5c34" stroke="#4a3620"/></g></svg>`,
+  forge_t3:`<svg viewBox="0 0 220 190"><defs><radialGradient id="fg3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#39d6b0" stop-opacity=".8"/><stop offset="100%" stop-color="#39d6b0" stop-opacity="0"/></radialGradient><radialGradient id="fg3o" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffb45e" stop-opacity=".8"/><stop offset="100%" stop-color="#ffb45e" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="92" ry="13" fill="#000" opacity=".45"/><ellipse cx="110" cy="152" rx="90" ry="22" fill="url(#fg3)" opacity=".3"/><rect x="40" y="148" width="140" height="16" rx="3" fill="#6a6d74" stroke="#33343a" stroke-width="2"/><rect x="52" y="84" width="116" height="64" fill="#7d8087" stroke="#3a3b3f" stroke-width="2"/><rect x="52" y="90" width="116" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="52" y="136" width="116" height="5" fill="#b9bdc4" stroke="#6d7076"/><path d="M46 84 L110 46 L174 84 Z" fill="#6e5c42" stroke="#2e2314" stroke-width="2"/><rect x="126" y="44" width="14" height="36" fill="#5a5c62" stroke="#33343a"/><rect x="80" y="50" width="13" height="30" fill="#5a5c62" stroke="#33343a"/><ellipse cx="133" cy="36" rx="7" ry="5" fill="url(#fg3o)"/><ellipse cx="86" cy="42" rx="6" ry="4" fill="url(#fg3)"/><path d="M110 30 L117 40 L110 50 L103 40 Z" fill="#5ff0cc" stroke="#1f8f72" stroke-width="2"/><circle cx="110" cy="40" r="13" fill="url(#fg3)"/><circle cx="110" cy="108" r="12" fill="#0e2a24" stroke="#39d6b0" stroke-width="2.5"/><path d="M110 100 v16 M103 104 l14 8 M117 104 l-14 8" stroke="#5ff0cc" stroke-width="2" stroke-linecap="round"/><circle cx="110" cy="108" r="19" fill="url(#fg3)"/><path d="M84 148 v-28 a16 16 0 0 1 32 0 v28 Z" fill="#2a1408" stroke="#1a0c04" stroke-width="2"/><ellipse cx="100" cy="142" rx="18" ry="13" fill="url(#fg3o)"/><path d="M92 148 v-20 a9 9 0 0 1 18 0 v20 Z" fill="#f0a83f"/><path d="M96 148 v-13 a5.5 5.5 0 0 1 11 0 v13 Z" fill="#ffe9a0"/><g fill="#5ff0cc"><circle cx="66" cy="70" r="2"/><circle cx="156" cy="66" r="2.2"/><circle cx="170" cy="104" r="1.8"/><circle cx="50" cy="110" r="1.8"/></g><g transform="translate(160,134)"><rect x="-14" y="8" width="28" height="8" fill="#54565a" stroke="#2c2d30"/><path d="M-16 0 h20 a8 8 0 0 1 8 8 h-36 a10 6 0 0 1 8 -8 Z" fill="#c9ccd2" stroke="#54565a"/><path d="M-4 0 l6 -12 4 2 -5 10 Z" fill="#7a5c34" stroke="#4a3620"/><circle cx="4" cy="-1" r="3" fill="url(#fg3o)"/></g></svg>`,
+  armor_t1:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="82" ry="13" fill="#000" opacity=".45"/><rect x="50" y="150" width="120" height="14" rx="3" fill="#4c3a24" stroke="#2a1f11"/><rect x="62" y="98" width="96" height="54" fill="#7a5528" stroke="#3d2810" stroke-width="2"/><g stroke="#5a3c18" stroke-width="1.4"><line x1="62" y1="112" x2="158" y2="112"/><line x1="62" y1="126" x2="158" y2="126"/><line x1="62" y1="140" x2="158" y2="140"/></g><rect x="74" y="116" width="20" height="36" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><path d="M56 98 L110 64 L164 98 Z" fill="#5c4a30" stroke="#2e2314" stroke-width="2"/><path d="M56 98 L110 64 L118 70 L68 100 Z" fill="#6e5a3a"/><g transform="translate(128,120)"><path d="M0 -14 L11 -10 V0 C11 8 5.5 13 0 16 C-5.5 13 -11 8 -11 0 V-10 Z" fill="#8f9298" stroke="#54565a" stroke-width="2"/><path d="M0 -14 L11 -10 V0 C11 8 5.5 13 0 16 Z" fill="#a8acb2"/><path d="M-14 -12 L14 12 M-11 14 l-4 4 M14 12 l4 -4" stroke="#6e5138" stroke-width="3" stroke-linecap="round"/></g><g transform="translate(58,136)"><rect x="-13" y="6" width="26" height="8" fill="#54565a" stroke="#2c2d30"/><path d="M-15 -2 h19 a8 8 0 0 1 8 8 h-34 a10 6 0 0 1 7 -8 Z" fill="#8f9298" stroke="#54565a"/></g></svg>`,
+  armor_t2:`<svg viewBox="0 0 220 190"><ellipse cx="110" cy="168" rx="86" ry="13" fill="#000" opacity=".45"/><rect x="46" y="150" width="128" height="14" rx="3" fill="#5a5c62" stroke="#33343a" stroke-width="2"/><rect x="58" y="130" width="104" height="22" fill="#6e7076" stroke="#3a3b3f" stroke-width="2"/><g stroke="#4c4e53" stroke-width="1.3" fill="none"><line x1="58" y1="141" x2="162" y2="141"/><line x1="84" y1="130" x2="84" y2="141"/><line x1="116" y1="130" x2="116" y2="141"/><line x1="142" y1="141" x2="142" y2="152"/></g><rect x="62" y="86" width="96" height="46" fill="#8a6130" stroke="#3d2810" stroke-width="2"/><rect x="62" y="92" width="96" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="62" y="122" width="96" height="5" fill="#9ea1a7" stroke="#54565a"/><rect x="74" y="104" width="20" height="28" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><rect x="74" y="104" width="20" height="5" fill="#9ea1a7" stroke="#54565a"/><path d="M54 86 L110 52 L166 86 Z" fill="#66543a" stroke="#2e2314" stroke-width="2"/><rect x="52" y="82" width="116" height="6" fill="#9ea1a7" stroke="#54565a"/><line x1="110" y1="52" x2="110" y2="34" stroke="#3a2c16" stroke-width="3"/><path d="M110 34 l18 5 -18 6 Z" fill="#8a1f1f" stroke="#4d1111"/><g transform="translate(130,112)"><path d="M0 -16 L13 -11.5 V0 C13 9 6.5 15 0 18.5 C-6.5 15 -13 9 -13 0 V-11.5 Z" fill="#b9bdc4" stroke="#54565a" stroke-width="2"/><path d="M0 -16 L13 -11.5 V0 C13 9 6.5 15 0 18.5 Z" fill="#d4d8de"/><circle r="4" fill="#54565a"/></g><g transform="translate(154,132)"><line x1="0" y1="20" x2="0" y2="-6" stroke="#54565a" stroke-width="3"/><path d="M-8 -6 h16 v-8 a8 8 0 0 0 -16 0 Z" fill="#8f9298" stroke="#54565a" stroke-width="2"/><rect x="-10" y="-2" width="20" height="14" rx="3" fill="#a8acb2" stroke="#54565a" stroke-width="2"/></g></svg>`,
+  armor_t3:`<svg viewBox="0 0 220 190"><defs><radialGradient id="ag3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffd45e" stop-opacity=".7"/><stop offset="100%" stop-color="#ffd45e" stop-opacity="0"/></radialGradient></defs><ellipse cx="110" cy="168" rx="90" ry="13" fill="#000" opacity=".45"/><rect x="42" y="148" width="136" height="16" rx="3" fill="#6a6d74" stroke="#33343a" stroke-width="2"/><rect x="54" y="126" width="112" height="24" fill="#7a7d84" stroke="#3a3b3f" stroke-width="2"/><rect x="58" y="76" width="104" height="50" fill="#96702f" stroke="#3d2810" stroke-width="2"/><rect x="58" y="82" width="104" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="58" y="116" width="104" height="5" fill="#b9bdc4" stroke="#6d7076"/><rect x="72" y="96" width="20" height="30" rx="2" fill="#4a3014" stroke="#2a1a08" stroke-width="2"/><path d="M50 76 L110 42 L170 76 Z" fill="#6e5c42" stroke="#2e2314" stroke-width="2"/><rect x="48" y="72" width="124" height="6" fill="#b9bdc4" stroke="#6d7076"/><line x1="110" y1="42" x2="110" y2="22" stroke="#3a2c16" stroke-width="3"/><path d="M110 22 l20 5 -20 6 Z" fill="#8a1f1f" stroke="#4d1111"/><path d="M116 24 l8 2 -8 2.5 Z" fill="#ffd45e"/><g transform="translate(132,104)"><circle r="24" fill="url(#ag3)" opacity=".8"/><path d="M0 -17 L14 -12 V0 C14 10 7 16 0 20 C-7 16 -14 10 -14 0 V-12 Z" fill="#d9a422" stroke="#6b5410" stroke-width="2"/><path d="M0 -17 L14 -12 V0 C14 10 7 16 0 20 Z" fill="#ffd45e"/><path d="M0 -8 L2.5 -2.5 L8 -2 L4 2 L5 8 L0 5 L-5 8 L-4 2 L-8 -2 L-2.5 -2.5 Z" fill="#6b5410"/></g><g transform="translate(158,130)"><line x1="0" y1="20" x2="0" y2="-8" stroke="#54565a" stroke-width="3"/><path d="M-8 -8 h16 v-8 a8 8 0 0 0 -16 0 Z" fill="#c9ccd2" stroke="#54565a" stroke-width="2"/><rect x="-10" y="-4" width="20" height="15" rx="3" fill="#d4d8de" stroke="#54565a" stroke-width="2"/><rect x="-10" y="-4" width="20" height="4" fill="#d9a422" stroke="#6b5410"/></g><g transform="translate(62,134)"><rect x="-13" y="6" width="26" height="8" fill="#54565a" stroke="#2c2d30"/><path d="M-15 -2 h19 a8 8 0 0 1 8 8 h-34 a10 6 0 0 1 7 -8 Z" fill="#c9ccd2" stroke="#54565a"/><path d="M-2 -2 l5 -10 4 2 -5 8 Z" fill="#7a5c34" stroke="#4a3620"/></g><g fill="#ffd45e"><circle cx="70" cy="60" r="1.8"/><circle cx="152" cy="56" r="2"/><circle cx="174" cy="96" r="1.6"/></g></svg>`
+};
+
+/* ---------- emblems (medallion content per building) ---------- */
+const EMBLEMS = {
+  lumbermill:`<svg viewBox="0 0 54 54"><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 C19.5 42.5 13 36 13 26 V13 Z" fill="#c96a1b" stroke="#6b3208" stroke-width="2"/><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 Z" fill="#e8891f" opacity=".65"/><g stroke="#5a3c18"><rect x="20" y="24" width="14" height="4" rx="2" fill="#8a5a28"/><rect x="22" y="29" width="14" height="4" rx="2" fill="#9a6830"/></g></svg>`,
+  windmill:`<svg viewBox="0 0 54 54"><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 C19.5 42.5 13 36 13 26 V13 Z" fill="#2e7d32" stroke="#174d1b" stroke-width="2"/><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 Z" fill="#3fae4e" opacity=".65"/><g stroke="#c9dc9a" stroke-width="2.4" stroke-linecap="round"><line x1="27" y1="20" x2="27" y2="34"/><line x1="20" y1="27" x2="34" y2="27"/><line x1="22" y1="22" x2="32" y2="32"/><line x1="32" y1="22" x2="22" y2="32"/></g><circle cx="27" cy="27" r="3" fill="#e6f0c8" stroke="#5a7a30"/></svg>`,
+  forge:`<svg viewBox="0 0 54 54"><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 C19.5 42.5 13 36 13 26 V13 Z" fill="#8a3a1f" stroke="#4d1c0c" stroke-width="2"/><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 Z" fill="#b0522a" opacity=".65"/><path d="M27 18 c-3 4 -5 7 -5 10 a5 5 0 0 0 10 0 c0 -3 -2 -6 -5 -10 Z" fill="#ffb45e" stroke="#8a4d0c" stroke-width="1.5"/><path d="M27 24 c-1.5 2.5 -2.4 4 -2.4 5.6 a2.4 2.4 0 0 0 4.8 0 c0 -1.6 -.9 -3.1 -2.4 -5.6 Z" fill="#ffe9a0"/></svg>`,
+  armorer:`<svg viewBox="0 0 54 54"><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 C19.5 42.5 13 36 13 26 V13 Z" fill="#55585e" stroke="#26282c" stroke-width="2"/><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 Z" fill="#7d8188" opacity=".65"/><path d="M27 17 L34 19.5 V26 C34 31 30.5 34.5 27 36.5 C23.5 34.5 20 31 20 26 V19.5 Z" fill="#c9ccd2" stroke="#3a3d42" stroke-width="1.5"/><path d="M27 17 L34 19.5 V26 C34 31 30.5 34.5 27 36.5 Z" fill="#e2e5ea"/></svg>`,
+  "arcane-tower":`<svg viewBox="0 0 54 54"><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 C19.5 42.5 13 36 13 26 V13 Z" fill="#54468a" stroke="#2a2138" stroke-width="2"/><path d="M27 8 L41 13 V26 C41 36 34.5 42.5 27 46 Z" fill="#6a58a5" opacity=".65"/><path d="M27 18 L31 25 L27 34 L23 25 Z" fill="#b9a5ea" stroke="#3d3163" stroke-width="1.5"/></svg>`
+};
+
+/* =====================================================================
+   BUILDING CONFIG JSON — the contract every upgradeable building passes.
+   Mirrors building-tiers.json + BuildingUpgradeVM (Perks / CostFor /
+   EffectFor / Select). "state" is derived by the VM from save data:
+   owned | unlockable | locked.
+   ===================================================================== */
+const CONFIGS = {
+  /* ids are the canon 1:1 building ids (BUILDING_UPGRADE_TREES.md rev 2, owner-authored
+     2026-07-16). Tier cards = T1..T3 upgrades; T0 is the basic starting building.
+     Costs are PLACEHOLDER balance values — the tree canon defines effects, not prices.
+     NOTE: armorer tiers cost Metal (Iron) — needs the flagged `costIron` field added to
+     BuildingTierDef (BUILDING_PERKS_DESIGN.md schema gap). */
+
+  lumbermill: {
+    buildingId:"lumbermill",
+    title:"Lumbermill Enhancements",
+    tabs:["Upgrade","Skills"],
+    wallet:[
+      {resource:"gold", amount:1000000, primary:true},
+      {resource:"wood", amount:998000},
+      {resource:"food", amount:999000},
+      {resource:"iron", amount:998000},
+      {resource:"crystal", amount:998000}
+    ],
+    tiers:[
+      { id:"t1", name:"Sawmill", bonus:"Wood gather rate +40%",
+        art:"mill_t1", state:"unlockable",
+        benefits:[
+          {text:"Wood gather rate increased by 40%", earned:true},
+          {text:"Unlocks reinforced wooden towers (higher HP)", earned:true},
+          {text:"Opens Tier 2: Timber Hall", earned:false}
+        ],
+        cost:[{resource:"wood",amount:900},{resource:"gold",amount:350}],
+        requires:null },
+      { id:"t2", name:"Timber Hall", bonus:"Auto-gather; construction -25%",
+        art:"mill_t2", state:"locked",
+        benefits:[
+          {text:"Auto-gathers wood from medium range", earned:true},
+          {text:"Construction time -25% for ALL buildings", earned:true},
+          {text:"Unlocks mobile barricades (temporary defenses)", earned:true},
+          {text:"Opens Tier 3: Ancient Grove Mill", earned:false}
+        ],
+        cost:[{resource:"wood",amount:2400},{resource:"iron",amount:600}],
+        requires:{tier:"t1", name:"Sawmill"} },
+      { id:"t3", name:"Ancient Grove Mill", bonus:"Global wood +25%; mid-wave repairs",
+        art:"mill_t3", state:"locked",
+        benefits:[
+          {text:"Global wood income increased by 25%", earned:true},
+          {text:"Spend wood mid-wave for emergency repairs", earned:true},
+          {text:"Synergy: Armorer and Barracks units 15% cheaper", earned:true}
+        ],
+        cost:[{resource:"wood",amount:6000},{resource:"crystal",amount:450}],
+        requires:{tier:"t2", name:"Timber Hall"} }
+    ]
+  },
+
+  windmill: {
+    buildingId:"windmill",
+    title:"Windmill Enhancements",
+    tabs:["Upgrade","Skills"],
+    wallet:[
+      {resource:"gold", amount:1000000, primary:true},
+      {resource:"wood", amount:998000},
+      {resource:"food", amount:999000},
+      {resource:"iron", amount:998000},
+      {resource:"crystal", amount:998000}
+    ],
+    tiers:[
+      { id:"t1", name:"Harvest Windmill", bonus:"Food rate +50%; +1 companion",
+        art:"wind_t1", state:"unlockable",
+        benefits:[
+          {text:"Food rate increased by 50%", earned:true},
+          {text:"+1 max active companions", earned:true},
+          {text:"Unlocks Bounty (short gather boost)", earned:true},
+          {text:"Opens Tier 2: Grand Mill", earned:false}
+        ],
+        cost:[{resource:"wood",amount:700},{resource:"gold",amount:300}],
+        requires:null },
+      { id:"t2", name:"Grand Mill", bonus:"Offline food; sustain towers",
+        art:"wind_t2", state:"locked",
+        benefits:[
+          {text:"Passive food income while offline", earned:true},
+          {text:"Unlocks sustain towers (Life Totem heals defenders)", earned:true},
+          {text:"Companions slowly regen while gathering", earned:true},
+          {text:"Opens Tier 3: Eternal Winds", earned:false}
+        ],
+        cost:[{resource:"wood",amount:2000},{resource:"food",amount:800}],
+        requires:{tier:"t1", name:"Harvest Windmill"} },
+      { id:"t3", name:"Eternal Winds", bonus:"Food surplus; global health regen",
+        art:"wind_t3", state:"locked",
+        benefits:[
+          {text:"Massive food surplus", earned:true},
+          {text:"Global tower and hero health regen", earned:true},
+          {text:"Synergy: faster Barracks training, better Forge conversion", earned:true}
+        ],
+        cost:[{resource:"food",amount:5000},{resource:"crystal",amount:400}],
+        requires:{tier:"t2", name:"Grand Mill"} }
+    ]
+  },
+
+  forge: {
+    buildingId:"forge",
+    title:"Forge Enhancements",
+    tabs:["Upgrade","Skills"],
+    wallet:[
+      {resource:"gold", amount:1000000, primary:true},
+      {resource:"wood", amount:998000},
+      {resource:"food", amount:999000},
+      {resource:"iron", amount:998000},
+      {resource:"crystal", amount:998000}
+    ],
+    tiers:[
+      { id:"t1", name:"Arcane Forge", bonus:"Essence rate +60%",
+        art:"forge_t1", state:"unlockable",
+        benefits:[
+          {text:"Essence processing rate increased by 60%", earned:true},
+          {text:"Unlocks elemental tower enchantments (fire and ice)", earned:true},
+          {text:"Opens Tier 2: Rune Crucible", earned:false}
+        ],
+        cost:[{resource:"wood",amount:800},{resource:"iron",amount:400}],
+        requires:null },
+      { id:"t2", name:"Rune Crucible", bonus:"Hero spells; cooldowns -20%",
+        art:"forge_t2", state:"locked",
+        benefits:[
+          {text:"Unlocks hero spells and area-effect runes", earned:true},
+          {text:"Spell cooldowns reduced by 20%", earned:true},
+          {text:"Opens Tier 3: Elarion Eternal Forge", earned:false}
+        ],
+        cost:[{resource:"iron",amount:2200},{resource:"crystal",amount:600}],
+        requires:{tier:"t1", name:"Arcane Forge"} },
+      { id:"t3", name:"Elarion Eternal Forge", bonus:"Global abilities; super-towers",
+        art:"forge_t3", state:"locked",
+        benefits:[
+          {text:"Unlocks high-tier global abilities (Realm Shield)", earned:true},
+          {text:"Essence powers super-towers mid-wave", earned:true},
+          {text:"Synergy: Arcane Tower damage up, Armorer gear quality up", earned:true}
+        ],
+        cost:[{resource:"crystal",amount:3000},{resource:"gold",amount:1500}],
+        requires:{tier:"t2", name:"Rune Crucible"} }
+    ]
+  },
+
+  armorer: {
+    buildingId:"armorer",
+    title:"Armorer Enhancements",
+    tabs:["Upgrade","Skills"],
+    wallet:[
+      {resource:"gold", amount:1000000, primary:true},
+      {resource:"wood", amount:998000},
+      {resource:"food", amount:999000},
+      {resource:"iron", amount:998000},
+      {resource:"crystal", amount:998000}
+    ],
+    tiers:[
+      { id:"t1", name:"Field Armorer", bonus:"Metal rate +45%",
+        art:"armor_t1", state:"unlockable",
+        benefits:[
+          {text:"Metal rate increased by 45%", earned:true},
+          {text:"Unlocks armored towers (better resistance)", earned:true},
+          {text:"Unlocks basic hero gear", earned:true},
+          {text:"Opens Tier 2: Master Smithy", earned:false}
+        ],
+        cost:[{resource:"wood",amount:900},{resource:"iron",amount:500}],
+        requires:null },
+      { id:"t2", name:"Master Smithy", bonus:"Advanced weapons; hero bonuses",
+        art:"armor_t2", state:"locked",
+        benefits:[
+          {text:"Unlocks advanced weapons (piercing, splash)", earned:true},
+          {text:"Hero combat bonuses during gathering runs", earned:true},
+          {text:"Opens Tier 3: Legendary Armory", earned:false}
+        ],
+        cost:[{resource:"iron",amount:2600},{resource:"gold",amount:800}],
+        requires:{tier:"t1", name:"Field Armorer"} },
+      { id:"t3", name:"Legendary Armory", bonus:"Epic gear; salvage; tower damage",
+        art:"armor_t3", state:"locked",
+        benefits:[
+          {text:"Unlocks epic gear sets", earned:true},
+          {text:"Salvage: enemy drops convert to metal", earned:true},
+          {text:"Permanent tower damage boost", earned:true},
+          {text:"Synergy: Barracks units tankier, Forge runes stronger", earned:true}
+        ],
+        cost:[{resource:"iron",amount:6000},{resource:"crystal",amount:500}],
+        requires:{tier:"t2", name:"Master Smithy"} }
+    ]
+  },
+
+  "arcane-tower": {
+    buildingId:"arcane-tower",
+    title:"Arcane Tower Enhancements",
+    tabs:["Upgrade","Skills"],
+    wallet:[
+      {resource:"gold", amount:1000000, primary:true},
+      {resource:"wood", amount:998000},
+      {resource:"food", amount:999000},
+      {resource:"iron", amount:998000},
+      {resource:"crystal", amount:998000}
+    ],
+    tiers:[
+      { id:"t1", name:"Enchanted Spire", bonus:"Chain lightning; slow effects",
+        art:"tower_t1", state:"unlockable",
+        benefits:[
+          {text:"Chain lightning and slow effects", earned:true},
+          {text:"Higher damage vs magic-immune foes", earned:true},
+          {text:"Opens Tier 2: Mystic Obelisk", earned:false}
+        ],
+        cost:[{resource:"gold",amount:800},{resource:"crystal",amount:400}],
+        requires:null },
+      { id:"t2", name:"Mystic Obelisk", bonus:"Area-denial runes; empower towers",
+        art:"tower_t2", state:"locked",
+        benefits:[
+          {text:"Area-denial runes and mana abilities", earned:true},
+          {text:"Can empower nearby towers", earned:true},
+          {text:"Opens Tier 3: Elarion Arcane Nexus", earned:false}
+        ],
+        cost:[{resource:"gold",amount:2200},{resource:"crystal",amount:900}],
+        requires:{tier:"t1", name:"Enchanted Spire"} },
+      { id:"t3", name:"Elarion Arcane Nexus", bonus:"Orbital strikes; wave-clear bursts",
+        art:"tower_t3", state:"locked",
+        benefits:[
+          {text:"Orbital strikes, global slow, wave-clear bursts", earned:true},
+          {text:"Campaign centerpiece tower", earned:true},
+          {text:"Synergy: Forge amplifies effects, Armorer adds durability", earned:true}
+        ],
+        cost:[{resource:"crystal",amount:2600},{resource:"iron",amount:1200}],
+        requires:{tier:"t2", name:"Mystic Obelisk"} }
+    ]
+  }
+};
+
+/* ---------- CompactNumber (no ellipsis, ever) ---------- */
+function compact(n){
+  if(n>=1000000) return (n/1000000).toFixed(n%1000000?1:0).replace(/\.0$/,"")+"m";
+  if(n>=1000)    return (n/1000).toFixed(n%1000?1:0).replace(/\.0$/,"")+"k";
+  return String(n);
+}
+
+let current=null, selectedIdx=0;
+
+function render(id){
+  current=CONFIGS[id];
+  document.querySelectorAll(".demo-switch button").forEach(b=>b.classList.remove("on"));
+  document.getElementById("sw-"+id).classList.add("on");
+  /* default selection = first unlockable tier, else first tier */
+  selectedIdx=Math.max(0,current.tiers.findIndex(t=>t.state==="unlockable"));
+  document.getElementById("medallion").innerHTML=EMBLEMS[id]||"";
+  document.getElementById("title").textContent=current.title;
+  document.getElementById("wallet").innerHTML=current.wallet.map(w=>
+    `<div class="res ${w.primary?"gold":""}">${ICONS[w.resource]||""}<span>${compact(w.amount)}</span></div>`).join("");
+  document.getElementById("tabs").innerHTML=current.tabs.map((t,i)=>
+    `<div class="tab ${i===0?"active":""}">${t}</div>`).join("");
+  renderTiers();
+}
+
+function renderTiers(){
+  const goldArrow=`<svg class="arrow" viewBox="0 0 34 24"><path d="M2 12 H24 M18 4 L26 12 L18 20" stroke="#f0b428" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const steelArrow=goldArrow.replace('#f0b428','#5a5c60');
+  let html="";
+  current.tiers.forEach((t,i)=>{
+    const isSel=i===selectedIdx;
+    const cls=[ "tier",
+      t.state==="owned"?"owned":"",
+      t.state==="locked"?"locked":"",
+      isSel ? (t.state==="locked"?"preview":"selected") : ""
+    ].join(" ");
+    let action="";
+    if(t.state==="unlockable") action=`<button class="btn gold">Upgrade</button>`;
+    else if(t.state==="owned") action=`<div class="built-chip">${check} Built</div>`;
+    else action=`<div class="lock-chip">${lock("#7a7a72")} Requires ${t.requires?("Tier "+t.requires.tier.slice(1)+": "+t.requires.name):"previous tier"}</div>`;
+    html+=`<div class="${cls}" onclick="select(${i})">
+      <div class="tier-label">Tier ${i+1}</div>
+      <div class="art">${ART[t.art]||""}</div>
+      <div class="tier-name">${t.name}</div>
+      <div class="tier-bonus">${t.bonus}</div>
+      ${action}
+    </div>`;
+    if(i<current.tiers.length-1){
+      /* gold arrow only up to the next unlockable step; steel beyond */
+      const nextUnlock=current.tiers[i+1].state!=="locked"||current.tiers[i].state==="unlockable";
+      html+= nextUnlock?goldArrow:steelArrow;
+    }
+  });
+  document.getElementById("tiers").innerHTML=html;
+  renderSide();
+}
+
+function select(i){ selectedIdx=i; renderTiers(); }
+
+function renderSide(){
+  const t=current.tiers[selectedIdx];
+  const stateLabel = t.state==="owned"?"Built":(t.state==="unlockable"?"Selected":"Locked");
+  const costs=t.cost.map(c=>
+    `<div class="cost">${ICONS[c.resource]||""}<span class="ok">${compact(c.amount)}</span></div>`).join("");
+  let cta, note;
+  if(t.state==="unlockable"){
+    cta=`<button class="btn gold">Upgrade</button>`;
+    note=`<div class="afford-note">Affordable &mdash; you have enough resources</div>`;
+  } else if(t.state==="owned"){
+    cta=`<button class="btn disabled">Built</button>`; note="";
+  } else {
+    cta=`<button class="btn disabled">Requires Tier ${t.requires?t.requires.tier.slice(1):"?"}: ${t.requires?t.requires.name:""}</button>`;
+    note="";
+  }
+  document.getElementById("side").innerHTML=`
+    <h2>${t.name}</h2>
+    <div class="sub">Tier ${selectedIdx+1} &mdash; ${stateLabel}</div>
+    <div class="divider"></div>
+    <div class="benefits">${t.benefits.map(b=>
+      `<div class="b ${b.earned?"":"future"}">${b.earned?check:lock("#6f6f68")}${b.text}</div>`).join("")}
+    </div>
+    <div class="divider"></div>
+    <div class="cost-title">Upgrade Cost</div>
+    <div class="costs">${costs}</div>
+    ${note}${cta}
+    <div class="keyline">UPGRADES ${current.buildingId.replace("-"," ").toUpperCase()} TO TIER ${selectedIdx+1}</div>`;
+}
+
+render("lumbermill");
+</script>
+</body>
+</html>

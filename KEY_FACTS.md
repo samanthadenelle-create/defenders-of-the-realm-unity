@@ -9,9 +9,12 @@
 - **The product:** "Echoes of Elarion" (chapter) in the "Defenders of the Realm" series — "Hold
   the last light." **V1 = ONE controllable Knight ("Grom")** in an overworld with isolated
   real-time BattleArena combat; **the player builds their own city** (player-defined map pivot
-  07-11: Build → place/move/rotate functional structures — **build mode IS the demo**).
-- **The platform:** **mobile web in Pi Browser** — Pi Hackathon deadline **July 31, 2026**.
-  Desktop is the dev proxy, never the verdict.
+  07-11: Build → place/move/rotate functional structures). *(The "build mode IS the demo" framing is
+  RETIRED — see the platform line.)*
+- **The platform:** **mobile web in Pi Browser**. **Pi Hackathon: WON (owner, 2026-07-17)** — the
+  July-31 deadline + "build mode IS the demo" framing is RETIRED/STALE: there is NO upcoming demo, the
+  roadmap is OPEN for the next phase (owner sets the new north star). Any doc still leaning on the
+  hackathon deadline is STALE. Desktop is the dev proxy, never the verdict.
 - **The bar:** the **ten-year-old test** — "wow, this feels good" on a phone, or it isn't done.
   Feel-first; headless proves binding, only the owner's hands prove feel.
 - **The player never sees a failure** — errors are captured loudly in the db, invisible on screen.
