@@ -284,11 +284,12 @@ namespace DeNelle.Core.State
         }
 
         // =====================================================================
-        //  Save — serialize the SO's 41 fields into the SaveFile envelope
+        //  Save — serialize the SO's persisted fields into the SaveFile envelope
         // =====================================================================
 
         /// <summary>
-        /// Serializes the SO's 41 persisted fields into the <see cref="SaveSchema.SaveFile"/>
+        /// Serializes the SO's persisted fields (~60 today, was 41 at v10) into the
+        /// <see cref="SaveSchema.SaveFile"/>
         /// envelope and writes it to PlayerPrefs key <c>dotr-save</c>. The literal
         /// analog of Zustand <c>persist</c> writing to localStorage.
         /// </summary>
@@ -356,7 +357,7 @@ namespace DeNelle.Core.State
             ResourcesChanged.Invoke();
         }
 
-        /// <summary>Snapshots the SO's 41 persisted fields into a <see cref="SaveSchema.PersistedState"/>.</summary>
+        /// <summary>Snapshots the SO's persisted fields (~60 today, was 41 at v10) into a <see cref="SaveSchema.PersistedState"/>.</summary>
         public SaveSchema.PersistedState Snapshot()
         {
             var s = _state;

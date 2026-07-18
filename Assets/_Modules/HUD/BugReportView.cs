@@ -280,7 +280,7 @@ namespace DeNelle.HUD
                 {
                     _sendBtn.interactable = _vm.CanSubmit;
                     if (_sendLabel != null)
-                        _sendLabel.text = _vm.State == BugReportVM.Stage.Sending ? "Sending…"
+                        _sendLabel.text = _vm.State == BugReportVM.Stage.Sending ? "Sending..."
                                         : _vm.State == BugReportVM.Stage.Failed  ? "Retry send"
                                         : "Send report";
                 }
@@ -289,12 +289,12 @@ namespace DeNelle.HUD
 
                 if (_vm.State == BugReportVM.Stage.Sent && !_closing)
                 {
-                    BugReportToast.Show("Report sent — thank you, defender.", ElarionUiKit.ToastTone.Confirm);
+                    BugReportToast.Show("Report sent - thank you, defender.", ElarionUiKit.ToastTone.Confirm);
                     Close();
                 }
                 else if (_vm.State == BugReportVM.Stage.Failed)
                 {
-                    BugReportToast.Show("Couldn't send — check your connection and retry.", ElarionUiKit.ToastTone.Danger);
+                    BugReportToast.Show("Couldn't send - check your connection and retry.", ElarionUiKit.ToastTone.Danger);
                 }
             });
         }

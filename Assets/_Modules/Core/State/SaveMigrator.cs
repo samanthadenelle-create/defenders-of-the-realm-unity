@@ -1,5 +1,5 @@
 // =============================================================================
-// SaveMigrator — the persisted-save migration chain v1 → v10 (spec §2.4)
+// SaveMigrator — the persisted-save migration chain v1 → v33 (spec §2.4)
 // -----------------------------------------------------------------------------
 // C# port of `migratePersistedState` from src/state/gameStore.ts. One shared
 // entry point used by BOTH the boot loader AND a future Save-Import path.
@@ -7,8 +7,9 @@
 // IMPROVEMENT #3 (adopted): a registry-based migrator. Each step is a
 // Dictionary<int,Func<...>> entry keyed by its TARGET version; Migrate() applies
 // every entry from fromVersion+1..CurrentVersion in ascending order. Behaviour
-// is identical to the React nine-stacked-`if` cascade, but each step is
-// independently unit-testable.
+// is identical to the original React stacked-`if` cascade, but each step is
+// independently unit-testable. (Steps now run to v33; the chain has grown well
+// past the original nine — many later versions are additive-default-on-read.)
 //
 // Every step is ADDITIVE — it seeds new fields with empty defaults and never
 // mutates data a save already carries. Three fields (inventory.torches,
@@ -25,7 +26,7 @@ namespace DeNelle.Core.State
 {
     using PersistedState = SaveSchema.PersistedState;
 
-    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v10).</summary>
+    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v33).</summary>
     public static class SaveMigrator
     {
         /// <summary>

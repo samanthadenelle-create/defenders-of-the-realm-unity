@@ -248,7 +248,7 @@ namespace DeNelle.Village.Talents
             int existing = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
             if (existing >= 0)
             {
-                QuickSwapStatus = SelectedNodeName + " is already in quick-swap " + (existing + 1) + " — tap a slot to move it.";
+                QuickSwapStatus = SelectedNodeName + " is already in quick-swap " + (existing + 1) + " - tap a slot to move it.";
                 Raise();
                 return;
             }
@@ -369,7 +369,7 @@ namespace DeNelle.Village.Talents
 
             _pending.Clear();
             WisdomCurrencyService.Instance?.RespecHero(_heroSlug);
-            RespecStatus = "Respec complete — talents refunded.";
+            RespecStatus = "Respec complete - talents refunded.";
             FlowTrace.Step("SkillTree", "respec '" + _heroSlug + "' done (-" + RespecCost + " crystals)");
             Rebuild();
             Raise();
@@ -679,16 +679,16 @@ namespace DeNelle.Village.Talents
                     {
                         int at = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
                         return at >= 0
-                            ? "Owned · Active — equipped in quick-swap " + (at + 1) + " (tap a slot to move)"
-                            : "Owned · Active — tap a slot (1-4) to equip";
+                            ? "Owned - Active - equipped in quick-swap " + (at + 1) + " (tap a slot to move)"
+                            : "Owned - Active - tap a slot (1-4) to equip";
                     }
-                    return "Owned · Passive — always active (no slot needed)";
+                    return "Owned - Passive - always active (no slot needed)";
                 }
-                if (_pending.Contains(n.Id)) return "Planned  ·  -" + n.Cost + " Wisdom";
+                if (_pending.Contains(n.Id)) return "Planned  -  -" + n.Cost + " Wisdom";
                 int budget = (svc != null ? svc.Wisdom : 0) - PendingCost;
                 var effective = Effective(owned);
                 if (HeroTalentCatalog.CanUnlock(n.Id, budget, effective) && n.Cost <= budget)
-                    return "Costs " + n.Cost + " Wisdom  ·  tap the node to plan it";
+                    return "Costs " + n.Cost + " Wisdom  -  tap the node to plan it";
                 return LockReasonFor(n, budget, effective);
             }
         }
@@ -721,7 +721,7 @@ namespace DeNelle.Village.Talents
                 var def = AbilityCatalog.FindById(ability);
                 if (def != null)
                     return (string.IsNullOrEmpty(def.Name) ? ability : def.Name)
-                         + (string.IsNullOrEmpty(def.Effect) ? "" : " — " + def.Effect);
+                         + (string.IsNullOrEmpty(def.Effect) ? "" : " - " + def.Effect);
                 return "Unlocks ability: " + ability;
             }
             if (n.Effect != null && !string.IsNullOrEmpty(n.Effect.Type))
@@ -757,7 +757,7 @@ namespace DeNelle.Village.Talents
             // it's already sitting in exactly this slot — report that rather than a stale "already
             // on the bar" dead-end.
             bool ok = AssignableSkillBarAccess.Assign(slotIndex, id);
-            QuickSwapStatus = ok ? SelectedNodeName + " → quick-swap " + (slotIndex + 1) + "."
+            QuickSwapStatus = ok ? SelectedNodeName + " -> quick-swap " + (slotIndex + 1) + "."
                                  : SelectedNodeName + " is already in quick-swap " + (slotIndex + 1) + ".";
             FlowTrace.Step("SkillTree", "quickswap assign " + id + " -> slot " + slotIndex + " => " + ok);
             Rebuild(); Raise();

@@ -236,13 +236,13 @@ namespace DeNelle.Village.Hero
             // runtime), not the story catalog — render its slots and bail.
             if (_vm.IsDailyTab) { RepaintDaily(); return; }
 
-            CreateSectionLabel(_contentRoot.transform, "— In Progress —");
+            CreateSectionLabel(_contentRoot.transform, "- In Progress -");
             if (_vm.ActiveQuests.Count == 0)
                 CreateFlavorRow(_contentRoot.transform, "Nothing underway. Pick up a thread below.");
             foreach (var item in _vm.ActiveQuests)
                 CreateActiveRow(_contentRoot.transform, item);
 
-            CreateSectionLabel(_contentRoot.transform, "— Rumors & Requests —");
+            CreateSectionLabel(_contentRoot.transform, "- Rumors & Requests -");
             if (_vm.AvailableQuests.Count == 0)
                 CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.");
             foreach (var item in _vm.AvailableQuests)
@@ -297,7 +297,7 @@ namespace DeNelle.Village.Hero
         // Daily tab: the VM's DailyQuests projection (read-only over DailyQuestService).
         private void RepaintDaily()
         {
-            CreateSectionLabel(_contentRoot.transform, "— Daily Quests —");
+            CreateSectionLabel(_contentRoot.transform, "- Daily Quests -");
             var daily = _vm.DailyQuests;
             if (daily == null || daily.Count == 0)
             {
@@ -321,7 +321,7 @@ namespace DeNelle.Village.Hero
                 : $"{q.Progress}/{q.Target}";
             CreateHook(row.transform, progress, q.Completed ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
             MakeRowSelectable(row, title,
-                (q.Completed ? "Complete." : "In progress — " + progress + ".") +
+                (q.Completed ? "Complete." : "In progress - " + progress + ".") +
                 "\n\nDaily quests reset with the day. Finish them for a steady trickle of rewards.");
         }
 
@@ -362,7 +362,7 @@ namespace DeNelle.Village.Hero
 
             CreateTitle(row.transform, item.Name);
 
-            string objective = _vm != null ? _vm.ObjectiveFor(item.Id) : "…";
+            string objective = _vm != null ? _vm.ObjectiveFor(item.Id) : "...";
             CreateHook(row.transform, objective, ElarionUi.ParchmentDim);
 
             // WO-454: Track → pin this quest to the far-right HUD slot, then close the board.
@@ -453,7 +453,7 @@ namespace DeNelle.Village.Hero
             _detailTitle.text = "The Board Awaits";
             ElarionUiKit.FitSingleLine(_detailTitle);
             _detailBody.text = "Select a rumor to read the full tale.\n\n" +
-                "Whispers gather here from every corner of Elarion — pick one up, and Brom will " +
+                "Whispers gather here from every corner of Elarion - pick one up, and Brom will " +
                 "point you where the trouble started.";
             _detailBody.fontSize = 14;
             ElarionUiKit.FitBlock(_detailBody, 10f, 15f);

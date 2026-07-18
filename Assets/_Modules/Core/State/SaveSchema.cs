@@ -3,12 +3,12 @@
 // -----------------------------------------------------------------------------
 // The C# analog of src/store/saveSchema.ts (the Zod schema). Defines:
 //   - the SaveFile envelope  (the React `SaveExport` — format/storeVersion/...)
-//   - PersistedState         (the 41-field payload — every field nullable so a
-//                             partial save deserializes, mirroring `.partial()`)
+//   - PersistedState         (the persisted payload, ~60 fields — every field
+//                             nullable so a partial save deserializes, mirroring `.partial()`)
 //   - Validate()             (the C# port of `safeParse` — rejects NaN/Infinity,
 //                             clamps numerics via NonNegInt/FiniteInt rules)
 //
-// CurrentVersion = 10, FileFormat = 1. PlayerPrefs key `dotr-save` replaces the
+// CurrentVersion = 33, FileFormat = 1. PlayerPrefs key `dotr-save` replaces the
 // React localStorage key (storage layer mandated by the port spec — improvement
 // #4 NOT adopted).
 // =============================================================================
@@ -206,12 +206,12 @@ namespace DeNelle.Core.State
             [JsonProperty("exportedAt")] public string ExportedAt;
             /// <summary>Wallet the save is tagged to, or null.</summary>
             [JsonProperty("wallet")] public string Wallet;
-            /// <summary>The 41-field persisted payload.</summary>
+            /// <summary>The persisted payload (~60 fields; was 41 at v10).</summary>
             [JsonProperty("state")] public PersistedState State = new PersistedState();
         }
 
         // =====================================================================
-        //  PersistedState — the 41-field payload (the persistedStateSchema)
+        //  PersistedState — the persisted payload, ~60 fields (persistedStateSchema)
         // =====================================================================
 
         /// <summary>

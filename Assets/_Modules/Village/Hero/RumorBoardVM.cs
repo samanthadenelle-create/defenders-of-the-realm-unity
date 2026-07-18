@@ -114,7 +114,7 @@ namespace DeNelle.Village.Hero
         public string ObjectiveFor(string id)
         {
             string o = _backend != null ? _backend.ObjectiveFor(id) : null;
-            return string.IsNullOrEmpty(o) ? "…" : o;
+            return string.IsNullOrEmpty(o) ? "..." : o;
         }
 
         /// <summary>The hook line for an available quest (its stage-1 objective, else a default).</summary>

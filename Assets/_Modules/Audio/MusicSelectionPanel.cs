@@ -149,9 +149,9 @@ namespace DeNelle.Audio
                 MusicTrack track = row.Track;
                 bool isSelected = row.IsSelected;
                 // Selected row = Green family (the pack's own affirmative), rest Gray.
-                // ASCII marker (eyes-on 2026-07-03: ✓ is missing from the TMP font).
+                // ASCII '>' marker (eyes-on 2026-07-03: the checkmark glyph is missing from the TMP font).
                 ElarionUiKit.BuildObsidianButton(_rowHost,
-                    (isSelected ? "»  " : "") + row.DisplayName,
+                    (isSelected ? ">  " : "") + row.DisplayName,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     isSelected ? ElarionUiKit.ObsidianButtonColor.Green
                                : ElarionUiKit.ObsidianButtonColor.Gray,

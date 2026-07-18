@@ -155,7 +155,7 @@ namespace DeNelle.Village.Talents
                 int n = _vm.PendingCount;
                 // ASCII "-" (the TMP font has no U+2212 minus; eyes-on 2026-07-03).
                 _confirmLabel.text = n > 0
-                    ? "CONFIRM " + n + " · -" + _vm.PendingCost
+                    ? "CONFIRM " + n + ", -" + _vm.PendingCost
                     : "CONFIRM";
             }
             if (_confirmBtn != null)
@@ -230,7 +230,7 @@ namespace DeNelle.Village.Talents
             DrawEdges(_vm.Shared, center, nodeById);
 
             // Section divider (above the shared band) — WO-675 crown-glyph band grammar.
-            BuildSectionBand("Universal — any class", 0.965f);
+            BuildSectionBand("Universal - any class", 0.965f);
 
             // Nodes on top.
             foreach (var n in _vm.Nodes) BuildGraphNode(n, center);

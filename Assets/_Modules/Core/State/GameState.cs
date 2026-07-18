@@ -2,13 +2,14 @@
 // GameState — the persisted-state ScriptableObject (spec §1.6)
 // -----------------------------------------------------------------------------
 // The Unity analog of the Zustand store's DATA. A pure data container — NO
-// logic, NO events — holding exactly the 41 persisted fields the React
-// `partialize` selects, plus SchemaVersion. One asset instance lives at
+// logic, NO events — holding the persisted fields the React `partialize`
+// selects (originally 41; now ~60 after many append-only additions through
+// schema v33), plus SchemaVersion. One asset instance lives at
 // Assets/_Modules/Core/State/GameState.asset and is the in-memory live state.
 //
 // Mutators / subscribers / load+save live in GameStateService. Fresh defaults
 // here = a brand-new game; the service overwrites them on Load() when a save
-// exists. The save layer (SaveSchema / SaveMigrator) round-trips all 41 fields.
+// exists. The save layer (SaveSchema / SaveMigrator) round-trips these fields.
 //
 // Slices are a React code-organisation device only — at runtime the state is
 // one FLAT object, so this SO is flat too (the `── Region ──` comments only
@@ -21,13 +22,14 @@ using UnityEngine;
 namespace DeNelle.Core.State
 {
     /// <summary>
-    /// The persisted slice of game state — the 41 fields selected by the React
-    /// store's <c>partialize</c>. A pure data container.
+    /// The persisted slice of game state — the fields selected by the React
+    /// store's <c>partialize</c> (originally 41; ~60 today after append-only
+    /// growth through schema v33). A pure data container.
     /// </summary>
     [CreateAssetMenu(menuName = "Defenders/Core/Game State", fileName = "GameState")]
     public sealed class GameState : ScriptableObject
     {
-        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (10).</summary>
+        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (33).</summary>
         public int SchemaVersion = SaveSchema.CurrentVersion;
 
         // ── Player (playerSlice) ─────────────────────────────────────────────
@@ -217,24 +219,26 @@ namespace DeNelle.Core.State
         // ── World content (WO-159 settlements / WO-160 tribes) ───────────────
         /// <summary>Per-tribe roaming-raider records (WO-160) — members remaining, cleared
         /// flag, clear-count for reduced respawn, last-seen. Append-only field at the END so
-        /// older saves stay loadable. Like <see cref="Zones"/>, NOT yet wired into
-        /// SaveSchema/SaveMigrator — the save owner adds its (de)serialisation + bumps the
-        /// schema version for it to round-trip to disk. Lives correctly in-memory meanwhile.</summary>
+        /// older saves stay loadable. NOT yet wired into SaveSchema/SaveMigrator — the save
+        /// owner adds its (de)serialisation + bumps the schema version for it to round-trip to
+        /// disk. Lives correctly in-memory meanwhile. (Unlike <see cref="Zones"/> and
+        /// <see cref="Settlements"/>, which DO round-trip.)</summary>
         public List<DeNelle.Core.World.TribeState> Tribes = new List<DeNelle.Core.World.TribeState>();
 
         /// <summary>Per-site node-settlement records (WO-159) — claim phase, defence HP, and
-        /// the razed-site game-day lockout. Append-only field at the END. Same save-wiring note
-        /// as <see cref="Tribes"/>/<see cref="Zones"/>: in-memory now, schema round-trip is the
-        /// save owner's follow-up.</summary>
+        /// the razed-site game-day lockout. Append-only field at the END. Round-trips through
+        /// SaveSchema (v21): serialized in GameStateService.Snapshot, restored in ApplyPersisted,
+        /// and null-defaulted to an empty list on load. (Unlike <see cref="Tribes"/>/<see cref="Wards"/>,
+        /// which remain in-memory only.)</summary>
         public List<DeNelle.Core.World.SettlementState> Settlements = new List<DeNelle.Core.World.SettlementState>();
 
         /// <summary>Per-ward relight records (WO-112) — the earned exploration reach. Each
         /// carries its ward id/region/granted-reach and whether the Keeper has relit it; the
         /// set of lit wards drives per-march reach (WardReach) and the forgetting effect.
         /// Append-only field at the END so older saves stay loadable. Same save-wiring note as
-        /// <see cref="Tribes"/>/<see cref="Settlements"/>/<see cref="Zones"/>: in-memory now,
-        /// the schema round-trip (SaveSchema/SaveMigrator + version bump) is the save owner's
-        /// follow-up.</summary>
+        /// <see cref="Tribes"/>: in-memory now, the schema round-trip (SaveSchema/SaveMigrator +
+        /// version bump) is the save owner's follow-up. (<see cref="Settlements"/> and
+        /// <see cref="Zones"/> DO round-trip.)</summary>
         public List<DeNelle.Core.World.WardStoneState> Wards = new List<DeNelle.Core.World.WardStoneState>();
 
         // ── Build Mode — the player's base layout (WO-108 P0 data spine) ──────
@@ -254,11 +258,10 @@ namespace DeNelle.Core.State
         // ── Pets — onboarding-named starter pet (WO-277) ─────────────────────
         /// <summary>
         /// The player-chosen name for their starter pet, set in the tutorial's pet
-        /// introduction (WO-277). Empty/null until the player names it. Persisted via
-        /// <see cref="GameStateService.Save"/> directly (not yet in SaveSchema's
-        /// round-trip — like Zones/Tribes it lives in-memory + the PlayerPrefs SO
-        /// snapshot until the save owner threads it through SaveSchema). Append-only
-        /// field at the END of the class so older saves stay loadable.
+        /// introduction (WO-277). Empty/null until the player names it. Round-trips
+        /// through SaveSchema (PersistedState.PetName, [JsonProperty("petName")]):
+        /// serialized in GameStateService.Snapshot and restored in ApplyPersisted.
+        /// Append-only field at the END of the class so older saves stay loadable.
         /// </summary>
         public string PetName;
 
@@ -415,13 +418,17 @@ namespace DeNelle.Core.State
 
         // ── WO-681/658 — Echo lane assignments ───────────────────────────────
         /// <summary>
-        /// Per-Echo gather-lane assignments as a CSV by echo index ("wood,iron,idle").
-        /// Lane ids: "wood" / "iron" / "food" / "idle". An index beyond the CSV length
-        /// reads as "idle" (a newly unlocked Echo waits for the player's word); the
-        /// fresh default "wood" covers the starter Echo (ECHO_WORKFORCE_SPEC: start 1
-        /// Echo auto-assigned). Written by the WO-681 Echo card via EchoAssignments;
-        /// WO-658's rate-split will consume the SAME field. Additive default-on-read
-        /// (nullable on the wire; absent → this initializer). Append-only at the END.
+        /// Per-Echo lane + level assignments as a CSV of "lane:level" tokens by echo
+        /// index (e.g. "harvest:3,idle,crafting:1"). WO-738 evolved the vocabulary from
+        /// resource lanes (wood/iron/food) to FUNCTIONAL lanes: "harvest" / "crafting" /
+        /// "defense" / "exploration" / "idle" (idle carries no level suffix). Read/written
+        /// via <see cref="DeNelle.Village.EchoAssignments"/>. Backward-compatible,
+        /// default-on-read (NO migrator): a legacy bare token wood/iron/food normalizes
+        /// forward to Harvest, and any bare token with no ":level" reads level 1, so the
+        /// shipped "wood" default below still loads as Harvest / level 1. An index beyond
+        /// the CSV reads as "idle" (index 0 defaults to Harvest, the starter Echo). New
+        /// Game seeds the starter Echo as "harvest:1". Additive default-on-read (nullable
+        /// on the wire; absent → this initializer). Append-only at the END.
         /// </summary>
         public string EchoLanes = "wood";
 

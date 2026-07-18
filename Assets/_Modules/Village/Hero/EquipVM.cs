@@ -147,7 +147,7 @@ namespace DeNelle.Village.Hero
                 if (t == null) return "No hero";
                 string name = string.IsNullOrEmpty(t.TargetName) ? "Hero" : t.TargetName;
                 string cls = string.IsNullOrEmpty(t.TargetClass) ? "" : Cap(t.TargetClass);
-                return string.IsNullOrEmpty(cls) ? name : name + " — " + cls;
+                return string.IsNullOrEmpty(cls) ? name : name + " - " + cls;
             }
         }
 
@@ -181,7 +181,7 @@ namespace DeNelle.Village.Hero
             {
                 var list = new List<string>(_targets.Count);
                 foreach (var t in _targets)
-                    list.Add(t == null ? "—" : (string.IsNullOrEmpty(t.TargetName) ? "Hero" : t.TargetName));
+                    list.Add(t == null ? "-" : (string.IsNullOrEmpty(t.TargetName) ? "Hero" : t.TargetName));
                 return list;
             }
         }

@@ -243,7 +243,7 @@ namespace DeNelle.Village.Crafting
             {
                 int n = Amount(get, id);
                 if (n <= 0) continue;
-                if (!first) sb.Append("  ·  ");
+                if (!first) sb.Append("  -  ");
                 string glyph = glyphFor != null ? glyphFor(id) : null;
                 if (!string.IsNullOrEmpty(glyph)) sb.Append(glyph).Append(' ');
                 string dn = displayNameFor != null ? displayNameFor(id) : id;

@@ -432,14 +432,14 @@ namespace DeNelle.Village.Hero
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(w.id, 1);
                 var ap = GearAppraisal.Appraise(w);
                 Status = ap != null && ap.isElarionMarked
-                    ? "Purchased " + w.name + "! " + ap.Summary() + " (added to inventory — see EQUIP)"
-                    : "Purchased " + w.name + "! Added to inventory — see EQUIP.";
+                    ? "Purchased " + w.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
+                    : "Purchased " + w.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
             }
             else
             {
-                Status = "Not enough resources for " + w.name + " — needs " + CostString(cost) + ".";
+                Status = "Not enough resources for " + w.name + " - needs " + CostString(cost) + ".";
             }
         }
 
@@ -453,14 +453,14 @@ namespace DeNelle.Village.Hero
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(a.id, 1);
                 var ap = GearAppraisal.Appraise(a);
                 Status = ap != null && ap.isElarionMarked
-                    ? "Purchased " + a.name + "! " + ap.Summary() + " (added to inventory — see EQUIP)"
-                    : "Purchased " + a.name + "! Added to inventory — see EQUIP.";
+                    ? "Purchased " + a.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
+                    : "Purchased " + a.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
             }
             else
             {
-                Status = "Not enough resources for " + a.name + " — needs " + CostString(cost) + ".";
+                Status = "Not enough resources for " + a.name + " - needs " + CostString(cost) + ".";
             }
         }
 
@@ -474,14 +474,14 @@ namespace DeNelle.Village.Hero
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(ac.id, 1);
                 var ap = GearAppraisal.Appraise(ac);
                 Status = ap != null && ap.isElarionMarked
-                    ? "Purchased " + ac.name + "! " + ap.Summary() + " (added to inventory — see EQUIP)"
-                    : "Purchased " + ac.name + "! Added to inventory — see EQUIP.";
+                    ? "Purchased " + ac.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
+                    : "Purchased " + ac.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
             }
             else
             {
-                Status = "Not enough resources for " + ac.name + " — needs " + CostString(cost) + ".";
+                Status = "Not enough resources for " + ac.name + " - needs " + CostString(cost) + ".";
             }
         }
 
@@ -495,7 +495,7 @@ namespace DeNelle.Village.Hero
                 PushHudResources();
                 Rebuild();
             }
-            else Status = "Not enough resources for " + id + " — needs " + CostString(cost) + ".";
+            else Status = "Not enough resources for " + id + " - needs " + CostString(cost) + ".";
         }
 
         // Mirror ShopPanel.RefreshEco's town-HUD push (owner: "sync on subtract"). Pure data call

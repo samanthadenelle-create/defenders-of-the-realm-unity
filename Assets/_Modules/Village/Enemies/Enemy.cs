@@ -976,6 +976,19 @@ namespace DeNelle.Village
                     $"contactLock={(_currentTarget != null && _currentTarget.IsAlive)} " +
                     "(DriveNav has NO _casting guard -> it may override the cast root this frame)");
 
+            // F8-38 FIX: while a RootedCast is channeling, HOLD position -- do NOT re-issue movement
+            // or clear isStopped. Without this guard the per-frame nav re-path (heartless branch and
+            // the heart-march path below) un-stops the agent + re-SetDestination within the same frame,
+            // overriding the cast root so the caster WALKS while channeling. Respect the existing
+            // _casting state consistently: keep the agent stopped on the NavMesh and return.
+            if (_casting)
+            {
+                if (_agent.isOnNavMesh && !_agent.isStopped) _agent.isStopped = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyCast", $"drivenav-hold-{_enemyId}", 0.5f,
+                    $"{_enemyId}: DriveNav HOLD - cast root respected, movement not re-issued this frame");
+                return;
+            }
+
             // HEARTLESS HOOK (overworld encounter rep) — DATA-PROVEN root of "no chase" 2026-06-23:
             // a rep has NO Heart (Configure(...,null)), so the old `_heart == null` bail returned
             // IMMEDIATELY and the agent was NEVER driven -> the rep stood still (no roam, no chase)

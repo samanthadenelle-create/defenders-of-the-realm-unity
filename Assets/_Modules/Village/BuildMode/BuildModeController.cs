@@ -2207,6 +2207,26 @@ namespace DeNelle.Village
                 // FireRate intentionally unchanged — range + damage are the readable tier wins.
             }
 
+            // Arcane spire (tower_arcane_spire) — a SEPARATE ArcaneTower component, NOT DefenseTower,
+            // so the DefenseTower branch above never touched it: L2/L3 charged escalating cost but
+            // scaled NOTHING (owner F8 "Upgrade does NOTHING"). Mirror DefenseTower's convention:
+            // scale Range + Damage (and the AoE blast radius) off the CATALOG base by the SAME
+            // per-tier multiplier (1.0 / 1.25 / 1.55), read from repo so repeated upgrades never
+            // compound. FireRate/slow/splash intentionally unchanged — range/damage/radius are the
+            // readable tier wins. AoeRadius only scales when the catalog authored one (else the
+            // component keeps its serialized default rather than collapsing to 0).
+            var arcane = ps.GetComponent<ArcaneTower>();
+            if (arcane != null && repo != null)
+            {
+                float mul = s_towerTierMul[tier];
+                arcane.Range  = repo.range  * mul;
+                arcane.Damage = repo.damage * mul;
+                if (repo.aoeRadius > 0f) arcane.AoeRadius = repo.aoeRadius * mul;
+                FlowTrace.Step("BuildUpgrade",
+                    $"ArcaneTower '{ps.itemId}' tier {tier} stats: x{mul:0.00} -> range={arcane.Range:0.#}, " +
+                    $"damage={arcane.Damage:0.#}, aoeRadius={arcane.AoeRadius:0.#}.");
+            }
+
             // Wall — step the durability tier (incoming-damage toughness on the 0-100 track).
             var wall = ps.GetComponent<WallSegment>();
             if (wall != null) wall.SetTier(tier);

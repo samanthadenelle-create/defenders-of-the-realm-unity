@@ -1,11 +1,11 @@
 // =============================================================================
-// Core State — Save/Load round-trip tests (EditMode)
+// Core State - Save/Load round-trip tests (EditMode)
 // -----------------------------------------------------------------------------
 // The spec's Week-1 acceptance criterion (core-state-port.md §6):
 //   "launch → New Game → quit → relaunch → save restored".
 //
 // Each test mutates the live GameState SO, calls Save() (writes the SaveFile
-// envelope to PlayerPrefs 'dotr-save'), then SIMULATES A RESTART — discards the
+// envelope to PlayerPrefs 'dotr-save'), then SIMULATES A RESTART - discards the
 // in-memory SO + service, spawns a fresh service, and calls Load() to rehydrate
 // from PlayerPrefs. All 41 persisted fields must come back byte-for-byte,
 // including the nested shapes and the dictionaries.
@@ -54,20 +54,20 @@ namespace DeNelle.Core.Tests
         }
 
         // =====================================================================
-        //  Round-trip — all 41 persisted fields
+        //  Round-trip - all 41 persisted fields
         // =====================================================================
 
         [Test]
         public void save_then_relaunch_restores_a_fully_populated_state()
         {
-            // ── Author a rich save through the service's own Snapshot path ──
+            // -- Author a rich save through the service's own Snapshot path --
             _service = TestSupport.SpawnService(out var state);
             ApplyRichStateOntoSO(state, TestSupport.MakeRichState());
             _service.Save();
             Assert.That(PlayerPrefs.HasKey(SaveSchema.PlayerPrefsKey), Is.True,
                 "Save() must write the dotr-save PlayerPrefs key.");
 
-            // ── Quit + relaunch ─────────────────────────────────────────────
+            // -- Quit + relaunch ---------------------------------------------
             var reloaded = RestartAndLoad(out var loaded);
             Assert.That(loaded, Is.True, "Load() must report an existing save was restored.");
 
@@ -99,7 +99,7 @@ namespace DeNelle.Core.Tests
             Assert.That(reloaded.Resources.Coins, Is.EqualTo(15));
             Assert.That(reloaded.Voidshards, Is.EqualTo(5));
             Assert.That(reloaded.Stone, Is.EqualTo(20));
-            // WO-682: strategic placement is always on — New Game seeds the core-kit budget.
+            // WO-682: strategic placement is always on - New Game seeds the core-kit budget.
             Assert.That(reloaded.Iron, Is.EqualTo(StartingBudget.StrategicIron));
             Assert.That(reloaded.Wood, Is.EqualTo(StartingBudget.StrategicWood));
             Assert.That(reloaded.TutorialStep, Is.EqualTo(TutorialStep.Step1));
@@ -203,6 +203,213 @@ namespace DeNelle.Core.Tests
             Assert.That(_service.Load(), Is.False);
             Assert.That(state.Voidshards, Is.EqualTo(5),
                 "An empty save must leave the fresh SO defaults intact.");
+        }
+
+        // =====================================================================
+        //  Round-trip - the NEWER persisted fields (schema v14..v33)
+        // -----------------------------------------------------------------------------
+        //  AssertAll41FieldsMatch (below) only covers the original v1-13 ~41-field
+        //  table. Everything appended since (build mode, army, tiers, echo workforce,
+        //  population, hero level/xp, party, zones, settlements, gear, freebies, the
+        //  strategic-placement marker, the named pet) is exercised here: author a
+        //  NON-DEFAULT value onto the SO, Save(), quit+relaunch, assert it came back.
+        //  Authored straight onto the SO (like ApplyRichStateOntoSO) so it drives the
+        //  service's own Snapshot() -> Save() -> Load() -> ApplyPersisted() path.
+        //
+        //  GENUINELY NOT PERSISTED (verified against Snapshot()/ApplyPersisted() - NOT
+        //  asserted here, deliberately):
+        //    - GameState.Tribes  (List<TribeState>)  - in-memory only; the field's own
+        //      doc says "NOT yet wired into SaveSchema/SaveMigrator".
+        //    - GameState.Wards   (List<WardStoneState>) - in-memory only (same note).
+        //    - GameState.Arena   (ArenaProgress W/L ledger) - in-memory only, mirrored
+        //      to PlayerPrefs by ArenaProgressStore, NOT in the save round-trip.
+        //      (ArenaDefense - the placed-defender layout - IS persisted, v19.)
+        //    - equippedRingId / equippedAmuletId - declared on SaveSchema.PersistedState
+        //      and SEEDED by SaveMigrator v26, but there is NO matching GameState field
+        //      and NO line in Snapshot()/ApplyPersisted(), so they do NOT round-trip
+        //      through the live GameStateService. They survive a raw-PersistedState
+        //      migrate (covered by CoreSaveRegression), never a SO save/load. Any
+        //      accessory-equip persistence would need those two fields wired into the
+        //      SO + Snapshot + ApplyPersisted first.
+        // =====================================================================
+
+        [Test]
+        public void save_then_relaunch_restores_the_newer_persisted_fields()
+        {
+            _service = TestSupport.SpawnService(out var state);
+            ApplyNewerFieldsOntoSO(state);
+            _service.Save();
+
+            var a = RestartAndLoad(out var loaded);
+            Assert.That(loaded, Is.True, "Load() must restore the saved newer fields.");
+
+            // -- Pets - the player-named starter (Snapshot: PetName) ----------
+            Assert.That(a.PetName, Is.EqualTo("Sparky"), "petName");
+
+            // -- ATB / gear (v20) ---------------------------------------------
+            Assert.That(a.GearInventory, Is.Not.Null, "gearInventory not null");
+            Assert.That(a.GearInventory.Count, Is.EqualTo(2), "gearInventory count");
+            Assert.That(a.GearInventory["sword"], Is.EqualTo(2), "gearInventory[sword]");
+            Assert.That(a.GearInventory["shield"], Is.EqualTo(1), "gearInventory[shield]");
+
+            // -- Magic tech-axis (v15) ----------------------------------------
+            Assert.That(a.Magic, Is.EqualTo(25), "magic");
+
+            // -- Base layout (v14/v27) ----------------------------------------
+            Assert.That(a.BaseLayout, Is.Not.Null, "baseLayout not null");
+            Assert.That(a.BaseLayout.Count, Is.EqualTo(1), "baseLayout count");
+            var bl = a.BaseLayout[0];
+            Assert.That(bl.itemId, Is.EqualTo("forge"), "baseLayout[0].itemId");
+            Assert.That(bl.cellX, Is.EqualTo(3), "baseLayout[0].cellX");
+            Assert.That(bl.cellZ, Is.EqualTo(4), "baseLayout[0].cellZ");
+            Assert.That(bl.yawSteps, Is.EqualTo(2), "baseLayout[0].yawSteps");
+            Assert.That(bl.level, Is.EqualTo(1), "baseLayout[0].level");
+            Assert.That(bl.worldY, Is.EqualTo(5f).Within(1e-3), "baseLayout[0].worldY (v27)");
+            Assert.That(bl.wallMounted, Is.True, "baseLayout[0].wallMounted (v27)");
+
+            // -- Party roster (v16) -------------------------------------------
+            Assert.That(a.PartyMemberIds, Is.EqualTo(new List<string> { "Ranger", "Cleric" }),
+                "partyMemberIds");
+
+            // -- Zones (v17) --------------------------------------------------
+            Assert.That(a.Zones, Is.Not.Null, "zones not null");
+            Assert.That(a.Zones.Count, Is.EqualTo(1), "zones count (not backfilled over a saved list)");
+            Assert.That(a.Zones[0].RegionKey, Is.EqualTo("Ashwood"), "zones[0].regionKey");
+            Assert.That(a.Zones[0].Discovered, Is.True, "zones[0].discovered");
+            Assert.That(a.Zones[0].Cleared, Is.True, "zones[0].cleared");
+            Assert.That(a.Zones[0].Destination, Is.EqualTo(DeNelle.Core.World.NodeType.Horde),
+                "zones[0].destination");
+            Assert.That(a.Zones[0].Neighbors, Is.EqualTo(new List<string> { "Mirewood" }),
+                "zones[0].neighbors");
+
+            // -- Settlements (v21) --------------------------------------------
+            Assert.That(a.Settlements, Is.Not.Null, "settlements not null");
+            Assert.That(a.Settlements.Count, Is.EqualTo(1), "settlements count");
+            var st = a.Settlements[0];
+            Assert.That(st.SiteId, Is.EqualTo("site-1"), "settlements[0].siteId");
+            Assert.That(st.RegionKey, Is.EqualTo("Goldfields"), "settlements[0].regionKey");
+            Assert.That(st.Phase, Is.EqualTo(DeNelle.Core.World.SettlementPhase.Outpost),
+                "settlements[0].phase");
+            Assert.That(st.Hp, Is.EqualTo(150f).Within(1e-3), "settlements[0].hp");
+            Assert.That(st.MaxHp, Is.EqualTo(200f).Within(1e-3), "settlements[0].maxHp");
+            Assert.That(st.RazedUntilDay, Is.EqualTo(5), "settlements[0].razedUntilDay");
+
+            // -- Army roster (v22) --------------------------------------------
+            Assert.That(a.Army, Is.Not.Null, "army not null");
+            Assert.That(a.Army.Owned.Count, Is.EqualTo(1), "army.owned count");
+            Assert.That(a.Army.NextId, Is.EqualTo(2), "army.nextId");
+            var troop = a.Army.Owned[0];
+            Assert.That(troop.Id, Is.EqualTo("troop-1"), "army.owned[0].id");
+            Assert.That(troop.TroopDefId, Is.EqualTo("troop-footman"), "army.owned[0].troopDefId");
+            Assert.That(troop.VeterancyRank, Is.EqualTo(2), "army.owned[0].veterancyRank");
+            Assert.That(troop.Wounded, Is.True, "army.owned[0].wounded");
+            Assert.That(troop.RecoveryRemaining, Is.EqualTo(30f).Within(1e-3),
+                "army.owned[0].recoveryRemaining");
+
+            // -- Building tiers / village tier / perks (v23/v24) --------------
+            Assert.That(a.BuildingTiers, Is.Not.Null, "buildingTiers not null");
+            Assert.That(a.BuildingTiers["armorer"], Is.EqualTo(2), "buildingTiers[armorer]");
+            Assert.That(a.BuildingTiers["lumbermill"], Is.EqualTo(3), "buildingTiers[lumbermill]");
+            Assert.That(a.VillageTier, Is.EqualTo(4), "villageTier");
+            Assert.That(a.OwnedBuildingPerks, Is.EqualTo(new List<string> { "forge:forge-damage-2" }),
+                "ownedBuildingPerks");
+
+            // -- Echo workforce (v25) -----------------------------------------
+            Assert.That(a.EchoCount, Is.EqualTo(3), "echoCount");
+            Assert.That(a.SiloResources, Is.EqualTo(12.5).Within(1e-6), "siloResources");
+            Assert.That(a.WavesCompleted, Is.EqualTo(17), "wavesCompleted");
+
+            // -- Population growth (v28) --------------------------------------
+            Assert.That(a.PopulationXP, Is.EqualTo(500), "populationXp");
+            Assert.That(a.PopulationQuests, Is.EqualTo(7), "populationQuests");
+            Assert.That(a.PopulationOutposts, Is.EqualTo(3), "populationOutposts");
+            Assert.That(a.PopulationEchoSlots, Is.EqualTo(4), "populationEchoSlots");
+
+            // -- Hero level / XP (v29) ----------------------------------------
+            Assert.That(a.HeroLevel, Is.EqualTo(9), "heroLevel");
+            Assert.That(a.HeroXp, Is.EqualTo(42.5f).Within(1e-3), "heroXp");
+            Assert.That(a.HeroLifetimeXp, Is.EqualTo(1234.5f).Within(1e-3), "heroLifetimeXp");
+
+            // -- Strategic-placement marker (v30) -----------------------------
+            Assert.That(a.StrategicPlacementMigrated, Is.True, "strategicPlacementMigrated");
+
+            // -- Echo lanes (v31/v33 richer token) ----------------------------
+            Assert.That(a.EchoLanes, Is.EqualTo("harvest:3,idle,crafting:1"), "echoLanes");
+
+            // -- First-build freebies (v32) -----------------------------------
+            Assert.That(a.FreeBuildsUsed, Is.EqualTo(new List<string> { "forge", "armorer" }),
+                "freeBuildsUsed");
+        }
+
+        /// <summary>
+        /// Authors a NON-DEFAULT value onto every persisted field added after the
+        /// original v1-13 table (schema v14..v33), so a Save()/Load() round-trip proves
+        /// each survives. Values are chosen to differ from BOTH the fresh GameState
+        /// defaults and the ResetToNewGame seeds, so an unwired field is caught.
+        /// </summary>
+        private static void ApplyNewerFieldsOntoSO(GameState s)
+        {
+            s.PetName = "Sparky";
+            s.GearInventory = new Dictionary<string, int> { { "sword", 2 }, { "shield", 1 } };
+            s.Magic = 25;
+            s.BaseLayout = new List<PlacedStructureData>
+            {
+                new PlacedStructureData("forge", 3, 4, 2, 1, yawOffset: 0f, worldY: 5f, wallMounted: true),
+            };
+            s.PartyMemberIds = new List<string> { "Ranger", "Cleric" };
+            s.Zones = new List<DeNelle.Core.World.ZoneState>
+            {
+                new DeNelle.Core.World.ZoneState(
+                    DeNelle.Core.World.RegionId.Ashwood,
+                    DeNelle.Core.World.NodeType.Horde,
+                    DeNelle.Core.World.RegionId.Mirewood)
+                {
+                    Discovered = true,
+                    Cleared = true,
+                },
+            };
+            s.Settlements = new List<DeNelle.Core.World.SettlementState>
+            {
+                new DeNelle.Core.World.SettlementState(
+                    "site-1",
+                    DeNelle.Core.World.RegionId.Goldfields,
+                    new DeNelle.Core.World.WorldPoint(1f, 2f, 3f),
+                    200f)
+                {
+                    Phase = DeNelle.Core.World.SettlementPhase.Outpost,
+                    Hp = 150f,
+                    RazedUntilDay = 5,
+                },
+            };
+            s.Army = new ArmyStorage
+            {
+                Owned = new List<PlayerTroop>
+                {
+                    new PlayerTroop("troop-1", "troop-footman")
+                    {
+                        VeterancyRank = 2,
+                        Wounded = true,
+                        RecoveryRemaining = 30f,
+                    },
+                },
+                NextId = 2,
+            };
+            s.BuildingTiers = new Dictionary<string, int> { { "armorer", 2 }, { "lumbermill", 3 } };
+            s.VillageTier = 4;
+            s.OwnedBuildingPerks = new List<string> { "forge:forge-damage-2" };
+            s.EchoCount = 3;
+            s.SiloResources = 12.5;
+            s.WavesCompleted = 17;
+            s.PopulationXP = 500;
+            s.PopulationQuests = 7;
+            s.PopulationOutposts = 3;
+            s.PopulationEchoSlots = 4;
+            s.HeroLevel = 9;
+            s.HeroXp = 42.5f;
+            s.HeroLifetimeXp = 1234.5f;
+            s.StrategicPlacementMigrated = true;
+            s.EchoLanes = "harvest:3,idle,crafting:1";
+            s.FreeBuildsUsed = new List<string> { "forge", "armorer" };
         }
 
         // =====================================================================
@@ -413,11 +620,11 @@ namespace DeNelle.Core.Tests
         private static void AssertDictEqual<TV>(
             IDictionary<string, TV> expected, IDictionary<string, TV> actual, string label)
         {
-            Assert.That(actual, Is.Not.Null, $"{label} — dictionary must not be null");
-            Assert.That(actual.Count, Is.EqualTo(expected.Count), $"{label} — count");
+            Assert.That(actual, Is.Not.Null, $"{label} - dictionary must not be null");
+            Assert.That(actual.Count, Is.EqualTo(expected.Count), $"{label} - count");
             foreach (var kv in expected)
             {
-                Assert.That(actual.ContainsKey(kv.Key), Is.True, $"{label} — missing key '{kv.Key}'");
+                Assert.That(actual.ContainsKey(kv.Key), Is.True, $"{label} - missing key '{kv.Key}'");
                 Assert.That(actual[kv.Key], Is.EqualTo(kv.Value), $"{label}['{kv.Key}']");
             }
         }
