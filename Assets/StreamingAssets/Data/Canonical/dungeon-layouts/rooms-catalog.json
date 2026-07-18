@@ -1,0 +1,578 @@
+﻿{
+  "version": 1,
+  "rooms": [
+    {
+      "id": "Entrance",
+      "prefabPath": "Assets/Dungeon/Rooms/Entrance.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EntryHall",
+      "prefabPath": "Assets/Dungeon/Rooms/EntryHall.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Straight",
+      "prefabPath": "Assets/Dungeon/Rooms/Straight.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TurnLeft",
+      "prefabPath": "Assets/Dungeon/Rooms/TurnLeft.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "w_door_01",
+          "type": "Door",
+          "facing": "W",
+          "isSecret": false,
+          "localPosition": [
+            -3.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TurnRight",
+      "prefabPath": "Assets/Dungeon/Rooms/TurnRight.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "e_door_01",
+          "type": "Door",
+          "facing": "E",
+          "isSecret": false,
+          "localPosition": [
+            3.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TJunction",
+      "prefabPath": "Assets/Dungeon/Rooms/TJunction.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "e_door_01",
+          "type": "Door",
+          "facing": "E",
+          "isSecret": false,
+          "localPosition": [
+            3.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "id": "w_door_01",
+          "type": "Door",
+          "facing": "W",
+          "isSecret": false,
+          "localPosition": [
+            -3.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Intersection",
+      "prefabPath": "Assets/Dungeon/Rooms/Intersection.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "id": "e_door_01",
+          "type": "Door",
+          "facing": "E",
+          "isSecret": false,
+          "localPosition": [
+            3.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "w_door_01",
+          "type": "Door",
+          "facing": "W",
+          "isSecret": false,
+          "localPosition": [
+            -3.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "DeadEnd",
+      "prefabPath": "Assets/Dungeon/Rooms/DeadEnd.prefab",
+      "archetype": "lore",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ChokePoint",
+      "prefabPath": "Assets/Dungeon/Rooms/ChokePoint.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CombatChamber",
+      "prefabPath": "Assets/Dungeon/Rooms/CombatChamber.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        2,
+        2
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -6.0
+          ]
+        },
+        {
+          "id": "n_door_01",
+          "type": "Door",
+          "facing": "N",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            6.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "LoreShrine",
+      "prefabPath": "Assets/Dungeon/Rooms/LoreShrine.prefab",
+      "archetype": "lore",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "RewardVault",
+      "prefabPath": "Assets/Dungeon/Rooms/RewardVault.prefab",
+      "archetype": "reward",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SecretAlcove",
+      "prefabPath": "Assets/Dungeon/Rooms/SecretAlcove.prefab",
+      "archetype": "secret",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": true,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairDown",
+      "prefabPath": "Assets/Dungeon/Rooms/StairDown.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "stair_down_01",
+          "type": "StairDown",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            0.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairUp",
+      "prefabPath": "Assets/Dungeon/Rooms/StairUp.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -3.0
+          ]
+        },
+        {
+          "id": "stair_up_01",
+          "type": "StairUp",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            0.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SideBranch",
+      "prefabPath": "Assets/Dungeon/Rooms/SideBranch.prefab",
+      "archetype": "combat",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "w_door_01",
+          "type": "Door",
+          "facing": "W",
+          "isSecret": false,
+          "localPosition": [
+            -3.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "id": "e_door_01",
+          "type": "Door",
+          "facing": "E",
+          "isSecret": false,
+          "localPosition": [
+            3.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BossKeep",
+      "prefabPath": "Assets/Dungeon/Rooms/BossKeep.prefab",
+      "archetype": "boss",
+      "themePalette": "default",
+      "footprintCells": [
+        2,
+        2
+      ],
+      "cellSize": 6.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -6.0
+          ]
+        }
+      ]
+    }
+  ]
+}
