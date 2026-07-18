@@ -53,13 +53,13 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (updated 2026-07-12 evening — anchored to `CANON_GROUND_TRUTH_2026-07-12.md`)
+## Current State (updated 2026-07-18 — anchored to `CANON_GROUND_TRUTH_2026-07-18.md`)
 - **Strategic placement = ALWAYS ON (2026-07-13, WO-695 ex-682):** `ff.strategicplacement` is REMOVED —
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = tonight's WO-677/678/682/683 arc (through `683b917b`), ~100 commits ahead of origin, push HELD for owner word.** Save schema **v30** (v29 heroLevel/heroXp/heroLifetimeXp, F8-47). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the 3-known-pre-exister baseline.
-- **MOBILE-WEB DEMO READINESS is the live focus** (Pi hackathon July 31; build mode IS the demo — player-defined-map pivot 07-11), riding on the feel-arc/F8 program's quality bar (ten-year-old test). **WebGL ship preview deploying tonight** (non-dev build; `mexharnff` superseded when the new URL lands); **prod untouched** (Pi build at `defenders-of-the-realm-v2.vercel.app`). **Next big lane = WO-614 skill-tree solo rework** (RULED, READY).
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 07-18 arc: WO-744 strict-MVVM whole-game migration + WO-740–745 Room Forge into mainline + WO-746 Build-Mode felt-fixes, pushed to origin (local == origin after each push).** Save schema **v33** (echoLanes `lane:level` token, WO-738; every 21→33 bump has a SaveMigrator step). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the **8-known-red baseline** (arena ground, B2 dual-wallet, pet-slot, core-save Tribes/Wards/Arena, fountain L2/L3, DATAWEB drift, HUDUI, orc-raider) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
@@ -78,7 +78,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-07-13.md` (the single live anchor of current reality — read FIRST; the 07-12/07-08 anchors and earlier snapshots are SUPERSEDED)
+- `CANON_GROUND_TRUTH_2026-07-18.md` (the single live anchor of current reality — read FIRST; the 07-13/07-12/07-08 anchors and earlier snapshots are SUPERSEDED)
 - `CLI_PREP_2026-07-08_next-session.md` (wave-2 close prep + open F8-37..F8-42 tickets + WO-614 rulings)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)
