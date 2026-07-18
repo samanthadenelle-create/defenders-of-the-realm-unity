@@ -75,7 +75,7 @@ namespace DeNelle.Editor.RoomForge
             return assetPath;
         }
 
-        public static void BakeFromFile(string layoutAssetPath)
+        public static void BakeFromFile(string layoutAssetPath, bool populateForPlay = false)
         {
             // Resolve to an absolute filesystem path (see ToFilesystemPath for the doubled-path fix).
             string fsPath = ToFilesystemPath(layoutAssetPath);
@@ -225,12 +225,54 @@ namespace DeNelle.Editor.RoomForge
             }
             FlowTrace.Step(Sys, $"navmesh baked; {navResult}");
 
+            // Optional: seat a playable hero + hero-aggro enemy spawners on the walkable NavMesh
+            // (opt-in; only the composed starter-loop passes populateForPlay). Done AFTER the
+            // NavMesh bake so both seat on real mesh, and BEFORE SaveScene so it is one bake pass.
+            if (populateForPlay)
+                PopulateForPlay(root, instances);
+
             // Save scene
             EnsureOutputFolder();
             string scenePath = $"{OutputScenesFolder}/{layout.dungeonId}.unity";
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, scenePath);
             EnsureInBuildSettings(scenePath);
+
+            // Force TEXT (YAML) serialization. In -batchmode, EditorSceneManager.SaveScene
+            // emits a BINARY Unity SerializedFile (mostly-NUL, non-diffable .unity that reads
+            // as "corrupt", e.g. the committed binary d4_sunken_crypt.unity) because the running
+            // batchmode editor's effective serialization mode is NOT ForceText even though the
+            // EditorSettings.asset stores ForceText. Force the mode explicitly, then reserialize
+            // the just-saved scene so it lands as %YAML text like every curated scene.
+            FlowTrace.Step(Sys, $"serializationMode(before)={EditorSettings.serializationMode}");
+            EditorSettings.serializationMode = SerializationMode.ForceText;
+            // ForceReserializeAssets will NOT rewrite the currently-OPEN scene, so close it
+            // (open a throwaway empty scene) first — the content is already on disk from
+            // SaveScene above. Then reserialize the on-disk file under ForceText -> %YAML.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceSynchronousImport);
+            AssetDatabase.ForceReserializeAssets(new[] { scenePath },
+                ForceReserializeAssetsOptions.ReserializeAssetsAndMetadata);
+            AssetDatabase.SaveAssets();
+
+            // Self-report the on-disk header so a binary/text regression is a captured line.
+            string hdr = Guard.Try(Sys, "read scene header", () =>
+            {
+                string abs = ToFilesystemPath(scenePath);
+                using var fs = new FileStream(abs, FileMode.Open, FileAccess.Read);
+                var buf = new byte[5];
+                int n = fs.Read(buf, 0, 5);
+                return n >= 5 ? Encoding.ASCII.GetString(buf) : "(short)";
+            }, "(unread)");
+            if (hdr != "%YAML")
+                // NOTE: pure -batchmode does NOT honor EditorSettings ForceText for SaveScene or
+                // ForceReserializeAssets, so a batch bake lands BINARY (valid + loadable, but not
+                // diffable). Running the compose from an OPEN editor (GUI) reserializes to %YAML.
+                // Warn (not Fail) so a batch bake does not spam error-level break-log tickets.
+                FlowTrace.Warn(Sys, $"scene '{scenePath}' saved BINARY header='{hdr}' (batchmode cannot ForceText; " +
+                                    "run compose from the GUI editor to get %YAML text)");
+            else
+                FlowTrace.Step(Sys, $"scene serialized as TEXT (header='%YAML') at {scenePath}");
 
             FlowTrace.Step(Sys, $"SUMMARY id={layout.dungeonId} rooms={instances.Count} " +
                                 $"matesOk={mateOk} matesFail=0 sealed={sealedN} saved={saved} " +
@@ -326,6 +368,92 @@ namespace DeNelle.Editor.RoomForge
             // Soft warn only — small spines will not hit 60/20/20.
             if (total >= 5 && Mathf.Abs(rc - rules.pacingCombat) > 0.25f)
                 FlowTrace.Warn(Sys, "pacing: combat ratio far from 60/20/20 canon - author more lore/reward rooms");
+        }
+
+        // =====================================================================
+        // Play population (opt-in) — a bare Player-tagged hero + hero-aggro enemy
+        // spawners, so a portal-loaded composed dungeon is enterable + fightable.
+        // WHY a baked hero: DungeonPortal enters via SceneManager.LoadScene (Single),
+        // which DESTROYS the overworld hero (it is re-homed into its scene by the last
+        // SceneTransitionTrigger, not permanently DDOL) — so NO hero carries in. This
+        // mirrors Dungeon_HealersCottage baking its own Keeper. HeroControlEnsurer then
+        // (runtime, every sceneLoaded) upgrades the bare hero: PlayerAttackController
+        // (melee), GearLoadout, and the follow camera. DeNelle.Editor cannot reference
+        // DeNelle.Village, so the Village MonoBehaviours are attached by REFLECTION
+        // (the DungeonChainBuilder idiom).
+        // =====================================================================
+        private static void PopulateForPlay(Transform root, Dictionary<string, GameObject> instances)
+        {
+            // Hero seat = EntryHall (entry node at origin), sampled onto the walkable NavMesh.
+            Vector3 entryPos = instances.TryGetValue("entry", out var eGo) && eGo != null
+                ? eGo.transform.position : Vector3.zero;
+            Vector3 heroPos = SampleNav(entryPos, 8f) + Vector3.up * 0.9f;
+
+            // Visible capsule body (mirrors HeroControlEnsurer.SpawnEmergencyHero so the hero
+            // renders even before HeroBodySwapper runs). TOP-LEVEL (no parent) so its
+            // transform.root is itself — HeroControlEnsurer.DedupeHeroes destroys a hero's
+            // whole root, and parenting under the dungeon root would risk nuking the geometry.
+            var hero = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            hero.name = "Hero (Blaise)";
+            Guard.Try(Sys, "tag hero Player", () => { hero.tag = "Player"; });
+            hero.transform.position = heroPos;
+            var hcol = hero.GetComponent<Collider>();
+            if (hcol != null) Object.DestroyImmediate(hcol); // HeroLocomotion CapsuleCast must not self-block
+            var heroType = FindType("DeNelle.Village.HeroLocomotion");
+            if (heroType != null)
+            {
+                hero.AddComponent(heroType);
+                FlowTrace.Step(Sys, $"HERO 'Hero (Blaise)' seated at {heroPos} (+HeroLocomotion; HeroControlEnsurer adds combat+camera at runtime)");
+            }
+            else
+            {
+                FlowTrace.Warn(Sys, "HeroLocomotion type unresolved at bake — hero placed WITHOUT locomotion " +
+                                    "(runtime HeroControlEnsurer emergency hero would still cover; re-run after compile if this persists)");
+            }
+
+            // Enemy spawners: OutpostEnemyGroupSpawner self-spawns 3-7 hero-aggro hollows on
+            // Start (heart=null + SetHeroOnlyTarget -> they chase the hero, BattleLock engages).
+            // Seated DEEP (junction + two loop rooms), NOT at the entry, so the first fight is a
+            // few steps in. Under an "Encounters" root for tidiness (not a hero -> dedup-safe).
+            var encRoot = new GameObject("Encounters");
+            encRoot.transform.SetParent(root, false);
+            var spawnerType = FindType("DeNelle.Village.OutpostEnemyGroupSpawner");
+            string[] rooms = { "junction", "loop1", "loop3" };
+            int placed = 0;
+            foreach (var id in rooms)
+            {
+                if (!instances.TryGetValue(id, out var rGo) || rGo == null) continue;
+                Vector3 pos = SampleNav(rGo.transform.position, 6f);
+                var marker = new GameObject($"SkeletonGroup_Spawn_{id}");
+                marker.transform.SetParent(encRoot.transform, true);
+                marker.transform.position = pos;
+                if (spawnerType != null)
+                {
+                    marker.AddComponent(spawnerType);
+                    placed++;
+                    FlowTrace.Step(Sys, $"SPAWNER '{id}' (OutpostEnemyGroupSpawner) at {pos}");
+                }
+                else
+                {
+                    FlowTrace.Warn(Sys, $"OutpostEnemyGroupSpawner type unresolved — marker '{id}' placed WITHOUT spawner (re-run after compile).");
+                }
+            }
+            FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 spawners={placed} (each spawns 3-7 hero-aggro hollows at runtime)");
+        }
+
+        private static Vector3 SampleNav(Vector3 p, float radius)
+            => NavMesh.SamplePosition(p, out var hit, radius, NavMesh.AllAreas) ? hit.position : p;
+
+        // Resolve a runtime type by full name across all loaded assemblies (DeNelle.Editor cannot
+        // reference DeNelle.Village, so Village MonoBehaviours are attached by reflection).
+        private static System.Type FindType(string fullName)
+        {
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var t = asm.GetType(fullName);
+                if (t != null) return t;
+            }
+            return null;
         }
 
         private static void EnsureInBuildSettings(string scenePath)

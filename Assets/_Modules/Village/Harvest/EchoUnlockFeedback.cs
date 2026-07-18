@@ -34,6 +34,7 @@ using UnityEngine.SceneManagement;
 using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -44,6 +45,12 @@ namespace DeNelle.Village
     {
         private Text _pipLabel;
         private GameObject _pipCanvas;
+
+        // Founding-echo teaching queue (WO: wire founding-echo teaching): TRUE while the
+        // founding card is DUE but deferred behind Build Mode or a menu scene. Re-evaluated
+        // on the builder-close EDGE (Update) + on scene change until it can show cleanly.
+        private bool _foundingPending;
+        private bool _buildWasActive;   // prior-frame Build Mode state -> detect the close edge
 
         private void Start()
         {
@@ -65,7 +72,13 @@ namespace DeNelle.Village
             // changes.
             ApplySceneVisibility(SceneManager.GetActiveScene().name);
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
-            FlowTrace.Step("Echo", "EchoUnlockFeedback built (persistent pip + Pets pet-box button + unlock dialogue armed; scene-gated)");
+
+            // Founding-echo teaching (WO): the wave path only raises EchoUnlocked at count>=2, so
+            // the FOUNDING spirit (granted via the pet path, EchoCount==1) never got the portrait
+            // card and its fragile FTUE line got watchdog-swallowed. Fire the SAME card here,
+            // tutorial-INDEPENDENT (this host is installed unconditionally by EchoWorkforceBootstrap).
+            EvaluateFoundingTeach();
+            FlowTrace.Step("Echo", "EchoUnlockFeedback built (persistent pip + Pets pet-box button + unlock dialogue armed; scene-gated; founding teaching armed)");
         }
 
         private void OnDestroy()
@@ -79,10 +92,59 @@ namespace DeNelle.Village
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         }
 
+        private void Update()
+        {
+            // Founding-echo teaching queue. Fire on the builder-close EDGE only (not every frame)
+            // so a deferred card shows on the FIRST frame the builder closes, without hammering
+            // AnnounceFoundingEcho (and its SFX) if a render ever faults. Scene-entry attempts are
+            // covered by OnActiveSceneChanged; the initial in-gameplay attempt by Start.
+            bool buildActive = DeNelle.Core.BuildModeState.IsActive;
+            if (_foundingPending && _buildWasActive && !buildActive) EvaluateFoundingTeach();
+            _buildWasActive = buildActive;
+        }
+
         // -- HUD-leak scene gate (visibility only; service stays global) -----------
         private void OnActiveSceneChanged(Scene from, Scene to)
         {
             ApplySceneVisibility(to.name);
+            // Entering a gameplay scene may make the founding teaching showable.
+            EvaluateFoundingTeach();
+        }
+
+        // -- founding-echo teaching (the SAME card as echoes #2-6, decoupled from FTUE) -----
+        /// <summary>Fire the founding-echo teaching card once, on the SAME portrait-card path as
+        /// echoes #2-6. Defers behind Build Mode and the menu scenes; the persisted one-shot flag
+        /// (set by <see cref="EchoService.AnnounceFoundingEcho"/> only AFTER the card renders) makes
+        /// it idempotent, so an app-quit mid-build never consumes the teaching.</summary>
+        private void EvaluateFoundingTeach()
+        {
+            var svc = EchoService.Instance;
+            if (svc == null) return;
+
+            // Already taught this save -> done for good; stop the pending retry loop.
+            if (FoundingTaught()) { _foundingPending = false; return; }
+
+            // No founding echo yet (defensive; EchoCount is >=1 via the property once a save exists).
+            if (svc.EchoCount < 1) { _foundingPending = false; return; }
+
+            // Hold until we can show cleanly: not over a menu scene, not behind the builder.
+            if (!IsGameplayScene(SceneManager.GetActiveScene().name) || DeNelle.Core.BuildModeState.IsActive)
+            {
+                _foundingPending = true;   // Update() + OnActiveSceneChanged re-evaluate until clear
+                return;
+            }
+
+            // Clear to teach: AnnounceFoundingEcho raises EchoUnlocked(1) -> OnEchoUnlocked renders
+            // the same card as echoes #2-6, and persists the one-shot flag ONLY on a confirmed render.
+            svc.AnnounceFoundingEcho();
+            _foundingPending = !FoundingTaught();   // if the card failed to render, keep retrying
+        }
+
+        /// <summary>Read the persisted founding-taught one-shot flag (the idempotency gate).</summary>
+        private static bool FoundingTaught()
+        {
+            var s = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return s != null && s.SeenTutorials.TryGetValue(EchoService.FoundingTaughtKey, out bool seen) && seen;
         }
 
         /// <summary>Show the pip + Pets button only in gameplay scenes; hide them on the

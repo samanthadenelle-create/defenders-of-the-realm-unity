@@ -102,13 +102,15 @@ namespace DeNelle.Editor.RoomForge
         [MenuItem("Defenders/Dungeon/Compose Starter Loop (dg_starter_loop)")]
         public static void ComposeStarterLoop()
         {
-            ComposeAndBake(Path.Combine(GraphsFolder, StarterGraph));
+            // populateForPlay: seat a playable hero + hero-aggro enemy spawners so the owner's
+            // first dungeon is enterable + fightable straight off the portal.
+            ComposeAndBake(Path.Combine(GraphsFolder, StarterGraph), populateForPlay: true);
         }
 
         /// <summary>Batchmode: -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeStarterLoopBatch</summary>
         public static void ComposeStarterLoopBatch()
         {
-            ComposeAndBake(Path.Combine(GraphsFolder, StarterGraph));
+            ComposeAndBake(Path.Combine(GraphsFolder, StarterGraph), populateForPlay: true);
             EditorApplication.Exit(0);
         }
 
@@ -119,7 +121,7 @@ namespace DeNelle.Editor.RoomForge
         /// fully-positioned DungeonComposeLayout JSON, and bake it through the existing
         /// <see cref="DungeonBaker"/> (mate-verify + NavMesh + save). No EditorApplication.Exit.
         /// </summary>
-        public static void ComposeAndBake(string graphAssetPath)
+        public static void ComposeAndBake(string graphAssetPath, bool populateForPlay = false)
         {
             string fsPath = ToFilesystemPath(graphAssetPath);
             if (!File.Exists(fsPath))
@@ -171,7 +173,8 @@ namespace DeNelle.Editor.RoomForge
                                 $"connections={layout.connections.Count} -> {layoutAssetPath} (cellSize={EmitCellSize})");
 
             // Hand off to the ONE bake path: DungeonBaker mate-verifies, bakes NavMesh, saves.
-            DungeonBaker.BakeFromFile(layoutAssetPath);
+            // populateForPlay seats the playable hero + enemy spawners (starter-loop only).
+            DungeonBaker.BakeFromFile(layoutAssetPath, populateForPlay);
         }
 
         /// <summary>

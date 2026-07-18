@@ -74,6 +74,9 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/DungeonCompose/d4_sunken_crypt.unity
     guid: 98bf657e7fb56fc4e9bf187a9104489c
+  - enabled: 1
+    path: Assets/Scenes/DungeonCompose/dg_starter_loop.unity
+    guid: 92d7d3844333cf346b1ce7b4b6ad8d59
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}

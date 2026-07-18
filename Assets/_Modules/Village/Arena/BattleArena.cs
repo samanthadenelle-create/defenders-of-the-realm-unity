@@ -2133,14 +2133,14 @@ namespace DeNelle.Village.Arena
         private static string TryGrantArenaGear(int threat, int stars)
         {
             // GEAR IS RARE (owner directive 2026-07-18): weapons/armor must feel like a special
-            // find, ~2% of arena wins — NOT the old 30-85% (dropped on nearly every win). Flat
-            // ~2%: no threat scaling, and the hard cap holds it at ~2% even with the star bonus.
-            // ONE knob to tune -> baseChance. NOTE: on a hit the roll splits ~50/50 weapon vs
-            // armor, so 0.02 here == ~1% armor + ~1% weapon; set to 0.04 for a full ~2% PER slot.
+            // find. Flat ~4% per-roll -> ~2% PER slot - NOT the old 30-85% (dropped on nearly
+            // every win). Flat: no threat scaling, and the hard cap holds it there even with the
+            // star bonus. ONE knob to tune -> baseChance. NOTE: on a hit the roll splits ~50/50
+            // weapon vs armor, so 0.04 here == ~2% armor + ~2% weapon (~4% any-gear per-roll).
             // Materials/consumables (loot-tables.json) are UNAFFECTED - this only gates gear.
-            const float baseChance = 0.02f;   // ~2% (GEAR RARE)
+            const float baseChance = 0.04f;   // ~4% per-roll -> ~2%/slot (GEAR RARE)
             const float perTier    = 0.00f;   // no threat scaling - stays rare
-            const float maxChance  = 0.02f;   // hard cap: gear never exceeds ~2% (star bonus clamped away)
+            const float maxChance  = 0.04f;   // hard cap: gear never exceeds ~4% per-roll (~2%/slot, star bonus clamped away)
             // WO-556 ITEM 4 star bonus is retained for reference but clamped by maxChance above,
             // so extra stars no longer raise the gear-drop odds (gear stays rare regardless of stars).
             float starBonus = GearDropPerStar * Mathf.Max(0, stars - 1);

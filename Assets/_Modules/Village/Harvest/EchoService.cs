@@ -78,6 +78,12 @@ namespace DeNelle.Village
         /// <summary>Raised when a new Echo is unlocked (count, total) -- the "New Echo joined!" toast.</summary>
         public event Action<int> EchoUnlocked;
 
+        /// <summary>Persisted one-shot key (GameState.SeenTutorials) that gates the FOUNDING-echo
+        /// teaching card so it fires exactly once per save. Set ONLY after the card actually
+        /// renders (see <see cref="AnnounceFoundingEcho"/>) so an app-quit mid-build never
+        /// consumes the teaching. Shared with EchoUnlockFeedback (the caller).</summary>
+        public const string FoundingTaughtKey = "echo_founding_taught";
+
         // Guard so the one-time offline catch-up runs once per session (not on every
         // re-enable). The clock advance is owned by OfflineHarvestService; we only READ.
         private bool _offlineClaimedThisSession;
@@ -461,6 +467,64 @@ namespace DeNelle.Village
             FlowTrace.Step("Echo", $"GrantEcho('{reason}'): New Echo joined! count now {s.EchoCount}/{MaxEchoes}.");
             EchoUnlocked?.Invoke(s.EchoCount);
             Changed?.Invoke();
+        }
+
+        // =====================================================================
+        //  Founding-echo teaching -- fire the SAME portrait card for echo #1
+        // =====================================================================
+
+        /// <summary>
+        /// Announce the FOUNDING echo (the starter, granted via the pet path -- EchoCount==1),
+        /// firing the SAME "spirit awakens and speaks" portrait card that echoes #2-6 get. The
+        /// wave path only raises <see cref="EchoUnlocked"/> at count&gt;=2, so the founding spirit
+        /// never got the card; this closes that gap, DECOUPLED from the fragile FTUE tutorial line.
+        ///
+        /// Fires EXACTLY ONCE per save: guarded by the persisted <see cref="FoundingTaughtKey"/>
+        /// flag (read here as the gate). Raising EchoUnlocked(1) synchronously renders the card via
+        /// EchoUnlockFeedback.OnEchoUnlocked -> EchoUnlockDialogue.Show(ByCount(1)=Frosthowl). We
+        /// persist the flag ONLY AFTER the card is confirmed on screen
+        /// (<see cref="EchoUnlockDialogue.IsShowing"/>) -- if the render failed we leave the flag
+        /// unset so a later attempt (e.g. after the builder closes) still teaches it.
+        ///
+        /// Raising EchoUnlocked(1) is side-effect-safe: the tutorial signal adapter only reacts at
+        /// count&gt;=2 (echo.born:2); every other subscriber merely re-snapshots UI for count 1
+        /// (already the state). Does NOT change EchoCount -- it only announces the existing founding echo.
+        /// </summary>
+        public void AnnounceFoundingEcho()
+        {
+            var gs = GameStateService.Instance;
+            var s = gs != null ? gs.State : null;
+            if (s == null) { FlowTrace.Warn("Echo", "AnnounceFoundingEcho before GameState -- ignored."); return; }
+
+            // Gate: already taught this save -> no-op (idempotent).
+            if (s.SeenTutorials.TryGetValue(FoundingTaughtKey, out bool taught) && taught)
+            {
+                FlowTrace.Step("Echo", "AnnounceFoundingEcho: already taught (flag set) -- no-op.");
+                return;
+            }
+
+            // The founding echo must actually exist (EchoCount is always >=1 via the property,
+            // but keep the guard explicit -- this is the "founding echo exists" contract).
+            if (EchoCount < 1)
+            {
+                FlowTrace.Step("Echo", "AnnounceFoundingEcho: no founding echo yet (EchoCount<1) -- skipped.");
+                return;
+            }
+
+            FlowTrace.Step("Echo", "AnnounceFoundingEcho: firing founding-echo teaching card (EchoUnlocked(1)).");
+            EchoUnlocked?.Invoke(1);   // synchronous -> renders the same portrait card as echoes #2-6
+
+            // Persist the teaching ONLY IF the card is confirmed on screen -- so an app-quit
+            // mid-build (where we never reached here) or a failed render never burns the one-shot.
+            if (EchoUnlockDialogue.IsShowing)
+            {
+                gs.MarkTutorialSeen(FoundingTaughtKey);
+                FlowTrace.Step("Echo", "AnnounceFoundingEcho: card rendered -> founding teaching marked seen (persisted).");
+            }
+            else
+            {
+                FlowTrace.Warn("Echo", "AnnounceFoundingEcho: card did NOT render -- flag left unset so a later attempt can teach it.");
+            }
         }
 
         // =====================================================================

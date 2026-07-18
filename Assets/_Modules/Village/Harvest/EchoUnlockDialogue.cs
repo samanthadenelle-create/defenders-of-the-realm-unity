@@ -42,6 +42,10 @@ namespace DeNelle.Village
     {
         private static EchoUnlockDialogue s_active;   // single instance
 
+        /// <summary>TRUE while an unlock card is on screen. Read by EchoService.AnnounceFoundingEcho
+        /// to confirm the founding card actually rendered before persisting its one-shot flag.</summary>
+        public static bool IsShowing => s_active != null;
+
         private GameObject _canvas;
         private EchoRosterEntry _entry;
         private TextMeshProUGUI _flavorLabel;
@@ -49,13 +53,15 @@ namespace DeNelle.Village
         private bool _showingLore;
 
         /// <summary>Build + show the unlock card for the spirit earned at
-        /// <paramref name="newCount"/>. Idempotent: replaces any card on screen.</summary>
-        public static void Show(EchoRosterEntry entry, int newCount)
+        /// <paramref name="newCount"/>. Idempotent: replaces any card on screen. Returns TRUE
+        /// when the card is on screen (used by the founding-echo teaching to persist its
+        /// one-shot flag only after a confirmed render), FALSE on a null entry / build fault.</summary>
+        public static bool Show(EchoRosterEntry entry, int newCount)
         {
             if (entry == null)
             {
                 FlowTrace.Warn("Echo", "EchoUnlockDialogue.Show: null roster entry -- card skipped (SFX + pip still fire).");
-                return;
+                return false;
             }
             if (s_active != null) { Destroy(s_active.gameObject); s_active = null; }
 
@@ -70,9 +76,10 @@ namespace DeNelle.Village
             {
                 if (dlg != null) Destroy(dlg.gameObject);
                 s_active = null;
-                return;
+                return false;
             }
             FlowTrace.Step("Echo", $"unlock dialogue shown id={entry.Id} count={newCount}");
+            return true;
         }
 
         private void Build(EchoRosterEntry entry, int newCount)

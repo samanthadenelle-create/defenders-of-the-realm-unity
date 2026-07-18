@@ -179,9 +179,41 @@ namespace DeNelle.Village
 
         private void EnterDungeon()
         {
+            if (_loading) return;
+
+            // Resolve the target scene name. Legacy portals pass a bare dungeon id
+            // ("HealersCottage") and the scene is "Dungeon_" + id. Composed dungeons
+            // (GraphDungeonComposer, e.g. "dg_starter_loop") ship the FULL scene name
+            // as the id, so prefer the id verbatim when it is already loadable; only
+            // then fall back to the legacy "Dungeon_" prefix form.
+            string sceneName = _dungeonId;
+            bool loadable = Application.CanStreamedLevelBeLoaded(sceneName);
+            if (!loadable)
+            {
+                string prefixed = "Dungeon_" + _dungeonId;
+                if (Application.CanStreamedLevelBeLoaded(prefixed))
+                {
+                    sceneName = prefixed;
+                    loadable = true;
+                }
+            }
+
+            // DEAD-LATCH FIX: SceneManager.LoadScene does NOT throw on an unregistered
+            // scene — it logs + no-ops, so the try/catch never fires, _loading would
+            // latch true, and every later tap would be dead. Guard with
+            // CanStreamedLevelBeLoaded: self-report via FlowTrace.Fail and stay live
+            // (reset _loading) so the portal is never permanently dead on device.
+            if (!loadable)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal",
+                    $"scene not loadable id='{_dungeonId}' (tried '{_dungeonId}' and 'Dungeon_{_dungeonId}') " +
+                    "- not in Build Settings; portal stays live (no dead-latch).");
+                _loading = false;
+                return;
+            }
+
             _loading = true;
             HidePrompt();
-            string sceneName = "Dungeon_" + _dungeonId;
             Debug.Log("[DungeonPortal] Entering dungeon scene: " + sceneName);
             // Owner 2026-05-20 ("freezes on load dungeon"): the fade-based
             // GoDungeon path nulls its Fader reference when the village scene
@@ -195,7 +227,7 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
-                Debug.LogError("[DungeonPortal] LoadScene threw: " + ex);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal", "LoadScene threw: " + ex);
                 _loading = false;
             }
         }

@@ -106,7 +106,11 @@ namespace DeNelle.Village.World
         {
             // EAST of the walls: ~141m from origin (~97m past the r~44 ring,
             // ~72m walk from the east bridge end). Yaw 262 faces the castle.
-            new AuthoredPortal("HealersCottage", new Vector3(140f, 0f, 20f), 262f),
+            // REROUTE (WO): the east portal now leads to the composed KayKit starter-loop
+            // dungeon 'dg_starter_loop' (GraphDungeonComposer) instead of Dungeon_HealersCottage.
+            // DungeonPortal routes by this id; LoadDefs injects a matching def when the scene is
+            // in the build. Overworld is origin-centered, so (140,0,20) stays reachable.
+            new AuthoredPortal("dg_starter_loop", new Vector3(140f, 0f, 20f), 262f),
             // WEST of the walls, mirrored — the opposite compass pull. Yaw 82
             // faces the castle.
             new AuthoredPortal("FolksGranary",   new Vector3(-140f, 0f, -20f), 82f),
@@ -553,6 +557,18 @@ namespace DeNelle.Village.World
                 if (d.SceneExists && UnityEngine.Application.CanStreamedLevelBeLoaded(d.SceneName))
                     built.Add(d);
             }
+
+            // REROUTE (WO): guarantee the composed starter-loop dungeon is represented whenever
+            // its scene is in the build, without needing a Resources/Dungeons .asset. Its
+            // DungeonId IS the full scene name, so DungeonPortal loads it verbatim (see
+            // DungeonPortal.EnterDungeon). The east AuthoredPortal row keys placement to it.
+            const string StarterLoop = "dg_starter_loop";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(StarterLoop)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, StarterLoop, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(StarterLoop, StarterLoop, "Starter Loop", new Color(0.62f, 0.72f, 1f)));
+            }
+
             if (built.Count > 0) return built;
 
             // Inline fallback — the two dungeon scenes that exist in the build today.

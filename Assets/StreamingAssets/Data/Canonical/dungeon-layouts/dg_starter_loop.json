@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "dungeonId": "dg_starter_loop",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "entry",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub"
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "corr1",
+      "cell": [
+        0,
+        0,
+        6
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "Intersection",
+      "instanceId": "junction",
+      "cell": [
+        0,
+        0,
+        12
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "StairUp",
+      "instanceId": "stair_up",
+      "cell": [
+        -6,
+        0,
+        12
+      ],
+      "yawDeg": 270.0,
+      "archetype": "hub"
+    },
+    {
+      "prefab": "StairDown",
+      "instanceId": "stair_down",
+      "cell": [
+        6,
+        0,
+        12
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "hub"
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "loop1",
+      "cell": [
+        0,
+        0,
+        18
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "TurnRight",
+      "instanceId": "turn1",
+      "cell": [
+        0,
+        0,
+        24
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "loop2",
+      "cell": [
+        6,
+        0,
+        24
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "TurnRight",
+      "instanceId": "turn2",
+      "cell": [
+        12,
+        0,
+        24
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "loop3",
+      "cell": [
+        12,
+        0,
+        18
+      ],
+      "yawDeg": 180.0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "TurnRight",
+      "instanceId": "turn3",
+      "cell": [
+        12,
+        0,
+        12
+      ],
+      "yawDeg": 180.0,
+      "archetype": "combat"
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "entry",
+      "fromSocket": "n_door_01",
+      "toInstance": "corr1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "corr1",
+      "fromSocket": "n_door_01",
+      "toInstance": "junction",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "junction",
+      "fromSocket": "n_door_01",
+      "toInstance": "loop1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "junction",
+      "fromSocket": "e_door_01",
+      "toInstance": "stair_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "junction",
+      "fromSocket": "w_door_01",
+      "toInstance": "stair_up",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "loop1",
+      "fromSocket": "n_door_01",
+      "toInstance": "turn1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "turn1",
+      "fromSocket": "e_door_01",
+      "toInstance": "loop2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "loop2",
+      "fromSocket": "n_door_01",
+      "toInstance": "turn2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "turn2",
+      "fromSocket": "e_door_01",
+      "toInstance": "loop3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "loop3",
+      "fromSocket": "n_door_01",
+      "toInstance": "turn3",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}

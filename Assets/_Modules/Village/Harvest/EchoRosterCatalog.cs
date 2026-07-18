@@ -96,8 +96,12 @@ namespace DeNelle.Village
                 Id = "echo-frosthowl", Order = 1,
                 DisplayName = "Frosthowl (Ice Echo)", Element = "Ice Elemental",
                 PortraitName = "Frosthowl",
-                Flavor = "The ancient spirit awakens, its icy breath whispering secrets of the frozen wastes...",
-                Lore = "Frosthowl prowled the glacier reaches long before Elarion had a name. Bound to your cause, the cold works FOR you -- every harvest hastened by winter's patience.",
+                // Founding-echo copy (WO: wire founding-echo teaching). Order==1 is ONLY ever
+                // shown for the founding spirit (waves unlock #2-6), so this row carries the
+                // "first light your Heart kept" flavor -- the teaching card the founding echo
+                // now fires via EchoService.AnnounceFoundingEcho. ASCII only (-- not em-dash).
+                Flavor = "I am the first light your Heart has kept. While you rest, I gather; while you fight, I tend the fields. Name my task -- wood, iron, or grain -- and it is done.",
+                Lore = "Every keeper the tree remembers wakes one Echo before all others. I am yours. Bring the dark back from the Heart and I grow stronger with it.",
                 ElementType = ElementType.Frost, PreferredLane = LaneType.Exploration, HarvestResource = null,
             },
             new EchoRosterEntry {

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "graphId": "dg_starter_loop",
+  "entry": "entry",
+  "_comment": "OWNER'S FIRST DUNGEON, authored as a pure room GRAPH (no hand-typed coords). GraphDungeonComposer instantiates each prefab, reads the real RoomSocket transforms, and solves every room's world pose by mating sockets door-to-door. Junction is Intersection (4-way) NOT TJunction: the owner's junction needs entry(S) + left + right + straight = 4 openings, and the built TJunction prefab only has S/E/W (no north), so it cannot carry a straight-through. The 3 TurnRight rooms make the straight branch bend N->E->S->W into a rectangular loop whose final open door dead-ends next to the junction (no closing edge - a returning dead-end). Add a room = add one node + one edge.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "corr1",
+      "prefab": "Straight"
+    },
+    {
+      "id": "junction",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "stair_up",
+      "prefab": "StairUp"
+    },
+    {
+      "id": "stair_down",
+      "prefab": "StairDown"
+    },
+    {
+      "id": "loop1",
+      "prefab": "Straight"
+    },
+    {
+      "id": "turn1",
+      "prefab": "TurnRight"
+    },
+    {
+      "id": "loop2",
+      "prefab": "Straight"
+    },
+    {
+      "id": "turn2",
+      "prefab": "TurnRight"
+    },
+    {
+      "id": "loop3",
+      "prefab": "Straight"
+    },
+    {
+      "id": "turn3",
+      "prefab": "TurnRight"
+    }
+  ],
+  "edges": [
+    {
+      "from": "entry",
+      "fromSocket": "n_door_01",
+      "to": "corr1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "corr1",
+      "fromSocket": "n_door_01",
+      "to": "junction",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "junction",
+      "fromSocket": "w_door_01",
+      "to": "stair_up",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "junction",
+      "fromSocket": "e_door_01",
+      "to": "stair_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "junction",
+      "fromSocket": "n_door_01",
+      "to": "loop1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "loop1",
+      "fromSocket": "n_door_01",
+      "to": "turn1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "turn1",
+      "fromSocket": "e_door_01",
+      "to": "loop2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "loop2",
+      "fromSocket": "n_door_01",
+      "to": "turn2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "turn2",
+      "fromSocket": "e_door_01",
+      "to": "loop3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "loop3",
+      "fromSocket": "n_door_01",
+      "to": "turn3",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}

@@ -86,15 +86,15 @@ namespace DeNelle.Village.World.Camps
         private const int IronPerThreat      = 8;
 
         // CHANCE: a GEAR drop. GEAR IS RARE (owner directive 2026-07-18): weapons/armor
-        // must feel like a special find, ~2% of clears — NOT the old 35-85% (dropped on
-        // nearly every kill). Flat ~2%: no threat scaling, capped at 2% so it stays rare
-        // at every tier. ONE knob to tune -> GearDropChanceBase. NOTE: on a hit the roll
-        // splits ~50/50 weapon vs armor, so 0.02 here == ~1% armor + ~1% weapon; set to
-        // 0.04 if the owner wants a full ~2% PER slot. Materials/consumables (loot-tables.json)
-        // are UNAFFECTED — this only gates weapon/armor gear.
-        private const float GearDropChanceBase    = 0.02f;  // ~2% at threat 0 (GEAR RARE)
+        // must feel like a special find. Flat ~4% per-roll -> ~2% PER slot - NOT the old
+        // 35-85% (dropped on nearly every kill). Flat: no threat scaling, capped so it stays
+        // rare at every tier. ONE knob to tune -> GearDropChanceBase. NOTE: on a hit the roll
+        // splits ~50/50 weapon vs armor, so 0.04 here == ~2% armor + ~2% weapon (~4% any-gear
+        // per-roll). Materials/consumables (loot-tables.json) are UNAFFECTED - this only gates
+        // weapon/armor gear.
+        private const float GearDropChanceBase    = 0.04f;  // ~4% per-roll -> ~2%/slot (GEAR RARE)
         private const float GearDropChancePerTier = 0.00f;  // no threat scaling - stays rare
-        private const float GearDropChanceMax     = 0.02f;  // hard cap: gear never exceeds ~2%
+        private const float GearDropChanceMax     = 0.04f;  // hard cap: gear never exceeds ~4% per-roll (~2%/slot)
 
         // RARER (high threat): a rare-gem bonus crystal payout on top of the base.
         private const int   RareGemThreatGate   = 4;     // only at threat >= this

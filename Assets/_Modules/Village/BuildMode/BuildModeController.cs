@@ -1723,13 +1723,18 @@ namespace DeNelle.Village
             // multi-resource ledger (EconomyService → GameState-backed Crystals/Food +
             // in-session Wood/Iron). TrySpend is atomic; it can't fail here (we re-checked
             // CanAfford above) but the bool is honoured for safety.
-            // First-build freebie (owner 2026-07-13 evening): the FIRST committed
-            // placement of each catalog id is FREE — skip the charge and burn the
-            // per-id flag HERE, at the committed placement only (an armed/cancelled
-            // ghost never consumes it). The flag NEVER resets: selling/destroying the
-            // building does not restore it. Persistence rides Exit() -> CommitLayout ->
-            // GameStateService.Save(), the SAME save that carries the BaseLayout append
-            // above — building and burned flag commit or revert together.
+            // First-build freebie (owner 2026-07-17): ONE free placement TOTAL for
+            // non-founding builds, PLUS a per-id freebie for each FTUE FoundingKit piece
+            // (pet-house / lumberyard / tower_ground_archer) so a zero-resource first run
+            // can found free. Skip the charge and burn the freebie HERE, at the committed
+            // placement only (an armed/cancelled ghost never consumes it) by appending
+            // this id to FreeBuildsUsed; FreeBuildAvailable then reads that ledger (a
+            // founding id burns only its own per-id freebie, a non-founding id burns the
+            // shared one-free-total) so it is false for every later charged placement. The flag
+            // NEVER resets: selling/destroying the building does not restore it. Persistence
+            // rides Exit() -> CommitLayout -> GameStateService.Save(), the SAME save that
+            // carries the BaseLayout append above -- building and burned flag commit or revert
+            // together.
             if (freeBuild)
             {
                 var st0 = GameStateService.Instance != null ? GameStateService.Instance.State : null;
@@ -1738,7 +1743,10 @@ namespace DeNelle.Village
                     if (st0.FreeBuildsUsed == null) st0.FreeBuildsUsed = new List<string>();
                     st0.FreeBuildsUsed.Add(_armed.id);
                 }
-                FlowTrace.Step("Build", $"first-build FREE consumed for '{_armed.id}' (one-shot, never resets)");
+                bool founding = FoundingKit.Contains(_armed.id);
+                FlowTrace.Step("Build", founding
+                    ? $"free build (FOUNDING-KIT, per-id) consumed on '{_armed.id}' -- this founding id now charged; general one-free-total untouched (never resets)"
+                    : $"free build (one-free-TOTAL, non-founding) consumed on '{_armed.id}' -- all later non-founding placements now charged (never resets)");
             }
             else
             {
@@ -2464,12 +2472,40 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// First-build freebie (owner ruling 2026-07-13 evening): TRUE while the
-        /// entry's ONE-TIME free first placement is still live — i.e. its id is not
-        /// yet in the per-save <c>GameState.FreeBuildsUsed</c> ledger (v32). The flag
-        /// burns ONLY at a committed placement (Place()); it never resets — selling/
-        /// destroying the building does not restore it. Service-less/state-less =
-        /// no freebie (fall back to the normal cost, never a free exploit path).
+        /// FTUE founding kit (owner ruling 2026-07-17): the exact structure ids the
+        /// founding tutorial steps force the player to place while they still have ZERO
+        /// starting resources (v32 zeroed StartingBudget). These are EXEMPT from the
+        /// general one-free-total rule so a first run can never soft-lock at founding:
+        ///   pet-house           <- founding_hollow  (build.structure_placed:pet-house)
+        ///   lumberyard          <- founding_stores  (build.structure_placed:lumberyard)
+        ///   tower_ground_archer <- founding_defense (build.tower_placed -- the canonical
+        ///                          founding tower: cheapest Tower row, the AutoPilot's
+        ///                          tutorial first-tower; a non-archer tower still comes
+        ///                          free via the untouched general one-free-total below).
+        /// Verified against StreamingAssets/Data/Canonical/tutorial/tutorial-steps.json.
+        /// Each seeds free ONCE (per-id), independent of the general freebie.
+        /// </summary>
+        private static readonly HashSet<string> FoundingKit =
+            new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                "pet-house",
+                "lumberyard",
+                "tower_ground_archer",
+            };
+
+        /// <summary>
+        /// Placement freebie policy (owner rulings 2026-07-17). Two lanes:
+        ///  - FOUNDING KIT (see <see cref="FoundingKit"/>): each of the three founding
+        ///    pieces is free UNTIL that specific id is in <c>GameState.FreeBuildsUsed</c>
+        ///    (per-item freebie), so all three seed free during the FTUE even with zero
+        ///    resources. These founding burns do NOT consume the general freebie.
+        ///  - EVERYTHING ELSE: ONE free placement TOTAL, counting ONLY non-founding
+        ///    entries in the ledger -- free only while no non-founding id has been burned
+        ///    yet; from then on every non-founding placement is charged.
+        /// The ledger never resets (selling/destroying a building does not restore a
+        /// freebie). Service-less/state-less = no freebie (fall back to normal cost,
+        /// never a free exploit path). Additive default: a never-written list is treated
+        /// as empty, so old/new saves alike still have their freebies live.
         /// </summary>
         public static bool FreeBuildAvailable(CatalogEntry entry)
         {
@@ -2477,9 +2513,16 @@ namespace DeNelle.Village
             var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (st == null) return false;
             var used = st.FreeBuildsUsed;
-            if (used == null) return true;   // additive default — never-written list = all freebies live
-            for (int i = 0; i < used.Count; i++)
-                if (string.Equals(used[i], entry.id, System.StringComparison.OrdinalIgnoreCase)) return false;
+
+            // Founding kit: per-id freebie -- free until THIS founding id has been burned.
+            if (FoundingKit.Contains(entry.id))
+                return used == null || !used.Contains(entry.id);
+
+            // Non-founding: one free build TOTAL, but the founding freebies must NOT
+            // count against it -- free only while no NON-founding id has been burned yet.
+            if (used == null) return true;   // additive default -- never-written list = general freebie still live
+            foreach (var id in used)
+                if (!FoundingKit.Contains(id)) return false;   // a real (non-founding) freebie already spent
             return true;
         }
 
