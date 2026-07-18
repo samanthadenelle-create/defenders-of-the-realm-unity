@@ -4,6 +4,8 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Village",
+        "DeNelle.HUD",
+        "DeNelle.Audio",
         "DeNelle.Data",
         "DeNelle.Editor",
         "UniTask",

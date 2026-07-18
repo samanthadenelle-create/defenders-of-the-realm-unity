@@ -8,7 +8,8 @@
 // the kit chrome's shared Close now fixes that AND it registers with PanelManager
 // so opening closes other panels and the arbiter can dismiss it (was squatting over
 // Talents/Upgrade in every bot capture). Opens via Toggle() (the kit HUD dock calls
-// it directly); reads ClanService.Instance directly (DeNelle.HUD -> DeNelle.Core).
+// it directly). Strict MVVM (Silo E): binds a ClanChatVM and reads vm.* only —
+// all ClanService / ChatPhraseCatalog access lives in the VM (DeNelle.HUD -> DeNelle.Core).
 //
 // Layout (in the frame's body well):
 //   • Status strip — clan tag + name (or "no clan"); Create/Leave action button.
@@ -21,7 +22,6 @@
 // wrapper later (§7.1 of the React design doc).
 // =============================================================================
 
-using DeNelle.Core.Services;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 using TMPro;
@@ -49,6 +49,10 @@ namespace DeNelle.HUD
         private bool _visible;
         private bool _customOpen;
 
+        // Strict MVVM (Silo E): ALL clan/chat state + projection live in the VM; this
+        // View reads vm.* only and never touches ClanService / ChatPhraseCatalog.
+        private ClanChatVM _vm;
+
         // Modal arbiter membership (eyes-on pass 2026-07-03: the open chat squatted OVER
         // the Talents/Upgrade modals in every bot capture — it never told PanelManager it
         // was open, so nothing ever closed it; and it exposed NO close affordance at all).
@@ -59,20 +63,11 @@ namespace DeNelle.HUD
             _panelHandle = PanelManager.Register("Clan Chat", () => SetVisible(false), () => _visible);
         }
 
-        private void OnEnable()
-        {
-            if (ClanService.Instance != null)
-                ClanService.Instance.Changed += Repaint;
-        }
-
-        private void OnDisable()
-        {
-            if (ClanService.Instance != null)
-                ClanService.Instance.Changed -= Repaint;
-        }
-
         private void OnDestroy()
         {
+            if (_vm != null) _vm.Changed -= Repaint;
+            _vm?.Dispose();
+            _vm = null;
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -112,6 +107,11 @@ namespace DeNelle.HUD
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("ClanChat", "EnsureBuilt");
 
+            // VM FIRST — it resolves ClanService + ChatPhraseCatalog itself, so this
+            // View never touches a service; the input cap composes from vm data.
+            _vm = ClanChatVM.CreateDefault(() => SetVisible(false));
+            _vm.Changed += Repaint;
+
             _modal = ElarionUiKit.BuildObsidianModal("ClanChatUI", "Clan Chat",
                 new Vector2(0.24f, 0.10f), new Vector2(0.76f, 0.92f), () => SetVisible(false),
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "crest");
@@ -148,7 +148,7 @@ namespace DeNelle.HUD
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0f, 0.05f), new Vector2(0.20f, 0.95f), ToggleCustomRow);
             _customRow = ZoneRect(_composerHost, "CustomRow", new Vector2(0.21f, 0.05f), new Vector2(1f, 0.95f));
-            _customField = MakeInputField(_customRow, "Say something...", "", ClanService.CustomTextMaxChars,
+            _customField = MakeInputField(_customRow, "Say something...", "", _vm.CustomTextMaxChars,
                 new Vector2(0f, 0f), new Vector2(0.80f, 1f));
             ElarionUiKit.BuildObsidianButton(_customRow, "Send",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
@@ -160,40 +160,39 @@ namespace DeNelle.HUD
 
         // ── Repaint ──────────────────────────────────────────────────────────
 
+        // Repaints purely from vm.* — no ClanService reads (strict MVVM, Silo E).
         private void Repaint()
         {
-            if (_modal == null || !_visible) return;
-            var svc = ClanService.Instance;
-            if (svc == null) return;
+            if (_modal == null || !_visible || _vm == null) return;
+
+            bool inClan = _vm.InClan;
 
             // Action button (Create / Leave) — rebuilt so its label + color reflect state.
             for (int i = _actionHost.childCount - 1; i >= 0; i--)
                 Destroy(_actionHost.GetChild(i).gameObject);
-            ElarionUiKit.BuildObsidianButton(_actionHost, svc.InClan ? "Leave" : "Create",
+            ElarionUiKit.BuildObsidianButton(_actionHost, _vm.ActionLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
-                svc.InClan ? ElarionUiKit.ObsidianButtonColor.Red : ElarionUiKit.ObsidianButtonColor.Green,
+                inClan ? ElarionUiKit.ObsidianButtonColor.Red : ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0f, 0.05f), new Vector2(1f, 0.95f), OnHeaderButton);
 
             for (int i = _statusHost.childCount - 1; i >= 0; i--)
                 Destroy(_statusHost.GetChild(i).gameObject);
 
-            if (svc.InClan)
+            if (inClan)
             {
-                var clan = svc.Current;
-                var tag  = string.IsNullOrEmpty(clan.Tag) ? "" : $"[{clan.Tag}] ";
-                MakeText(_statusHost, $"{tag}{clan.Name}", 18, ElarionUi.Gilt, FontStyles.Bold,
+                MakeText(_statusHost, _vm.StatusLine, 18, ElarionUi.Gilt, FontStyles.Bold,
                     TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
 
                 _createForm.gameObject.SetActive(false);
                 _messageScrollHost.gameObject.SetActive(true);
                 _chipContent.parent.parent.gameObject.SetActive(true);
                 _composerHost.gameObject.SetActive(true);
-                RebuildMessages(svc);
-                RebuildChips(svc);
+                RebuildMessages();
+                RebuildChips();
             }
             else
             {
-                MakeText(_statusHost, "No clan yet", 18, ElarionUi.ParchmentDim, FontStyles.Italic,
+                MakeText(_statusHost, _vm.StatusLine, 18, ElarionUi.ParchmentDim, FontStyles.Italic,
                     TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
 
                 _createForm.gameObject.SetActive(true);
@@ -203,27 +202,13 @@ namespace DeNelle.HUD
             }
         }
 
-        private void RebuildMessages(ClanService svc)
+        private void RebuildMessages()
         {
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Destroy(_listContent.GetChild(i).gameObject);
 
-            var msgs = svc.Messages;
-            if (msgs == null || msgs.Count == 0)
-            {
-                FlowTrace.Step("ClanChat",
-                    "RebuildMessages: no messages yet — showing visible 'Send a phrase...' hint (expected empty, not a failure).");
-                AddMessageRow("", "Send a phrase below to start the chat.", true);
-                return;
-            }
-
-            foreach (var m in msgs)
-            {
-                if (m == null) continue;
-                var meta = (m.SenderId == svc.AccountId ? "You" : (m.SenderName ?? "?"))
-                           + (m.IsCustom ? " - custom" : "");
-                AddMessageRow(meta, m.Text ?? "...", false);
-            }
+            foreach (var row in _vm.Messages)
+                AddMessageRow(row.Meta, row.Body, row.IsHint);
         }
 
         private void AddMessageRow(string meta, string body, bool hint)
@@ -246,42 +231,18 @@ namespace DeNelle.HUD
                 new Vector2(1f, string.IsNullOrEmpty(meta) ? 1f : 0.66f));
         }
 
-        private void RebuildChips(ClanService svc)
+        // The VM owns the never-blank contract: an empty phrase catalogue yields a single
+        // fallback ChipRow, so the rail is never blank. This View just lays the rows out.
+        private void RebuildChips()
         {
             for (int i = _chipContent.childCount - 1; i >= 0; i--)
                 Destroy(_chipContent.GetChild(i).gameObject);
 
-            var phrases = ChatPhraseCatalog.Phrases;
-            // Never-blank contract: a null/empty phrase catalogue previously left the rail
-            // utterly blank with NO fallback and NO trace — the chat read as broken. Show a
-            // visible placeholder AND self-report (data-empty).
-            if (phrases == null || phrases.Count == 0)
+            foreach (var chip in _vm.Chips)
             {
-                FlowTrace.Warn("ClanChat",
-                    $"RebuildChips: ChatPhraseCatalog.Phrases is {(phrases == null ? "null" : "empty")} — " +
-                    "no quick-phrase chips; rendering visible 'Custom... to chat' fallback (data-empty).");
-                AddChipFallback();
-                return;
-            }
-
-            int chipCount = 0;
-            string lastCategory = null;
-            foreach (var p in phrases)
-            {
-                if (p == null) continue;
-                if (p.Category != lastCategory)
-                {
-                    lastCategory = p.Category;
-                    AddChipDivider(ResolveCategoryLabel(p.Category));
-                }
-                AddChip(p);
-                chipCount++;
-            }
-            if (chipCount == 0)
-            {
-                FlowTrace.Warn("ClanChat",
-                    "RebuildChips: every phrase entry was null — rendering visible 'Custom... to chat' fallback (data-empty).");
-                AddChipFallback();
+                if (chip.IsDivider)       AddChipDivider(chip.Label);
+                else if (chip.IsFallback) AddChipFallback(chip.Label);
+                else                      AddChip(chip.Label, chip.PhraseId);
             }
         }
 
@@ -297,9 +258,8 @@ namespace DeNelle.HUD
                 FontStyles.Bold, TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
         }
 
-        private void AddChip(ChatPhraseDef p)
+        private void AddChip(string label, string phraseId)
         {
-            var label = string.IsNullOrEmpty(p.Emoji) ? p.Text : $"{p.Emoji} {p.Text}";
             var host = new GameObject("Chip", typeof(RectTransform), typeof(LayoutElement));
             host.transform.SetParent(_chipContent, false);
             host.GetComponent<LayoutElement>().preferredHeight = 32f;
@@ -307,53 +267,33 @@ namespace DeNelle.HUD
             hrt.sizeDelta = new Vector2(hrt.sizeDelta.x, 32f);
             ElarionUiKit.BuildObsidianButton(host.transform, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                Vector2.zero, Vector2.one, () => OnSendPhrase(p.Id));
+                Vector2.zero, Vector2.one, () => OnSendPhrase(phraseId));
         }
 
-        private void AddChipFallback()
+        private void AddChipFallback(string text)
         {
             var go = new GameObject("ChipFallback", typeof(RectTransform), typeof(LayoutElement));
             go.transform.SetParent(_chipContent, false);
             go.GetComponent<LayoutElement>().preferredHeight = 28f;
             var frt = go.GetComponent<RectTransform>();
             frt.sizeDelta = new Vector2(frt.sizeDelta.x, 28f);
-            MakeText(go.transform, "No quick phrases — use Custom... below to chat.", 12,
+            MakeText(go.transform, text, 12,
                 ElarionUi.ParchmentDim, FontStyles.Italic,
                 TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
         }
 
-        private static string ResolveCategoryLabel(string key)
-        {
-            foreach (var c in ChatPhraseCatalog.Categories)
-                if (c != null && c.Key == key) return c.Label;
-            return key ?? "Phrases";
-        }
+        // ── Event handlers (route taps to VM commands; the View reads no game state) ──
 
-        // ── Event handlers ───────────────────────────────────────────────────
-
-        private void OnHeaderButton()
-        {
-            var svc = ClanService.Instance;
-            if (svc == null) return;
-            if (svc.InClan) svc.LeaveClan();
-            // else: the create form is already visible (not-in-clan state) — no-op.
-        }
+        private void OnHeaderButton() => _vm?.OnHeaderButton();
 
         private void OnConfirmCreate()
         {
-            var svc = ClanService.Instance;
-            if (svc == null) return;
             var name = _createNameField != null ? _createNameField.text : "Ember Wardens";
             var tag  = _createTagField  != null ? _createTagField.text  : "EMBR";
-            svc.CreateClan(name, tag);
+            _vm?.CreateClan(name, tag);
         }
 
-        private void OnSendPhrase(string phraseId)
-        {
-            var svc = ClanService.Instance;
-            if (svc == null || !svc.InClan) return;
-            svc.AddTemplatedMessage(phraseId);
-        }
+        private void OnSendPhrase(string phraseId) => _vm?.SendPhrase(phraseId);
 
         private void ToggleCustomRow()
         {
@@ -366,10 +306,8 @@ namespace DeNelle.HUD
 
         private void OnSendCustom()
         {
-            var svc = ClanService.Instance;
-            if (svc == null || !svc.InClan) return;
             var text = _customField != null ? _customField.text : null;
-            svc.AddCustomMessage(text);
+            _vm?.SendCustom(text);
             if (_customField != null) _customField.text = string.Empty;
         }
 

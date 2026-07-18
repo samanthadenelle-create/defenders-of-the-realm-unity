@@ -6,7 +6,8 @@
 // WO-F conversion (2026-07-03, coverage matrix row #50): UIDocument/UITK card ->
 // code-built uGUI on the Obsidian master frame (BuildObsidianModal: FrameCore +
 // medallion + the ONE shared Close + scrim), per the HelpMenu reference recipe.
-// Opens via Toggle() (the kit dock); reads LeaderboardService.Instance directly.
+// Opens via Toggle() (the kit dock). Strict MVVM (Silo E): binds a LeaderboardVM
+// and reads vm.* only — all LeaderboardService access + the async fetch live in the VM.
 //
 // Layout (in the frame's body well):
 //   • Profile strip — "You", invite code, best wave / crystals / arena W-L.
@@ -37,28 +38,22 @@ namespace DeNelle.HUD
         private TextMeshProUGUI _footer;
 
         private bool _visible;
-        private LeaderboardMetric _metric = LeaderboardMetric.BestWave;
         private PanelHandle _panelHandle;
+
+        // Strict MVVM (Silo E): ALL leaderboard state + the async fetch live in the VM;
+        // this View reads vm.* only and never touches LeaderboardService.
+        private LeaderboardVM _vm;
 
         private void Awake()
         {
             _panelHandle = PanelManager.Register("Leaderboard", () => SetVisible(false), () => _visible);
         }
 
-        private void OnEnable()
-        {
-            if (LeaderboardService.Instance != null)
-                LeaderboardService.Instance.Changed += Repaint;
-        }
-
-        private void OnDisable()
-        {
-            if (LeaderboardService.Instance != null)
-                LeaderboardService.Instance.Changed -= Repaint;
-        }
-
         private void OnDestroy()
         {
+            if (_vm != null) _vm.Changed -= Render;
+            _vm?.Dispose();
+            _vm = null;
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -82,7 +77,8 @@ namespace DeNelle.HUD
                     _modal.canvas.SetActive(false);   // battle-lock reject — never force-show
                     return;
                 }
-                Repaint();
+                _vm?.Refresh();   // re-pull profile + rows (raises Changed -> Render)
+                Render();
             }
             else
             {
@@ -98,6 +94,10 @@ namespace DeNelle.HUD
             _modal = ElarionUiKit.BuildObsidianModal("LeaderboardUI", "Leaderboard",
                 new Vector2(0.26f, 0.10f), new Vector2(0.74f, 0.92f), () => SetVisible(false),
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "combat");
+
+            // VM FIRST — it resolves LeaderboardService itself + owns the async fetch.
+            _vm = LeaderboardVM.CreateDefault(() => SetVisible(false));
+            _vm.Changed += Render;
 
             var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
                 ? (Transform)_modal.chrome.layout.body
@@ -135,8 +135,8 @@ namespace DeNelle.HUD
             float x1 = x0 + (1f / 3f) - 0.01f;
             ElarionUiKit.BuildObsidianButton(_tabHost, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
-                metric == _metric ? ElarionUiKit.ObsidianButtonColor.Yellow
-                                  : ElarionUiKit.ObsidianButtonColor.Gray,
+                (_vm != null && metric == _vm.Metric) ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                                      : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                 () => SelectMetric(metric));
         }
@@ -182,65 +182,41 @@ namespace DeNelle.HUD
 
         private void SelectMetric(LeaderboardMetric metric)
         {
-            _metric = metric;
-            BuildTabs();   // re-color active tab
-            Repaint();
+            _vm?.SelectMetric(metric);   // VM re-fetches + raises Changed -> Render
         }
 
-        private void Repaint()
+        // Repaints purely from vm.* — no LeaderboardService reads (strict MVVM, Silo E).
+        private void Render()
         {
-            if (_modal == null || !_visible) return;
-            var svc = LeaderboardService.Instance;
-            if (svc == null) return;
+            if (_modal == null || !_visible || _vm == null) return;
 
-            RebuildProfile(svc.GetLocalProfile());
-            svc.FetchTopAsync(_metric, 20, RebuildList);
-
-            _footer.text = svc.IsLocalStub
-                ? $"Source: {svc.SourceLabel}. Scores are local; ranks shown are placeholder rivals until the online ladder is connected."
-                : $"Source: {svc.SourceLabel}.";
+            BuildTabs();        // re-color the active tab from vm.Metric
+            RebuildProfile();
+            RebuildRows();
+            if (_footer != null) _footer.text = _vm.FooterText;
         }
 
-        private void RebuildProfile(PlayerProfile p)
+        private void RebuildProfile()
         {
             for (int i = _profileHost.childCount - 1; i >= 0; i--)
                 Destroy(_profileHost.GetChild(i).gameObject);
-            if (p == null) return;
+            if (_vm == null || string.IsNullOrEmpty(_vm.ProfileHeroLine)) return;
 
-            var heroLine = string.IsNullOrEmpty(p.HeroClass) || p.HeroClass == "None"
-                ? p.DisplayName
-                : $"{p.DisplayName} - {p.HeroClass}";
-            string code = string.IsNullOrEmpty(p.InviteCode) ? "" : $"   #{p.InviteCode}";
-            MakeText(_profileHost, heroLine + code, 18, ElarionUi.Gilt, FontStyles.Bold,
+            MakeText(_profileHost, _vm.ProfileHeroLine, 18, ElarionUi.Gilt, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0f, 0.5f), new Vector2(1f, 1f));
-            MakeText(_profileHost,
-                $"Best Wave {p.BestWave}    Crystals {p.Crystals}    Magic {p.Magic}    Arena {p.ArenaWins}-{p.ArenaLosses}",
+            MakeText(_profileHost, _vm.ProfileStatsLine,
                 14, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(1f, 0.5f));
         }
 
-        private void RebuildList(IReadOnlyList<LeaderboardEntry> rows)
+        private void RebuildRows()
         {
-            if (_listContent == null) return;
+            if (_listContent == null || _vm == null) return;
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Destroy(_listContent.GetChild(i).gameObject);
 
-            if (rows == null || rows.Count == 0)
-            {
-                // Empty-data roll-up: keep the visible placeholder + self-report so a blank
-                // list reads as data-empty, not a silent failure.
-                FlowTrace.Warn("Leaderboard",
-                    $"RebuildList: fetch for metric '{_metric}' returned {(rows == null ? "null" : "0 rows")} — " +
-                    "showing the visible 'No entries yet.' placeholder (data-empty).");
-                MakeRow("—", "No entries yet.", "", false, 0);
-                return;
-            }
-
-            for (int i = 0; i < rows.Count; i++)
-            {
-                var e = rows[i];
-                MakeRow($"{e.Rank}", e.Name ?? "?", $"{e.Score}", e.IsLocalPlayer, i);
-            }
+            foreach (var row in _vm.Rows)
+                MakeRow(row.Rank, row.Name, row.Score, row.IsLocal, row.Index);
         }
 
         private void MakeRow(string rank, string name, string score, bool isLocal, int index)

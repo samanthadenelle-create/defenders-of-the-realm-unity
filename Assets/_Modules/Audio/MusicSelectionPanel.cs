@@ -47,6 +47,10 @@ namespace DeNelle.Audio
         private Transform _rowHost;   // the frame's body zone — rows rebuilt into it each open
         private bool _open;
 
+        // Strict MVVM (Silo E): ALL selection state/logic lives in the VM; this View
+        // reads vm.* only and never touches AudioService.
+        private JukeboxVM _vm;
+
         // PanelManager mutual-exclusion handle (one panel at a time).
         private DeNelle.Core.UI.PanelHandle _panelHandle;
 
@@ -57,6 +61,9 @@ namespace DeNelle.Audio
 
         private void OnDestroy()
         {
+            if (_vm != null) _vm.Changed -= RebuildRows;
+            _vm?.Dispose();
+            _vm = null;
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -110,20 +117,24 @@ namespace DeNelle.Audio
             hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
             _rowHost = hostGo.transform;
 
+            // VM FIRST — it resolves AudioService itself, so this View never touches a service.
+            _vm = JukeboxVM.CreateDefault(() => SetOpen(false));
+            _vm.Changed += RebuildRows;
+
             _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
         }
 
         // Rebuilds the track rows for the player's CURRENT ambient context, with a
         // checkmark on the selected one. Called every open so the set + selection
         // are always current.
+        // Renders purely from vm.* — no AudioService reads (strict MVVM, Silo E).
         private void RebuildRows()
         {
             if (_rowHost == null) return;
             for (int i = _rowHost.childCount - 1; i >= 0; i--)
                 Destroy(_rowHost.GetChild(i).gameObject);
 
-            var svc = AudioService.Instance;
-            if (svc == null)
+            if (_vm == null || !_vm.AudioReady)
             {
                 ElarionUiKit.Label(_rowHost, "Audio not ready.", 0.85f, 0.97f,
                     ElarionUi.Danger, ElarionUi.FontBody,
@@ -131,23 +142,16 @@ namespace DeNelle.Audio
                 return;
             }
 
-            AudioService.AmbientContext context = svc.CurrentAmbientContext;
-            MusicTrack chosen = svc.GetAmbientChoice(context);
-            // None => the player hasn't picked; the context default is effectively selected.
-            if (chosen == MusicTrack.None)
-                chosen = AudioService.DefaultTrackFor(context);
-
-            IReadOnlyList<MusicChoice> choices = AudioService.AmbientChoicesFor(context);
             const float rowH = 0.115f, gap = 0.02f;
             float top = 0.97f;
-            foreach (var choice in choices)
+            foreach (var row in _vm.Tracks)
             {
-                MusicTrack track = choice.Track;
-                bool isSelected = track == chosen;
+                MusicTrack track = row.Track;
+                bool isSelected = row.IsSelected;
                 // Selected row = Green family (the pack's own affirmative), rest Gray.
                 // ASCII marker (eyes-on 2026-07-03: ✓ is missing from the TMP font).
                 ElarionUiKit.BuildObsidianButton(_rowHost,
-                    (isSelected ? "»  " : "") + choice.DisplayName,
+                    (isSelected ? "»  " : "") + row.DisplayName,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     isSelected ? ElarionUiKit.ObsidianButtonColor.Green
                                : ElarionUiKit.ObsidianButtonColor.Gray,
@@ -158,14 +162,11 @@ namespace DeNelle.Audio
             }
         }
 
-        // Selecting a track persists the pick and previews it immediately (the
-        // service plays it live when in this ambient context and not mid-combat-cue).
+        // Selecting a track routes to the VM command (persists + previews); the VM
+        // raises Changed, which re-renders the checkmark via RebuildRows.
         private void OnPick(MusicTrack track)
         {
-            var svc = AudioService.Instance;
-            if (svc == null) return;
-            svc.SetAmbientChoice(svc.CurrentAmbientContext, track);
-            RebuildRows(); // refresh the checkmark
+            _vm?.SetAmbientChoice(track);
         }
 
         private void SetOpen(bool open)
@@ -184,7 +185,7 @@ namespace DeNelle.Audio
                     _modal.canvas.SetActive(false);
                     return;
                 }
-                RebuildRows();
+                _vm?.Rebuild();   // refresh context + selection on open (raises Changed -> RebuildRows)
             }
             else
             {

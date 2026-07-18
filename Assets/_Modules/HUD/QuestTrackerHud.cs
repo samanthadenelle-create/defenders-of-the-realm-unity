@@ -14,15 +14,14 @@
 // hasRoot=False / rootResolved=0x0) — UIDocument HUDs are unreliable in this project.
 // Builds its OWN ScreenSpaceOverlay Canvas (no PanelSettings/theme dependency).
 //
-// Data plumbing is UNCHANGED (presentation-only change): still reads QuestService +
-// QuestCatalog, still resolves the tracked quest (type-aware WO-454 fallback), still
-// repaints on QuestService.QuestChanged, still hides while any modal is open and
-// when no quest is active. Click → PanelRouter.Open(PanelId.RumorBoard), the exact
-// route the old "tap to open board" card used.
+// STRICT MVVM (Silo E, 2026-07-17): the tracked-quest RESOLUTION (type-aware WO-454
+// fallback) now lives in a QuestTrackerVM; this View binds it and reads vm.* only
+// (HasTrackedQuest + UpdateSnapshot), repainting on vm.Changed. It still hides while
+// any modal is open and when no quest is active. Click → PanelRouter.Open(
+// PanelId.RumorBoard), the exact route the old "tap to open board" card used.
 // Spawned by QuestTrackerHudBootstrap once a scene has a hero.
 // =============================================================================
 
-using DeNelle.Core.Quests;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
@@ -36,18 +35,17 @@ namespace DeNelle.HUD
         private GameObject _ui;
         private RectTransform _card;        // the icon-button medallion (visibility toggled on repaint)
         private GameObject _attentionDot;   // subtle gold update cue (luminance, not hue-meaning)
-        private bool _subscribed;
         private string _lastSnapshot;       // tracked-id|objective — detects quest updates for the dot
         private bool _painted;              // first Repaint never arms the dot
+
+        // Strict MVVM (Silo E): the tracked-quest RESOLUTION lives in the VM; this View
+        // reads vm.* only and never touches QuestService / QuestCatalog.
+        private QuestTrackerVM _vm;
 
         private void OnEnable()
         {
             Build();
-            if (QuestService.Instance != null)
-            {
-                QuestService.Instance.QuestChanged += Repaint;
-                _subscribed = true;
-            }
+            if (_vm != null) _vm.Changed += Repaint;
             // MODAL DISCIPLINE (eyes-on pass 2026-07-03: the tracker card overlapped the open
             // Gear Shop / Talents frames in the bot captures — this widget predates the kit's
             // hud-areas occupancy, so it must observe the arbiter itself): hide while any
@@ -58,9 +56,7 @@ namespace DeNelle.HUD
 
         private void OnDisable()
         {
-            if (_subscribed && QuestService.Instance != null)
-                QuestService.Instance.QuestChanged -= Repaint;
-            _subscribed = false;
+            if (_vm != null) _vm.Changed -= Repaint;
             PanelManager.OpenStateChanged -= SyncModalVisibility;
         }
 
@@ -69,12 +65,22 @@ namespace DeNelle.HUD
             if (_ui != null) _ui.SetActive(!PanelManager.AnyOpen);
         }
 
-        private void OnDestroy() { if (_ui != null) Destroy(_ui); }
+        private void OnDestroy()
+        {
+            if (_vm != null) _vm.Changed -= Repaint;
+            _vm?.Dispose();
+            _vm = null;
+            if (_ui != null) Destroy(_ui);
+        }
 
         // ── Build the uGUI canvas + the right-side card ──────────────────────────
         private void Build()
         {
             if (_ui != null) return;
+
+            // VM FIRST — it resolves QuestService + QuestCatalog itself and owns the
+            // WO-454 tracked-quest resolution, so this View never touches a service.
+            _vm = QuestTrackerVM.CreateDefault(null);
 
             _ui = new GameObject("QuestTrackerHudUI");
             _ui.transform.SetParent(transform, false);
@@ -180,51 +186,20 @@ namespace DeNelle.HUD
         }
 
         // ── Repaint = visibility + update-cue only (owner 2026-07-06: the icon carries
-        //    no text; the Rumor Board panel is the reading surface). Data plumbing —
-        //    QuestService / QuestCatalog reads + the WO-454 type-aware tracked-quest
-        //    fallback — is kept intact so the update cue (and any future reader) still
-        //    resolves the same quest the old card pinned. ──────────────────────────
+        //    no text; the Rumor Board panel is the reading surface). Renders from vm.*
+        //    ONLY — the WO-454 tracked-quest resolution lives in the VM (strict MVVM). ──
         private void Repaint()
         {
-            if (_card == null) return;
+            if (_card == null || _vm == null) return;
 
-            var svc = QuestService.Instance;
-            if (svc == null) { _card.gameObject.SetActive(false); return; }
-
-            var ids = svc.ActiveQuestIds();
-            if (ids == null || ids.Count == 0) { _card.gameObject.SetActive(false); return; }
-
-            // Player-tracked quest; fall back to an active quest until one is chosen.
-            string tracked = svc.TrackedId;
-            if (string.IsNullOrEmpty(tracked) || !svc.IsActive(tracked))
-            {
-                // WO-454 Phase 2: type-aware fallback — prefer a main/story quest over the
-                // rest, otherwise the first active. Empty Type normalizes to "story", so a
-                // catalog with no type data keeps the old "first active" behavior.
-                tracked = null;
-                string firstActive = null;
-                foreach (var id in ids)
-                {
-                    if (string.IsNullOrEmpty(id)) continue;
-                    if (firstActive == null) firstActive = id;
-                    var d = QuestCatalog.FindQuest(id);
-                    string ty = (d != null && !string.IsNullOrEmpty(d.Type))
-                        ? d.Type.Trim().ToLowerInvariant() : "story";
-                    if (ty == "main" || ty == "story") { tracked = id; break; }
-                }
-                if (tracked == null) tracked = firstActive;
-            }
-            if (tracked == null) { _card.gameObject.SetActive(false); return; }
+            if (!_vm.HasTrackedQuest) { _card.gameObject.SetActive(false); return; }
 
             _card.gameObject.SetActive(true);
 
             // Update cue: the tracked quest id or its current objective changed since the
             // last paint → light the gold dot. First paint never arms it (session start
             // is not "new"). Cleared in OpenBoard when the player reads the board.
-            var stage = svc.GetStage(tracked);
-            string objective = stage != null && !string.IsNullOrEmpty(stage.ObjectiveText)
-                ? stage.ObjectiveText : "";
-            string snapshot = tracked + "|" + objective;
+            string snapshot = _vm.UpdateSnapshot;
             if (_painted && _attentionDot != null && snapshot != _lastSnapshot)
                 _attentionDot.SetActive(true);
             _lastSnapshot = snapshot;
