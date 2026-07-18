@@ -193,12 +193,11 @@ namespace DeNelle.Village.Hero
                 _targetBodies.Add(ResolveBody(comp.gameObject));
             }
 
-            // WO-578: build the store AFTER the targets so OwnedWeapons/OwnedArmor UNION the gear each
-            // party member has auto-equipped (what the Forge surfaces as owned) with VillageInventory —
-            // making the Gear Preview drawer agree with the inventory + the Forge on "owned."
-            _store = new InventoryStore(VillageInventory.Instance, targets);
-
-            _vm = new EquipVM(_store, targets, onClose: Close);
+            // DI-in-Open (strict-MVVM): EquipVM.CreateDefault resolves the owned-store handle itself
+            // (VillageInventory.Instance, WO-578 UNIONed with the party targets) so this View no longer
+            // names VillageInventory.Instance. Targets stay View-resolved (they wrap live GameObjects the
+            // preview also needs). The factory returns the store so we keep the handle to dispose.
+            _vm = EquipVM.CreateDefault(targets, Close, out _store);
         }
 
         private static GameObject ResolveBody(GameObject root)
@@ -399,7 +398,7 @@ namespace DeNelle.Village.Hero
 
             // Bottom band: FILLED = the item's one-line grant (why it matters, WO-683 BESTOWS
             // read from the catalog defs); EMPTY = a pointer to the system that fills the slot.
-            string valueText = filled ? GrantLine(slotKey, item) : EmptySlotPointer(slotKey);
+            string valueText = filled ? (_vm != null ? _vm.GrantLineFor(slotKey) : "") : EmptySlotPointer(slotKey);
             if (!string.IsNullOrEmpty(valueText))
             {
                 var grantLbl = ElarionUiKit.Label(go.transform, valueText, 0.05f, 0.23f,
@@ -410,27 +409,8 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // The one-line grant a filled card shows ("+25% dmg" / "+35% def +12 hp") — a
-        // presentation read of the same catalog defs this view already resolves for slot art.
-        // Returns "" when no def resolves (accessories have no stat def yet) — no fake stats.
-        private static string GrantLine(string slotKey, ItemVM item)
-        {
-            if (slotKey == EquipVM.SlotMainhand)
-            {
-                var w = GearCatalog.FindWeapon(item.Id);
-                if (w == null) return "";
-                int dmgPct = Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult) - 1f) * 100f);
-                return "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + w.reach.ToString("0.#") + "m" : "");
-            }
-            if (slotKey == EquipVM.SlotChest || slotKey == EquipVM.SlotOffHand)
-            {
-                var a = GearCatalog.FindArmor(item.Id);
-                if (a == null) return "";
-                int defPct = Mathf.RoundToInt(Mathf.Clamp(a.defense, 0f, 0.9f) * 100f);
-                return "+" + defPct + "% def" + (a.hpBonus > 0f ? "  +" + a.hpBonus.ToString("0.#") + " hp" : "");
-            }
-            return "";
-        }
+        // GrantLine MOVED to EquipVM.GrantLineFor (strict-MVVM: it read GearCatalog in the View).
+        // BuildGearSlot now reads the filled slot's grant line off the bound VM — verbatim math.
 
         // EMPTY slots route the player to the system that fills them (owner spec: a pointer,
         // never a bare "Empty"). ASCII only.
@@ -892,29 +872,16 @@ namespace DeNelle.Village.Hero
         // art keep their sensible glyph (heart/compass/shield), never the gold inventory bag.
         private static Sprite ResolveSlotItemArt(string slotKey, ItemVM item)
         {
-            // OFF-HAND is shields-only (V1): resolve SHIELD art via ForArmor (which has the shield
-            // keyword handling), NEVER ForWeapon. The off-hand ItemVM is tagged IconRoleWeapon, and
-            // ForWeapon falls through to a SWORD sprite for a shield id — owner bug "offhand shows a
-            // sword". Null -> caller falls back to the shield glyph (a shield, never a sword).
+            // OFF-HAND is shields-only (V1): resolve SHIELD art via the ARMOR role (GearIconCatalog
+            // maps armor -> ItemIconCatalog.ForArmor, which has the shield keyword handling), NEVER
+            // the weapon role. The off-hand ItemVM is tagged IconRoleWeapon, and the weapon path falls
+            // through to a SWORD sprite for a shield id — owner bug "offhand shows a sword". Null ->
+            // caller falls back to the shield glyph (a shield, never a sword).
             if (slotKey == EquipVM.SlotOffHand)
-            {
-                var sh = GearCatalog.FindArmor(item.Id);
-                return sh != null ? ItemIconCatalog.ForArmor(sh) : null;
-            }
-            switch (item.IconRole)
-            {
-                case EquipVM.IconRoleWeapon:
-                {
-                    var w = GearCatalog.FindWeapon(item.Id);
-                    return w != null ? ItemIconCatalog.ForWeapon(w) : null;
-                }
-                case EquipVM.IconRoleArmor:
-                {
-                    var a = GearCatalog.FindArmor(item.Id);
-                    return a != null ? ItemIconCatalog.ForArmor(a) : null;
-                }
-            }
-            return null;
+                return GearIconCatalog.Resolve(EquipVM.IconRoleArmor, item.Id);
+            // Weapon/armor slots resolve by the item's own role through the presentation seam (this
+            // View no longer names GearCatalog); accessories have no sheet art -> null (glyph fallback).
+            return GearIconCatalog.Resolve(item.IconRole, item.Id);
         }
 
         private static string SlotIconName(string slotKey)

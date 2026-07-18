@@ -102,6 +102,21 @@ namespace DeNelle.Village.Hero
         // Type filter for the SELL list (Buy is vendor-locked). Default = All.
         private GearKind _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;
 
+        /// <summary>
+        /// DI-in-Open factory (UI_MVVM_MIGRATION_PLAN §1 step 5): resolves the IEconomy handle
+        /// (EconomyService.Instance) ITSELF so the View never names the economy singleton — the
+        /// sole resolution site. The equip target + Close/refresh callbacks stay View-supplied
+        /// (they wrap live scene objects the pure VM can't hold). Mirrors BuildingUpgradeVM.CreateDefault.
+        /// </summary>
+        public static ShopVM CreateDefault(string vendorContext,
+                                           string displayName = null,
+                                           IShopEquipTarget equip = null,
+                                           Action onClose = null,
+                                           Action<ShopVM> onEquipRefreshHero = null)
+        {
+            return new ShopVM(vendorContext, EconomyService.Instance, displayName, equip, onClose, onEquipRefreshHero);
+        }
+
         public ShopVM(string vendorContext, IEconomy economy,
                       string displayName = null,
                       IShopEquipTarget equip = null,

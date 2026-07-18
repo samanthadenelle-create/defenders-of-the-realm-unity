@@ -32,12 +32,13 @@ namespace DeNelle.Village
             // build failure; if owned>0 but slots=0 the projection is broken; if slots>0 but no
             // content children get built (logged after the grid pass) it is built-but-invisible.
             int owned = -1;
-            bool invPresent = DeNelle.Village.Crafting.VillageInventory.Instance != null;
             try { owned = _store != null ? _store.OwnedCounts.Count : -1; } catch { owned = -2; }
             int slotCount = (_vm != null && _vm.Slots != null) ? _vm.Slots.Count : -1;
+            // The inventory model is resolved by InventoryVM.CreateDefault now; this View reads the
+            // store presence it holds, never VillageInventory.Instance (strict-MVVM: no state read here).
             FlowTrace.Step("Inventory",
                 $"RebuildGrid tab={_vm?.ActiveTab} store={(_store == null ? "NULL" : "ok")} " +
-                $"villageInventory={(invPresent ? "present" : "NULL")} ownedCounts={owned} slots={slotCount}");
+                $"inventorySource={(_store == null ? "NULL" : "store-ok")} ownedCounts={owned} slots={slotCount}");
 
             // WO-582: ALWAYS render a GRID (owner: "still no grids"). The grid is a fixed set of
             // styled Obsidian Inventory_Slot frames; owned items drop into the first cells and the
@@ -192,14 +193,15 @@ namespace DeNelle.Village
             {
                 case InventoryVM.IconRoleWeapon:
                 {
-                    var w = GearCatalog.FindWeapon(id);
-                    var s = ItemIconCatalog.ForWeapon(w);
+                    // Icon resolves through the presentation seam (GearIconCatalog does the
+                    // GearCatalog.Find*+ItemIconCatalog.For* pair internally), so this View
+                    // never names GearCatalog. Pack-icon fallback kept.
+                    var s = GearIconCatalog.Resolve(InventoryVM.IconRoleWeapon, id);
                     return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
                 }
                 case InventoryVM.IconRoleArmor:
                 {
-                    var a = GearCatalog.FindArmor(id);
-                    var s = ItemIconCatalog.ForArmor(a);
+                    var s = GearIconCatalog.Resolve(InventoryVM.IconRoleArmor, id);
                     return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
                 }
                 case InventoryVM.IconRolePotion:
@@ -216,8 +218,10 @@ namespace DeNelle.Village
         {
             switch (role)
             {
-                case InventoryVM.IconRoleWeapon: return WeaponTypeGlyph(GearCatalog.FindWeapon(id));
-                case InventoryVM.IconRoleArmor:  return ArmorTypeGlyph(GearCatalog.FindArmor(id));
+                // Weapon/armor glyph fallback resolves through the seam too (GearIconCatalog.Glyph
+                // does the GearCatalog.Find* + type-glyph internally) so the View drops GearCatalog.
+                case InventoryVM.IconRoleWeapon: return GearIconCatalog.Glyph(InventoryVM.IconRoleWeapon, id);
+                case InventoryVM.IconRoleArmor:  return GearIconCatalog.Glyph(InventoryVM.IconRoleArmor, id);
                 case InventoryVM.IconRolePotion: return ConsumableTypeGlyph(id, ConsumableNameFor(id));
             }
             return "?";

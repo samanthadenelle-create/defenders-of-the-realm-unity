@@ -110,6 +110,21 @@ namespace DeNelle.Tests.EditMode
             public void UnequipAccessory(string slot) { if (slot == "amulet") EquippedAmulet = null; else EquippedRing = null; EquipChanged?.Invoke(); }
         }
 
+        // Minimal IEconomy so the footer-wallet projection (InventoryVM.Coins/Crystals) is testable
+        // over a fake — no EconomyService / GameState singleton.
+        private sealed class FakeEconomy : IEconomy
+        {
+            public int Coins { get; set; }
+            public int Wood { get; set; }
+            public int Iron { get; set; }
+            public int Food { get; set; }
+            public int Crystals { get; set; }
+            public event Action<ResourceSnapshot> OnChanged;
+            public bool CanAfford(ResourceCost cost) => Coins >= cost.Coins;
+            public bool TrySpend(ResourceCost cost) { if (!CanAfford(cost)) return false; Coins -= cost.Coins; OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals)); return true; }
+            public void Grant(ResourceCost amount) { Coins += amount.Coins; OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals)); }
+        }
+
         private static FakeStore SeedStore()
         {
             var s = new FakeStore();
@@ -257,6 +272,32 @@ namespace DeNelle.Tests.EditMode
 
             Assert.That(changed, Is.GreaterThan(0), "store Changed must propagate to the VM");
             Assert.That(vm.Slots.Count, Is.EqualTo(3), "the new owned weapon must appear");
+        }
+
+        [Test]
+        public void wallet_projects_from_injected_economy()
+        {
+            // WO icon-leak/DI: the footer wallet now reads InventoryVM.Coins/Crystals (sourced from
+            // the injected IEconomy) instead of GameStateService in the View. Lock the projection.
+            var store = SeedStore();
+            var eco = new FakeEconomy { Coins = 1234, Crystals = 56 };
+            using var vm = new InventoryVM(store, null, null, eco);
+            Assert.That(vm.Coins, Is.EqualTo(1234), "footer gold projects from the injected economy");
+            Assert.That(vm.Crystals, Is.EqualTo(56), "footer crystals project from the injected economy");
+        }
+
+        [Test]
+        public void create_default_returns_store_and_zero_wallet_without_economy()
+        {
+            // CreateDefault resolves VillageInventory.Instance + EconomyService.Instance itself (both
+            // null in EditMode), so the View drops those singleton reads. Store is returned to dispose;
+            // a null economy degrades to a 0/0 wallet (the same fallback the old footer showed).
+            using var vm = InventoryVM.CreateDefault(null, () => { }, out var store);
+            Assert.That(store, Is.Not.Null, "CreateDefault must return the built store for the View to dispose");
+            Assert.That(vm.Coins, Is.EqualTo(0), "null economy -> 0 gold");
+            Assert.That(vm.Crystals, Is.EqualTo(0), "null economy -> 0 crystals");
+            Assert.That(vm.Tabs.Count, Is.EqualTo(4), "the four tabs still project from the (empty) store");
+            store.Dispose();
         }
 
         [Test]

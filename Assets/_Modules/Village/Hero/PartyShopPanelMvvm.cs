@@ -244,18 +244,12 @@ namespace DeNelle.Village.Hero
                 levels.Add(ResolveLevel(comp.gameObject));
             }
 
-            // WO-578: build the store AFTER the members so OwnedWeapons/OwnedArmor UNION the auto-equipped
-            // gear (what the Forge surfaces as owned) with VillageInventory — store/Forge/Preview agree.
-            _store = new InventoryStore(VillageInventory.Instance, members);
-
-            var economy = EconomyService.Instance;   // resolved at the open-site, injected into the pure VM
-            // UI review 07: the header read "Gear Shop" (the VM's no-context fallback). This IS the
-            // Party Shop surface — default the title to "Party Shop" when opened with no vendor/displayName;
-            // a registered vendor still supplies its own authored name.
-            string headerName = !string.IsNullOrEmpty(_displayName)
-                ? _displayName
-                : (string.IsNullOrEmpty(_vendorContext) ? "Party Shop" : null);
-            _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, headerName, onClose: Close, lockedTab: _lockMode);
+            // DI-in-Open (strict-MVVM): PartyShopVM.CreateDefault resolves the economy + owned-store
+            // handles itself (EconomyService.Instance + VillageInventory.Instance, WO-578 UNIONed with
+            // the members — store/Forge/Preview agree) so this View names neither singleton. Members/
+            // levels stay View-resolved (they wrap live GameObjects). The factory returns the store so we
+            // keep the handle to dispose, and composes the "Party Shop" no-context header default.
+            _vm = PartyShopVM.CreateDefault(_vendorContext, _displayName, members, levels, Close, _lockMode, out _store);
         }
 
         private static int ResolveLevel(GameObject go)
@@ -1096,32 +1090,19 @@ namespace DeNelle.Village.Hero
         private void BuildPreviewModelOrFallback(string id, PartyShopDetail detail, ItemVM? item)
         {
             if (string.IsNullOrEmpty(id)) { ShowSpriteFallback(detail, item, "no-id"); return; }
-            // WO-598: goods/jeweler rows (consumable/material/gem/accessory) have no 3D gear
-            // model - straight to the 2D iconPath sprite / glyph, never a dead weapon lookup.
-            if (detail.IconRole != PartyShopVM.IconRoleWeapon &&
-                detail.IconRole != PartyShopVM.IconRoleArmor)
+            // Preview MODEL descriptor comes from the VM (PreviewModelFor resolves the gear def's
+            // prefabPath + addressable flag) so this View never names GearCatalog. Non-gear rows
+            // (goods/jeweler/craftable) come back IsGear=false -> straight to the 2D icon/glyph.
+            var previewModel = _vm != null ? _vm.PreviewModelFor(id) : default;
+            if (!previewModel.IsGear)
             {
                 ShowSpriteFallback(detail, item, "non-gear");
                 return;
             }
             if (_rigModelId == id && (_rigVisual != null || _rigHandleOpen)) return;   // already mounted
 
-            // Resolve the def for prefabPath via the same key the rows use (role-keyed catalog find).
-            bool isArmor = detail.IconRole == PartyShopVM.IconRoleArmor;
-            string prefabPath = null;
-            bool addressable = false;
-            if (isArmor)
-            {
-                var a = GearCatalog.FindArmor(id);
-                prefabPath = a?.prefabPath;
-                addressable = ArmorLoadsViaAddressable(a);
-            }
-            else
-            {
-                var w = GearCatalog.FindWeapon(id);
-                prefabPath = w?.prefabPath;
-                addressable = WeaponLoadsViaAddressable(w);
-            }
+            string prefabPath = previewModel.PrefabPath;
+            bool addressable = previewModel.Addressable;
 
             if (string.IsNullOrEmpty(prefabPath))
             {
@@ -1154,34 +1135,8 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // Mirror of EquipmentController.LoadsViaAddressable (which is private - replicated, NOT forked;
-        // see report). Addressable when loadVia=="addressable" or prefabPath starts "gear/".
-        private static bool WeaponLoadsViaAddressable(WeaponDef def)
-        {
-            if (def == null) return false;
-            // WO-536: Blink gear was JUNKED in the 2026-06-22 pivot (ff.blinkarmor OFF) and its
-            // addressables no longer resolve -> the load throws + spams [Flow:Store] every preview.
-            // Route junked Blink ids to the sprite fallback. Flag-safe: re-enabling ff.blinkarmor
-            // restores the addressable path.
-            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
-                def.id.StartsWith("blink_", System.StringComparison.OrdinalIgnoreCase)) return false;
-            if (!string.IsNullOrEmpty(def.loadVia) &&
-                def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
-            return !string.IsNullOrEmpty(def.prefabPath) &&
-                   def.prefabPath.StartsWith("gear/", System.StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool ArmorLoadsViaAddressable(ArmorDef def)
-        {
-            if (def == null) return false;
-            // WO-536: junked-Blink armor (ff.blinkarmor OFF) -> sprite fallback, no dead addressable load.
-            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
-                def.id.StartsWith("blink_", System.StringComparison.OrdinalIgnoreCase)) return false;
-            if (!string.IsNullOrEmpty(def.loadVia) &&
-                def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
-            return !string.IsNullOrEmpty(def.prefabPath) &&
-                   def.prefabPath.StartsWith("gear/", System.StringComparison.OrdinalIgnoreCase);
-        }
+        // (Weapon/ArmorLoadsViaAddressable MOVED to PartyShopVM.PreviewModelFor — the gear-def read
+        //  left the View for the VM per strict-MVVM. The View now consumes PartyShopPreviewModel.)
 
         // Async Addressables load (mirror BeginAddressableEquip): guarded, stale-checked via _rigGeneration,
         // released on swap/close. On any miss, fall back to the 2D sprite so the preview never blanks.
@@ -1470,14 +1425,14 @@ namespace DeNelle.Village.Hero
             string role = detail.HasValue ? detail.Value.IconRole : item.IconRole;
             if (role == PartyShopVM.IconRoleArmor)
             {
-                var a = GearCatalog.FindArmor(item.Id);
-                var s = ItemIconCatalog.ForArmor(a);
+                // Presentation seam (no GearCatalog in the View): GearIconCatalog does the
+                // Find*+ItemIconCatalog.For* pair internally. Pack-icon fallback kept.
+                var s = GearIconCatalog.Resolve(PartyShopVM.IconRoleArmor, item.Id);
                 return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
             }
             if (role == PartyShopVM.IconRoleWeapon)
             {
-                var w = GearCatalog.FindWeapon(item.Id);
-                var s = ItemIconCatalog.ForWeapon(w);
+                var s = GearIconCatalog.Resolve(PartyShopVM.IconRoleWeapon, item.Id);
                 return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
             }
             // WO-598 goods/jeweler bands: try the sliced item-icon art by id/name; a miss

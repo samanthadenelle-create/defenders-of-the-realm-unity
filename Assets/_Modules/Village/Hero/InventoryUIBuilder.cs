@@ -112,23 +112,11 @@ namespace DeNelle.Village
             // once InventoryVM exposes a sort/filter the grid can project. The wallet wells below
             // keep their right-aligned positions; the freed left of the footer simply stays clear.
 
-            int coins = 0, crystals = 0;
-            try
-            {
-                var s = DeNelle.Core.State.GameStateService.Instance;
-                if (s != null && s.State != null)
-                {
-                    coins = s.State.Resources.Coins;
-                    crystals = s.State.Resources.Crystals;
-                }
-            }
-            catch (System.Exception ex)
-            {
-                // No silent failure (§12): a state read that throws leaves the footer at 0/0, but
-                // it must be logged — never swallowed blind.
-                FlowTrace.Warn("Inventory",
-                    $"BuildFooterBar: resource read threw ({ex.GetType().Name}: {ex.Message}) — wallet shows 0.");
-            }
+            // Wallet balances come from the bound VM (InventoryVM.Coins/Crystals, sourced from the
+            // injected IEconomy which reads GameState.Resources) — this View never reads
+            // GameStateService directly (strict-MVVM). Null-safe: a missing VM shows 0/0.
+            int coins    = _vm != null ? _vm.Coins : 0;
+            int crystals = _vm != null ? _vm.Crystals : 0;
 
             // WO-713 A.6 + the appended owner ruling (2026-07-13): the footer is the STANDARD
             // kit chip row (CurrencyChip owns ALL currency presentation — CompactNumber,

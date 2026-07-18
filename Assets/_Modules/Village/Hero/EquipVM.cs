@@ -24,6 +24,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Village.Crafting;   // VillageInventory (resolved in CreateDefault, the sole site)
 
 namespace DeNelle.Village.Hero
 {
@@ -70,6 +71,19 @@ namespace DeNelle.Village.Hero
         private readonly List<SlotVM> _equipSlots = new List<SlotVM>();
         private readonly List<ItemVM> _compatible = new List<ItemVM>();
         private readonly List<EquipStat> _stats = new List<EquipStat>();
+
+        /// <summary>
+        /// DI-in-Open factory (UI_MVVM_MIGRATION_PLAN §1 step 5): resolves the owned-store handle
+        /// ITSELF (VillageInventory.Instance, UNIONed with the party targets — WO-578) so the View
+        /// no longer names VillageInventory.Instance. The party targets stay View-supplied (they wrap
+        /// live scene GameObjects the pure VM can't hold). Returns the built store via
+        /// <paramref name="store"/> so the View keeps its handle to dispose.
+        /// </summary>
+        public static EquipVM CreateDefault(IReadOnlyList<IEquipTarget> targets, Action onClose, out InventoryStore store)
+        {
+            store = new InventoryStore(VillageInventory.Instance, targets);
+            return new EquipVM(store, targets, onClose);
+        }
 
         public EquipVM(IInventoryStore store,
                        IReadOnlyList<IEquipTarget> targets,
@@ -175,6 +189,36 @@ namespace DeNelle.Village.Hero
         public int ActiveTargetIndex => _activeTargetIndex;
 
         public string Status { get; private set; }
+
+        /// <summary>
+        /// The one-line GRANT a FILLED slot shows ("+25% dmg" / "+35% def  +12 hp"), keyed by slot.
+        /// Moved out of EquipmentPanel.GrantLine (which read GearCatalog in the View) — the projection
+        /// now lives here (banned symbols are legit inside a VM). Returns "" when the slot is empty or
+        /// no def resolves (accessories have no stat def yet — no fake stats). Verbatim math.
+        /// </summary>
+        public string GrantLineFor(string slotKey)
+        {
+            string id = null;
+            foreach (var s in _equipSlots)
+                if (s.SlotKey == slotKey && s.Content.HasValue) { id = s.Content.Value.Id; break; }
+            if (string.IsNullOrEmpty(id)) return "";
+
+            if (slotKey == SlotMainhand)
+            {
+                var w = GearCatalog.FindWeapon(id);
+                if (w == null) return "";
+                int dmgPct = RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f);
+                return "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + Fmt1(w.reach) + "m" : "");
+            }
+            if (slotKey == SlotChest || slotKey == SlotOffHand)
+            {
+                var a = GearCatalog.FindArmor(id);
+                if (a == null) return "";
+                int defPct = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
+                return "+" + defPct + "% def" + (a.hpBonus > 0f ? "  +" + Fmt1(a.hpBonus) + " hp" : "");
+            }
+            return "";
+        }
 
         // ── Commands ────────────────────────────────────────────────────────────
 
@@ -419,5 +463,7 @@ namespace DeNelle.Village.Hero
             RoundToInt(cur) + " / " + RoundToInt(max);
 
         private static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
+        private static float Max(float a, float b) => a > b ? a : b;
+        private static string Fmt1(float v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
     }
 }

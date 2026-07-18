@@ -27,6 +27,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Village.Crafting;   // VillageInventory (resolved in CreateDefault, the sole site)
 
 namespace DeNelle.Village.Hero
 {
@@ -90,11 +91,29 @@ namespace DeNelle.Village.Hero
 
         private readonly IInventoryStore _store;
         private readonly IEquipTarget _equip;        // may be null (no hero / tests)
+        private readonly IEconomy _economy;          // wallet readout for the footer; may be null (tests)
         private readonly Action _onClose;            // View supplies how to dismiss; may be null
 
         private readonly Action _storeHandler;
         private readonly Action _equipHandler;
         private bool _disposed;
+
+        /// <summary>
+        /// DI-in-Open factory (UI_MVVM_MIGRATION_PLAN §3): resolves the inventory model handles
+        /// ITSELF — the live <see cref="VillageInventory"/> (wrapped in the returned store, so the
+        /// View no longer reads VillageInventory.Instance) + the wallet economy (EconomyService.Instance,
+        /// so the footer no longer reads GameStateService). The equip target stays View-supplied (it
+        /// wraps the live hero loadout). Returns the built store via <paramref name="store"/> so the
+        /// View keeps its handle to dispose.
+        /// </summary>
+        public static InventoryVM CreateDefault(IEquipTarget equip, Action onClose, out InventoryStore store)
+        {
+            // Mirror HeroInventoryController's WO-578 store build: UNION the active hero's equip
+            // target with VillageInventory so OwnedWeapons/OwnedArmor agree with the Forge on "owned".
+            store = new InventoryStore(VillageInventory.Instance,
+                equip != null ? new List<IEquipTarget> { equip } : null);
+            return new InventoryVM(store, equip, onClose, EconomyService.Instance);
+        }
 
         // Active list (owned items in the active tab) + per-id detail payload + kind.
         private readonly List<ItemVM> _slots = new List<ItemVM>();
@@ -107,10 +126,12 @@ namespace DeNelle.Village.Hero
 
         public InventoryVM(IInventoryStore store,
                            IEquipTarget equip = null,
-                           Action onClose = null)
+                           Action onClose = null,
+                           IEconomy economy = null)
         {
             _store = store;
             _equip = equip;
+            _economy = economy;
             _onClose = onClose;
 
             if (_store != null)
@@ -175,6 +196,12 @@ namespace DeNelle.Village.Hero
             SelectedId != null && _details.TryGetValue(SelectedId, out var d) ? d : (InventoryDetail?)null;
 
         public string Status { get; private set; }
+
+        /// <summary>Live wallet readout for the footer (the View reads these instead of GameStateService).
+        /// Sourced from the injected IEconomy, which reads GameState.Resources — the SAME values the
+        /// footer showed before, so behaviour is unchanged. 0 when no economy is bound (tests).</summary>
+        public int Coins    => _economy?.Coins ?? 0;
+        public int Crystals => _economy?.Crystals ?? 0;
 
         // ── Commands ────────────────────────────────────────────────────────────
 

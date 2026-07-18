@@ -138,6 +138,27 @@ namespace DeNelle.Village.Hero
         }
     }
 
+    /// <summary>
+    /// The 3D preview MODEL descriptor for a row (WO-501 preview pane), projected by the VM so the
+    /// View resolves the prefab WITHOUT naming GearCatalog (strict-MVVM). IsGear=false routes the
+    /// preview straight to the 2D icon/glyph (non-gear rows, or a missing/def-less id); when IsGear
+    /// is true the View loads <see cref="PrefabPath"/> via Addressables when <see cref="Addressable"/>
+    /// else Resources. An empty PrefabPath degrades to the 2D sprite (most gear has no model today).
+    /// </summary>
+    public readonly struct PartyShopPreviewModel
+    {
+        public readonly bool IsGear;
+        public readonly string PrefabPath;
+        public readonly bool Addressable;
+
+        public PartyShopPreviewModel(bool isGear, string prefabPath, bool addressable)
+        {
+            IsGear = isGear;
+            PrefabPath = prefabPath;
+            Addressable = addressable;
+        }
+    }
+
     public sealed class PartyShopVM : IPanelViewModel, IDisposable
     {
         // -- Icon role keys (ItemVM.IconRole) - the View maps these to the real sprite source --
@@ -178,6 +199,28 @@ namespace DeNelle.Village.Hero
 
         // The store TYPE this vendor sells (weapon shop -> Weapon, armor shop -> Armor), from the contract.
         private readonly GearKind _storeKinds;
+
+        /// <summary>
+        /// DI-in-Open factory (UI_MVVM_MIGRATION_PLAN §1 step 5): resolves the economy + owned-store
+        /// handles ITSELF (EconomyService.Instance + VillageInventory.Instance) so the View names
+        /// neither singleton. The party members/levels stay View-supplied (they wrap live scene
+        /// GameObjects the pure VM can't hold). The store is returned via <paramref name="store"/> so
+        /// the View keeps its handle to dispose. Header default ("Party Shop" for a no-context open)
+        /// composes here, matching the old View-side computation.
+        /// </summary>
+        public static PartyShopVM CreateDefault(string vendorContext, string displayName,
+                                                IReadOnlyList<IEquipTarget> members,
+                                                IReadOnlyList<int> memberLevels,
+                                                Action onClose, PartyShopTab? lockedTab,
+                                                out InventoryStore store)
+        {
+            store = new InventoryStore(VillageInventory.Instance, members);
+            string headerName = !string.IsNullOrEmpty(displayName)
+                ? displayName
+                : (string.IsNullOrEmpty(vendorContext) ? "Party Shop" : null);
+            return new PartyShopVM(vendorContext, EconomyService.Instance, store, members, memberLevels,
+                headerName, onClose, lockedTab);
+        }
 
         public PartyShopVM(string vendorContext,
                            IEconomy economy,
@@ -357,6 +400,53 @@ namespace DeNelle.Village.Hero
         /// <summary>Detail payload for any row id (View renders the per-row stats/delta from this). Null when absent.</summary>
         public PartyShopDetail? DetailFor(string id) =>
             id != null && _rowDetails.TryGetValue(id, out var d) ? d : (PartyShopDetail?)null;
+
+        /// <summary>
+        /// The 3D preview MODEL descriptor for a row id (WO-501 preview pane). Resolves the gear def's
+        /// prefabPath + addressable flag HERE (banned symbols are legit inside a VM) so the View drives
+        /// the rig WITHOUT naming GearCatalog. Non-gear rows (or a missing/def-less id) return IsGear=false
+        /// -> the View shows the 2D icon/glyph. Verbatim logic moved from PartyShopPanelMvvm.
+        /// </summary>
+        public PartyShopPreviewModel PreviewModelFor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return new PartyShopPreviewModel(false, null, false);
+            string role = _rowDetails.TryGetValue(id, out var d) ? d.IconRole : null;
+            if (role != IconRoleWeapon && role != IconRoleArmor)
+                return new PartyShopPreviewModel(false, null, false);   // goods/jeweler/craftable -> 2D
+
+            if (role == IconRoleArmor)
+            {
+                var a = GearCatalog.FindArmor(id);
+                return new PartyShopPreviewModel(true, a?.prefabPath, ArmorLoadsViaAddressable(a));
+            }
+            var w = GearCatalog.FindWeapon(id);
+            return new PartyShopPreviewModel(true, w?.prefabPath, WeaponLoadsViaAddressable(w));
+        }
+
+        // Mirror of EquipmentController.LoadsViaAddressable (replicated, NOT forked) — MOVED here from
+        // PartyShopPanelMvvm so the def read leaves the View. Addressable when loadVia=="addressable"
+        // or prefabPath starts "gear/"; junked-Blink ids (ff.blinkarmor OFF) route to the 2D fallback.
+        private static bool WeaponLoadsViaAddressable(WeaponDef def)
+        {
+            if (def == null) return false;
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
+                def.id.StartsWith("blink_", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrEmpty(def.loadVia) &&
+                def.loadVia.Equals("addressable", StringComparison.OrdinalIgnoreCase)) return true;
+            return !string.IsNullOrEmpty(def.prefabPath) &&
+                   def.prefabPath.StartsWith("gear/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ArmorLoadsViaAddressable(ArmorDef def)
+        {
+            if (def == null) return false;
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
+                def.id.StartsWith("blink_", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrEmpty(def.loadVia) &&
+                def.loadVia.Equals("addressable", StringComparison.OrdinalIgnoreCase)) return true;
+            return !string.IsNullOrEmpty(def.prefabPath) &&
+                   def.prefabPath.StartsWith("gear/", StringComparison.OrdinalIgnoreCase);
+        }
 
         /// <summary>The selected row's ItemVM (price/affordable/owned/equipped), or null. Pure lookup
         /// into the built _items by SelectedId - the View binds the preview price/buttons off this.</summary>

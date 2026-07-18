@@ -88,10 +88,11 @@ namespace DeNelle.Village.Hero
 
             BuildChrome(displayName);
 
-            // Construct the ViewModel: inject EconomyService.Instance as the IEconomy seam, the
-            // active hero loadout as the equip target, and the View's Close as the dismiss command.
-            var economy = EconomyService.Instance;   // resolved at the open-site, injected into the pure VM
-            _vm = new ShopVM(_vendorContext, economy, displayName,
+            // Construct the ViewModel via its DI-in-Open factory: ShopVM.CreateDefault resolves
+            // the IEconomy handle (EconomyService.Instance) ITSELF (the sole resolution site), so
+            // this View never names the economy singleton. The active-hero equip target + the
+            // Close/refresh callbacks are the View-side seams the factory takes.
+            _vm = ShopVM.CreateDefault(_vendorContext, displayName,
                              new LoadoutEquipTarget(this),
                              onClose: Close,
                              onEquipRefreshHero: _ => ResolveActiveHero());
@@ -252,14 +253,15 @@ namespace DeNelle.Village.Hero
             {
                 case ShopVM.IconRoleWeapon:
                 {
-                    var w = GearCatalog.FindWeapon(id);
-                    var s = ItemIconCatalog.ForWeapon(w);
+                    // Icon resolves from the VM's role+id through the presentation seam
+                    // (GearIconCatalog does the GearCatalog.Find*+ItemIconCatalog.For* pair
+                    // internally, so this View never names GearCatalog). Pack-icon fallback kept.
+                    var s = GearIconCatalog.Resolve(ShopVM.IconRoleWeapon, id);
                     return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
                 }
                 case ShopVM.IconRoleArmor:
                 {
-                    var a = GearCatalog.FindArmor(id);
-                    var s = ItemIconCatalog.ForArmor(a);
+                    var s = GearIconCatalog.Resolve(ShopVM.IconRoleArmor, id);
                     return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
                 }
                 case ShopVM.IconRolePotion:

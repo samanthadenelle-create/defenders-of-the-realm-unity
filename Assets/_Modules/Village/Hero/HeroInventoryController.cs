@@ -220,16 +220,17 @@ namespace DeNelle.Village
             string hero;
             try { hero = GameObject.FindWithTag("Player") != null ? "Player-found" : "Player-MISSING"; }
             catch { hero = "Player-tag-error"; }
-            int weapons = 0, armors = 0;
-            try { weapons = GearCatalog.AllWeapons().Count; armors = GearCatalog.AllArmors().Count; }
-            catch { /* catalog read failed — reported as 0 below */ }
+            // Owned-count via the store (the inventory model handle the VM resolved) instead of a
+            // direct GearCatalog read — strict-MVVM keeps the catalog out of this View.
+            int ownedCount = -1;
+            try { ownedCount = _store != null ? _store.OwnedCounts.Count : -1; } catch { /* store not ready */ }
             string job = "?";
             try { job = HeroJob; } catch { /* loadout/abilities not ready */ }
             return "[state hero=" + hero
                    + " loadout=" + (_loadout != null ? "present" : "NULL")
                    + " equippedArmor=" + (_loadout != null && _loadout.EquippedArmor != null ? _loadout.EquippedArmor.id : "none")
                    + " job=" + job
-                   + " catalog(weapons=" + weapons + ",armor=" + armors + ")]";
+                   + " store(owned=" + ownedCount + ")]";
         }
 
         // Runs a UI-rebuild step, swallowing+logging any exception so one bad
@@ -290,11 +291,11 @@ namespace DeNelle.Village
             _equipTarget = _loadout != null
                 ? new GearLoadoutEquipTarget(_loadout, HeroDisplayName(HeroJob), HeroJob)
                 : null;
-            // WO-578: feed the active hero's equip target into the store so OwnedWeapons/OwnedArmor
-            // UNION the auto-equipped gear (what the Forge shows as owned) with VillageInventory.
-            _store = new InventoryStore(DeNelle.Village.Crafting.VillageInventory.Instance,
-                _equipTarget != null ? new System.Collections.Generic.List<IEquipTarget> { _equipTarget } : null);
-            _vm = new InventoryVM(_store, _equipTarget, onClose: Close);
+            // DI-in-Open (strict-MVVM): InventoryVM.CreateDefault resolves the inventory model itself
+            // (VillageInventory.Instance + EconomyService.Instance) — this View no longer names those
+            // singletons. It still builds the equip target (which wraps the live hero loadout) and
+            // keeps the returned store handle to dispose. WO-578 store UNION preserved inside the factory.
+            _vm = InventoryVM.CreateDefault(_equipTarget, Close, out _store);
         }
 
         private void DisposeViewModel()
@@ -436,44 +437,10 @@ namespace DeNelle.Village
         // When real per-type art lands, swap these returns for sprite icons (mirror
         // PetPortraitRenderer's render-to-Sprite); the call sites already centralise
         // here. TYPE GLYPHS are the agreed acceptable bar ("just something to denote").
-        private static string WeaponTypeGlyph(WeaponDef w)
-        {
-            if (w == null) return "?";
-            string k = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
-            // Most specific first.
-            if (Has(k, "dagger", "knife", "dirk", "stiletto"))          return "D"; // dagger
-            if (Has(k, "bow", "recurve", "longbow", "shortbow"))        return "B"; // bow / ranged shot
-            if (Has(k, "wand"))                                         return "W"; // wand
-            if (Has(k, "staff", "scepter", "sceptre", "stave", "rod"))  return "S"; // arcane staff
-            if (Has(k, "censer", "censor", "thurible"))                 return "C"; // cleric censer
-            if (Has(k, "axe", "hatchet"))                               return "A"; // axe
-            if (Has(k, "hammer", "maul", "mace"))                       return "H"; // hammer/mace
-            if (Has(k, "greatsword", "claymore", "sword", "blade",
-                       "longsword", "saber", "sabre", "edge", "brand",
-                       "breaker", "keeper")) return "/";                            // sword
-            // Fallback by class.
-            switch ((w.job ?? "").ToLowerInvariant())
-            {
-                case "mage":   return "S"; // staff
-                case "ranger": return "B"; // bow
-                case "cleric": return "C"; // censer
-                case "knight": return "/"; // sword
-                default:        return "/";
-            }
-        }
-
-        private static string ArmorTypeGlyph(ArmorDef a)
-        {
-            if (a == null) return "?";
-            string k = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
-            if (Has(k, "shield", "aegis", "buckler", "ward"))           return "O"; // shield boss
-            if (Has(k, "plate", "platemail"))                           return "#"; // plate
-            if (Has(k, "chain", "mail", "chainmail"))                   return "x"; // mail
-            if (Has(k, "leather", "hide"))                              return "x"; // leather
-            if (Has(k, "cloth", "robe", "cloak", "garb", "wanderer"))   return "~"; // cloth/robe
-            if (Has(k, "helm", "helmet", "hood", "crown", "cap"))       return "^"; // helm
-            return "x";                                                            // generic armor
-        }
+        //
+        // WeaponTypeGlyph/ArmorTypeGlyph MOVED to GearIconCatalog.Glyph (strict-MVVM icon-leak
+        // seam, UI_MVVM_MIGRATION_PLAN §1): they resolved GearCatalog.Find* inside this View, so
+        // the glyph fallback now routes through GearIconCatalog.Glyph(role,id) — verbatim logic.
 
         // A faint GHOST glyph for an EMPTY equipment slot — hints at the slot TYPE (sword /
         // shield / helm / ring) so an empty socket reads as "weapon goes here", not blank. All

@@ -146,6 +146,45 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
+        public void grant_line_reads_the_equipped_weapon_stats()
+        {
+            // GrantLineFor MOVED out of EquipmentPanel.GrantLine (which read GearCatalog in the View).
+            // It reads the real catalog by the equipped weapon id (verbatim), so equip a real weapon.
+            var ws = GearCatalog.AllWeapons();
+            if (ws == null || ws.Count == 0) Assert.Ignore("no catalog weapons in this env");
+            var w = ws[0];
+
+            var store = SeedStore();
+            var hero = new FakeEquip { TargetClass = "knight", EquippedWeapon = w };
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+
+            string grant = vm.GrantLineFor(EquipVM.SlotMainhand);
+            Assert.That(grant, Does.Contain("% dmg"),
+                "the mainhand grant line reads the equipped weapon's damage (View-side GrantLine moved here)");
+        }
+
+        [Test]
+        public void grant_line_empty_for_an_empty_slot()
+        {
+            var store = SeedStore();
+            var hero = new FakeEquip { TargetClass = "knight" };   // nothing equipped
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+            Assert.That(vm.GrantLineFor(EquipVM.SlotAmulet), Is.EqualTo(""), "an empty slot has no grant line");
+        }
+
+        [Test]
+        public void create_default_builds_slots_and_returns_store()
+        {
+            // DI-in-Open hoist: EquipVM.CreateDefault resolves VillageInventory.Instance itself (null
+            // in EditMode) and returns the built store for the View to dispose.
+            var hero = new FakeEquip { TargetClass = "knight" };
+            using var vm = EquipVM.CreateDefault(new IEquipTarget[] { hero }, () => { }, out var store);
+            Assert.That(store, Is.Not.Null, "CreateDefault must return the built store");
+            Assert.That(vm.EquipSlots.Count, Is.EqualTo(5), "mainhand/offhand/chest/ring/amulet");
+            store.Dispose();
+        }
+
+        [Test]
         public void ring_slot_lists_compatible_accessories_and_equip_routes_to_target()
         {
             var store = SeedStore();

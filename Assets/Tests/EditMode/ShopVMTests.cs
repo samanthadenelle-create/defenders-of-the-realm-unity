@@ -202,6 +202,31 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
+        public void create_default_builds_the_same_buy_projection()
+        {
+            // DI-in-Open hoist (UI_MVVM_MIGRATION_PLAN §1): ShopVM.CreateDefault resolves
+            // EconomyService.Instance ITSELF (null in EditMode -> empty wallet), so its projection
+            // matches a null-economy direct construction. Locks the factory so the View can drop the
+            // direct `EconomyService.Instance` read. Also asserts the icon role/id mapping is intact.
+            using var direct = new ShopVM("", null);
+            using var viaFactory = ShopVM.CreateDefault("");
+
+            Assert.That(viaFactory.Items.Count, Is.EqualTo(direct.Items.Count),
+                "CreateDefault must build the same Buy list as the direct constructor");
+            Assert.That(viaFactory.Items.Count, Is.GreaterThan(0));
+
+            foreach (var it in viaFactory.Items)
+            {
+                bool knownRole = it.IconRole == ShopVM.IconRoleWeapon
+                              || it.IconRole == ShopVM.IconRoleArmor
+                              || it.IconRole == ShopVM.IconRolePotion
+                              || it.IconRole == ShopVM.IconRoleAccessory;
+                Assert.That(knownRole, Is.True, $"row '{it.Id}' must carry a known icon role for the seam");
+                Assert.That(it.IconName, Is.EqualTo(it.Id), "the icon-name key is the item id (seam contract)");
+            }
+        }
+
+        [Test]
         public void dispose_unsubscribes_no_callback_after_dispose()
         {
             var eco = new FakeEconomy { Coins = 1000 };
