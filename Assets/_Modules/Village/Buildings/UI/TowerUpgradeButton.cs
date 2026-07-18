@@ -18,7 +18,6 @@
 
 using UnityEngine;
 using UnityEngine.UIElements;
-using DeNelle.Core.Data;
 
 namespace DeNelle.Village.UI
 {
@@ -26,15 +25,28 @@ namespace DeNelle.Village.UI
     /// A UI Toolkit upgrade button for a single <see cref="Tower"/>. Attach to a
     /// GameObject with a UIDocument (or let it build its own root); call
     /// <see cref="SetTargetTower"/> to point it at a tower.
+    ///
+    /// MVVM Silo C: the economy/level/cost logic moved to <see cref="TowerUpgradeVM"/>
+    /// — this View is a dumb skin that renders the VM's ButtonText/Interactable and
+    /// routes its click to the VM's Upgrade command. It names no EconomyService.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public class TowerUpgradeButton : MonoBehaviour
     {
-        private Tower _selectedTower;
         private Button _button;
+        private TowerUpgradeVM _vm;
+
+        private void EnsureVm()
+        {
+            if (_vm != null) return;
+            _vm = TowerUpgradeVM.CreateDefault();
+            _vm.Changed += UpdateUI;
+        }
 
         private void OnEnable()
         {
+            EnsureVm();
+
             var doc = GetComponent<UIDocument>();
             var root = doc != null ? doc.rootVisualElement : null;
             if (root == null) return;
@@ -61,8 +73,13 @@ namespace DeNelle.Village.UI
         /// <summary>Point this button at the tower it should upgrade.</summary>
         public void SetTargetTower(Tower tower)
         {
-            _selectedTower = tower;
-            UpdateUI();
+            EnsureVm();
+            _vm.SetTarget(tower);   // raises Changed -> UpdateUI
+        }
+
+        private void OnDestroy()
+        {
+            if (_vm != null) { _vm.Changed -= UpdateUI; _vm = null; }
         }
 
         /// <summary>
@@ -76,45 +93,17 @@ namespace DeNelle.Village.UI
         /// </summary>
         public void OnUpgradeClicked()
         {
-            if (_selectedTower == null) return;
-            _selectedTower.TryUpgrade();   // cost gate is internal — never free
-            UpdateUI();
+            EnsureVm();
+            _vm.Upgrade();   // cost gate is internal — never free; raises Changed -> UpdateUI
         }
 
-        /// <summary>Reflect target state: interactable only if level &lt; 3 AND affordable.</summary>
+        /// <summary>Reflect the VM's projected state (label + interactable). The level/cost/
+        /// affordability logic lives in <see cref="TowerUpgradeVM"/>; this just paints it.</summary>
         public void UpdateUI()
         {
-            if (_button == null) return;
-
-            if (_selectedTower == null || _selectedTower.Data == null)
-            {
-                _button.text = "Upgrade";
-                _button.SetEnabled(false);
-                return;
-            }
-
-            int nextLevel = _selectedTower.CurrentLevel + 1;
-            if (nextLevel > Tower.MaxLevel)
-            {
-                _button.text = "Max Level";
-                _button.SetEnabled(false);
-                return;
-            }
-
-            int cost = NextUpgradeCost(nextLevel);
-            bool canAfford = EconomyService.Instance != null && EconomyService.Instance.CanAfford(cost);
-            _button.text = $"Upgrade (L{nextLevel})  {cost}";
-            _button.SetEnabled(canAfford);   // UI Toolkit equivalent of Button.interactable
-        }
-
-        /// <summary>Cost to upgrade INTO <paramref name="nextLevel"/> (bounds-safe).</summary>
-        private int NextUpgradeCost(int nextLevel)
-        {
-            var upgrades = _selectedTower.Data.upgrades;
-            int idx = nextLevel - 1;
-            if (upgrades == null || idx < 0 || idx >= upgrades.Length || upgrades[idx] == null)
-                return int.MaxValue;   // unknown cost → unaffordable, never free
-            return upgrades[idx].upgradeCost;
+            if (_button == null || _vm == null) return;
+            _button.text = _vm.ButtonText;
+            _button.SetEnabled(_vm.Interactable);   // UI Toolkit equivalent of Button.interactable
         }
     }
 }

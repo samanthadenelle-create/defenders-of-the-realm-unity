@@ -28,10 +28,13 @@ namespace DeNelle.Village.UI
         private ElarionUiKit.ObsidianModal _modal;
         private Transform _bodyHost;          // frame body drop-zone — rows + actions
         private TextMeshProUGUI _detail;      // footer strip — selected-tower readout
-        private Tower _selected;
         private GameObject _marker;
         private bool _visible;
         private float _nextRefresh;
+
+        // MVVM Silo C — the tower list VM owns the placed-tower scan + the selection +
+        // the upgrade/raze commands. This View reads only the VM's list/selection.
+        private PlacedTowerListVM _vm;
 
         // PanelManager mutual-exclusion handle (one panel at a time).
         private PanelHandle _panelHandle;
@@ -61,6 +64,7 @@ namespace DeNelle.Village.UI
         private void Awake()
         {
             Instance = this;
+            _vm = PlacedTowerListVM.CreateDefault(Hide);
             // Register with the modal arbiter so opening this closes any other panel
             // (and vice-versa). Probe = the panel's own visibility flag.
             _panelHandle = PanelManager.Register("Tower Manager", Hide, () => _visible);
@@ -70,6 +74,7 @@ namespace DeNelle.Village.UI
         {
             if (Instance == this) Instance = null;
             ClearMarker();
+            _vm?.Dispose();
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -138,28 +143,29 @@ namespace DeNelle.Village.UI
             for (int i = _bodyHost.childCount - 1; i >= 0; i--)
                 Destroy(_bodyHost.GetChild(i).gameObject);
 
-            var towers = FindObjectsByType<Tower>();
-            if (towers.Length == 0)
+            _vm.Refresh();                       // re-poll the live towers (drops a stale selection)
+            var towers = _vm.Towers;
+            if (towers.Count == 0)
             {
                 MakeText(_bodyHost, "No towers placed yet.", 14, ElarionUi.ParchmentDim,
                     FontStyles.Italic, TextAlignmentOptions.Center,
                     new Vector2(0.08f, 0.85f), new Vector2(0.92f, 0.95f));
-                _selected = null; ClearMarker();
+                ClearMarker();
             }
             else
             {
-                // Drop a stale selection if its tower was destroyed.
-                if (_selected == null) ClearMarker();
+                // Drop a stale selection marker if its tower was destroyed.
+                if (_vm.Selected == null) ClearMarker();
 
                 const float rowH = 0.08f, gap = 0.014f;
                 float top = 0.97f;
-                for (int i = 0; i < towers.Length; i++)
+                for (int i = 0; i < towers.Count; i++)
                 {
                     var t = towers[i];
-                    bool sel = ReferenceEquals(t, _selected);
+                    bool sel = ReferenceEquals(t, _vm.Selected);
                     // ASCII-only label (no glyphs — missing from the TMP font).
-                    string label = (sel ? "> " : "")
-                                 + $"Tower {i + 1}  -  Lv {t.CurrentLevel}   (rng {t.CurrentRange:0}, dmg {t.CurrentDamage:0})";
+                    string label = PlacedTowerListVM.FormatManagerRow(
+                        i + 1, t.CurrentLevel, t.CurrentRange, t.CurrentDamage, sel);
                     Tower captured = t;
                     ElarionUiKit.BuildObsidianButton(_bodyHost, label,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -175,48 +181,39 @@ namespace DeNelle.Village.UI
             RefreshDetail();
         }
 
-        private void Select(Tower t) { SetMarker(t); _selected = t; Refresh(); }
+        private void Select(Tower t) { SetMarker(t); _vm.Select(t); Refresh(); }
 
         private void RefreshDetail()
         {
-            if (_selected == null)
+            if (_vm.Selected == null)
             {
                 if (_detail != null) _detail.text = "Select a tower to manage.";
                 return;
             }
 
-            // Silo 3 UI: display tier + upgrade cost alongside level/stats.
-            // Tower.EffectiveTier (line 160): current tier (1..3 or 4 if empowered).
-            // Tower.NextUpgradeCost (line 809): cost to reach next level.
-            // Tower.CurrentLevel (line 150): placed level (1..3).
-            int tier = _selected.EffectiveTier;
-            int cost = _selected.NextUpgradeCost;
-            bool canUpgrade = _selected.CurrentLevel < Tower.MaxLevel;
-
-            if (_detail != null)
-                _detail.text = $"Selected: Lv {_selected.CurrentLevel}/{Tower.MaxLevel}  T{tier}   |   " +
-                    $"rng {_selected.CurrentRange:0}   dmg {_selected.CurrentDamage:0}   |   " +
-                    (canUpgrade ? $"Upgrade: {cost} cost" : "Max Level");
+            // Silo 3 UI: display tier + upgrade cost alongside level/stats — composed by
+            // the VM (Tower.EffectiveTier / NextUpgradeCost / CurrentLevel live in the VM now).
+            if (_detail != null) _detail.text = _vm.DetailLine;
 
             // Action row along the base of the body well.
             // DEPRECATED (owner 2026-06-27, tower-upgrade CONSOLIDATION): this Upgrade
             // button was one of three duplicate paths and called the FREE Tower.Upgrade().
             // The canonical surface is now the proximity HUD context button
             // (TowerInteractable -> HudBuildingFocus -> Tower.TryUpgrade). This button is
-            // no longer free — it routes through the single cost-enforced Tower.TryUpgrade.
-            // RAZE + tower SELECTION are PRESERVED (this panel is their only home).
+            // no longer free — it routes through the single cost-enforced Tower.TryUpgrade
+            // (via the VM's UpgradeSelected). RAZE + SELECTION are PRESERVED (this panel's home).
             ElarionUiKit.BuildObsidianButton(_bodyHost, "Upgrade",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0.10f, 0.03f), new Vector2(0.48f, 0.13f), () =>
                 {
-                    if (_selected != null) { _selected.TryUpgrade(); Refresh(); }
+                    _vm.UpgradeSelected(); Refresh();
                 });
 
             ElarionUiKit.BuildObsidianButton(_bodyHost, "Raze",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
                 new Vector2(0.52f, 0.03f), new Vector2(0.90f, 0.13f), () =>
                 {
-                    if (_selected != null) { Destroy(_selected.gameObject); _selected = null; ClearMarker(); Refresh(); }
+                    _vm.RazeSelected(); ClearMarker(); Refresh();
                 });
         }
 

@@ -8,19 +8,19 @@
 // (ElarionUi.CompactNumber). Replaces the crystals-only header the palette used
 // to show (Grok reuse ledger: "Resource strip -> BuildWalletRow all pools").
 //
-// Amounts come from EconomyService (Wood/Iron are in-session; Food/Crystals/Coins
-// are GameState-backed). Refresh is driven by both GameStateService.ResourcesChanged
-// (Food/Crystals/Coins mutations) and EconomyService.OnChanged (Wood/Iron in-session
-// mutations) so every pool stays live. Meaning is carried by the LETTER badge +
-// number, never colour alone (owner is red/green colourblind). ASCII-only TMP;
-// code-built uGUI on the kit; ZERO UXML.
+// Amounts come from the shared WalletVM DTO produced by LiveWalletSource (MVVM
+// Silo C) — this View no longer reads the economy/state services directly. The
+// source owns the live subscriptions (the in-session Wood/Iron pools + the
+// GameState-backed Food/Crystals/Coins) and raises Changed; the row rebinds its
+// chips off the DTO.
+// Meaning is carried by the LETTER badge + number, never colour alone (owner is
+// red/green colourblind). ASCII-only TMP; code-built uGUI on the kit; ZERO UXML.
 // =============================================================================
 
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using DeNelle.Core.State;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Village
@@ -40,11 +40,20 @@ namespace DeNelle.Village
             new Dictionary<string, TextMeshProUGUI>();
         private bool _built;
 
+        // MVVM Silo C — the live wallet DTO producer (owns the service subscriptions).
+        // This View binds its Changed event and reads Wallet; it never names a service.
+        private LiveWalletSource _wallet;
+
         /// <summary>Build the chip row into <paramref name="parent"/> (a left-anchored band).</summary>
         public void Build(Transform parent)
         {
             if (_built) return;
             _built = true;
+
+            // Resolve the live wallet source (the sole resolution site) + bind its updates.
+            if (_wallet == null) _wallet = LiveWalletSource.CreateDefault();
+            _wallet.Changed -= Refresh;
+            _wallet.Changed += Refresh;
 
             var rowGo = new GameObject("WalletChips",
                 typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -63,12 +72,10 @@ namespace DeNelle.Village
             layout.childForceExpandHeight = false;
             layout.childAlignment = TextAnchor.MiddleLeft;
 
-            // Order: Wood, Iron, Food, Crystals, Gold. Letter badges are the colour-free tell.
-            Chip(rowGo.transform, "wood",     "W");
-            Chip(rowGo.transform, "iron",     "I");
-            Chip(rowGo.transform, "food",     "F");
-            Chip(rowGo.transform, "crystals", "C");
-            Chip(rowGo.transform, "gold",     "G");
+            // Order + letter badges come from the DTO (Wood, Iron, Food, Crystals, Gold).
+            // The badge is the colour-free tell (owner is red/green colourblind).
+            foreach (var entry in _wallet.Wallet.Entries)
+                Chip(rowGo.transform, entry.CurrencyId, entry.IconName);
 
             Refresh();
         }
@@ -102,21 +109,12 @@ namespace DeNelle.Village
             _amountLabels[key] = amount;
         }
 
-        /// <summary>Re-read the live wallet and update every chip's amount (compact >= 10k).</summary>
+        /// <summary>Re-read the live wallet DTO and update every chip's amount (compact >= 10k).</summary>
         public void Refresh()
         {
-            var econ = EconomyService.Instance;
-            int wood     = econ != null ? econ.Wood : 0;
-            int iron     = econ != null ? econ.Iron : 0;
-            int food     = econ != null ? econ.Food : 0;
-            int crystals = econ != null ? econ.Crystals : 0;
-            int gold     = econ != null ? econ.Coins : 0;
-
-            Set("wood", wood);
-            Set("iron", iron);
-            Set("food", food);
-            Set("crystals", crystals);
-            Set("gold", gold);
+            if (_wallet == null) return;
+            foreach (var entry in _wallet.Wallet.Entries)
+                Set(entry.CurrencyId, entry.Amount);
         }
 
         private void Set(string key, int value)
@@ -127,30 +125,24 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
-            var gs = GameStateService.Instance;
-            if (gs != null)
+            // Rebind the live source (idempotent) so a re-enabled row stays live.
+            if (_wallet != null)
             {
-                gs.ResourcesChanged.RemoveListener(Refresh);
-                gs.ResourcesChanged.AddListener(Refresh);
-            }
-            var econ = EconomyService.Instance;
-            if (econ != null)
-            {
-                econ.OnChanged -= OnEconomyChanged;
-                econ.OnChanged += OnEconomyChanged;
+                _wallet.Changed -= Refresh;
+                _wallet.Changed += Refresh;
             }
             if (_built) Refresh();
         }
 
         private void OnDisable()
         {
-            var gs = GameStateService.Instance;
-            if (gs != null) gs.ResourcesChanged.RemoveListener(Refresh);
-            var econ = EconomyService.Instance;
-            if (econ != null) econ.OnChanged -= OnEconomyChanged;
+            if (_wallet != null) _wallet.Changed -= Refresh;
         }
 
-        private void OnEconomyChanged(ResourceSnapshot _) => Refresh();
+        private void OnDestroy()
+        {
+            if (_wallet != null) { _wallet.Changed -= Refresh; _wallet.Dispose(); _wallet = null; }
+        }
 
         // ── uGUI helper (BuildPaletteUI/BuildSelectionUI shape) ────────────────
         private static TextMeshProUGUI MakeText(Transform parent, string text, float size,

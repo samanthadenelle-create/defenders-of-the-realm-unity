@@ -25,7 +25,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Catalog;
-using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 
@@ -60,56 +59,32 @@ namespace DeNelle.Village
         /// </summary>
         public event Action<string> OnOrientRequested;
 
-        // Which catalog types this palette lists + which ids are unlock-gated — now
-        // SOURCED FROM DATA (owner 2026-07-10 generic build-mode). Configure(BuildType)
-        // fills these from BuildCategoryRegistry.Get(type) so the SAME palette serves
-        // every build verb. Defaults to the Defense recipe so the palette is coherent
-        // even if Configure is never called (back-compat: the old no-arg build path is
-        // BuildType.Defense).
-        //
-        // ⚠ PALETTE REVERSAL (WO-673, owner 2026-07-11) — supersedes the 2026-06-27
-        // "Defensive only" ruling that restricted the palette to Tower/Wall/Gate:
-        // functional buildings (CatalogType.Resource + Collector) JOIN the palette under
-        // the Build → Town verb, and Walls split out of Defense (owner taxonomy
-        // Town / Defenses / Walls). Always on — WO-682 removed ff.strategicplacement.
-        private CatalogType[] _types = { CatalogType.Tower, CatalogType.Gate };
-
-        // Catalog ids defined-but-not-yet-buildable for the active build verb. They stay
-        // in the catalog (ready to unlock + referenced elsewhere) but are filtered out of
-        // the palette until their unlock ships. Sourced from build-categories.json via
-        // Configure; the initial value mirrors the Defense lockedIds so the pre-Configure
-        // palette stays the three tower types (owner ruling 2026-07-06; WO-673 moved the
-        // jeweler lock to the Town verb and the wall ids out with the Walls split — the
-        // rendered pre-Configure set is unchanged, since every removed id was either
-        // locked or not a Tower/Gate type).
-        private HashSet<string> _lockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "tower_siege_tower",
-            "tower_catapult",
-            "gate_stone",
-        };
+        // MVVM Silo C: the catalog types + unlock-gated ids + the CatalogRegistry query +
+        // the affordability/freebie projection now live in BuildPaletteVM (the sanctioned
+        // resolution site). This View keeps only _activeType (for the tab underline); the
+        // card data comes from _vm.Cards and the balance from _vm.Crystals. The palette
+        // still serves every build verb (Town / Defenses / Walls) via Configure.
 
         /// <summary>
-        /// Point the palette at a build verb (owner 2026-07-10). Sources <c>_types</c> +
-        /// <c>_lockedIds</c> from <see cref="BuildCategoryRegistry"/> so <c>Render</c> lists
-        /// exactly that verb's catalog types (Defense → Tower/Wall/Gate, Collector →
-        /// Collector). Called by BuildModeController before Show; re-renders live if open.
+        /// Point the palette at a build verb (owner 2026-07-10). Delegates to the VM, which
+        /// sources the catalog types + unlock-gated ids from BuildCategoryRegistry and rebuilds
+        /// the cards. Called by BuildModeController before Show; re-renders live if open.
         /// </summary>
         public void Configure(BuildType type)
         {
             _activeType = type;
-            var cat = BuildCategoryRegistry.Get(type);
-            if (cat != null)
-            {
-                if (cat.Types != null && cat.Types.Length > 0) _types = cat.Types;
-                _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            }
+            EnsureVm();
+            _vm.Configure(type);
             UpdateTabHighlight();   // WO-673 — move the gold underline to the active category tab
             if (_canvas != null && _canvas.activeSelf) Render();
         }
 
         // Strips sit ABOVE the HUD but BELOW kit modals (BuildObsidianModal defaults 31000).
         private const int SortingOrder = 900;
+
+        // MVVM Silo C — the paired VM (catalog query + wallet + card projections). Created
+        // lazily; the View binds its Changed and renders _vm.Cards / _vm.Crystals only.
+        private BuildPaletteVM _vm;
 
         private GameObject _canvas;           // own overlay canvas (kit BuildModalCanvas)
         private Transform _stripContent;      // horizontal-layout card host inside the scroll
@@ -140,49 +115,38 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
-            var svc = GameStateService.Instance;
-            if (svc != null)
-            {
-                svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
-                svc.ResourcesChanged.AddListener(OnResourcesChanged);
-            }
-            // LIVE affordability (owner felt-test 2026-07-17 "should update the price... not
-            // only when reselecting"): also listen to EconomyService.OnChanged. TrySpend's
-            // NotifyChanged() fires OnChanged but NOT GameState.ResourcesChanged for a
-            // Wood/Iron-only spend (EconomyService.cs:289), so a wood-priced build would
-            // never re-tint the palette off ResourcesChanged alone. OnChanged catches EVERY
-            // wallet mutation so each card's cost/affordability refreshes on the spot.
-            var econ = EconomyService.Instance;
-            if (econ != null)
-            {
-                econ.OnChanged -= OnEconomyChanged;
-                econ.OnChanged += OnEconomyChanged;
-            }
+            // MVVM Silo C: the VM owns the live wallet subscriptions (EconomyService.OnChanged
+            // + GameState.ResourcesChanged). The View just binds the VM's Changed so per-card
+            // cost/affordability stays live (owner felt-test 2026-07-17 "update the price").
+            EnsureVm();
+            _vm.Changed -= OnVmChanged;
+            _vm.Changed += OnVmChanged;
         }
 
         private void OnDisable()
         {
-            var svc = GameStateService.Instance;
-            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
-            var econ = EconomyService.Instance;
-            if (econ != null) econ.OnChanged -= OnEconomyChanged;
+            if (_vm != null) _vm.Changed -= OnVmChanged;
         }
 
         private void OnDestroy()
         {
+            if (_vm != null) { _vm.Changed -= OnVmChanged; _vm.Dispose(); _vm = null; }
             if (_canvas != null) Destroy(_canvas);
         }
 
-        private void OnResourcesChanged()
+        /// <summary>The VM re-projected (a wallet mutation or a verb change) — re-render if shown.</summary>
+        private void OnVmChanged()
         {
             if (_canvas != null && _canvas.activeSelf) Render();
         }
 
-        /// <summary>EconomyService.OnChanged bridge — re-render so per-card cost/affordability
-        /// stays live on Wood/Iron-only spends that GameState.ResourcesChanged misses.</summary>
-        private void OnEconomyChanged(ResourceSnapshot _)
+        /// <summary>Create + bind the paired VM (idempotent). The sole VM-resolution point.</summary>
+        private void EnsureVm()
         {
-            if (_canvas != null && _canvas.activeSelf) Render();
+            if (_vm != null) return;
+            _vm = BuildPaletteVM.CreateDefault(_activeType, null);
+            _vm.Changed -= OnVmChanged;
+            _vm.Changed += OnVmChanged;
         }
 
         // ── Show / Hide ────────────────────────────────────────────────────────
@@ -409,6 +373,7 @@ namespace DeNelle.Village
         {
             FlowTrace.Step("BuildPalette", "palette-build-start");
             EnsureBuilt();
+            EnsureVm();
             if (_stripContent == null)
             {
                 FlowTrace.Warn("BuildPalette", "Render aborted: strip content is null (palette never built)");
@@ -420,34 +385,21 @@ namespace DeNelle.Village
             UpdateBalance();
             UpdateOrientButton();
 
-            // Gather every candidate entry across the configured types FIRST so the
-            // catalog-count is logged even if a card later throws. CatalogRegistry is
-            // populated at BeforeSceneLoad (CatalogBootstrap) and is WebGL-safe — an
-            // empty count here means the JSON/fallback load failed, not a render bug.
-            var candidates = new List<CatalogEntry>();
-            foreach (var type in _types)
-            {
-                var entries = CatalogRegistry.OfType(type);
-                if (entries == null) continue;
-                foreach (var e in entries)
-                {
-                    if (e == null) continue;
-                    if (e.id != null && _lockedIds.Contains(e.id)) continue;   // unlock-gated — see Configure/_lockedIds
-                    candidates.Add(e);
-                }
-            }
-            FlowTrace.Step("BuildPalette", $"catalog-count: registry={CatalogRegistry.Count} candidates={candidates.Count} (types={_types.Length})");
+            // MVVM Silo C: the candidate gather + unlock filter + affordability projection
+            // now live in the VM. The View renders _vm.Cards (each a StructureCardVM). The
+            // catalog-count trace is emitted by the VM on (re)build.
+            var cards = _vm.Cards;
 
-            // §12: guard EACH card build so one bad entry (missing field / service throw /
-            // kit quirk) is logged + skipped instead of blanking the whole palette —
-            // the WebGL "shows nothing, no error" silent-failure class becomes a logged line.
-            var built = Guard.TryEach("BuildPalette", "build card", candidates,
-                e => BuildCard(e));
+            // §12: guard EACH card build so one bad entry (missing field / kit quirk) is
+            // logged + skipped instead of blanking the whole palette — the WebGL "shows
+            // nothing, no error" silent-failure class becomes a logged line.
+            var built = Guard.TryEach("BuildPalette", "build card", cards,
+                c => BuildCard(c));
             FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
 
             if (built.built == 0)
             {
-                var none = MakeText(_stripContent, candidates.Count == 0
+                var none = MakeText(_stripContent, cards.Count == 0
                         ? "No buildables registered."
                         : "Buildables failed to load.",
                     14, ElarionUi.Parchment, FontStyles.Italic, TextAlignmentOptions.Left,
@@ -458,15 +410,18 @@ namespace DeNelle.Village
             }
         }
 
-        private void BuildCard(CatalogEntry e)
+        private void BuildCard(StructureCardVM card)
         {
-            // First-build freebie (owner 2026-07-13): the card reads the SAME effective
-            // cost as the validator/commit (BuildModeController.EffectiveCostFor), so a
-            // live freebie is a zero cost = the card never greys out on a first build.
-            bool freebie = BuildModeController.FreeBuildAvailable(e);
-            DeNelle.Core.Catalog.ResourceCost cost = freebie ? default : CostFor(e);
-            bool affordable = CanAfford(cost);
-            bool armed = e.id == _armedId;
+            // MVVM Silo C: the freebie / effective-cost / affordability projection is the VM's
+            // (StructureCardVM), computed off the SAME BuildModeController.EffectiveCostFor seam
+            // the validator/commit use — so a live freebie is a zero cost = the card never greys
+            // out on a first build. The View only paints it; the CatalogEntry (card.Entry) is
+            // used ONLY to raise the existing arm events + resolve card art.
+            var e = card.Entry;
+            bool freebie = card.Freebie;
+            DeNelle.Core.Catalog.ResourceCost cost = card.EffectiveCost;
+            bool affordable = card.Affordable;
+            bool armed = card.Id == _armedId;
 
             // Slot-plate card: the Blink "slot_action" plate as the face (Obsidian fill
             // fallback when the mirrored art is absent), a Button over the whole plate.
@@ -521,7 +476,7 @@ namespace DeNelle.Village
             // plate's normal obsidian face, so gilt reads — the old dark Ink assumed a
             // gold-flooded plate that no longer exists).
             var nameLabel = MakeText(cardGo.transform,
-                string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName,
+                card.DisplayName,
                 14, armed ? ElarionUi.Gilt : ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.96f));
             nameLabel.raycastTarget = false;
@@ -575,7 +530,7 @@ namespace DeNelle.Village
             {
                 // (c) fallback plate: recessed dark well + the entry's gilt initial.
                 bandImg.color = new Color(0f, 0f, 0f, 0.45f);
-                string glyphSource = string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName;
+                string glyphSource = card.DisplayName;
                 string glyph = string.IsNullOrEmpty(glyphSource)
                     ? "?" : glyphSource.Substring(0, 1).ToUpperInvariant();
                 MakeText(bandGo.transform, glyph, 30, ElarionUi.Gilt, FontStyles.Bold,
@@ -597,7 +552,7 @@ namespace DeNelle.Village
             // Arcane = Land + Air). Colorblind-safe: meaning is the TEXT, never color
             // alone (owner is red/green colorblind). ASCII-only — WO-683: the old
             // leading shape glyphs rendered as tofu boxes on the shipped TMP font.
-            string targetTag = TargetingTagFor(e);
+            string targetTag = card.TargetingTag;
             if (!string.IsNullOrEmpty(targetTag))
             {
                 var tagBackGo = new GameObject("TargetTag", typeof(RectTransform), typeof(Image));
@@ -614,27 +569,6 @@ namespace DeNelle.Village
                     Vector2.zero, Vector2.one);
                 tagLabel.raycastTarget = false;
             }
-        }
-
-        /// <summary>
-        /// Compact targeting-capability caption for a DEFENSIVE tower card, from the repo
-        /// flags (RepoProps.airOnly / canHitAir): airOnly → "Air only", canHitAir → "Land
-        /// + Air", else "Land only". Null for non-tower structures (no tag). Pure ASCII
-        /// TEXT — WO-683 (owner device screenshot 2026-07-12): the old ▲/◆/▬ leading
-        /// glyphs render as tofu boxes on the shipped TMP font (the "□ Land + Air"
-        /// defect). The words themselves are the color-independent cue (owner colorblind:
-        /// meaning by text, never glyph/color alone).
-        /// </summary>
-        private static string TargetingTagFor(CatalogEntry e)
-        {
-            if (e == null || e.type != CatalogType.Tower) return null;
-            var repo = e.repo;
-            if (repo == null) return null;
-            bool airOnly   = repo.airOnly;
-            bool canHitAir = repo.canHitAir || airOnly;
-            if (airOnly)   return "Air only";
-            if (canHitAir) return "Land + Air";
-            return "Land only";
         }
 
         // ── Entry art resolution (owner 2026-07-06 image band) ────────────────
@@ -689,29 +623,7 @@ namespace DeNelle.Village
             return sprite;
         }
 
-        // ── Cost resolution (mirrors BuildModeController — crystals-only fallback) ──
-
-        /// <summary>
-        /// Resolve a catalog entry's build cost to the Core multi-resource shape: the
-        /// authored multi-cost (repo.cost) wins; otherwise fall back to repo.buildCost
-        /// Crystals so legacy / cost-less rows still gate + display as before.
-        /// </summary>
-        private static DeNelle.Core.Catalog.ResourceCost CostFor(CatalogEntry e)
-        {
-            var repo = e != null ? e.repo : null;
-            if (repo == null) return default;
-            if (!repo.cost.IsZero) return repo.cost;
-            return new DeNelle.Core.Catalog.ResourceCost { crystals = repo.buildCost };
-        }
-
-        /// <summary>Multi-resource affordability via the persisted ledger (EconomyService).</summary>
-        private static bool CanAfford(DeNelle.Core.Catalog.ResourceCost cost)
-        {
-            var econ = EconomyService.Instance;
-            if (econ != null)
-                return econ.CanAfford(new ResourceCost(cost.wood, cost.food, cost.iron, cost.crystals));
-            return CrystalBalance >= cost.crystals;   // service-less fallback
-        }
+        // ── Cost string formatting (pure presentation; cost/affordability live in the VM) ──
 
         /// <summary>Compact per-resource cost string for the card (skips zero slots; ASCII only).</summary>
         private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
@@ -728,9 +640,10 @@ namespace DeNelle.Village
 
         private void UpdateBalance()
         {
-            // WO-697: balance through the ONE kit formatter (compact >= 10k).
+            // WO-697: balance through the ONE kit formatter (compact >= 10k). Crystals come
+            // from the VM (IEconomy.Crystals — the single GameState-backed crystal store).
             if (_balanceLabel != null)
-                _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(CrystalBalance);
+                _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(_vm != null ? _vm.Crystals : 0);
         }
 
         // ── Category tabs (now the reusable BuildTabRow kit component) ─────────
@@ -757,16 +670,6 @@ namespace DeNelle.Village
                 _orientBtn.gameObject.SetActive(
                     (DeNelle.Core.FeatureFlags.DevHotkeys || Debug.isDebugBuild)
                     && !string.IsNullOrEmpty(_armedId));
-        }
-
-        /// <summary>The persisted crystal wallet (WO-131 — the single source of truth).</summary>
-        private static int CrystalBalance
-        {
-            get
-            {
-                var svc = GameStateService.Instance;
-                return svc != null && svc.State != null ? svc.State.Resources.Crystals : 0;
-            }
         }
 
         // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────

@@ -46,11 +46,7 @@ namespace DeNelle.Village
     public sealed class BuildMenu : MonoBehaviour
     {
         [Header("Crystal balance")]
-        [Tooltip("When true, the menu spends from GameState.Resources.Crystals via GameStateService. " +
-                 "When false it spends from _localCrystalBalance below (standalone testing).")]
-        [SerializeField] private bool _useGameState = true;
-
-        [Tooltip("Crystal balance used when no GameStateService is alive (standalone testing only).")]
+        [Tooltip("Crystal balance used when no economy service is alive (standalone testing only).")]
         [SerializeField, Min(0)] private int _localCrystalBalance = 500;
 
         // ── Kit modal (lazy-built on first Open) ─────────────────────────────
@@ -63,6 +59,11 @@ namespace DeNelle.Village
         // Modal arbiter handle (DEF-212): opening closes any other open panel;
         // battle-lock may reject — revert and stay hidden.
         private PanelHandle _panelHandle;
+
+        // MVVM Silo C — the paired VM owns the crystal balance, the placed-tower scan, and
+        // the Repair-Wall command (replacing the removed reflection seam). Created fresh on
+        // Open, disposed on Close. This View reads only VM data (no state/scene services).
+        private BuildMenuVM _vm;
 
         // ── WO-31: multi-screen build/upgrade flow ───────────────────────────
         private enum MenuScreen { Root, BuildTower, UpgradeTower }
@@ -116,20 +117,25 @@ namespace DeNelle.Village
 
         private void OnDisable()
         {
-            var svc = GameStateService.Instance;
-            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+            DisposeVm();              // never leave a stale wallet subscription across a teardown
             UnhookPlacementRelay();   // WO-T1 — never leave a stale relay across a teardown
         }
 
         private void OnDestroy()
         {
+            DisposeVm();
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
-        /// <summary>Re-render the open menu when crystals change (dev grant, wave reward).</summary>
+        /// <summary>Re-render the open menu when the VM changes (crystals: dev grant, wave reward).</summary>
         private void OnResourcesChanged()
         {
             if (_isOpen) Render();
+        }
+
+        private void DisposeVm()
+        {
+            if (_vm != null) { _vm.Changed -= OnResourcesChanged; _vm.Dispose(); _vm = null; }
         }
 
         // =====================================================================
@@ -156,21 +162,18 @@ namespace DeNelle.Village
                 return;
             }
 
+            // Build the VM (resolves economy + tower list + wall-repair controller) and
+            // bind its Changed so the open menu live-refreshes when crystals change (a dev
+            // grant, a wave reward). Remove-then-add guards against a double subscription.
+            DisposeVm();
+            _vm = BuildMenuVM.CreateDefault(Close, _localCrystalBalance);
+            _vm.Changed += OnResourcesChanged;
+
             _screen = MenuScreen.Root;            // always open on the chooser
             _selectedTowerForUpgrade = null;
             Disarm();
             Render();
             FlowTrace.Step("UI", "Build menu shown (kit modal, FrameCore)");
-
-            // Live-refresh the balance + affordability while the menu is open if
-            // crystals change (a dev grant, a wave reward). Remove-then-add guards
-            // against a double subscription.
-            var svc = GameStateService.Instance;
-            if (svc != null)
-            {
-                svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
-                svc.ResourcesChanged.AddListener(OnResourcesChanged);
-            }
         }
 
         /// <summary>
@@ -182,8 +185,7 @@ namespace DeNelle.Village
             _isOpen = false;
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             PanelManager.NotifyClosed(_panelHandle);
-            var svc = GameStateService.Instance;
-            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+            DisposeVm();
         }
 
         /// <summary>Toggles the menu open/closed.</summary>
@@ -290,7 +292,7 @@ namespace DeNelle.Village
 
         private void OnRepairWall()
         {
-            InvokeRepairNearestWall();
+            _vm?.RepairNearestWall();   // typed WallRepairController command (reflection seam removed)
             SetStatus("Restoring the nearest damaged wall section.");
         }
 
@@ -466,12 +468,16 @@ namespace DeNelle.Village
 
             // WO-127 root cause: enumerate LIVE Tower components (the type whose
             // _currentLevel actually upgrades), not the separate Building type whose
-            // serialized Level never mutates.
-            var towers = UnityEngine.Object.FindObjectsByType<Tower>();
+            // serialized Level never mutates. MVVM Silo C: the placed-tower scan lives in
+            // the VM's tower list (the sanctioned resolution site) — not in this View.
+            _vm.Towers.Refresh();
+            var towers = _vm.Towers.Towers;
 
             // Drop a selection that no longer exists in the scene.
-            if (_selectedTowerForUpgrade == null ||
-                System.Array.IndexOf(towers, _selectedTowerForUpgrade) < 0)
+            bool stillPresent = false;
+            foreach (var tw in towers)
+                if (ReferenceEquals(tw, _selectedTowerForUpgrade)) { stillPresent = true; break; }
+            if (_selectedTowerForUpgrade == null || !stillPresent)
                 _selectedTowerForUpgrade = null;
 
             bool any = false;
@@ -482,9 +488,7 @@ namespace DeNelle.Village
                 bool selected = ReferenceEquals(t, _selectedTowerForUpgrade);
                 // WO-127: print the LIVE level (1..MaxLevel) so it always matches
                 // TowerManagerPanel's t.CurrentLevel for the same tower.
-                string label = (selected ? "> " : "")
-                             + t.name.Replace("Tower-", "").Replace("Tower_", "")
-                             + "  (Lvl " + t.CurrentLevel + "/" + Tower.MaxLevel + ")";
+                string label = DeNelle.Village.UI.PlacedTowerListVM.FormatMenuRow(t.name, t.CurrentLevel, selected);
                 Tower captured = t;
                 ElarionUiKit.BuildObsidianButton(_bodyHost, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -598,32 +602,6 @@ namespace DeNelle.Village
             return m > 0 ? $"{m}m {s}s" : $"{s}s";
         }
 
-        private static void InvokeRepairNearestWall()
-        {
-            try
-            {
-                System.Type t = null;
-                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    t = asm.GetType("DeNelle.Village.WallRepairController", false);
-                    if (t != null) break;
-                }
-                if (t == null) { Debug.LogWarning("[BuildMenu] WallRepairController not found."); return; }
-                var inst = UnityEngine.Object.FindAnyObjectByType(t) as Component;
-                if (inst == null) { Debug.LogWarning("[BuildMenu] WallRepairController not in scene."); return; }
-                var m = t.GetMethod("RepairNearestDamagedWall")
-                        ?? t.GetMethod("ConfirmRepair")
-                        ?? t.GetMethod("StartRepair");
-                if (m == null) { Debug.LogWarning("[BuildMenu] WallRepairController.Repair* not found."); return; }
-                m.Invoke(inst, m.GetParameters().Length == 0 ? null : new object[] { });
-                Debug.Log("[BuildMenu] Repair Wall click -> " + m.Name + "().");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError("[BuildMenu] Repair invoke failed: " + ex.Message);
-            }
-        }
-
         private void SetStatus(string message, bool isError = false)
         {
             if (_statusLabel == null) return;
@@ -640,23 +618,11 @@ namespace DeNelle.Village
         //  Crystal balance — GameState-backed or local (standalone testing)
         // =====================================================================
 
-        /// <summary>The current crystal balance the menu spends from.</summary>
-        public int CrystalBalance
-        {
-            get
-            {
-                // Prefer the live GameState whenever it exists — it always does now
-                // that GameStateService self-bootstraps — so the menu shares ONE
-                // crystal store with the HUD and the dev grants. Keying off the
-                // _useGameState serialized flag was the trap: if it was left off on
-                // the scene instance, dev "+Crystals" updated GameState but the menu
-                // still read its local int (owner: "balance doesn't reflect the grant").
-                var service = GameStateService.Instance;
-                if (service != null && service.State != null)
-                    return service.State.Resources.Crystals;
-                return _localCrystalBalance;   // true standalone test only (no service)
-            }
-        }
+        /// <summary>The current crystal balance the menu spends from. MVVM Silo C: sourced from
+        /// the VM (IEconomy.Crystals — the SAME single crystal store the HUD + dev grants share),
+        /// falling back to the standalone-test local value when the menu is closed / no service.
+        /// This View reads only VM data.</summary>
+        public int CrystalBalance => _vm != null ? _vm.Crystals : _localCrystalBalance;
 
         // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────
 
