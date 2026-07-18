@@ -263,6 +263,8 @@ namespace DeNelle.Editor
             // --- WO-738 echo per-echo specialization — §2c permission gate (roster identity +
             // balance dual-copy + token/legacy round-trip + bonus math + save v33 + EchoLaneBonuses) ---
             if (!EchoSpecializationRegression.Run(out var echoSpecReason)) failures.Add(echoSpecReason); else log.AppendLine("[echo-spec] " + echoSpecReason);
+            // --- WO-745 Room Forge pipeline gate (catalog/dual-copy/mate/seal/drift/overlap + spine+demo green) ---
+            if (!DeNelle.Editor.Regression.RoomForgeRegression.Run(out var roomForgeReason)) failures.Add(roomForgeReason); else log.AppendLine("[room-forge] " + roomForgeReason);
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

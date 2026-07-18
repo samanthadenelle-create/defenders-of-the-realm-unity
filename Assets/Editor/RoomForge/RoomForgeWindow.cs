@@ -13,6 +13,7 @@ using System.Text;
 using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Dungeons.RoomForge;
 
 namespace DeNelle.Editor.RoomForge
@@ -367,6 +368,7 @@ namespace DeNelle.Editor.RoomForge
             if (!ok)
             {
                 _status = $"FAILED saving prefab: {prefabPath}";
+                FlowTrace.Fail("RoomForge", $"failed to save prefab '{prefabPath}'");
                 return;
             }
 
@@ -374,10 +376,12 @@ namespace DeNelle.Editor.RoomForge
             RoomForgeMaterials.ApplyToRoomRoot(_workingRoot,
                 useAccentFloor: meta.archetype == "reward" || meta.archetype == "boss");
 
-            AppendCatalog(meta, prefabPath, _workingRoot.GetComponentsInChildren<RoomSocket>(true));
+            var savedSockets = _workingRoot.GetComponentsInChildren<RoomSocket>(true);
+            FlowTrace.Step("RoomForge", $"room saved id='{meta.roomId}' archetype='{meta.archetype}' " +
+                                        $"footprint={meta.footprintCells.x}x{meta.footprintCells.y} sockets={savedSockets.Length} -> {prefabPath}");
+            AppendCatalog(meta, prefabPath, savedSockets);
             AssetDatabase.Refresh();
             _status = $"Saved {prefabPath} + catalog entry '{meta.roomId}' (KayKit wall/floor mats).";
-            Debug.Log($"[RoomForge] {_status}");
         }
 
         private static void EnsureFolder(string assetFolder)
@@ -444,13 +448,18 @@ namespace DeNelle.Editor.RoomForge
             file.rooms.Add(entry);
 
             string json = JsonConvert.SerializeObject(file, Formatting.Indented);
-            File.WriteAllText(CatalogPath, json, Encoding.UTF8);
 
-            // Resources mirror (WebGL-safe path if ever loaded at runtime).
+            // Resources mirror (WebGL-safe path if ever loaded at runtime) — dual-copy, byte-identical.
             string resDir = "Assets/Resources/Data/Canonical/dungeon-layouts";
             EnsureFolder(resDir);
             string resPath = resDir + "/rooms-catalog.json";
-            File.WriteAllText(resPath, json, Encoding.UTF8);
+            bool wrote = Guard.Try("RoomForge", "write rooms-catalog dual-copy", () =>
+            {
+                File.WriteAllText(CatalogPath, json, Encoding.UTF8);
+                File.WriteAllText(resPath, json, Encoding.UTF8);
+            });
+            FlowTrace.Step("RoomForge", $"catalog write id='{meta.roomId}' entries={file.rooms.Count} " +
+                                        $"dualCopy={(wrote ? "ok" : "FAILED")} (StreamingAssets + Resources)");
         }
     }
 }

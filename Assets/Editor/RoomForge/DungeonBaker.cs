@@ -17,6 +17,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using Unity.AI.Navigation;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Dungeons.RoomForge;
 
 namespace DeNelle.Editor.RoomForge
@@ -26,6 +27,11 @@ namespace DeNelle.Editor.RoomForge
         private const string LayoutsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts";
         private const string DefaultLayout = "d4_sunken_crypt_spine.json";
         private const string OutputScenesFolder = "Assets/Scenes/DungeonCompose";
+        private const string Sys = "DungeonBake";
+        // Editor pref (default OFF): when ON, a FAILED bake is saved to a _FAILED_<id>.unity
+        // OUTSIDE Build Settings for debugging. Default off keeps a broken layout from leaving
+        // any scene behind (WO-745 §2 fix 1).
+        private const string SaveFailedScenesPref = "DungeonBaker.SaveFailedScenes";
 
         [MenuItem("Defenders/Dungeon/Bake Compose Layout (default spine)")]
         public static void BakeDefault()
@@ -56,44 +62,57 @@ namespace DeNelle.Editor.RoomForge
             EditorApplication.Exit(0);
         }
 
+        // Convert a project-relative "Assets/..." path to an absolute filesystem path.
+        // Only the LEADING "Assets/" is the project marker (Application.dataPath already ends in
+        // "/Assets"); a naive Replace("Assets/", ...) ALSO mangles the "Assets/" inside
+        // "StreamingAssets/" -> a doubled path (the WO-742 bake crash). Strip the leading marker only.
+        private static string ToFilesystemPath(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath)) return assetPath;
+            if (Path.IsPathRooted(assetPath)) return assetPath;
+            if (assetPath.StartsWith("Assets/", System.StringComparison.Ordinal))
+                return Application.dataPath + "/" + assetPath.Substring("Assets/".Length);
+            return assetPath;
+        }
+
         public static void BakeFromFile(string layoutAssetPath)
         {
-            if (!File.Exists(layoutAssetPath))
+            // Resolve to an absolute filesystem path (see ToFilesystemPath for the doubled-path fix).
+            string fsPath = ToFilesystemPath(layoutAssetPath);
+            if (!File.Exists(fsPath))
             {
-                // Unity asset path → filesystem
-                string fs = layoutAssetPath.Replace("Assets/", Application.dataPath + "/");
-                if (!File.Exists(fs))
-                {
-                    Debug.LogError($"[DungeonBaker] Layout not found: {layoutAssetPath}");
-                    return;
-                }
-                layoutAssetPath = fs;
+                FlowTrace.Fail(Sys, $"layout not found: {layoutAssetPath} (resolved '{fsPath}')");
+                return;
             }
-            else if (layoutAssetPath.StartsWith("Assets/"))
-            {
-                layoutAssetPath = layoutAssetPath.Replace("Assets/", Application.dataPath + "/");
-            }
+            layoutAssetPath = fsPath;
 
-            string json = File.ReadAllText(layoutAssetPath, Encoding.UTF8);
-            DungeonComposeLayout layout;
-            try
+            string json = Guard.Try(Sys, "read layout json", () => File.ReadAllText(layoutAssetPath, Encoding.UTF8), null);
+            if (string.IsNullOrEmpty(json))
             {
-                layout = JsonConvert.DeserializeObject<DungeonComposeLayout>(json);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"[DungeonBaker] JSON parse failed: {ex.Message}");
+                FlowTrace.Fail(Sys, $"layout unreadable/empty file: {layoutAssetPath}");
                 return;
             }
 
-            if (layout == null || layout.rooms == null || layout.rooms.Count == 0)
+            DungeonComposeLayout layout = Guard.Try(Sys, "parse layout json",
+                () => JsonConvert.DeserializeObject<DungeonComposeLayout>(json), null);
+            if (layout == null)
             {
-                Debug.LogError("[DungeonBaker] Layout empty — abort.");
+                FlowTrace.Fail(Sys, "JSON parse returned null - abort (no scene left open)");
+                return;
+            }
+
+            if (layout.rooms == null || layout.rooms.Count == 0)
+            {
+                FlowTrace.Fail(Sys, $"layout '{layout.dungeonId}' has 0 rooms - abort");
                 return;
             }
 
             float cell = layout.cellSize > 0.1f ? layout.cellSize : 6f;
             var rules = layout.rules ?? new ComposeRules();
+            int connCount = layout.connections != null ? layout.connections.Count : 0;
+            FlowTrace.Step(Sys, $"layout loaded id='{layout.dungeonId}' rooms={layout.rooms.Count} " +
+                                $"connections={connCount} cellSize={cell:F1} maxMateDist={rules.maxMateDistance:F2} " +
+                                $"sealUnmated={rules.sealUnmated}");
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var root = new GameObject($"DungeonCompose_{layout.dungeonId}").transform;
@@ -101,27 +120,25 @@ namespace DeNelle.Editor.RoomForge
             // Instance lookup
             var instances = new Dictionary<string, GameObject>();
             var instanceMeta = new Dictionary<string, string>(); // instanceId -> archetype
+            var placedOrder = new List<string>();                // instantiate order (for navmesh first/last)
 
             foreach (var place in layout.rooms)
             {
                 if (place == null || string.IsNullOrEmpty(place.prefab)) continue;
                 string instId = string.IsNullOrEmpty(place.instanceId) ? place.prefab : place.instanceId;
                 GameObject prefab = LoadRoomPrefab(place.prefab);
-                if (prefab == null)
-                {
-                    Debug.LogWarning($"[DungeonBaker] Missing prefab '{place.prefab}' — spawning placeholder box room.");
-                    prefab = null;
-                }
 
                 GameObject go;
                 if (prefab != null)
                 {
                     go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root);
                     if (go == null) go = Object.Instantiate(prefab, root);
+                    FlowTrace.Step(Sys, $"instantiate inst='{instId}' prefab='{place.prefab}'");
                 }
                 else
                 {
                     go = CreatePlaceholderRoom(instId, root);
+                    FlowTrace.Warn(Sys, $"instantiate inst='{instId}' PLACEHOLDER (prefab '{place.prefab}' not found under Assets/Dungeon/Rooms or Resources)");
                 }
 
                 go.name = instId;
@@ -132,95 +149,48 @@ namespace DeNelle.Editor.RoomForge
                 go.transform.rotation = Quaternion.Euler(0f, place.yawDeg, 0f);
 
                 instances[instId] = go;
+                placedOrder.Add(instId);
                 string arch = place.archetype;
                 if (string.IsNullOrEmpty(arch))
                 {
-                    var meta = go.GetComponent<RoomPrefabMeta>();
-                    arch = meta != null ? meta.archetype : "combat";
+                    var roomMeta = go.GetComponent<RoomPrefabMeta>();
+                    arch = roomMeta != null ? roomMeta.archetype : "combat";
                 }
                 instanceMeta[instId] = arch ?? "combat";
             }
 
-            // Mate connections
-            int mateOk = 0, mateFail = 0;
-            if (layout.connections != null)
-            {
-                foreach (var c in layout.connections)
-                {
-                    if (c == null) continue;
-                    if (!instances.TryGetValue(c.fromInstance, out var aGo) ||
-                        !instances.TryGetValue(c.toInstance, out var bGo))
-                    {
-                        Debug.LogError($"[DungeonBaker] Connection references missing instance " +
-                                       $"'{c.fromInstance}' -> '{c.toInstance}'.");
-                        mateFail++;
-                        continue;
-                    }
-
-                    var aSock = FindSocket(aGo, c.fromSocket);
-                    var bSock = FindSocket(bGo, c.toSocket);
-                    if (aSock == null || bSock == null)
-                    {
-                        Debug.LogError($"[DungeonBaker] Socket missing: {c.fromInstance}.{c.fromSocket} " +
-                                       $"or {c.toInstance}.{c.toSocket}");
-                        mateFail++;
-                        continue;
-                    }
-
-                    if (!TypesCompatible(aSock.type, bSock.type))
-                    {
-                        Debug.LogError($"[DungeonBaker] Type mismatch {aSock.type} vs {bSock.type} " +
-                                       $"on {c.fromInstance}.{c.fromSocket}");
-                        mateFail++;
-                        continue;
-                    }
-
-                    float dist = Vector3.Distance(aSock.WorldPosition, bSock.WorldPosition);
-                    float maxD = rules.maxMateDistance > 0f ? rules.maxMateDistance : 1.25f;
-                    // Prefer sliding the "to" room so sockets touch if slightly off grid.
-                    if (dist > maxD)
-                    {
-                        Vector3 delta = aSock.WorldPosition - bSock.WorldPosition;
-                        // Only planar nudge of the whole "to" instance.
-                        bGo.transform.position += new Vector3(delta.x, 0f, delta.z);
-                        dist = Vector3.Distance(aSock.WorldPosition, bSock.WorldPosition);
-                    }
-
-                    float align = Vector3.Dot(aSock.Outward.normalized, -bSock.Outward.normalized);
-                    if (dist > maxD || align < 0.25f)
-                    {
-                        Debug.LogError($"[DungeonBaker] Mate FAIL {c.fromInstance}.{c.fromSocket} <-> " +
-                                       $"{c.toInstance}.{c.toSocket} dist={dist:F2} align={align:F2} " +
-                                       $"(door-touch-door hard gate).");
-                        mateFail++;
-                        continue;
-                    }
-
-                    string connId = $"{c.fromInstance}.{c.fromSocket}::{c.toInstance}.{c.toSocket}";
-                    aSock.matedTo = connId;
-                    bSock.matedTo = connId;
-                    mateOk++;
-                    Debug.Log($"[DungeonBaker] Mated {connId} dist={dist:F2} align={align:F2}");
-                }
-            }
-
-            // Seal unmated
-            int sealedN = 0;
-            if (rules.sealUnmated)
-            {
-                foreach (var kv in instances)
-                {
-                    foreach (var s in kv.Value.GetComponentsInChildren<RoomSocket>(true))
-                    {
-                        if (s == null || s.IsMated) continue;
-                        SealSocket(s);
-                        sealedN++;
-                    }
-                }
-            }
+            // Mate + re-verify (drift) + overlap + seal — the shared DungeonBakerChecks.Compose is
+            // the SINGLE source of truth the RoomForgeRegression oracle also drives. It emits the
+            // [Flow:DungeonBake] band (per-connection reason enum + seal events) itself (WO-745 §3).
+            var outcome = DungeonBakerChecks.Compose(instances, layout);
+            int mateOk = outcome.mateOk;
+            int sealedN = outcome.sealedN;
+            int totalFail = outcome.mateFail + outcome.driftFail + outcome.overlapFail;
 
             // Pacing lint
             LintPacing(instanceMeta, rules);
+
+            // ---- §2 fix 1: HARD GATE. Any mate/drift/overlap failure => do NOT bake navmesh,
+            // do NOT save the shipping scene, do NOT touch Build Settings. Abort with the
+            // machine-parseable summary so the failure is a captured line, not a silent bad scene.
+            if (totalFail > 0)
+            {
+                string failSummary = $"SUMMARY id={layout.dungeonId} rooms={instances.Count} " +
+                                     $"matesOk={mateOk} matesFail={outcome.ConnectionFail} sealed={sealedN} " +
+                                     $"saved=False drift={outcome.driftFail} overlaps={outcome.overlapFail}";
+                FlowTrace.Fail(Sys, failSummary + " ABORT: not saving scene, not touching Build Settings (WO-745 fix 1)");
+
+                // Optional debug-only save OUTSIDE Build Settings (default off).
+                if (EditorPrefs.GetBool(SaveFailedScenesPref, false))
+                {
+                    EnsureOutputFolder();
+                    string failPath = $"{OutputScenesFolder}/_FAILED_{layout.dungeonId}.unity";
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    Guard.Try(Sys, "save FAILED debug scene", () => { EditorSceneManager.SaveScene(scene, failPath); });
+                    FlowTrace.Warn(Sys, $"saved FAILED debug scene (NOT in Build Settings): {failPath}");
+                }
+                return;
+            }
 
             // Lighting defaults (dim)
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
@@ -232,7 +202,8 @@ namespace DeNelle.Editor.RoomForge
             light.intensity = 0.35f;
             light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
-            // NavMesh
+            // NavMesh + path-connectivity (stronger than a single origin sample): confirm a path
+            // from the first placed room centre to the last actually completes.
             var navHost = new GameObject("NavMesh");
             navHost.transform.SetParent(root, false);
             var surface = navHost.AddComponent<NavMeshSurface>();
@@ -241,24 +212,37 @@ namespace DeNelle.Editor.RoomForge
             surface.layerMask = ~0;
             surface.BuildNavMesh();
             bool walkable = NavMesh.SamplePosition(Vector3.zero, out _, 8f, NavMesh.AllAreas);
-            Debug.Log($"[DungeonBaker] NavMesh baked; sample@origin walkable={walkable}.");
+            string navResult = "walkable=" + walkable;
+            if (placedOrder.Count >= 2 &&
+                instances.TryGetValue(placedOrder[0], out var firstGo) &&
+                instances.TryGetValue(placedOrder[placedOrder.Count - 1], out var lastGo))
+            {
+                var path = new NavMeshPath();
+                bool got = NavMesh.SamplePosition(firstGo.transform.position, out var fHit, 8f, NavMesh.AllAreas) &&
+                           NavMesh.SamplePosition(lastGo.transform.position, out var lHit, 8f, NavMesh.AllAreas) &&
+                           NavMesh.CalculatePath(fHit.position, lHit.position, NavMesh.AllAreas, path);
+                navResult += $" path[{placedOrder[0]}->{placedOrder[placedOrder.Count - 1]}]={(got ? path.status.ToString() : "NoSample")}";
+            }
+            FlowTrace.Step(Sys, $"navmesh baked; {navResult}");
 
             // Save scene
-            if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
-                AssetDatabase.CreateFolder("Assets", "Scenes");
-            if (!AssetDatabase.IsValidFolder(OutputScenesFolder))
-                AssetDatabase.CreateFolder("Assets/Scenes", "DungeonCompose");
-
+            EnsureOutputFolder();
             string scenePath = $"{OutputScenesFolder}/{layout.dungeonId}.unity";
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, scenePath);
             EnsureInBuildSettings(scenePath);
 
-            Debug.Log($"[DungeonBaker] DONE id={layout.dungeonId} rooms={instances.Count} " +
-                      $"matesOk={mateOk} matesFail={mateFail} sealed={sealedN} saved={saved} path={scenePath}");
+            FlowTrace.Step(Sys, $"SUMMARY id={layout.dungeonId} rooms={instances.Count} " +
+                                $"matesOk={mateOk} matesFail=0 sealed={sealedN} saved={saved} " +
+                                $"path={scenePath} {navResult}");
+        }
 
-            if (mateFail > 0)
-                Debug.LogError($"[DungeonBaker] HARD GATE: {mateFail} mate failure(s) — fix layout or sockets.");
+        private static void EnsureOutputFolder()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
+                AssetDatabase.CreateFolder("Assets", "Scenes");
+            if (!AssetDatabase.IsValidFolder(OutputScenesFolder))
+                AssetDatabase.CreateFolder("Assets/Scenes", "DungeonCompose");
         }
 
         private static GameObject LoadRoomPrefab(string prefabStem)
@@ -301,11 +285,11 @@ namespace DeNelle.Editor.RoomForge
             floor.transform.localScale = new Vector3(6f, 0.1f, 6f);
             GameObjectUtility.SetStaticEditorFlags(floor, StaticEditorFlags.NavigationStatic);
 
-            // Four door sockets at cardinals
-            AddPlaceholderSocket(go, "north_door_01", "N", new Vector3(0, 0, 3f), Vector3.forward);
-            AddPlaceholderSocket(go, "south_door_01", "S", new Vector3(0, 0, -3f), Vector3.back);
-            AddPlaceholderSocket(go, "east_door_01", "E", new Vector3(3f, 0, 0), Vector3.right);
-            AddPlaceholderSocket(go, "west_door_01", "W", new Vector3(-3f, 0, 0), Vector3.left);
+            // Four door sockets at cardinals (short ids match rooms-catalog.json convention).
+            AddPlaceholderSocket(go, "n_door_01", "N", new Vector3(0, 0, 3f), Vector3.forward);
+            AddPlaceholderSocket(go, "s_door_01", "S", new Vector3(0, 0, -3f), Vector3.back);
+            AddPlaceholderSocket(go, "e_door_01", "E", new Vector3(3f, 0, 0), Vector3.right);
+            AddPlaceholderSocket(go, "w_door_01", "W", new Vector3(-3f, 0, 0), Vector3.left);
             return go;
         }
 
@@ -319,44 +303,6 @@ namespace DeNelle.Editor.RoomForge
             sock.id = id;
             sock.type = RoomSocketType.Door;
             sock.facing = facing;
-        }
-
-        private static RoomSocket FindSocket(GameObject room, string socketId)
-        {
-            if (room == null || string.IsNullOrEmpty(socketId)) return null;
-            foreach (var s in room.GetComponentsInChildren<RoomSocket>(true))
-                if (s != null && s.id == socketId) return s;
-            return null;
-        }
-
-        private static bool TypesCompatible(RoomSocketType a, RoomSocketType b)
-        {
-            if (a == b) return true;
-            if (a == RoomSocketType.Door && b == RoomSocketType.Arch) return true;
-            if (a == RoomSocketType.Arch && b == RoomSocketType.Door) return true;
-            if (a == RoomSocketType.StairUp && b == RoomSocketType.StairDown) return true;
-            if (a == RoomSocketType.StairDown && b == RoomSocketType.StairUp) return true;
-            return false;
-        }
-
-        private static void SealSocket(RoomSocket s)
-        {
-            if (s.isSecret)
-            {
-                // Invisible marker only — runtime can treat as illusory (no collider).
-                s.matedTo = "SEALED_SECRET";
-                Debug.Log($"[DungeonBaker] Secret-sealed unmated socket {s.id} on {s.transform.root.name}");
-                return;
-            }
-
-            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            wall.name = $"Seal_{s.id}";
-            wall.transform.SetParent(s.transform, false);
-            wall.transform.localPosition = Vector3.forward * 0.15f;
-            wall.transform.localRotation = Quaternion.identity;
-            wall.transform.localScale = new Vector3(s.halfWidth * 2f, 2.5f, 0.35f);
-            GameObjectUtility.SetStaticEditorFlags(wall, StaticEditorFlags.NavigationStatic);
-            s.matedTo = "SEALED_WALL";
         }
 
         private static void LintPacing(Dictionary<string, string> archetypes, ComposeRules rules)
@@ -375,11 +321,11 @@ namespace DeNelle.Editor.RoomForge
             float rc = combat / (float)total;
             float rl = lore / (float)total;
             float rr = reward / (float)total;
-            Debug.Log($"[DungeonBaker] Pacing lint rooms={total} combat={rc:P0} (target {rules.pacingCombat:P0}) " +
-                      $"lore={rl:P0} (target {rules.pacingLore:P0}) reward={rr:P0} (target {rules.pacingReward:P0}) other={other}");
+            FlowTrace.Step(Sys, $"pacing rooms={total} combat={rc:P0} (target {rules.pacingCombat:P0}) " +
+                                $"lore={rl:P0} (target {rules.pacingLore:P0}) reward={rr:P0} (target {rules.pacingReward:P0}) other={other}");
             // Soft warn only — small spines will not hit 60/20/20.
             if (total >= 5 && Mathf.Abs(rc - rules.pacingCombat) > 0.25f)
-                Debug.LogWarning("[DungeonBaker] Pacing: combat ratio far from 60/20/20 canon — author more lore/reward rooms.");
+                FlowTrace.Warn(Sys, "pacing: combat ratio far from 60/20/20 canon - author more lore/reward rooms");
         }
 
         private static void EnsureInBuildSettings(string scenePath)

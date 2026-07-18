@@ -6,6 +6,8 @@
         "DeNelle.Village",
         "DeNelle.Data",
         "DeNelle.BattleATB",
+        "DeNelle.Dungeons",
+        "Unity.AI.Navigation",
         "Unity.Addressables",
         "Unity.ResourceManager"
     ],

@@ -17,6 +17,7 @@ using System.Text;
 using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Dungeons.RoomForge;
 
 namespace DeNelle.Editor.RoomForge
@@ -55,6 +56,7 @@ namespace DeNelle.Editor.RoomForge
             RoomForgeMaterials.EnsureMenu();
 
             var specs = DefaultSpecs();
+            FlowTrace.Step("RoomForge", $"BuildDefaultRoomPrefabs specs={specs.Count} folder='{RoomsFolder}'");
             var catalog = new RoomCatalogFile { version = 1, rooms = new List<RoomCatalogEntry>() };
             int ok = 0;
             foreach (var spec in specs)
@@ -65,8 +67,8 @@ namespace DeNelle.Editor.RoomForge
             WriteCatalog(catalog);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[{Sys}] Built {ok}/{specs.Count} default room prefabs → {RoomsFolder} + rooms-catalog.json " +
-                      $"(shared KayKit atlas mats on all walls/floors)");
+            FlowTrace.Step("RoomForge", $"built {ok}/{specs.Count} default room prefabs -> {RoomsFolder} + rooms-catalog.json " +
+                                        $"(shared KayKit atlas mats on all walls/floors)");
         }
 
         /// <summary>Batchmode: Unity -executeMethod DeNelle.Editor.RoomForge.DefaultDungeonRoomsBuilder.BuildAll</summary>
@@ -291,7 +293,7 @@ namespace DeNelle.Editor.RoomForge
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out bool success);
                 if (!success)
                 {
-                    Debug.LogError($"[{Sys}] Failed to save {prefabPath}");
+                    FlowTrace.Fail("RoomForge", $"failed to save prefab '{prefabPath}'");
                     return false;
                 }
 
@@ -306,7 +308,8 @@ namespace DeNelle.Editor.RoomForge
                     sockets = socketList,
                 });
 
-                Debug.Log($"[{Sys}] {spec.id}: {spec.note} → {prefabPath}");
+                FlowTrace.Step("RoomForge", $"room saved id='{spec.id}' archetype='{spec.archetype}' " +
+                                            $"footprint={spec.footprint.x}x{spec.footprint.y} sockets={socketList.Count} -> {prefabPath}");
                 return true;
             }
             finally
@@ -484,8 +487,13 @@ namespace DeNelle.Editor.RoomForge
         private static void WriteCatalog(RoomCatalogFile catalog)
         {
             string json = JsonConvert.SerializeObject(catalog, Formatting.Indented);
-            File.WriteAllText(CatalogPath, json, Encoding.UTF8);
-            File.WriteAllText(CatalogPathRes, json, Encoding.UTF8);
+            bool wrote = Guard.Try("RoomForge", "write rooms-catalog dual-copy", () =>
+            {
+                File.WriteAllText(CatalogPath, json, Encoding.UTF8);
+                File.WriteAllText(CatalogPathRes, json, Encoding.UTF8);
+            });
+            FlowTrace.Step("RoomForge", $"catalog write entries={catalog.rooms.Count} dualCopy={(wrote ? "ok" : "FAILED")} " +
+                                        $"(StreamingAssets + Resources)");
             // Also write a human README of the kit
             string readme = Path.Combine(Application.dataPath, "Dungeon/Rooms/DEFAULT_ROOMS.md");
             var sb = new StringBuilder();
