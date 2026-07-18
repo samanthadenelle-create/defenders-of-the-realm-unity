@@ -128,6 +128,35 @@ namespace DeNelle.Editor
             "audio-mix.json",
         };
 
+        // ── WO-747: curation-aware catalogs (ADDITIVE model) ────────────────────
+        // weapons.json + armor.json are the runtime-winning Resources copies that the
+        // Gear Caster curation ADDS to. The exporter is ADDITIVE (never drops): the
+        // Resources copy = ALL current Resources rows UNION the curated library rows.
+        // So the Resources copy is deliberately DIFFERENT from (a superset of) the
+        // StreamingAssets copy — byte-identity can never be green — and it may also
+        // hold authored ids that exist ONLY in Resources (the class-tier progression
+        // armor + loot/vendor weapons). These two files are therefore EXEMPTED from
+        // the dual-copy drift check (1) and the cross-copy version comparison (4), and
+        // asserted by CheckGearCuration below (curation REACHED runtime, catalog well-
+        // formed) — NOT by an exact-projection equality (which would demand drops).
+        private static readonly HashSet<string> CurationAwareCatalogs =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "weapons.json",
+            "armor.json",
+        };
+
+        // The blink_armor class-default ids referenced by HeroBodySwapper.DefaultArmorIdFor
+        // (centurion/beasthunter/dragonic) + the SaveIntegrityRegression seed (basic1).
+        // They live ONLY in the StreamingAssets library, not the current Resources copy,
+        // so the additive exporter MERGES their full rows into Resources — which is what
+        // fixes the HeroBodySwapper default-armor no-op (the ids now resolve at runtime).
+        // KEEP IN SYNC with GearCurationExporter (single source of truth).
+        public static readonly string[] ReferencedDefaultArmorIds =
+        {
+            "blink_armor_centurion", "blink_armor_beasthunter", "blink_armor_dragonic", "blink_armor_basic1",
+        };
+
         // ── Entry point ─────────────────────────────────────────────────────────
 
         /// <summary>
@@ -156,6 +185,7 @@ namespace DeNelle.Editor
                 CheckWebglOmission(streamingRoot, resourcesRoot, failures, log);
                 CheckAllParse(streamingRoot, resourcesRoot, failures, log);
                 CheckVersionFields(streamingRoot, resourcesRoot, failures, log);
+                CheckGearCuration(streamingRoot, resourcesRoot, failures, log);   // WO-747
             }
 
             if (failures.Count == 0)
@@ -178,6 +208,14 @@ namespace DeNelle.Editor
             foreach (var sPath in CanonicalJsonFiles(streamingRoot))
             {
                 string rel = RelativePath(streamingRoot, sPath);
+                // WO-747: weapons.json/armor.json are a curated SUBSET of the library by
+                // design (Resources != StreamingAssets on purpose) — CheckGearCuration
+                // asserts them instead. Skipping keeps them out of the byte-drift check.
+                if (rel.IndexOf('/') < 0 && CurationAwareCatalogs.Contains(Path.GetFileName(rel)))
+                {
+                    log.AppendLine($"  '{rel}' curation-aware (WO-747) — drift check delegated to CheckGearCuration");
+                    continue;
+                }
                 string rPath = Path.Combine(resourcesRoot, rel);
                 if (!File.Exists(rPath)) continue;   // existence is (2)'s / CoreDataHub's job
 
@@ -335,6 +373,16 @@ namespace DeNelle.Editor
                     continue;
                 }
 
+                // WO-747: the curated catalogs may legitimately carry a DIFFERENT version
+                // across copies (armor's curated Resources copy stays v2 while the full
+                // library is v1) — skip the cross-copy version comparison for them. The
+                // presence check above still applies to the StreamingAssets side.
+                if (rel.IndexOf('/') < 0 && CurationAwareCatalogs.Contains(fileName))
+                {
+                    log.AppendLine($"  '{rel}' curation-aware (WO-747) — cross-copy version compare skipped (intentional divergence)");
+                    continue;
+                }
+
                 // Cross-copy agreement (a clearer name for the drift it accompanies).
                 string rPath = Path.Combine(resourcesRoot, rel);
                 if (File.Exists(rPath))
@@ -347,6 +395,157 @@ namespace DeNelle.Editor
                 }
             }
             log.AppendLine($"version fields: {checkedCount} catalog(s) checked, {VersionlessByDesign.Count} allowlisted");
+        }
+
+        // ── (5) Gear curation (WO-747, ADDITIVE model) ──────────────────────────
+        // Replaces the byte-drift check for weapons.json + armor.json. The exporter is
+        // ADDITIVE (Resources = current-Resources UNION curated-library-rows, never
+        // drops), so the gate does NOT assert exact projection equality (that would
+        // demand drops of the authored Resources-only content). It asserts the two
+        // things that matter:
+        //   (a) CURATION REACHED RUNTIME — every included pick id (weapons + armor) +
+        //       every referenced blink_armor default id is PRESENT in the Resources
+        //       catalog (so the Gear Caster picks + HeroBodySwapper defaults resolve).
+        //   (b) CATALOG RESOLVES — every Resources row is well-formed: a non-empty id,
+        //       no duplicate ids within a catalog (a dup = ambiguous GearCatalog lookup).
+        // Emits GEAR_CURATION_OK / GEAR_CURATION_FAIL. Absent picks file = WARN + skip.
+        // NOTE (authoring 2026-07-18): EXPECTED RED until GearCurationExporter is run —
+        // the pre-export Resources copies (34 weapons / 20 armor, no blink) do not yet
+        // hold the curated picks or the blink_armor defaults.
+
+        private static void CheckGearCuration(string streamingRoot, string resourcesRoot,
+                                              List<string> failures, StringBuilder log)
+        {
+            string picksPath = Path.Combine(Application.dataPath, "Editor/GearCurationPicks.json");
+            if (!File.Exists(picksPath))
+            {
+                log.AppendLine("  GEAR_CURATION skipped — no GearCurationPicks.json (curation is opt-in editor tooling; " +
+                               "the runtime curated copies are only asserted once the owner has curated + exported)");
+                return;
+            }
+
+            var included = ReadIncludedPickIds(picksPath, failures, log);
+            if (included == null) return;   // read failure already recorded
+
+            // The runtime-winning Resources copies (raw id lists, nulls kept to catch empties).
+            var weaponIds = ReadCatalogIds(Path.Combine(resourcesRoot, "weapons.json"), "weapons", failures, log);
+            var armorIds  = ReadCatalogIds(Path.Combine(resourcesRoot, "armor.json"),  "armor",  failures, log);
+            if (weaponIds == null || armorIds == null) return;   // read failure already recorded
+
+            // (b) CATALOG RESOLVES — well-formed rows (non-empty + unique ids).
+            bool resolveOk = true;
+            resolveOk &= ResolveCheck("weapons.json", weaponIds, failures, log);
+            resolveOk &= ResolveCheck("armor.json",  armorIds,  failures, log);
+
+            // (a) CURATION REACHED RUNTIME — presence in the combined Resources id set.
+            var resourcesAll = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in weaponIds) if (!string.IsNullOrEmpty(id)) resourcesAll.Add(id);
+            foreach (var id in armorIds)  if (!string.IsNullOrEmpty(id)) resourcesAll.Add(id);
+
+            var missingPicks = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in included) if (!resourcesAll.Contains(id)) missingPicks.Add(id);
+
+            var missingDefaults = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in ReferencedDefaultArmorIds) if (!resourcesAll.Contains(id)) missingDefaults.Add(id);
+
+            log.AppendLine($"  curation(additive): {included.Count} picked, {ReferencedDefaultArmorIds.Length} referenced-default; " +
+                           $"Resources has {resourcesAll.Count} distinct id(s) — missingPicks={missingPicks.Count} missingDefaults={missingDefaults.Count}");
+
+            if (missingPicks.Count > 0)
+                failures.Add($"GEAR_CURATION_FAIL: {missingPicks.Count} curated pick id(s) NOT present in the Resources catalog " +
+                             $"(curation did not reach runtime — run GearCurationExporter): {Preview(missingPicks)}");
+            if (missingDefaults.Count > 0)
+                failures.Add($"GEAR_CURATION_FAIL: referenced default armor id(s) NOT present in Resources " +
+                             $"(HeroBodySwapper class-default armor would no-op): {Preview(missingDefaults)}");
+
+            if (resolveOk && missingPicks.Count == 0 && missingDefaults.Count == 0)
+                log.AppendLine($"GEAR_CURATION_OK — all {included.Count} curated pick id(s) + {ReferencedDefaultArmorIds.Length} referenced " +
+                               "default armor id(s) present in the Resources catalog; every Resources row resolves (non-empty, unique id)");
+        }
+
+        /// <summary>Asserts one Resources catalog is well-formed: no empty ids, no duplicate ids
+        /// (a dup makes GearCatalog's id lookup ambiguous). Returns true when clean.</summary>
+        private static bool ResolveCheck(string label, List<string> ids, List<string> failures, StringBuilder log)
+        {
+            int empties = 0;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dups  = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in ids)
+            {
+                if (string.IsNullOrEmpty(id)) { empties++; continue; }
+                if (!seen.Add(id)) dups.Add(id);
+            }
+            bool ok = true;
+            if (empties > 0)
+            {
+                ok = false;
+                failures.Add($"GEAR_CURATION_FAIL: '{label}' has {empties} row(s) with an empty/missing id — will not resolve at runtime");
+            }
+            if (dups.Count > 0)
+            {
+                ok = false;
+                failures.Add($"GEAR_CURATION_FAIL: '{label}' has {dups.Count} duplicate id(s) (ambiguous GearCatalog lookup): {Preview(dups)}");
+            }
+            log.AppendLine($"  resolve[{label}]: {ids.Count} row(s), {empties} empty id(s), {dups.Count} duplicate id(s)");
+            return ok;
+        }
+
+        /// <summary>Raw id list from a Resources catalog array (nulls kept so empties are visible
+        /// to ResolveCheck). Returns null on a missing/unparseable file (failure already recorded).</summary>
+        private static List<string> ReadCatalogIds(string resourcesPath, string arrayKey,
+                                                   List<string> failures, StringBuilder log)
+        {
+            if (!File.Exists(resourcesPath))
+            {
+                failures.Add($"GEAR_CURATION_FAIL: Resources '{Path.GetFileName(resourcesPath)}' missing ({resourcesPath}) — run GearCurationExporter");
+                return null;
+            }
+            JObject robj = TryParseObject(resourcesPath);
+            if (robj == null)
+            {
+                failures.Add($"GEAR_CURATION_FAIL: Resources '{Path.GetFileName(resourcesPath)}' did not parse ({resourcesPath})");
+                return null;
+            }
+            var ids = new List<string>();
+            var arr = robj[arrayKey] as JArray;
+            if (arr != null)
+                foreach (var tok in arr)
+                {
+                    var row = tok as JObject;
+                    ids.Add(row != null ? (string)row["id"] : null);
+                }
+            return ids;
+        }
+
+        private static List<string> ReadIncludedPickIds(string picksPath, List<string> failures, StringBuilder log)
+        {
+            JObject obj = TryParseObject(picksPath);
+            if (obj == null)
+            {
+                failures.Add($"GEAR_CURATION_FAIL: GearCurationPicks.json present but did not parse ({picksPath})");
+                return null;
+            }
+            var ids = new List<string>();
+            var arr = obj["picks"] as JArray;
+            if (arr != null)
+                foreach (var tok in arr)
+                {
+                    var p = tok as JObject;
+                    if (p == null) continue;
+                    bool included = p["included"] != null && p["included"].Type == JTokenType.Boolean && (bool)p["included"];
+                    string id = (string)p["id"];
+                    if (included && !string.IsNullOrEmpty(id)) ids.Add(id);
+                }
+            log.AppendLine($"  curation: {ids.Count} picked id(s) included:true");
+            return ids;
+        }
+
+        private static string Preview(IEnumerable<string> ids)
+        {
+            var list = new List<string>(ids);
+            const int cap = 12;
+            if (list.Count <= cap) return string.Join(", ", list);
+            return string.Join(", ", list.GetRange(0, cap)) + $", ... (+{list.Count - cap} more)";
         }
 
         // ── Helpers ─────────────────────────────────────────────────────────────

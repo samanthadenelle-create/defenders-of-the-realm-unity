@@ -933,7 +933,10 @@ namespace DeNelle.Village
         }
 
         /// <summary>The owner-picked DEFAULT Blink armor catalog id per class (cosmetic level-1 look).
-        /// Ids match Assets/Resources/Data/Canonical/armor.json (Blink rows, loadVia="addressable").</summary>
+        /// These blink_armor default ids live in the StreamingAssets gear library
+        /// (Assets/StreamingAssets/Data/Canonical/armor.json) and are MERGED into the runtime
+        /// Resources copy by DeNelle.Editor.GearCurationExporter (WO-747, additive) so they resolve
+        /// at runtime; the visual equips via the Blink Addressables path (loadVia="addressable").</summary>
         private static string DefaultArmorIdFor(HeroClass cls) => cls switch
         {
             HeroClass.Knight => "blink_armor_centurion",    // gear/armor/Centurion_Male

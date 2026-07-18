@@ -10,7 +10,9 @@
       "rarity": "common",
       "defense": 0.04,
       "hpBonus": 10,
-      "req": { "level": 1 },
+      "req": {
+        "level": 1
+      },
       "buyWood": 20,
       "buyFood": 30,
       "buyIron": 10,
@@ -26,7 +28,9 @@
       "rarity": "uncommon",
       "defense": 0.08,
       "hpBonus": 25,
-      "req": { "level": 3 },
+      "req": {
+        "level": 3
+      },
       "buyWood": 40,
       "buyFood": 80,
       "buyIron": 60,
@@ -42,7 +46,9 @@
       "rarity": "rare",
       "defense": 0.14,
       "hpBonus": 45,
-      "req": { "level": 6 },
+      "req": {
+        "level": 6
+      },
       "buyFood": 50,
       "buyIron": 400,
       "buyCrystals": 10,
@@ -57,9 +63,11 @@
       "job": "any",
       "weight": "heavy",
       "rarity": "epic",
-      "defense": 0.20,
+      "defense": 0.2,
       "hpBonus": 75,
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyWood": 100,
       "buyIron": 900,
       "buyCrystals": 50,
@@ -75,7 +83,9 @@
       "rarity": "legendary",
       "defense": 0.28,
       "hpBonus": 100,
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyWood": 300,
       "buyIron": 2000,
       "buyCrystals": 200,
@@ -84,7 +94,6 @@
       "makersMark": "Oathweld",
       "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart."
     },
-
     {
       "id": "armor_knight_common",
       "name": "Ironward Plate",
@@ -95,7 +104,9 @@
       "defense": 0.06,
       "hpBonus": 20,
       "perk": "Reduces incoming melee damage by a small additional amount while standing still.",
-      "req": { "level": 1 },
+      "req": {
+        "level": 1
+      },
       "buyIron": 70,
       "buyFood": 20,
       "iconPath": "ItemIcons/armor_knight_common",
@@ -111,7 +122,9 @@
       "defense": 0.12,
       "hpBonus": 40,
       "perk": "Extended stun on Shield Bash when HP is above 75%.",
-      "req": { "level": 3 },
+      "req": {
+        "level": 3
+      },
       "buyIron": 250,
       "buyFood": 50,
       "iconPath": "ItemIcons/armor_knight_uncommon",
@@ -127,7 +140,9 @@
       "defense": 0.18,
       "hpBonus": 60,
       "perk": "Gain a brief damage reduction buff after landing a charged attack.",
-      "req": { "level": 6 },
+      "req": {
+        "level": 6
+      },
       "buyIron": 600,
       "buyFood": 80,
       "buyCrystals": 15,
@@ -145,7 +160,9 @@
       "defense": 0.25,
       "hpBonus": 85,
       "perk": "Charge attacks release an ember burst on impact, dealing bonus fire-adjacent damage.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyIron": 1200,
       "buyFood": 100,
       "buyCrystals": 60,
@@ -163,7 +180,9 @@
       "defense": 0.35,
       "hpBonus": 120,
       "perk": "A portion of damage taken is reflected to attackers. Oathweld runes pulse brighter as the wearer's HP falls.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyIron": 3000,
       "buyCrystals": 300,
       "setId": "oathplate",
@@ -171,7 +190,6 @@
       "makersMark": "Oathweld",
       "saga": "The plate of the first defenders — dark iron sealed with Oathweld runes that glow gold and orange. It remembers every oath sworn over it. The runes are not decoration; they are the oaths themselves, still binding."
     },
-
     {
       "id": "armor_ranger_common",
       "name": "Scout's Leather",
@@ -182,7 +200,9 @@
       "defense": 0.05,
       "hpBonus": 12,
       "perk": "Slightly increased movement speed when no enemies are within close range.",
-      "req": { "level": 1 },
+      "req": {
+        "level": 1
+      },
       "buyFood": 40,
       "buyWood": 20,
       "buyIron": 15,
@@ -196,10 +216,12 @@
       "job": "ranger",
       "weight": "light",
       "rarity": "uncommon",
-      "defense": 0.10,
+      "defense": 0.1,
       "hpBonus": 28,
       "perk": "Extends Snare Arrow root duration.",
-      "req": { "level": 3 },
+      "req": {
+        "level": 3
+      },
       "buyFood": 100,
       "buyWood": 60,
       "buyIron": 40,
@@ -216,7 +238,9 @@
       "defense": 0.16,
       "hpBonus": 50,
       "perk": "Increases critical chance on ranged attacks.",
-      "req": { "level": 6 },
+      "req": {
+        "level": 6
+      },
       "buyFood": 100,
       "buyWood": 300,
       "buyCrystals": 12,
@@ -234,7 +258,9 @@
       "defense": 0.22,
       "hpBonus": 70,
       "perk": "Dodge chance increases briefly after firing Suppressing Volley.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyFood": 150,
       "buyWood": 600,
       "buyCrystals": 55,
@@ -249,10 +275,12 @@
       "job": "ranger",
       "weight": "light",
       "rarity": "legendary",
-      "defense": 0.30,
+      "defense": 0.3,
       "hpBonus": 95,
       "perk": "Aim charges faster. Nature-adjacent damage bonus on all ranged attacks. Glows faintly green near the Heart.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyFood": 300,
       "buyWood": 1500,
       "buyCrystals": 200,
@@ -261,7 +289,6 @@
       "makersMark": "Heartwood",
       "saga": "The first scout who came back from the outer paths wore this. It was grown for her by the Tree itself — the leaves are not attached, they are part of the armor. It has never been fully still."
     },
-
     {
       "id": "armor_mage_common",
       "name": "Apprentice Robes",
@@ -272,7 +299,9 @@
       "defense": 0.03,
       "hpBonus": 8,
       "perk": "Minor increase to mana regeneration rate.",
-      "req": { "level": 1 },
+      "req": {
+        "level": 1
+      },
       "buyWood": 30,
       "buyFood": 20,
       "buyCrystals": 2,
@@ -289,7 +318,9 @@
       "defense": 0.08,
       "hpBonus": 22,
       "perk": "Reduces Frost Nova cooldown.",
-      "req": { "level": 3 },
+      "req": {
+        "level": 3
+      },
       "buyWood": 80,
       "buyFood": 40,
       "buyCrystals": 8,
@@ -306,7 +337,9 @@
       "defense": 0.13,
       "hpBonus": 40,
       "perk": "Increases all spell damage. Runes on the vestments glow brighter with each successive cast.",
-      "req": { "level": 6 },
+      "req": {
+        "level": 6
+      },
       "buyWood": 150,
       "buyFood": 60,
       "buyCrystals": 30,
@@ -321,10 +354,12 @@
       "job": "mage",
       "weight": "light",
       "rarity": "epic",
-      "defense": 0.20,
+      "defense": 0.2,
       "hpBonus": 65,
       "perk": "Meteor Strike pulls nearby enemies toward the point of impact.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyWood": 400,
       "buyFood": 100,
       "buyCrystals": 80,
@@ -342,7 +377,9 @@
       "defense": 0.28,
       "hpBonus": 90,
       "perk": "Reduces all spell mana costs. Chance for spell echo on cast. Trails blue aether light when moving.",
-      "req": { "level": 10 },
+      "req": {
+        "level": 10
+      },
       "buyWood": 1000,
       "buyFood": 200,
       "buyCrystals": 350,
@@ -350,6 +387,115 @@
       "iconPath": "ItemIcons/armor_mage_legendary",
       "makersMark": "Last-Pressing",
       "saga": "The Keeper's robe from the Bright Centuries — deep void-black lined with living aether, constellation patterns that shift as the wearer moves. It was the master's. She wore it into the dark. It came back; she didn't."
+    },
+    {
+      "id": "blink_armor_centurion",
+      "name": "Centurion Harness",
+      "icon": "🧥",
+      "kind": "Gear",
+      "category": "outfit",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "uncommon",
+      "prefabPath": "gear/armor/Centurion_Male",
+      "generated": true,
+      "manual": true,
+      "loadVia": "addressable",
+      "slot": "Body",
+      "weight": "heavy",
+      "defense": 0.08,
+      "hpBonus": 25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_centurion"
+    },
+    {
+      "id": "blink_armor_beasthunter",
+      "name": "Beasthunter Garb",
+      "icon": "🧥",
+      "kind": "Gear",
+      "category": "outfit",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "uncommon",
+      "prefabPath": "gear/armor/BeastHunter_Male",
+      "generated": true,
+      "manual": true,
+      "loadVia": "addressable",
+      "slot": "Body",
+      "weight": "light",
+      "defense": 0.08,
+      "hpBonus": 25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_beasthunter"
+    },
+    {
+      "id": "blink_armor_dragonic",
+      "name": "Dragonic (Blink)",
+      "icon": "🧥",
+      "kind": "Gear",
+      "category": "outfit",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "gear/armor/Dragonic_Male",
+      "generated": true,
+      "manual": false,
+      "loadVia": "addressable",
+      "slot": "Body",
+      "weight": "heavy",
+      "defense": 0.04,
+      "hpBonus": 10.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_dragonic"
+    },
+    {
+      "id": "blink_armor_basic1",
+      "name": "Basic1 (Blink)",
+      "icon": "🧥",
+      "kind": "Gear",
+      "category": "outfit",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "gear/armor/Basic1_Male",
+      "generated": true,
+      "manual": false,
+      "loadVia": "addressable",
+      "slot": "Body",
+      "weight": "light",
+      "defense": 0.04,
+      "hpBonus": 10.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic1"
     }
-  ]
+  ],
+  "_generated": "GearCurationExporter (additive merge) from StreamingAssets library + GearCurationPicks.json - DO NOT hand-edit"
 }
