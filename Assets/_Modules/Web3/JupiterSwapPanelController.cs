@@ -1,18 +1,24 @@
 // =============================================================================
-// JupiterSwapPanelController — drives JupiterSwapPanel.uxml (WO-43).
+// JupiterSwapPanelController — the VIEW for JupiterSwapPanel.uxml (WO-43).
 // -----------------------------------------------------------------------------
-// Debounces user input, fires JupiterSwapService.GetQuoteAsync, refreshes the
-// fee breakdown, and triggers ExecuteSwapAsync on confirm. Binds elements by the
-// name contract documented in JupiterSwapPanel.uxml.
+// MVVM (Silo G, DANGER / money path): a DUMB UXML skin that binds a SwapVM. ALL
+// logic — the keystroke debounce, the quote fetch, the fee-breakdown projection,
+// and the guarded confirm/execute — lives in the VM. This View only:
+//   * binds the UXML elements by the name contract in JupiterSwapPanel.uxml,
+//   * forwards taps/keystrokes to the VM as commands,
+//   * repaints the element text/flags from the VM on Changed.
+// It reads NO service/game state directly (it holds the service ONLY to build the
+// VM's backend seam at Awake — SwapVM.CreateDefault).
+//
+// ⚠ MONEY PATH: the confirm guards (not-charged guarantees + indeterminate Fail
+// path) are preserved VERBATIM inside SwapVM.ConfirmAsync — zero transaction
+// behaviour changed. The async-void handler below just awaits that guarded task.
 //
 // v1 uses hardcoded English strings (the swap.* keys exist in en.json for a
 // later localisation pass via CanonStrings).
 // =============================================================================
 
 using System;
-using System.Threading;
-using System.Threading.Tasks;
-using DeNelle.Core.Web3;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -36,9 +42,6 @@ namespace DeNelle.Web3
         private const string ConfirmDisabledClass = "swap-confirm-btn--disabled";
         private const string StatusErrorClass = "swap-status--error";
 
-        // How long to wait after the last keystroke before firing a quote request.
-        private const float QuoteDebounceSeconds = 0.6f;
-
         [SerializeField] private UIDocument _document;
 
         // ── Bound elements ───────────────────────────────────────────────────
@@ -52,13 +55,9 @@ namespace DeNelle.Web3
         private Label _status;
         private Button _confirmBtn;
 
-        // ── State ────────────────────────────────────────────────────────────
+        // ── The ViewModel (owns debounce / quote / confirm + all display state) ──
         private JupiterSwapService _service;
-        private SwapFeeConfig _feeConfig;
-        private SwapQuote _latestQuote;
-        private decimal _currentInput;
-        private bool _quoteLoading;
-        private CancellationTokenSource _debounceCts;
+        private SwapVM _vm;
         private bool _bound;
 
         // The overlay tap-to-dismiss callback (kept so we can unregister it).
@@ -72,6 +71,10 @@ namespace DeNelle.Web3
         {
             _service = GetComponent<JupiterSwapService>();
             if (_document == null) _document = GetComponent<UIDocument>();
+            // Build the VM over the service's backend seam. The View never calls the
+            // service directly after this — all logic goes through the VM.
+            _vm = SwapVM.CreateDefault(_service);
+            _vm.Changed += Render;
         }
 
         private void OnEnable()
@@ -81,13 +84,18 @@ namespace DeNelle.Web3
 
         private void OnDisable()
         {
-            if (_debounceCts != null)
-            {
-                _debounceCts.Cancel();
-                _debounceCts.Dispose();
-                _debounceCts = null;
-            }
+            _vm?.CancelPendingQuote();
             UnbindElements();
+        }
+
+        private void OnDestroy()
+        {
+            if (_vm != null)
+            {
+                _vm.Changed -= Render;
+                _vm.Dispose();
+                _vm = null;
+            }
         }
 
         // =====================================================================
@@ -100,17 +108,16 @@ namespace DeNelle.Web3
             // shown; (re)bind defensively here.
             if (!_bound) BindElements();
 
-            _feeConfig = feeConfig;
-            _latestQuote = null;
-            _currentInput = 0m;
+            // Reset the VM state + fee source (order mirrors the original controller).
+            _vm.BeginInitialise(feeConfig != null ? feeConfig.PlatformFeeBps : 20);
 
-            if (_inputAmount != null) _inputAmount.value = "0";
-            ClearQuoteDisplay();
-            SetStatus("Enter an amount to see the rate.", isError: false);
-            SetConfirmEnabled(false);
+            if (_inputAmount != null) _inputAmount.value = "0";   // fires OnInputChanged -> VM
+            _vm.ApplyInitialiseBaseline();   // clears the quote + "enter an amount" + confirm off
+            Render();
 
             // If a minimum is requested, pre-fill a rough USDC amount that would
-            // cover it (refined on the first live quote).
+            // cover it (refined on the first live quote). Setting the value fires
+            // OnInputChanged -> the VM's debounced quote.
             if (minimumSkr > 0 && _inputAmount != null)
                 _inputAmount.value = Math.Ceiling(minimumSkr / 10m).ToString("F2");
         }
@@ -165,6 +172,9 @@ namespace DeNelle.Web3
             _bound = _overlay != null || _confirmBtn != null || _inputAmount != null;
             if (_bound) FlowTrace.Step("Swap", "BindElements: swap panel bound.");
             else FlowTrace.Fail("Swap", "BindElements: NO swap element resolved — panel did not build (player sees nothing / cannot swap).");
+
+            // Paint the current VM state onto the freshly-bound elements.
+            Render();
         }
 
         private void UnbindElements()
@@ -179,158 +189,41 @@ namespace DeNelle.Web3
         }
 
         // =====================================================================
-        //  Input -> debounced quote
+        //  Render — repaint elements from the VM ONLY
         // =====================================================================
 
-        private void OnInputChanged(ChangeEvent<string> evt)
+        private void Render()
         {
-            SetConfirmEnabled(false);
-            ClearQuoteDisplay();
-
-            if (!decimal.TryParse(evt.newValue, out decimal amount) || amount <= 0)
+            if (_vm == null) return;
+            if (_skrOut != null) _skrOut.text = _vm.SkrOutText;
+            if (_rate != null) _rate.text = _vm.RateText;
+            if (_platformFee != null) _platformFee.text = _vm.PlatformFeeText;
+            if (_networkFee != null) _networkFee.text = _vm.NetworkFeeText;
+            if (_status != null)
             {
-                SetStatus("Enter a valid amount.", isError: false);
-                return;
+                _status.text = _vm.StatusText;
+                _status.EnableInClassList(StatusErrorClass, _vm.StatusIsError);
             }
-
-            _currentInput = amount;
-            SetStatus("Getting rate...", isError: false);
-
-            // Cancel any in-flight debounce and start a new one.
-            if (_debounceCts != null)
+            if (_confirmBtn != null)
             {
-                _debounceCts.Cancel();
-                _debounceCts.Dispose();
+                _confirmBtn.SetEnabled(_vm.ConfirmEnabled);
+                _confirmBtn.EnableInClassList(ConfirmDisabledClass, !_vm.ConfirmEnabled);
             }
-            _debounceCts = new CancellationTokenSource();
-            _ = DebounceQuote(_debounceCts.Token);
-        }
-
-        private async Task DebounceQuote(CancellationToken ct)
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(QuoteDebounceSeconds), ct);
-            }
-            catch (OperationCanceledException)
-            {
-                return; // superseded by a newer keystroke.
-            }
-
-            if (ct.IsCancellationRequested) return;
-
-            _quoteLoading = true;
-            SwapQuote quote = await _service.GetQuoteAsync(SwapInputToken.USDC, _currentInput);
-            _quoteLoading = false;
-
-            if (ct.IsCancellationRequested) return;
-
-            if (quote == null)
-            {
-                FlowTrace.Warn("Swap", $"DebounceQuote: GetQuoteAsync returned null for {_currentInput} USDC — rate unavailable.");
-                SetStatus("Could not fetch rate. Check connection.", isError: true);
-                return;
-            }
-
-            _latestQuote = quote;
-            RefreshQuoteDisplay(quote);
-
-            bool walletConnected = !string.IsNullOrEmpty(_service.ConnectedWalletKey);
-            SetConfirmEnabled(walletConnected);
-            SetStatus(walletConnected ? string.Empty : "Connect your wallet to swap.", isError: false);
         }
 
         // =====================================================================
-        //  Display helpers
+        //  Commands (forward to the VM)
         // =====================================================================
 
-        private void RefreshQuoteDisplay(SwapQuote q)
-        {
-            if (_skrOut != null) _skrOut.text = $"~ {q.SkrOut:F2} SKR";
-            if (_rate != null) _rate.text = $"1 USDC = {q.Rate:F4} SKR";
-            if (_platformFee != null)
-            {
-                decimal feePct = (_feeConfig != null ? _feeConfig.PlatformFeeBps : 20) / 100m;
-                _platformFee.text = $"{q.PlatformFee:F4} USDC ({feePct:F1}%)";
-            }
-            if (_networkFee != null) _networkFee.text = $"~{q.NetworkFee:F6} SOL";
-        }
+        private void OnInputChanged(ChangeEvent<string> evt) => _vm?.OnInputChanged(evt.newValue);
 
-        private void ClearQuoteDisplay()
-        {
-            if (_skrOut != null) _skrOut.text = "-";
-            if (_rate != null) _rate.text = "-";
-            if (_platformFee != null) _platformFee.text = "-";
-            if (_networkFee != null) _networkFee.text = "-";
-        }
-
-        private void SetStatus(string msg, bool isError)
-        {
-            if (_status == null) return;
-            _status.text = msg;
-            _status.EnableInClassList(StatusErrorClass, isError);
-        }
-
-        private void SetConfirmEnabled(bool enabled)
-        {
-            if (_confirmBtn == null) return;
-            _confirmBtn.SetEnabled(enabled);
-            _confirmBtn.EnableInClassList(ConfirmDisabledClass, !enabled);
-        }
-
-        // =====================================================================
-        //  Actions
-        // =====================================================================
-
-        private void OnCloseTapped() => _service.CloseSwapPanel();
+        private void OnCloseTapped() => _vm?.Close();
 
         private async void OnConfirmTapped()
         {
-            using var _ = FlowTrace.Enter("Swap", "OnConfirmTapped");
-
-            if (_latestQuote == null || _quoteLoading)
-            {
-                FlowTrace.Warn("Swap", $"OnConfirmTapped: ignored — quote {(_latestQuote == null ? "null" : "present")}, loading={_quoteLoading}.");
-                return;
-            }
-
-            string walletKey = _service.ConnectedWalletKey;
-            if (string.IsNullOrEmpty(walletKey))
-            {
-                FlowTrace.Warn("Swap", "OnConfirmTapped: no connected wallet — swap blocked (player NOT charged).");
-                SetStatus("Connect your wallet to swap.", isError: true);
-                return;
-            }
-
-            SetConfirmEnabled(false);
-            SetStatus("Sending to wallet for approval...", isError: false);
-
-            bool ok;
-            try
-            {
-                ok = await _service.ExecuteSwapAsync(_latestQuote, walletKey);
-            }
-            catch (Exception ex)
-            {
-                // async void: an unhandled throw here would otherwise crash the frame silently. Catch,
-                // Fail loudly (outcome indeterminate = possible partial/charged swap), and re-enable.
-                FlowTrace.Fail("Swap",
-                    $"OnConfirmTapped: ExecuteSwapAsync THREW: {ex.GetType().Name}: {ex.Message} — swap outcome indeterminate.");
-                SetStatus("Swap failed. Please try again.", isError: true);
-                SetConfirmEnabled(true);
-                return;
-            }
-
-            if (!ok)
-            {
-                FlowTrace.Fail("Swap", "OnConfirmTapped: ExecuteSwapAsync returned FALSE — swap failed.");
-                SetStatus("Swap failed. Please try again.", isError: true);
-                SetConfirmEnabled(true);
-            }
-            else
-            {
-                FlowTrace.Step("Swap", "OnConfirmTapped: swap executed OK.");
-            }
+            // The guarded money path lives in the VM; its internal try/catch means this
+            // async-void handler can never crash the frame on an unhandled throw.
+            if (_vm != null) await _vm.ConfirmAsync();
         }
     }
 }

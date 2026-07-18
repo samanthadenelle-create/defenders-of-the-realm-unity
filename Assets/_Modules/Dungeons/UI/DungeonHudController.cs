@@ -7,14 +7,17 @@
 // for the v2 build: the lantern oil / duration readout (owner acceptance
 // checklist — "torch / lantern duration mechanic: make the duration legible").
 //
-// MODULE ISOLATION: the HUD is a PASSIVE display. It reads the Lantern's public
-// API (OilFraction, IsLowOil, LowOilFraction, EstimatedSecondsRemaining) each
-// frame and never mutates it. Lantern lives in the SAME module (DeNelle.Dungeons)
-// so a direct reference is allowed — no cross-module dependency.
+// MODULE ISOLATION: the HUD is a PASSIVE display. MVVM (Silo G): the View reads
+// NO game state — it binds a DungeonHudVM that owns the lantern projection (bar
+// fraction, low/critical band, low-oil pill, burn-time copy). The Lantern is fed
+// to the VM through the narrow ILanternReadout seam. Lantern lives in the SAME
+// module (DeNelle.Dungeons), so a direct reference is allowed — no cross-module
+// dependency; only the read-of-state moved into the VM.
 //
 // The Lantern reference is pushed in by the DungeonController on dungeon load
 // (SetLantern) — the controller already owns the Lantern reference, so the HUD
-// does not need to find it. Until a lantern is bound the oil panel reads "--".
+// does not need to find it. SetLantern now just routes the ref into the VM (PUSH
+// seam preserved). Until a lantern is bound the oil panel reads "--".
 //
 // All UI is UI Toolkit (UXML/USS) — project mandate.
 // =============================================================================
@@ -59,11 +62,8 @@ namespace DeNelle.Dungeons
         private const string OilFillEmptyClass = "oil-bar-fill--empty";
         private const string OilLowWarningShownClass = "oil-low-warning--shown";
 
-        // LOCALIZE: player-facing oil-readout copy. Kept as clearly-marked
-        // constants — Workstream C does NOT touch the shared en.json.
-        private const string MsgLightFmt = "Light: {0}";
-        private const string MsgLightUnknown = "Light: --";
-        private const string MsgLightFull = "Light: steady";
+        // ── The ViewModel (owns ALL oil-meter state/band logic + copy) ───────
+        private DungeonHudVM _vm;
 
         // ── Bound UI elements ────────────────────────────────────────────────
         private VisualElement _root;
@@ -79,6 +79,10 @@ namespace DeNelle.Dungeons
         private void Awake()
         {
             if (_document == null) _document = GetComponent<UIDocument>();
+            // The VM owns the band logic + copy; seed it with the critical threshold
+            // (serialized config) and, if a lantern was inspector-assigned, that ref.
+            _vm = new DungeonHudVM(_criticalOilFraction);
+            if (_lantern != null) _vm.SetLantern(new LanternReadoutAdapter(_lantern));
         }
 
         private void OnEnable()
@@ -121,6 +125,10 @@ namespace DeNelle.Dungeons
         public void SetLantern(Lantern lantern)
         {
             _lantern = lantern;
+            // PUSH seam preserved: route the pushed ref into the VM (wrapped in the
+            // read-only seam) rather than reading it from the View each frame.
+            if (_vm == null) _vm = new DungeonHudVM(_criticalOilFraction);
+            _vm.SetLantern(lantern != null ? new LanternReadoutAdapter(lantern) : null);
         }
 
         // =====================================================================
@@ -134,33 +142,21 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
-        /// Repaints the oil meter from the lantern's public API. The bar fill is
-        /// the oil fraction; the bar tints amber in the low band and red when
-        /// critically low; the time label shows the estimated remaining burn;
-        /// the warning pill shows while the lantern reads low oil.
+        /// Repaints the oil meter from the VM ONLY (no game-state read). The bar
+        /// fill is the VM's oil fraction; the bar tints amber in the low band and
+        /// red when critically low; the time label shows the VM's burn-time copy;
+        /// the warning pill shows while the VM reads low oil.
         /// </summary>
         private void RenderOil()
         {
-            if (_lantern == null)
-            {
-                // No lantern bound yet — show a neutral idle readout.
-                SetBarFraction(1f);
-                SetBarState(false, false);
-                if (_oilTimeLabel != null) _oilTimeLabel.text = MsgLightUnknown;
-                ShowLowWarning(false);
-                return;
-            }
+            if (_vm == null) return;
 
-            float fraction = Mathf.Clamp01(_lantern.OilFraction);
-            bool low = _lantern.IsLowOil;
-            bool critical = fraction <= _criticalOilFraction;
-
-            SetBarFraction(fraction);
-            SetBarState(low && !critical, critical);
-            ShowLowWarning(low);
+            SetBarFraction(_vm.BarFraction);
+            SetBarState(_vm.IsWarning, _vm.IsCritical);
+            ShowLowWarning(_vm.ShowLowWarning);
 
             if (_oilTimeLabel != null)
-                _oilTimeLabel.text = FormatBurnTime(_lantern.EstimatedSecondsRemaining);
+                _oilTimeLabel.text = _vm.TimeLabel;
         }
 
         // =====================================================================
@@ -187,31 +183,6 @@ namespace DeNelle.Dungeons
         {
             if (_oilLowWarning == null) return;
             _oilLowWarning.EnableInClassList(OilLowWarningShownClass, show);
-        }
-
-        /// <summary>
-        /// Formats the estimated remaining burn into a glanceable label —
-        /// "Light: 1m 12s" / "Light: 24s". A non-draining lantern (infinite /
-        /// pre-run) reads "Light: steady".
-        /// </summary>
-        private static string FormatBurnTime(float seconds)
-        {
-            if (float.IsInfinity(seconds) || float.IsNaN(seconds))
-                return MsgLightFull;
-
-            int total = Mathf.Max(0, Mathf.CeilToInt(seconds));
-            string time;
-            if (total >= 60)
-            {
-                int m = total / 60;
-                int s = total % 60;
-                time = $"{m}m {s:00}s";
-            }
-            else
-            {
-                time = $"{total}s";
-            }
-            return string.Format(MsgLightFmt, time);
         }
     }
 }

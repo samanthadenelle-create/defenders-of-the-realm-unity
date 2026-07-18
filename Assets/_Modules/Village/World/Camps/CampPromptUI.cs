@@ -4,12 +4,13 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
 //
 // Self-bootstraps ONLY when CampSystem.Enabled (ships dark otherwise). One DDOL
-// instance drives every camp:
-//   * Each frame find the nearest CLEARED-but-unclaimed camp within ClaimRange of
-//     the hero (tag "Player" or "HeroTarget"). If found, show a world-space
-//     "Claim" prompt. Tap it (or press [E]) -> camp.Claim().
-//   * On claim, show a small code-built pick-a-building menu (Watchtower / Lumber
-//     Outpost / Farm Outpost). Tapping a choice -> camp.BuildOutpost(type).
+// instance drives every camp. MVVM (Silo G): this View reads NO game state — it
+// binds a CampPromptVM and delegates all scene reads to CampProximityService:
+//   * Each frame CampProximityService finds the nearest CLEARED-but-unclaimed camp
+//     within ClaimRange of the hero (tag "Player" or "HeroTarget"); the VM projects
+//     whether to show the world-space "Claim" prompt. Tap it -> vm.ClaimCurrent().
+//   * On claim, the VM opens the build menu; the View paints the code-built pick-a-
+//     building menu (Watchtower / Lumber Outpost / Farm Outpost). Tap -> vm.Build(type).
 //
 // Build-safe: LegacyRuntime.ttf font, NO UXML, NO EventSystem - pointer/touch is
 // polled and hit-tested manually (the proven GameOverScreen / VirtualJoystick
@@ -30,17 +31,17 @@ namespace DeNelle.Village.World.Camps
         [Tooltip("Hero must be within this many metres of a cleared camp to claim.")]
         public float ClaimRange = 7f;
 
-        private Transform _hero;
-        private Camera _cam;
+        // MVVM: the VM owns the prompt/menu STATE; the service owns the scene reads
+        // (hero find, proximity, world->screen). The View reads neither directly.
+        private CampPromptVM _vm;
+        private CampProximityService _proximity;
 
         private Canvas _canvas;
         private RectTransform _promptRect;   // the "Claim" tap button
         private Text _promptLabel;
-        private ClaimableCamp _promptCamp;    // camp the prompt currently targets
 
-        // Build menu state.
+        // Build menu UI (state lives in the VM; this is just the built menu root).
         private GameObject _menuRoot;
-        private ClaimableCamp _menuCamp;
         private readonly System.Collections.Generic.List<(RectTransform rect, OutpostType type)> _menuButtons =
             new System.Collections.Generic.List<(RectTransform, OutpostType)>();
 
@@ -57,6 +58,8 @@ namespace DeNelle.Village.World.Camps
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            _proximity = new CampProximityService { ClaimRange = ClaimRange };
+            _vm = new CampPromptVM(_proximity);
             BuildCanvas();
         }
 
@@ -69,19 +72,23 @@ namespace DeNelle.Village.World.Camps
         {
             if (!CampSystem.Enabled) { HidePrompt(); return; }
 
-            EnsureRefs();
+            _proximity.ClaimRange = ClaimRange;   // keep the service in sync with the inspector field
+            _vm.Tick();
+
+            // Sync the built menu root to the VM's menu state (VM owns open/close).
+            SyncMenu();
 
             // If a build menu is open, it owns input until a choice is made.
-            if (_menuRoot != null && _menuRoot.activeSelf)
+            if (_vm.MenuOpen)
             {
+                HidePrompt();
                 HandleMenuInput();
                 return;
             }
 
-            ClaimableCamp near = FindClaimableCamp();
-            if (near == null) { HidePrompt(); return; }
+            if (!_vm.ShowPrompt) { HidePrompt(); return; }
 
-            ShowPrompt(near);
+            ShowPrompt();
 
             // Mobile-first: claim on a tap on the prompt button. The [E] key trigger was removed.
             bool tapHit = TryGetTap(out Vector2 tap) && _promptRect != null &&
@@ -89,96 +96,52 @@ namespace DeNelle.Village.World.Camps
 
             if (tapHit)
             {
-                near.Claim();
+                _vm.ClaimCurrent();   // claims the camp + opens the build menu (VM state)
                 HidePrompt();
-                OpenBuildMenu(near);
+                SyncMenu();
             }
-        }
-
-        // =====================================================================
-        // Proximity search.
-        // =====================================================================
-        private ClaimableCamp FindClaimableCamp()
-        {
-            if (_hero == null) return null;
-            ClaimableCamp best = null;
-            float bestSqr = ClaimRange * ClaimRange;
-            var camps = CampSystem.Camps;
-            for (int i = 0; i < camps.Count; i++)
-            {
-                var c = camps[i];
-                if (c == null || !c.Cleared || c.Claimed) continue;
-                float sqr = (c.transform.position - _hero.position).sqrMagnitude;
-                if (sqr <= bestSqr) { bestSqr = sqr; best = c; }
-            }
-            return best;
-        }
-
-        private void EnsureRefs()
-        {
-            if (_hero == null)
-            {
-                var p = GameObject.FindWithTag("Player");
-                if (p == null)
-                {
-                    // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-                    var ht = SafeFindWithTag("HeroTarget");
-                    if (ht != null) p = ht;
-                }
-                _hero = p != null ? p.transform : null;
-            }
-            if (_cam == null) _cam = Camera.main;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
 
         // =====================================================================
         // Claim prompt (single reusable label/button, positioned at the camp).
         // =====================================================================
-        private void ShowPrompt(ClaimableCamp camp)
+        private void ShowPrompt()
         {
-            _promptCamp = camp;
             if (_promptRect == null) return;
 
-            // Project the camp's head position to screen space.
-            if (_cam == null) _cam = Camera.main;
-            Vector3 world = camp.transform.position + Vector3.up * 2.2f;
-            Vector3 sp = _cam != null ? _cam.WorldToScreenPoint(world) : new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 1f);
-
-            // Behind camera -> hide.
-            if (sp.z < 0f) { _promptRect.gameObject.SetActive(false); return; }
+            // Project the VM's prompt anchor to screen space (via the service).
+            if (!_proximity.TryProject(_vm.PromptWorldAnchor, out Vector2 sp))
+            {
+                _promptRect.gameObject.SetActive(false);   // behind camera -> hide
+                return;
+            }
 
             _promptRect.gameObject.SetActive(true);
             _promptRect.position = new Vector3(sp.x, sp.y, 0f);
             if (_promptLabel != null)
-                _promptLabel.text = "[ Tap ]  Claim Camp";
+                _promptLabel.text = _vm.PromptText;
         }
 
         private void HidePrompt()
         {
-            _promptCamp = null;
             if (_promptRect != null) _promptRect.gameObject.SetActive(false);
         }
 
         // =====================================================================
         // Build menu.
         // =====================================================================
-        private void OpenBuildMenu(ClaimableCamp camp)
+        /// <summary>Mirrors the built menu root's visibility to the VM's menu state.</summary>
+        private void SyncMenu()
         {
-            _menuCamp = camp;
-            if (_menuRoot == null) BuildMenu();
-            _menuRoot.SetActive(true);
-        }
-
-        private void CloseBuildMenu()
-        {
-            _menuCamp = null;
-            if (_menuRoot != null) _menuRoot.SetActive(false);
+            if (_vm.MenuOpen)
+            {
+                if (_menuRoot == null) BuildMenu();
+                if (!_menuRoot.activeSelf) _menuRoot.SetActive(true);
+            }
+            else if (_menuRoot != null && _menuRoot.activeSelf)
+            {
+                _menuRoot.SetActive(false);
+            }
         }
 
         private void HandleMenuInput()
@@ -189,8 +152,8 @@ namespace DeNelle.Village.World.Camps
                 var (rect, type) = _menuButtons[i];
                 if (rect != null && RectTransformUtility.RectangleContainsScreenPoint(rect, tap, null))
                 {
-                    _menuCamp?.BuildOutpost(type);
-                    CloseBuildMenu();
+                    _vm.Build(type);   // builds on the menu's camp + closes the menu (VM state)
+                    SyncMenu();
                     return;
                 }
             }

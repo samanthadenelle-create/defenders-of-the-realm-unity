@@ -23,7 +23,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.Data;
-using DeNelle.Core.Progression;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
@@ -51,6 +50,10 @@ namespace DeNelle.Village.UI
         // PanelManager mutual-exclusion handle (one panel at a time).
         private PanelHandle _panelHandle;
 
+        // MVVM (Silo G): the VM owns ALL skill-point / hero-level state + copy; this
+        // View reads NO game state — it binds the VM and routes taps back as commands.
+        private LevelUpVM _vm;
+
         private void OnEnable()
         {
             BuildUiIfNeeded();
@@ -62,14 +65,13 @@ namespace DeNelle.Village.UI
                     () => _overlay != null && _overlay.style.display.value == DisplayStyle.Flex);
             Hide();
 
-            // DEF-261 ROOT-CAUSE FIX: subscribe to the STATIC relay, not the instance
-            // event. ProgressionManager destroys the BeforeSceneLoad standalone
-            // HeroProgression and migrates XP onto the hero's own HeroProgression — an
-            // instance-event subscription would dangle on the destroyed bootstrap and
-            // never hear the hero's real level-ups. The static relay survives the swap.
-            HeroProgression.OnAnyLevelUp += Show;
-            if (SkillSystem.Instance != null)
-                SkillSystem.Instance.OnSkillsChanged += UpdateUI;
+            // The VM relays SkillSystem.OnSkillsChanged (-> Changed -> UpdateUI) and the
+            // instance-swap-proof HeroProgression.OnAnyLevelUp static relay (-> LeveledUp
+            // -> Show). DEF-261 root cause (the destroyed-bootstrap instance swap) stays
+            // covered because the adapter subscribes to the STATIC relay, not the instance.
+            _vm = LevelUpVM.CreateDefault(Hide);
+            _vm.Changed += UpdateUI;
+            _vm.LeveledUp += Show;
 
             UpdateUI();
 
@@ -77,15 +79,19 @@ namespace DeNelle.Village.UI
             // level-up gift, or a level-up that fired before the popup existed in this
             // scene), surface it now so banked points are never stranded with no way
             // to spend them. Show() itself defers if a fight is in progress.
-            if (SkillSystem.Instance != null && SkillSystem.Instance.AvailablePoints > 0)
-                Show(HeroProgression.Instance != null ? HeroProgression.Instance.Level : 1);
+            if (_vm.AvailablePoints > 0)
+                Show(_vm.HeroLevel);
         }
 
         private void OnDisable()
         {
-            HeroProgression.OnAnyLevelUp -= Show;
-            if (SkillSystem.Instance != null)
-                SkillSystem.Instance.OnSkillsChanged -= UpdateUI;
+            if (_vm != null)
+            {
+                _vm.Changed -= UpdateUI;
+                _vm.LeveledUp -= Show;
+                _vm.Dispose();
+                _vm = null;
+            }
         }
 
         // DEF-261 — drain a level-up that arrived mid-fight once the fight is over.
@@ -109,15 +115,16 @@ namespace DeNelle.Village.UI
         private void Show(int newLevel)
         {
             if (PopupRetired) return;   // RETIRED — no allocate-popup; Wisdom shown via flashing skill-tree icon.
-            if (_overlay == null) return;
+            if (_overlay == null || _vm == null) return;
             // DEF-266 — Level 1 is the baseline (account creation), not an achievement.
             // The DEF-82 starting skill-point gift banks points at level 1, which would
             // otherwise trip both the OnAnyLevelUp path and the OnEnable banked-points
             // fallback into auto-opening a "Level 1!" popup the instant a hero is picked.
             // Suppress the AUTO-popup below level 2 — the points are still granted and
             // remain spendable via the skill panel; alerts just start at genuine
-            // level-UPs (2+). Guards on the level REACHED (not points-available).
-            if (newLevel < 2) return;
+            // level-UPs (2+). Guards on the level REACHED (not points-available). The
+            // level>=2 gate lives in the VM now.
+            if (!_vm.ShouldAutoShow(newLevel)) return;
             _lastLevel = newLevel;
             if (_title != null) _title.text = $"Level {newLevel}!  Spend a skill point";
             ShowCard();
@@ -142,8 +149,7 @@ namespace DeNelle.Village.UI
         private void Collapse()
         {
             if (PopupRetired) { Hide(); return; }   // RETIRED — never surface the persistent spend pill.
-            var sys = SkillSystem.Instance;
-            if (sys != null && sys.AvailablePoints > 0)
+            if (_vm != null && _vm.AvailablePoints > 0)
             {
                 if (_overlay != null) _overlay.style.display = DisplayStyle.Flex;
                 if (_card != null) _card.style.display = DisplayStyle.None;
@@ -166,46 +172,43 @@ namespace DeNelle.Village.UI
 
         private void UpdateUI()
         {
-            var sys = SkillSystem.Instance;
-            if (_overlay == null || sys == null) return;
+            if (_overlay == null || _vm == null) return;
             if (PopupRetired) { Hide(); return; }   // RETIRED — keep the popup/pill hidden regardless of points.
 
-            int pts = sys.AvailablePoints;
-            if (_points != null) _points.text = $"Available points: {pts}";
-            if (_pill != null) _pill.text = pts == 1 ? "1 skill point — Spend" : $"{pts} skill points — Spend";
+            int pts = _vm.AvailablePoints;
+            if (_points != null) _points.text = _vm.PointsLine;
+            if (_pill != null) _pill.text = _vm.PillText;
 
-            SetSkillButton(_blacksmith,  "Blacksmith",  SkillType.Blacksmith,     pts);
-            SetSkillButton(_woodworking, "Woodworking", SkillType.Woodworking,    pts);
-            SetSkillButton(_arcane,      "Arcane",      SkillType.Arcane,         pts);
-            SetSkillButton(_gathering,   "Gathering",   SkillType.GatheringSpeed, pts);
+            SetSkillButton(_blacksmith,  "Blacksmith",  SkillType.Blacksmith);
+            SetSkillButton(_woodworking, "Woodworking", SkillType.Woodworking);
+            SetSkillButton(_arcane,      "Arcane",      SkillType.Arcane);
+            SetSkillButton(_gathering,   "Gathering",   SkillType.GatheringSpeed);
 
             // Keep the persistent indicator honest: if points exist but nothing is on
             // screen, surface the pill so they can never be stranded; if they hit zero,
-            // clear everything.
+            // clear everything. The hero-level>=2 gate lives in the VM.
             if (pts <= 0)
             {
                 Hide();
             }
             else if (_overlay != null && _overlay.style.display == DisplayStyle.None
-                     && (HeroProgression.Instance == null || HeroProgression.Instance.Level >= 2))
+                     && _vm.HeroAtLevel2Plus)
             {
                 Collapse();
             }
         }
 
-        private void SetSkillButton(Button b, string label, SkillType type, int pts)
+        private void SetSkillButton(Button b, string label, SkillType type)
         {
-            if (b == null) return;
-            int lvl = SkillSystem.Instance != null ? SkillSystem.Instance.GetSkillLevel(type) : 0;
-            b.text = $"{label}  (Lv {lvl})   +";
-            b.SetEnabled(pts > 0);
+            if (b == null || _vm == null) return;
+            b.text = _vm.SkillButtonLabel(label, type);
+            b.SetEnabled(_vm.CanSpend);
         }
 
         private void Spend(SkillType type)
         {
-            if (SkillSystem.Instance == null) return;
-            SkillSystem.Instance.SpendPoint(type);   // fires OnSkillsChanged → UpdateUI
-            if (SkillSystem.Instance.AvailablePoints <= 0) Hide();
+            if (_vm == null) return;
+            if (_vm.Spend(type)) Hide();   // Spend routes through the VM; fires Changed -> UpdateUI
         }
 
         // --- Code-built panel (UI Toolkit) ---------------------------------------

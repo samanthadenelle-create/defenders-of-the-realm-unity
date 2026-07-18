@@ -9,6 +9,7 @@
         "DeNelle.Audio",
         "DeNelle.Data",
         "DeNelle.Editor",
+        "DeNelle.Web3",
         "UniTask",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
