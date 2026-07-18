@@ -117,18 +117,12 @@ namespace DeNelle.Editor
             "Assets/_Modules/Wallet/PackStore.cs",
             "Assets/_Modules/HUD/Kit/HudKitController.cs",
             "Assets/_Modules/Village/Buildings/NPCUpgradeStation.cs",
-            "Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs",
-            "Assets/_Modules/Village/BuildMode/BuildWalletRow.cs",
-            "Assets/_Modules/Village/Crafting/VillageCraftingPanel.cs",
             "Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs",
-            "Assets/_Modules/Village/Harvest/EchoRosterView.cs",
             "Assets/_Modules/Village/Harvest/EchoUnlockDialogue.cs",
             "Assets/_Modules/Village/Harvest/EchoUnlockFeedback.cs",
             "Assets/_Modules/Village/Hero/InventoryUIBuilder.cs",
             "Assets/_Modules/Village/Hero/TroopTrainingPanel.cs",
             "Assets/_Modules/Village/World/NodeDiscoverySystem.cs",
-            "Assets/_Modules/Village/Buildings/UI/BuildMenu.cs",
-            "Assets/_Modules/Village/Buildings/UI/TowerManagerPanel.cs",
             "Assets/_Modules/Village/UI/EndState/EndStateView.cs",
         };
 
