@@ -1,37 +1,31 @@
 // =============================================================================
-// CraftingPanelController — drives the UI Toolkit crafting panel (Workstream C).
+// CraftingPanelController — drives the UI Toolkit crafting panel. DUMB SKIN (MVVM, Silo F).
 // -----------------------------------------------------------------------------
 // The controller behind CraftingPanel.uxml — the modal the Keeper opens at a
-// crafting pedestal. It is a PASSIVE view: it owns no crafting state. The
-// CraftingPedestal raises typed UnityEvents (OpenRequested / CloseRequested /
-// Crafted); this controller renders the snapshot they carry and calls back into
-// the pedestal's TryCraft() / ClosePanel() on the button clicks.
+// crafting pedestal. A PASSIVE view: the CraftingPedestal raises typed UnityEvents
+// (OpenRequested / CloseRequested); this controller binds a DungeonCraftVM and
+// renders its projected CraftRecipeVM. The have/need math + already-crafted logic
+// live in the VM, NOT in this View body (Silo F). Craft / Close route back through
+// the VM to the pedestal.
 //
-// MODULE ISOLATION: the panel lives INSIDE DeNelle.Dungeons (the dungeon owns
-// its own HUD — there is no dungeon HUD in DeNelle.HUD, which ships only the
-// village HUD). It references only the dungeon's own crafting types, which is
-// allowed — same module.
+// MODULE ISOLATION: the panel lives INSIDE DeNelle.Dungeons and references only the
+// dungeon's own crafting types + the Core MVVM seam (CraftRecipeVM) — never DeNelle.Village.
 //
-// The ingredient cells are built ONCE at runtime into "crafting-ingredient-list"
-// from the recipe; each Refresh() repaints the have/need numbers off the live
-// inventory so the panel always reflects the current state — including after a
-// craft consumes the ingredients.
-//
-// All UI is UI Toolkit (UXML/USS) — project mandate. The panel hides itself
-// when no pedestal is open, so the UIDocument can host it permanently.
+// All UI is UI Toolkit (UXML/USS). The panel hides itself when no pedestal is open.
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Dungeons
 {
     /// <summary>
-    /// Drives the dungeon crafting panel (CraftingPanel.uxml) — renders the
-    /// recipe a <see cref="CraftingPedestal"/> hands over, shows live have/need
-    /// counts off the <see cref="DungeonInventory"/>, and forwards the Craft /
-    /// Close clicks back to the pedestal. A passive UI view.
+    /// Drives the dungeon crafting panel (CraftingPanel.uxml). Binds a
+    /// <see cref="DungeonCraftVM"/> and renders its <see cref="CraftRecipeVM"/> — live
+    /// have/need counts, the result row, the Craft button — forwarding Craft / Close
+    /// back through the VM to the pedestal. A passive UI view.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class CraftingPanelController : MonoBehaviour
@@ -64,12 +58,6 @@ namespace DeNelle.Dungeons
         private const string ResultLabelReadyClass = "crafting-result-label--ready";
         private const string ResultLabelDoneClass = "crafting-result-label--done";
 
-        // LOCALIZE: player-facing crafting-panel copy. Kept here as clearly-marked
-        // constants — Workstream C does NOT touch the shared en.json (other
-        // agents own it). A future localisation pass moves these into a data file.
-        private const string MsgGather = "Gather the ingredients";
-        private const string MsgReady = "Ready to craft";
-        private const string MsgCraftedFmt = "{0} crafted";
         private const string TickChar = "OK"; // ingredient-met marker (ASCII; the heavy-check glyph tofu'd on the build font)
 
         // ── Bound UI elements ────────────────────────────────────────────────
@@ -88,14 +76,12 @@ namespace DeNelle.Dungeons
             public VisualElement Root;
             public Label Count;
             public Label Tick;
-            public string IngredientId;
-            public int Needed;
         }
 
         private readonly List<IngredientCell> _cells = new List<IngredientCell>();
 
-        // ── Live request being shown ─────────────────────────────────────────
-        private CraftingPanelRequest _request;
+        // ── Bound ViewModel ──────────────────────────────────────────────────
+        private DungeonCraftVM _vm;
         private bool _bound;
 
         // =====================================================================
@@ -117,6 +103,7 @@ namespace DeNelle.Dungeons
         {
             if (_craftButton != null) _craftButton.clicked -= OnCraftClicked;
             if (_closeButton != null) _closeButton.clicked -= OnCloseClicked;
+            DisposeVm();
             _bound = false;
         }
 
@@ -134,8 +121,6 @@ namespace DeNelle.Dungeons
                 return;
             }
 
-            // The crafting panel may share its UIDocument with the dungeon HUD.
-            // Resolve the panel sub-tree by its root name so both can co-exist.
             VisualElement panel = _root.Q<VisualElement>(RootName) ?? _root;
 
             _recipeName = panel.Q<Label>(RecipeNameName);
@@ -164,11 +149,7 @@ namespace DeNelle.Dungeons
         //  Pedestal wiring — the DungeonController hooks these to the pedestal.
         // =====================================================================
 
-        /// <summary>
-        /// Subscribes this panel to a crafting pedestal's events. Called by the
-        /// dungeon controller once the pedestal is configured — keeps the pedestal
-        /// a pure scene actor and the panel a pure UI view.
-        /// </summary>
+        /// <summary>Subscribes this panel to a crafting pedestal's events.</summary>
         public void BindPedestal(CraftingPedestal pedestal)
         {
             if (pedestal == null) return;
@@ -184,20 +165,26 @@ namespace DeNelle.Dungeons
         public void Show(CraftingPanelRequest request)
         {
             if (!_bound) BindElements();
-            _request = request;
-            if (_request == null || _request.Recipe == null)
+            if (request == null || request.Recipe == null)
             {
                 Hide();
                 return;
             }
 
+            // Bind (or re-bind) the VM to the fresh request snapshot.
+            if (_vm == null)
+            {
+                _vm = new DungeonCraftVM(request);
+                _vm.Changed += Refresh;
+            }
+            else _vm.Rebind(request);
+
             BuildIngredientCells();
 
-            if (_recipeName != null) _recipeName.text = _request.Recipe.DisplayName ?? "Recipe";
-            if (_recipeDesc != null) _recipeDesc.text = _request.Recipe.Description ?? string.Empty;
-            if (_resultGlyph != null)
-                _resultGlyph.text = string.IsNullOrEmpty(_request.Recipe.ResultGlyph)
-                    ? "?" : _request.Recipe.ResultGlyph;
+            var r = _vm.Recipe;
+            if (_recipeName != null) _recipeName.text = r.DisplayName ?? "Recipe";
+            if (_recipeDesc != null) _recipeDesc.text = r.Description ?? string.Empty;
+            if (_resultGlyph != null) _resultGlyph.text = r.ResultGlyph;
 
             Refresh();
 
@@ -213,34 +200,41 @@ namespace DeNelle.Dungeons
         /// <summary>True while the panel is shown.</summary>
         public bool IsShown => _root != null && _root.style.display == DisplayStyle.Flex;
 
+        private void DisposeVm()
+        {
+            if (_vm != null)
+            {
+                _vm.Changed -= Refresh;
+                _vm.Dispose();
+                _vm = null;
+            }
+        }
+
         // =====================================================================
         //  Cell construction + repaint
         // =====================================================================
 
-        /// <summary>Builds one cell per recipe ingredient into the list container.</summary>
+        /// <summary>Builds one cell per recipe ingredient (from the VM projection) into the list container.</summary>
         private void BuildIngredientCells()
         {
             _cells.Clear();
-            if (_ingredientList == null || _request?.Recipe?.Ingredients == null) return;
+            if (_ingredientList == null || _vm == null) return;
+            var ingredients = _vm.Recipe.Ingredients;
+            if (ingredients == null) return;
             _ingredientList.Clear();
 
-            foreach (var line in _request.Recipe.Ingredients)
+            foreach (var line in ingredients)
             {
-                if (line == null) continue;
-
-                CraftingIngredient ing = _request.CraftingData?.FindIngredient(line.IngredientId);
-
                 var cell = new VisualElement();
                 cell.AddToClassList(CellClass);
 
-                var glyph = new Label(ing != null && !string.IsNullOrEmpty(ing.Glyph)
-                    ? ing.Glyph : "?");
+                var glyph = new Label(string.IsNullOrEmpty(line.Glyph) ? "?" : line.Glyph);
                 glyph.AddToClassList(GlyphClass);
                 glyph.pickingMode = PickingMode.Ignore;
-                ApplyGlyphTint(glyph, ing);
+                ApplyGlyphTint(glyph, line.Tint);
                 cell.Add(glyph);
 
-                var name = new Label(ing != null ? ing.DisplayName : line.IngredientId);
+                var name = new Label(line.DisplayName);
                 name.AddToClassList(NameClass);
                 name.pickingMode = PickingMode.Ignore;
                 cell.Add(name);
@@ -256,65 +250,49 @@ namespace DeNelle.Dungeons
                 cell.Add(tick);
 
                 _ingredientList.Add(cell);
-                _cells.Add(new IngredientCell
-                {
-                    Root = cell,
-                    Count = count,
-                    Tick = tick,
-                    IngredientId = line.IngredientId,
-                    Needed = line.Count,
-                });
+                _cells.Add(new IngredientCell { Root = cell, Count = count, Tick = tick });
             }
         }
 
-        /// <summary>
-        /// Repaints every ingredient cell + the result row + the Craft button
-        /// off the live inventory. Safe to call any time the panel is shown.
-        /// </summary>
+        /// <summary>Repaints every ingredient cell + the result row + the Craft button off the VM projection.</summary>
         private void Refresh()
         {
-            if (_request == null) return;
-            DungeonInventory inv = _request.Inventory;
-            CraftingRecipe recipe = _request.Recipe;
-            bool alreadyCrafted = inv != null && recipe != null && inv.HasCrafted(recipe.Id);
+            if (_vm == null) return;
+            var recipe = _vm.Recipe;
+            var ingredients = recipe.Ingredients;
+            bool alreadyCrafted = recipe.AlreadyCrafted;
 
-            // ── Ingredient cells ─────────────────────────────────────────────
-            for (int i = 0; i < _cells.Count; i++)
+            // ── Ingredient cells (index-aligned with the projection) ──────────
+            if (ingredients != null)
             {
-                IngredientCell cell = _cells[i];
-                int have = inv != null ? inv.CountOf(cell.IngredientId) : 0;
-                // A crafted recipe has consumed its ingredients — show the cells
-                // as satisfied (the need was met at craft time) so the panel
-                // reads as a finished recipe rather than an empty larder.
-                bool met = alreadyCrafted || have >= cell.Needed;
-                int shown = alreadyCrafted ? cell.Needed : have;
+                int n = Mathf.Min(_cells.Count, ingredients.Count);
+                for (int i = 0; i < n; i++)
+                {
+                    IngredientCell cell = _cells[i];
+                    CraftIngredientVM ing = ingredients[i];
+                    bool met = ing.Met;
 
-                if (cell.Count != null)
-                {
-                    cell.Count.text = $"{shown} / {cell.Needed}";
-                    cell.Count.EnableInClassList(CountMetClass, met);
-                }
-                if (cell.Tick != null)
-                    cell.Tick.text = met ? TickChar : string.Empty;
-                if (cell.Root != null)
-                {
-                    cell.Root.EnableInClassList(CellHaveClass, met);
-                    cell.Root.EnableInClassList(CellNeedClass, !met);
+                    if (cell.Count != null)
+                    {
+                        cell.Count.text = $"{ing.Shown} / {ing.Need}";
+                        cell.Count.EnableInClassList(CountMetClass, met);
+                    }
+                    if (cell.Tick != null)
+                        cell.Tick.text = met ? TickChar : string.Empty;
+                    if (cell.Root != null)
+                    {
+                        cell.Root.EnableInClassList(CellHaveClass, met);
+                        cell.Root.EnableInClassList(CellNeedClass, !met);
+                    }
                 }
             }
 
             // ── Result row + Craft button ────────────────────────────────────
-            bool canCraft = !alreadyCrafted && inv != null && inv.CanCraft(recipe);
+            bool canCraft = recipe.CanCraft;
 
             if (_resultLabel != null)
             {
-                if (alreadyCrafted)
-                    _resultLabel.text = string.Format(MsgCraftedFmt, recipe.DisplayName);
-                else if (canCraft)
-                    _resultLabel.text = MsgReady;
-                else
-                    _resultLabel.text = MsgGather;
-
+                _resultLabel.text = _vm.ResultText;
                 _resultLabel.EnableInClassList(ResultLabelReadyClass, canCraft && !alreadyCrafted);
                 _resultLabel.EnableInClassList(ResultLabelDoneClass, alreadyCrafted);
             }
@@ -337,11 +315,11 @@ namespace DeNelle.Dungeons
             }
         }
 
-        /// <summary>Tints an ingredient cell's glyph plate from the data's hex tint.</summary>
-        private static void ApplyGlyphTint(Label glyph, CraftingIngredient ing)
+        /// <summary>Tints an ingredient cell's glyph plate from a data hex tint.</summary>
+        private static void ApplyGlyphTint(Label glyph, string tint)
         {
-            if (glyph == null || ing == null || string.IsNullOrEmpty(ing.Tint)) return;
-            if (ColorUtility.TryParseHtmlString("#" + ing.Tint, out Color c))
+            if (glyph == null || string.IsNullOrEmpty(tint)) return;
+            if (ColorUtility.TryParseHtmlString("#" + tint, out Color c))
                 glyph.style.backgroundColor = c;
         }
 
@@ -349,22 +327,19 @@ namespace DeNelle.Dungeons
         //  Button handlers
         // =====================================================================
 
-        /// <summary>Forwards the Craft click to the pedestal, then repaints.</summary>
+        /// <summary>Forwards the Craft click through the VM to the pedestal, then repaints.</summary>
         private void OnCraftClicked()
         {
-            if (_request?.Pedestal == null) return;
-            CraftingPanelRequest updated = _request.Pedestal.TryCraft();
-            if (updated != null) _request = updated;
+            if (_vm == null) return;
+            _vm.Craft();
             Refresh();
         }
 
-        /// <summary>Closes the panel through the pedestal so its state stays in sync.</summary>
+        /// <summary>Closes the panel through the VM (pedestal) so its state stays in sync.</summary>
         private void OnCloseClicked()
         {
-            if (_request?.Pedestal != null)
-                _request.Pedestal.ClosePanel();
-            else
-                Hide();
+            if (_vm != null) _vm.Close();
+            else Hide();
         }
     }
 }

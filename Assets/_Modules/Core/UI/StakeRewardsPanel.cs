@@ -19,13 +19,16 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.Platform;
+using DeNelle.Core.UI.Mvvm;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
     /// <summary>
-    /// The read-only stake-rewards panel. Call <see cref="Open()"/> to build + show it (used by the
-    /// Seekerthon demo bootstrap). Presentation only — it reflects <see cref="StakeRewardsResolver"/>.
+    /// The read-only stake-rewards panel. DUMB SKIN (MVVM, Silo F): it binds a
+    /// <see cref="StakeRewardsVM"/> and renders its projected strings + reward rows — the
+    /// StakeRewardsResolver.Resolve() call + every StakeStanding read live in the VM.
+    /// Call <see cref="Open()"/> to build + show it (used by the Seekerthon demo bootstrap).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class StakeRewardsPanel : MonoBehaviour
@@ -43,15 +46,20 @@ namespace DeNelle.Core.UI
         //  Open / close
         // =====================================================================
 
-        /// <summary>Build + show the panel for the CURRENT resolver query (reads it once). Idempotent:
-        /// a second call re-opens a fresh panel. Returns the live instance.</summary>
+        /// <summary>Build + show the panel for the CURRENT resolver query (reads it once via the VM).
+        /// Idempotent: a second call re-opens a fresh panel. Returns the live instance.</summary>
         public static StakeRewardsPanel Open()
         {
-            return Open(StakeRewardsResolver.Resolve());
+            return OpenWith(StakeRewardsVM.CreateDefault());
         }
 
         /// <summary>Build + show the panel for an explicit standing (tests / a seeded demo value).</summary>
         public static StakeRewardsPanel Open(StakeStanding standing)
+        {
+            return OpenWith(standing != null ? new StakeRewardsVM(standing) : StakeRewardsVM.CreateUnstaked());
+        }
+
+        private static StakeRewardsPanel OpenWith(StakeRewardsVM vm)
         {
             using var _ = FlowTrace.Enter("Stake", "StakeRewardsPanel.Open");
             if (_open != null)
@@ -64,7 +72,7 @@ namespace DeNelle.Core.UI
             var host = new GameObject("StakeRewardsPanel");
             Object.DontDestroyOnLoad(host);   // survive the boot->hub scene load for the capture
             var panel = host.AddComponent<StakeRewardsPanel>();
-            panel.Build(standing ?? StakeRewardsResolver.Resolve(0));
+            panel.Build(vm);
             _open = panel;
             return panel;
         }
@@ -85,7 +93,7 @@ namespace DeNelle.Core.UI
         //  Build
         // =====================================================================
 
-        private void Build(StakeStanding standing)
+        private void Build(StakeRewardsVM vm)
         {
             _modal = ElarionUiKit.BuildObsidianModal("StakeRewardsUI", "Stake Rewards",
                 new Vector2(0.16f, 0.10f), new Vector2(0.84f, 0.92f), Close);
@@ -98,22 +106,18 @@ namespace DeNelle.Core.UI
             }
 
             var body = _modal.chrome.content.transform;
-            string sym = standing != null ? standing.CurrencySymbol : "SKR";
 
             // --- Active stake (the headline number) ---
-            string stakeText = standing != null && standing.HasStake
-                ? $"Active Stake:  {standing.ActiveStake:N0} {sym}"
-                : $"Active Stake:  0 {sym}";
-            ElarionUiKit.Label(body, stakeText, 0.855f, 0.925f, ElarionUi.Gilt, 34,
+            ElarionUiKit.Label(body, vm.ActiveStakeText, 0.855f, 0.925f, ElarionUi.Gilt, 34,
                 TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 1f, bold: true);
 
             // --- Tier line ---
-            if (standing != null && standing.HasStake && standing.CurrentTier != null)
+            if (vm.HasTier)
             {
-                ElarionUiKit.Label(body, $"Tier:  {standing.CurrentTier.Name}", 0.795f, 0.855f,
+                ElarionUiKit.Label(body, $"Tier:  {vm.TierName}", 0.795f, 0.855f,
                     ElarionUi.Gold, 26, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-                if (!string.IsNullOrEmpty(standing.CurrentTier.Tagline))
-                    ElarionUiKit.Label(body, standing.CurrentTier.Tagline, 0.752f, 0.795f,
+                if (!string.IsNullOrEmpty(vm.TierTagline))
+                    ElarionUiKit.Label(body, vm.TierTagline, 0.752f, 0.795f,
                         ElarionUi.ParchmentDim, 18, TextAlignmentOptions.Center, 0.06f, 0.94f);
             }
             else
@@ -128,7 +132,7 @@ namespace DeNelle.Core.UI
 
             // --- The unlocked reward list (scrollable well) ---
             var well = ElarionUiKit.Well(body.transform, new Vector2(0.06f, 0.235f), new Vector2(0.94f, 0.688f));
-            BuildRewardList(well.transform, standing);
+            BuildRewardList(well.transform, vm);
 
             // --- The message: native staking, automatic, non-custodial ---
             ElarionUiKit.Label(body, StakeNativeLine, 0.150f, 0.225f, ElarionUi.Parchment, 18,
@@ -137,13 +141,13 @@ namespace DeNelle.Core.UI
                 TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
 
             FlowTrace.Step("Stake",
-                $"StakeRewardsPanel built: stake={standing?.ActiveStake ?? 0} {sym}, " +
-                $"tier='{standing?.CurrentTier?.Name ?? "(none)"}', rewards={standing?.UnlockedRewards?.Count ?? 0}.");
+                $"StakeRewardsPanel built: {vm.ActiveStakeText}, " +
+                $"tier='{vm.TierName ?? "(none)"}', rewards={vm.Rewards.Count}.");
         }
 
-        private void BuildRewardList(Transform well, StakeStanding standing)
+        private void BuildRewardList(Transform well, StakeRewardsVM vm)
         {
-            IReadOnlyList<StakeReward> rewards = standing != null ? standing.UnlockedRewards : null;
+            IReadOnlyList<StakeRewardRowVM> rewards = vm != null ? vm.Rewards : null;
 
             if (rewards == null || rewards.Count == 0)
             {
@@ -187,10 +191,8 @@ namespace DeNelle.Core.UI
                 BuildRewardRow(contentGo.transform, rewards[i]);
         }
 
-        private void BuildRewardRow(Transform parent, StakeReward reward)
+        private void BuildRewardRow(Transform parent, StakeRewardRowVM reward)
         {
-            if (reward == null) return;
-
             var rowGo = new GameObject("reward-" + reward.Label, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             rowGo.transform.SetParent(parent, false);
             rowGo.GetComponent<LayoutElement>().preferredHeight = 78f;
@@ -204,7 +206,7 @@ namespace DeNelle.Core.UI
             if (chipImg != null) chipImg.raycastTarget = false;
 
             // Kind tag (tiny), reward label (bold), and the small-print detail.
-            ElarionUiKit.Label(row, KindLabel(reward.Kind), 0.58f, 0.96f, ElarionUi.ParchmentDim, 13,
+            ElarionUiKit.Label(row, reward.KindTag, 0.58f, 0.96f, ElarionUi.ParchmentDim, 13,
                 TextAlignmentOptions.TopLeft, 0.075f, 0.55f);
             ElarionUiKit.Label(row, reward.Label, 0.50f, 0.96f, ElarionUi.Parchment, 18,
                 TextAlignmentOptions.TopLeft, 0.075f, 0.98f, bold: true);
@@ -221,18 +223,6 @@ namespace DeNelle.Core.UI
                 case StakeRewardKind.Cosmetic: return ElarionUi.Aether;
                 case StakeRewardKind.Trickle:  return ElarionUi.Affordable;
                 default:                       return ElarionUi.ParchmentDim;
-            }
-        }
-
-        private static string KindLabel(StakeRewardKind kind)
-        {
-            switch (kind)
-            {
-                case StakeRewardKind.Badge:    return "BADGE";
-                case StakeRewardKind.Title:    return "TITLE";
-                case StakeRewardKind.Cosmetic: return "COSMETIC";
-                case StakeRewardKind.Trickle:  return "TRICKLE";
-                default:                       return "PERK";
             }
         }
     }

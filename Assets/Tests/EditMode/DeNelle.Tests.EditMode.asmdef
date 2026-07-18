@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Village",
+        "DeNelle.Dungeons",
         "DeNelle.HUD",
         "DeNelle.Audio",
         "DeNelle.Data",

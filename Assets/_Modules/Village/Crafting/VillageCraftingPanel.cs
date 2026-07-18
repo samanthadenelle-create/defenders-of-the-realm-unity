@@ -1,25 +1,25 @@
 // =============================================================================
-// VillageCraftingPanel — the Workshop crafting station panel.
+// VillageCraftingPanel — the Workshop crafting station panel. DUMB SKIN (MVVM, Silo F).
 // -----------------------------------------------------------------------------
-// WO-F conversion (2026-07-03, coverage matrix row #2): UIDocument/UITK card ->
-// code-built uGUI on the Obsidian MASTER-DETAIL template (BuildObsidianModal:
-// FrameCrafting — the owner-ratified "spot on 100% perfect" split frame).
+// Code-built uGUI on the Obsidian MASTER-DETAIL template (BuildObsidianModal:
+// FrameCrafting):
 //   • bodyLeft  (dark well)      = recipe rows (Obsidian buttons, selected=Yellow,
-//                                  ✓/✗ affordability suffix)
+//                                  +/- affordability suffix)
 //   • bodyRight (parchment well) = selected recipe detail: description,
-//                                  ingredient checklist, output, Craft CTA
-//                                  (dark-INK text — the well is parchment)
+//                                  ingredient checklist, output, Craft CTA (dark ink)
 //   • footer    (action strip)   = the larder readout
-// The ONE shared Close is the chrome's (the old per-panel "X" chip is retired).
+//
+// MVVM: the View reads NO service. Recipe list, have/need projection, craftable
+// state and the larder line all come from WorkshopCraftVM (it names NO
+// VillageInventory.Instance and NO CraftingRecipeCatalog). The View binds
+// Rows / Selected / Larder and routes Select / Craft back as commands.
 //
 // Public API preserved: Toggle() / Open() / Close() / IsOpen / Instance;
-// PanelRouter.Register(PanelId.Crafting, Open); arbiter handle "Workshop";
-// VillageInventory.Changed -> Repaint. Spawned by VillageCraftingPanelBootstrap.
+// PanelRouter.Register(PanelId.Crafting, Open); arbiter handle "Workshop".
 // =============================================================================
 
-using System.Collections.Generic;
-using System.Text;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 using TMPro;
 using UnityEngine;
 
@@ -35,12 +35,11 @@ namespace DeNelle.Village.Crafting
         private Transform _detailHost;   // bodyRight — parchment detail well
         private TextMeshProUGUI _larder; // footer strip readout
 
-        private string _selectedRecipeId;
+        private WorkshopCraftVM _vm;
         private bool _open;
         private PanelHandle _panelHandle;
 
-        // Dark ink for text sitting ON the parchment well (light Parchment text
-        // is unreadable there — the well IS parchment).
+        // Dark ink for text sitting ON the parchment well.
         private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
         private static readonly Color InkDim  = new Color(0.34f, 0.28f, 0.20f, 1f);
         private static readonly Color InkGood = new Color(0.10f, 0.42f, 0.16f, 1f);
@@ -57,22 +56,15 @@ namespace DeNelle.Village.Crafting
             PanelRouter.Register(PanelId.Crafting, Open);
         }
 
-        private void OnEnable()
-        {
-            if (VillageInventory.Instance != null)
-                VillageInventory.Instance.Changed += Repaint;
-        }
-
         private void OnDisable()
         {
-            if (VillageInventory.Instance != null)
-                VillageInventory.Instance.Changed -= Repaint;
             if (Instance == this) Instance = null;
         }
 
         private void OnDestroy()
         {
             PanelRouter.Unregister(PanelId.Crafting, Open);
+            if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -96,11 +88,6 @@ namespace DeNelle.Village.Crafting
                 _open = false;
                 _modal.canvas.SetActive(false);
                 return;
-            }
-            if (string.IsNullOrEmpty(_selectedRecipeId))
-            {
-                var first = CraftingRecipeCatalog.All;
-                if (first != null && first.Count > 0) _selectedRecipeId = first[0].Id;
             }
             Repaint();
         }
@@ -137,22 +124,24 @@ namespace DeNelle.Village.Crafting
             _larder = MakeText(footHost, "", 14, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
 
+            _vm = WorkshopCraftVM.CreateDefault(Close);
+            _vm.Changed += Repaint;
+
             _modal.canvas.SetActive(false);   // built hidden; Open shows it
         }
 
-        // ── Repaint ─────────────────────────────────────────────────────────
+        // ── Repaint (VM -> View, one direction) ─────────────────────────────
 
         private void Repaint()
         {
-            if (!_open || _recipeHost == null || _detailHost == null) return;
+            if (!_open || _vm == null || _recipeHost == null || _detailHost == null) return;
 
             // Recipe rows (dark well, left).
             for (int i = _recipeHost.childCount - 1; i >= 0; i--)
                 Destroy(_recipeHost.GetChild(i).gameObject);
 
-            var recipes = CraftingRecipeCatalog.All;
-            var inv = VillageInventory.Instance;
-            if (recipes == null || recipes.Count == 0)
+            var rows = _vm.Rows;
+            if (rows == null || rows.Count == 0)
             {
                 MakeText(_recipeHost, "No recipes loaded.", 14, ElarionUi.ParchmentDim,
                     FontStyles.Italic, TextAlignmentOptions.Center,
@@ -162,22 +151,17 @@ namespace DeNelle.Village.Crafting
             {
                 const float rowH = 0.105f, gap = 0.015f;
                 float top = 0.98f;
-                foreach (var r in recipes)
+                foreach (var row in rows)
                 {
-                    if (r == null) continue;
-                    string id = r.Id;
-                    bool selected = id == _selectedRecipeId;
-                    bool canCraft = inv != null && inv.CanCraft(id);
-                    // ASCII markers (eyes-on 2026-07-03: ✓/✗ are missing from the TMP font
-                    // and rendered as boxes in the 14:46 capture).
-                    string label = (string.IsNullOrEmpty(r.DisplayName) ? id : r.DisplayName)
-                                 + (canCraft ? "  +" : "  -");
+                    string id = row.Id;
+                    // ASCII markers (✓/✗ are missing from the TMP font).
+                    string label = row.Name + (row.Affordable ? "  +" : "  -");
                     ElarionUiKit.BuildObsidianButton(_recipeHost, label,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
-                        selected ? ElarionUiKit.ObsidianButtonColor.Yellow
-                                 : ElarionUiKit.ObsidianButtonColor.Gray,
+                        row.Equipped ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                     : ElarionUiKit.ObsidianButtonColor.Gray,
                         new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
-                        () => { _selectedRecipeId = id; Repaint(); });
+                        () => { _vm.Select(id); });
                     top -= rowH + gap;
                     if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
@@ -186,19 +170,17 @@ namespace DeNelle.Village.Crafting
             // Detail (parchment well, right — dark ink).
             for (int i = _detailHost.childCount - 1; i >= 0; i--)
                 Destroy(_detailHost.GetChild(i).gameObject);
-            var selectedRecipe = CraftingRecipeCatalog.Find(_selectedRecipeId);
-            if (selectedRecipe != null) BuildDetail(selectedRecipe);
+            if (_vm.HasSelection) BuildDetail(_vm.Selected);
             else
                 MakeText(_detailHost, "Select a recipe.", 15, InkDim, FontStyles.Italic,
                     TextAlignmentOptions.Center, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.55f));
 
-            BuildLarder();
+            if (_larder != null) _larder.text = _vm.Larder;
         }
 
-        private void BuildDetail(RecipeDef recipe)
+        private void BuildDetail(CraftRecipeVM recipe)
         {
-            var inv = VillageInventory.Instance;
-            string display = string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName;
+            string display = recipe.DisplayName;
 
             MakeText(_detailHost, display, 20, Ink, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.06f, 0.90f), new Vector2(0.94f, 0.99f));
@@ -219,14 +201,11 @@ namespace DeNelle.Village.Crafting
             {
                 foreach (var line in recipe.Ingredients)
                 {
-                    if (line == null) continue;
-                    int have = inv != null ? inv.Get(line.IngredientId) : 0;
-                    bool ok = have >= line.Count;
                     MakeText(_detailHost,
-                        (ok ? "+  " : "-  ") + CraftingRecipeCatalog.DisplayNameFor(line.IngredientId),
-                        14, ok ? InkGood : InkBad, FontStyles.Normal,
+                        (line.Met ? "+  " : "-  ") + line.DisplayName,
+                        14, line.Met ? InkGood : InkBad, FontStyles.Normal,
                         TextAlignmentOptions.Left, new Vector2(0.08f, y - 0.055f), new Vector2(0.70f, y));
-                    MakeText(_detailHost, $"{have}/{line.Count}", 14, InkDim, FontStyles.Normal,
+                    MakeText(_detailHost, $"{line.Have}/{line.Need}", 14, InkDim, FontStyles.Normal,
                         TextAlignmentOptions.Right, new Vector2(0.70f, y - 0.055f), new Vector2(0.92f, y));
                     y -= 0.06f;
                 }
@@ -234,7 +213,7 @@ namespace DeNelle.Village.Crafting
 
             // Output preview.
             y -= 0.03f;
-            int held = inv != null ? inv.Get(recipe.OutputId) : 0;
+            int held = recipe.OutputHeld;
             string glyph = string.IsNullOrEmpty(recipe.ResultGlyph) ? "" : recipe.ResultGlyph + "  ";
             MakeText(_detailHost, "Output", 15, Ink, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.06f), new Vector2(0.94f, y));
@@ -242,85 +221,15 @@ namespace DeNelle.Village.Crafting
             MakeText(_detailHost, $"{glyph}{display}  x1  (have {held})", 14, Ink, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.08f, y - 0.055f), new Vector2(0.94f, y));
 
-            // Craft CTA — Green when affordable, Gray (still tappable; repaint keeps
-            // it honest) when short.
-            bool canCraft = inv != null && inv.CanCraft(recipe.Id);
+            // Craft CTA — Green when affordable, Gray (still tappable) when short.
+            bool canCraft = recipe.CanCraft;
             var btn = ElarionUiKit.BuildObsidianButton(_detailHost, "Craft",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canCraft ? ElarionUiKit.ObsidianButtonColor.Green
                          : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.13f),
-                () => OnCraftClicked(recipe));
+                () => _vm.Craft());
             btn.interactable = canCraft;
-        }
-
-        private void OnCraftClicked(RecipeDef recipe)
-        {
-            if (recipe == null) return;
-            var inv = VillageInventory.Instance;
-            if (inv == null) return;
-            bool ok = inv.TryCraft(recipe.Id);
-            if (ok)
-            {
-                if (!string.IsNullOrEmpty(recipe.CraftedToast))
-                    Debug.Log("[VillageCrafting] " + recipe.CraftedToast);
-                else
-                    Debug.Log("[VillageCrafting] Crafted " + recipe.DisplayName);
-            }
-            // Repaint pulls fresh counts whether or not the craft went through.
-            Repaint();
-        }
-
-        private void BuildLarder()
-        {
-            if (_larder == null) return;
-            var inv = VillageInventory.Instance;
-            if (inv == null || inv.Counts.Count == 0)
-            {
-                _larder.text = "Larder:  (empty)";
-                return;
-            }
-
-            // Stable order: ingredients first (catalog order), then recipe outputs,
-            // then any orphan keys (defensive) — same ordering as the old panel.
-            var seen = new HashSet<string>();
-            var ordered = new List<string>();
-            foreach (var ing in CraftingRecipeCatalog.Ingredients)
-            {
-                if (ing == null || string.IsNullOrEmpty(ing.Id)) continue;
-                if (inv.Get(ing.Id) > 0) { ordered.Add(ing.Id); seen.Add(ing.Id); }
-            }
-            foreach (var r in CraftingRecipeCatalog.All)
-            {
-                if (r == null || string.IsNullOrEmpty(r.Id)) continue;
-                if (seen.Contains(r.Id)) continue;
-                if (inv.Get(r.Id) > 0) { ordered.Add(r.Id); seen.Add(r.Id); }
-            }
-            foreach (var kv in inv.Counts)
-                if (!seen.Contains(kv.Key)) ordered.Add(kv.Key);
-
-            var sb = new StringBuilder("Larder:  ");
-            bool first = true;
-            foreach (var id in ordered)
-            {
-                int n = inv.Get(id);
-                if (n <= 0) continue;
-                if (!first) sb.Append("  ·  ");
-                string glyph = ResolveGlyph(id);
-                if (!string.IsNullOrEmpty(glyph)) sb.Append(glyph).Append(' ');
-                sb.Append(CraftingRecipeCatalog.DisplayNameFor(id)).Append(" x").Append(n);
-                first = false;
-            }
-            _larder.text = sb.ToString();
-        }
-
-        private static string ResolveGlyph(string id)
-        {
-            var ing = CraftingRecipeCatalog.FindIngredient(id);
-            if (ing != null && !string.IsNullOrEmpty(ing.Glyph)) return ing.Glyph;
-            var r = CraftingRecipeCatalog.Find(id);
-            if (r != null && !string.IsNullOrEmpty(r.ResultGlyph)) return r.ResultGlyph;
-            return null;
         }
 
         // ── uGUI helper ──────────────────────────────────────────────────────

@@ -1,27 +1,19 @@
 // =============================================================================
-// EchoWorkforceHud -- the Echo Workforce panel (ECHO_WORKFORCE_SPEC).
+// EchoWorkforceHud -- the Echo Workforce panel (ECHO_WORKFORCE_SPEC). DUMB SKIN.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// OWNER F8 (2026-06-28, WO-555): the Echo / offline-harvest readout used to be an
-// ALWAYS-ON top-left widget (count + silo fill + Dump All, live on screen every
-// frame in town). The owner called it "a side thought, not the main idea" and asked
-// for it TUCKED AWAY behind a button next to Settings. So this is now a HIDDEN panel
-// that only appears when the player taps the harvest button in the HUD top-right
-// cluster (next to the Settings gear).
-//
+// OWNER F8 (2026-06-28, WO-555): the Echo / offline-harvest readout is a HIDDEN
+// panel that only appears when the player taps the harvest button in the HUD
+// top-right cluster (next to the Settings gear).
 //   - The HUD button (VillageHudController, DeNelle.HUD) calls
 //     HarvestPanelGate.RequestToggle() (Core seam — HUD never references Village, §5).
 //   - This view subscribes to HarvestPanelGate.ToggleRequested and shows/hides itself.
 //
-// The HARVEST LOGIC is untouched (EchoService owns accrual / silo / Dump / unlocks);
-// this is a PRESENTATION RELOCATION only. The panel is built with the shared Obsidian
-// chrome (ElarionUiKit.BuildObsidianModal — near-black fill + gold trim + one Close)
-// so it reads as the same designed game as every other panel. Still code-built uGUI
-// (NO UXML -- UXML does not render in player builds; PIPELINE_STATE S8). It owns its
-// OWN modal canvas, DISJOINT from VillageHudController so the two never collide.
-//
-// Lives on the EchoService DDOL host (installed by EchoWorkforceBootstrap).
+// MVVM (Silo F): this View reads NO service. Every count / silo / pending / rate value
+// and the Collect-All command come from EchoWorkforceVM; the View just repaints the
+// VM's strings on Changed. Still code-built uGUI on the shared Obsidian chrome (NO UXML,
+// PIPELINE_STATE S8). Lives on the EchoService DDOL host (EchoWorkforceBootstrap).
 // =============================================================================
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,13 +21,12 @@ using UnityEngine.EventSystems;
 using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
-    /// <summary>Tucked-away Echo panel: count + silo fill + Dump All. Opened by the HUD
-    /// harvest button (next to Settings) via <see cref="HarvestPanelGate"/>. Driven by
-    /// EchoService. Hidden by default — never persistent on-screen chrome.</summary>
+    /// <summary>Tucked-away Echo panel: count + silo fill + Collect All. Opened by the HUD
+    /// harvest button (next to Settings) via <see cref="HarvestPanelGate"/>. Binds
+    /// <see cref="EchoWorkforceVM"/>. Hidden by default — never persistent on-screen chrome.</summary>
     [DisallowMultipleComponent]
     public sealed class EchoWorkforceHud : MonoBehaviour
     {
@@ -46,6 +37,8 @@ namespace DeNelle.Village
         private TextMeshProUGUI _dumpLabel;
         private bool _open;
 
+        private EchoWorkforceVM _vm;
+
         // Life-force green for the silo fill (the resource the Echoes accrue).
         private static readonly Color LifeGreen = new Color(0.40f, 0.78f, 0.45f, 1f);
 
@@ -53,22 +46,24 @@ namespace DeNelle.Village
         {
             Build();
             Hide();                              // tucked away: starts hidden, button-driven
+
+            _vm = EchoWorkforceVM.CreateDefault(Hide);
+            _vm.Changed += Refresh;
+            _vm.EchoUnlocked += OnEchoUnlocked;
+
             Refresh();
-            if (EchoService.Instance != null)
-            {
-                EchoService.Instance.Changed += Refresh;
-                EchoService.Instance.EchoUnlocked += OnEchoUnlocked;
-            }
             HarvestPanelGate.ToggleRequested += Toggle;
             FlowTrace.Step("HUD", "EchoWorkforceHud built (hidden; opens via HarvestPanelGate / harvest button)");
         }
 
         private void OnDestroy()
         {
-            if (EchoService.Instance != null)
+            if (_vm != null)
             {
-                EchoService.Instance.Changed -= Refresh;
-                EchoService.Instance.EchoUnlocked -= OnEchoUnlocked;
+                _vm.Changed -= Refresh;
+                _vm.EchoUnlocked -= OnEchoUnlocked;
+                _vm.Dispose();
+                _vm = null;
             }
             HarvestPanelGate.ToggleRequested -= Toggle;
         }
@@ -102,14 +97,6 @@ namespace DeNelle.Village
         {
             EnsureEventSystem();
 
-            // The whole modal in one call: canvas + scrim (tap-outside closes) + Obsidian
-            // chrome (near-black fill + gold trim + one Close). Compact, centred panel.
-            // CLOSE-BAND CLEARANCE (eyes-sweep 2026-07-06): on the old 0.32-tall panel
-            // (≈614px at the 1920 ref) the fixed 360x120px shared Close topped out at
-            // frac ≈0.245, and "Dump All" (y 0.16–0.32, built as a LATER sibling) painted
-            // over it — Close was occluded/unreachable. The panel grows to 0.44 tall
-            // (Close top ≈0.192) and the content stack re-seats so Dump All's bottom
-            // edge (0.25) clears the Close band with a gap.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoHarvestPanel", "ECHO HARVEST",
                 new Vector2(0.30f, 0.28f), new Vector2(0.70f, 0.72f),
@@ -140,32 +127,25 @@ namespace DeNelle.Village
             _dumpLabel = dumpBtn != null ? dumpBtn.GetComponentInChildren<TextMeshProUGUI>() : null;
         }
 
-        // -- view refresh (logic -> view) -----------------------------------------
+        // -- view refresh (VM -> view, one direction) -----------------------------
         private void Refresh()
         {
-            var svc = EchoService.Instance;
-            if (svc == null) return;
-            if (_countLabel != null) _countLabel.text = $"Echoes  {svc.EchoCount}/{svc.MaxEchoes}";
-            if (_fill != null) _fill.fillAmount = svc.FillFraction;
-            if (_siloLabel != null)
-            {
-                int pending = ResourceCollectorService.TotalPending();
-                int siloPct = Mathf.RoundToInt(svc.FillFraction * 100f);
-                int collectorPct = Mathf.RoundToInt(ResourceCollectorService.MaxFillFraction() * 100f);
-                _siloLabel.text = $"Pending  {pending}   Echo {siloPct}%   Collectors {collectorPct}%";
-            }
+            if (_vm == null || !_vm.HasWorkforce) return;
+            if (_countLabel != null) _countLabel.text = _vm.HudCountLine;
+            if (_fill != null) _fill.fillAmount = _vm.FillFraction;
+            if (_siloLabel != null) _siloLabel.text = _vm.HudSiloLine;
         }
 
         private void OnCollectAllTapped()
         {
-            int banked = ResourceCollectorService.CollectAll();
+            int banked = _vm != null ? _vm.CollectAll() : 0;
             if (_dumpLabel != null)
             {
                 _dumpLabel.text = banked > 0 ? $"+{banked} collected!" : "Nothing to collect";
                 CancelInvoke(nameof(ResetDumpLabel));
                 Invoke(nameof(ResetDumpLabel), 1.5f);
             }
-            Refresh();
+            // _vm.CollectAll already raised Changed -> Refresh repainted the counts.
         }
 
         private void ResetDumpLabel()
@@ -187,13 +167,12 @@ namespace DeNelle.Village
         // -- helpers --------------------------------------------------------------
         private static void EnsureEventSystem()
         {
-            if (FindAnyObjectByType<EventSystem>() == null)
-            {
-                var es = new GameObject("EventSystem");
-                es.AddComponent<EventSystem>();
-                es.AddComponent<StandaloneInputModule>();
-                DontDestroyOnLoad(es);
-            }
+            // EventSystem.current is a plain static (NOT a scene query) — no banned FindAnyObjectByType.
+            if (EventSystem.current != null) return;
+            var es = new GameObject("EventSystem");
+            es.AddComponent<EventSystem>();
+            es.AddComponent<StandaloneInputModule>();
+            DontDestroyOnLoad(es);
         }
     }
 }
