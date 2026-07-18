@@ -1,4 +1,4 @@
-# UI MVVM Migration Plan — Whole-Game (program spec)
+# UI MVVM Migration Plan — Whole-Game (program spec) · **WO-744**
 
 **Status:** ACTIVE program (owner: "do the mvvm", 2026-07-17). Authoritative execution spec for bringing
 all 36 non-compliant Views to strict MVVM. Produced by the architect agent (delegated to 8 SME sub-agents,
