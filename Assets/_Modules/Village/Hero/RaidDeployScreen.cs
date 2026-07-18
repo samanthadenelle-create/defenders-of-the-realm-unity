@@ -46,9 +46,12 @@ namespace DeNelle.Village.Hero
     public sealed class RaidDeployScreen : MonoBehaviour
     {
         private GameObject _ui;
-        private SceneConfigDef _def;
+        private RaidDeployVM _vm;                       // owns the party/army/power math (no GameState in the View)
         private RectTransform _troopListArea;          // list region inside the body zone
         private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
+
+        // Cached self-instance so the static entry never FindObjectsByType-scans the scene.
+        private static RaidDeployScreen _instance;
 
         private const float RowHeightPx = 60f;
         private const float RowGapPx    = 3f;
@@ -63,13 +66,18 @@ namespace DeNelle.Village.Hero
         public static void Open(SceneConfigDef def)
         {
             if (def == null) { Debug.LogWarning("[RaidDeployScreen] Open(null) ignored."); return; }
-            var existing = FindAnyObjectByType<RaidDeployScreen>();
+            var existing = _instance;
             if (existing == null)
             {
                 var host = new GameObject("RaidDeployScreen");
-                existing = host.AddComponent<RaidDeployScreen>();
+                existing = host.AddComponent<RaidDeployScreen>();   // Awake caches _instance
             }
             existing.OpenInternal(def);
+        }
+
+        private void Awake()
+        {
+            if (_instance == null) _instance = this;
         }
 
         // ── Build ─────────────────────────────────────────────────────────────
@@ -77,7 +85,10 @@ namespace DeNelle.Village.Hero
         private void OpenInternal(SceneConfigDef def)
         {
             Close();
-            _def = def;
+
+            // VM FIRST — it resolves the army roster + party + troop facts from GameState/
+            // TroopCatalog, so this View never touches either.
+            _vm = RaidDeployVM.CreateDefault(def, Close);
 
             // 31050: one band above RaidSelectionScreen (31000) so deploy sits over the grid.
             _ui = ElarionUiKit.BuildModalCanvas("RaidDeployScreenUI", 31050);
@@ -91,9 +102,9 @@ namespace DeNelle.Village.Hero
             // BuildHeader now adds only the badge / stars / target-time sub-row.
             // WO-714 P10: a raw id is never player-visible — missing displayName routes
             // through the ONE kit formatter.
-            string raidName = _def != null && !string.IsNullOrEmpty(_def.displayName)
-                ? _def.displayName
-                : (_def != null ? ElarionUiKit.SpacedDisplayName(_def.id) : "Raid");
+            string raidName = !string.IsNullOrEmpty(_vm.DisplayNameRaw)
+                ? _vm.DisplayNameRaw
+                : (!string.IsNullOrEmpty(_vm.RaidId) ? ElarionUiKit.SpacedDisplayName(_vm.RaidId) : "Raid");
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAID: " + raidName,
                 new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore);
@@ -122,7 +133,7 @@ namespace DeNelle.Village.Hero
             // FOOTER action strip — Auto Recommend + the big glowing DEPLOY CTA.
             BuildDeployBar(footer);
 
-            Debug.Log($"[RaidDeployScreen] Opened for raid '{_def?.id}' -> scene '{_def?.sceneName}'.");
+            Debug.Log($"[RaidDeployScreen] Opened for raid '{_vm.RaidId}' -> scene '{_vm.SceneName}'.");
         }
 
         // Sub-row (difficulty badge + star row + target time) across the TOP band of the
@@ -131,12 +142,12 @@ namespace DeNelle.Village.Hero
         // (WO-714 W4 — the old sweep-9413 / #29 hand-tuned offsets are the kit's job now).
         private void BuildHeader(Transform body)
         {
-            Color tint = DifficultyColor(_def != null ? _def.difficulty : null);
+            Color tint = DifficultyColor(_vm != null ? _vm.Difficulty : null);
             var badge = ElarionUiKit.AddImage(body, "DiffBadge",
                 new Vector2(0.00f, 0.945f), new Vector2(0.20f, 1.00f),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
-            var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_def != null ? _def.difficulty : null),
+            var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_vm != null ? _vm.Difficulty : null),
                 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
 
@@ -145,7 +156,7 @@ namespace DeNelle.Village.Hero
             // builds. Procedural gold diamonds instead (EndStateView's pattern via
             // the shared StarRatingRow), then a plain font-safe "Target:" label.
             StarRatingRow.Build(body, 3, 3, 0.23f, 0.945f, 0.32f, 1.00f, sizePx: 12f);
-            var timeLbl = ElarionUiKit.Label(body, "Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
+            var timeLbl = ElarionUiKit.Label(body, "Target: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
                 0.945f, 1.00f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.335f, 0.75f, bold: true);
             timeLbl.raycastTarget = false;
         }
@@ -162,17 +173,9 @@ namespace DeNelle.Village.Hero
             // Hero + Companions portrait row.
             BuildPartyRow(body);
 
-            // Army-cap indicator (SlotsUsed / MaxArmySize).
-            var army = Army();
-            string capText;
-            if (army != null)
-            {
-                int used = army.SlotsUsed(TroopDialogueCommands.SlotOf);
-                capText = $"Army: {used} / {army.MaxArmySize} slots";
-            }
-            else capText = "Army: -";
-            var capLbl = ElarionUiKit.Label(body, capText, 0.635f, 0.685f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
+            // Army-cap indicator (VM-computed SlotsUsed / MaxArmySize).
+            var capLbl = ElarionUiKit.Label(body, _vm != null ? _vm.ArmyCapText : "Army: -", 0.635f, 0.685f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
             capLbl.raycastTarget = false;
 
             // Troop list region (left half of the body zone, below the cap line). The body
@@ -195,7 +198,7 @@ namespace DeNelle.Village.Hero
         // the player even before any companion has joined.)
         private void BuildPartyRow(Transform body)
         {
-            var classes = PartyClasses();
+            var classes = _vm != null ? _vm.PartyClasses : new List<string>();
 
             // Row host — left half of the body zone, below "YOUR FORCES".
             var rowHost = new GameObject("PartyRow", typeof(RectTransform));
@@ -221,7 +224,8 @@ namespace DeNelle.Village.Hero
                 var portrait = ElarionUiKit.Portrait(niche.transform, ElarionUiKit.PortraitForClass(cls), active: i == 0);
 
                 // Name under the portrait (the canon companion name for the class).
-                var nameLbl = ElarionUiKit.Label(rowHost.transform, CompanionName(cls), 0f, 0.18f, ElarionUi.Parchment,
+                var nameLbl = ElarionUiKit.Label(rowHost.transform, _vm != null ? _vm.CompanionName(cls) : cls,
+                    0f, 0.18f, ElarionUi.Parchment,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, x0, x1, bold: true);
                 nameLbl.raycastTarget = false;
             }
@@ -233,20 +237,8 @@ namespace DeNelle.Village.Hero
         {
             ClearTroopList();
 
-            var army = Army();
-            var counts = new Dictionary<string, int>();
-            var order = new List<string>();
-            if (army != null)
-            {
-                foreach (var t in army.GetDeployable())
-                {
-                    if (t == null || string.IsNullOrEmpty(t.TroopDefId)) continue;
-                    if (!counts.ContainsKey(t.TroopDefId)) { counts[t.TroopDefId] = 0; order.Add(t.TroopDefId); }
-                    counts[t.TroopDefId]++;
-                }
-            }
-
-            if (order.Count == 0)
+            var troops = _vm != null ? _vm.Troops : null;
+            if (troops == null || troops.Count == 0)
             {
                 // Empty state sits directly on the list area (a stretched label inside the
                 // scroll column reports height 0 under the kit's childControlHeight:false law).
@@ -258,18 +250,19 @@ namespace DeNelle.Village.Hero
             // WO-714 W4: the ONE kit scroll zone (§1.14) replaces the hand-rolled
             // viewport/content/fitter plumbing — screens add no scroll plumbing of their own.
             _scroll = ElarionUiKit.MakeScrollZone(_troopListArea, spacing: RowGapPx, padding: 3);
-            foreach (var defId in order)
-                CreateTroopRow(_scroll.content, defId, counts[defId]);
+            foreach (var item in troops)
+                CreateTroopRow(_scroll.content, item);
 
             FinalizeScroll();
         }
 
-        private void CreateTroopRow(Transform parent, string troopDefId, int owned)
+        private void CreateTroopRow(Transform parent, DeNelle.Core.UI.Mvvm.ItemVM item)
         {
-            var def = TroopCatalog.Find(troopDefId);
+            string troopDefId = item.Id;
+            int owned = item.Price;   // owned count carried on Price by the VM
             // WO-714 P10: a raw troopDefId is never player-visible.
-            string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
-                ? def.DisplayName : ElarionUiKit.SpacedDisplayName(troopDefId);
+            string name = !string.IsNullOrEmpty(item.Name)
+                ? item.Name : ElarionUiKit.SpacedDisplayName(troopDefId);
 
             var row = new GameObject("TroopRow_" + troopDefId, typeof(Image));
             row.transform.SetParent(parent, false);
@@ -285,7 +278,7 @@ namespace DeNelle.Village.Hero
             var well = ElarionUiKit.AddImage(row.transform, "IconWell",
                 new Vector2(0.03f, 0.15f), new Vector2(0.20f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
             well.GetComponent<Image>().raycastTarget = false;
-            string glyph = (def != null && def.Role != null && def.Role.ToLowerInvariant().Contains("ranged")) ? "RNG" : "MEL";
+            string glyph = (_vm != null && _vm.IsRanged(troopDefId)) ? "RNG" : "MEL";
             var ic = ElarionUiKit.Label(well.transform, glyph, 0f, 1f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             ic.raycastTarget = false;
@@ -315,14 +308,14 @@ namespace DeNelle.Village.Hero
             pvLbl.raycastTarget = false;
 
             // Estimated Clear Time readout (FIRST PASS: static from the config; TODO live).
-            string est = _def != null ? FormatTime(_def.twoStarTime > 0f ? _def.twoStarTime : _def.recommendedClearTime) : "--:--";
+            string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
             var estLbl = ElarionUiKit.Label(body, "Est. Clear Time: ~" + est, 0.27f, 0.33f, ElarionUi.Gilt,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
             estLbl.raycastTarget = false;
 
-            // Summary — total deployable troops + a simple power rating (sum of deployable).
-            int totalTroops = DeployableCount();
-            int power = PowerRating();
+            // Summary — total deployable troops + a simple power rating (VM-computed).
+            int totalTroops = _vm != null ? _vm.DeployableCount : 0;
+            int power = _vm != null ? _vm.PowerRating : 0;
             var sumLbl = ElarionUiKit.Label(body, $"Troops: {totalTroops}    Power: {power}", 0.19f, 0.25f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
             sumLbl.raycastTarget = false;
@@ -349,14 +342,14 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.615f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
             // Gold-ink-on-green reads as the ember CTA; keep it enabled (the raid can be
             // entered to scout even with no troops — the in-raid tray handles placement).
-            if (deployBtn != null) deployBtn.interactable = _def != null && !string.IsNullOrEmpty(_def.sceneName);
+            if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy;
         }
 
         private void OnAutoRecommend()
         {
             // FIRST PASS stub: "select all deployable" is the whole roster already shown.
             // A real comp picker (driven by a scout report) is a later increment (see TODO).
-            int n = DeployableCount();
+            int n = _vm != null ? _vm.DeployableCount : 0;
             // WO-714 P5: transient feedback through the ONE kit toast — a button tap must
             // never be a silent no-op (dead-button law), and no status label to go stale.
             ElarionUiKit.ShowToast("Auto Recommend: all " + n + " deployable troop(s) selected.",
@@ -366,96 +359,23 @@ namespace DeNelle.Village.Hero
 
         private void OnDeploy()
         {
-            if (_def == null || string.IsNullOrEmpty(_def.sceneName))
+            if (_vm == null || !_vm.CanDeploy)
             {
                 // WO-714 P5: player-visible transient feedback, not just a console line.
                 ElarionUiKit.ShowToast("This raid has no battleground yet.", ElarionUiKit.ToastTone.Danger);
                 Debug.LogWarning("[RaidDeployScreen] DEPLOY: no scene to load for this raid.");
                 return;
             }
-            Debug.Log($"[RaidDeployScreen] DEPLOY -> SceneRouter.GoRaid('{_def.sceneName}').");
-            // SHARED CONTRACT: SceneRouter.GoRaid(sceneName) loads the raid scene; the
-            // in-raid deploy tray handles the actual unit placement.
-            DeNelle.Core.SceneRouter.GoRaid(_def.sceneName);
+            Debug.Log($"[RaidDeployScreen] DEPLOY -> SceneRouter.GoRaid('{_vm.SceneName}').");
+            // SHARED CONTRACT: the VM loads the raid scene; the in-raid deploy tray handles
+            // the actual unit placement.
+            _vm.Deploy();
         }
 
         // ── Data helpers ───────────────────────────────────────────────────────
 
-        // The persisted army roster (GameState.Army), null when no save service is live.
-        private static ArmyStorage Army()
-        {
-            var svc = GameStateService.Instance;
-            return svc != null && svc.State != null ? svc.State.Army : null;
-        }
-
-        // Hero class first, then companion classes from PartyMemberIds (deduped).
-        private static List<string> PartyClasses()
-        {
-            var list = new List<string>();
-            var svc = GameStateService.Instance;
-            var state = svc != null ? svc.State : null;
-
-            // Hero's own class.
-            if (state != null && state.HeroClass != HeroClassOpt.None)
-                list.Add(state.HeroClass.ToString());
-
-            // Companions (class-name strings).
-            if (state != null && state.PartyMemberIds != null)
-            {
-                foreach (var id in state.PartyMemberIds)
-                {
-                    if (string.IsNullOrEmpty(id)) continue;
-                    if (!list.Contains(id)) list.Add(id);
-                }
-            }
-
-            // Always show at least the hero placeholder so the row never reads empty.
-            if (list.Count == 0) list.Add("Knight");
-            return list;
-        }
-
-        // The canon companion name for a class word (Wizard=Thrain, Knight=Grom,
-        // Ranger=Sylas, Healer/Cleric=Elara, Mage=Thrain). Unknown -> the class word.
-        private static string CompanionName(string cls)
-        {
-            switch ((cls ?? "").Trim().ToLowerInvariant())
-            {
-                case "mage":
-                case "wizard": return "Thrain";
-                case "knight": return "Grom";
-                case "ranger": return "Sylas";
-                case "cleric":
-                case "healer": return "Elara";
-                default: return string.IsNullOrEmpty(cls) ? "Hero" : cls;
-            }
-        }
-
-        private static int DeployableCount()
-        {
-            var army = Army();
-            if (army == null) return 0;
-            int n = 0;
-            foreach (var t in army.GetDeployable()) if (t != null) n++;
-            return n;
-        }
-
-        // A simple power rating: sum of each deployable troop's AttackDamage * veterancy
-        // multiplier, rounded. A coarse first-pass scalar (the scout-report-driven soft
-        // RPS rating is a later increment).
-        private static int PowerRating()
-        {
-            var army = Army();
-            if (army == null) return 0;
-            float total = 0f;
-            foreach (var t in army.GetDeployable())
-            {
-                if (t == null) continue;
-                var def = TroopCatalog.Find(t.TroopDefId);
-                float atk = def != null ? def.AttackDamage : 10f;
-                total += atk * t.DamageMultiplier;
-            }
-            return Mathf.RoundToInt(total);
-        }
+        // (Army roster / party / deployable-count / power-rating all moved to RaidDeployVM —
+        //  the View no longer reads GameState / TroopCatalog.)
 
         private static Color DifficultyColor(string difficulty)
         {
@@ -503,6 +423,8 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
+            _vm?.Dispose();
+            _vm = null;
             // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
             // immediate Destroy when the FX is absent / not playing).
             if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
@@ -513,6 +435,9 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            _vm?.Dispose();
+            _vm = null;
+            if (_instance == this) _instance = null;
             if (_ui != null) Destroy(_ui);
         }
     }

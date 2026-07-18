@@ -20,6 +20,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Arena
 {
@@ -41,18 +42,24 @@ namespace DeNelle.Village.Arena
         private VisualElement _root;
         private VisualElement _strip;
         private Label _pointsLabel;
-        private string _armedId;
 
-        // Live budget state, pushed in by the controller each Render so the palette
-        // never re-derives the spend (single source of truth = the controller's layout).
-        private int _spent;
-        private int _remaining = ArenaDefenseCatalog.DefensePointPool;
+        // The pure ViewModel owns the catalog projection + budget/affordability + armed
+        // rules (single source of truth). The controller pushes the live spend via Render
+        // -> vm.SetBudget; this View reads vm.Cards/PointsLabel and never touches the catalog.
+        private ArenaPaletteVM _vm;
 
         private void Awake()
         {
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
+            _vm = ArenaPaletteVM.CreateDefault(ArenaPaletteMode.Defense);
             AdoptPanelSettings();
+        }
+
+        private void OnDestroy()
+        {
+            _vm?.Dispose();
+            _vm = null;
         }
 
         /// <summary>
@@ -107,11 +114,12 @@ namespace DeNelle.Village.Arena
         public void Hide()
         {
             if (_root != null) _root.style.display = DisplayStyle.None;
-            _armedId = null;
+            _vm?.Arm(null);
         }
 
         private void EnsureBuilt()
         {
+            if (_vm == null) _vm = ArenaPaletteVM.CreateDefault(ArenaPaletteMode.Defense);
             if (_root != null) return;
             var docRoot = _document != null ? _document.rootVisualElement : null;
             if (docRoot == null) return;
@@ -167,22 +175,19 @@ namespace DeNelle.Village.Arena
         /// </summary>
         public void Render(int spent, int remaining)
         {
-            _spent = Mathf.Max(0, spent);
-            _remaining = remaining;
             EnsureBuilt();
-            if (_strip == null) return;
+            if (_vm == null || _strip == null) return;
 
-            if (_pointsLabel != null)
-                _pointsLabel.text = $"Defense Points: {_remaining} / {ArenaDefenseCatalog.DefensePointPool}";
+            // Push the live budget INTO the VM (single source of truth) and read back.
+            _vm.SetBudget(spent, remaining);
+
+            if (_pointsLabel != null) _pointsLabel.text = _vm.PointsLabel;
 
             _strip.Clear();
-            int cards = 0;
-            foreach (var def in ArenaDefenseCatalog.All)
-            {
-                if (def == null) continue;
-                _strip.Add(BuildCard(def));
-                cards++;
-            }
+            var projected = _vm.Cards;
+            int cards = projected != null ? projected.Count : 0;
+            for (int i = 0; i < cards; i++)
+                _strip.Add(BuildCard(projected[i]));
 
             if (cards == 0)
             {
@@ -193,17 +198,19 @@ namespace DeNelle.Village.Arena
             }
         }
 
-        private VisualElement BuildCard(ArenaDefenseDef def)
+        private VisualElement BuildCard(ItemVM item)
         {
-            bool armed = def.Id == _armedId;
-            // Affordable = this def's cost fits the REMAINING pool (or it's already armed).
-            bool affordable = armed || def.PointCost <= _remaining;
+            // The VM projects both the armed highlight (Equipped) and affordability (fits the
+            // remaining pool OR is the already-armed card).
+            bool armed = item.Equipped;
+            bool affordable = item.Affordable;
+            string id = item.Id;
 
             var card = new Button(() =>
             {
-                _armedId = def.Id;
-                OnDefSelected?.Invoke(def);
-                Render(_spent, _remaining);   // refresh the armed highlight
+                _vm.Arm(id);
+                OnDefSelected?.Invoke(_vm.DefFor(id));
+                Render(_vm.Spent, _vm.Remaining);   // refresh the armed highlight
             });
             card.style.width = 116; card.style.height = 108;
             card.style.marginLeft = 6; card.style.marginRight = 6;
@@ -221,14 +228,14 @@ namespace DeNelle.Village.Arena
             card.style.opacity = affordable ? 1f : 0.45f;
             card.SetEnabled(affordable);
 
-            var nameLabel = new Label(string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName);
+            var nameLabel = new Label(item.Name);
             nameLabel.style.color = ElarionUi.Parchment;
             nameLabel.style.fontSize = ElarionUi.FontLabel;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             card.Add(nameLabel);
 
-            var costLabel = new Label(def.PointCost + " pts");
+            var costLabel = new Label(item.Price + " pts");
             costLabel.style.color = affordable ? ElarionUi.Affordable : ElarionUi.Danger;
             costLabel.style.fontSize = ElarionUi.FontLabel;
             costLabel.style.unityFontStyleAndWeight = FontStyle.Bold;

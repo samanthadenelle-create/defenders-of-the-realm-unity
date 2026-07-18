@@ -28,6 +28,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 using DeNelle.Village;
 using DeNelle.Village.UI;   // StarRatingRow (tofu-proof star row)
 
@@ -35,17 +36,19 @@ namespace DeNelle.Village.Hero
 {
     public sealed class RaidSelectionScreen : MonoBehaviour
     {
-        // The three flagship enemy raids, in card order (the spec's grid).
-        private static readonly string[] FlagshipRaidIds =
-        {
-            "raider_camp_small",
-            "fortified_garrison",
-            "mage_enclave",
-        };
+        // The flagship-raid ids + the catalog projection now live in RaidSelectionVM.
 
         private GameObject _ui;
         private RectTransform _bodyZone;              // chrome.layout.body — the ONE content well
         private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
+
+        // The pure ViewModel owns the SceneConfigCatalog projection; this View renders
+        // vm.Raids + the per-card helpers and never touches the catalog itself.
+        private RaidSelectionVM _vm;
+
+        // Cached self-instance so the static entry never FindObjectsByType-scans the scene
+        // (a View locating its own singleton screen — routed through this cache instead).
+        private static RaidSelectionScreen _instance;
 
         /// <summary>
         /// WO-725: true while the camp-select list owns the screen (reflects the _ui
@@ -71,13 +74,18 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open()
         {
-            var existing = FindAnyObjectByType<RaidSelectionScreen>();
+            var existing = _instance;
             if (existing == null)
             {
                 var host = new GameObject("RaidSelectionScreen");
-                existing = host.AddComponent<RaidSelectionScreen>();
+                existing = host.AddComponent<RaidSelectionScreen>();   // Awake caches _instance
             }
             existing.OpenInternal();
+        }
+
+        private void Awake()
+        {
+            if (_instance == null) _instance = this;
         }
 
         // ── Build ─────────────────────────────────────────────────────────────
@@ -85,6 +93,10 @@ namespace DeNelle.Village.Hero
         private void OpenInternal()
         {
             Close();
+
+            // VM FIRST — it resolves the flagship raids (fallback to all enemy raids) from
+            // the catalog, so this View never touches SceneConfigCatalog.
+            _vm = RaidSelectionVM.CreateDefault(Close);
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin
             // sortingOrder 31000 + overrideSorting (mirrors ShopPanel) so the panel +
@@ -126,37 +138,23 @@ namespace DeNelle.Village.Hero
         {
             ClearContent();
 
-            // Gather the 3 flagship enemy raids from the catalog (in card order).
-            var defs = new List<SceneConfigDef>();
-            foreach (var id in FlagshipRaidIds)
-            {
-                var def = SceneConfigCatalog.Find(id);
-                if (def != null) defs.Add(def);
-            }
-
-            // Fallback: if the named flagship ids aren't present, show all enemy raids
-            // so the screen is never empty when the catalog loaded SOMETHING.
-            if (defs.Count == 0)
-            {
-                foreach (var def in SceneConfigCatalog.All)
-                    if (def != null && def.IsEnemy) defs.Add(def);
-            }
-
-            if (defs.Count == 0)
+            // The VM owns the flagship-then-fallback catalog projection.
+            var raids = _vm != null ? _vm.Raids : null;
+            if (raids == null || raids.Count == 0)
             {
                 // Empty state sits directly on the body zone (a stretched label inside the
                 // scroll column reports height 0 under the kit's childControlHeight:false law).
                 ElarionUiKit.Label(_bodyZone, "No raids available.", 0.4f, 0.6f, ElarionUi.ParchmentDim,
                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center);
-                Debug.LogWarning("[RaidSelectionScreen] No enemy raids in SceneConfigCatalog — empty grid.");
+                Debug.LogWarning("[RaidSelectionScreen] No enemy raids projected — empty grid.");
                 return;
             }
 
             // WO-714 W4: the ONE kit scroll zone (§1.14) replaces the hand-rolled
             // viewport/content/fitter plumbing — screens add no scroll plumbing of their own.
             _scroll = ElarionUiKit.MakeScrollZone(_bodyZone, spacing: CardGapPx, padding: 8);
-            foreach (var def in defs)
-                CreateRaidCard(_scroll.content, def);
+            foreach (var item in raids)
+                CreateRaidCard(_scroll.content, item);
 
             FinalizeScroll();
         }
@@ -164,13 +162,14 @@ namespace DeNelle.Village.Hero
         // One framed raid plaque: difficulty-tinted frame, fortress name (gold serif),
         // a difficulty badge, the 3-star target time (m:ss), and a reward hint
         // (resource + Echo-Shard). The whole card is one tap target -> RaidDeployScreen.
-        private void CreateRaidCard(Transform parent, SceneConfigDef def)
+        private void CreateRaidCard(Transform parent, ItemVM item)
         {
-            Color tint = DifficultyColor(def.difficulty);
+            string id = item.Id;
+            Color tint = DifficultyColor(_vm.DifficultyFor(id));
 
             // Card root: a Cell tile (LayoutElement-sized for the scroll layout) with a
             // difficulty-tinted inner rim, and a Button so the whole plaque taps.
-            var card = new GameObject("RaidCard_" + def.id, typeof(Image), typeof(Button));
+            var card = new GameObject("RaidCard_" + id, typeof(Image), typeof(Button));
             card.transform.SetParent(parent, false);
             // Kit scroll-column row law (MakeScrollZone runs childControlHeight:false): rows
             // carry their own height via sizeDelta, not a LayoutElement.
@@ -186,8 +185,8 @@ namespace DeNelle.Village.Hero
             var cardBtn = card.GetComponent<Button>();
             cardBtn.targetGraphic = cardImg;
             ElarionUiKit.StyleButtonColors(cardBtn);
-            var defCopy = def;
-            cardBtn.onClick.AddListener(() => OnCardTapped(defCopy));
+            string idCopy = id;
+            cardBtn.onClick.AddListener(() => OnCardTapped(idCopy));
 
             // Difficulty accent — a thin left edge bar (the only colour on the obsidian tile).
             var accent = ElarionUiKit.AddImage(card.transform, "DiffAccent",
@@ -197,8 +196,8 @@ namespace DeNelle.Village.Hero
 
             // Fortress name — gold serif title, top band. WO-714 P10: a raw id is never
             // player-visible — missing displayName routes through the ONE kit formatter.
-            string name = string.IsNullOrEmpty(def.displayName)
-                ? ElarionUiKit.SpacedDisplayName(def.id) : def.displayName;
+            string name = string.IsNullOrEmpty(item.Name)
+                ? ElarionUiKit.SpacedDisplayName(id) : item.Name;
             var nameLabel = ElarionUiKit.Label(card.transform, name, 0.66f, 0.94f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
             nameLabel.raycastTarget = false;
@@ -210,7 +209,7 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.72f, 0.68f), new Vector2(0.96f, 0.92f),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
-            var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(def.difficulty), 0f, 1f,
+            var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_vm.DifficultyFor(id)), 0f, 1f,
                 ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
 
@@ -220,25 +219,27 @@ namespace DeNelle.Village.Hero
             // gold diamonds instead (EndStateView's pattern via StarRatingRow).
             StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
             var timeLabel = ElarionUiKit.Label(card.transform,
-                "Target: " + FormatTime(def.recommendedClearTime), 0.38f, 0.60f,
+                "Target: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
             timeLabel.raycastTarget = false;
 
             // Reward hint — resource multiplier + Echo-Shard drop, bottom band.
-            var rewardLabel = ElarionUiKit.Label(card.transform, RewardHint(def), 0.10f, 0.32f,
+            var rewardLabel = ElarionUiKit.Label(card.transform,
+                RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id)), 0.10f, 0.32f,
                 ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
         }
 
-        private void OnCardTapped(SceneConfigDef def)
+        private void OnCardTapped(string id)
         {
+            var def = _vm != null ? _vm.DefFor(id) : null;
             if (def == null) return;
             RaidDeployScreen.Open(def);
             // Leave the selection screen open underneath so closing the deploy screen
             // returns the player to the raid grid (mirrors a drill-down flow).
         }
 
-        // ── Card data helpers (read straight off SceneConfigDef) ───────────────
+        // ── Card data helpers (read straight off VM-projected values) ──────────
 
         // Difficulty -> tint: green (Regular) / yellow (Hard) / red (Extreme).
         private static Color DifficultyColor(string difficulty)
@@ -270,16 +271,16 @@ namespace DeNelle.Village.Hero
 
         // A short reward hint from rewardMultiplier + shardDropChance: a resource yield
         // multiplier ("x1.5 Loot") plus an Echo-Shard drop chance ("+ Echo Shard 25%").
-        private static string RewardHint(SceneConfigDef def)
+        private static string RewardHint(float rewardMultiplier, float shardDropChance)
         {
             var parts = new List<string>();
-            float mult = def.rewardMultiplier <= 0f ? 1f : def.rewardMultiplier;
+            float mult = rewardMultiplier <= 0f ? 1f : rewardMultiplier;
             // SWEEP 9413 R2 (#3): "◆" is not in the build TMP font — rendered as tofu "□"
             // before every loot line. ASCII marker only (same rule as the jukebox "»" fix).
             parts.Add("- x" + mult.ToString("0.#") + " Loot");
-            if (def.shardDropChance > 0f)
+            if (shardDropChance > 0f)
             {
-                int pct = Mathf.RoundToInt(Mathf.Clamp01(def.shardDropChance) * 100f);
+                int pct = Mathf.RoundToInt(Mathf.Clamp01(shardDropChance) * 100f);
                 parts.Add("Echo Shard " + pct + "%");
             }
             return string.Join("   ", parts);
@@ -309,6 +310,8 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
+            _vm?.Dispose();
+            _vm = null;
             // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
             // immediate Destroy when the FX is absent / not playing).
             if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
@@ -320,6 +323,9 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            _vm?.Dispose();
+            _vm = null;
+            if (_instance == this) _instance = null;
             if (_ui != null) Destroy(_ui);
             IsScreenOpen = false;   // WO-725: scene-change safety — never leave the static stuck true
         }

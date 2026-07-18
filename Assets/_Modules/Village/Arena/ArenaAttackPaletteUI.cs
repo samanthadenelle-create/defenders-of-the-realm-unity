@@ -29,6 +29,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Arena
 {
@@ -58,11 +59,10 @@ namespace DeNelle.Village.Arena
         private static readonly Color CardBg = ElarionUi.PanelStone;
         private static readonly Color TopBar = ElarionUi.PanelStoneDark;
 
-        // Live budget state, pushed in by the controller each Render so the palette
-        // never re-derives the spend (single source of truth = the controller's squad).
-        private int _spent;
-        private int _remaining = ArenaDefenseCatalog.DefensePointPool;
-        private int _squadCount;
+        // The pure ViewModel owns the catalog projection + budget/affordability rules
+        // (single source of truth). The controller pushes the live spend via Render ->
+        // vm.SetBudget; this View reads vm.Cards/PointsLabel and never touches the catalog.
+        private ArenaPaletteVM _vm;
 
         // ── Show / Hide ────────────────────────────────────────────────────────
 
@@ -88,6 +88,8 @@ namespace DeNelle.Village.Arena
 
         private void OnDestroy()
         {
+            _vm?.Dispose();
+            _vm = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
         }
@@ -96,6 +98,7 @@ namespace DeNelle.Village.Arena
 
         private void EnsureBuilt()
         {
+            if (_vm == null) _vm = ArenaPaletteVM.CreateDefault(ArenaPaletteMode.Attack);
             if (_ui != null) return;
             BuildModal();
         }
@@ -157,25 +160,22 @@ namespace DeNelle.Village.Arena
         /// </summary>
         public void Render(int spent, int remaining, int squadCount)
         {
-            _spent = Mathf.Max(0, spent);
-            _remaining = remaining;
-            _squadCount = Mathf.Max(0, squadCount);
-
             try
             {
                 EnsureBuilt();
-                if (_cardRow == null) return;
+                if (_vm == null || _cardRow == null) return;
 
-                if (_pointsLabel != null)
-                    _pointsLabel.text = $"Squad Points: {_spent} / {ArenaDefenseCatalog.DefensePointPool}" +
-                                        (_squadCount > 0 ? $"   ({_squadCount} units)" : "");
+                // Push the live budget INTO the VM (single source of truth) and read back.
+                _vm.SetBudget(spent, remaining, squadCount);
+
+                if (_pointsLabel != null) _pointsLabel.text = _vm.PointsLabel;
 
                 // Rebuild the card row against the new budget.
                 for (int i = _cardRow.childCount - 1; i >= 0; i--)
                     Destroy(_cardRow.GetChild(i).gameObject);
 
-                var defs = ArenaDefenseCatalog.All;
-                int count = defs != null ? defs.Count : 0;
+                var cards = _vm.Cards;
+                int count = cards != null ? cards.Count : 0;
                 if (count == 0)
                 {
                     AddLabel(_cardRow, "No troops registered.", 0.4f, 0.6f, ElarionUi.Parchment,
@@ -188,11 +188,9 @@ namespace DeNelle.Village.Arena
                 float cardW = (1f - pad * (count + 1)) / count;
                 for (int i = 0; i < count; i++)
                 {
-                    var def = defs[i];
-                    if (def == null) continue;
                     float x0 = pad + i * (cardW + pad);
                     float x1 = x0 + cardW;
-                    BuildCard(def, x0, x1);
+                    BuildCard(cards[i], x0, x1);
                 }
             }
             catch (Exception e)
@@ -201,10 +199,11 @@ namespace DeNelle.Village.Arena
             }
         }
 
-        private void BuildCard(ArenaDefenseDef def, float x0, float x1)
+        private void BuildCard(ItemVM item, float x0, float x1)
         {
-            // Affordable = this def's cost fits the REMAINING budget (a recruit always ADDS).
-            bool affordable = def.PointCost <= _remaining;
+            // Affordable = the VM's projection (this def's cost fits the REMAINING budget).
+            bool affordable = item.Affordable;
+            string id = item.Id;
 
             Color bg = affordable
                 ? CardBg
@@ -213,16 +212,15 @@ namespace DeNelle.Village.Arena
             var btn = AddButton(_cardRow, string.Empty,
                                 new Vector2((x0 + x1) * 0.5f, (x1 - x0) * 0.5f),
                                 new Vector2(0.10f, 0.90f),
-                                bg, () => { if (affordable) OnRecruit?.Invoke(def); }, ButtonKind.Neutral);
+                                bg, () => { if (affordable) OnRecruit?.Invoke(_vm.DefFor(id)); }, ButtonKind.Neutral);
             btn.interactable = affordable;
 
             // Name (top) + cost (bottom) stacked on the card. Greyed when unaffordable.
-            string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
-            AddLabel(btn.transform, name, 0.52f, 0.94f,
+            AddLabel(btn.transform, item.Name, 0.52f, 0.94f,
                      affordable ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
-            AddLabel(btn.transform, def.PointCost + " pts", 0.10f, 0.46f,
+            AddLabel(btn.transform, item.Price + " pts", 0.10f, 0.46f,
                      affordable ? ElarionUi.Affordable : ElarionUi.Danger,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
         }

@@ -39,6 +39,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Arena
 {
@@ -50,7 +51,11 @@ namespace DeNelle.Village.Arena
         private GameObject _resultRoot;
         private TMPro.TextMeshProUGUI _headerSkr;
         private TMPro.TextMeshProUGUI _headerRecord;
-        private bool _subscribed;
+
+        // The pure ViewModel owns ALL Arena game state (catalog / wallet / record /
+        // toggle / start-raid / OnRaidEnded push). This View binds it, renders from
+        // vm.*, and routes taps to commands — it never reads a service/catalog itself.
+        private ArenaVM _vm;
 
         // WO-437: the Arena entry panel used to bypass the modal arbiter (open via
         // backdrop only). Register a PanelHandle so it routes through PanelManager:
@@ -84,8 +89,8 @@ namespace DeNelle.Village.Arena
                 if (_handle == null)
                     _handle = PanelManager.Register("Arena", Close, () => _ui != null);
 
+                EnsureVm();
                 if (_ui == null) BuildRoot();
-                Subscribe();
                 ShowEntry();
 
                 // Route through the modal arbiter: closes any other open panel, and the
@@ -102,7 +107,7 @@ namespace DeNelle.Village.Arena
         /// <summary>Tear the overlay down.</summary>
         public void Close()
         {
-            Unsubscribe();
+            DisposeVm();
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _entryRoot = _resultRoot = null;
@@ -110,7 +115,24 @@ namespace DeNelle.Village.Arena
             PanelManager.NotifyClosed(_handle);
         }
 
-        private void OnDestroy() { Unsubscribe(); if (_ui != null) Destroy(_ui); }
+        private void OnDestroy() { DisposeVm(); if (_ui != null) Destroy(_ui); }
+
+        // Create the VM once + subscribe its re-raised OnRaidEnded push (survives a live
+        // raid: the panel is hidden, not closed, so the VM stays alive to fire the result).
+        private void EnsureVm()
+        {
+            if (_vm != null) return;
+            _vm = ArenaVM.CreateDefault(Close);
+            _vm.RaidEnded += HandleRaidEnded;
+        }
+
+        private void DisposeVm()
+        {
+            if (_vm == null) return;
+            _vm.RaidEnded -= HandleRaidEnded;
+            _vm.Dispose();
+            _vm = null;
+        }
 
         // -- construction ----------------------------------------------------
         private void BuildRoot()
@@ -131,25 +153,12 @@ namespace DeNelle.Village.Arena
             AddImage(_ui.transform, "Scrim", Vector2.zero, Vector2.one, ElarionUi.Scrim, rounded: false);
         }
 
-        private void Subscribe()
-        {
-            if (_subscribed) return;
-            _subscribed = true;
-            ArenaMode.Instance.OnRaidEnded += HandleRaidEnded;
-        }
-
-        private void Unsubscribe()
-        {
-            if (!_subscribed) return;
-            _subscribed = false;
-            if (ArenaMode.Instance != null) ArenaMode.Instance.OnRaidEnded -= HandleRaidEnded;
-        }
-
         // ====================================================================
         // ENTRY SCREEN
         // ====================================================================
         private void ShowEntry()
         {
+            EnsureVm();
             DestroyScreen(ref _resultRoot);
             DestroyScreen(ref _entryRoot);
 
@@ -168,7 +177,7 @@ namespace DeNelle.Village.Arena
             float top = 0.785f;
             float cardH = 0.165f;
             float gap = 0.022f;
-            var opponents = ArenaCatalog.All;
+            var opponents = _vm.Opponents;
             for (int i = 0; i < opponents.Count; i++)
             {
                 float y1 = top - i * (cardH + gap);
@@ -210,21 +219,10 @@ namespace DeNelle.Village.Arena
         // the recruit screen is unobstructed; the controller owns its own teardown. ──
         private void OpenAttackRecruit()
         {
-            try
-            {
-                var ctl = ArenaAttackRecruitController.EnsureExists();
-                // Default the raid target to the first seeded opponent (MVP) so the
-                // recruit -> launch path always has a base to raid.
-                if (ArenaCatalog.All != null && ArenaCatalog.All.Count > 0)
-                    ctl.SetOpponent(ArenaCatalog.All[0]);
-                if (_ui != null) _ui.SetActive(false);
-                ctl.Enter();
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[ArenaPanel] OpenAttackRecruit failed: " + e);
-                if (_ui != null) _ui.SetActive(true);
-            }
+            // Hide this panel so the recruit screen is unobstructed; the VM owns the
+            // controller EnsureExists/SetOpponent/Enter flow. Restore on failure.
+            if (_ui != null) _ui.SetActive(false);
+            if (!(_vm != null && _vm.BeginAttack()) && _ui != null) _ui.SetActive(true);
         }
 
         // ── DEFEND flow: open the defense-placement screen (place your War Base ->
@@ -232,34 +230,27 @@ namespace DeNelle.Village.Arena
         // placement camera + palette are unobstructed. ──
         private void OpenDefenseSetup()
         {
-            try
-            {
-                var ctl = ArenaDefenseSetupController.EnsureExists();
-                if (_ui != null) _ui.SetActive(false);
-                ctl.Enter();
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[ArenaPanel] OpenDefenseSetup failed: " + e);
-                if (_ui != null) _ui.SetActive(true);
-            }
+            // Hide this panel so the placement camera/palette are unobstructed; the VM
+            // owns the controller EnsureExists/Enter flow. Restore on failure.
+            if (_ui != null) _ui.SetActive(false);
+            if (!(_vm != null && _vm.BeginDefense()) && _ui != null) _ui.SetActive(true);
         }
 
         // ── "Use My Castle" toggle — a sleek labelled pill (matches the panel idiom:
         // built from the same glass/gold helpers; tap flips the flag + re-renders). ──
         private void BuildUseMyCastleToggle(Transform parent)
         {
-            bool on = ArenaMode.Instance.UsePlayerCastle;
+            bool on = _vm != null && _vm.UsePlayerCastle;
 
             // A recessed well behind the toggle so it reads as a setting, not a card.
             var well = AddImage(parent, "CastleToggleWell", new Vector2(0.06f, 0.10f), new Vector2(0.94f, 0.18f), Track);
             AddLabel(well.transform, "DEFENDER BASE", 0.55f, 0.96f, ElarionUi.ParchmentDim,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f, spacing: 3f);
-            AddLabel(well.transform, on ? "My Castle" : "Seeded opponent", 0.06f, 0.55f, ElarionUi.Parchment,
+            AddLabel(well.transform, _vm != null ? _vm.DefenderLabel : "", 0.06f, 0.55f, ElarionUi.Parchment,
                      ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f, bold: true);
 
-            // The pill: green/ON shows "USE MY CASTLE", neutral/OFF shows "SEEDED".
-            string label = on ? "MY CASTLE  *" : "USE MY CASTLE";
+            // The pill: green/ON shows "MY CASTLE *", neutral/OFF shows "USE MY CASTLE".
+            string label = _vm != null ? _vm.CastleToggleLabel : "USE MY CASTLE";
             Color pill = on
                 ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f)
                 : Glass;
@@ -270,53 +261,52 @@ namespace DeNelle.Village.Arena
 
         private void ToggleUseMyCastle()
         {
-            ArenaMode.Instance.UsePlayerCastle = !ArenaMode.Instance.UsePlayerCastle;
+            _vm?.ToggleUseMyCastle();
             ShowEntry();   // re-render so the pill + label reflect the new state
         }
 
         // ── SKR balance + W/L record header — two recessed glass wells. ────────
         private void BuildStatsHeader(Transform parent, float y0, float y1)
         {
-            var rec = ArenaProgressStore.Current;
-
             var skrWell = AddImage(parent, "SkrWell", new Vector2(0.06f, y0), new Vector2(0.49f, y1), Track);
             AddLabel(skrWell.transform, "BALANCE", 0.55f, 0.95f, ElarionUi.ParchmentDim,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            _headerSkr = AddLabel(skrWell.transform, ArenaWalletService.Balance + " SKR", 0.06f, 0.55f,
+            _headerSkr = AddLabel(skrWell.transform, (_vm != null ? _vm.Balance : 0) + " SKR", 0.06f, 0.55f,
                      ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
             var recWell = AddImage(parent, "RecWell", new Vector2(0.51f, y0), new Vector2(0.94f, y1), Track);
             AddLabel(recWell.transform, "RECORD", 0.55f, 0.95f, ElarionUi.ParchmentDim,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            _headerRecord = AddLabel(recWell.transform, $"{rec.Wins}W / {rec.Losses}L   ({rec.Streak} streak)", 0.06f, 0.55f,
+            _headerRecord = AddLabel(recWell.transform, _vm != null ? _vm.RecordLine : "", 0.06f, 0.55f,
                      ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
         }
 
-        private void BuildOpponentCard(Transform parent, ArenaOpponentDef opp, float y0, float y1)
+        private void BuildOpponentCard(Transform parent, ItemVM opp, float y0, float y1)
         {
             var card = AddPanel(parent, new Vector2(0.04f, y0), new Vector2(0.96f, y1), deep: false);
+            string id = opp.Id;
 
             // Tier pip — small gilt badge top-left.
             var pip = AddImage(card.transform, "Tier", new Vector2(0.035f, 0.62f), new Vector2(0.155f, 0.92f),
                                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f));
-            AddLabel(pip.transform, "T" + opp.Tier, 0f, 1f, ElarionUi.Gilt,
+            AddLabel(pip.transform, "T" + _vm.TierFor(id), 0f, 1f, ElarionUi.Gilt,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
 
             // Name (beside the pip) + flavour beneath.
-            AddLabel(card.transform, opp.DisplayName, 0.60f, 0.94f, ElarionUi.Parchment,
+            AddLabel(card.transform, opp.Name, 0.60f, 0.94f, ElarionUi.Parchment,
                      ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.18f, 0.66f, bold: true);
-            AddLabel(card.transform, opp.Flavour, 0.40f, 0.60f, ElarionUi.ParchmentDim,
+            AddLabel(card.transform, _vm.FlavourFor(id), 0.40f, 0.60f, ElarionUi.ParchmentDim,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.66f);
 
             // Stake -> purse line in a recessed well across the card bottom.
             var stakeWell = AddImage(card.transform, "Stake", new Vector2(0.035f, 0.08f), new Vector2(0.66f, 0.34f), Track);
             AddLabel(stakeWell.transform,
-                     $"Garrison 1 boss + {opp.GuardCount}   |   Stake {opp.Wager}  ->  Win {opp.WinPurse} SKR",
+                     $"Garrison 1 boss + {_vm.GuardCountFor(id)}   |   Stake {_vm.WagerFor(id)}  ->  Win {_vm.WinPurseFor(id)} SKR",
                      0f, 1f, ElarionUi.Gold, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
 
             // RAID button — green when affordable, dimmed red gate otherwise.
-            bool canAfford = ArenaWalletService.CanAfford(opp.Wager);
-            string btnLabel = canAfford ? $"RAID   {opp.Wager} SKR" : "NEED MORE SKR";
+            bool canAfford = opp.Affordable;
+            string btnLabel = canAfford ? $"RAID   {_vm.WagerFor(id)} SKR" : "NEED MORE SKR";
             ButtonKind kind = canAfford ? ButtonKind.Confirm : ButtonKind.Danger;
             Color btnColor = canAfford
                 ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f)
@@ -324,16 +314,16 @@ namespace DeNelle.Village.Arena
 
             var btn = AddButton(card.transform, btnLabel, new Vector2(0.68f, 0.97f),
                                 new Vector2(0.10f, 0.42f), btnColor,
-                                () => { if (canAfford) ConfirmRaid(opp); }, kind);
+                                () => { if (canAfford) ConfirmRaid(id); }, kind);
             btn.interactable = canAfford;
         }
 
-        private void ConfirmRaid(ArenaOpponentDef opp)
+        private void ConfirmRaid(string id)
         {
-            if (ArenaMode.Instance.TryStartRaid(opp))
+            if (_vm != null && _vm.TryStartRaid(id))
             {
                 // Hide the overlay during the live raid; the result screen reopens it
-                // when OnRaidEnded fires. Keep the GameObject alive (we are subscribed).
+                // when the VM re-raises RaidEnded. Keep the GameObject alive (VM stays alive).
                 if (_ui != null) _ui.SetActive(false);
             }
             else
@@ -345,44 +335,44 @@ namespace DeNelle.Village.Arena
 
         private void RefreshHeader()
         {
-            if (_headerSkr != null) _headerSkr.text = ArenaWalletService.Balance + " SKR";
-            if (_headerRecord != null)
-            {
-                var rec = ArenaProgressStore.Current;
-                _headerRecord.text = $"{rec.Wins}W / {rec.Losses}L   ({rec.Streak} streak)";
-            }
+            if (_headerSkr != null) _headerSkr.text = (_vm != null ? _vm.Balance : 0) + " SKR";
+            if (_headerRecord != null && _vm != null) _headerRecord.text = _vm.RecordLine;
         }
 
         // ====================================================================
         // RESULT SCREEN
         // ====================================================================
-        private void HandleRaidEnded(ArenaOpponentDef opp, ArenaResult result, long skrDelta)
+        // Driven by the VM's re-raised OnRaidEnded push (parameterless — the result is
+        // captured on the VM: LastOpponentName / LastResult / LastDelta).
+        private void HandleRaidEnded()
         {
             if (_handle == null)
                 _handle = PanelManager.Register("Arena", Close, () => _ui != null);
             if (_ui == null) BuildRoot();
             _ui.SetActive(true);
-            ShowResult(opp, result, skrDelta);
+            ShowResult();
             // The raid just ended (RaidInProgress is already false), so the battle-lock
             // permits this result screen; register it as the modal owner.
             PanelManager.NotifyOpened(_handle);
         }
 
-        private void ShowResult(ArenaOpponentDef opp, ArenaResult result, long skrDelta)
+        private void ShowResult()
         {
             DestroyScreen(ref _entryRoot);
             DestroyScreen(ref _resultRoot);
 
             _resultRoot = AddPanel(_ui.transform, new Vector2(0.12f, 0.28f), new Vector2(0.88f, 0.72f), deep: true);
 
-            bool win = result == ArenaResult.Win;
+            bool win = _vm != null && _vm.LastResult == ArenaResult.Win;
+            long skrDelta = _vm != null ? _vm.LastDelta : 0L;
+            string oppName = _vm != null ? _vm.LastOpponentName : "opponent";
+
             string banner = win ? "VICTORY" : "DEFEAT";
             Color bannerColor = win ? ElarionUi.Affordable : ElarionUi.Danger;
             AddLabel(_resultRoot.transform, banner, 0.78f, 0.95f, bannerColor, ElarionUi.FontTitle + 12,
                      TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 8f, bold: true);
             AddRule(_resultRoot.transform, 0.76f, 0.18f, 0.82f);
 
-            string oppName = opp != null ? opp.DisplayName : "opponent";
             AddLabel(_resultRoot.transform,
                      win ? $"You raided {oppName} and seized the purse."
                          : $"{oppName} held their walls. Your stake is forfeit.",
@@ -396,7 +386,7 @@ namespace DeNelle.Village.Arena
                      win ? ElarionUi.Gilt : ElarionUi.Danger, ElarionUi.FontTitle + 4,
                      TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
-            AddLabel(_resultRoot.transform, StatsLine(), 0.32f, 0.40f,
+            AddLabel(_resultRoot.transform, _vm != null ? _vm.StatsLine : "", 0.32f, 0.40f,
                      ElarionUi.Gold, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
 
             AddButton(_resultRoot.transform, "Back to Arena", new Vector2(0.34f, 0.66f),
@@ -405,12 +395,6 @@ namespace DeNelle.Village.Arena
             ElarionUiKit.PinCanonicalCtaSize(
                 AddButton(_resultRoot.transform, "Close", new Vector2(0.34f, 0.66f),
                           new Vector2(0.04f, 0.13f), Glass, Close, ButtonKind.Neutral));
-        }
-
-        private static string StatsLine()
-        {
-            var rec = ArenaProgressStore.Current;
-            return $"SKR {ArenaWalletService.Balance}      {rec.Wins}W / {rec.Losses}L      Streak {rec.Streak}";
         }
 
         // ====================================================================

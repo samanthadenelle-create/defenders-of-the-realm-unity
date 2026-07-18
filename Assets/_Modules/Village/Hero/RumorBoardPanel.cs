@@ -33,8 +33,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using DeNelle.Core.Quests;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Hero
 {
@@ -48,14 +48,14 @@ namespace DeNelle.Village.Hero
         // text here; the empty state renders an authored line (no silent blanks law).
         private TMPro.TextMeshProUGUI _detailTitle;
         private TMPro.TextMeshProUGUI _detailBody;
-        private bool _subscribed;
 
-        // WO-454 Phase 2: board tab filter. Story/Gear/Endgame read QuestCatalog by Type;
-        // Daily reads DailyQuestService. "all" = the original ungrouped catalog view.
+        // The pure ViewModel owns ALL quest state (catalog browse, active/available
+        // bucketing, per-tab filter, daily projection, tracked flag, StartQuest/SetTracked).
+        // This View binds it, repaints on Changed, and routes taps to Accept/Track/SetTab.
+        private RumorBoardVM _vm;
+
+        // WO-454 Phase 2: board tab strip (keys/labels + filter now live on the VM).
         private GameObject _tabStrip;
-        private string _activeTab = "all";
-        private static readonly string[] TabKeys    = { "all", "story", "daily", "gear", "endgame" };
-        private static readonly string[] TabLabels  = { "All", "Story", "Daily", "Gear", "Endgame" };
 
         // WO-437: this panel used to bypass the modal arbiter (open via backdrop only),
         // so it could stack on top of another panel AND open mid-battle. Register a
@@ -70,6 +70,12 @@ namespace DeNelle.Village.Hero
 
             if (_handle == null)
                 _handle = PanelManager.Register("Rumor Board", Close, () => _ui != null);
+
+            // VM FIRST — it resolves QuestService / QuestCatalog / DailyQuestService, so this
+            // View never touches them. Repaint on the VM's Changed (replaces the direct
+            // QuestService.QuestChanged subscription).
+            _vm = RumorBoardVM.CreateDefault(Close);
+            _vm.Changed += Repaint;
 
             // WO-562: the ONE canonical obsidian modal (canvas + scrim + black panel + gold trim +
             // gold header + the shared Close) replaces the hand-rolled Canvas/backdrop/brown panel +
@@ -187,14 +193,7 @@ namespace DeNelle.Village.Hero
             _statusText.fontSize = 14;
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
-            SetStatus("The talk of Elarion. Accept what calls to you.");
-
-            // Repaint when a quest is started/advanced/completed.
-            if (!_subscribed && QuestService.Instance != null)
-            {
-                QuestService.Instance.QuestChanged += Repaint;
-                _subscribed = true;
-            }
+            SetStatus(_vm.Status);
 
             Repaint();
 
@@ -208,9 +207,7 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
-            if (_subscribed && QuestService.Instance != null)
-                QuestService.Instance.QuestChanged -= Repaint;
-            _subscribed = false;
+            if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
 
             if (_ui != null) Destroy(_ui);
             _ui = null;
@@ -224,9 +221,7 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
-            if (_subscribed && QuestService.Instance != null)
-                QuestService.Instance.QuestChanged -= Repaint;
-            _subscribed = false;
+            if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
             if (_ui != null) Destroy(_ui);
         }
 
@@ -234,68 +229,27 @@ namespace DeNelle.Village.Hero
 
         private void Repaint()
         {
-            if (_contentRoot == null) return;
+            if (_contentRoot == null || _vm == null) return;
             ClearContent();
 
-            // WO-454: the Daily tab is a reader over DailyQuestService (different runtime), not
-            // the story catalog — render its slots and bail before the catalog grouping below.
-            if (_activeTab == "daily") { RepaintDaily(); return; }
-
-            var svc = QuestService.Instance;
-            var catalog = QuestCatalog.Quests; // empty list if json missing — safe to enumerate
-
-            // Bucket the catalog: active vs available (not active, not completed), filtered by tab.
-            var active = new List<QuestDef>();
-            var available = new List<QuestDef>();
-            if (catalog != null)
-            {
-                foreach (var def in catalog)
-                {
-                    if (def == null || string.IsNullOrEmpty(def.Id)) continue;
-                    if (!MatchesTab(def, _activeTab)) continue; // WO-454: tab filter by Type
-                    if (svc != null && svc.IsActive(def.Id)) { active.Add(def); continue; }
-                    if (svc != null && svc.IsCompleted(def.Id)) continue; // done — off the board
-                    available.Add(def);
-                }
-            }
+            // WO-454: the Daily tab renders from the VM's DailyQuests projection (its own
+            // runtime), not the story catalog — render its slots and bail.
+            if (_vm.IsDailyTab) { RepaintDaily(); return; }
 
             CreateSectionLabel(_contentRoot.transform, "— In Progress —");
-            if (active.Count == 0)
+            if (_vm.ActiveQuests.Count == 0)
                 CreateFlavorRow(_contentRoot.transform, "Nothing underway. Pick up a thread below.");
-            foreach (var def in active)
-                CreateActiveRow(_contentRoot.transform, def, svc);
+            foreach (var item in _vm.ActiveQuests)
+                CreateActiveRow(_contentRoot.transform, item);
 
             CreateSectionLabel(_contentRoot.transform, "— Rumors & Requests —");
-            if (available.Count == 0)
+            if (_vm.AvailableQuests.Count == 0)
                 CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.");
-            foreach (var def in available)
-                CreateAvailableRow(_contentRoot.transform, def);
+            foreach (var item in _vm.AvailableQuests)
+                CreateAvailableRow(_contentRoot.transform, item);
         }
 
-        // ── Tabs (WO-454 Phase 2) ─────────────────────────────────────────────────
-
-        // Normalize a quest's free-string Type → a lowercase bucket; empty/null = "story"
-        // so legacy quests with no Type field stay in the Story tab.
-        private static string NormalizedType(QuestDef def)
-        {
-            if (def == null || string.IsNullOrEmpty(def.Type)) return "story";
-            return def.Type.Trim().ToLowerInvariant();
-        }
-
-        // Does this quest belong under the given tab? "all" shows everything; "story" also
-        // catches "main"/"side"/unknown (the default narrative bucket); gear/endgame are exact.
-        private static bool MatchesTab(QuestDef def, string tab)
-        {
-            if (tab == "all") return true;
-            string ty = NormalizedType(def);
-            switch (tab)
-            {
-                case "gear":    return ty == "gear";
-                case "endgame": return ty == "endgame";
-                case "story":   return ty != "gear" && ty != "endgame"; // story/main/side/unknown
-                default:        return true;
-            }
-        }
+        // ── Tabs (WO-454 Phase 2 — keys/labels/filter now on the VM) ──────────────
 
         // Builds (or rebuilds) the horizontal tab strip below the header; the active tab is gilt.
         private void BuildTabStrip(Transform parent)
@@ -310,19 +264,20 @@ namespace DeNelle.Village.Hero
             sr.offsetMin = Vector2.zero;
             sr.offsetMax = Vector2.zero;
 
-            int n = TabKeys.Length;
+            string activeTab = _vm != null ? _vm.ActiveTab : "all";
+            int n = RumorBoardVM.TabKeys.Length;
             float gap = 0.01f;
             float w = (1f - gap * (n - 1)) / n;
             for (int i = 0; i < n; i++)
             {
-                string key = TabKeys[i];
-                bool isActive = key == _activeTab;
+                string key = RumorBoardVM.TabKeys[i];
+                bool isActive = key == activeTab;
                 string tabKey = key;
                 float x0 = i * (w + gap);
                 // OWNER 2026-07-06 ("theme buttons to UI common"): tabs were bespoke flat Image
                 // plates (gold/stone Color fills + hand-rolled TMP label). Now the ONE kit button —
                 // active = Yellow (gold), rest Gray — labels fitted by the kit (FitSingleLine).
-                ElarionUiKit.BuildObsidianButton(_tabStrip.transform, TabLabels[i],
+                ElarionUiKit.BuildObsidianButton(_tabStrip.transform, RumorBoardVM.TabLabels[i],
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     isActive ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
@@ -333,38 +288,32 @@ namespace DeNelle.Village.Hero
 
         private void SetTab(string tab)
         {
-            if (_activeTab == tab) return;
-            _activeTab = tab;
+            if (_vm == null || _vm.ActiveTab == tab) return;
+            _vm.SetTab(tab);   // updates the VM + raises Changed -> Repaint
             if (_ui != null) BuildTabStrip(_panelRoot ?? _ui.transform);
-            ShowDetailEmpty();   // the previous selection may not exist under the new tab
-            Repaint();
+            ShowDetailEmpty(); // the previous selection may not exist under the new tab
         }
 
-        // Daily tab: read-only view of DailyQuestService's rolled slots (its own runtime — the
-        // board is just a unified READER; the daily runtime stays in DailyQuestService).
+        // Daily tab: the VM's DailyQuests projection (read-only over DailyQuestService).
         private void RepaintDaily()
         {
             CreateSectionLabel(_contentRoot.transform, "— Daily Quests —");
-            var dq = DailyQuestService.Instance;
-            var set = dq != null ? dq.Today : null;
-            if (set == null || set.Quests == null || set.Quests.Count == 0)
+            var daily = _vm.DailyQuests;
+            if (daily == null || daily.Count == 0)
             {
                 CreateFlavorRow(_contentRoot.transform, "No daily quests rolled yet. Check back later.");
                 return;
             }
-            foreach (var q in set.Quests)
-            {
-                if (q == null) continue;
+            foreach (var q in daily)
                 CreateDailyRow(_contentRoot.transform, q);
-            }
         }
 
-        private void CreateDailyRow(Transform parent, DailyQuestInstance q)
+        private void CreateDailyRow(Transform parent, RumorBoardVM.DailyRow q)
         {
             var row = MakeRowFrame(parent, "Daily_" + q.Id,
                 new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 120f);
 
-            string title = q.Label ?? q.TemplateId ?? q.Slot;
+            string title = q.Title;
             CreateTitle(row.transform, title);
 
             string progress = q.Completed
@@ -406,17 +355,14 @@ namespace DeNelle.Village.Hero
             t.alignment = TMPro.TextAlignmentOptions.Left;
         }
 
-        private void CreateActiveRow(Transform parent, QuestDef def, QuestService svc)
+        private void CreateActiveRow(Transform parent, ItemVM item)
         {
-            var row = MakeRowFrame(parent, "Active_" + def.Id,
+            var row = MakeRowFrame(parent, "Active_" + item.Id,
                 new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f), 150f);
 
-            CreateTitle(row.transform, def.Title ?? def.Id);
+            CreateTitle(row.transform, item.Name);
 
-            var stage = svc != null ? svc.GetStage(def.Id) : null;
-            string objective = stage != null && !string.IsNullOrEmpty(stage.ObjectiveText)
-                ? stage.ObjectiveText
-                : "…";
+            string objective = _vm != null ? _vm.ObjectiveFor(item.Id) : "…";
             CreateHook(row.transform, objective, ElarionUi.ParchmentDim);
 
             // WO-454: Track → pin this quest to the far-right HUD slot, then close the board.
@@ -425,8 +371,8 @@ namespace DeNelle.Village.Hero
             // affirmative, plus the TRACKED label so state is never color-only), untracked = Gold.
             // SWEEP 9413 R2 (#1): at card size the 0.80–0.99 band ellipsized the label ("TR…" —
             // the kit's FontFloor won't shrink below 30). Wider band + shorter words: PIN/PINNED.
-            bool isTracked = svc != null && svc.TrackedId == def.Id;
-            string tid = def.Id;
+            bool isTracked = item.Equipped;
+            string tid = item.Id;
             ElarionUiKit.BuildObsidianButton(row.transform,
                 isTracked ? "PINNED" : "PIN",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -435,23 +381,20 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.66f, 0.18f), new Vector2(0.985f, 0.82f),
                 () => OnTrack(tid));
 
-            MakeRowSelectable(row, def.Title ?? def.Id,
+            MakeRowSelectable(row, item.Name,
                 "Current objective:\n" + objective +
                 "\n\nThis rumor is underway. TRACK pins it to your HUD.");
         }
 
-        private void CreateAvailableRow(Transform parent, QuestDef def)
+        private void CreateAvailableRow(Transform parent, ItemVM item)
         {
-            var row = MakeRowFrame(parent, "Avail_" + def.Id,
+            var row = MakeRowFrame(parent, "Avail_" + item.Id,
                 new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 170f);
 
-            CreateTitle(row.transform, def.Title ?? def.Id);
+            CreateTitle(row.transform, item.Name);
 
-            // Hook text = the first stage's objective (the "what's this about").
-            string hook = "A new thread waits to be picked up.";
-            if (def.Stages != null && def.Stages.Count > 0 && def.Stages[0] != null
-                && !string.IsNullOrEmpty(def.Stages[0].ObjectiveText))
-                hook = def.Stages[0].ObjectiveText;
+            // Hook text = the VM's projected stage-1 objective (the "what's this about").
+            string hook = _vm != null ? _vm.HookFor(item.Id) : "A new thread waits to be picked up.";
             CreateHook(row.transform, hook, ElarionUi.Parchment);
 
             // ACCEPT button → StartQuest. OWNER F8 2026-07-06 t=171 ("accept buttons should be
@@ -459,13 +402,13 @@ namespace DeNelle.Village.Hero
             // color + hand-rolled TMP — a green-hue-only affordance, colorblind law). Now the ONE
             // kit gold CTA with a fitted label, like every other panel.
             // SWEEP 9413 R2 (#1): widened band (was 0.80–0.99 → "A…" ellipsis at card size).
-            string id = def.Id;
+            string id = item.Id;
             ElarionUiKit.BuildObsidianButton(row.transform, "ACCEPT",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.66f, 0.18f), new Vector2(0.985f, 0.82f),
                 () => OnAccept(id));
 
-            MakeRowSelectable(row, def.Title ?? def.Id,
+            MakeRowSelectable(row, item.Name,
                 hook + "\n\nAccept this rumor to add it to your ledger.");
         }
 
@@ -556,27 +499,17 @@ namespace DeNelle.Village.Hero
 
         private void OnAccept(string id)
         {
-            if (string.IsNullOrEmpty(id)) return;
-            var svc = QuestService.Instance;
-            if (svc == null) { SetStatus("Quests aren't ready yet."); return; }
-
-            svc.StartQuest(id); // moves Available → Active; raises QuestChanged → Repaint
-            var def = QuestCatalog.FindQuest(id);
-            SetStatus($"Accepted: {(def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : id)}.");
-            // QuestChanged repaints the board; if the service wasn't up to fire it,
-            // repaint defensively so the row still moves to In Progress.
-            if (!svc.IsActive(id)) Repaint();
+            if (_vm == null) return;
+            _vm.Accept(id);     // StartQuest + status; the VM raises Changed -> Repaint
+            SetStatus(_vm.Status);
         }
 
         // WO-454: pin an active quest to the far-right HUD tracker, then close the board
         // (owner flow: open board → select the quest you want → close → it shows on the right).
         private void OnTrack(string id)
         {
-            if (string.IsNullOrEmpty(id)) return;
-            var svc = QuestService.Instance;
-            if (svc == null) { SetStatus("Quests aren't ready yet."); return; }
-            svc.SetTracked(id);   // persists + raises QuestChanged → HUD pin repaints
-            Close();
+            // The VM pins it (SetTracked) then invokes onClose -> this View's Close.
+            _vm?.Track(id);
         }
 
         // ── Status / content helpers ──────────────────────────────────────────────
