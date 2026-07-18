@@ -1,0 +1,50 @@
+{
+  "dungeonId": "d4_sunken_crypt",
+  "cellSize": 6,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "EntryHall",
+      "cell": [0, 0, 0],
+      "yawDeg": 0,
+      "archetype": "hub"
+    },
+    {
+      "prefab": "CombatChamber",
+      "instanceId": "CombatChamber",
+      "cell": [0, 0, 1],
+      "yawDeg": 0,
+      "archetype": "combat"
+    },
+    {
+      "prefab": "RewardVault",
+      "instanceId": "RewardVault",
+      "cell": [0, 0, 2],
+      "yawDeg": 0,
+      "archetype": "reward"
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "EntryHall",
+      "fromSocket": "north_door_01",
+      "toInstance": "CombatChamber",
+      "toSocket": "south_door_01"
+    },
+    {
+      "fromInstance": "CombatChamber",
+      "fromSocket": "north_door_01",
+      "toInstance": "RewardVault",
+      "toSocket": "south_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": true,
+    "minShrines": 1,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "dungeonId": "demo_branching_kit",
+  "cellSize": 6,
+  "_comment": "Uses default room prefabs: entrance, choke, turn L/R, intersection, dead ends, reward.",
+  "rooms": [
+    { "prefab": "Entrance", "instanceId": "start", "cell": [0, 0, 0], "yawDeg": 0, "archetype": "hub" },
+    { "prefab": "Straight", "instanceId": "hall1", "cell": [0, 0, 1], "yawDeg": 0, "archetype": "combat" },
+    { "prefab": "ChokePoint", "instanceId": "choke", "cell": [0, 0, 2], "yawDeg": 0, "archetype": "combat" },
+    { "prefab": "Intersection", "instanceId": "cross", "cell": [0, 0, 3], "yawDeg": 0, "archetype": "combat" },
+    { "prefab": "TurnLeft", "instanceId": "leftArm", "cell": [-1, 0, 3], "yawDeg": 90, "archetype": "combat" },
+    { "prefab": "DeadEnd", "instanceId": "leftEnd", "cell": [-2, 0, 3], "yawDeg": 90, "archetype": "lore" },
+    { "prefab": "TurnRight", "instanceId": "rightArm", "cell": [1, 0, 3], "yawDeg": -90, "archetype": "combat" },
+    { "prefab": "LoreShrine", "instanceId": "shrine", "cell": [2, 0, 3], "yawDeg": -90, "archetype": "lore" },
+    { "prefab": "Straight", "instanceId": "northHall", "cell": [0, 0, 4], "yawDeg": 0, "archetype": "combat" },
+    { "prefab": "RewardVault", "instanceId": "loot", "cell": [0, 0, 5], "yawDeg": 0, "archetype": "reward" }
+  ],
+  "connections": [
+    { "fromInstance": "start", "fromSocket": "north_door_01", "toInstance": "hall1", "toSocket": "south_door_01" },
+    { "fromInstance": "hall1", "fromSocket": "north_door_01", "toInstance": "choke", "toSocket": "south_door_01" },
+    { "fromInstance": "choke", "fromSocket": "north_door_01", "toInstance": "cross", "toSocket": "south_door_01" },
+    { "fromInstance": "cross", "fromSocket": "west_door_01", "toInstance": "leftArm", "toSocket": "south_door_01" },
+    { "fromInstance": "leftArm", "fromSocket": "west_door_01", "toInstance": "leftEnd", "toSocket": "south_door_01" },
+    { "fromInstance": "cross", "fromSocket": "east_door_01", "toInstance": "rightArm", "toSocket": "south_door_01" },
+    { "fromInstance": "rightArm", "fromSocket": "east_door_01", "toInstance": "shrine", "toSocket": "south_door_01" },
+    { "fromInstance": "cross", "fromSocket": "north_door_01", "toInstance": "northHall", "toSocket": "south_door_01" },
+    { "fromInstance": "northHall", "fromSocket": "north_door_01", "toInstance": "loot", "toSocket": "south_door_01" }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 1,
+    "maxMateDistance": 1.5,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}
