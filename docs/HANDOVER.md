@@ -15,6 +15,29 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-07-18 (MVVM migration + Room Forge landed; hackathon WON) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-07-18.md` (read first). Branch `wip/village2-and-f8-tickets`,
+**pushed to origin** through `b337affe` (+ the ping-time canon commit). Prod UNTOUCHED.
+
+**LANDED + pushed this arc:**
+- **WO-744 — strict-MVVM migration DONE.** Every panel View (all 36 from the audit) binds an
+  `IPanelViewModel`; zero runtime game-state reads. Silos B/C/D/E/F/G + landmines. The `[ui-mvvm]`
+  conformance oracle (`UiMvvmConformanceRegression`, in `DataRegression`) is armed **HardFailOnNew=true**
+  with an EMPTY baseline — a new state-reading View now hard-fails the gate. BattleHudVM is behind
+  `ff.battlehudvm` (default OFF — ATB feel-sim byte-unchanged); DialogueView's WO-702 build-truce is
+  RELOCATED not deleted. Spec: `docs/UI_MVVM_MIGRATION_PLAN.md`. Repair-Wall dead-button also fixed.
+- **WO-740–745 — Room Forge into mainline DONE.** Merged the dungeon session's socketed-room pipeline;
+  17 prefabs + materials; demo bakes clean; `[room-forge]` 10-case oracle + `[Flow:DungeonBake]` + baker
+  contract fixes. RESULT: `WorkOrders/WORK_ORDER_745.RESULT.md`.
+
+**OPEN (owner):** felt-verify the converted screens + repair button + Room Forge scene; image-pair
+screenshots (behavior-preserving, so pairs should show no change); Notion sync (needs `/mcp` auth).
+**HAZARD:** the dungeon session shares this working tree — it caused branch + editor-lock collisions;
+it should move to a separate git worktree. WO banner next-free = **746**.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-07-13 MIDDAY (owner felt-pass + 7-lane parallel wave) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `2de11256` (07-13 morning brief),

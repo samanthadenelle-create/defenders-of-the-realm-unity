@@ -1,6 +1,15 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-12 evening) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-07-18) — READ BEFORE WORKING
+> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-18.md` (read it first).** Since 07-13:
+> **Pi Hackathon WON** (the "July-31 deadline / build mode IS the demo" framing is RETIRED); the
+> **whole-game MVVM migration is DONE** (WO-744 — every panel View binds an `IPanelViewModel`, the
+> `[ui-mvvm]` conformance oracle is armed HARD-FAIL); **Room Forge merged to mainline** (WO-740–745,
+> green); **save v33**; `wip` pushed to origin. Two-session shared-tree hazard is live (dungeon
+> session should use its own worktree). WO banner next-free = **746**. **The 07-12 thread below is
+> SUPERSEDED — do not act on its "demo readiness" framing.**
+>
+> ## ▶ LIVE THREAD (2026-07-12 evening) — SUPERSEDED (see the 07-18 thread above)
 > Current focus = **MOBILE-WEB DEMO READINESS** (Pi hackathon **July 31**; **build mode IS the demo**
 > per the player-defined-map pivot, 07-11). Tonight's arc: **WO-677/678/682/683 committed local**
 > (`66b3272f`, `c963a553`, `33799026`, `965309a6`, `683b917b`); gates = `COMPILE_GATE_OK` +

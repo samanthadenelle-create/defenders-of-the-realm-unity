@@ -120,6 +120,26 @@
 - Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
 - Fleet baseline: DataRegression = 3 known pre-existers (arena ground, B2 dual-wallet, pet-slot) **+ 3 expected CoreSave fail-by-design reds** (Tribes/Wards/Arena). *(2026-07-12)*
 
+## UI / MVVM (WO-744 — DONE 2026-07-18)
+- **Strict MVVM across the whole game:** every panel View binds an `IPanelViewModel` and reads NO
+  game state at runtime; all state/logic lives in the VM (`CreateDefault` is the sole resolution
+  site). All 36 audit panel Views migrated (silos B/C/D/E/F/G) + the landmines: BattleHudUgui behind
+  `ff.battlehudvm` (default OFF; ATB feel-sim untouched), DialogueView with the WO-702 truce relocated.
+  Spec: `docs/UI_MVVM_MIGRATION_PLAN.md`. *(2026-07-18)*
+- **The ratchet is ARMED:** `UiMvvmConformanceRegression` runs in `DataRegression` as `[ui-mvvm]`
+  with `HardFailOnNew=true` + an EMPTY baseline — any NEW View that reads game state (EconomyService/
+  GameStateService/Find*Type/gameplay catalogs) HARD-FAILS the gate. Non-panel offenders (flow
+  controllers, spawners, benign EventSystem/sibling finds, HUD wiring) are allowlisted with reasons. *(2026-07-18)*
+- Shared VM seams: `Core.UI.Mvvm.WalletVM` (DTO) + `LiveWalletSource`, `GearIconCatalog` (icon leak),
+  promoted `Core.UI.Mvvm.CraftRecipeVM`, `ArenaPaletteVM`, `StructureCardVM`/`PlacedTowerListVM`. *(2026-07-18)*
+
+## Room Forge (WO-740–745 — DONE 2026-07-18)
+- Socketed-room dungeon pipeline merged to mainline: 17 default room prefabs + shared KayKit
+  materials; JSON compose layouts (`Assets/**/dungeon-layouts/`, dual-copy + `version`); the demo
+  bakes clean (`matesOk=2 matesFail=0`, NavMesh `PathComplete`); `RoomForgeRegression` (`[room-forge]`,
+  10 cases) + `[Flow:DungeonBake]` + baker hard-gate/re-verify fixes. Editor menus under
+  `Defenders/Dungeon/*`. KayKit atlas stays machine-local (big-art-out-of-git). *(2026-07-18)*
+
 ## UI / input
 - ASCII-only TMP strings (non-ASCII glyphs = tofu □ on device); never meaning by color alone (owner red/green colorblind). HUDUI oracle locks the tofu class. *(2026-07-12)*
 - Build-mode touch: uGUI verb bar + PLACE + kit d-pad (publishes `HudMoveInput` → merged with arrow-key read). GhostPreview moves its CHILD visual — probe via `GhostPreview.CurrentPosition`, never the host transform. *(2026-07-12)*
