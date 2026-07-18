@@ -22,9 +22,11 @@ Owner-authored **modular dungeon rooms** with standardized **sockets**, composed
 | Socket MB + gizmos | `Assets/_Modules/Dungeons/RoomForge/RoomSocket.cs` |
 | Room meta | `Assets/_Modules/Dungeons/RoomForge/RoomPrefabMeta.cs` |
 | Compose JSON DTOs + catalog | `Assets/_Modules/Dungeons/RoomForge/DungeonComposeLayout.cs` |
-| Room Forge window | `Assets/Editor/RoomForge/RoomForgeWindow.cs` |
+| Room Forge window + prop carousel | `Assets/Editor/RoomForge/RoomForgeWindow.cs` |
+| **Shared KayKit wall/floor mats** | `Assets/Editor/RoomForge/RoomForgeMaterials.cs` → `Assets/Dungeon/Materials/` |
+| Default room kit builder | `Assets/Editor/RoomForge/DefaultDungeonRoomsBuilder.cs` |
 | DungeonBaker | `Assets/Editor/RoomForge/DungeonBaker.cs` |
-| Sample spine layout | `…/dungeon-layouts/d4_sunken_crypt_spine.json` (dual-copy) |
+| Sample layouts | `d4_sunken_crypt_spine.json`, `demo_branching_kit.json` |
 | Prefab folder | `Assets/Dungeon/Rooms/` |
 | README | `Assets/_Modules/Dungeons/RoomForge/README.md` |
 | Editor asmdef | `DeNelle.Dungeons` reference added |

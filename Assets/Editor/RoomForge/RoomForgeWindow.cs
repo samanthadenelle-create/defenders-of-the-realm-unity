@@ -8,6 +8,7 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using UnityEditor;
@@ -29,13 +30,20 @@ namespace DeNelle.Editor.RoomForge
         private GameObject _workingRoot;
         private Vector2 _scroll;
         private GameObject _piecePrefab;
-        private string _status = "Open or create a working room, drop KayKit pieces, add sockets, Save.";
+        private string _status = "Open or create a working room, KayKit props via carousel, add sockets, Save.";
+
+        // Simple KayKit prop carousel (no external package) — scans dungeon pack once.
+        private List<GameObject> _kayProps = new List<GameObject>();
+        private int _carouselIndex;
+        private string _carouselFilter = "barrel,crate,chest,torch,banner,pillar,table,chair,shelf";
+        private Vector2 _carouselScroll;
+        private bool _carouselLoaded;
 
         [MenuItem("Defenders/Dungeon/Room Forge")]
         public static void Open()
         {
             var w = GetWindow<RoomForgeWindow>("Room Forge");
-            w.minSize = new Vector2(360, 420);
+            w.minSize = new Vector2(380, 520);
             w.Show();
         }
 
@@ -72,13 +80,66 @@ namespace DeNelle.Editor.RoomForge
             _piecePrefab = (GameObject)EditorGUILayout.ObjectField(
                 "Piece prefab/FBX", _piecePrefab, typeof(GameObject), false);
             if (GUILayout.Button("Add piece as child of room") && _piecePrefab != null && _workingRoot != null)
+                PlaceProp(_piecePrefab);
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("KayKit prop carousel (simple)", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "Shared wall/floor mats use KayKit dungeon_texture.png (Defenders/Dungeon/Ensure Room Forge Materials). " +
+                "Carousel scans KayKit dungeon meshes for prop names (barrel, crate, chest…).",
+                MessageType.None);
+            _carouselFilter = EditorGUILayout.TextField("Name filter (csv)", _carouselFilter);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Scan KayKit props"))
             {
-                var inst = (GameObject)PrefabUtility.InstantiatePrefab(_piecePrefab, _workingRoot.transform);
-                if (inst == null)
-                    inst = (GameObject)Object.Instantiate(_piecePrefab, _workingRoot.transform);
-                inst.name = _piecePrefab.name;
-                Undo.RegisterCreatedObjectUndo(inst, "Room Forge add piece");
-                _status = $"Added piece '{inst.name}'.";
+                ScanKayKitProps();
+                _carouselLoaded = true;
+            }
+            if (GUILayout.Button("Ensure wall/floor mats"))
+                RoomForgeMaterials.EnsureMenu();
+            EditorGUILayout.EndHorizontal();
+
+            if (_carouselLoaded && _kayProps.Count > 0)
+            {
+                EditorGUILayout.LabelField($"Props: {_carouselIndex + 1}/{_kayProps.Count}");
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("◀ Prev"))
+                    _carouselIndex = (_carouselIndex - 1 + _kayProps.Count) % _kayProps.Count;
+                if (GUILayout.Button("Place current") && _workingRoot != null)
+                    PlaceProp(_kayProps[_carouselIndex]);
+                if (GUILayout.Button("Next ▶"))
+                    _carouselIndex = (_carouselIndex + 1) % _kayProps.Count;
+                EditorGUILayout.EndHorizontal();
+
+                var cur = _kayProps[_carouselIndex];
+                if (cur != null)
+                {
+                    EditorGUILayout.ObjectField("Current", cur, typeof(GameObject), false);
+                    // Thumbnail preview when possible
+                    var preview = AssetPreview.GetAssetPreview(cur);
+                    if (preview != null)
+                    {
+                        GUILayout.Label(preview, GUILayout.Width(96), GUILayout.Height(96));
+                    }
+                }
+
+                _carouselScroll = EditorGUILayout.BeginScrollView(_carouselScroll, GUILayout.Height(80));
+                int show = Mathf.Min(12, _kayProps.Count);
+                for (int i = 0; i < show; i++)
+                {
+                    int idx = (_carouselIndex + i) % _kayProps.Count;
+                    if (_kayProps[idx] == null) continue;
+                    if (GUILayout.Button(_kayProps[idx].name, GUILayout.Height(18)))
+                    {
+                        _carouselIndex = idx;
+                        if (_workingRoot != null) PlaceProp(_kayProps[idx]);
+                    }
+                }
+                EditorGUILayout.EndScrollView();
+            }
+            else if (_carouselLoaded)
+            {
+                EditorGUILayout.HelpBox("No props matched filter under Assets/Models/KayKit. Widen filter or import pack.", MessageType.Warning);
             }
 
             EditorGUILayout.Space(6);
@@ -156,8 +217,70 @@ namespace DeNelle.Editor.RoomForge
             GameObjectUtility.SetStaticEditorFlags(floor,
                 StaticEditorFlags.NavigationStatic | StaticEditorFlags.BatchingStatic);
 
+            // Simple KayKit atlas on the placeholder floor (walls get same mat when added).
+            RoomForgeMaterials.ApplyToRoomRoot(_workingRoot);
+
             Selection.activeGameObject = _workingRoot;
-            _status = $"Created working room '{_roomId}' ({_footprint.x}x{_footprint.y} cells @ {CellSize}u).";
+            _status = $"Created working room '{_roomId}' ({_footprint.x}x{_footprint.y} cells @ {CellSize}u) with KayKit floor mat.";
+        }
+
+        private void PlaceProp(GameObject prefab)
+        {
+            if (prefab == null || _workingRoot == null) return;
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, _workingRoot.transform);
+            if (inst == null)
+                inst = (GameObject)Object.Instantiate(prefab, _workingRoot.transform);
+            inst.name = prefab.name;
+            // Seat near room center on the floor
+            inst.transform.localPosition = new Vector3(0f, 0f, 0f);
+            Undo.RegisterCreatedObjectUndo(inst, "Room Forge place prop");
+            _status = $"Placed KayKit prop '{inst.name}'.";
+        }
+
+        private void ScanKayKitProps()
+        {
+            _kayProps.Clear();
+            _carouselIndex = 0;
+            string[] roots =
+            {
+                "Assets/Models/KayKit/dungeon",
+                "Assets/Models/KayKit/KayKit Dungeon Remastered 1.1",
+                "Assets/Models/KayKit",
+            };
+            var tokens = _carouselFilter.Split(',')
+                .Select(t => t.Trim().ToLowerInvariant())
+                .Where(t => t.Length > 0)
+                .ToArray();
+
+            var found = new HashSet<string>();
+            foreach (var root in roots)
+            {
+                if (!AssetDatabase.IsValidFolder(root)) continue;
+                foreach (var filter in new[] { "t:Model", "t:Prefab" })
+                {
+                    string[] guids = AssetDatabase.FindAssets(filter, new[] { root });
+                    foreach (var g in guids)
+                    {
+                        string path = AssetDatabase.GUIDToAssetPath(g);
+                        if (string.IsNullOrEmpty(path)) continue;
+                        // Prefer mesh props, skip huge source blends
+                        if (path.EndsWith(".blend", System.StringComparison.OrdinalIgnoreCase)) continue;
+                        string file = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+                        bool match = tokens.Length == 0 || tokens.Any(t => file.Contains(t));
+                        if (!match) continue;
+                        if (!found.Add(path)) continue;
+                        var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                        if (go != null) _kayProps.Add(go);
+                        if (_kayProps.Count >= 200) break;
+                    }
+                    if (_kayProps.Count >= 200) break;
+                }
+                if (_kayProps.Count >= 200) break;
+            }
+
+            _kayProps = _kayProps.OrderBy(g => g.name).ToList();
+            _status = $"Carousel loaded {_kayProps.Count} KayKit props (filter: {_carouselFilter}).";
+            Debug.Log($"[RoomForge] {_status}");
         }
 
         private void AddCardinalSocket(string facing, RoomSocketType type)
@@ -247,9 +370,13 @@ namespace DeNelle.Editor.RoomForge
                 return;
             }
 
+            // Re-apply shared wall/floor atlas so saves stay consistent after prop adds.
+            RoomForgeMaterials.ApplyToRoomRoot(_workingRoot,
+                useAccentFloor: meta.archetype == "reward" || meta.archetype == "boss");
+
             AppendCatalog(meta, prefabPath, _workingRoot.GetComponentsInChildren<RoomSocket>(true));
             AssetDatabase.Refresh();
-            _status = $"Saved {prefabPath} + catalog entry '{meta.roomId}'.";
+            _status = $"Saved {prefabPath} + catalog entry '{meta.roomId}' (KayKit wall/floor mats).";
             Debug.Log($"[RoomForge] {_status}");
         }
 
