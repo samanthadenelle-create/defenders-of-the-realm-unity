@@ -525,6 +525,17 @@ namespace DeNelle.Core
         /// right-thumb layout) resurfaced because this still defaulted OFF. Approved = default.</summary>
         public static bool CombatHud611 => Get("combathud611", defaultOn: true);
 
+        /// <summary>UI MVVM migration (WO-744, landmine 1) — when ON, the ATB combat HUD
+        /// (<see cref="DeNelle.BattleATB.BattleHudUgui"/>) binds a read-only snapshot
+        /// <c>BattleHudVM</c> for its Skills/Item submenus (the catalog resolves —
+        /// Defs.HERO_ABILITIES / ITEM_DEFS -> active hero class + usable abilities/items —
+        /// move into the VM) instead of resolving them off its own held BattleState. The
+        /// per-frame VISUAL ATB feel-sim (_visualAtb / TickVisualAtb) and the OnAction
+        /// callback contract are UNTOUCHED on both paths. Default OFF: with the flag off the
+        /// HUD behaves BYTE-IDENTICALLY to today (no VM path) so the owner can A/B the ATB
+        /// feel. PlayerPrefs "ff.battlehudvm" = 1 to bind the snapshot VM.</summary>
+        public static bool BattleHudVm => Get("battlehudvm", defaultOn: false);
+
         /// <summary>2026-07-07 sheathed-pose fallback (owner A/B): when a weapon has NO explicit
         /// "&lt;mesh&gt;@sheathed" registry entry, its DRAWN offset falls back onto the built-in back
         /// pose. OFF (default) = the fallback nudges POSITION ONLY — frame-safe, since the drawn

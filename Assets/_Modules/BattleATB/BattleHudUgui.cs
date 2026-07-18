@@ -169,6 +169,14 @@ namespace DeNelle.BattleATB
         private readonly Dictionary<string, float> _visualAtb = new Dictionary<string, float>();
         private const float VisualAtbChargeSeconds = 3.0f;
 
+        // WO-744 MVVM landmine 1: flag-gated read-only snapshot VM for the Skills/Item
+        // submenus. Resolved ONCE at Build. When OFF (default) _useVm is false and the HUD
+        // resolves abilities/items off its own held BattleState exactly as before (no VM
+        // path). When ON, Render pushes the snapshot and the submenus read the VM. The
+        // _visualAtb feel-sim + OnAction contract are untouched on BOTH paths.
+        private BattleHudVM _vm;
+        private bool _useVm;
+
         private enum PickKind { None, Ability, Item }
 
         private class PartySlot
@@ -188,6 +196,9 @@ namespace DeNelle.BattleATB
         public void Build(Canvas existingCanvas = null)
         {
             FlowTrace.Step("UI", $"BattleHudUgui.Build: existingCanvas={(existingCanvas != null ? "supplied" : "self-create")}");
+            // WO-744 landmine 1: resolve the snapshot-VM flag once. OFF (default) => byte-identical legacy path.
+            _useVm = DeNelle.Core.FeatureFlags.BattleHudVm;
+            if (_useVm && _vm == null) _vm = new BattleHudVM();
             if (existingCanvas != null)
             {
                 _canvas = existingCanvas;
@@ -485,15 +496,22 @@ namespace DeNelle.BattleATB
             foreach (Transform t in _skillsSubPanel.transform) Destroy(t.gameObject);
             _skillButtons.Clear();
 
-            // Dynamic skills from current active member (use engine defs / catalog for the hero class)
-            var abilities = GetAbilitiesForActiveHero();
-            HeroClass? activeClass = GetActiveHeroClass();
+            // Dynamic skills from current active member (use engine defs / catalog for the hero class).
+            // WO-744 landmine 1: when the snapshot VM is bound (flag ON) the catalog resolves come
+            // from the VM projection; OFF (default) uses the legacy in-View resolves byte-identically.
+            IReadOnlyList<AbilityDef> abilities = _useVm && _vm != null
+                ? _vm.UsableAbilities
+                : GetAbilitiesForActiveHero();
+            HeroClass? activeClass = _useVm && _vm != null ? _vm.ActiveHeroClass : GetActiveHeroClass();
+            string activeIdForTrace = _useVm && _vm != null
+                ? (_vm.ActiveUnitId ?? "<no state>")
+                : (_lastState != null ? _lastState.ActiveUnitId : "<no state>");
             // TGVRU V: an empty ability list builds a Skills submenu with ZERO buttons — the player
             // taps Skills and gets a blank panel with no way out. Self-report which active unit had
             // no abilities so it's a known data gap, not an invisible dead-end.
             if (abilities == null || abilities.Count == 0)
                 FlowTrace.Warn("UI", $"ShowSkillsSubmenu: 0 abilities for active unit " +
-                    $"'{(_lastState != null ? _lastState.ActiveUnitId : "<no state>")}' (class={(activeClass?.ToString() ?? "<none>")}) " +
+                    $"'{activeIdForTrace}' (class={(activeClass?.ToString() ?? "<none>")}) " +
                     "— Skills submenu opens EMPTY.");
             foreach (var ab in abilities)
             {
@@ -556,12 +574,29 @@ namespace DeNelle.BattleATB
             foreach (Transform t in _skillsSubPanel.transform) Destroy(t.gameObject);
             _skillButtons.Clear();
 
-            var items = GetUsableItems();
+            // WO-744 landmine 1: when the snapshot VM is bound (flag ON) usable items + their names
+            // come from the VM projection; OFF (default) uses the legacy in-View resolves byte-identically.
+            if (_useVm && _vm != null)
+            {
+                var items = _vm.UsableItems;
+                if (items == null || items.Count == 0)
+                    FlowTrace.Warn("UI", "ShowItemSubmenu: 0 usable items in inventory — Item submenu opens EMPTY.");
+                foreach (var it in items)
+                {
+                    var kind = it.Kind;   // capture for the closure (avoid modified-closure on the loop var)
+                    var b = CreateMenuButton($"{it.Name} (x{it.Count})", () => SubmitItem(kind));
+                    b.transform.SetParent(_skillsSubPanel.transform, false);
+                    _skillButtons.Add(b);
+                }
+                return;
+            }
+
+            var legacyItems = GetUsableItems();
             // TGVRU V: no usable items builds an EMPTY submenu (a blank panel, no way out).
             // Self-report so an empty inventory is a known data state, not an invisible dead-end.
-            if (items == null || items.Count == 0)
+            if (legacyItems == null || legacyItems.Count == 0)
                 FlowTrace.Warn("UI", "ShowItemSubmenu: 0 usable items in inventory — Item submenu opens EMPTY.");
-            foreach (var kv in items)
+            foreach (var kv in legacyItems)
             {
                 var kind = kv.Key;      // capture for the closure (avoid modified-closure on the loop var)
                 int count = kv.Value;
@@ -777,6 +812,10 @@ namespace DeNelle.BattleATB
                 return;
             }
             _lastState = state;
+
+            // WO-744 landmine 1: keep the push direction — the controller pushes Render, Render
+            // pushes the read-only snapshot into the VM (flag-gated). The feel-sim below is untouched.
+            if (_useVm && _vm != null) _vm.PushSnapshot(state);
 
             // Top info
             string activeName = "";

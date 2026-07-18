@@ -52,6 +52,11 @@ namespace DeNelle.Village
         private bool _uiOpen;
         private GameObject _upgradeUI;
 
+        // WO-744 MVVM: the economy transaction is owned by a small VM so this world-space
+        // View never names EconomyService.Instance. Resolved lazily (CreateDefault is the
+        // sole resolution site for the economy singleton).
+        private NPCUpgradeVM _vm;
+
         private void OnTriggerEnter(Collider other)
         {
             if (other.CompareTag("Player") && !_uiOpen)
@@ -181,8 +186,8 @@ namespace DeNelle.Village
             }
 
             var cost = GetNextTierCost();
-            var econ = EconomyService.Instance;
-            if (econ == null || !econ.TrySpend(cost))
+            if (_vm == null) _vm = NPCUpgradeVM.CreateDefault();
+            if (!_vm.TryPurchaseUpgrade(cost))
             {
                 Debug.LogWarning($"[NPCUpgradeStation] Cannot afford upgrade for {BuildingName}.");
                 return;
@@ -195,7 +200,7 @@ namespace DeNelle.Village
 
             // Economy benefit hook (example: grant a small immediate bonus + register for future)
             // In real system this could register a ProductionSource with Economy.
-            econ.Grant(wood: 5, food: 5); // symbolic "first harvest boost"
+            _vm.GrantFirstHarvestBonus(); // symbolic "first harvest boost"
             Debug.Log($"[NPCUpgradeStation] {BuildingName} upgraded to tier {CurrentTier}. Economy charged.");
 
             // Refresh UI or close

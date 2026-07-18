@@ -100,27 +100,24 @@ namespace DeNelle.HUD
         // Closed: closing fires Ended and would falsely complete a dialogue-gated
         // tutorial step (the captured STEP-STUCK :: founding_town gate is
         // dialogue.ended). On builder exit the panel re-shows and the player reads it.
-        // The view also publishes BuildModeState.DialogueHiddenForBuilder so the build
-        // placement loop knows the input lock it sees belongs to an INVISIBLE dialogue
-        // and stays usable.
-        private bool _hiddenForBuilder;
+        // WO-744 MVVM: the truce STATE + the BuildModeState.DialogueHiddenForBuilder write are
+        // RELOCATED into DialogueViewModel (VM owns HiddenForBuilder + the publish). This View
+        // now only POLLS BuildModeState.IsActive each frame and forwards it via
+        // _vm.SetBuilderActive, then reads _vm.HiddenForBuilder to hide/show its panel.
 
         private void OnOpened(DialogueViewModel vm)
         {
             if (_vm != null) Unbind();
-            // Opened while the builder is already up (e.g. a step outro riding a build
-            // action): start hidden — no one-frame flash, no arbiter registration yet.
-            _hiddenForBuilder = DeNelle.Core.BuildModeState.IsActive;
-            if (_hiddenForBuilder)
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
-                    "opened while the builder is up — starting HIDDEN (WO-702 truce); reshown on builder exit.");
-            // A per-node `portrait` command override is scoped to ITS dialogue: clear the sticky
-            // static at every open so the previous conversation's forced portrait can't leak onto
-            // this one (the speakers block is now the data-driven default; the command re-fires
-            // within a dialogue when an override is authored).
-            DeNelle.Core.DialoguePortrait.Forced = null;
             _lastCardKey = null;
             _vm = vm;
+            // Opened while the builder is already up (e.g. a step outro riding a build action):
+            // seed the VM-owned truce from the live builder state so it starts HIDDEN — no
+            // one-frame flash, no arbiter registration yet. (The DialoguePortrait.Forced reset
+            // now lives in DialogueViewModel.Begin — WO-744.)
+            _vm.SetBuilderActive(DeNelle.Core.BuildModeState.IsActive);
+            if (_vm.HiddenForBuilder)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    "opened while the builder is up — starting HIDDEN (WO-702 truce); reshown on builder exit.");
             _vm.Changed += Repaint;
             var closedFor = vm;   // identity capture — this handler belongs to THIS vm only
             _vmClosedHandler = () => OnClosedFor(closedFor);
@@ -343,7 +340,7 @@ namespace DeNelle.HUD
             // (RefreshPortrait), because a per-node `portrait` command can change the speaker
             // portrait mid-conversation. Built once here, repainted live.
             _portrait = ElarionUiKit.Portrait(portraitHost,
-                ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null, out _), active: false);
+                ResolveSpeakerPortrait(out _), active: false);
             if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
             // OWNER F8 t=322: "can we lose yellow circle around image?" — the kit's
             // Portrait always adds a gold Ring overlay; hide it here (kit untouched —
@@ -422,7 +419,7 @@ namespace DeNelle.HUD
         private void Update()
         {
             TickBuilderTruce();
-            if (_hiddenForBuilder) return;   // WO-702: no any-key advance on an invisible dialogue
+            if (_vm != null && _vm.HiddenForBuilder) return;   // WO-702: no any-key advance on an invisible dialogue
             if (_vm == null || !_vm.IsOpen || _vm.ShowingOptions) return;
             if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
             if (UnityEngine.Input.anyKeyDown &&
@@ -440,30 +437,28 @@ namespace DeNelle.HUD
         // (self-healing: a dialogue superseded/closed while hidden clears it).
         private void TickBuilderTruce()
         {
+            if (_vm == null) return;
             bool builder = DeNelle.Core.BuildModeState.IsActive;
-            bool live = _vm != null && _vm.IsOpen && _ui != null;
+            bool live = _vm.IsOpen && _ui != null;
 
-            if (builder != _hiddenForBuilder)
+            // The VM owns the truce flag + the BuildModeState.DialogueHiddenForBuilder publish
+            // (WO-744) — forward the per-frame builder state and repaint on a change.
+            bool changed = _vm.SetBuilderActive(builder);
+            if (changed && live)
             {
-                _hiddenForBuilder = builder;
-                if (live)
+                if (builder)
                 {
-                    if (builder)
-                    {
-                        DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
-                            "hidden for builder (WO-702 truce) — panel off, VM stays open, Ended NOT fired.");
-                    }
-                    else
-                    {
-                        _openedAt = Time.unscaledTime;   // re-arm min-hold: the builder-close tap can't skip line 1
-                        DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
-                            "reshown after builder exit (WO-702 truce) — player can read/advance now.");
-                    }
-                    Repaint();
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                        "hidden for builder (WO-702 truce) — panel off, VM stays open, Ended NOT fired.");
                 }
+                else
+                {
+                    _openedAt = Time.unscaledTime;   // re-arm min-hold: the builder-close tap can't skip line 1
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                        "reshown after builder exit (WO-702 truce) — player can read/advance now.");
+                }
+                Repaint();
             }
-
-            DeNelle.Core.BuildModeState.DialogueHiddenForBuilder = _hiddenForBuilder && live;
         }
 
         private void OnBoxTapped()
@@ -481,8 +476,8 @@ namespace DeNelle.HUD
             // the VM is open (hidden, not closed). Skip the paint AND the arbiter
             // notification — NotifyOpened on an inactive _ui would trip the arbiter's
             // isOpen-verify false-Fail; it fires on the reshow Repaint instead.
-            _ui.SetActive(open && !_hiddenForBuilder);
-            if (!open || _hiddenForBuilder) return;
+            _ui.SetActive(open && !_vm.HiddenForBuilder);
+            if (!open || _vm.HiddenForBuilder) return;
 
             // Register + announce to the modal arbiter on the FIRST visible paint.
             // (DialogueService raises Opened BEFORE vm.Begin(), so IsOpen is still false
@@ -501,8 +496,8 @@ namespace DeNelle.HUD
             if (_speaker != null) { _speaker.text = _vm.Speaker; _speaker.gameObject.SetActive(!string.IsNullOrEmpty(_vm.Speaker)); }
             if (_affiliation != null)
             {
-                var rec = DialogueCatalog.FindSpeaker(_vm.Speaker);
-                string aff = rec != null ? rec.Affiliation : null;
+                // WO-744: the catalog read now lives in the VM projection (_vm.Affiliation).
+                string aff = _vm.Affiliation;
                 _affiliation.text = aff ?? "";
                 _affiliation.gameObject.SetActive(!string.IsNullOrEmpty(aff));
             }
@@ -748,25 +743,26 @@ namespace DeNelle.HUD
         // The card is DATA-DRIVEN: the catalog's top-level `speakers` block declares
         // { name, affiliation, portrait } per speaker. Resolve by priority, never blank /
         // never throw:
-        //   1) an AUTHORED per-node `portrait` command (back-compat OVERRIDE) — sets
-        //      DeNelle.Core.DialoguePortrait.Forced to a Resources sprite path;
-        //   2) the speakers-block record's portrait path (the data-driven default);
+        //   1) an AUTHORED per-node `portrait` command (back-compat OVERRIDE) / 2) the
+        //      speakers-block record's portrait path — BOTH now resolved by the VM projection
+        //      (_vm.PortraitPath + _vm.PortraitForced); the View only loads the sprite;
         //   3) the speaker name mapped to a class portrait (Knight/Ranger/Wizard/Healer);
         //   4) null → RefreshPortrait draws the styled SILHOUETTE (never a raw tinted disc).
-        private static Sprite ResolveSpeakerPortrait(string speaker, out string source)
+        // WO-744: the catalog/DialoguePortrait reads moved into the VM — the View resolves the
+        // sprite (presentation) from the VM-projected path only.
+        private Sprite ResolveSpeakerPortrait(out string source)
         {
-            string forced = DeNelle.Core.DialoguePortrait.Forced;
-            if (!string.IsNullOrEmpty(forced))
+            string path = _vm != null ? _vm.PortraitPath : null;
+            if (!string.IsNullOrEmpty(path))
             {
-                var sp = Resources.Load<Sprite>(forced);
-                if (sp != null) { source = forced + " (command)"; return sp; }
+                var sp = Resources.Load<Sprite>(path);
+                if (sp != null)
+                {
+                    source = (_vm != null && _vm.PortraitForced) ? path + " (command)" : path;
+                    return sp;
+                }
             }
-            var rec = DialogueCatalog.FindSpeaker(speaker);
-            if (rec != null && !string.IsNullOrEmpty(rec.Portrait))
-            {
-                var sp = Resources.Load<Sprite>(rec.Portrait);
-                if (sp != null) { source = rec.Portrait; return sp; }
-            }
+            string speaker = _vm != null ? _vm.Speaker : null;
             var cls = ElarionUiKit.PortraitForClass(speaker);
             if (cls != null) { source = "class:" + speaker; return cls; }
             source = "silhouette";
@@ -782,7 +778,7 @@ namespace DeNelle.HUD
         {
             if (_portrait == null || _portrait.image == null) return;
             string speaker = _vm != null ? _vm.Speaker : null;
-            var sp = ResolveSpeakerPortrait(speaker, out string source);
+            var sp = ResolveSpeakerPortrait(out string source);
             if (sp != null)
             {
                 _portrait.image.sprite = sp;
@@ -796,14 +792,15 @@ namespace DeNelle.HUD
                 _portrait.image.preserveAspect = true;
             }
 
-            var rec = DialogueCatalog.FindSpeaker(speaker);
+            // WO-744: affiliation comes from the VM projection (no direct catalog read in the View).
+            string affiliation = _vm != null ? _vm.Affiliation : null;
             string card = (speaker ?? "<narration>") + "|" + source;
             if (card != _lastCardKey)
             {
                 _lastCardKey = card;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
                     $"card {(string.IsNullOrEmpty(speaker) ? "<narration>" : speaker)}: " +
-                    $"affiliation={(rec != null && !string.IsNullOrEmpty(rec.Affiliation) ? rec.Affiliation : "<none>")} " +
+                    $"affiliation={(!string.IsNullOrEmpty(affiliation) ? affiliation : "<none>")} " +
                     $"portrait={source}");
             }
         }

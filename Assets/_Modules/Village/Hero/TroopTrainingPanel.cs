@@ -1,12 +1,11 @@
 // =============================================================================
 // TroopTrainingPanel — the Barracks "train troops" UI (WO-453 troop-training flow;
-// WO-733 unlock ladder + WO-737 Obsidian master-detail layout).
+// WO-733 unlock ladder + WO-737 Obsidian master-detail layout; WO-744 strict MVVM).
 // A DUMB SKIN over the SHARED kit chrome: it INHERITS BuildObsidianPanel
 // (FrameCrafting master-detail + zones + the ONE shared Close) and only DISPLAYS +
-// routes commands. ALL logic (catalog, cost, cap, UNLOCK, train) lives in the
-// services it CALLS (TroopCatalog / TroopUnlock / ArmyStorage / EconomyService /
-// TroopDialogueCommands) — the panel defines none of it. Presentation NEVER invents
-// a game rule; it only projects IsTrainable / LockedReason / afford / cap.
+// routes commands. It BINDS a TroopTrainingVM (IPanelView) — ALL logic (catalog,
+// cost, cap, UNLOCK, train, economy subscription, HUD push, Save) lives in the VM;
+// the View reads NO game state, never names EconomyService / GameStateService.
 // -----------------------------------------------------------------------------
 // WO-737 layout contract (owner-ratified FrameCrafting master-detail template):
 //   * bodyLeft  (dark well)      = a SCROLLABLE ladder of ALL 7 troops (kit
@@ -34,13 +33,15 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
-using DeNelle.Core.State;
+using DeNelle.Core.UI.Mvvm;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Hero
 {
-    public sealed class TroopTrainingPanel : MonoBehaviour
+    public sealed class TroopTrainingPanel : MonoBehaviour, IPanelView
     {
+        private TroopTrainingVM _vm;
+
         private GameObject _ui;
         private Transform _troopHost;      // bodyLeft — dark list well (hosts the scroll zone)
         private RectTransform _listContent; // the scroll content the troop rows parent into
@@ -48,7 +49,6 @@ namespace DeNelle.Village.Hero
         // WO-714 P2: the footer wallet is a row of kit CurrencyChips — the ONE currency
         // read (chip owns CompactNumber/icon/tag; no hand-formatted wallet string ever).
         private ElarionUiKit.CurrencyChipHandle[] _wallet;
-        private System.Action<ResourceSnapshot> _ecoHandler;
 
         private string _selectedTroopId;
         // Static instruction (never mutates — transient train feedback is a kit toast, P5).
@@ -72,6 +72,8 @@ namespace DeNelle.Village.Hero
 
         private const float RowHeightPx = 80f;   // two-line row + touch floor (mobile)
         private const float RowGapPx    = 6f;
+
+        public bool IsOpen => _ui != null;
 
         public void Open()
         {
@@ -125,63 +127,47 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.AttachPanelOpenFx(_ui,
                 chrome.root != null ? chrome.root.transform as RectTransform : null);
 
-            // The economy readout tracks the wallet live (unchanged seam; presentation refresh).
-            if (EconomyService.Instance != null)
-            {
-                _ecoHandler = _ => Rebuild();
-                EconomyService.Instance.OnChanged += _ecoHandler;
-            }
-
-            Rebuild();
+            // WO-744: the VM resolves the economy handle + persisted army itself (CreateDefault),
+            // subscribes to economy changes, and owns train/HUD-push/Save. The View just binds it.
+            _vm = TroopTrainingVM.CreateDefault(Close);
+            Bind(_vm);
 
             Debug.Log("[TroopTrainingPanel] Opened — barracks troop training.");
         }
 
-        // The persisted army roster (GameState.Army), null when no save service is live.
-        private static ArmyStorage Army()
+        // ── IPanelView ────────────────────────────────────────────────────────────
+
+        public void Bind(IPanelViewModel vm)
         {
-            var svc = GameStateService.Instance;
-            return svc != null && svc.State != null ? svc.State.Army : null;
+            Unbind();
+            _vm = vm as TroopTrainingVM;
+            if (_vm == null) return;
+            _vm.Changed += Rebuild;
+            Rebuild();
         }
 
-        // ALL catalog troops, sorted by UnlockBarracksTier ASC then catalog order (stable
-        // insertion sort — preserves catalog order for equal tiers). Locked troops are
-        // NEVER filtered out (ladder education, WO-733/737).
-        private static List<TroopDef> SortedRoster()
+        public void Unbind()
         {
-            var list = new List<TroopDef>();
-            foreach (var d in TroopCatalog.All) if (d != null) list.Add(d);
-            for (int i = 1; i < list.Count; i++)
-            {
-                var key = list[i];
-                int j = i - 1;
-                while (j >= 0 && list[j].UnlockBarracksTier > key.UnlockBarracksTier)
-                {
-                    list[j + 1] = list[j];
-                    j--;
-                }
-                list[j + 1] = key;
-            }
-            return list;
+            if (_vm != null) _vm.Changed -= Rebuild;
         }
 
-        // Re-project the whole master-detail from the live services after every train.
+        // ── Render: repaint the whole master-detail from vm.* ONLY ─────────────────
+
         private void Rebuild()
         {
-            if (_detailHost == null) return;
+            if (_detailHost == null || _vm == null) return;
 
             FlowTrace.Step("Barracks", "TroopTrainingPanel.Rebuild - projecting the roster ladder + detail.");
 
             UpdateWallet();
 
-            var army = Army();
-            var troops = SortedRoster();
+            var troops = _vm.Troops;
 
             // Keep the selection valid (first troop by default).
             if (troops.Count > 0)
             {
                 bool found = false;
-                foreach (var d in troops) if (d.Id == _selectedTroopId) { found = true; break; }
+                foreach (var t in troops) if (t.Id == _selectedTroopId) { found = true; break; }
                 if (!found) _selectedTroopId = troops[0].Id;
             }
 
@@ -201,7 +187,7 @@ namespace DeNelle.Village.Hero
                 else
                 {
                     // §12: guard EACH row so one bad def logs + is skipped, never blanks the list.
-                    Guard.TryEach("Barracks", "troop-row", troops, d => BuildRow(rowHost, d, army));
+                    Guard.TryEach("Barracks", "troop-row", troops, item => BuildRow(rowHost, item));
                 }
             }
 
@@ -209,8 +195,8 @@ namespace DeNelle.Village.Hero
             for (int i = _detailHost.childCount - 1; i >= 0; i--)
                 Destroy(_detailHost.GetChild(i).gameObject);
 
-            var def = TroopCatalog.Find(_selectedTroopId);
-            if (def != null) BuildDetail(def, army);
+            if (!string.IsNullOrEmpty(_selectedTroopId))
+                BuildDetail(_vm.Detail(_selectedTroopId), _selectedTroopId);
             else
                 MakeText(_detailHost, "Select a troop.", 15, InkDim, FontStyles.Italic,
                     TextAlignmentOptions.Center, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.55f));
@@ -220,11 +206,12 @@ namespace DeNelle.Village.Hero
         //    owned xN badge + tier chip / lock glyph. Locked rows stay selectable so the
         //    detail card can explain the unlock. State by plate tint + text + chip (not
         //    colour alone — colorblind-safe). ──
-        private void BuildRow(Transform parent, TroopDef def, ArmyStorage army)
+        private void BuildRow(Transform parent, ItemVM item)
         {
-            string id = def.Id;
+            string id = item.Id;
+            var d = _vm.Detail(id);
             bool selected = id == _selectedTroopId;
-            bool locked   = !TroopUnlock.IsTrainable(def);
+            bool locked   = item.Locked;
             float dim = locked ? 0.5f : 1f;
 
             var row = new GameObject("TroopRow_" + id, typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -264,7 +251,7 @@ namespace DeNelle.Village.Hero
             }
 
             // ICON (left) — sprite when it resolves, else a role glyph; dim 0.5 when locked.
-            var iconSprite = TroopIcon(def);
+            var iconSprite = TroopIcon(item.IconName, d.Role);
             if (iconSprite != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
@@ -280,7 +267,7 @@ namespace DeNelle.Village.Hero
             }
             else
             {
-                var g = ElarionUiKit.Label(row.transform, RoleGlyph(def),
+                var g = ElarionUiKit.Label(row.transform, RoleGlyph(d.Role),
                     0.16f, 0.84f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
                     ElarionUi.FontTitle, TextAlignmentOptions.Center, 0.04f, 0.17f, bold: true);
@@ -291,13 +278,13 @@ namespace DeNelle.Village.Hero
             // NAME (line 1) — DisplayName, never a raw id.
             Color nameCol = selected ? ElarionUi.Gilt : ElarionUi.Parchment;
             nameCol = new Color(nameCol.r, nameCol.g, nameCol.b, dim);
-            var nameLbl = ElarionUiKit.Label(row.transform, DisplayName(def), 0.52f, 0.92f,
+            var nameLbl = ElarionUiKit.Label(row.transform, item.Name, 0.52f, 0.92f,
                 nameCol, ElarionUi.FontBody, TextAlignmentOptions.MidlineLeft, 0.20f, 0.74f, bold: true);
             nameLbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(nameLbl);
 
             // ROLE line (line 2) — melee / ranged, dim.
-            string role = string.IsNullOrEmpty(def.Role) ? "" : Capitalize(def.Role);
+            string role = string.IsNullOrEmpty(d.Role) ? "" : Capitalize(d.Role);
             if (!string.IsNullOrEmpty(role))
             {
                 var roleLbl = ElarionUiKit.Label(row.transform, role, 0.10f, 0.48f,
@@ -310,7 +297,7 @@ namespace DeNelle.Village.Hero
             // RIGHT chip — locked: "T{n}" (the tier needed) + lock text; unlocked: owned "xN".
             if (locked)
             {
-                var chip = ElarionUiKit.Label(row.transform, "T" + def.UnlockBarracksTier + " LOCK",
+                var chip = ElarionUiKit.Label(row.transform, "T" + d.UnlockBarracksTier + " LOCK",
                     0.30f, 0.70f,
                     new Color(ElarionUi.ParchmentDim.r, ElarionUi.ParchmentDim.g, ElarionUi.ParchmentDim.b, 0.9f),
                     ElarionUi.FontLabel, TextAlignmentOptions.MidlineRight, 0.74f, 0.97f, bold: true);
@@ -319,7 +306,7 @@ namespace DeNelle.Village.Hero
             }
             else
             {
-                int owned = OwnedCount(army, id);
+                int owned = d.OwnedCount;
                 if (owned > 0)
                 {
                     var badge = ElarionUiKit.Label(row.transform, "x" + owned, 0.30f, 0.70f,
@@ -335,32 +322,31 @@ namespace DeNelle.Village.Hero
         //    (WO-737 bodyRight anatomy). The STATE BLOCK (band 0.16-0.37) is mutually
         //    exclusive A(locked) / B(cant-afford) / C(affordable); the CTA row (0.03-0.14)
         //    is Green+interactable only in C. ──
-        private void BuildDetail(TroopDef def, ArmyStorage army)
+        private void BuildDetail(TroopDetail d, string id)
         {
-            string name = DisplayName(def);
-            int owned = OwnedCount(army, def.Id);
+            string name = d.Name;
+            int owned = d.OwnedCount;
 
-            bool trainable = TroopUnlock.IsTrainable(def);
-            var cost = CostOf(def);
-            bool affordable = EconomyService.Instance == null || EconomyService.Instance.CanAfford(cost);
-            bool hasRoom = army == null || army.CanTrain(def.Id, TroopDialogueCommands.SlotOf);
-            bool canTrain = trainable && affordable && hasRoom;
+            bool trainable = d.Trainable;
+            bool affordable = d.Affordable;
+            bool hasRoom = d.HasRoom;
+            bool canTrain = d.CanTrain;
 
             // 0.92-0.99  DisplayName (bold title).
             MakeText(_detailHost, name, 20, Ink, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.92f), new Vector2(0.94f, 0.99f));
 
             // 0.86-0.91  Role . Slots . Unlock  (ASCII " - " separators).
-            string slotWord = def.Slots == 1 ? "1 slot" : def.Slots + " slots";
-            string roleLine = Capitalize(def.Role) + "  -  " + slotWord + "  -  Barracks T" + def.UnlockBarracksTier;
+            string slotWord = d.Slots == 1 ? "1 slot" : d.Slots + " slots";
+            string roleLine = Capitalize(d.Role) + "  -  " + slotWord + "  -  Barracks T" + d.UnlockBarracksTier;
             MakeText(_detailHost, roleLine, 13, InkDim, FontStyles.Normal,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.855f), new Vector2(0.94f, 0.915f));
 
             // 0.72-0.85  Portrait / icon socket (slot art + troop icon; dim when locked).
-            BuildPortraitSocket(def, trainable);
+            BuildPortraitSocket(d.IconId, d.Role, trainable);
 
             // 0.64-0.71  Owned . Recovering.
-            int woundedOfType = WoundedCount(army, def.Id);
+            int woundedOfType = d.WoundedCount;
             MakeText(_detailHost, "Owned:  " + owned, 14, InkDim, FontStyles.Normal,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.64f), new Vector2(0.50f, 0.71f));
             if (woundedOfType > 0)
@@ -369,23 +355,23 @@ namespace DeNelle.Village.Hero
 
             // 0.58-0.63  Army cap.
             string capLine;
-            if (army == null) capLine = "Army:  -";
-            else capLine = "Army:  " + army.SlotsUsed(TroopDialogueCommands.SlotOf) + " / " + army.MaxArmySize + " slots";
-            Color capColor = (army != null && !hasRoom) ? InkBad : InkDim;
+            if (!d.ArmyKnown) capLine = "Army:  -";
+            else capLine = "Army:  " + d.SlotsUsed + " / " + d.MaxArmySize + " slots";
+            Color capColor = (d.ArmyKnown && !hasRoom) ? InkBad : InkDim;
             MakeText(_detailHost, capLine, 13, capColor, FontStyles.Normal,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.575f), new Vector2(0.94f, 0.635f));
 
             // 0.48-0.57  Combat stats (one line).
-            string statLine = "HP " + Mathf.RoundToInt(def.MaxHp) +
-                              "   -   DMG " + Mathf.RoundToInt(def.AttackDamage) +
-                              "   -   Range " + def.AttackRange.ToString("0.#");
+            string statLine = "HP " + d.MaxHp +
+                              "   -   DMG " + d.AttackDamage +
+                              "   -   Range " + d.AttackRange.ToString("0.#");
             MakeText(_detailHost, statLine, 13, Ink, FontStyles.Normal,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.555f));
 
             // 0.38-0.47  Cost (tinted Good/Bad by afford; only meaningful once unlocked).
             Color costColor = !trainable ? InkDim
-                : (EconomyService.Instance == null ? InkDim : (affordable ? InkGood : InkBad));
-            MakeText(_detailHost, "Cost:  " + CostString(def), 15, costColor, FontStyles.Bold,
+                : (!d.EconomyKnown ? InkDim : (affordable ? InkGood : InkBad));
+            MakeText(_detailHost, "Cost:  " + d.CostString, 15, costColor, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.385f), new Vector2(0.94f, 0.465f));
 
             // 0.16-0.37  STATE BLOCK (mutually exclusive) + 0.16-0.26 Hint.
@@ -406,7 +392,7 @@ namespace DeNelle.Village.Hero
                 MakeText(plate.transform, "LOCKED", 15, InkDim, FontStyles.Bold,
                     TextAlignmentOptions.Center, new Vector2(0.04f, 0.66f), new Vector2(0.96f, 0.98f));
                 // LockedReason already carries "Unlocks at Barracks Tier {n} - {TierName}".
-                MakeText(plate.transform, TroopUnlock.LockedReason(def), 13, Ink, FontStyles.Normal,
+                MakeText(plate.transform, d.LockedReason, 13, Ink, FontStyles.Normal,
                     TextAlignmentOptions.Center, new Vector2(0.04f, 0.36f), new Vector2(0.96f, 0.66f));
                 MakeText(plate.transform, "Upgrade the Barracks to recruit.", 12, InkDim, FontStyles.Italic,
                     TextAlignmentOptions.Center, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.34f));
@@ -433,19 +419,19 @@ namespace DeNelle.Village.Hero
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canTrain ? ElarionUiKit.ObsidianButtonColor.Green : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.08f, 0.03f), new Vector2(0.50f, 0.14f),
-                () => TrainAndRefresh(def.Id, 1));
+                () => TrainAndRefresh(id, 1));
             if (b1 != null) b1.interactable = canTrain;
 
             var b5 = ElarionUiKit.BuildObsidianButton(_detailHost, "Train x5",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canTrain ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.52f, 0.03f), new Vector2(0.92f, 0.14f),
-                () => TrainAndRefresh(def.Id, 5));
+                () => TrainAndRefresh(id, 5));
             if (b5 != null) b5.interactable = canTrain;
         }
 
         // Portrait / icon socket (detail band 0.72-0.85): slot art plate + centred troop icon.
-        private void BuildPortraitSocket(TroopDef def, bool trainable)
+        private void BuildPortraitSocket(string iconId, string role, bool trainable)
         {
             var socket = new GameObject("PortraitSocket", typeof(Image));
             socket.transform.SetParent(_detailHost, false);
@@ -458,7 +444,7 @@ namespace DeNelle.Village.Hero
             sImg.color = new Color(0.22f, 0.18f, 0.13f, trainable ? 0.85f : 0.45f);
             sImg.raycastTarget = false;
 
-            var iconSprite = TroopIcon(def);
+            var iconSprite = TroopIcon(iconId, role);
             float dim = trainable ? 1f : 0.5f;
             if (iconSprite != null)
             {
@@ -475,7 +461,7 @@ namespace DeNelle.Village.Hero
             }
             else
             {
-                var g = MakeText(socket.transform, RoleGlyph(def), 22,
+                var g = MakeText(socket.transform, RoleGlyph(role), 22,
                     new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                     FontStyles.Bold, TextAlignmentOptions.Center,
                     new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f));
@@ -484,65 +470,50 @@ namespace DeNelle.Village.Hero
         }
 
         // WO-714 P2: amounts flow through the chips' SetAmount (count-tween; CompactNumber
-        // formatting lives inside the chip — WO-697 law, currency-ellipsis forbidden).
+        // formatting lives inside the chip — WO-697 law, currency-ellipsis forbidden). Values
+        // read from the VM's live wallet projection (no direct economy read).
         private void UpdateWallet()
         {
-            if (_wallet == null || _wallet.Length < 4 || EconomyService.Instance == null) return;
-            var e = EconomyService.Instance;
-            if (_wallet[0] != null) _wallet[0].SetAmount(e.Wood);
-            if (_wallet[1] != null) _wallet[1].SetAmount(e.Iron);
-            if (_wallet[2] != null) _wallet[2].SetAmount(e.Food);
-            if (_wallet[3] != null) _wallet[3].SetAmount(e.Crystals);
+            if (_wallet == null || _wallet.Length < 4 || _vm == null) return;
+            if (_wallet[0] != null) _wallet[0].SetAmount(_vm.Wood);
+            if (_wallet[1] != null) _wallet[1].SetAmount(_vm.Iron);
+            if (_wallet[2] != null) _wallet[2].SetAmount(_vm.Food);
+            if (_wallet[3] != null) _wallet[3].SetAmount(_vm.Crystals);
         }
 
         private void TrainAndRefresh(string troopId, int qty)
         {
-            var def = TroopCatalog.Find(troopId);
-            // WO-714 P10: never toast a raw troop id.
-            string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
-                ? def.DisplayName : ElarionUiKit.SpacedDisplayName(troopId);
+            if (_vm == null) return;
 
-            // WO-733/737: presentation projects the unlock rule for the refuse toast. The CTA is
-            // already disabled when locked, so this is a defensive belt-and-suspenders path.
-            if (def != null && !TroopUnlock.IsTrainable(def))
+            // The VM owns the train (unlock gate + spend + army mutation + HUD push + Save) and
+            // raises Changed (which re-renders this View). The result drives the toast (presentation).
+            var result = _vm.Train(troopId, qty);
+            switch (result.Outcome)
             {
-                ElarionUiKit.ShowToast(name + " unlocks at Barracks Tier " + def.UnlockBarracksTier + ".",
-                    ElarionUiKit.ToastTone.Danger);
-                Rebuild();
-                return;
+                case TrainOutcome.Locked:
+                {
+                    // WO-733/737: the CTA is already disabled when locked; this is the defensive path.
+                    var d = _vm.Detail(troopId);
+                    ElarionUiKit.ShowToast(result.Name + " unlocks at Barracks Tier " + d.UnlockBarracksTier + ".",
+                        ElarionUiKit.ToastTone.Danger);
+                    break;
+                }
+                case TrainOutcome.Trained:
+                    // WO-714 P5: transient feedback through the ONE kit toast, never a stuck label.
+                    ElarionUiKit.ShowToast("Trained " + result.Count + "x " + result.Name + ".",
+                        ElarionUiKit.ToastTone.Confirm);
+                    break;
+                default:
+                    ElarionUiKit.ShowToast("Couldn't train " + result.Name + " - army cap full or not enough resources.",
+                        ElarionUiKit.ToastTone.Danger);
+                    break;
             }
-
-            int trained = TroopDialogueCommands.Train(troopId, qty);
-            if (trained > 0)
-            {
-                // WO-714 P5: transient feedback through the ONE kit toast, never a stuck label.
-                ElarionUiKit.ShowToast("Trained " + trained + "x " + name + ".", ElarionUiKit.ToastTone.Confirm);
-                // Push the fresh economy snapshot to the town HUD too (mirrors ShopPanel).
-                var eco = EconomyService.Instance;
-                if (eco != null)
-                    DeNelle.Core.CoreServices.Hud?.SetResources(eco.Wood, eco.Iron, eco.Food, eco.Crystals);
-                GameStateService.Instance?.Save();
-            }
-            else
-            {
-                ElarionUiKit.ShowToast("Couldn't train " + name + " - army cap full or not enough resources.",
-                    ElarionUiKit.ToastTone.Danger);
-            }
-            Rebuild();   // re-project owned counts / cap / affordability after the attempt
-        }
-
-        // WO-714 P10: DisplayName only — a raw troop id is never player-visible.
-        private static string DisplayName(TroopDef def)
-        {
-            if (def == null) return "";
-            return string.IsNullOrEmpty(def.DisplayName)
-                ? ElarionUiKit.SpacedDisplayName(def.Id) : def.DisplayName;
         }
 
         // Role glyph fallback when no icon sprite resolves (ASCII initial).
-        private static string RoleGlyph(TroopDef def)
+        private static string RoleGlyph(string role)
         {
-            if (def != null && def.Role == "ranged") return "R";
+            if (role == "ranged") return "R";
             return "M";
         }
 
@@ -554,52 +525,15 @@ namespace DeNelle.Village.Hero
 
         // Troop icon: the authored IconId (WO-735 art) first, else a role glyph icon from the
         // committed RpgUi icon set. Null-safe — a null result draws a letter glyph instead.
-        private static Sprite TroopIcon(TroopDef def)
+        private static Sprite TroopIcon(string iconId, string role)
         {
-            if (def == null) return null;
-            if (!string.IsNullOrEmpty(def.IconId))
+            if (!string.IsNullOrEmpty(iconId))
             {
-                var s = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, def.IconId);
+                var s = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, iconId);
                 if (s != null) return s;
             }
-            string roleIcon = def.Role == "ranged" ? "icon_combat" : "icon_sword";
+            string roleIcon = role == "ranged" ? "icon_combat" : "icon_sword";
             return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, roleIcon);
-        }
-
-        private static int OwnedCount(ArmyStorage army, string troopId)
-        {
-            if (army == null || army.Owned == null) return 0;
-            int n = 0;
-            foreach (var t in army.Owned)
-                if (t != null && t.TroopDefId == troopId) n++;
-            return n;
-        }
-
-        // WO-724: count owned troops of this type currently wounded (recovering) - blocked
-        // from deploy until ArmyStorage.TickRecovery clears the flag.
-        private static int WoundedCount(ArmyStorage army, string troopId)
-        {
-            if (army == null || army.Owned == null) return 0;
-            int n = 0;
-            foreach (var t in army.Owned)
-                if (t != null && t.TroopDefId == troopId && t.Wounded) n++;
-            return n;
-        }
-
-        private static ResourceCost CostOf(TroopDef def)
-        {
-            // ResourceCost ctor order is (wood, food, iron, crystals).
-            return def == null ? new ResourceCost() : new ResourceCost(def.CostWood, def.CostFood, def.CostIron);
-        }
-
-        private string CostString(TroopDef def)
-        {
-            if (def == null) return "Free";
-            var parts = new List<string>();
-            if (def.CostWood > 0) parts.Add(def.CostWood + "W");
-            if (def.CostIron > 0) parts.Add(def.CostIron + "I");
-            if (def.CostFood > 0) parts.Add(def.CostFood + "F");
-            return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 
         // ── uGUI helper (mirrors VillageCraftingPanel.MakeText) ───────────────────
@@ -626,9 +560,9 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
-            if (_ecoHandler != null && EconomyService.Instance != null)
-                EconomyService.Instance.OnChanged -= _ecoHandler;
-            _ecoHandler = null;
+            Unbind();
+            _vm?.Dispose();
+            _vm = null;
             _wallet = null;
             _troopHost = null;
             _listContent = null;
@@ -641,9 +575,9 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
-            if (_ecoHandler != null && EconomyService.Instance != null)
-                EconomyService.Instance.OnChanged -= _ecoHandler;
-            _ecoHandler = null;
+            Unbind();
+            _vm?.Dispose();
+            _vm = null;
             if (_ui != null) Destroy(_ui);
         }
     }

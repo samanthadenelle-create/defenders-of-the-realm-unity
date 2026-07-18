@@ -54,6 +54,11 @@ namespace DeNelle.Wallet
 
         private WalletService _wallet;
 
+        // WO-744 MVVM: game-state ownership + entitlement grant + the interactor close-resolve
+        // live in the VM so this View never names GameStateService / FindFirstObjectOfType. The
+        // money path (WalletService.Pay orchestration) stays here; it asks the VM to read/apply state.
+        private PackStoreVM _vm;
+
         // Modal-arbiter handle (WO-F door): registers with PanelManager so the
         // Realm Store obeys the one-panel-at-a-time rule AND so PanelRouter.Open's
         // post-open VerifyOpenedVisible sees a panel actually recorded open. Purely
@@ -82,6 +87,10 @@ namespace DeNelle.Wallet
         {
             // Defaults to the devnet StubWalletProvider — no Solana SDK needed.
             _wallet = new WalletService();
+
+            // The game-state seam (ownership queries + entitlement grant + close-resolve). CreateDefault
+            // binds the live GameState lazily (provider), so this is safe before GameStateService is ready.
+            _vm = PackStoreVM.CreateDefault();
 
             // Modal-arbiter handle: the manager may hide this store when another panel
             // opens (Close = SetActive(false) -> OnDisable hides the canvas), and its
@@ -226,72 +235,12 @@ namespace DeNelle.Wallet
         /// </summary>
         private void CloseStore()
         {
-            if (TryCloseViaInteractor()) return;
-
-            // Fallback: re-enable a disabled hero locomotion, then hide self.
-            ReEnableDisabledHeroLocomotion();
-            gameObject.SetActive(false);
-        }
-
-        private bool TryCloseViaInteractor()
-        {
-            // Find MarketplaceInteractor by type name across loaded assemblies
-            // (we can't reference the Village asmdef directly).
-            Type interactorType = null;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                interactorType = asm.GetType("DeNelle.Village.MarketplaceInteractor");
-                if (interactorType != null) break;
-            }
-            if (interactorType == null) return false;
-
-            var interactor = FindFirstObjectOfType(interactorType, true);
-            if (interactor == null) return false;
-
-            var closeMethod = interactorType.GetMethod(
-                "CloseStore",
-                System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.Public |
-                System.Reflection.BindingFlags.NonPublic);
-            if (closeMethod == null) return false;
-
-            closeMethod.Invoke(interactor, null);
-            return true;
-        }
-
-        private static UnityEngine.Object FindFirstObjectOfType(Type t, bool includeInactive)
-        {
-            var found = Resources.FindObjectsOfTypeAll(t);
-            if (found == null) return null;
-            foreach (var obj in found)
-            {
-                // Skip assets / prefabs not in a live scene.
-                if (obj is Component comp && comp.gameObject.scene.IsValid())
-                {
-                    if (includeInactive || comp.gameObject.activeInHierarchy)
-                        return obj;
-                }
-            }
-            return null;
-        }
-
-        private void ReEnableDisabledHeroLocomotion()
-        {
-            Type locoType = null;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                locoType = asm.GetType("DeNelle.Village.HeroLocomotion");
-                if (locoType != null) break;
-            }
-            if (locoType == null) return;
-
-            var found = Resources.FindObjectsOfTypeAll(locoType);
-            if (found == null) return;
-            foreach (var obj in found)
-            {
-                if (obj is Behaviour behaviour && behaviour.gameObject.scene.IsValid())
-                    behaviour.enabled = true;
-            }
+            // The VM drives MarketplaceInteractor.CloseStore (re-enables HeroLocomotion + clears
+            // _storeOpen) when present; on the fallback it re-enables a disabled hero locomotion and
+            // returns false, so we hide this GameObject ourselves. Behaviour is unchanged.
+            if (_vm == null) _vm = PackStoreVM.CreateDefault();
+            if (!_vm.CloseViaInteractor())
+                gameObject.SetActive(false);
         }
 
         // =====================================================================
@@ -413,7 +362,7 @@ namespace DeNelle.Wallet
             // size and sits cleanly inside its row, in front of the card plate.
             var buyMin = new Vector2(0.70f, 0.06f);
             var buyMax = new Vector2(0.985f, 0.94f);
-            if (IsOwned(pack.Sku))
+            if (_vm.IsOwned(pack.Sku))
             {
                 MakeText(card, "Owned", 20, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
                     TextAlignmentOptions.Center, buyMin, buyMax);
@@ -512,7 +461,7 @@ namespace DeNelle.Wallet
                 return PaymentResult.Failure(pack.Sku, currency, "Purchase already in progress.");
             }
 
-            if (IsOwned(pack.Sku))
+            if (_vm.IsOwned(pack.Sku))
             {
                 SetStatus($"{pack.Name} is already in your collection.");
                 return PaymentResult.Failure(pack.Sku, currency, "Already owned.");
@@ -542,7 +491,7 @@ namespace DeNelle.Wallet
                 {
                     // Payment confirmed -> the player IS charged. ApplyPackContents MUST land the
                     // entitlement; it self-reports if GameState is unavailable (paid-for content lost).
-                    ApplyPackContents(pack);
+                    _vm.ApplyPackContents(pack);
                     FlowTrace.Step("Store", $"Purchase '{pack.Sku}' confirmed — tx {result.TxSignature}, contents applied.");
                     SetStatus($"{pack.Name} unlocked - tx {Shorten(result.TxSignature)}.");
                     PackPurchased?.Invoke(pack, result);
@@ -575,77 +524,6 @@ namespace DeNelle.Wallet
                 _purchaseInFlight = false;
                 Render();
             }
-        }
-
-        /// <summary>
-        /// Applies a purchased pack's contents to the live game state — the
-        /// economy top-up lands in the resource wallet and the pack SKU plus its
-        /// cosmetic SKUs are recorded as owned. Mirrors the React entitlement
-        /// fulfilment (storeItems.ts <c>purchaseGrantFor</c> + <c>grantItem</c>).
-        /// </summary>
-        private void ApplyPackContents(PackDef pack)
-        {
-            using var _ = FlowTrace.Enter("Store", $"ApplyPackContents '{pack?.Sku ?? "<null>"}'");
-            var service = GameStateService.Instance;
-            if (service == null || service.State == null)
-            {
-                // The payment already confirmed by the time we reach here — no GameState = the player
-                // paid and the entitlement is LOST. Fail loudly (was a swallowed LogWarning).
-                FlowTrace.Fail("Store",
-                    $"ApplyPackContents: no GameStateService/State — pack '{pack?.Sku ?? "<null>"}' contents NOT applied. " +
-                    "If this followed a confirmed payment, the player is CHARGED with NO entitlement.");
-                return;
-            }
-
-            var state = service.State;
-
-            // Economy layer — crystals / food / coins into the resource wallet.
-            var econ = pack.Contents != null ? pack.Contents.Economy : null;
-            if (econ != null)
-            {
-                var r = state.Resources;
-                r.Crystals += econ.Crystals;
-                r.Food += econ.Food;
-                r.Coins += econ.Coins;
-                state.Resources = r;
-            }
-
-            // Ownership — the pack SKU + every cosmetic SKU it grants.
-            RecordOwned(state.OwnedItemIds, pack.Sku);
-            if (pack.Contents != null && pack.Contents.Cosmetics != null)
-                foreach (var sku in pack.Contents.Cosmetics)
-                    RecordOwned(state.OwnedItemIds, sku);
-
-            // Convenience tokens are consumable items — the v2 foundation has no
-            // token tray yet; they are flagged for the Week-8 inventory pass.
-            // (Recording the pack SKU above is enough for the entitlement check.)
-
-            // VERIFY the entitlement actually landed before persisting — the SKU must now be owned, or
-            // the paid-for grant silently failed. This is the proof the entitlement took.
-            bool owned = state.OwnedItemIds != null && state.OwnedItemIds.Contains(pack.Sku);
-            if (!owned)
-                FlowTrace.Fail("Store",
-                    $"ApplyPackContents: pack '{pack.Sku}' NOT recorded as owned after grant — entitlement did NOT take (player may be charged with nothing to show).");
-            else
-                FlowTrace.Step("Store", $"ApplyPackContents: pack '{pack.Sku}' recorded owned + economy applied.");
-
-            // Persist through the service so the save round-trips.
-            FlowTrace.Try("Store", $"save after granting '{pack.Sku}'", () => service.Save());
-        }
-
-        private static void RecordOwned(List<string> owned, string sku)
-        {
-            if (owned == null || string.IsNullOrEmpty(sku)) return;
-            if (!owned.Contains(sku)) owned.Add(sku);
-        }
-
-        /// <summary>True when the pack SKU is already in the player's owned items.</summary>
-        private static bool IsOwned(string sku)
-        {
-            var service = GameStateService.Instance;
-            if (service == null || service.State == null || service.State.OwnedItemIds == null)
-                return false;
-            return service.State.OwnedItemIds.Contains(sku);
         }
 
         private void SetStatus(string message)
