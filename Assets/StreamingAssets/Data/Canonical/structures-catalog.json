@@ -410,8 +410,8 @@
     },
     "maxLevel": 3,
     "upgradeVisualPath": [
-     "Structures/Fountain_L2",
-     "Structures/Fountain_L3"
+     "",
+     ""
     ],
     "navSurface": "Blocker",
     "singleton": true,

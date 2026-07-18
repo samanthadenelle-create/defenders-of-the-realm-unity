@@ -130,7 +130,7 @@ namespace DeNelle.HUD
             {
                 bool active = rt.gameObject.activeInHierarchy;
                 bool ray = rt.TryGetComponent(out Graphic g) && g.raycastTarget;
-                sb.Append($"  • '{rt.name}' active={active} raycastTarget={ray} screenCenter≈{RectScreenCenter(rt)} canvas='{CanvasOf(rt)}'\n");
+                sb.Append($"  • '{rt.name}' active={active} raycastTarget={ray} screenCenter~{RectScreenCenter(rt)} canvas='{CanvasOf(rt)}'\n");
             }
 
             AppendUguiStack(sb, pt);

@@ -11,7 +11,7 @@
 //   [ Turn Left ] [ Turn Right ]<- 90° per tap, yaw only
 //   Rotation: 90°                <- live readout
 //   [ Reset to 0° ]
-//   ItemName — 120 ◈            <- name + cost
+//   ItemName — 120 Crystals    <- name + cost
 //   [ Confirm Placement ] [ Cancel ]
 //
 // NO 3-axis sliders, NO snap dropdown, NO runic border — clean dark-navy panel
@@ -284,7 +284,7 @@ namespace DeNelle.Village
                                   new Vector2(0.28f, 0.27f), new Vector2(0.72f, 0.35f));
 
             // Item name + cost line.
-            string costLabel = cost > 0 ? $"{displayName}  —  {cost:0} ◈" : displayName;
+            string costLabel = cost > 0 ? $"{displayName}  —  {cost:0} Crystals" : displayName;
             var nameLine = NewText(panel.transform, "ItemNameCost", costLabel, 22, FontStyle.Normal, CreamText);
             Anchor(nameLine.rectTransform, new Vector2(0.06f, 0.18f), new Vector2(0.94f, 0.25f));
 

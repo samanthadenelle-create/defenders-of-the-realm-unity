@@ -34,7 +34,7 @@ namespace DeNelle.Village
         [Tooltip("The clickable Button component on this (or a child) GameObject.")]
         [SerializeField] private Button _button;
 
-        [Tooltip("Label showing cost — e.g. '✦ 8 Crystals'.")]
+        [Tooltip("Label showing cost — e.g. '8 Crystals'.")]
         [SerializeField] private TMP_Text _costLabel;
 
         [Tooltip("Label showing ability name — e.g. 'Mana Surge'.")]
@@ -120,7 +120,7 @@ namespace DeNelle.Village
             var emp = _tower.Data?.empowerment;
             if (emp == null) return;
 
-            if (_costLabel  != null) _costLabel.text  = $"✦  {emp.crystalCost} Crystals";
+            if (_costLabel  != null) _costLabel.text  = $"{emp.crystalCost} Crystals";
             if (_abilityLabel != null) _abilityLabel.text = emp.abilityName;
 
             bool affordable = CrystalEconomy.Instance != null &&

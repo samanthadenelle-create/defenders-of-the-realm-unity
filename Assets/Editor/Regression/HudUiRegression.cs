@@ -118,6 +118,7 @@ namespace DeNelle.Editor
             "Env/Fish",
             "HudIcons/Wizard/wiard",
             "Pets/Pet",
+            "Pets/PetIdle",
             "RpgUi/params/widget-params",
             "Sfx/BuildDenied",
             "Sfx/EnemyHit",

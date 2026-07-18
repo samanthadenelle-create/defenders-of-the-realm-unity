@@ -236,7 +236,7 @@ namespace DeNelle.Village.UI
             var col = new VisualElement();
             col.style.marginBottom = 8;
 
-            var title = new Label("⚒  SEATING EDITOR");
+            var title = new Label("SEATING EDITOR");
             title.style.fontSize = 15;
             title.style.color = TitleGold;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
