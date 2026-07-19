@@ -442,7 +442,7 @@ namespace DeNelle.Village
                 string wantId = signal.Substring(TutorialSignals.StructurePlacedPrefix.Length);
                 if (string.IsNullOrEmpty(wantId)) return false;
                 foreach (var rec in state.BaseLayout)
-                    if (string.Equals(rec.itemId, wantId, StringComparison.OrdinalIgnoreCase))
+                    if (BuildIdMatches(rec.itemId, wantId))
                         return true;
                 return false;
             }
@@ -456,6 +456,27 @@ namespace DeNelle.Village
             }
 
             return false;   // not a build signal
+        }
+
+        /// <summary>
+        /// True when a placed record's itemId satisfies a wanted build id. Normally an
+        /// ordinal-ignore-case equality, plus WO-748 id-drift reconciliation: the Default
+        /// Town migration writes the wood storefront as <c>lumbermill</c> (the CastleHubBuilder
+        /// ring id), but the founding_stores FTUE step keys on <c>lumberyard</c>. They are the
+        /// same wood-resource building under two catalog ids, so accept either — the guided-build
+        /// step auto-satisfies for a Default Town founding (and for a self-built lumberyard).
+        /// </summary>
+        private static bool BuildIdMatches(string recordId, string wantId)
+        {
+            if (string.Equals(recordId, wantId, StringComparison.OrdinalIgnoreCase)) return true;
+            return IsWoodResourceId(recordId) && IsWoodResourceId(wantId);
+        }
+
+        /// <summary>The two interchangeable wood-resource building ids (WO-748 id drift).</summary>
+        private static bool IsWoodResourceId(string id)
+        {
+            return string.Equals(id, "lumberyard", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, "lumbermill", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>True when a placed itemId resolves to a Tower/Gate (Defense) in the catalog

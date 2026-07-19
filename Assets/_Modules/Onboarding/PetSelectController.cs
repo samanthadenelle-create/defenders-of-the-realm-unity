@@ -124,8 +124,10 @@ namespace DeNelle.Onboarding
             // route straight to the castle before binding any UI (no pet step in V1).
             if (FeatureFlags.BypassPetSelect)
             {
-                FlowTrace.Step("Onboarding", "PetSelectController.OnEnable: BypassPetSelect ON — GoCastle (screen skipped).");
-                SceneRouter.GoCastle();
+                // WO-748: still a FRESH founding path (single-hero V1) — offer the founding
+                // choice (Default Town vs Build Your Own) before the hub, then GoCastle.
+                FlowTrace.Step("Onboarding", "PetSelectController.OnEnable: BypassPetSelect ON — founding choice then GoCastle (screen skipped).");
+                FoundingChoiceController.PresentOrContinue(SceneRouter.GoCastle);
                 return;
             }
 
@@ -667,7 +669,11 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void RouteToVillage()
         {
-            SceneRouter.GoCastle();
+            // WO-748: at founding, insert the "Default Town vs Build Your Own" choice
+            // BEFORE the first hub load (the choice must set StrategicPlacementMigrated
+            // before the Castle-scene migration writer runs). PresentOrContinue self-gates:
+            // a returning / already-founded player continues straight to GoCastle.
+            FoundingChoiceController.PresentOrContinue(SceneRouter.GoCastle);
         }
     }
 }
