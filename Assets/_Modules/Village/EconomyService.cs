@@ -293,8 +293,38 @@ namespace DeNelle.Village
         /// <summary>Adds resources — for wave rewards, harvesting, etc. Negative values are clamped to 0.</summary>
         public void Grant(ResourceCost amount)
         {
-            _wood  += Mathf.Max(0, amount.Wood);
-            _iron  += Mathf.Max(0, amount.Iron);
+            int wood = Mathf.Max(0, amount.Wood);
+            int iron = Mathf.Max(0, amount.Iron);
+            _wood  += wood;
+            _iron  += iron;
+
+            // B2 DUAL-WALLET CONVERGENCE (regression VillageEconomyRegression (B2)):
+            // Wood/Iron do NOT only live in the in-session pool above -- the building-
+            // UPGRADE flow's ResourceLedger reads/spends GameState.Wood / GameState.Iron.
+            // A plain Grant used to fill ONLY the in-session pool, so wood/iron earned via
+            // the ordinary income path (wave rewards, harvest, pet/outpost ticks) was
+            // INVISIBLE to the upgrade flow. Mirror the grant into the persisted GameState
+            // wallet here so ONE Grant keeps both views in lockstep atomically. Food/
+            // Crystals/Coins are already GameState single-sourced below (AddFood/
+            // AddCrystals/AddCoins), so they need no mirroring. Null-safe: no-op on the
+            // GameState side when no state is present (the in-session pool still moves).
+            if (wood > 0 || iron > 0)
+            {
+                var gsw = GameStateService.Instance;
+                if (gsw != null && gsw.State != null)
+                {
+                    if (wood > 0) gsw.State.Wood = Mathf.Max(0, gsw.State.Wood + wood);
+                    if (iron > 0) gsw.State.Iron = Mathf.Max(0, gsw.State.Iron + iron);
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                        $"Grant mirrored Wood/Iron to GameState (+W{wood} +I{iron}) -> pool W{_wood} I{_iron}, ledger Wood={gsw.State.Wood} Iron={gsw.State.Iron} (dual-wallet in sync)");
+                }
+                else
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                        $"Grant(+W{wood} +I{iron}) filled in-session pool but GameState absent - upgrade ledger not mirrored this call");
+                }
+            }
+
             int food = Mathf.Max(0, amount.Food);
             if (food > 0)
                 GameStateService.Instance?.AddFood(food);           // DEF-121 — GameState-backed grant
@@ -330,22 +360,18 @@ namespace DeNelle.Village
         /// </summary>
         public void GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            // Mirror Wood/Iron into the persisted GameState wallet the upgrade flow spends.
-            var gs = GameStateService.Instance;
-            if (gs != null && gs.State != null)
-            {
-                if (wood > 0) gs.State.Wood = Mathf.Max(0, gs.State.Wood + wood);
-                if (iron > 0) gs.State.Iron = Mathf.Max(0, gs.State.Iron + iron);
-            }
-
-            // Grant fills the in-session Wood/Iron pool (shop + HUD bar) and routes
-            // Food/Crystals through GameState (AddFood/AddCrystals -> Save + ResourcesChanged).
+            // Grant now writes BOTH wallets for Wood/Iron: it fills the in-session pool
+            // (shop + HUD bar) AND mirrors into the persisted GameState.Wood/Iron the
+            // upgrade ledger spends (B2 convergence), and routes Food/Crystals through
+            // GameState (AddFood/AddCrystals -> Save + ResourcesChanged). So the Wood/Iron
+            // mirror is NO LONGER done here -- doing it again would DOUBLE-COUNT Wood/Iron.
             Grant(new ResourceCost(wood, food, iron, crystals));
 
-            // Persist + announce the GameState Wood/Iron mutation so the upgrade flow
-            // sees it and any GameState-bound listeners refresh. (Grant already raised
-            // OnChanged for the in-session pool; if Food/Crystals were > 0 it also fired
-            // ResourcesChanged, but a Wood/Iron-only grant would not, so do it here.)
+            // GrantSpendable keeps its stronger DEV-grant guarantee: persist + announce the
+            // GameState Wood/Iron mutation so it survives reload and any GameState-bound
+            // listeners refresh. (Grant mirrored the field + raised OnChanged for the pool,
+            // but on that hot path deliberately does not Save/announce Wood/Iron.)
+            var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {
                 gs.Save();
