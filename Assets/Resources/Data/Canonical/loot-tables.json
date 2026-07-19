@@ -6,7 +6,7 @@
     "bossOnly": "WO-556: optional bool per drop line (default false). A bossOnly line ONLY rolls on a BOSS kill (table source 'boss', or DragonBoss). Used to gate the GEM crystals (ing_ember_crystal/ing_aether_shard/ing_heartstone_crystal) behind bosses at a low rate; ordinary mobs skip them.",
     "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own."
   },
-  "version": 1,
+  "version": 2,
   "tables": [
     {
       "id": "common-grunt",
@@ -148,6 +148,59 @@
         { "materialId": "ing_ember_crystal", "chance": 0.30, "minCount": 1, "maxCount": 1, "bossOnly": true },
         { "materialId": "ing_aether_shard", "chance": 0.22, "minCount": 1, "maxCount": 1, "bossOnly": true },
         { "materialId": "ing_heartstone_crystal", "chance": 0.12, "minCount": 1, "maxCount": 1, "bossOnly": true }
+      ]
+    },
+
+    {
+      "_comment": "WO-749 — dungeon-only Hollow-family enemy drops for the ATB/cottage per-encounter loot roll (DungeonLootGrant.GrantEncounter, non-boss). Sources the 5 hollow commons the WO enumerates so a delve fight yields survival mats.",
+      "id": "dungeon-hollow",
+      "source": "dungeon",
+      "drops": [
+        { "materialId": "BoneFragment", "chance": 0.80, "minCount": 1, "maxCount": 2 },
+        { "materialId": "IronScrap", "chance": 0.55, "minCount": 1, "maxCount": 2 },
+        { "materialId": "monster-hide", "chance": 0.45, "minCount": 1, "maxCount": 2 },
+        { "materialId": "wild-herb", "chance": 0.40, "minCount": 1, "maxCount": 2 },
+        { "materialId": "tattered-cloth", "chance": 0.35, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "_comment": "WO-749 — dungeon mini-boss drop: the 3 gem crystals + a healthy common payout. source 'boss' so the enemy path opens bossOnly lines; the encounter/chest resolver also passes includeBossOnly=true.",
+      "id": "dungeon-miniboss",
+      "source": "boss",
+      "drops": [
+        { "materialId": "ManaCrystalShard", "chance": 0.85, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.45, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_aether_shard", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.18, "minCount": 1, "maxCount": 1 },
+        { "materialId": "IronScrap", "chance": 0.70, "minCount": 2, "maxCount": 3 }
+      ]
+    },
+    {
+      "_comment": "WO-749 — deep-boss / deep-vault table: the ONLY source of the 5 LEGENDARY reforge components (gear-recipes.json), gated bossOnly at a LOW rate so a legendary weapon is a 5+ deep-delve payoff (epic by design). Master-gear components (heartwood_core/quench_oil) + a gem always-eligible.",
+      "id": "dungeon-deepboss",
+      "source": "boss",
+      "drops": [
+        { "materialId": "heartwood_core", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "quench_oil", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.30, "minCount": 1, "maxCount": 1 },
+        { "materialId": "reforged_steel", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "oathweld_plating", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "heartwood_bough", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "last_pressing", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "aether_catalyst", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true }
+      ]
+    },
+    {
+      "_comment": "WO-749 — treasure-chest table (rewardKey resolver map target for the healers-cottage cellar/storage chests + the resolver default). Ember/essence + crystal shards + the 2 Master-gear components (quench_oil/heartwood_core).",
+      "id": "dungeon-chest",
+      "source": "dungeon",
+      "drops": [
+        { "materialId": "ember-resin", "chance": 0.75, "minCount": 1, "maxCount": 2 },
+        { "materialId": "rare-essence", "chance": 0.50, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ManaCrystalShard", "chance": 0.70, "minCount": 1, "maxCount": 3 },
+        { "materialId": "ArcaneDust", "chance": 0.65, "minCount": 1, "maxCount": 3 },
+        { "materialId": "quench_oil", "chance": 0.30, "minCount": 1, "maxCount": 1 },
+        { "materialId": "heartwood_core", "chance": 0.25, "minCount": 1, "maxCount": 1 }
       ]
     }
   ],

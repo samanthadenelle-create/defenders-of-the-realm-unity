@@ -7,7 +7,7 @@
     "glyph": "ASCII fallback shown when the icon sprite is not yet sliced.",
     "price": "gold BUY price at goods/jeweler vendors (Market materials, Jeweler gems). WO-598: shelf price is CONTENT, not code."
   },
-  "version": 1,
+  "version": 2,
   "materials": [
     {
       "id": "ing_moonbloom",
@@ -161,6 +161,69 @@
       "glyph": "=",
       "iconPath": "",
       "price": 4
+    },
+    {
+      "id": "quench_oil",
+      "displayName": "Quench Oil",
+      "kind": "material",
+      "category": "liquid",
+      "glyph": "j",
+      "iconPath": "",
+      "price": 12
+    },
+    {
+      "id": "heartwood_core",
+      "displayName": "Heartwood Core",
+      "kind": "material",
+      "category": "wood",
+      "glyph": "O",
+      "iconPath": "",
+      "price": 16
+    },
+    {
+      "id": "reforged_steel",
+      "displayName": "Reforged Steel",
+      "kind": "material",
+      "category": "metal",
+      "glyph": "S",
+      "iconPath": "",
+      "price": 48
+    },
+    {
+      "id": "oathweld_plating",
+      "displayName": "Oathweld Plating",
+      "kind": "material",
+      "category": "metal",
+      "glyph": "H",
+      "iconPath": "",
+      "price": 52
+    },
+    {
+      "id": "heartwood_bough",
+      "displayName": "Heartwood Bough",
+      "kind": "material",
+      "category": "wood",
+      "glyph": "Y",
+      "iconPath": "",
+      "price": 50
+    },
+    {
+      "id": "last_pressing",
+      "displayName": "Last Pressing",
+      "kind": "material",
+      "category": "liquid",
+      "glyph": "!",
+      "iconPath": "",
+      "price": 55
+    },
+    {
+      "id": "aether_catalyst",
+      "displayName": "Aether Catalyst",
+      "kind": "material",
+      "category": "crystal",
+      "glyph": "+",
+      "iconPath": "",
+      "price": 60
     }
   ]
 }

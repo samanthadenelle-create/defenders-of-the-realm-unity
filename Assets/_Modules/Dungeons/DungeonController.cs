@@ -206,8 +206,13 @@ namespace DeNelle.Dungeons
             // resume path on re-entry (or a real ExitToVillage) ends it.
             if (_runtimeState.HasPendingEncounter) return;
 
-            // No battle pending — a real teardown. End the run so a stale run
-            // never leaks into the next scene.
+            // No battle pending — a real teardown (e.g. quit-to-menu, not the
+            // Apothecary exit). WO-749: bank any gathered scatter to the persistent
+            // larder before the per-run inventory dies with the scene. (The
+            // Apothecary ExitToVillage path already deposited + set RunActive false,
+            // so it returns above and never double-deposits here.)
+            if (_dungeonInventory != null)
+                DungeonLootGrant.DepositDungeonInventory(_dungeonInventory);
             _runtimeState.EndRun();
         }
 
@@ -301,6 +306,7 @@ namespace DeNelle.Dungeons
             HydrateCheckpoints();
             HydrateEncounters();
             ConfigureCrafting();
+            HydrateChests();
             ConfigureDungeonHud();
             DressTraversalLinks();
             SweepPlaceholderCubes();
@@ -335,10 +341,15 @@ namespace DeNelle.Dungeons
         {
             if (_runtimeState != null && _runtimeState.RunActive)
                 _runtimeState.EndRun();
-            // The crafting inventory is per-run — clear it on a real exit so a
-            // stale run's ingredients never leak into the next dungeon run.
+            // The crafting inventory is per-run — bank the gathered scatter to the
+            // PERSISTENT larder (WO-749 gap 2 bridge) BEFORE clearing it, so delving
+            // actually stocks the village crafting supply. Then clear so a stale run's
+            // ingredients never leak into the next dungeon run.
             if (_dungeonInventory != null)
+            {
+                DungeonLootGrant.DepositDungeonInventory(_dungeonInventory);
                 _dungeonInventory.Clear();
+            }
             StopAmbientAudio();
             // Owner ruling 2026-07-13 ("map the dungeon in"): the exit goes HOME — the
             // merged overworld hub (SceneRouter.Castle -> Main_Castle_Overworld), not the
@@ -548,15 +559,33 @@ namespace DeNelle.Dungeons
                 var pickups = _ingredientRoot.GetComponentsInChildren<IngredientPickup>(true);
                 int total = _craftingData.IngredientPlacements.Count;
                 int n = Mathf.Min(pickups.Length, total);
-                if (pickups.Length != total)
+                // WO-749: MORE placements than scene pickups is NORMAL now (the 12-ingredient
+                // floor scatter is authored in data, not baked into the scene). Only warn when
+                // the SCENE has extra pickups no placement feeds (a real drift).
+                if (pickups.Length > total)
                 {
                     FlowTrace.Warn("Dungeon",
-                        $"ConfigureCrafting: ingredient-pickup count mismatch — {pickups.Length} " +
-                        $"in scene, {total} in crafting data. Hydrating the first {n}.");
+                        $"ConfigureCrafting: {pickups.Length} scene ingredient-pickups but only {total} " +
+                        $"placements in crafting data — hydrating the first {n}, {pickups.Length - total} left inert.");
                 }
                 for (int i = 0; i < n; i++)
                     pickups[i].Configure(
                         _craftingData.IngredientPlacements[i], _dungeonInventory, _hero);
+
+                // WO-749 gap 2/4 — floor scatter without a scene bake: every placement
+                // beyond the scene-authored pickups is runtime-authored as a tinted mote.
+                // Collected ids ride the per-run DungeonInventory and bank to the larder on
+                // exit (DungeonLootGrant.DepositDungeonInventory).
+                for (int i = n; i < total; i++)
+                {
+                    var placement = _craftingData.IngredientPlacements[i];
+                    if (placement == null) continue;
+                    Color tint = TintForIngredient(placement.IngredientId);
+                    IngredientPickup.CreateRuntime(_ingredientRoot, placement, _dungeonInventory, _hero, tint);
+                }
+                if (total > n)
+                    FlowTrace.Step("DungeonLoot",
+                        $"ConfigureCrafting: runtime-authored {total - n} scatter mote(s) beyond {n} scene pickup(s).");
             }
 
             // ── Crafting pedestal + its UI panel. ────────────────────────────
@@ -570,6 +599,79 @@ namespace DeNelle.Dungeons
                 if (_craftingPanel != null)
                     _craftingPanel.BindPedestal(_craftingPedestal);
             }
+        }
+
+        /// <summary>
+        /// The tint (from crafting-recipes.json <c>tint</c> hex) for a scatter mote,
+        /// falling back to loot-gold when the ingredient has no authored tint.
+        /// </summary>
+        private Color TintForIngredient(string ingredientId)
+        {
+            var ing = _craftingData?.FindIngredient(ingredientId);
+            if (ing != null && !string.IsNullOrEmpty(ing.Tint)
+                && ColorUtility.TryParseHtmlString("#" + ing.Tint, out Color c))
+                return c;
+            return new Color(0.95f, 0.82f, 0.35f);   // loot-gold fallback
+        }
+
+        /// <summary>
+        /// Wires the treasure chests (WO-749 gap 1) — attaches a
+        /// <see cref="DungeonChestInteract"/> to each layout chest so its rewardKey
+        /// resolves to a larder loot grant on open. The scene builder places chest
+        /// VISUALS named <c>Chest_{id}</c> with no behaviour; this attaches the
+        /// interact at runtime (NO scene bake), falling back to a runtime marker at
+        /// the layout coords when the visual is absent (pack not imported). Idempotent
+        /// — a chest already carrying the component is skipped.
+        /// </summary>
+        private void HydrateChests()
+        {
+            if (Layout?.chests == null || Layout.chests.Length == 0 || _runtimeState == null) return;
+
+            using var _flow = FlowTrace.Enter("DungeonLoot", "HydrateChests");
+
+            // Bucket every "Chest_*" transform once so each layout chest finds its visual.
+            var byName = new System.Collections.Generic.Dictionary<string, Transform>();
+            foreach (var t in Object.FindObjectsByType<Transform>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t == null || string.IsNullOrEmpty(t.name)) continue;
+                if (t.name.StartsWith("Chest_", System.StringComparison.Ordinal)
+                    && !byName.ContainsKey(t.name))
+                    byName[t.name] = t;
+            }
+
+            int wired = 0;
+            foreach (var chest in Layout.chests)
+            {
+                if (chest == null || string.IsNullOrEmpty(chest.id)) continue;
+                var localChest = chest;   // capture for the closure
+                Guard.Try("DungeonLoot", $"wire chest '{localChest.id}'", () =>
+                {
+                    GameObject host;
+                    if (byName.TryGetValue($"Chest_{localChest.id}", out var visual) && visual != null)
+                    {
+                        host = visual.gameObject;
+                    }
+                    else
+                    {
+                        host = new GameObject($"Chest_{localChest.id}");
+                        host.transform.SetParent(transform, false);
+                        host.transform.position = localChest.position.ToWorld();
+                        FlowTrace.Warn("DungeonLoot",
+                            $"chest '{localChest.id}' has no scene visual — runtime marker placed at " +
+                            $"{host.transform.position} (KayKit chest mesh not imported?).");
+                    }
+
+                    if (host.GetComponent<DungeonChestInteract>() == null)
+                    {
+                        host.AddComponent<DungeonChestInteract>()
+                            .Configure(localChest, _runtimeState, _hero);
+                        wired++;
+                    }
+                });
+            }
+            FlowTrace.Step("DungeonLoot",
+                $"HydrateChests: wired {wired} chest interactable(s) of {Layout.chests.Length}.");
         }
 
         /// <summary>
@@ -749,6 +851,14 @@ namespace DeNelle.Dungeons
             // encounter never re-fires either way — ResumePendingEncounter
             // re-arms _hasFired).
             bool victory = true;
+
+            // WO-749 gap 3: the ATB/cottage encounter path credited NO loot (only the
+            // composed-chain live-Enemy path fed the larder). Grant a per-encounter
+            // dungeon roll into the larder on a victory resume. Capture the boss flag
+            // BEFORE the trigger's resume clears the pending handoff below.
+            bool wasBoss = _runtimeState.PendingEncounterIsBoss;
+            if (victory)
+                DungeonLootGrant.GrantEncounter(wasBoss);
 
             string pendingId = _runtimeState.PendingEncounterId;
             bool settled = false;

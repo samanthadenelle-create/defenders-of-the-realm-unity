@@ -11,7 +11,7 @@
     "ingredientPlacements": "Where each ingredient pickup is dropped in the Healer's Cottage. position is X east(+)/west(-), Y up, Z south(+)/north(-) — same convention as healers-cottage.json.",
     "pedestal": "The crafting pedestal placement — replaces the §5.4 'crafting shard pedestal' placeholder primitive in the Hidden Vault."
   },
-  "version": 1,
+  "version": 2,
   "ingredients": [
     {
       "id": "dry-reed",
@@ -33,6 +33,78 @@
       "description": "Hardened sap that catches at a spark — the heart of any torch.",
       "glyph": "*",
       "tint": "e2683a"
+    },
+
+    {
+      "_comment": "WO-749 floor-scatter ingredients. ids are materials.json larder keys so the scatter -> larder bridge (DungeonLootGrant.DepositDungeonInventory) deposits them 1:1. These have no scene-authored pickup; DungeonController runtime-authors a tinted mote per placement (no scene bake).",
+      "id": "ing_moonbloom",
+      "displayName": "Moonbloom Herb",
+      "description": "A pale night-blooming herb — its petals glow faintly in the dark.",
+      "glyph": "*",
+      "tint": "a9c4ff"
+    },
+    {
+      "id": "ing_spring_water",
+      "displayName": "Spring Water",
+      "description": "Clear water drawn from the garden spring — the base of every tincture.",
+      "glyph": "~",
+      "tint": "6fd6e8"
+    },
+    {
+      "id": "ing_cloth_scrap",
+      "displayName": "Cloth Scrap",
+      "description": "A torn strip of homespun — bandages and wick alike.",
+      "glyph": "=",
+      "tint": "d8cbb0"
+    },
+    {
+      "id": "ing_shadowcap",
+      "displayName": "Shadowcap Mushroom",
+      "description": "A dusk-grey fungus from the cellar dark — bitter, potent.",
+      "glyph": "T",
+      "tint": "6b5a86"
+    },
+    {
+      "id": "ing_quickfoot",
+      "displayName": "Quickfoot Mushroom",
+      "description": "A spry little cap that quickens the blood — reagent for haste draughts.",
+      "glyph": "T",
+      "tint": "9ad06b"
+    },
+    {
+      "id": "ing_starbloom",
+      "displayName": "Starbloom",
+      "description": "A gold-flecked bloom that opens only at first light.",
+      "glyph": "*",
+      "tint": "ffe58a"
+    },
+    {
+      "id": "ing_ironroot",
+      "displayName": "Ironroot",
+      "description": "A woody root laced with metal — grit for tonics that toughen the flesh.",
+      "glyph": "Y",
+      "tint": "8a6a3a"
+    },
+    {
+      "id": "ing_oil_flask",
+      "displayName": "Oil Flask",
+      "description": "A small flask of pressed lamp oil — fuel and firestarter.",
+      "glyph": "b",
+      "tint": "caa14a"
+    },
+    {
+      "id": "ing_elarion_petal",
+      "displayName": "Elarion Petal",
+      "description": "A single petal shed from the Heart-tree — faintly warm to the touch.",
+      "glyph": "*",
+      "tint": "ff9ec4"
+    },
+    {
+      "id": "HealthHerb",
+      "displayName": "Health Herb",
+      "description": "A common wound-herb — the first thing any healer learns to pick.",
+      "glyph": "*",
+      "tint": "6fd07a"
     }
   ],
   "recipes": [
@@ -52,7 +124,18 @@
   "ingredientPlacements": [
     { "ingredientId": "dry-reed", "pickupId": "reed-garden", "roomId": "garden-approach", "position": { "x": -24, "y": 0, "z": 5 } },
     { "ingredientId": "oil-soaked-cloth", "pickupId": "cloth-entrance", "roomId": "entrance-room", "position": { "x": -8, "y": 0, "z": -5 } },
-    { "ingredientId": "ember-resin", "pickupId": "resin-main", "roomId": "main-room", "position": { "x": 11, "y": 0, "z": 6 } }
+    { "ingredientId": "ember-resin", "pickupId": "resin-main", "roomId": "main-room", "position": { "x": 11, "y": 0, "z": 6 } },
+
+    { "ingredientId": "ing_moonbloom", "pickupId": "scatter-moonbloom", "roomId": "garden-approach", "position": { "x": -24, "y": 0, "z": 2 } },
+    { "ingredientId": "ing_spring_water", "pickupId": "scatter-springwater", "roomId": "garden-approach", "position": { "x": -22, "y": 0, "z": 6 } },
+    { "ingredientId": "ing_elarion_petal", "pickupId": "scatter-elarionpetal", "roomId": "garden-approach", "position": { "x": -20, "y": 0, "z": -1 } },
+    { "ingredientId": "ing_shadowcap", "pickupId": "scatter-shadowcap", "roomId": "entrance-room", "position": { "x": -9, "y": 0, "z": 3 } },
+    { "ingredientId": "ing_cloth_scrap", "pickupId": "scatter-clothscrap", "roomId": "entrance-room", "position": { "x": -7, "y": 0, "z": -3 } },
+    { "ingredientId": "HealthHerb", "pickupId": "scatter-healthherb", "roomId": "entrance-room", "position": { "x": -10, "y": 0, "z": -1 } },
+    { "ingredientId": "ing_ironroot", "pickupId": "scatter-ironroot", "roomId": "main-room", "position": { "x": 9, "y": 0, "z": 4 } },
+    { "ingredientId": "ing_starbloom", "pickupId": "scatter-starbloom", "roomId": "main-room", "position": { "x": 13, "y": 0, "z": 3 } },
+    { "ingredientId": "ing_quickfoot", "pickupId": "scatter-quickfoot", "roomId": "main-room", "position": { "x": 12, "y": 0, "z": 7 } },
+    { "ingredientId": "ing_oil_flask", "pickupId": "scatter-oilflask", "roomId": "main-room", "position": { "x": 10, "y": 0, "z": 2 } }
   ],
   "pedestal": {
     "id": "crafting-pedestal-vault",

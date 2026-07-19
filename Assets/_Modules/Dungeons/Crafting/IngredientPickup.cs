@@ -116,6 +116,59 @@ namespace DeNelle.Dungeons
             _reducedMotion = reduced;
         }
 
+        // ── Runtime factory (WO-749 — scatter without a scene bake) ──────────
+
+        /// <summary>
+        /// Builds a runtime ingredient-scatter mote so the WO-749 12-ingredient floor
+        /// scatter needs NO scene bake: DungeonController spawns one of these per
+        /// crafting-recipes.json placement that has no scene-authored pickup. The mote
+        /// is a small URP-tinted sphere (bobs/spins); the collected ingredient rides
+        /// the per-run <see cref="DungeonInventory"/> and is banked to the larder on
+        /// exit (DungeonLootGrant). As a static member of this class it may set the
+        /// private mote fields directly — no reflection.
+        /// </summary>
+        public static IngredientPickup CreateRuntime(Transform parent, IngredientPlacement def,
+            DungeonInventory inventory, Transform hero, Color tint)
+        {
+            var root = new GameObject($"IngredientPickup_{(def != null ? def.PickupId : "scatter")}");
+            if (parent != null) root.transform.SetParent(parent, false);
+
+            // The visual mote — a small tinted sphere the Keeper walks over.
+            var mote = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            mote.name = "Mote";
+            mote.transform.SetParent(root.transform, false);
+            mote.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+            mote.transform.localScale = Vector3.one * 0.4f;
+
+            // Proximity pickup is a distance check, not a physics event — drop the
+            // primitive collider so the mote never blocks the hero or the NavMesh.
+            var col = mote.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+
+            // CreatePrimitive ships the built-in Standard shader (magenta under URP);
+            // build a URP-compatible tinted material (the "pink floor" URP/Lit lesson).
+            var rend = mote.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit")
+                             ?? Shader.Find("Universal Render Pipeline/Unlit")
+                             ?? Shader.Find("Sprites/Default");
+                if (shader != null)
+                {
+                    var mat = new Material(shader);
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
+                    rend.material = mat;
+                }
+            }
+
+            var pickup = root.AddComponent<IngredientPickup>();
+            pickup._moteVisual = mote;
+            pickup._moteSpin = mote.transform;
+            pickup.Configure(def, inventory, hero);
+            return pickup;
+        }
+
         // ── Per-frame ────────────────────────────────────────────────────────
 
         private void Update()
