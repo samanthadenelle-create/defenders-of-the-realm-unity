@@ -1,5 +1,10 @@
 # SESSION BOOT CONFIRMATION — hand this to the CLI before ANY work (owner: paste this first)
 
+> ⚠ **This file's STEP-1/STEP-2 specifics are a FROZEN 2026-07-03 snapshot** (wave-1 commits, the
+> Fable exe, "Paladin hero body"). The *process* (verify state with evidence, then wait) is binding;
+> the literal commits/files/decisions are STALE — verify against the newest `CANON_GROUND_TRUTH_<date>.md`
+> + newest `docs/HANDOVER.md` block, which are authoritative. Do NOT treat the 07-03 literals as current.
+
 You are a fresh CLI session inheriting a live, mid-flight operation. **Do NOT write, edit,
 build, assign, or fix ANYTHING until you have completed every item below and reported the
 results to the owner in the format at the bottom.** The owner is explicitly measuring
@@ -53,7 +58,7 @@ whether you confirm state before acting — skipping ahead IS the failure being 
 6. §12: no fix without captured data; the preflight gate fires on every .cs edit — answer it
    honestly every time.
 7. Her open decisions (defeat-screen secondary button; Knight gap-fill + package-shape
-   — the BODY is DECIDED: Paladin is the new hero body, owner ruling 07-03;
+   — the hero BODY = a single Tripo self-rigged Knight "Grom", NO mesh-swap (Blink/Paladin JUNKED 06-22; the newest CANON_GROUND_TRUTH is authoritative, NOT this frozen 07-03 line);
    water taste slices; death-clip direction mapping) are HERS — do not decide them.
 
 ## STEP 4 — REPORT BACK, then WAIT

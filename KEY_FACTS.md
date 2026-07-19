@@ -29,7 +29,7 @@
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
 ## Persistence / save
-- Save schema **v33** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token, WO-738). Every bump 21→33 carries a `SaveMigrator` step (additive ones are pass-throughs) so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs/SaveMigrator.cs 2026-07-17)*
+- Save schema **v34** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738; **v34** persists Tribes/Wards/Arena + pet active-slot, RED-3/4 2026-07-19). Every bump 21→33 carries a `SaveMigrator` step (additive ones are pass-throughs) so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs/SaveMigrator.cs 2026-07-17)*
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
 - Local save = PlayerPrefs `dotr-save`, signed (LB-3 HMAC, tamper-rejected); server save/load nonce-auth is built but `BackendAuthConfig.Enforced` = **OFF**. *(2026-07-12)*
 
@@ -118,7 +118,7 @@
   **URL source** (not VideoClip) with the WebGL `audioOutputMode=Direct` fix. *(2026-07-16)*
 - **Ship WebGL = `BuildOptions.None`** (Development is opt-in `-DevBuild` — NEVER deploy a DevBuild: Development players paint the full-screen error overlay). Desktop release still ships Development (open item). *(verified WebGLBuild.cs:124 / DesktopBuild.cs:178, 2026-07-12)*
 - Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
-- Fleet baseline: DataRegression = 3 known pre-existers (arena ground, B2 dual-wallet, pet-slot) **+ 3 expected CoreSave fail-by-design reds** (Tribes/Wards/Arena). *(2026-07-12)*
+- Fleet baseline: DataRegression = **REGRESSION_OK, 0 reds** — all 5 long-standing reds fixed 2026-07-19 (R1 arena ground texture, R2 dual-wallet Grant->GameState, R3 pet active-slot persist, R4 core-save Tribes/Wards/Arena persist, R5 orc-raider SSOT enemies.json Hp 130). *(2026-07-19)*
 
 ## UI / MVVM (WO-744 — DONE 2026-07-18)
 - **Strict MVVM across the whole game:** every panel View binds an `IPanelViewModel` and reads NO
@@ -147,6 +147,6 @@
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
 - Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 723**; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 750** as of 2026-07-19, 739-749 consumed; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ⛔ Apex dragon model = CC BY-NC — license/replace before commercial release.

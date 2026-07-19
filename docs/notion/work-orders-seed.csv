@@ -1,0 +1,666 @@
+WO#,Title,Status,Type,Silo/Lane,Stage,Owner,SpecPath,ResultPath,Notes
+20,Hud Data Binding,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_20_hud_data_binding.md,WorkOrders/WORK_ORDER_20_hud_data_binding.RESULT.md,RESULT filed; no Status line in spec
+21,Atb Scene Wiring,Spec,fix,,,,WorkOrders/WORK_ORDER_21_atb_scene_wiring.md,,no Status line in spec
+22,Village Wall Gate Geometry,Spec,fix,,,,WorkOrders/WORK_ORDER_22_village_wall_gate_geometry.md,,no Status line in spec
+23,Dungeon Interior Content,Spec,fix,,,,WorkOrders/WORK_ORDER_23_dungeon_interior_content.md,,no Status line in spec
+24,Exterior World,Spec,fix,,,,WorkOrders/WORK_ORDER_24_exterior_world.md,,no Status line in spec
+25,Audio Mixer Rebuild,Spec,fix,,,,WorkOrders/WORK_ORDER_25_audio_mixer_rebuild.md,,no Status line in spec
+26,Larger City,Spec,feature,,,,WorkOrders/WORK_ORDER_26_larger_city.md,,spec Status: DESIGN / SPEC ONLY. **Owner-gated.** Nothing here is applied yet.
+27,Enemy Spawn World,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_27_enemy_spawn_world.md,WorkOrders/WORK_ORDER_27_enemy_spawn_world.RESULT.md,RESULT filed; spec Status: DESIGN / SPEC ONLY. **Owner-gated.** Nothing here is applied yet.
+28,Building Interact Tag Alignment,Ready,fix,,,,WorkOrders/WORK_ORDER_28_building_interact_tag_alignment.md,,spec Status: READY TO IMPLEMENT
+29,Npc Pill Healer Cottage,Ready,fix,,,,WorkOrders/WORK_ORDER_29_npc_pill_healer_cottage.md,,spec Status: READY TO IMPLEMENT
+30,Dungeon Portals Resize And Reposition,Ready,fix,,,,WorkOrders/WORK_ORDER_30_dungeon_portals_resize_and_reposition.md,,spec Status: READY TO IMPLEMENT
+31,Build Menu Tower Dialog,Ready,feature,,,,WorkOrders/WORK_ORDER_31_build_menu_tower_dialog.md,,spec Status: READY TO IMPLEMENT
+32,Hero Animation Rotation 90Deg,Ready,fix,,,,WorkOrders/WORK_ORDER_32_hero_animation_rotation_90deg.md,,spec Status: READY TO IMPLEMENT - single-line fix
+33,Map Edge Boundary,Ready,fix,,,,WorkOrders/WORK_ORDER_33_map_edge_boundary.md,,spec Status: READY TO IMPLEMENT
+34,World Map Expansion Mobile,Spec,feature,,,,WorkOrders/WORK_ORDER_34_world_map_expansion_mobile.md,,spec Status: ARCHITECTURE / DESIGN SPEC - Implement in Week 8+
+35,Knight Coloring Wrong,Ready,fix,,,,WorkOrders/WORK_ORDER_35_knight_coloring_wrong.md,,spec Status: READY TO IMPLEMENT
+36,Hero Actions Skill Tree Binding,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_36_hero_actions_skill_tree_binding.md,WorkOrders/WORK_ORDER_36_hero_actions_skill_tree_binding.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+37,Hero Attack Vfx And Sound Overhaul,Ready,feature,,,,WorkOrders/WORK_ORDER_37_hero_attack_vfx_and_sound_overhaul.md,,spec Status: READY TO IMPLEMENT - Creative spec + code targets
+38,Wave Complete Celebration And Repair,Ready,fix,,,,WorkOrders/WORK_ORDER_38_wave_complete_celebration_and_repair.md,,spec Status: READY TO IMPLEMENT
+39,Compass Enemy Direction Indicator,Ready,feature,,,,WorkOrders/WORK_ORDER_39_compass_enemy_direction_indicator.md,,spec Status: READY TO IMPLEMENT
+40,Wave Imminent Flash And Vibration,Ready,feature,,,,WorkOrders/WORK_ORDER_40_wave_imminent_flash_and_vibration.md,,spec Status: READY TO IMPLEMENT
+41,Cross Assembly Interface Refactor,Ready,feature,,,,WorkOrders/WORK_ORDER_41_cross_assembly_interface_refactor.md,,spec Status: READY TO IMPLEMENT
+42,Hero Select Screen Redesign,Ready,feature,,,,WorkOrders/WORK_ORDER_42_hero_select_screen_redesign.md,,spec Status: READY TO IMPLEMENT
+43,Jupiter Swap Panel Superseded,Ready,feature,,,,WorkOrders/WORK_ORDER_43_jupiter_swap_panel_SUPERSEDED.md,,spec Status: READY TO IMPLEMENT
+43,Jupiter Swap Panel Phase1,Ready,feature,,,,WorkOrders/WORK_ORDER_43_jupiter_swap_panel_phase1.md,,spec Status: READY TO IMPLEMENT
+44,Jupiter Quote Integration Phase2,Ready,feature,,,,WorkOrders/WORK_ORDER_44_jupiter_quote_integration_phase2.md,,spec Status: READY TO IMPLEMENT
+45,Jupiter Swap Execution Phase3,Ready,feature,,,,WorkOrders/WORK_ORDER_45_jupiter_swap_execution_phase3.md,,spec Status: READY TO IMPLEMENT
+46,Defend The Tower Refinement,Done,fix,,,,WorkOrders/WORK_ORDER_46_defend_the_tower_refinement.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+46,Tower Combat,Ready,docs,,,,WorkOrders/WORK_ORDER_46_tower_combat.md,,spec Status: READY TO IMPLEMENT
+47,Patricia Light,Done,docs,,,,WorkOrders/WORK_ORDER_47_patricia_light.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+48,Tower Core Loop,Done,feature,,,,WorkOrders/WORK_ORDER_48_tower_core_loop.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+49,Enemy Ai Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_49_enemy_ai_fix.md,,spec Status: READY TO IMPLEMENT
+50,Vfx Manager,Ready,docs,,,,WorkOrders/WORK_ORDER_50_vfx_manager.md,,spec Status: READY TO IMPLEMENT
+51,Mobile Performance,Ready,feature,,,,WorkOrders/WORK_ORDER_51_mobile_performance.md,,spec Status: READY TO IMPLEMENT
+52,Weather Manager,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_52_weather_manager.md,WorkOrders/WORK_ORDER_52_weather_manager.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+53,Animator Culling,Ready,feature,,,,WorkOrders/WORK_ORDER_53_animator_culling.md,,spec Status: READY TO IMPLEMENT
+54,Lod Setup,Ready,feature,,,,WorkOrders/WORK_ORDER_54_lod_setup.md,,spec Status: READY TO IMPLEMENT
+55,Torch Fire Polish,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_55_torch_fire_polish.md,WorkOrders/WORK_ORDER_55_torch_fire_polish.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+56,Vfxmanager Integration,Ready,docs,,,,WorkOrders/WORK_ORDER_56_vfxmanager_integration.md,,spec Status: READY TO IMPLEMENT
+57,Mobile Quality Settings,Ready,feature,,,,WorkOrders/WORK_ORDER_57_mobile_quality_settings.md,,spec Status: READY TO IMPLEMENT
+58,Pet Aura System,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_58_pet_aura_system.md,WorkOrders/WORK_ORDER_58_pet_aura_system.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+59,Dungeon Vfx,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_59_dungeon_vfx.md,WorkOrders/WORK_ORDER_59_dungeon_vfx.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+60,Wave Clear Celebration,Ready,docs,,,,WorkOrders/WORK_ORDER_60_wave_clear_celebration.md,,spec Status: READY TO IMPLEMENT
+61,Ground Decals Hit Polish,Ready,feature,,,,WorkOrders/WORK_ORDER_61_ground_decals_hit_polish.md,,spec Status: READY TO IMPLEMENT
+62,Audio Integration,Ready,feature,,,,WorkOrders/WORK_ORDER_62_audio_integration.md,,spec Status: READY TO IMPLEMENT
+63,Levelup Celebration,Ready,feature,,,,WorkOrders/WORK_ORDER_63_levelup_celebration.md,,spec Status: READY TO IMPLEMENT
+64,Master Quality Controller,Ready,feature,,,,WorkOrders/WORK_ORDER_64_master_quality_controller.md,,spec Status: READY TO IMPLEMENT
+65,Portal Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_65_portal_vfx.md,,spec Status: READY TO IMPLEMENT
+66,Boss Vfx,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_66_boss_vfx.md,WorkOrders/WORK_ORDER_66_boss_vfx.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+67,Master Integration Checklist,Ready,fix,,,,WorkOrders/WORK_ORDER_67_master_integration_checklist.md,,spec Status: READY TO IMPLEMENT
+68,Atb System Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_68_atb_system_fix.md,,spec Status: READY TO IMPLEMENT
+69,Enemy Pet Combat Overhaul,Ready,docs,,,,WorkOrders/WORK_ORDER_69_enemy_pet_combat_overhaul.md,,spec Status: READY TO IMPLEMENT
+70,Final Combat System,Ready,feature,,,,WorkOrders/WORK_ORDER_70_final_combat_system.md,,spec Status: READY TO IMPLEMENT
+71,World Implementation Polish,Ready,feature,,,,WorkOrders/WORK_ORDER_71_world_implementation_polish.md,,spec Status: READY TO IMPLEMENT
+72,Monetization Strategy,Ready,feature,,,,WorkOrders/WORK_ORDER_72_monetization_strategy.md,,spec Status: READY TO IMPLEMENT
+73,Shop Ui Battle Pass,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_73_shop_ui_battle_pass.md,WorkOrders/WORK_ORDER_73_shop_ui_battle_pass.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+74,Solana Crypto Payments,Ready,feature,,,,WorkOrders/WORK_ORDER_74_solana_crypto_payments.md,,spec Status: READY TO IMPLEMENT
+75,Shop Ui Crypto Tabs,Ready,feature,,,,WorkOrders/WORK_ORDER_75_shop_ui_crypto_tabs.md,,spec Status: READY TO IMPLEMENT
+76,Staked Skr Bonus,Ready,feature,,,,WorkOrders/WORK_ORDER_76_staked_skr_bonus.md,,spec Status: READY TO IMPLEMENT
+77,Staking Full Integration,Ready,feature,,,,WorkOrders/WORK_ORDER_77_staking_full_integration.md,,spec Status: READY TO IMPLEMENT
+78,Tx Verification Staking Dashboard,Ready,feature,,,,WorkOrders/WORK_ORDER_78_tx_verification_staking_dashboard.md,,spec Status: READY TO IMPLEMENT
+79,Management War Room,Ready,feature,,,,WorkOrders/WORK_ORDER_79_management_war_room.md,,spec Status: READY TO IMPLEMENT
+80,Vercel Neon Backend,Ready,feature,,,,WorkOrders/WORK_ORDER_80_vercel_neon_backend.md,,spec Status: READY TO IMPLEMENT
+81,Hero Combat Overhaul,Ready,feature,,,,WorkOrders/WORK_ORDER_81_hero_combat_overhaul.md,,spec Status: READY TO IMPLEMENT
+82,Tower Power Pass,Ready,feature,,,,WorkOrders/WORK_ORDER_82_tower_power_pass.md,,spec Status: READY TO IMPLEMENT
+83,Wave Clear Kill Combo,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_83_wave_clear_kill_combo.md,WorkOrders/WORK_ORDER_83_wave_clear_kill_combo.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+84,Enemy Death Hit Reactions,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_84_enemy_death_hit_reactions.md,WorkOrders/WORK_ORDER_84_enemy_death_hit_reactions.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+85,World Atmosphere Immersion,Ready,feature,,,,WorkOrders/WORK_ORDER_85_world_atmosphere_immersion.md,,spec Status: READY TO IMPLEMENT
+86,Scriptableobject Data Architecture,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_86_scriptableobject_data_architecture.md,WorkOrders/WORK_ORDER_86_scriptableobject_data_architecture.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+87,Cinemachine Camera,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_87_cinemachine_camera.md,WorkOrders/WORK_ORDER_87_cinemachine_camera.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+88,Itemdata Object Spawner,Ready,feature,,,,WorkOrders/WORK_ORDER_88_itemdata_object_spawner.md,,spec Status: READY TO IMPLEMENT
+89,Fix Salve Heal,Ready,fix,,,,WorkOrders/WORK_ORDER_89_fix_salve_heal.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+90,Fix Heart Tree Zero Damage,Ready,fix,,,,WorkOrders/WORK_ORDER_90_fix_heart_tree_zero_damage.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+91,Fix Countdown World Scale,Ready,fix,,,,WorkOrders/WORK_ORDER_91_fix_countdown_world_scale.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+92,Fix Enemy Targeting,Ready,fix,,,,WorkOrders/WORK_ORDER_92_fix_enemy_targeting.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+93,Fix Atb Combat Scene,Ready,fix,,,,WorkOrders/WORK_ORDER_93_fix_atb_combat_scene.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+94,Fix Skeleton Placeholder Battle Loop,Ready,fix,,,,WorkOrders/WORK_ORDER_94_fix_skeleton_placeholder_battle_loop.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+95,Last Stand Ambiance Respawn,Ready,fix,,,,WorkOrders/WORK_ORDER_95_last_stand_ambiance_respawn.md,,spec Status: BUG FIX - READY TO IMPLEMENT
+96,Defend Tower Scene,Done,fix,,,,WorkOrders/WORK_ORDER_96_defend_tower_scene.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+97,Village Scene Polish,Spec,fix,,,,WorkOrders/WORK_ORDER_97_village_scene_polish.md,,spec Status: PARTIALLY OBSOLETE - review before implementation
+98,Mending Salve Heals Tower,Done,feature,,,,WorkOrders/WORK_ORDER_98_mending_salve_heals_tower.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+99,Defend Tower Enemy Pills Tower Asset,Done,feature,,,,WorkOrders/WORK_ORDER_99_defend_tower_enemy_pills_tower_asset.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+100,Defend Tower Camera Targeting,Done,fix,,,,WorkOrders/WORK_ORDER_100_defend_tower_camera_targeting.md,,spec Status: CLOSED - **SUPERSEDED** (system removed 2026-06-09)
+101,Village Redesign Polyperfect,Ready,docs,,,,WorkOrders/WORK_ORDER_101_village_redesign_polyperfect.md,,spec Status: READY TO IMPLEMENT
+102,Village Bug Cluster,Ready,fix,,,,WorkOrders/WORK_ORDER_102_village_bug_cluster.md,,spec Status: READY TO IMPLEMENT
+103,Village Rebake,Ready,fix,,,,WorkOrders/WORK_ORDER_103_village_rebake.md,,spec Status: READY TO IMPLEMENT
+104,Castle Fortification Moat,Ready,feature,,,,WorkOrders/WORK_ORDER_104_castle_fortification_moat.md,,spec Status: READY TO IMPLEMENT
+105,Villagescenebuilder Restore And Reland,Ready,feature,,,,WorkOrders/WORK_ORDER_105_villagescenebuilder_restore_and_reland.md,,spec Status: READY TO IMPLEMENT - CLI priority
+106,Pet Resource Farming Outpost,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_106_pet_resource_farming_outpost.md,WorkOrders/WORK_ORDER_106_pet_resource_farming_outpost.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+106,Xp Level Progress Hud,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_106_xp_level_progress_hud.md,WorkOrders/WORK_ORDER_106_xp_level_progress_hud.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+107,Climate Regions Terrain,Ready,docs,,,,WorkOrders/WORK_ORDER_107_climate_regions_terrain.md,,spec Status: READY TO IMPLEMENT
+107,Village Castle Overhaul,Ready,docs,,,,WorkOrders/WORK_ORDER_107_village_castle_overhaul.md,,spec Status: READY TO IMPLEMENT
+108,Castle World Overhaul,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_108_Castle_World_Overhaul.md,WorkOrders/WORK_ORDER_108_player_build_mode.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+108,Player Build Mode,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_108_player_build_mode.md,WorkOrders/WORK_ORDER_108_player_build_mode.RESULT.md,RESULT filed; spec Status:  READY TO IMPLEMENT - **TOP PRIORITY after the playtest regressions (WO-166)
+109,Npc Dialogue Equip Crafting,Ready,feature,,,,WorkOrders/WORK_ORDER_109_npc_dialogue_equip_crafting.md,,spec Status: READY TO IMPLEMENT
+109,Rampart Level Wall Towers,Ready,feature,,,,WorkOrders/WORK_ORDER_109_rampart_level_wall_towers.md,,spec Status: READY TO IMPLEMENT
+110,Siege Warfare Trebuchet,Ready,feature,,,,WorkOrders/WORK_ORDER_110_siege_warfare_trebuchet.md,,spec Status: READY TO IMPLEMENT
+110,Yarn Blue Button Mobile Hud,Ready,fix,,,,WorkOrders/WORK_ORDER_110_yarn_blue_button_mobile_hud.md,,spec Status: READY TO IMPLEMENT
+110,Yarn Hud Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_110_yarn_hud_fix.md,,spec Status: READY TO IMPLEMENT
+111,Audio Boss Outposts,Ready,feature,,,,WorkOrders/WORK_ORDER_111_Audio_Boss_Outposts.md,,spec Status: READY TO IMPLEMENT
+111,World Resource Collection Pillar,Ready,feature,,,,WorkOrders/WORK_ORDER_111_world_resource_collection_pillar.md,,"spec Status: DESIGN - owner vision captured 2026-05-29, ready to phase"
+112,Ward Tether Exploration,Ready,fix,,,,WorkOrders/WORK_ORDER_112_ward_tether_exploration.md,,spec Status: READY TO IMPLEMENT
+113,Arcane Tower Buildable,Ready,fix,,,,WorkOrders/WORK_ORDER_113_arcane_tower_buildable.md,,spec Status: READY TO IMPLEMENT
+114,Wall Upgrade Tiers,Ready,feature,,,,WorkOrders/WORK_ORDER_114_wall_upgrade_tiers.md,,spec Status: READY TO IMPLEMENT
+115,Offline Harvest Accrual,Ready,docs,,,,WorkOrders/WORK_ORDER_115_offline_harvest_accrual.md,,spec Status: READY TO IMPLEMENT
+116,Npc Dialogue Bark System,Ready,feature,,,,WorkOrders/WORK_ORDER_116_npc_dialogue_bark_system.md,,spec Status: READY TO IMPLEMENT
+117,Worker Dispatch Autocollect,Ready,feature,,,,WorkOrders/WORK_ORDER_117_worker_dispatch_autocollect.md,,spec Status: READY TO IMPLEMENT - **Phase 1 is the immediate CLI target (SUNDAY deadline)
+118,Rewarded Ads Route,Ready,docs,,,,WorkOrders/WORK_ORDER_118_rewarded_ads_route.md,,spec Status: READY TO IMPLEMENT
+119,Pet Auto Harvest,Ready,feature,,,,WorkOrders/WORK_ORDER_119_pet_auto_harvest.md,,spec Status: READY TO IMPLEMENT
+120,Backend Spec Reconciliation,Ready,docs,,,,WorkOrders/WORK_ORDER_120_backend_spec_reconciliation.md,,spec Status: READY TO IMPLEMENT
+121,Metrics Analytics Dashboard,Ready,feature,,,,WorkOrders/WORK_ORDER_121_metrics_analytics_dashboard.md,,spec Status: READY TO SPEC-REVIEW
+122,Crystal Mine Site,Ready,feature,,,,WorkOrders/WORK_ORDER_122_crystal_mine_site.md,,spec Status: READY TO IMPLEMENT - CLI lane (held until green tree)
+123,Webgl Build Tester Hosting,Ready,feature,,,,WorkOrders/WORK_ORDER_123_webgl_build_tester_hosting.md,,spec Status: READY - overnight CLI (build) + script-relay (hosting)
+124,Resource Hud,Ready,feature,,,,WorkOrders/WORK_ORDER_124_resource_hud.md,,spec Status: READY TO IMPLEMENT
+125,P0 Combat Bugs Dragon Heartfall,Ready,fix,,,,WorkOrders/WORK_ORDER_125_p0_combat_bugs_dragon_heartfall.md,,spec Status: READY TO IMPLEMENT
+126,Scene Material Bugs,Ready,fix,,,,WorkOrders/WORK_ORDER_126_scene_material_bugs.md,,spec Status: READY TO IMPLEMENT
+127,Tower Manage Ui Desync,Ready,fix,,,,WorkOrders/WORK_ORDER_127_tower_manage_ui_desync.md,,spec Status: READY TO IMPLEMENT
+128,Pet Anti Ranged Ability,Ready,feature,,,,WorkOrders/WORK_ORDER_128_pet_anti_ranged_ability.md,,spec Status: READY TO IMPLEMENT
+129,Leaderboard Profile Social,Ready,feature,,,,WorkOrders/WORK_ORDER_129_leaderboard_profile_social.md,,spec Status: READY TO IMPLEMENT (design / user-story stage)
+129,Pipeline Architecture Reconciliation,Ready,docs,,,,WorkOrders/WORK_ORDER_129_pipeline_architecture_reconciliation.md,,spec Status: READY - UI (planning/reconciliation pass; NOT a coding pass yet)
+130,Atb Pills And Broken Loop,Ready,fix,,,,WorkOrders/WORK_ORDER_130_atb_pills_and_broken_loop.md,,spec Status: READY TO IMPLEMENT
+131,Economy Wallet Unification,Ready,docs,,,,WorkOrders/WORK_ORDER_131_economy_wallet_unification.md,,spec Status: READY TO IMPLEMENT
+132,Hero Health Lose Condition,Ready,docs,,,,WorkOrders/WORK_ORDER_132_hero_health_lose_condition.md,,spec Status: READY TO IMPLEMENT
+133,Onboarding Ftue Wiring,Ready,docs,,,,WorkOrders/WORK_ORDER_133_onboarding_ftue_wiring.md,,spec Status: READY TO IMPLEMENT
+134,Input Hud Reward Consistency,Ready,fix,,,,WorkOrders/WORK_ORDER_134_input_hud_reward_consistency.md,,spec Status: READY TO IMPLEMENT
+135,P1 Bug Triage Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_135_p1_bug_triage_fixes.md,,spec Status: READY TO IMPLEMENT
+136,Castle Structure Ramparts,Ready,feature,,,,WorkOrders/WORK_ORDER_136_castle_structure_ramparts.md,,spec Status: READY TO IMPLEMENT
+136,Remove Kaykit Buildings Markers,Spec,feature,,,,WorkOrders/WORK_ORDER_136_remove_kaykit_buildings_markers.md,,no Status line in spec
+136,Strip Wall Perimeter For Handdesign,Spec,feature,,,,WorkOrders/WORK_ORDER_136_strip_wall_perimeter_for_handdesign.md,,no Status line in spec
+137,Castle Rampart Rebake,Ready,feature,,,,WorkOrders/WORK_ORDER_137_castle_rampart_rebake.md,,spec Status: READY TO IMPLEMENT
+137,Catalog Data Model And Defensive Content,Ready,docs,,,,WorkOrders/WORK_ORDER_137_catalog_data_model_and_defensive_content.md,,spec Status: READY TO IMPLEMENT
+138,Animated Object Factory,Spec,feature,,,,WorkOrders/WORK_ORDER_138_animated_object_factory.md,,no Status line in spec
+138,Cc5 Character Pipeline First Hero,Ready,feature,,,,WorkOrders/WORK_ORDER_138_cc5_character_pipeline_first_hero.md,,spec Status: READY TO IMPLEMENT
+139,Pipeline Bug Triage,Spec,fix,,,,WorkOrders/WORK_ORDER_139_pipeline_bug_triage.md,,spec Status: TRIAGE - fixes staged for deliberate application (NOT blind-patched)
+140,Hero Animator Factory,Ready,feature,,,,WorkOrders/WORK_ORDER_140_hero_animator_factory.md,,spec Status: READY TO IMPLEMENT
+141,Harvestable Resource Nodes,Ready,feature,,,,WorkOrders/WORK_ORDER_141_harvestable_resource_nodes.md,,spec Status: READY TO IMPLEMENT
+142,Outer World Regions,Ready,feature,,,,WorkOrders/WORK_ORDER_142_outer_world_regions.md,,spec Status: READY TO IMPLEMENT
+143,Roaming Raids,Ready,feature,,,,WorkOrders/WORK_ORDER_143_roaming_raids.md,,spec Status: READY TO IMPLEMENT
+144,Regional Crystal Subtypes,Ready,feature,,,,WorkOrders/WORK_ORDER_144_regional_crystal_subtypes.md,,spec Status: READY TO IMPLEMENT
+145,Advanced Enemy Tactics,Ready,feature,,,,WorkOrders/WORK_ORDER_145_advanced_enemy_tactics.md,,spec Status: READY TO IMPLEMENT
+146,Formation Movement,Ready,feature,,,,WorkOrders/WORK_ORDER_146_formation_movement.md,,spec Status: READY TO IMPLEMENT
+147,Situational Awareness Perception,Ready,feature,,,,WorkOrders/WORK_ORDER_147_situational_awareness_perception.md,,spec Status: READY TO IMPLEMENT
+148,Catalog Structure Factory,Ready,docs,,,,WorkOrders/WORK_ORDER_148_catalog_structure_factory.md,,spec Status: READY TO IMPLEMENT
+149,Catalog Base Persistence,Ready,docs,,,,WorkOrders/WORK_ORDER_149_catalog_base_persistence.md,,spec Status: READY TO IMPLEMENT
+150,Skip Deleted Generators,Ready,fix,,,,WorkOrders/WORK_ORDER_150_skip_deleted_generators.md,,spec Status: READY TO IMPLEMENT
+151,Village Progression Crafting,Ready,feature,,,,WorkOrders/WORK_ORDER_151_village_progression_crafting.md,,spec Status: READY TO IMPLEMENT
+152,City Ui Information Architecture,Ready,feature,,,,WorkOrders/WORK_ORDER_152_city_ui_information_architecture.md,,spec Status: READY TO IMPLEMENT (IA decision locked; panel wiring phased)
+152,Full City Redesign Component Catalog,Spec,docs,,,,WorkOrders/WORK_ORDER_152_full_city_redesign_component_catalog.md,,spec Status: DRAFT - sequenced AFTER WO-151
+153,World Crystal Mine,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_153_world_crystal_mine.md,WorkOrders/WORK_ORDER_153_world_crystal_mine.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+154,Rare Timed Crystal Spawns,Ready,feature,,,,WorkOrders/WORK_ORDER_154_rare_timed_crystal_spawns.md,,spec Status: READY TO IMPLEMENT
+155,Region Enemy Spawning,Ready,feature,,,,WorkOrders/WORK_ORDER_155_region_enemy_spawning.md,,spec Status: READY TO IMPLEMENT (phased)
+156,Camera Pivot High Walls,Ready,feature,,,,WorkOrders/WORK_ORDER_156_camera_pivot_high_walls.md,,spec Status: READY TO IMPLEMENT
+157,Strip Crystal Veins,Ready,fix,,,,WorkOrders/WORK_ORDER_157_strip_crystal_veins.md,,spec Status: READY TO IMPLEMENT
+158,Gates Impassable Cannot Exit,Ready,feature,,,,WorkOrders/WORK_ORDER_158_gates_impassable_cannot_exit.md,,spec Status: READY TO IMPLEMENT
+159,Add Mining Nodes,Spec,feature,,,,WorkOrders/WORK_ORDER_159_add_mining_nodes.md,,no Status line in spec
+159,Node Settlements Harvest Defend,Ready,feature,,,,WorkOrders/WORK_ORDER_159_node_settlements_harvest_defend.md,,spec Status: READY TO IMPLEMENT (phased)
+160,Wandering Tribes,Ready,feature,,,,WorkOrders/WORK_ORDER_160_wandering_tribes.md,,spec Status: READY TO IMPLEMENT (phased)
+161,Player Home Interior,Spec,feature,,,,WorkOrders/WORK_ORDER_161_player_home_interior.md,,spec Status: DRAFT - feasibility + design captured; build when prioritized
+162,Player Music Selection,Ready,feature,,,,WorkOrders/WORK_ORDER_162_player_music_selection.md,,spec Status: READY TO IMPLEMENT
+163,Console Error Triage,Ready,fix,,,,WorkOrders/WORK_ORDER_163_console_error_triage.md,,spec Status: READY TO IMPLEMENT
+164,Zone Foundation Threatlevel,Ready,feature,,,,WorkOrders/WORK_ORDER_164_zone_foundation_threatlevel.md,,spec Status: READY TO IMPLEMENT
+165,Dungeon World Portals,Ready,feature,,,,WorkOrders/WORK_ORDER_165_dungeon_world_portals.md,,spec Status: READY TO IMPLEMENT (phased)
+166,Playtest Regressions Gates Anim Pet,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_166_playtest_regressions_gates_anim_pet.md,WorkOrders/WORK_ORDER_166_playtest_regressions_gates_anim_pet.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+167,Gatehouse Pillar Clipping,Ready,fix,,,,WorkOrders/WORK_ORDER_167_gatehouse_pillar_clipping.md,,spec Status: READY TO IMPLEMENT
+168,Navmesh Gate Openings,Ready,feature,,,,WorkOrders/WORK_ORDER_168_navmesh_gate_openings.md,,spec Status: READY TO IMPLEMENT
+169,Atb Refine Party Hud Dynamic,Ready,feature,,,,WorkOrders/WORK_ORDER_169_atb_refine_party_hud_dynamic.md,,spec Status: READY TO IMPLEMENT (phased)
+170,Battle 2D Retro Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_170_battle_2d_retro_vfx.md,,spec Status: READY TO IMPLEMENT
+171,Atb Battle Theme,Ready,feature,,,,WorkOrders/WORK_ORDER_171_atb_battle_theme.md,,spec Status: READY TO IMPLEMENT - quick win
+172,Build Times And Ad Speedup,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_172_build_times_and_ad_speedup.md,WorkOrders/WORK_ORDER_172_build_times_and_ad_speedup.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT (phased)
+173,World Void Terrain Missing,Ready,fix,,,,WorkOrders/WORK_ORDER_173_world_void_terrain_missing.md,,spec Status: READY TO IMPLEMENT -  P0 BLOCKER (owner-flagged 2026-05-31)
+174,Hero Backwards And Anim,Ready,fix,,,,WorkOrders/WORK_ORDER_174_hero_backwards_and_anim.md,,spec Status: READY TO IMPLEMENT
+175,Store Visual Polish,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_175_store_visual_polish.md,WorkOrders/WORK_ORDER_175_store_visual_polish.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+176,Tower Visual Polish,Ready,feature,,,,WorkOrders/WORK_ORDER_176_tower_visual_polish.md,,spec Status: READY TO IMPLEMENT
+177,Wall Orientation Wrong,Ready,feature,,,,WorkOrders/WORK_ORDER_177_wall_orientation_wrong.md,,spec Status: READY TO IMPLEMENT
+178,Hud Healthbar Styling,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_178_hud_healthbar_styling.md,WorkOrders/WORK_ORDER_178_hud_healthbar_styling.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+179,Moat Water And Widen,Ready,feature,,,,WorkOrders/WORK_ORDER_179_moat_water_and_widen.md,,spec Status: READY TO IMPLEMENT
+179,Moat Water Material,Ready,feature,,,,WorkOrders/WORK_ORDER_179_moat_water_material.md,,spec Status: READY TO IMPLEMENT
+180,Production Building Roster,Ready,fix,,,,WorkOrders/WORK_ORDER_180_production_building_roster.md,,spec Status: READY TO IMPLEMENT (phased)
+181,Rampart Stairs Upper Siege Defenses,Ready,feature,,,,WorkOrders/WORK_ORDER_181_rampart_stairs_upper_siege_defenses.md,,spec Status: READY TO IMPLEMENT
+181,Villagescenebuilder Partial Split,Ready,fix,,,,WorkOrders/WORK_ORDER_181_villagescenebuilder_partial_split.md,,spec Status: READY TO IMPLEMENT** (run AFTER the current playtest build ships)
+182,Avalon To Elarion Canon Purge,Ready,docs,,,,WorkOrders/WORK_ORDER_182_avalon_to_elarion_canon_purge.md,,spec Status: READY TO IMPLEMENT
+183,Stairs Orientation Open To Wall,Ready,fix,,,,WorkOrders/WORK_ORDER_183_stairs_orientation_open_to_wall.md,,spec Status: READY TO IMPLEMENT
+184,Pet Tpose Animation,Ready,fix,,,,WorkOrders/WORK_ORDER_184_pet_tpose_animation.md,,spec Status: READY TO IMPLEMENT
+185,Hero Select To Pet Select Flow,Ready,fix,,,,WorkOrders/WORK_ORDER_185_hero_select_to_pet_select_flow.md,,spec Status: READY TO IMPLEMENT
+186,Wave Countdown Timer,Ready,feature,,,,WorkOrders/WORK_ORDER_186_wave_countdown_timer.md,,spec Status: READY TO IMPLEMENT
+187,Pet Clips Through Walls,Ready,feature,,,,WorkOrders/WORK_ORDER_187_pet_clips_through_walls.md,,spec Status: READY TO IMPLEMENT
+188,Solid Bridges Replace Gates,Ready,fix,,,,WorkOrders/WORK_ORDER_188_solid_bridges_replace_gates.md,,spec Status: READY TO IMPLEMENT
+189,Elarion City Persistent Populate,Ready,fix,,,,WorkOrders/WORK_ORDER_189_elarion_city_persistent_populate.md,,spec Status: READY TO IMPLEMENT
+190,Orc Necromancer Enemy,Spec,feature,,,,WorkOrders/WORK_ORDER_190_orc_necromancer_enemy.md,,spec Status: QUEUED for overnight**  **Date:** 2026-05-31  **Lane:** Art/Enemy pipeline (CLI gatekeeper gates the build)
+191,Webgl Size Optimization,Ready,feature,,,,WorkOrders/WORK_ORDER_191_webgl_size_optimization.md,,spec Status: READY TO IMPLEMENT
+192,Ground Coplanar Zfight Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_192_ground_coplanar_zfight_fix.md,,spec Status: READY TO IMPLEMENT
+193,Overworld Random Encounters,Ready,feature,,,,WorkOrders/WORK_ORDER_193_overworld_random_encounters.md,,spec Status: DESIGN -> READY once the resolution decision is made (see Decision)
+194,Build Experience Timers Construction,Ready,docs,,,,WorkOrders/WORK_ORDER_194_build_experience_timers_construction.md,,spec Status: READY TO IMPLEMENT (phased)
+195,Spell Vfx Factory,Ready,docs,,,,WorkOrders/WORK_ORDER_195_spell_vfx_factory.md,,spec Status: READY TO IMPLEMENT
+196,Webgl No Brotli,Ready,fix,,,,WorkOrders/WORK_ORDER_196_webgl_no_brotli.md,,spec Status: READY TO IMPLEMENT
+197,Zelda Overworld Combat Design,Ready,feature,,,,WorkOrders/WORK_ORDER_197_zelda_overworld_combat_design.md,,spec Status: READY FOR ARCHITECT
+198,Pipeline Architecture Reconciliation,Ready,docs,,,,WorkOrders/WORK_ORDER_198_pipeline_architecture_reconciliation.md,,spec Status: READY - UI (planning/reconciliation pass; NOT a coding pass yet)
+199,Remove Kaykit Buildings Markers,Spec,feature,,,,WorkOrders/WORK_ORDER_199_remove_kaykit_buildings_markers.md,,no Status line in spec
+200,Strip Wall Perimeter For Handdesign,Spec,feature,,,,WorkOrders/WORK_ORDER_200_strip_wall_perimeter_for_handdesign.md,,no Status line in spec
+201,Catalog Data Model And Defensive Content,Ready,docs,,,,WorkOrders/WORK_ORDER_201_catalog_data_model_and_defensive_content.md,,spec Status: READY TO IMPLEMENT
+202,Cc5 Character Pipeline First Hero,Ready,feature,,,,WorkOrders/WORK_ORDER_202_cc5_character_pipeline_first_hero.md,,spec Status: READY TO IMPLEMENT
+203,Full City Redesign Component Catalog,Spec,docs,,,,WorkOrders/WORK_ORDER_203_full_city_redesign_component_catalog.md,,spec Status: DRAFT - sequenced AFTER WO-151
+204,Camera Rig Wall Occlusion,Ready,feature,,,,WorkOrders/WORK_ORDER_204_camera_rig_wall_occlusion.md,,spec Status: READY TO IMPLEMENT (spec finalized + reviewed 2026-05-31)
+205,Node Settlements Harvest Defend,Ready,feature,,,,WorkOrders/WORK_ORDER_205_node_settlements_harvest_defend.md,,spec Status: READY TO IMPLEMENT (phased)
+206,Moat Water Material,Ready,feature,,,,WorkOrders/WORK_ORDER_206_moat_water_material.md,,spec Status: READY TO IMPLEMENT
+207,Villagescenebuilder Partial Split,Ready,fix,,,,WorkOrders/WORK_ORDER_207_villagescenebuilder_partial_split.md,,spec Status: READY TO IMPLEMENT** (run AFTER the current playtest build ships)
+208,Webgl Rebuild Current Tree,Ready,fix,,,,WorkOrders/WORK_ORDER_208_webgl_rebuild_current_tree.md,,spec Status: READY TO IMPLEMENT
+209,Tower Combat,Ready,docs,,,,WorkOrders/WORK_ORDER_209_tower_combat.md,,spec Status: READY TO IMPLEMENT
+210,Jupiter Swap Panel Phase1,Ready,feature,,,,WorkOrders/WORK_ORDER_210_jupiter_swap_panel_phase1.md,,spec Status: READY TO IMPLEMENT
+211,Webgl Optimize Full,Ready,feature,,,,WorkOrders/WORK_ORDER_211_webgl_optimize_full.md,,spec Status: READY TO IMPLEMENT
+212,Gate Alignment Z Fighting,Ready,fix,,,,WorkOrders/WORK_ORDER_212_gate_alignment_z_fighting.md,,spec Status: READY TO IMPLEMENT
+213,Wandering Troops Downscale,Ready,feature,,,,WorkOrders/WORK_ORDER_213_wandering_troops_downscale.md,,spec Status: READY TO IMPLEMENT
+214,Camera Height Adjustment,Ready,feature,,,,WorkOrders/WORK_ORDER_214_camera_height_adjustment.md,,spec Status: READY TO IMPLEMENT
+215,Build Mode Placement Input,Ready,fix,,,,WorkOrders/WORK_ORDER_215_build_mode_placement_input.md,,spec Status: READY TO IMPLEMENT
+216,Enemy Camps System,Ready,feature,,,,WorkOrders/WORK_ORDER_216_enemy_camps_system.md,,spec Status: READY TO IMPLEMENT
+217,Animation Polish Anticipation Impact,Ready,feature,,,,WorkOrders/WORK_ORDER_217_animation_polish_anticipation_impact.md,,spec Status: READY TO IMPLEMENT
+218,Animation Layering Upper Body,Ready,feature,,,,WorkOrders/WORK_ORDER_218_animation_layering_upper_body.md,,spec Status: READY TO IMPLEMENT
+219,Visual Feedback Hit Stop Particles,Ready,feature,,,,WorkOrders/WORK_ORDER_219_visual_feedback_hit_stop_particles.md,,spec Status: READY TO IMPLEMENT
+221,Defend Tower Camera Closer Angle,Done,feature,,,,WorkOrders/WORK_ORDER_221_defend_tower_camera_closer_angle.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+222,Tutorial Hero First Free Tower,Ready,feature,,,,WorkOrders/WORK_ORDER_222_tutorial_hero_first_free_tower.md,,spec Status: READY TO IMPLEMENT
+223,Archer Hero Select Card,Ready,feature,,,,WorkOrders/WORK_ORDER_223_archer_hero_select_card.md,,spec Status: READY TO IMPLEMENT
+224,Knight Hero Select Card,Ready,feature,,,,WorkOrders/WORK_ORDER_224_knight_hero_select_card.md,,spec Status: READY TO IMPLEMENT
+225,Mage Hero Select Card,Ready,feature,,,,WorkOrders/WORK_ORDER_225_mage_hero_select_card.md,,spec Status: READY TO IMPLEMENT
+226,Cleric Hero Select Card,Ready,feature,,,,WorkOrders/WORK_ORDER_226_cleric_hero_select_card.md,,spec Status: READY TO IMPLEMENT
+227,Opening Cutscene Story Companion,Ready,feature,,,,WorkOrders/WORK_ORDER_227_opening_cutscene_story_companion.md,,spec Status: READY TO IMPLEMENT
+228,Resource Nodes Gathering Tutorial,Ready,feature,,,,WorkOrders/WORK_ORDER_228_resource_nodes_gathering_tutorial.md,,spec Status: READY TO IMPLEMENT
+229,Harvest Visual Feedback Ui,Ready,feature,,,,WorkOrders/WORK_ORDER_229_harvest_visual_feedback_ui.md,,spec Status: READY TO IMPLEMENT
+231,Party Assembly And Early Resource Loop,Ready,fix,,,,WorkOrders/WORK_ORDER_231_party_assembly_and_early_resource_loop.md,,spec Status: READY TO IMPLEMENT
+232,Rendering Urp Sweep,Ready,fix,,,,WorkOrders/WORK_ORDER_232_rendering_urp_sweep.md,,spec Status: READY TO IMPLEMENT
+233,Collision Navmesh Sweep,Ready,feature,,,,WorkOrders/WORK_ORDER_233_collision_navmesh_sweep.md,,spec Status: READY TO IMPLEMENT
+234,Animation Sweep,Ready,fix,,,,WorkOrders/WORK_ORDER_234_animation_sweep.md,,spec Status: READY TO IMPLEMENT
+235,Death And Spire Destroyed Screens,Ready,docs,,,,WorkOrders/WORK_ORDER_235_death_and_spire_destroyed_screens.md,,spec Status: READY TO IMPLEMENT
+236,Cosmetic Store Ui,Ready,feature,,,,WorkOrders/WORK_ORDER_236_cosmetic_store_ui.md,,spec Status: READY TO IMPLEMENT
+237,Building Upgrade Panel,Ready,feature,,,,WorkOrders/WORK_ORDER_237_building_upgrade_panel.md,,spec Status: READY TO IMPLEMENT
+238,Sylas First Meeting Narrative,Ready,feature,,,,WorkOrders/WORK_ORDER_238_sylas_first_meeting_narrative.md,,spec Status: READY TO IMPLEMENT
+239,Node Claiming Outpost Build,Ready,feature,,,,WorkOrders/WORK_ORDER_239_node_claiming_outpost_build.md,,spec Status: READY TO IMPLEMENT
+240,Heartwood Living Tree Asset,Ready,feature,,,,WorkOrders/WORK_ORDER_240_heartwood_living_tree_asset.md,,spec Status: READY TO IMPLEMENT
+241,Alert Intel System,Ready,feature,,,,WorkOrders/WORK_ORDER_241_alert_intel_system.md,,spec Status: READY TO IMPLEMENT
+242,Mobile First Hud And Interaction,Ready,feature,,,,WorkOrders/WORK_ORDER_242_mobile_first_hud_and_interaction.md,,spec Status: READY TO IMPLEMENT
+243,Audio Full Pass,Ready,feature,,,,WorkOrders/WORK_ORDER_243_audio_full_pass.md,,spec Status: READY TO IMPLEMENT
+244,Node Visibility And Discovery,Ready,feature,,,,WorkOrders/WORK_ORDER_244_node_visibility_and_discovery.md,,spec Status: READY TO IMPLEMENT
+245,World Terrain Foundation,Ready,feature,,,,WorkOrders/WORK_ORDER_245_world_terrain_foundation.md,,spec Status: READY TO IMPLEMENT
+246,Replace Kaykit Npcs,Ready,feature,,,,WorkOrders/WORK_ORDER_246_replace_kaykit_npcs.md,,spec Status: READY TO IMPLEMENT
+247,Village Scene Cleanup,Ready,fix,,,,WorkOrders/WORK_ORDER_247_village_scene_cleanup.md,,spec Status: READY TO IMPLEMENT
+248,Hero Hover Exploit Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_248_hero_hover_exploit_fix.md,,spec Status: READY TO IMPLEMENT
+249,Oversized Npc Scale Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_249_oversized_npc_scale_fix.md,,spec Status: READY TO IMPLEMENT
+250,Portal Interior Glow Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_250_portal_interior_glow_vfx.md,,spec Status: READY TO IMPLEMENT
+251,Landing Page Ui Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_251_landing_page_ui_fixes.md,,spec Status: READY TO IMPLEMENT
+252,Npc Dialogue Z Order,Ready,fix,,,,WorkOrders/WORK_ORDER_252_npc_dialogue_z_order.md,,spec Status: READY TO IMPLEMENT
+253,Split Village Scene Builder,Ready,feature,,,,WorkOrders/WORK_ORDER_253_split_village_scene_builder.md,,spec Status: READY TO IMPLEMENT
+253,Tutorial Speech Bubble Overlay,Ready,feature,,,,WorkOrders/WORK_ORDER_253_tutorial_speech_bubble_overlay.md,,spec Status: READY TO IMPLEMENT
+254,Claimablenode Timer Persistence,Ready,feature,,,,WorkOrders/WORK_ORDER_254_claimablenode_timer_persistence.md,,spec Status: READY TO IMPLEMENT
+254,Hero Hover Exploit,Ready,fix,,,,WorkOrders/WORK_ORDER_254_hero_hover_exploit.md,,spec Status: READY TO IMPLEMENT
+255,Hero Backwards Walk,Ready,feature,,,,WorkOrders/WORK_ORDER_255_hero_backwards_walk.md,,spec Status: READY TO IMPLEMENT
+255,Terrain Seam Height Mismatch,Ready,feature,,,,WorkOrders/WORK_ORDER_255_terrain_seam_height_mismatch.md,,spec Status: READY TO IMPLEMENT
+256,Blue Ring Removal,Ready,fix,,,,WorkOrders/WORK_ORDER_256_blue_ring_removal.md,,spec Status: READY TO IMPLEMENT
+256,Double Wall Ring,Ready,feature,,,,WorkOrders/WORK_ORDER_256_double_wall_ring.md,,spec Status: READY TO IMPLEMENT
+257,Atb Hero Icons,Ready,feature,,,,WorkOrders/WORK_ORDER_257_atb_hero_icons.md,,spec Status: READY TO IMPLEMENT
+257,Hero Select Layout,Ready,fix,,,,WorkOrders/WORK_ORDER_257_hero_select_layout.md,,spec Status: READY TO IMPLEMENT
+258,Atb Bug Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_258_atb_bug_fixes.md,,spec Status: READY TO IMPLEMENT (CRITICAL PATH)
+259,Inworld Combat Core,Ready,feature,,,,WorkOrders/WORK_ORDER_259_inworld_combat_core.md,,spec Status: READY TO IMPLEMENT
+260,Hero Intro Screen,Ready,feature,,,,WorkOrders/WORK_ORDER_260_hero_intro_screen.md,,spec Status: READY TO PRODUCE
+261,Hero Hover Exploit,Ready,feature,,,,WorkOrders/WORK_ORDER_261_hero_hover_exploit.md,,spec Status: READY TO IMPLEMENT
+262,Pets Traveling Reverse,Ready,feature,,,,WorkOrders/WORK_ORDER_262_pets_traveling_reverse.md,,spec Status: READY TO IMPLEMENT
+263,Upside Down Tree,Ready,feature,,,,WorkOrders/WORK_ORDER_263_upside_down_tree.md,,spec Status: READY TO IMPLEMENT
+264,Portal Color Incorrect,Ready,fix,,,,WorkOrders/WORK_ORDER_264_portal_color_incorrect.md,,spec Status: READY TO IMPLEMENT
+265,Castle Doors Not Opening,Spec,feature,,,,WorkOrders/WORK_ORDER_265_castle_doors_not_opening.md,,spec Status: CANCELLED - owner confirmed this is old and can be deleted (2026-06-03)
+266,Resource Economy Correction,Ready,feature,,,,WorkOrders/WORK_ORDER_266_resource_economy_correction.md,,spec Status: READY TO IMPLEMENT
+267,Gate Crossing Intel,Ready,feature,,,,WorkOrders/WORK_ORDER_267_gate_crossing_intel.md,,spec Status: READY TO IMPLEMENT
+268,Replace Kaykit Npcs,Ready,feature,,,,WorkOrders/WORK_ORDER_268_replace_kaykit_npcs.md,,spec Status: READY TO IMPLEMENT
+269,Regionmobspawner Perf,Ready,feature,,,,WorkOrders/WORK_ORDER_269_regionmobspawner_perf.md,,spec Status: READY TO IMPLEMENT
+270,Claimablenode Perf,Ready,feature,,,,WorkOrders/WORK_ORDER_270_claimablenode_perf.md,,spec Status: READY TO IMPLEMENT
+271,Npc Dialogue Overlaps Hud,Ready,feature,,,,WorkOrders/WORK_ORDER_271_npc_dialogue_overlaps_hud.md,,spec Status: READY TO IMPLEMENT
+272,Portal Glow Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_272_portal_glow_vfx.md,,spec Status: READY TO IMPLEMENT
+273,Zone Architecture Redesign,Ready,fix,,,,WorkOrders/WORK_ORDER_273_zone_architecture_redesign.md,,spec Status: READY TO IMPLEMENT
+274,Project Restructuring,Ready,feature,,,,WorkOrders/WORK_ORDER_274_project_restructuring.md,,spec Status: READY TO IMPLEMENT
+275,Silo Architecture,Ready,feature,,,,WorkOrders/WORK_ORDER_275_silo_architecture.md,,spec Status: READY TO IMPLEMENT
+276,Atb System Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_276_atb_system_fix.md,,spec Status: READY TO IMPLEMENT
+277,Tutorial Companion Onboarding,Ready,feature,,,,WorkOrders/WORK_ORDER_277_tutorial_companion_onboarding.md,,spec Status: READY TO IMPLEMENT
+278,Village Rebuild Modular,Ready,feature,,,,WorkOrders/WORK_ORDER_278_village_rebuild_modular.md,,spec Status: READY TO IMPLEMENT
+279,Am Build Bake Chain,Ready,feature,,,,WorkOrders/WORK_ORDER_279_am_build_bake_chain.md,,spec Status: READY TO IMPLEMENT
+279,Village2 Generator Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_279_village2_generator_fixes.md,,spec Status: READY TO IMPLEMENT
+280,Go Live Blockers,Ready,fix,,,,WorkOrders/WORK_ORDER_280_go_live_blockers.md,,spec Status: READY TO IMPLEMENT
+280,Village2 Wiring Gate,Ready,feature,,,,WorkOrders/WORK_ORDER_280_village2_wiring_gate.md,,spec Status: READY TO IMPLEMENT - but GATED. Do not merge to feat/tower-core-loop until all 6 pass.
+281,Build Blocker Addressables Sbp,Ready,feature,,,,WorkOrders/WORK_ORDER_281_build_blocker_addressables_sbp.md,,"spec Status: READY TO IMPLEMENT - P0, blocks ALL player builds"
+282,Buildpreviewmodal Premium Rotation,Ready,feature,,,,WorkOrders/WORK_ORDER_282_BuildPreviewModal_Premium_Rotation.md,,spec Status: READY TO IMPLEMENT
+282,Heroes Resources To Addressables.Hold,Spec,feature,,,,WorkOrders/WORK_ORDER_282_heroes_resources_to_addressables.HOLD.md,,"spec Status: HELD for a daytime, play-verified session. **Not** started."
+282,Heroes Resources To Addressables,Ready,feature,,,,WorkOrders/WORK_ORDER_282_heroes_resources_to_addressables.md,,spec Status: READY TO IMPLEMENT
+283,Canonical Animation Library,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_283_canonical_animation_library.md,WorkOrders/WORK_ORDER_283_canonical_animation_library.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+284,Unified Animation Routines,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_284_unified_animation_routines.md,WorkOrders/WORK_ORDER_284_unified_animation_routines.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+285,D Combat Uses Animation Library,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_285_3d_combat_uses_animation_library.md,WorkOrders/WORK_ORDER_285_3d_combat_uses_animation_library.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+286,Hero Fbx Import Settings Fix,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_286_hero_fbx_import_settings_fix.md,WorkOrders/WORK_ORDER_286_hero_fbx_import_settings_fix.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+287,Threat Assessment Intel,Ready,feature,,,,WorkOrders/WORK_ORDER_287_threat_assessment_intel.md,,"spec Status: SPEC - captured, NOT yet ready to implement** (depends on the roaming-enemy +"
+288,Class Signature Combat Moves,In Implementation,feature,,,,WorkOrders/WORK_ORDER_288_class_signature_combat_moves.md,,"spec Status: IN PROGRESS - core shipped, class variants are SPEC."
+290,Quest Service And Tracker,Ready,feature,,,,WorkOrders/WORK_ORDER_290_quest_service_and_tracker.md,,spec Status: READY TO IMPLEMENT
+291,Vendor Yarn Pack And Quest Verbs,Ready,fix,,,,WorkOrders/WORK_ORDER_291_vendor_yarn_pack_and_quest_verbs.md,,spec Status: READY TO IMPLEMENT
+292,Keystone Spire Finale Wiring,Ready,feature,,,,WorkOrders/WORK_ORDER_292_keystone_spire_finale_wiring.md,,spec Status: READY TO IMPLEMENT
+293,Crafting Tiers And Legendary Recipes,Ready,feature,,,,WorkOrders/WORK_ORDER_293_crafting_tiers_and_legendary_recipes.md,,spec Status: READY TO IMPLEMENT
+294,Forgemasters Saga Yarn And Scenes,Ready,docs,,,,WorkOrders/WORK_ORDER_294_forgemasters_saga_yarn_and_scenes.md,,spec Status: READY TO IMPLEMENT
+295,Legendary Aegis Set And Ward,Ready,feature,,,,WorkOrders/WORK_ORDER_295_legendary_aegis_set_and_ward.md,,spec Status: READY TO IMPLEMENT
+296,Reforge Choice Finale Ending,Ready,feature,,,,WorkOrders/WORK_ORDER_296_reforge_choice_finale_ending.md,,spec Status: READY TO IMPLEMENT
+297,Pet Acquisition And Slots,Ready,docs,,,,WorkOrders/WORK_ORDER_297_pet_acquisition_and_slots.md,,spec Status: READY TO IMPLEMENT
+298,Pet Skill Catalog Content,Ready,docs,,,,WorkOrders/WORK_ORDER_298_pet_skill_catalog_content.md,,spec Status: READY TO IMPLEMENT
+299,Pet Bond Questlines,Ready,feature,,,,WorkOrders/WORK_ORDER_299_pet_bond_questlines.md,,spec Status: READY TO IMPLEMENT
+300,Weaponsmithing Lore Integration,Ready,feature,,,,WorkOrders/WORK_ORDER_300_weaponsmithing_lore_integration.md,,spec Status: READY TO IMPLEMENT
+301,Party Persistence,Ready,feature,,,,WorkOrders/WORK_ORDER_301_party_persistence.md,,spec Status: READY - BACKBONE (build early; companion presence + party UI both depend on it).
+301,Party Persistence Wallet Keyed,Ready,feature,,,,WorkOrders/WORK_ORDER_301_party_persistence_wallet_keyed.md,,spec Status: READY TO IMPLEMENT
+302,Floating Healthbar Oversize Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_302_floating_healthbar_oversize_fix.md,,spec Status: READY TO IMPLEMENT
+303,Combat Party Hud Wire To Data,Ready,feature,,,,WorkOrders/WORK_ORDER_303_combat_party_hud_wire_to_data.md,,spec Status: READY TO IMPLEMENT
+304,Brom Rumor Board,Ready,feature,,,,WorkOrders/WORK_ORDER_304_brom_rumor_board.md,,spec Status: READY TO IMPLEMENT
+305,Relic Recovery Quests,Ready,feature,,,,WorkOrders/WORK_ORDER_305_relic_recovery_quests.md,,spec Status: READY TO IMPLEMENT
+306,Regression Smoke Test Harness,In Implementation,fix,,,,WorkOrders/WORK_ORDER_306_regression_smoke_test_harness.md,,"spec Status: SPEC - capture now, build when ramping** (owner: ""designing  implementing now;"
+307,Hud Visual Overhaul Responsive,Spec,docs,,,,WorkOrders/WORK_ORDER_307_hud_visual_overhaul_responsive.md,,spec Status: QUEUED - later/polish (post-core; owner 2026-06-07).** Visual targets:
+308,Ability Bar Cooldown Rings,Ready,feature,,,,WorkOrders/WORK_ORDER_308_ability_bar_cooldown_rings.md,,spec Status: READY TO IMPLEMENT
+309,Resource Bar Icons,Ready,feature,,,,WorkOrders/WORK_ORDER_309_resource_bar_icons.md,,spec Status: READY TO IMPLEMENT
+310,Companion Wrong Color Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_310_companion_wrong_color_fix.md,,spec Status: READY TO IMPLEMENT
+311,Tree Of Life Canonical Placement,Ready,docs,,,,WorkOrders/WORK_ORDER_311_tree_of_life_canonical_placement.md,,spec Status: READY TO IMPLEMENT
+312,Farm To Harvest Node,Ready,docs,,,,WorkOrders/WORK_ORDER_312_farm_to_harvest_node.md,,spec Status: READY TO IMPLEMENT
+313,Windmill Production Station,Ready,docs,,,,WorkOrders/WORK_ORDER_313_windmill_production_station.md,,spec Status: READY TO IMPLEMENT
+314,Buildpreview Pane Cleanup,Ready,docs,,,,WorkOrders/WORK_ORDER_314_buildpreview_pane_cleanup.md,,spec Status: READY TO IMPLEMENT
+315,Enemies Walk Backwards,Ready,docs,,,,WorkOrders/WORK_ORDER_315_enemies_walk_backwards.md,,spec Status: READY TO IMPLEMENT
+316,Mobs Spawn In Families,Ready,docs,,,,WorkOrders/WORK_ORDER_316_mobs_spawn_in_families.md,,spec Status: READY TO IMPLEMENT
+317,Dtt Player Grounding,Done,docs,,,,WorkOrders/WORK_ORDER_317_dtt_player_grounding.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+318,Dtt Aim North Head Pivot,Done,docs,,,,WorkOrders/WORK_ORDER_318_dtt_aim_north_head_pivot.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+319,Dtt Combat Parity Model Anim Firerate,Done,docs,,,,WorkOrders/WORK_ORDER_319_dtt_combat_parity_model_anim_firerate.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+320,Dtt Loss Has No Impact,Done,docs,,,,WorkOrders/WORK_ORDER_320_dtt_loss_has_no_impact.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+321,Missing Side Gate Pet House,Ready,docs,,,,WorkOrders/WORK_ORDER_321_missing_side_gate_pet_house.md,,spec Status: READY TO IMPLEMENT
+322,Compass Not Visible,Ready,docs,,,,WorkOrders/WORK_ORDER_322_compass_not_visible.md,,spec Status: READY TO IMPLEMENT
+323,Trees All White,Ready,fix,,,,WorkOrders/WORK_ORDER_323_trees_all_white.md,,spec Status: READY TO IMPLEMENT
+324,Dungeon Placeholder Npc Exit,Ready,docs,,,,WorkOrders/WORK_ORDER_324_dungeon_placeholder_npc_exit.md,,spec Status: READY TO IMPLEMENT
+325,Node Interaction Does Nothing,Ready,docs,,,,WorkOrders/WORK_ORDER_325_node_interaction_does_nothing.md,,spec Status: READY TO IMPLEMENT
+326,Hero Facing 90Deg Offset,Ready,fix,,,,WorkOrders/WORK_ORDER_326_hero_facing_90deg_offset.md,,spec Status: READY TO IMPLEMENT
+327,Admin Trigger Wave Noop,Ready,docs,,,,WorkOrders/WORK_ORDER_327_admin_trigger_wave_noop.md,,spec Status: READY TO IMPLEMENT
+328,Root Nullref Spam Investigation,Ready,fix,,,,WorkOrders/WORK_ORDER_328_root_nullref_spam_investigation.md,,"spec Status: READY TO IMPLEMENT**  **PRIORITY: HIGH (suspected root of several ""nothing happens"" bugs)"
+329,Checkin Regression Test Suite,Ready,fix,,,,WorkOrders/WORK_ORDER_329_checkin_regression_test_suite.md,,spec Status: READY TO IMPLEMENT** (scaffolds authored by agent; CLI build-verifies the C# tests)
+329,Pet Deploy Timing,Spec,docs,,,,WorkOrders/WORK_ORDER_329_pet_deploy_timing.md,,"spec Status: SPEC / revisit** - stopgap shipped, root design call pending. **Lane:** 12 (Onboarding) / 6 (Pets)."
+330,Dtt Hero Cyan Material,Done,fix,,,,WorkOrders/WORK_ORDER_330_dtt_hero_cyan_material.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+330,No Account Local Only Warning,Ready,fix,,,,WorkOrders/WORK_ORDER_330_no_account_local_only_warning.md,,spec Status: READY (small) - pick the surface.** **Lane:** 4 (UI/HUD) + 7 (Persistence).
+331,Dtt Keyboard Hotkeys,Done,feature,,,,WorkOrders/WORK_ORDER_331_dtt_keyboard_hotkeys.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+331,Inventory Character Screen,Spec,docs,,,,WorkOrders/WORK_ORDER_331_inventory_character_screen.md,,spec Status: SPEC (design-driven).** **Lane:** 4 (UI/HUD). **Reference concept:
+332,Dtt Aim Sensitivity,Done,feature,,,,WorkOrders/WORK_ORDER_332_dtt_aim_sensitivity.md,,spec Status: CLOSED - SUPERSEDED (system removed 2026-06-09)
+333,Dtt Sensitivity Consolidation,Spec,feature,,,,WorkOrders/WORK_ORDER_333_dtt_sensitivity_consolidation.md,,spec Status:  DUPLICATE - CLOSED. Superseded by WO-332 (DTT aim sensitivity).** Kept (not deleted) to
+333,Village Death No Dtt Atb Trigger,Spec,fix,,,,WorkOrders/WORK_ORDER_333_village_death_no_dtt_atb_trigger.md,,spec Status: REVIEW - verify against current canon (no DTT)
+334,Asset Orient Inspect Tool,Spec,docs,,,,WorkOrders/WORK_ORDER_334_asset_orient_inspect_tool.md,,"spec Status: SPEC (owner 2026-06-07 - ""yes, build it"").** **Lane:** 10 (Build/Tooling). **Seed:** the"
+334,Tower Placement Rotate Menu,Ready,feature,,,,WorkOrders/WORK_ORDER_334_tower_placement_rotate_menu.md,,spec Status: READY TO IMPLEMENT
+335,Atb Capsule Primitive Bug,Ready,fix,,,,WorkOrders/WORK_ORDER_335_atb_capsule_primitive_bug.md,,spec Status: READY TO IMPLEMENT
+336,Atb Village Wall Environment,Ready,feature,,,,WorkOrders/WORK_ORDER_336_atb_village_wall_environment.md,,spec Status: READY TO IMPLEMENT
+337,Pet House Dialogue Overlap,Ready,fix,,,,WorkOrders/WORK_ORDER_337_pet_house_dialogue_overlap.md,,spec Status: READY TO IMPLEMENT
+338,Echo Hollow Rebrand,Ready,fix,,,,WorkOrders/WORK_ORDER_338_echo_hollow_rebrand.md,,spec Status: READY TO IMPLEMENT
+339,Save Schema Version Bump Quest State,Ready,feature,,,,WorkOrders/WORK_ORDER_339_save_schema_version_bump_quest_state.md,,spec Status: READY TO IMPLEMENT
+340,Persistplayerprefs Migration Elder Data,Ready,feature,,,,WorkOrders/WORK_ORDER_340_persistplayerprefs_migration_elder_data.md,,spec Status: READY TO IMPLEMENT
+341,Backend Auth Token Refresh Flow,Ready,feature,,,,WorkOrders/WORK_ORDER_341_backend_auth_token_refresh_flow.md,,spec Status: READY TO IMPLEMENT
+342,Webgl Memory Optimization Pass,Ready,feature,,,,WorkOrders/WORK_ORDER_342_webgl_memory_optimization_pass.md,,spec Status: READY TO IMPLEMENT
+343,Analytics Event Batching Backend Flush,Ready,feature,,,,WorkOrders/WORK_ORDER_343_analytics_event_batching_backend_flush.md,,spec Status: READY TO IMPLEMENT
+352,Structure Preview Panel,Ready,feature,,,,WorkOrders/WORK_ORDER_352_structure_preview_panel.md,,spec Status: READY TO IMPLEMENT
+353,Palette Filters,Ready,feature,,,,WorkOrders/WORK_ORDER_353_palette_filters.md,,spec Status: READY TO IMPLEMENT
+354,Upgrade Synergy System,Ready,feature,,,,WorkOrders/WORK_ORDER_354_upgrade_synergy_system.md,,spec Status: READY TO IMPLEMENT
+355,Portrait Responsiveness,Ready,feature,,,,WorkOrders/WORK_ORDER_355_portrait_responsiveness.md,,spec Status: READY TO IMPLEMENT
+356,Placement Validation Grid,Ready,feature,,,,WorkOrders/WORK_ORDER_356_placement_validation_grid.md,,spec Status: READY TO IMPLEMENT
+357,Mobile Touch Accessibility,Ready,feature,,,,WorkOrders/WORK_ORDER_357_mobile_touch_accessibility.md,,spec Status: READY TO IMPLEMENT
+358,Yarn Spinner Welcome,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_358_yarn_spinner_welcome.md,WorkOrders/WORK_ORDER_358_yarn_spinner_welcome.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+359,Combat Feedback Hits,Ready,feature,,,,WorkOrders/WORK_ORDER_359_combat_feedback_hits.md,,spec Status: READY TO IMPLEMENT
+360,Companion Echo Outpost,Ready,feature,,,,WorkOrders/WORK_ORDER_360_companion_echo_outpost.md,,spec Status: READY TO IMPLEMENT
+361,Wave Rewards Passive Xp,Ready,feature,,,,WorkOrders/WORK_ORDER_361_wave_rewards_passive_xp.md,,spec Status: READY TO IMPLEMENT
+362,Enemy Wave Composition,Ready,feature,,,,WorkOrders/WORK_ORDER_362_enemy_wave_composition.md,,spec Status: READY TO IMPLEMENT
+363,Character Orientation Validation,Ready,fix,,,,WorkOrders/WORK_ORDER_363_character_orientation_validation.md,,spec Status: READY TO IMPLEMENT
+364,Companion Hero Gear Setup,Ready,feature,,,,WorkOrders/WORK_ORDER_364_companion_hero_gear_setup.md,,spec Status: READY TO IMPLEMENT
+365,Character Idle Pose States,Ready,feature,,,,WorkOrders/WORK_ORDER_365_character_idle_pose_states.md,,spec Status: READY TO IMPLEMENT
+366,Idle Routines,Ready,feature,,,,WorkOrders/WORK_ORDER_366_idle_routines.md,,spec Status: READY TO IMPLEMENT
+367,Town Camera Distance,Ready,feature,,,,WorkOrders/WORK_ORDER_367_town_camera_distance.md,,spec Status: READY TO IMPLEMENT
+368,Camera Movement Regression,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_368_camera_movement_regression.md,WorkOrders/WORK_ORDER_368_camera_movement_regression.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+369,Arena Monument Landmark,Ready,feature,,,,WorkOrders/WORK_ORDER_369_arena_monument_landmark.md,,spec Status: READY TO IMPLEMENT
+370,Arena Monument Vfx Aura,Ready,feature,,,,WorkOrders/WORK_ORDER_370_arena_monument_vfx_aura.md,,spec Status: READY TO IMPLEMENT
+371,Combat Audio Sfx,Ready,feature,,,,WorkOrders/WORK_ORDER_371_combat_audio_sfx.md,,spec Status: READY TO IMPLEMENT
+372,Battle Music System,Ready,feature,,,,WorkOrders/WORK_ORDER_372_battle_music_system.md,,spec Status: READY TO IMPLEMENT
+373,Critical Regression Gates,Ready,fix,,,,WorkOrders/WORK_ORDER_373_critical_regression_gates.md,,spec Status: READY TO IMPLEMENT
+374,Character Selection Ui Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_374_character_selection_ui_fix.md,,spec Status: READY TO IMPLEMENT
+375,Yarn Spinner Threading Debug Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_375_yarn_spinner_threading_debug_fix.md,,spec Status: READY TO IMPLEMENT
+376,Hero Pose Initialization,Ready,feature,,,,WorkOrders/WORK_ORDER_376_hero_pose_initialization.md,,spec Status: READY TO IMPLEMENT
+377,Dialogue Input Blocking,Ready,fix,,,,WorkOrders/WORK_ORDER_377_dialogue_input_blocking.md,,spec Status: READY TO IMPLEMENT
+378,Town Hud Modernization,Ready,feature,,,,WorkOrders/WORK_ORDER_378_town_hud_modernization.md,,spec Status: READY TO IMPLEMENT
+379,Echo Dialogue Summoning,Ready,feature,,,,WorkOrders/WORK_ORDER_379_echo_dialogue_summoning.md,,spec Status: READY TO IMPLEMENT
+380,Gear Icon Minimap Overlap,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_380_gear_icon_minimap_overlap.md,WorkOrders/WORK_ORDER_380_gear_icon_minimap_overlap.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+381,Atb Arena Cleanup,Ready,fix,,,,WorkOrders/WORK_ORDER_381_atb_arena_cleanup.md,,spec Status: READY TO IMPLEMENT
+382,Hero Hp Consolidation,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_382_hero_hp_consolidation.md,WorkOrders/WORK_ORDER_382_hero_hp_consolidation.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+383,Castle Outerworld Seam Connection,Ready,fix,,,,WorkOrders/WORK_ORDER_383_castle_outerworld_seam_connection.md,,spec Status: READY TO IMPLEMENT
+384,Castle Two Level Stairs,Ready,feature,,,,WorkOrders/WORK_ORDER_384_castle_two_level_stairs.md,,spec Status: READY TO IMPLEMENT
+385,Castle Camera Fights Geometry,Spec,fix,,,,WorkOrders/WORK_ORDER_385_castle_camera_fights_geometry.md,,"spec Status: FADE FIX LANDED (commit 4291324, COMPILE_GATE_OK) - PENDING OWNER PLAYTEST. Global, not castle-only."
+386,Battle Visualization System,Spec,feature,,,,WorkOrders/WORK_ORDER_386_battle_visualization_system.md,,spec Status: UNDERSTAND PHASE COMPLETE (documented below) - design/build pending the TARGET decision (0). Architecture recommended.
+387,Camera Relative Movement,Done,fix,,,,WorkOrders/WORK_ORDER_387_camera_relative_movement.md,,spec Status: DONE - owner-playtested working 2026-06-09 (commit acb2c80; compiled + ran in editor).
+388,Player Castle Arena Defender,Spec,feature,,,,WorkOrders/WORK_ORDER_388_player_castle_arena_defender.md,,spec Status: SPEC - implementation gated on the 2 verification questions (3). Surgical change is small; the glue depends on the verify result.
+389,Arena Defense System,Spec,feature,,,,WorkOrders/WORK_ORDER_389_arena_defense_system.md,,spec Status: SPEC FINALIZED 2026-06-09 (consolidated with owner). Data/core + venue + defense-setup + defender-spawn + patterns BUILT this session; Attack flow + AI-attacker + matchmaking remain.
+390,Battle Potion Loadout,Spec,feature,,,,WorkOrders/WORK_ORDER_390_battle_potion_loadout.md,,spec Status: SPEC - design captured; build AFTER the WO-389 defense loop is playable (deliberate scope order).
+405,Ugui Design System,Ready,feature,,,,WorkOrders/WORK_ORDER_405_ugui_design_system.md,,spec Status: READY TO IMPLEMENT (foundation + ~50% already landed - see 7 Current State)
+408,Texture Ship Audit,Spec,docs,,,,WorkOrders/WORK_ORDER_408_texture_ship_audit.md,,spec Status: SPEC / OWNER EYEBALL**  Lane 10 Build/Perf  P0  2026-06-13  By: CLI
+411,Town Hud Mockup Match,Spec,docs,,,,WorkOrders/WORK_ORDER_411_town_hud_mockup_match.md,,spec Status: BLOCKED - Depends On **WO-405** (design-system foundation). CLI must NOT pick up until unblocked.
+413,Upgradable Building Menu,Ready,docs,,,,WorkOrders/WORK_ORDER_413_upgradable_building_menu.md,,spec Status: READY TO IMPLEMENT
+414,Store Stock From Db,Spec,docs,,,,WorkOrders/WORK_ORDER_414_store_stock_from_db.md,,spec Status: SUPERSEDED - do not implement from this file.
+429,Store Stock From Db,Ready,docs,,,,WorkOrders/WORK_ORDER_429_store_stock_from_db.md,,spec Status: READY (client side) - depends on a backend GET endpoint (React repo)
+430,Handover Triage Detailed Work Orders,Ready,fix,,,,WorkOrders/WORK_ORDER_430_Handover_Triage_Detailed_Work_Orders.md,,spec Status: READY TO IMPLEMENT
+430,City Upgrades Modifiers,Ready,fix,,,,WorkOrders/WORK_ORDER_430_city_upgrades_modifiers.md,,spec Status: READY TO IMPLEMENT
+430,Comprehensive Instrumentation Tgvru,Ready,fix,,,,WorkOrders/WORK_ORDER_430_comprehensive_instrumentation_TGVRU.md,,spec Status: READY TO IMPLEMENT (active mandate)
+430,Gear Catalog From Db,Spec,docs,,,,WorkOrders/WORK_ORDER_430_gear_catalog_from_db.md,,spec Status: SPEC / NEEDS DECISION + BACKEND REPO.** Not safe to blind-build in the Unity repo alone.
+430,Offline Troop Garrison Defense,Spec,docs,,,,WorkOrders/WORK_ORDER_430_offline_troop_garrison_defense.md,,spec Status: SPEC - queued (post V1 / post Pi-loop).** Priority: V1 loop polish (NOT Pi critical path).
+430,Ui Mvvm Seam,Ready,docs,,,,WorkOrders/WORK_ORDER_430_ui_mvvm_seam.md,,spec Status: READY TO IMPLEMENT
+431,Raid Rewards Victory,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_431_raid_rewards_victory.md,WorkOrders/WORK_ORDER_431_shop_mvvm_slice.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+431,Shop Mvvm Slice,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_431_shop_mvvm_slice.md,WorkOrders/WORK_ORDER_431_shop_mvvm_slice.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+432,Building Perk Research Techtree,Ready,docs,,,,WorkOrders/WORK_ORDER_432_building_perk_research_techtree.md,,spec Status: READY TO IMPLEMENT** (owner-designed 2026-06-20; WO# provisional - confirm vs
+432,Shared Party Nameplate,Ready,feature,,,,WorkOrders/WORK_ORDER_432_shared_party_nameplate.md,,spec Status: READY TO IMPLEMENT
+432,Shop Blink Subelements,Ready,fix,,,,WorkOrders/WORK_ORDER_432_shop_blink_subelements.md,,spec Status: READY TO IMPLEMENT
+433,Shop Blink Cohesion,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_433_shop_blink_cohesion.md,WorkOrders/WORK_ORDER_433_shop_blink_cohesion.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT**  Follow-on to WO-431 (MVVM) + WO-432 (slot plates).
+433,Victory Screen Width,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_433_victory_screen_width.md,WorkOrders/WORK_ORDER_433_shop_blink_cohesion.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+433,Village2 Raid Destination,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_433_village2_raid_destination.md,WorkOrders/WORK_ORDER_433_shop_blink_cohesion.RESULT.md,RESULT filed; spec Status: SPEC - owner design sign-off needed on 3 decisions (defaults proposed so the loop can build v1).
+434,Inventory Mvvm Viewer,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_434_inventory_mvvm_viewer.md,WorkOrders/WORK_ORDER_434_inventory_mvvm_viewer.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT (phased)**  Follow-on to WO-431/432/433 (shop arc proved the pattern).
+435,Blink Prefab View Migration,Ready,feature,,,,WorkOrders/WORK_ORDER_435_blink_prefab_view_migration.md,,spec Status: SPEC - NOT READY TO IMPLEMENT.
+435,Bridge Navmesh Clip,Ready,fix,,,,WorkOrders/WORK_ORDER_435_bridge_navmesh_clip.md,,spec Status: READY TO IMPLEMENT
+435,Weapon Grip Orientation,Spec,fix,,,,WorkOrders/WORK_ORDER_435_weapon_grip_orientation.md,,"spec Status: SUPERSEDED by WO-478 (2026-07-05)** - the 2026-06-18 ""FIX"" inverted native pivot trust and"
+436,Enemy Green No Animation,Ready,fix,,,,WorkOrders/WORK_ORDER_436_enemy_green_no_animation.md,,spec Status: READY TO IMPLEMENT
+436,Quest Board,Ready,feature,,,,WorkOrders/WORK_ORDER_436_quest_board.md,,"spec Status: SPEC (READY TO GROOM - not yet READY TO IMPLEMENT; see ""Open decision"" below)"
+437,Bar Overflow Rectmask,Ready,fix,,,,WorkOrders/WORK_ORDER_437_bar_overflow_rectmask.md,,spec Status: READY TO IMPLEMENT
+437,Combat Hud Tech Skin,Ready,feature,,,,WorkOrders/WORK_ORDER_437_combat_hud_tech_skin.md,,spec Status: READY TO IMPLEMENT**  Lane 4 UI/HUD  P1  Owner directive 2026-06-12
+437,Input State Gate,Ready,feature,,,,WorkOrders/WORK_ORDER_437_input_state_gate.md,,spec Status: READY TO IMPLEMENT** (owner-confirmed rule 2026-06-17). Editor-closed (gate + felt-test).
+438,Base Loop Rca Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_438_base_loop_rca_fixes.md,,spec Status: READY TO IMPLEMENT.** Editor-closed (gate + felt-test). Each item below is RCA'd (read-only
+438,Compass Minimap Widget,Ready,fix,,,,WorkOrders/WORK_ORDER_438_compass_minimap_widget.md,,spec Status: READY TO IMPLEMENT
+438,Global Tech Skin Rollout,Ready,docs,,,,WorkOrders/WORK_ORDER_438_global_tech_skin_rollout.md,,spec Status: READY TO IMPLEMENT (after WO-437)**  Lane 4 UI/HUD  P2  Owner directive 2026-06-12
+439,Left Slide Panel,Ready,feature,,,,WorkOrders/WORK_ORDER_439_left_slide_panel.md,,spec Status: READY TO IMPLEMENT
+439,Quest Board Collection,Ready,feature,,,,WorkOrders/WORK_ORDER_439_quest_board_collection.md,,"spec Status: READY TO IMPLEMENT** (feature). Editor-closed. Owner: ""quests grouped on a quest board from"
+440,Atb Wiring,Ready,fix,,,,WorkOrders/WORK_ORDER_440_atb_wiring.md,,"spec Status: READY TO IMPLEMENT.** Editor-closed (gate). Owner: ""refine ATB - nothing really touches it,"
+440,Resources Collapse Right,Ready,feature,,,,WorkOrders/WORK_ORDER_440_resources_collapse_right.md,,spec Status: READY TO IMPLEMENT
+441,Raid Rescue Capture City Loop,Spec,feature,,,,WorkOrders/WORK_ORDER_441_raid_rescue_capture_city_loop.md,,"spec Status: DESIGN SPEC (phased).** Feature. The ""next natural step"" (owner 2026-06-17). Ties the raid"
+442,Buildmode Wall Pay Validation,Ready,fix,,,,WorkOrders/WORK_ORDER_442_buildmode_wall_pay_validation.md,,spec Status: READY TO IMPLEMENT** (owner 2026-06-17). Editor-closed (gate + felt-test).
+443,Web Remote Trace Audit,Spec,fix,,,,WorkOrders/WORK_ORDER_443_web_remote_trace_audit.md,,"spec Status: DESIGN SPEC.** Owner (2026-06-17): ""for the web version we need some audit in place - we'll"
+444,Wrap Core Deep,Spec,fix,,,,WorkOrders/WORK_ORDER_444_wrap_core_deep.md,,"spec Status: STANDING STANDARD + phased coverage pass.** Owner (2026-06-17): ""the whole core should be"
+445,Remote Feature Flags,Spec,feature,,,,WorkOrders/WORK_ORDER_445_remote_feature_flags.md,,"spec Status: DESIGN SPEC.** Owner (2026-06-17): ""enough safety flags where you can remotely turn off a"
+446,Front Door Cold Open,Ready,feature,,,,WorkOrders/WORK_ORDER_446_front_door_cold_open.md,,"spec Status: READY TO IMPLEMENT.** Owner-directed (2026-06-17), storyboarded live + locked (v2)."
+447,Hero Select Polish,Ready,feature,,,,WorkOrders/WORK_ORDER_447_hero_select_polish.md,,spec Status: READY TO IMPLEMENT** (design locked; functional verification done by agent 2026-06-17).
+448,Hub Outerworld Seam Natural Transition,Ready,fix,,,,WorkOrders/WORK_ORDER_448_hub_outerworld_seam_natural_transition.md,,"spec Status: READY TO IMPLEMENT.** Owner-reported + agent-RCA'd 2026-06-17. Lane: World/seam (CastleHubBuilder,"
+449,World Layout Distance Gated,Spec,fix,,,,WorkOrders/WORK_ORDER_449_world_layout_distance_gated.md,,"spec Status: DESIGN SPEC (do-it-right pass).** Owner-directed 2026-06-17 (""B - always do it right not fast"")."
+450,Runtime Injector Fixes,Ready,fix,,,,WorkOrders/WORK_ORDER_450_runtime_injector_fixes.md,,"spec Status: READY TO IMPLEMENT.** RCA-verified 2026-06-17. Lane: Core injectors. **No bake, no scene edit** -"
+451,Intro Shorten Bg Images No Shooting Stars,Ready,docs,,,,WorkOrders/WORK_ORDER_451_intro_shorten_bg_images_no_shooting_stars.md,,spec Status: READY TO IMPLEMENT
+452,Autopilot Hardening Oracles,Ready,fix,,,,WorkOrders/WORK_ORDER_452_autopilot_hardening_oracles.md,,"spec Status: READY TO IMPLEMENT**  Lane: QA/Tooling (DevTools - isolated, no gameplay scene files)  P1"
+453,Dev Capture Toolkit,Ready,fix,,,,WorkOrders/WORK_ORDER_453_dev_capture_toolkit.md,,"spec Status: READY TO IMPLEMENT**  Lane: QA/Tooling  P1  Owner directive 2026-06-13 (Grok-seeded, CLI-synthesized)"
+453,Outerworld Gated Regions,Ready,feature,,,,WorkOrders/WORK_ORDER_453_outerworld_gated_regions.md,,"spec Status: READY TO IMPLEMENT (Region 1 first - prove ONE, then replicate)"
+453,Troops,Spec,fix,,,,WorkOrders/WORK_ORDER_453_troops.md,,"spec Status: SPEC - owner template + relayed XP design + creative review, synthesized.** P1, Lane"
+454,Faction Base Scene Generator,Ready,docs,,,,WorkOrders/WORK_ORDER_454_faction_base_scene_generator.md,,spec Status: READY TO IMPLEMENT**  Lane: Architect / World  P1  Est: 1-2 days CLI
+454,Unified Quest System,Ready,feature,,,,WorkOrders/WORK_ORDER_454_unified_quest_system.md,,spec Status: READY TO IMPLEMENT
+455,Custom Dialogue System,Ready,feature,,,,WorkOrders/WORK_ORDER_455_custom_dialogue_system.md,,spec Status: READY TO IMPLEMENT**  Owner executive decision (2026-06-20)
+456,Wardrobe Cosmetics Data,Ready,docs,,,,WorkOrders/WORK_ORDER_456_wardrobe_cosmetics_data.md,,spec Status: SPEC DRAFT (not ready to implement - owner to ratify data shape first)
+465,Premium Mobile Inventory,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_465_premium_mobile_inventory.md,WorkOrders/WORK_ORDER_465_premium_mobile_inventory.RESULT.md,RESULT filed; spec Status:  done (gate validated + committed locally)
+466,Gear Display Equip And Anim,Spec,fix,,,,WorkOrders/WORK_ORDER_466_gear_display_equip_and_anim.md,,spec Status: DRAFT (spec) - finalize once the usage audit lands + imports are done.
+467,Moat Bridges Seam Geometry,Ready,feature,,,,WorkOrders/WORK_ORDER_467_moat_bridges_seam_geometry.md,,"spec Status: SPEC / DESIGN-READY  World/Environment lane (serial, editor-closed bakes)  extends WO-467 RegionGate."
+467,Region Gate System,Ready,docs,,,,WorkOrders/WORK_ORDER_467_region_gate_system.md,,spec Status: READY TO IMPLEMENT
+468,Castle To Outerworld Redesign,Ready,feature,,,,WorkOrders/WORK_ORDER_468_castle_to_outerworld_redesign.md,,spec Status: READY TO IMPLEMENT (SME investigation in progress)
+469,Shop Type Filter Buttons,Ready,docs,,,,WorkOrders/WORK_ORDER_469_shop_type_filter_buttons.md,,"spec Status: READY TO IMPLEMENT**  Drafted by read-only agent (2026-06-21), reconciled to code."
+470,Hud Battle Context,Ready,docs,,,,WorkOrders/WORK_ORDER_470_hud_battle_context.md,,"spec Status: READY TO IMPLEMENT**  Drafted by read-only agent (2026-06-21), reconciled to code."
+471,Panel Zorder Audit,Ready,fix,,,,WorkOrders/WORK_ORDER_471_panel_zorder_audit.md,,"spec Status: READY TO IMPLEMENT**  Drafted by read-only agent (2026-06-21), reconciled to code."
+472,Bot Dev Instant Spawn,Ready,feature,,,,WorkOrders/WORK_ORDER_472_bot_dev_instant_spawn.md,,spec Status: PART A SHIPPED  PART B READY TO IMPLEMENT**  Owner request 2026-06-21.
+473,Petselect Bypass,Ready,fix,,,,WorkOrders/WORK_ORDER_473_petselect_bypass.md,,"spec Status: READY TO IMPLEMENT** (held until editor closed)  F8 ticket (owner): ""PetSelect should be bypassed."""
+474,Audio Master Toggle,Ready,fix,,,,WorkOrders/WORK_ORDER_474_audio_master_toggle.md,,"spec Status: READY TO IMPLEMENT** (held until editor closed)  F8 ticket (owner): ""audio on/off doesn't work."""
+475,Stronghold To Player Settlement Conversion,Ready,feature,,,,WorkOrders/WORK_ORDER_475_stronghold_to_player_settlement_conversion.md,,spec Status: READY TO IMPLEMENT (spec complete)
+476,Building Perk Research Surfacing,Ready,feature,,,,WorkOrders/WORK_ORDER_476_building_perk_research_surfacing.md,,spec Status: READY TO IMPLEMENT
+477,Diag Log Level Noise,Ready,fix,,,,WorkOrders/WORK_ORDER_477_diag_log_level_noise.md,,spec Status: READY TO IMPLEMENT** (held until editor closed)  F8 tickets #3 + #7.
+478,Weapon Grip Trust Native Pivot,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_478_weapon_grip_trust_native_pivot.md,WorkOrders/WORK_ORDER_478_weapon_grip_trust_native_pivot.RESULT.md,RESULT filed; spec Status: IMPLEMENTED @ `C:\EoA` (2026-07-05)** - this doc is the **CLI replication playbook** for Claude/UI to route to CLI on any branch/worktree. Do **not** re-debug the moat or re-litigate WO-435; apply these steps verbatim.
+479,Scene Chunk Composer,Ready,feature,,,,WorkOrders/WORK_ORDER_479_scene_chunk_composer.md,,"spec Status: DESIGN - owner north-star (2026-06-21), ready to scope**  Supersedes the one-off Village2 builder approach."
+480,Village2 Connected Interior Generator,Spec,feature,,,,WorkOrders/WORK_ORDER_480_village2_connected_interior_generator.md,,"spec Status: SOLVED (pass 4, 2026-06-21) - interior traverses arrival -> chokepoint -> keep ramp"
+481,Knight Orcs V1 Vertical,Ready,docs,,,,WorkOrders/WORK_ORDER_481_knight_orcs_v1_vertical.md,,spec Status: READY TO IMPLEMENT (Phase 1 gate first)
+482,Battlearena Bounded Json Module,Spec,feature,,,,WorkOrders/WORK_ORDER_482_battlearena_bounded_json_module.md,,"spec Status: DESIGN LOCKED (owner-directed, 2026-06-23). Supersedes the far-offset arena hack"
+482,Overworld Encounter Realtime Battle,Spec,docs,,,,WorkOrders/WORK_ORDER_482_overworld_encounter_realtime_battle.md,,"spec Status: DESIGN SETTLED (owner 2026-06-23) - slice plan below; confirm the ONE fork in B, then implement."
+483,V1 Roadmap And Queued Silos,Spec,docs,,,,WorkOrders/WORK_ORDER_483_v1_roadmap_and_queued_silos.md,,no Status line in spec
+485,Winding Dungeon Generator,Ready,feature,,,,WorkOrders/WORK_ORDER_485_winding_dungeon_generator.md,,spec Status: DESIGN-COMPLETE / READY TO IMPLEMENT - BUT QUEUED BEHIND THE KNIGHT.
+486,Store Preview Pane,Ready,feature,,,,WorkOrders/WORK_ORDER_486_store_preview_pane.md,,spec Status: READY TO IMPLEMENT
+490,Offset Forge Alignment Tool,Ready,feature,,,,WorkOrders/WORK_ORDER_490_offset_forge_alignment_tool.md,,spec Status: READY TO IMPLEMENT (slice 1)  DevTools/Editor lane (isolated)  owner-greenlit 2026-06-23
+491,Orc Family Animation Set,Ready,feature,,,,WorkOrders/WORK_ORDER_491_orc_family_animation_set.md,,spec Status: SPEC / READY  Combat/Animation lane  owner-requested 2026-06-23 (felt-test in BattleArena)
+492,V2 Enemy Seam Traversal Grok,Ready,feature,,,,WorkOrders/WORK_ORDER_492_v2_enemy_seam_traversal_grok.md,,spec Status: TABLED / READY FOR BOTS  V2  Combat/AI + World lane  captured 2026-06-23 (Grok review)
+493,Combat Feedback Game Feel,Ready,feature,,,,WorkOrders/WORK_ORDER_493_combat_feedback_game_feel.md,,spec Status: SPEC / READY  Combat/Presentation lane  owner-requested 2026-06-23 (arena felt-test)
+494,Arena Combat Design Grok,Spec,feature,,,,WorkOrders/WORK_ORDER_494_arena_combat_design_grok.md,,spec Status: DESIGN / TABLED  Combat lane  captured 2026-06-23 (Grok review of the open-kite arena)
+495,Themed Arena Scene,Ready,feature,,,,WorkOrders/WORK_ORDER_495_themed_arena_scene.md,,"spec Status: SPEC / BUILD-READY (creative agent, 2026-06-23)  Arena/Presentation lane"
+496,Game Feel Research,Spec,feature,,,,WorkOrders/WORK_ORDER_496_game_feel_research.md,,"spec Status: RESEARCH / SEQUENCED  Combat+Economy feel  research agent, 2026-06-23 (source-backed)"
+497,Combat Feedback Reuse Map,Spec,feature,,,,WorkOrders/WORK_ORDER_497_combat_feedback_reuse_map.md,,"spec Status: REFERENCE / BINDING before any WO-493/494/496 work  inventory agent, 2026-06-23"
+498,Battle Ui Layout,Spec,feature,,,,WorkOrders/WORK_ORDER_498_battle_ui_layout.md,,spec Status: SPEC  HUD/Presentation lane  owner mockup 2026-06-23 (the visual TARGET)
+499,Biome Arena Backdrops,Spec,feature,,,,WorkOrders/WORK_ORDER_499_biome_arena_backdrops.md,,spec Status: SPEC  Arena/Presentation lane  owner 2026-06-23 (art + vision delivered)
+500,Weapon Armor Balance,Ready,feature,,,,WorkOrders/WORK_ORDER_500_weapon_armor_balance.md,,spec Status: PROPOSAL / DESIGN - READY FOR OWNER REVIEW (not yet READY TO IMPLEMENT)
+501,Store View Redesign,Ready,feature,,,,WorkOrders/WORK_ORDER_501_store_view_redesign.md,,spec Status: PROPOSAL / READY TO IMPLEMENT (DESIGN pass - read-only survey done)
+502,Weapon Vfx Differentiation,Ready,feature,,,,WorkOrders/WORK_ORDER_502_weapon_vfx_differentiation.md,,spec Status: READY TO IMPLEMENT
+503,Single Hero Select,Ready,fix,,,,WorkOrders/WORK_ORDER_503_single_hero_select.md,,spec Status: READY TO IMPLEMENT
+504,Battle Vfx Wow,Ready,feature,,,,WorkOrders/WORK_ORDER_504_battle_vfx_wow.md,,"spec Status: READY TO IMPLEMENT  VFX/Combat lane  owner directive 2026-06-24 (""most wow, we do right not easy"")"
+505,Battle Closing,Done,fix,,,,WorkOrders/WORK_ORDER_505_battle_closing.md,,spec Status: DONE (gate + DataRegression verified; owner felt-verify pending)  Combat/Arena lane  2026-06-24
+506,Battle Arena Scene Rebuild,Ready,feature,,,,WorkOrders/WORK_ORDER_506_battle_arena_scene_rebuild.md,,spec Status: READY TO IMPLEMENT (all decisions resolved owner+Grok 2026-06-24)  World/Arena lane  2026-06-24
+507,Battle Hud 9Zone Polish,Ready,feature,,,,WorkOrders/WORK_ORDER_507_battle_hud_9zone_polish.md,,spec Status: READY TO IMPLEMENT (all decisions resolved owner+Grok 2026-06-24)  HUD/Presentation lane  2026-06-24
+508,Normalize Locomotion,Ready,fix,,,,WorkOrders/WORK_ORDER_508_normalize_locomotion.md,,spec Status: READY TO IMPLEMENT (deferred - do when the animation system is touched deliberately)  Animation lane  2026-06-24
+509,Four Gate Seam Expansion,Ready,feature,,,,WorkOrders/WORK_ORDER_509_four_gate_seam_expansion.md,,spec Status: READY TO IMPLEMENT (player crossing)  World/Seam lane  2026-06-24
+510,Instantiation Attach Override,Ready,feature,,,,WorkOrders/WORK_ORDER_510_instantiation_attach_override.md,,spec Status: READY TO IMPLEMENT (owner greenlit 2026-06-24)  Hero/Equip lane  feeds WO-490 (Offset Forge product)
+511,Vfx Parade Browser,Ready,feature,,,,WorkOrders/WORK_ORDER_511_vfx_parade_browser.md,,spec Status: READY TO IMPLEMENT (owner-requested 2026-06-24)  Tooling/VFX lane  editor-only
+512,Lockon Camera,Ready,feature,,,,WorkOrders/WORK_ORDER_512_lockon_camera.md,,"spec Status: READY TO IMPLEMENT (owner picked ""highest value"" 2026-06-24)  Combat/Camera lane  flag `ff.lockon` (default OFF until proven)"
+513,Coordinated Family Combat,Ready,feature,,,,WorkOrders/WORK_ORDER_513_coordinated_family_combat.md,,"spec Status: READY TO IMPLEMENT (owner-driven, felt-test 2026-06-24)  Combat/AI lane  the ""real feature"" slice (vs the quick pathing/role tuning done inline)"
+514,Tower Cap And Saved Echoes,Spec,feature,,,,WorkOrders/WORK_ORDER_514_tower_cap_and_saved_echoes.md,,"spec Status: DESIGN CAPTURED (owner felt-test brain-dump 2026-06-25, F8)  Economy/Defense lane  NOT yet implemented (needs owner confirm + deliberate build)"
+515,Tower Target Priority,Ready,feature,,,,WorkOrders/WORK_ORDER_515_tower_target_priority.md,,spec Status: CAPTURED (design in hand; not yet READY - one design decision open)
+516,Inventory Equip And Restyle,Spec,feature,,,,WorkOrders/WORK_ORDER_516_inventory_equip_and_restyle.md,,"spec Status: CAPTURED (F8 ticket, 2026-06-26)  **Silo:** UI/Presentation (code)  **Type:** EXISTING (reuse, not greenfield)"
+517,Arena Return Music Context,Ready,fix,,,,WorkOrders/WORK_ORDER_517_arena_return_music_context.md,,spec Status: RCA-DONE / READY (data-proven)  **Silo:** Audio (code)  **Type:** EXISTING (bug)  **Priority:** Med (V2 arena loop)
+541,Hud One Model,Ready,feature,,,,WorkOrders/WORK_ORDER_541_hud_one_model.md,,spec Status: READY TO IMPLEMENT (foundation lane)
+542,Shop Icon Rendering,Ready,feature,,,,WorkOrders/WORK_ORDER_542_shop_icon_rendering.md,,spec Status: READY TO IMPLEMENT
+543,Rings Amulets And Armor Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_543_rings_amulets_and_armor_vfx.md,,spec Status: READY TO IMPLEMENT
+544,Class Armor Catalog Wirein,Ready,docs,,,,WorkOrders/WORK_ORDER_544_class_armor_catalog_wirein.md,,spec Status: READY TO IMPLEMENT
+545,Editmode Pre Existing Test Failures,Ready,fix,,,,WorkOrders/WORK_ORDER_545_editmode_pre_existing_test_failures.md,,spec Status: READY TO IMPLEMENT
+550,Village2 Raid Polish,Ready,docs,,,,WorkOrders/WORK_ORDER_550_village2_raid_polish.md,,spec Status: READY TO IMPLEMENT** (implemented in this worktree; awaiting orchestrator gate + commit + bake)
+551,Geometry First Weapon Seating,Ready,feature,,,,WorkOrders/WORK_ORDER_551_geometry_first_weapon_seating.md,,spec Status: READY TO IMPLEMENT (runtime model implemented in this WO; Forge-preview slice specced as follow-up)
+552,Store Inventory Obsidian Alignment,Ready,fix,,,,WorkOrders/WORK_ORDER_552_store_inventory_obsidian_alignment.md,,spec Status: READY TO IMPLEMENT (audit complete; one fix applied this pass)
+553,Jeweler Jewelry Crafting,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_553_jeweler_jewelry_crafting.md,WorkOrders/WORK_ORDER_553_jeweler_jewelry_crafting.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+554,Shared Obsidian Panel Chrome,Ready,feature,,,,WorkOrders/WORK_ORDER_554_shared_obsidian_panel_chrome.md,,spec Status: READY (implemented in worktree; awaiting orchestrator gate + commit)
+555,Offline Harvest Relocation,Spec,feature,,,,WorkOrders/WORK_ORDER_555_offline_harvest_relocation.md,,spec Status: IMPLEMENTED (edit-only; orchestrator gates + commits)
+556,Combat Rewards And Challenge,Spec,feature,,,,WorkOrders/WORK_ORDER_556_combat_rewards_and_challenge.md,,spec Status: IMPLEMENTED (CLI to batch-gate + commit)
+557,Full Yarn Removal,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_557_full_yarn_removal.md,WorkOrders/WORK_ORDER_557_full_yarn_removal.RESULT.md,"RESULT filed; spec Status: Phase 1 DONE  Phase 2 PARTIAL (faithful subset migrated + enabler-gaps specced)  Phase 3 DEFERRED (package-rip specced, NOT executed)"
+558,Quest Pack,Spec,fix,,,,WorkOrders/WORK_ORDER_558_quest_pack.md,,spec Status: IMPLEMENTED (data + minimal wiring) - pending CLI batch-gate + commit by explicit path
+559,Hero Select Carousel,Spec,fix,,,,WorkOrders/WORK_ORDER_559_hero_select_carousel.md,,spec Status: IMPLEMENTED (agent worktree - not gated/committed; orchestrator reconciles)
+560,Vfx Usage Pass,Ready,docs,,,,WorkOrders/WORK_ORDER_560_vfx_usage_pass.md,,"spec Status: READY TO IMPLEMENT (spec from read-only VFX review, 2026-06-28)"
+561,Intro And Lore,Spec,feature,,,,WorkOrders/WORK_ORDER_561_intro_and_lore.md,,spec Status:  DONE (intro implemented + skippable; lore bible written; image-prompt sidecar authored)
+562,Ui Theme Consistency,Spec,docs,,,,WorkOrders/WORK_ORDER_562_ui_theme_consistency.md,,"spec Status: IMPLEMENTED (worktree `agent-a44895a7ab0d961c5`, branch `wip/village2-and-f8-tickets`)"
+563,Hud Cleanup And Access,Spec,feature,,,,WorkOrders/WORK_ORDER_563_hud_cleanup_and_access.md,,spec Status: IMPLEMENTED (edit-only agent; NOT gated/committed - orchestrator batch-gates + commits)
+564,Income And Quest Rewards,Spec,docs,,,,WorkOrders/WORK_ORDER_564_income_and_quest_rewards.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed - CLI reconciles)
+565,Small Ui Fixes,Spec,fix,,,,WorkOrders/WORK_ORDER_565_small_ui_fixes.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed by this agent)
+566,Talent Effect Interpreter,Spec,feature,,,,WorkOrders/WORK_ORDER_566_talent_effect_interpreter.md,,spec Status: IMPLEMENTED (headless-verify + felt-verify pending)
+567,Equip To Visual,Spec,docs,,,,WorkOrders/WORK_ORDER_567_equip_to_visual.md,,spec Status: IMPLEMENTED (edit-only worktree; NOT gated/committed - orchestrator batch-gates)
+568,Perf Material Cache,Spec,fix,,,,WorkOrders/WORK_ORDER_568_perf_material_cache.md,,spec Status: IMPLEMENTED (edit-only worktree; CLI to gate + commit)
+569,Video Intro,Spec,feature,,,,WorkOrders/WORK_ORDER_569_video_intro.md,,spec Status: IMPLEMENTED (pending CLI gate + commit)
+570,Title Tagline Canon,Ready,docs,,,,WorkOrders/WORK_ORDER_570_title_tagline_canon.md,,"spec Status: IMPLEMENTED (worktree `agent-a6c54a4c278a6686e`, branch tip ea087782) - ready for reconcile/gate by CLI."
+571,Audio Pass,Spec,docs,,,,WorkOrders/WORK_ORDER_571_audio_pass.md,,spec Status: IMPLEMENTED (edit-only; NOT gated/committed - orchestrator reconciles)
+572,Resource Flash Throttle,Spec,feature,,,,WorkOrders/WORK_ORDER_572_resource_flash_throttle.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed by this agent)
+573,Inventory Portrait Grid Fix,Spec,fix,,,,WorkOrders/WORK_ORDER_573_inventory_portrait_grid_fix.md,,spec Status: IMPLEMENTED (edit-only; awaiting CLI batch-gate + commit + PO felt-verify)
+574,Talent Quickswap Fix,Spec,fix,,,,WorkOrders/WORK_ORDER_574_talent_quickswap_fix.md,,spec Status: IMPLEMENTED (edit-only agent; not gated/committed - orchestrator batch-gates per 11)
+575,Maxed Button Inert,Spec,docs,,,,WorkOrders/WORK_ORDER_575_maxed_button_inert.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed - orchestrator reconciles)
+576,Building Talk Fix,Spec,fix,,,,WorkOrders/WORK_ORDER_576_building_talk_fix.md,,spec Status: IMPLEMENTED (edit-only; NOT gated/committed - for orchestrator reconcile)
+577,Ingame Seating Editor,Spec,feature,,,,WorkOrders/WORK_ORDER_577_ingame_seating_editor.md,,spec Status: IMPLEMENTED (this branch worktree) - pending CLI batch-gate + commit
+578,Inventory Owned Gear,Spec,fix,,,,WorkOrders/WORK_ORDER_578_inventory_owned_gear.md,,"spec Status: IMPLEMENTED (worktree `agent-a62ea88573c0c0de1`, branch base = `wip/village2-and-f8-tickets` tip `4f51e085`). Not gated/committed (per task)."
+579,Wave Loop Fix,Spec,fix,,,,WorkOrders/WORK_ORDER_579_wave_loop_fix.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed - orchestrator batch-gates + commits)
+580,White Bar Fix,Spec,fix,,,,WorkOrders/WORK_ORDER_580_white_bar_fix.md,,spec Status: IMPLEMENTED (CLI to gate/commit; PO to felt-verify + close)
+581,Hero Animator Recache,Spec,feature,,,,WorkOrders/WORK_ORDER_581_hero_animator_recache.md,,spec Status: IMPLEMENTED (edit-only; not gated/committed - orchestrator batch-gates)
+584,Dungeon Outpost Arena Consolidation,Ready,docs,,,,WorkOrders/WORK_ORDER_584_dungeon_outpost_arena_consolidation.md,,spec Status: READY TO IMPLEMENT (design owner-ratified 2026-06-28)
+584,B Dungeon Generator Design,Ready,feature,,,,WorkOrders/WORK_ORDER_584b_dungeon_generator_design.md,,spec Status: READY TO IMPLEMENT (design only - this WO writes NO `.cs`; implementation is the gated follow-up 584c)
+585,Inventory Equip Feedback,Ready,fix,,,,WorkOrders/WORK_ORDER_585_inventory_equip_feedback.md,,spec Status: READY TO IMPLEMENT (held for owner green-light - overlaps WO-582 Gear Preview)
+585,Knight Animation Driven Abilities,Spec,feature,,,,WorkOrders/WORK_ORDER_585_knight_animation_driven_abilities.md,,spec Status: DESIGN - owner review pending (drafted 2026-07-04)
+586,Battle Animation Posture Directional Death,Spec,feature,,,,WorkOrders/WORK_ORDER_586_battle_animation_posture_directional_death.md,,spec Status: IMPLEMENTED - pending CompileGate + controller rebuild + PO felt-verify (2026-07-05)
+586,Fleet Save Probe Isolation,Ready,fix,,,,WorkOrders/WORK_ORDER_586_fleet_save_probe_isolation.md,,"spec Status: READY TO IMPLEMENT** (small, test-harness only - no shipping code)"
+587,Population Echo Growth,Ready,feature,,,,WorkOrders/WORK_ORDER_587_population_echo_growth.md,,"spec Status: READY TO IMPLEMENT (owner spec, drafted w/ Grok, 2026-06-29)  Economy/Workforce lane  data-driven"
+588,Game Guide Tutorial Codex,Ready,feature,,,,WorkOrders/WORK_ORDER_588_game_guide_tutorial_codex.md,,spec Status: READY TO IMPLEMENT (owner request 2026-06-29)  UI/Onboarding lane  data-driven content
+589,Inventory Overhaul,Ready,fix,,,,WorkOrders/WORK_ORDER_589_inventory_overhaul.md,,spec Status: READY TO IMPLEMENT (CLI-owned UI pass)
+590,Castle Water Dip Fill And Fish,Ready,fix,,,,WorkOrders/WORK_ORDER_590_castle_water_dip_fill_and_fish.md,,spec Status: READY TO IMPLEMENT (environment lane - file-disjoint from inventory)
+590,Knight Shield Grip Native Pivot,Spec,fix,,,,WorkOrders/WORK_ORDER_590_knight_shield_grip_native_pivot.md,,spec Status: IMPLEMENTED @ `C:\EoA` (shield path live in `EquipmentController` since 2026-06-19 Blink fix; carry-state/sheath 2026-07-04)** - this doc is the **CLI replication playbook** for Claude/UI. Apply verbatim; do **not** re-debug moat/castle geometry (closed).
+591,Base Defense V2,Spec,fix,,,,WorkOrders/WORK_ORDER_591_base_defense_v2.md,,"spec Status: DESIGN CAPTURED - build with the V2 base-building layer (`ff.basebuilding`), NOT V1 polish."
+592,Seating Editor Embedded Viewer,Ready,feature,,,,WorkOrders/WORK_ORDER_592_seating_editor_embedded_viewer.md,,spec Status: READY TO IMPLEMENT
+593,Wide Gates Cliffs Wayfinding,Ready,feature,,,,WorkOrders/WORK_ORDER_593_wide_gates_cliffs_wayfinding.md,,spec Status: READY TO IMPLEMENT
+594,Measure Driven Castle Base,Ready,feature,,,,WorkOrders/WORK_ORDER_594_measure_driven_castle_base.md,,spec Status: CAPTURED (idea) - not yet ready to implement
+595,Kaykit Dungeon Kit,Ready,docs,,,,WorkOrders/WORK_ORDER_595_kaykit_dungeon_kit.md,,spec Status: READY TO IMPLEMENT (design complete; pack present + measured)
+596,Player Bug Report,Ready,fix,,,,WorkOrders/WORK_ORDER_596_player_bug_report.md,,spec Status: READY TO IMPLEMENT
+597,Bot Popup Close Oracle,Ready,docs,,,,WorkOrders/WORK_ORDER_597_bot_popup_close_oracle.md,,spec Status: READY TO IMPLEMENT
+598,Vendor Wares Content Mapping,Ready,docs,,,,WorkOrders/WORK_ORDER_598_vendor_wares_content_mapping.md,,spec Status: READY TO IMPLEMENT
+599,Combat Locks Modals,Ready,fix,,,,WorkOrders/WORK_ORDER_599_combat_locks_modals.md,,spec Status: READY TO IMPLEMENT
+600,Uncraftable Recipe Ingredients,Ready,fix,,,,WorkOrders/WORK_ORDER_600_uncraftable_recipe_ingredients.md,,spec Status: READY TO IMPLEMENT
+601,Npc Portrait Art Brief,Ready,feature,,,,WorkOrders/WORK_ORDER_601_npc_portrait_art_brief.md,,spec Status: READY FOR ART (owner generates; then a 5-minute data hookup)
+602,Way Back Home,Ready,fix,,,,WorkOrders/WORK_ORDER_602_way_back_home.md,,"spec Status: READY TO IMPLEMENT - P1, blocks the core loop (venture out -> CANNOT return home)"
+603,Currency Skin Resolver,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_603_currency_skin_resolver.md,WorkOrders/WORK_ORDER_603_currency_skin_resolver.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+606,Spawn Regions And Squad Tactics,In Implementation,feature,,,,WorkOrders/WORK_ORDER_606_spawn_regions_and_squad_tactics.md,,"spec Status: IMPLEMENTED (V1, lean, data-driven). Not gated/built/committed by the implementing agent - hand to CLI for the batch gate + commit."
+607,Seam 4Side Traversal,Ready,feature,,,,WorkOrders/WORK_ORDER_607_seam_4side_traversal.md,,spec Status: READY TO IMPLEMENT (with owner felt-verify gate).** Provisional number - slot into
+608,World Merge Single Scene,Ready,feature,,,,WorkOrders/WORK_ORDER_608_world_merge_single_scene.md,,spec Status: READY TO IMPLEMENT.** Owner-approved architecture pivot (2026-07-04): one seamless scene =
+609,Battle Hud Prefab Layout,Ready,docs,,,,WorkOrders/WORK_ORDER_609_battle_hud_prefab_layout.md,,spec Status: READY TO IMPLEMENT (Phase 1 in flight)
+610,Camera Tighter Sideview Combat,Ready,feature,,,,WorkOrders/WORK_ORDER_610_camera_tighter_sideview_combat.md,,"spec Status: READY TO IMPLEMENT - **owner-ratified 2026-07-05** (extend-SMC  3/4-angled start  pacing default-ON ~0.8). **WO number 610 is PROVISIONAL** (authority is `MASTER_PIPELINES_BACKLOG`, not the filesystem; confirm on mint)."
+611,Combat Hud Build,Ready,feature,,,,WorkOrders/WORK_ORDER_611_combat_hud_build.md,,spec Status: READY TO IMPLEMENT - overnight build. Owner-designed live 2026-07-05 (interactive view iteration).
+612,Build Timers Wire,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_612_build_timers_wire.md,WorkOrders/WORK_ORDER_612_build_timers_wire.RESULT.md,"RESULT filed; spec Status: IMPLEMENTING (CLI, same session as ratification)."
+613,B Outpost Prefab Chunk Assembly,Ready,feature,,,,WorkOrders/WORK_ORDER_613B_outpost_prefab_chunk_assembly.md,,"spec Status: READY TO IMPLEMENT - owner re-ruling F8-28 (2026-07-08): *""the outpost should be"
+613,Tower Vfx Moments,Ready,feature,,,,WorkOrders/WORK_ORDER_613_tower_vfx_moments.md,,"spec Status: READY TO IMPLEMENT - overnight creative lane (owner-requested 2026-07-06,"
+614,Skill Tree Solo Rework,Ready,feature,,,,WorkOrders/WORK_ORDER_614_skill_tree_solo_rework.md,,"spec Status: RULED - READY TO IMPLEMENT (rulings 1, 2, 2a, 3 received; one open detail: T4 signature placement)"
+670,Motion Caster Tool,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_670_motion_caster_tool.md,WorkOrders/WORK_ORDER_670_motion_caster_tool.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+671,Action Bundle Rows,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_671_action_bundle_rows.md,WorkOrders/WORK_ORDER_671_action_bundle_rows.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+672,Structure Damage Lifecycle,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_672_structure_damage_lifecycle.md,WorkOrders/WORK_ORDER_672_structure_damage_lifecycle.RESULT.md,RESULT filed; spec Status: SPEC - awaiting owner go (NEW feature per the QA gate; design requested by owner 2026-07-11:
+673,Strategic Building Placement,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_673_strategic_building_placement.md,WorkOrders/WORK_ORDER_673_strategic_building_placement.RESULT.md,"RESULT filed; spec Status: RULED + IN IMPLEMENTATION (owner go 2026-07-11 ""lets do it. sounds great"")."
+674,Player Wall System,Ready,feature,,,,WorkOrders/WORK_ORDER_674_player_wall_system.md,,"spec Status: READY TO IMPLEMENT** (owner directive 2026-07-11: ""let players create their own walls -"
+675,Building Upgrade Panel Obsidian Redesign,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_675_building_upgrade_panel_obsidian_redesign.md,WorkOrders/WORK_ORDER_675_building_upgrade_panel_obsidian_redesign.RESULT.md,"RESULT filed; spec Status: READY TO IMPLEMENT** (owner approved the mockup 2026-07-11: ""yes so much clearer"")."
+676,Skill Tree Strategic Redesign,Ready,feature,,,,WorkOrders/WORK_ORDER_676_skill_tree_strategic_redesign.md,,"spec Status: READY TO IMPLEMENT** (owner rulings 2026-07-11, in-chat: (1) approved the icon-only"
+677,Mobile Buildmode Move Unreachable,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_677_mobile_buildmode_move_unreachable.md,WorkOrders/WORK_ORDER_677_mobile_buildmode_move_unreachable.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT** (owner report + screenshot 2026-07-12; ticket MOB-1 on the board).
+678,Pi Sdk Timeout Clean Wrap,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_678_pi_sdk_timeout_clean_wrap.md,WorkOrders/WORK_ORDER_678_pi_sdk_timeout_clean_wrap.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT** (owner report 2026-07-12: mobile devices show a raw JS error
+679,Crystal Economy Faucets,Ready,feature,,,,WorkOrders/WORK_ORDER_679_crystal_economy_faucets.md,,"spec Status: SPEC - needs owner pin sign-off, then READY** (owner ask 2026-07-12, from the live"
+680,Enhancement Tier Gate Legibility,Ready,fix,,,,WorkOrders/WORK_ORDER_680_enhancement_tier_gate_legibility.md,,"spec Status: READY TO IMPLEMENT** (owner report + screenshot 2026-07-12, preview `9ncz1sks9`:"
+681,Echo Select Intro And Assign,Ready,docs,,,,WorkOrders/WORK_ORDER_681_echo_select_intro_and_assign.md,,"spec Status: READY TO IMPLEMENT** (owner directive 2026-07-12: ""On selecting an Echo, there should"
+682,Web Quiet Error Surface,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_682_web_quiet_error_surface.md,WorkOrders/WORK_ORDER_682_web_quiet_error_surface.RESULT.md,"RESULT filed; spec Status: READY TO IMPLEMENT** (owner directive 2026-07-12 evening: ""those need caught quietly -"
+683,Build Screen Dpad,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_683_build_screen_dpad.md,WorkOrders/WORK_ORDER_683_build_screen_dpad.RESULT.md,"RESULT filed; spec Status: READY TO IMPLEMENT** (owner rulings 2026-07-12 evening, verbatim: ""we need the dpad from"
+684,Outstanding Items Board,Spec,fix,,,,WorkOrders/WORK_ORDER_684_outstanding_items_board.md,,"spec Status: TRIAGE BOARD** (owner directive 2026-07-12: ""give me a work order of outstanding items"
+685,Webtrace Retention Ttl Cron,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_685_webtrace_retention_ttl_cron.md,WorkOrders/WORK_ORDER_685_webtrace_retention_ttl_cron.RESULT.md,"RESULT filed; spec Status: READY TO IMPLEMENT** (implemented ahead in this WO - see ""Implemented in this WO"" below;"
+686,Webtrace Ingestion Hardening,Ready,feature,,,,WorkOrders/WORK_ORDER_686_webtrace_ingestion_hardening.md,,spec Status: READY TO IMPLEMENT.** **Lane:** Persistence/Backend (Lane 7) + Build/Deploy (Lane 10 for the
+687,Webtrace Read Triage Surface,Ready,fix,,,,WorkOrders/WORK_ORDER_687_webtrace_read_triage_surface.md,,spec Status: READY TO IMPLEMENT.** **Lane:** Persistence/Backend (Lane 7) + Platform/WebGL template (Lane
+688,Asset Caster Toolkit Family,Spec,docs,,,,WorkOrders/WORK_ORDER_688_asset_caster_toolkit_family.md,,spec Status: SPEC DRAFT - gated on the SME dossier fleet (docs/SME/) completing + per-pack applicability assessment
+689,Hovl Vfx Fidelity,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_689_hovl_vfx_fidelity.md,WorkOrders/WORK_ORDER_689_hovl_vfx_fidelity.RESULT.md,RESULT filed; no Status line in spec
+690,Swordshield Full Wiring,Spec,docs,,,,WorkOrders/WORK_ORDER_690_swordshield_full_wiring.md,,no Status line in spec
+691,Blink Orcs Activation,Spec,docs,,,,WorkOrders/WORK_ORDER_691_blink_orcs_activation.md,,no Status line in spec
+692,Blink Icons Import,Spec,docs,,,,WorkOrders/WORK_ORDER_692_blink_icons_import.md,,no Status line in spec
+693,Jeweler Crafting Mobile Readability,Ready,feature,,,,WorkOrders/WORK_ORDER_693_jeweler_crafting_mobile_readability.md,,"spec Status: READY TO IMPLEMENT** (owner report + screenshot 2026-07-12: ""text should be set to"
+694,Webtrace Lifecycle,Ready,fix,,,,WorkOrders/WORK_ORDER_694_webtrace_lifecycle.md,,"spec Status: READY TO IMPLEMENT** (owner ask 2026-07-12: ""work orders for the web trace life"")."
+695,Strategic Placement Lock On,Ready,feature,,,,WorkOrders/WORK_ORDER_695_strategic_placement_lock_on.md,,"spec Status: READY TO IMPLEMENT** (owner ruling 2026-07-12, verbatim intent: ""I want to see the"
+696,Repair Before Upgrade Context,Ready,fix,,,,WorkOrders/WORK_ORDER_696_repair_before_upgrade_context.md,,"spec Status: READY TO IMPLEMENT** (owner ruling 2026-07-12, verbatim intent: ""outside of battle,"
+697,Currency Compact Format Icon Chips,Ready,feature,,,,WorkOrders/WORK_ORDER_697_currency_compact_format_icon_chips.md,,"spec Status: READY TO IMPLEMENT** (owner-relayed from the UI seat's live-screenshot ticket RES-1,"
+698,Encounter Budget And Scouting,Ready,feature,,,,WorkOrders/WORK_ORDER_698_encounter_budget_and_scouting.md,,"spec Status: READY TO IMPLEMENT** (owner ask 2026-07-12: ""logic that dictates a seeded max of"
+699,Hero Select Ability Chips Data Source,Ready,feature,,,,WorkOrders/WORK_ORDER_699_hero_select_ability_chips_data_source.md,,"spec Status: READY TO IMPLEMENT** (UI-seat live-screenshot ticket SEL-1, 2026-07-13: the hero-select"
+700,Android Apk Seeker Test,Ready,feature,,,,WorkOrders/WORK_ORDER_700_android_apk_seeker_test.md,,"spec Status: READY TO IMPLEMENT (Phase A)** (owner ask 2026-07-13: ""package it as an APK with the"
+701,Mending Echoes Offline Repair,Ready,fix,,,,WorkOrders/WORK_ORDER_701_mending_echoes_offline_repair.md,,"spec Status: SPEC - needs owner number pins, then READY** (owner idea 2026-07-12: ""an ability or"
+702,Founding Of Elarion Ftue,Ready,feature,,,,WorkOrders/WORK_ORDER_702_founding_of_elarion_ftue.md,,"spec Status: READY TO IMPLEMENT** (owner directive 2026-07-13, verbatim intent: ""start with the"
+703,Blank Start Residual Standdown,Ready,feature,,,,WorkOrders/WORK_ORDER_703_blank_start_residual_standdown.md,,"spec Status: READY TO IMPLEMENT - verification step FIRST** (owner screenshots 3, 2026-07-13,"
+704,Trailer Fullscreen Aspect,Ready,feature,,,,WorkOrders/WORK_ORDER_704_trailer_fullscreen_aspect.md,,"spec Status: READY TO IMPLEMENT** (owner ask 2026-07-13: ""can the trailer play full screen?"")."
+705,Onboarding Duplicate Uidocument,Ready,fix,,,,WorkOrders/WORK_ORDER_705_onboarding_duplicate_uidocument.md,,spec Status: READY TO IMPLEMENT - RCA-first (12).** Minted 2026-07-13 from the post-WO-703/704 fleet
+706,Palette Portraits Complete Set,Ready,feature,,,,WorkOrders/WORK_ORDER_706_palette_portraits_complete_set.md,,"spec Status: READY - UI-seat art task** (owner directive 2026-07-13, felt-test: ""same thing you"
+707,Town Catalog Grooming One Building Per Trade,Ready,docs,,,,WorkOrders/WORK_ORDER_707_town_catalog_grooming_one_building_per_trade.md,,"spec Status: READY TO IMPLEMENT - two small owner pins open (below), implementable around them."
+708,Wall Builder Drag Lines,Spec,docs,,,,WorkOrders/WORK_ORDER_708_wall_builder_drag_lines.md,,"spec Status: PARKED - POST-V1** (owner 2026-07-13: ""lets figure those out after we ship v1"" - pins"
+709,Echo Workforce Multiplier Hud,Ready,feature,,,,WorkOrders/WORK_ORDER_709_echo_workforce_multiplier_hud.md,,"spec Status: SPEC - needs owner pins 1-4, then READY** (owner design paste + ""design a HUD that"
+710,Inventory Panel Obsidian Conformance,Spec,feature,,,,WorkOrders/WORK_ORDER_710_inventory_panel_obsidian_conformance.md,,no Status line in spec
+710,Phased Founding Staged Palette,Ready,feature,,,,WorkOrders/WORK_ORDER_710_phased_founding_staged_palette.md,,spec Status: READY TO IMPLEMENT** (owner + Grok brainstorm 2026-07-13 evening; owner chased it:
+711,Dungeon Content Dressing,Spec,feature,,,,WorkOrders/WORK_ORDER_711_dungeon_content_dressing.md,,"spec Status: SPEC - owner walking the dungeon live 2026-07-13 evening, annotating placeholders."
+712,Courtyard Navmesh Island Diag,Ready,feature,,,,WorkOrders/WORK_ORDER_712_courtyard_navmesh_island_diag.md,,spec Status: READY - instrument-only lane (12 hard gate: cause NOT yet proven).
+713,Inventory Panel Obsidian Conformance,Ready,feature,,,,WorkOrders/WORK_ORDER_713_inventory_panel_obsidian_conformance.md,,"spec Status: READY TO IMPLEMENT - WIREFRAME APPROVED (owner 2026-07-13: ""much better - relay to"
+714,Obsidian Conformance Program,Ready,feature,,,,WorkOrders/WORK_ORDER_714_obsidian_conformance_program.md,,"spec Status: READY TO IMPLEMENT (phased program - run as lanes, one wave at a time)"
+715,Hovl Towers Melee Spell Vfx,Ready,feature,,,,WorkOrders/WORK_ORDER_715_hovl_towers_melee_spell_vfx.md,,spec Status: READY TO IMPLEMENT
+716,Capture Pairwalk Gate,Ready,docs,,,,WorkOrders/WORK_ORDER_716_capture_pairwalk_gate.md,,spec Status: READY TO IMPLEMENT
+717,Unstyled Class Kill,Ready,feature,,,,WorkOrders/WORK_ORDER_717_unstyled_class_kill.md,,spec Status: READY TO IMPLEMENT
+718,Kit Law Regression,Ready,fix,,,,WorkOrders/WORK_ORDER_718_kit_law_regression.md,,spec Status: READY TO IMPLEMENT
+719,Dedicated Build Hud Coc,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_719_dedicated_build_hud_coc.md,WorkOrders/WORK_ORDER_719_dedicated_build_hud_coc.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+720,Founding Critical Obsidian Fix,Ready,fix,,,,WorkOrders/WORK_ORDER_720_founding_critical_obsidian_fix.md,,spec Status: READY TO IMPLEMENT (screen list **completed from WO-716 FAIL marks**)
+721,Hud Vitals Fill Contract,Ready,fix,,,,WorkOrders/WORK_ORDER_721_hud_vitals_fill_contract.md,,spec Status: READY TO IMPLEMENT
+722,Obsidian Expansion Tail,Ready,feature,,,,WorkOrders/WORK_ORDER_722_obsidian_expansion_tail.md,,spec Status: READY TO IMPLEMENT (after demo pillars)
+723,Coc Offense Path Charter,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_723_coc_offense_path_charter.md,WorkOrders/WORK_ORDER_723_coc_offense_path_charter.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+723,Coc Arena Barracks,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_PROGRAM_723_731_coc_arena_barracks.md,WorkOrders/WORK_ORDER_723_coc_offense_path_charter.RESULT.md,RESULT filed; spec Status: MINTED 2026-07-16  **WO-723 DONE** (start implement at **724**)
+724,Barracks Live Train Army,Ready,feature,,,,WorkOrders/WORK_ORDER_724_barracks_live_train_army.md,,spec Status: READY TO IMPLEMENT (after WO-723)
+725,Settlement Arena Entry Live,Ready,feature,,,,WorkOrders/WORK_ORDER_725_settlement_arena_entry_live.md,,spec Status: READY TO IMPLEMENT (after WO-723)
+726,Ai Camp Attack Loop,Ready,feature,,,,WorkOrders/WORK_ORDER_726_ai_camp_attack_loop.md,,spec Status: READY TO IMPLEMENT
+727,Recipe Ai Settlements,Ready,feature,,,,WorkOrders/WORK_ORDER_727_recipe_ai_settlements.md,,spec Status: READY TO IMPLEMENT
+728,Repeatable Raid Economy,Ready,feature,,,,WorkOrders/WORK_ORDER_728_repeatable_raid_economy.md,,spec Status: READY TO IMPLEMENT
+729,Defend And Watch,Ready,feature,,,,WorkOrders/WORK_ORDER_729_defend_and_watch.md,,spec Status: READY TO IMPLEMENT (parallel-safe after WO-727)
+730,Async Pvp Foundation,Ready,feature,,,,WorkOrders/WORK_ORDER_730_async_pvp_foundation.md,,spec Status: READY TO IMPLEMENT (backend may stub)
+731,Coc Felt Complete Close,Ready,docs,,,,WorkOrders/WORK_ORDER_731_coc_felt_complete_close.md,,spec Status: READY TO IMPLEMENT (serial program close)
+732,Troop Roster Data Schema,RESULT-filed,docs,,,,WorkOrders/WORK_ORDER_732_troop_roster_data_schema.md,WorkOrders/WORK_ORDER_732_troop_roster_data_schema.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+732,Barracks Troop Roster,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_PROGRAM_732_736_barracks_troop_roster.md,WorkOrders/WORK_ORDER_732_troop_roster_data_schema.RESULT.md,RESULT filed; spec Status: MINTED 2026-07-16 (owner-directed: default types + upgrade unlocks)
+733,Troop Unlock Train Ui Gate,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_733_troop_unlock_train_ui_gate.md,WorkOrders/WORK_ORDER_733_troop_unlock_train_ui_gate.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+734,Barracks Tier Unlock Copy,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_734_barracks_tier_unlock_copy.md,WorkOrders/WORK_ORDER_734_barracks_tier_unlock_copy.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+735,Troop Visual Placeholders,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_735_troop_visual_placeholders.md,WorkOrders/WORK_ORDER_735_troop_visual_placeholders.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+736,Troop Roster Verify Canon,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_736_troop_roster_verify_canon.md,WorkOrders/WORK_ORDER_736_troop_roster_verify_canon.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+737,Barracks Train Obsidian Layout,RESULT-filed,feature,,,,WorkOrders/WORK_ORDER_737_barracks_train_obsidian_layout.md,WorkOrders/WORK_ORDER_737_barracks_train_obsidian_layout.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+738,Echo Per Echo Agency Specialization,Ready,fix,,,,WorkOrders/WORK_ORDER_738_echo_per_echo_agency_specialization.md,,"spec Status: SPEC - needs owner pins (see ""Owner pins""), then READY TO IMPLEMENT."
+739,Generic Obsidian Upgrade Tier Panel,Ready,feature,UI/HUD (L4),,,WorkOrders/WORK_ORDER_739_generic_obsidian_upgrade_tier_panel.md,,"spec Status: READY TO IMPLEMENT (Enhancement Path panel, banner 2026-07-17b)"
+740,Room Forge Dungeon Baker,Done,feature,World/Env (L1),,,WorkOrders/WORK_ORDER_740_room_forge_dungeon_baker.md,,RECONCILED: closed in Room Forge program (f86e7f3f); spec header says IN PROGRESS
+740,Room Forge Into Mainline,Done,feature,World/Env (L1),,,WorkOrders/WORK_ORDER_PROGRAM_740_743_room_forge_into_mainline.md,,"RECONCILED: Room Forge program closed - 740-745 done, commit f86e7f3f"
+745,Room Forge Regression Flowtrace,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_745_room_forge_regression_flowtrace.md,WorkOrders/WORK_ORDER_745.RESULT.md,RESULT filed; spec Status: READY TO IMPLEMENT
+746,Buildmode Placement Tutorial Tickets,RESULT-filed,fix,,,,WorkOrders/WORK_ORDER_746_buildmode_placement_tutorial_tickets.md,WorkOrders/WORK_ORDER_746.RESULT.md,"RESULT filed; spec Status: READY TO IMPLEMENT (tickets BM-1 / BM-2 / BM-3, owner playtest 2026-07-18)"
+747,Gear Curation To Runtime,Done,fix,Monetization/Backend (L7),,CLI,WorkOrders/WORK_ORDER_747_gear_curation_to_runtime.md,,RECONCILED: committed 7c843ad3 (feat wo-747); spec header still reads IN IMPLEMENTATION - Done per git
+748,Default Town Choice,Ready,feature,Build Mode/Player Base (L11),,,WorkOrders/WORK_ORDER_748_default_town_choice.md,,spec Status: SPEC - READY TO IMPLEMENT; awaiting owner go (banner 2026-07-18d)
+749,Dungeon Ingredient Sourcing,Ready,feature,Dungeon (L12/exploration),,,WorkOrders/WORK_ORDER_749_dungeon_ingredient_sourcing.md,,spec Status: SPEC - READY TO IMPLEMENT; awaiting owner go
+,Combat Vfx Batch 2026-07-10,Spec,feature,,,,WorkOrders/WORK_ORDER_COMBAT_VFX_BATCH_2026-07-10.md,,no Status line in spec
+,Knight Anim 4Button,Ready,docs,,,,WorkOrders/WORK_ORDER_KNIGHT_ANIM_4button.md,,spec Status: READY TO IMPLEMENT
+,Village2 Enemy Stronghold,Spec,docs,,,,WorkOrders/WORK_ORDER_Village2_Enemy_Stronghold.md,,spec Status: SPEC - awaiting owner confirm before the Village2 regen + Village.unity removal.
+,Ad Generator,Ready,docs,,,,WorkOrders/WORK_ORDER_ad_generator.md,,spec Status: READY TO IMPLEMENT (design complete; data + schema shipped)
+,Battle And Monthly Packs,Ready,feature,,,,WorkOrders/WORK_ORDER_battle_and_monthly_packs.md,,spec Status: DRAFT FOR OWNER REVIEW - not yet READY TO IMPLEMENT.
+,Economy Store Packs,Ready,feature,,,,WorkOrders/WORK_ORDER_economy_store_packs.md,,spec Status: DESIGN - ideas + legwork (NOT ready to implement until schema-extension sign-off)
+,Offline Storage Logic,Spec,feature,,,,WorkOrders/WORK_ORDER_offline_storage_logic.md,,spec Status: DESIGN COMPLETE - ideas + data schema only. **NO `.cs` written.
+,Outpost Base Footprint,Spec,feature,,,,WorkOrders/WORK_ORDER_outpost_base_footprint.md,,spec Status: DESIGN CAPTURE (owner thinking-out-loud 2026-06-07).** **Lane:** Roaming/Outposts (relates to
+,Pi Browser Integration,Ready,feature,,,,WorkOrders/WORK_ORDER_pi_browser_integration.md,,spec Status: DRAFT FOR OWNER REVIEW - not yet READY TO IMPLEMENT.
+,Pi Browser Integration Deep,Ready,feature,,,,WorkOrders/WORK_ORDER_pi_browser_integration_DEEP.md,,spec Status: DRAFT FOR OWNER REVIEW - decision-grade. Not yet READY TO IMPLEMENT.
+,Second Grom Companion,Spec,fix,,,,WorkOrders/WORK_ORDER_second_grom_companion.md,,spec Status: DIAGNOSED-PARTIAL - root cause NOT yet proven. Ruled-out list + one probe below.
+,Skr Staking And Seeker,Ready,feature,,,,WorkOrders/WORK_ORDER_skr_staking_and_seeker.md,,spec Status: DRAFT FOR OWNER REVIEW - not yet READY TO IMPLEMENT.
+,Skr Store Design,Ready,docs,,,,WorkOrders/WORK_ORDER_skr_store_design.md,,spec Status: DRAFT FOR OWNER REVIEW - not yet READY TO IMPLEMENT.
+,Store Packs Content,Spec,docs,,,,WorkOrders/WORK_ORDER_store_packs_content.md,,spec Status: CONTENT DELIVERED (data authored) - art assets PENDING
+,Techdebt Ledger 2026-06-28,Spec,docs,,,,WorkOrders/WORK_ORDER_techdebt_ledger_2026-06-28.md,,spec Status: PLANNING ONLY - no code changed. Mini-specs for owner routing.

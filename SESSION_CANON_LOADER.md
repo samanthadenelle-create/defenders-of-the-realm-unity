@@ -1,12 +1,22 @@
 # DeNelle Studios — Project Canon Loader
 
+> ## ▶ LIVE THREAD (2026-07-19) — READ BEFORE WORKING
+> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-19.md` (read it first).** Since 07-18: HEAD
+> `98ff1135`, **local ahead of origin by 7, PUSH HELD**. **DataRegression is `REGRESSION_OK` — ZERO reds**
+> (all 5 long-standing FAIL-BY-DESIGN reds fixed 07-19 per the owner's plan: arena texture, dual-wallet,
+> pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT). **Save v34** (persist Tribes/Wards/Arena +
+> pet active-slot). **WO-748 (Default Town) + WO-749 (dungeon ingredients) DONE + RESULT-filed.** Corrupt
+> `d4_sunken_crypt` scene PURGED + stale branch junked. New: `SUNDAY_HOUSEKEEPING.md` weekly ritual +
+> known-dictionaries; Notion setup kit staged (`docs/notion/`, awaiting owner `/mcp`). WO next-free = **750**.
+> **The 07-18 thread below is SUPERSEDED.**
+>
 > ## ▶ LIVE THREAD (2026-07-18) — READ BEFORE WORKING
 > **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-18.md` (read it first).** Since 07-13:
 > **Pi Hackathon WON** (the "July-31 deadline / build mode IS the demo" framing is RETIRED); the
 > **whole-game MVVM migration is DONE** (WO-744 — every panel View binds an `IPanelViewModel`, the
 > `[ui-mvvm]` conformance oracle is armed HARD-FAIL); **Room Forge merged to mainline** (WO-740–745,
 > green); **save v33**; `wip` pushed to origin. Two-session shared-tree hazard is live (dungeon
-> session should use its own worktree). WO banner next-free = **746**. **The 07-12 thread below is
+> session should use its own worktree). WO banner next-free = **750**. **The 07-12 thread below is
 > SUPERSEDED — do not act on its "demo readiness" framing.**
 >
 > ## ▶ LIVE THREAD (2026-07-12 evening) — SUPERSEDED (see the 07-18 thread above)

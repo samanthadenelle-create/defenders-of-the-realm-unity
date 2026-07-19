@@ -15,6 +15,29 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-07-19 (all 5 regression reds GREEN; WO-748/749 done; d4 purged) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-07-19.md` (read first). Branch `wip/village2-and-f8-tickets`,
+HEAD `98ff1135`, **local ahead of origin by 7, PUSH HELD** (owner authorizes push + prod).
+
+**LANDED this session (7 commits, gate-green):**
+- **DataRegression `REGRESSION_OK` — ZERO reds** (first time). All 5 owner-plan reds fixed: R1 arena
+  ground texture (`00568728`), R2 dual-wallet Grant->GameState (`ef6f097b`), R5 orc-raider SSOT
+  enemies.json Hp 130 (`6ac98fa3`), R3+R4 save v34 persist pet-slot + Tribes/Wards/Arena (`98ff1135`).
+- **WO-748 Default Town founding choice** (`f5fcbde2`, RESULT-filed) + **WO-749 dungeons as crafting-
+  ingredient source** (`0c64daaa`, RESULT-filed; +7 gear-component MaterialDefs).
+- **Corrupt `d4_sunken_crypt` scene PURGED** (`c5b3461c`) + stale merged branch `feat/room-forge-dungeon-baker`
+  deleted + the dungeon session's broken uncommitted socket rework restored out of the tree.
+- **Process:** `SUNDAY_HOUSEKEEPING.md` weekly ritual + KNOWN DICTIONARIES registry (memories). **Notion
+  setup kit** staged (`docs/notion/`), awaiting owner `/mcp`.
+
+**OPEN (owner):** felt-verify the 5 red fixes on mobile (arena look/perf; orc-raider wave balance; multi-slot
+pet + tribe/ward/arena survive reload; dual-wallet upgrade income) + WO-748/749 screens; authorize the 7-commit
+push; `/mcp` to finish Notion. **LANDING:** the two known dictionaries (hero-animation, regression-coverage)
+from the audit fleets. WO next-free = **750**.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-07-18 (MVVM migration + Room Forge landed; hackathon WON) ★★
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-07-18.md` (read first). Branch `wip/village2-and-f8-tickets`,

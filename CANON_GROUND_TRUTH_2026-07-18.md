@@ -1,5 +1,8 @@
 # CANON GROUND TRUTH — 2026-07-18
 
+> ⚠ **SUPERSEDED 2026-07-19 by `CANON_GROUND_TRUTH_2026-07-19.md`.** Frozen history — do not act on
+> this body's "8-known-red baseline" / HEAD `9b38d058` / next-free framing. The newer anchor is truth.
+
 > **Purpose:** the single anchor of *current reality*, verified from the working tree, HEAD, the
 > gates, and owner rulings given live. **Supersedes `CANON_GROUND_TRUTH_2026-07-13.md`** (banner it).
 > If a doc contradicts a line here, the doc is STALE. Read this → `KEY_FACTS.md` →

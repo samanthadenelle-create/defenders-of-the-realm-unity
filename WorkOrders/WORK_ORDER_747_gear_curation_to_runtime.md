@@ -1,6 +1,6 @@
 # WORK ORDER 747 — Gear curation -> runtime (Option A: curated catalog actually ships)
 
-**Status:** IN IMPLEMENTATION (architect-ruled 2026-07-18, owner chose Option A). **Implemented by: Claude (CLI).**
+**Status:** DONE — committed `7c843ad3` (additive exporter + GEAR_CURATION_OK gate). **Implemented by: Claude (CLI).**
 **Owner (PO):** Sam — chose Option A; owner action = curate armor in the Gear Caster; felt-verify the shipped gear.
 **Priority:** P1 — a live bug: the owner's curated gear + the hero class-default armor never load in-game.
 **Lane:** Gear catalog (single silo). Source: `GAP_AUDIT_2026-07-18.md` (DATAWEB armor/weapons hold) + architect review.
