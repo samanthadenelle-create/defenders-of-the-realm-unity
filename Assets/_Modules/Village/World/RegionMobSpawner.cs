@@ -547,7 +547,15 @@ namespace DeNelle.Village
             switch (id)
             {
                 case "orc-raider":
-                    name = "Orc Raider";     ai = "charger";    hp = 95f;  spd = 3.1f; dmg = 12f; interval = 1.3f; height = 2.0f; xp = 22; break;
+                    // SSOT: orc-raider stats come from the single Wildlands roster (enemies.json,
+                    // code-fallback matched) so this table can NEVER drift from the garrison table
+                    // again (CombatAtbRegression Check H). Keep this path's own name; pull the stats.
+                    {
+                        var b = WildlandsRoster.BaseDef("orc-raider");
+                        name = "Orc Raider"; ai = b.Ai; hp = b.Hp; spd = b.MoveSpeed; dmg = b.ContactDamage;
+                        interval = b.AttackInterval; height = b.Height; xp = b.XpReward;
+                    }
+                    break;
                 case "caveman":
                     name = "Wildlands Caveman"; ai = "walker";  hp = 70f;  spd = 2.7f; dmg = 9f;  interval = 1.4f; height = 1.9f; xp = 16; break;
                 case "feral-wolf":

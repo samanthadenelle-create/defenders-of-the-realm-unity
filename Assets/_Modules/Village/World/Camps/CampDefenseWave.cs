@@ -288,7 +288,16 @@ namespace DeNelle.Village.World.Camps
             switch (id)
             {
                 case "orc-raider":
-                    name = "Raider";        ai = "charger";    hp = 95f;  spd = 3.3f; dmg = 12f; interval = 1.3f; height = 2.0f; xp = 22; break;
+                    // SSOT: pull orc-raider stats from the single Wildlands roster (enemies.json,
+                    // code-fallback matched) so the camp-counterattack table stays unified with the
+                    // garrison table (CombatAtbRegression Check H). Keep the camp-flavored name; the
+                    // threat scale + early ease below still apply on top.
+                    {
+                        var b = WildlandsRoster.BaseDef("orc-raider");
+                        name = "Raider"; ai = "charger"; hp = b.Hp; spd = b.MoveSpeed; dmg = b.ContactDamage;
+                        interval = b.AttackInterval; height = b.Height; xp = b.XpReward;
+                    }
+                    break;
                 case "caveman":
                     name = "Brute";         ai = "walker";     hp = 70f;  spd = 2.9f; dmg = 9f;  interval = 1.4f; height = 1.9f; xp = 16; break;
                 case "feral-wolf":

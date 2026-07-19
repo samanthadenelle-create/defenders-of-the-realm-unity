@@ -21,7 +21,7 @@
     "height": "Approximate mesh height (world units) - sizes the NavMeshAgent capsule + the floating HP bar offset.",
     "boss": "true for a faction wave-boss (the Necromancer of the Wound). Orc 'elite' camp-bosses are role='elite', not boss=true (they lead a camp, not a village wave)."
   },
-  "version": 2,
+  "version": 3,
   "enemies": [
     {
       "id": "hollow-walker",
@@ -158,6 +158,23 @@
       "height": 2.2,
       "boss": false,
       "flavor": "The elite that holds a Warband camp. Clear it and the node it squats on is yours to reclaim."
+    },
+    {
+      "id": "orc-raider",
+      "name": "Orc Raider",
+      "displayName": "Orc Raider",
+      "family": "orc",
+      "role": "skirmisher",
+      "spawn": ["roam", "camp"],
+      "modelKey": "Orc_Berserker",
+      "ai": "charger",
+      "hp": 130,
+      "moveSpeed": 3.1,
+      "contactDamage": 12,
+      "attackInterval": 1.3,
+      "height": 2.0,
+      "boss": false,
+      "flavor": "The Warband's roving muscle - a greenskin raider who hunts the open Wildlands and garrisons the reclaimable camps. SINGLE-SOURCE stat block: whether it roams, guards an outpost, mounts a camp counterattack, or staffs a garrison, it reads these exact base stats (each spawner still scales by its own context)."
     },
     {
       "id": "troll",
