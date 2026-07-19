@@ -1,5 +1,5 @@
 // =============================================================================
-// SaveMigrator — the persisted-save migration chain v1 → v33 (spec §2.4)
+// SaveMigrator — the persisted-save migration chain v1 → v34 (spec §2.4)
 // -----------------------------------------------------------------------------
 // C# port of `migratePersistedState` from src/state/gameStore.ts. One shared
 // entry point used by BOTH the boot loader AND a future Save-Import path.
@@ -26,7 +26,7 @@ namespace DeNelle.Core.State
 {
     using PersistedState = SaveSchema.PersistedState;
 
-    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v33).</summary>
+    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v34).</summary>
     public static class SaveMigrator
     {
         /// <summary>
@@ -71,6 +71,7 @@ namespace DeNelle.Core.State
                 { 31, MigrateToV31 },
                 { 32, MigrateToV32 },
                 { 33, MigrateToV33 },
+                { 34, MigrateToV34 },
             };
 
         /// <summary>
@@ -481,6 +482,24 @@ namespace DeNelle.Core.State
         // the same reason recent additive bumps each carry a pass-through step.
         private static PersistedState MigrateToV33(PersistedState s)
         {
+            return s;
+        }
+
+        // v34 (REDS #3/#4) — the four previously in-memory-only fields now round-trip.
+        // A pre-v34 save never persisted them, so seed the fresh defaults — exactly what
+        // such a player had on every load: no claimed tribe progress, no relit wards, a
+        // zeroed arena W/L ledger, and no persisted pet slot map (PetAcquisitionService
+        // then falls back to its legacy starter-in-slot-0 rebuild). tribes/wards/
+        // petActiveSlots are additive-default-on-read (null → empty on load) and arena is
+        // additive-default-on-read (null → the SO's Empty default); we seed each explicitly
+        // for a clean round-trip, mirroring the v22/v25/v29 seed precedent. Additive +
+        // idempotent (only seeds when null), so it never clobbers data a save already carries.
+        private static PersistedState MigrateToV34(PersistedState s)
+        {
+            if (s.Tribes == null) s.Tribes = new List<DeNelle.Core.World.TribeState>();
+            if (s.Wards == null) s.Wards = new List<DeNelle.Core.World.WardStoneState>();
+            if (!s.Arena.HasValue) s.Arena = ArenaProgress.Empty;
+            if (s.PetActiveSlots == null) s.PetActiveSlots = new List<string>();
             return s;
         }
 

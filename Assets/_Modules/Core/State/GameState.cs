@@ -3,8 +3,8 @@
 // -----------------------------------------------------------------------------
 // The Unity analog of the Zustand store's DATA. A pure data container — NO
 // logic, NO events — holding the persisted fields the React `partialize`
-// selects (originally 41; now ~60 after many append-only additions through
-// schema v33), plus SchemaVersion. One asset instance lives at
+// selects (originally 41; now ~64 after many append-only additions through
+// schema v34), plus SchemaVersion. One asset instance lives at
 // Assets/_Modules/Core/State/GameState.asset and is the in-memory live state.
 //
 // Mutators / subscribers / load+save live in GameStateService. Fresh defaults
@@ -24,12 +24,12 @@ namespace DeNelle.Core.State
     /// <summary>
     /// The persisted slice of game state — the fields selected by the React
     /// store's <c>partialize</c> (originally 41; ~60 today after append-only
-    /// growth through schema v33). A pure data container.
+    /// growth through schema v34). A pure data container.
     /// </summary>
     [CreateAssetMenu(menuName = "Defenders/Core/Game State", fileName = "GameState")]
     public sealed class GameState : ScriptableObject
     {
-        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (33).</summary>
+        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (34).</summary>
         public int SchemaVersion = SaveSchema.CurrentVersion;
 
         // ── Player (playerSlice) ─────────────────────────────────────────────
@@ -73,6 +73,18 @@ namespace DeNelle.Core.State
         public List<int> PetBonds = new List<int> { 0, 0, 0 };
         /// <summary>#25 — unlocked Warden species.</summary>
         public List<PetSpecies> OwnedPets = new List<PetSpecies>();
+        /// <summary>
+        /// REDS #3 (flag_17) — the pet ACTIVE-SLOT deploy map: one entry per deploy slot in
+        /// slot order, holding the canonical species id occupying it (e.g. "ice-wolf") or null
+        /// for an empty slot. The persisted mirror of PetAcquisitionService's runtime
+        /// <c>_activeSlots</c>: previously that map was rebuilt from <see cref="StarterPetId"/>
+        /// alone on load (SyncSlotsFromState), so a multi-slot pet roster reset every reload.
+        /// PetAcquisitionService now rebuilds from this list on load and writes it back on every
+        /// slot change. Empty on a fresh save (the acquisition service falls back to its legacy
+        /// starter-in-slot-0 rebuild). Round-trips through SaveSchema (v34) — additive at the END
+        /// so older saves load with an empty map.
+        /// </summary>
+        public List<string> PetActiveSlots = new List<string>();
 
         // ── Village (villageSlice) ───────────────────────────────────────────
         /// <summary>#9 — tower tier per slot. Length = TowerSlots (9). Fresh = [0]×9.</summary>
@@ -219,10 +231,10 @@ namespace DeNelle.Core.State
         // ── World content (WO-159 settlements / WO-160 tribes) ───────────────
         /// <summary>Per-tribe roaming-raider records (WO-160) — members remaining, cleared
         /// flag, clear-count for reduced respawn, last-seen. Append-only field at the END so
-        /// older saves stay loadable. NOT yet wired into SaveSchema/SaveMigrator — the save
-        /// owner adds its (de)serialisation + bumps the schema version for it to round-trip to
-        /// disk. Lives correctly in-memory meanwhile. (Unlike <see cref="Zones"/> and
-        /// <see cref="Settlements"/>, which DO round-trip.)</summary>
+        /// older saves stay loadable. Round-trips through SaveSchema (v34, REDS #4): serialized
+        /// in GameStateService.Snapshot, restored in ApplyPersisted, seeded to an empty list on
+        /// older saves by SaveMigrator MigrateToV34 — so a half-cleared tribe no longer resets on
+        /// reload. (Like <see cref="Zones"/>/<see cref="Settlements"/>/<see cref="Wards"/>.)</summary>
         public List<DeNelle.Core.World.TribeState> Tribes = new List<DeNelle.Core.World.TribeState>();
 
         /// <summary>Per-site node-settlement records (WO-159) — claim phase, defence HP, and
@@ -235,10 +247,11 @@ namespace DeNelle.Core.State
         /// <summary>Per-ward relight records (WO-112) — the earned exploration reach. Each
         /// carries its ward id/region/granted-reach and whether the Keeper has relit it; the
         /// set of lit wards drives per-march reach (WardReach) and the forgetting effect.
-        /// Append-only field at the END so older saves stay loadable. Same save-wiring note as
-        /// <see cref="Tribes"/>: in-memory now, the schema round-trip (SaveSchema/SaveMigrator +
-        /// version bump) is the save owner's follow-up. (<see cref="Settlements"/> and
-        /// <see cref="Zones"/> DO round-trip.)</summary>
+        /// Append-only field at the END so older saves stay loadable. Round-trips through
+        /// SaveSchema (v34, REDS #4): serialized in GameStateService.Snapshot, restored in
+        /// ApplyPersisted, seeded to an empty list on older saves by SaveMigrator MigrateToV34 —
+        /// so relit wards no longer reset on reload. (<see cref="Settlements"/>/<see cref="Zones"/>/
+        /// <see cref="Tribes"/> DO round-trip.)</summary>
         public List<DeNelle.Core.World.WardStoneState> Wards = new List<DeNelle.Core.World.WardStoneState>();
 
         // ── Build Mode — the player's base layout (WO-108 P0 data spine) ──────
@@ -299,12 +312,13 @@ namespace DeNelle.Core.State
         /// (ARENA MVP). A small append-only struct (Wins/Losses/Streak/TotalPurse),
         /// mirroring the "small serializable record on GameState" shape that Zones /
         /// Tribes / BaseLayout use. Append-only field at the END so older saves load
-        /// with a zeroed record. NOT yet wired into SaveSchema/SaveMigrator — like
-        /// <see cref="Zones"/>/<see cref="Tribes"/> it lives in-memory now and is
-        /// mirrored to PlayerPrefs by ArenaProgressStore; threading it through the
-        /// save round-trip (+ a schema bump) is the save owner's follow-up. The SKR
-        /// wager balance itself is a SEPARATE client stub (ArenaWalletService) — this
-        /// is only the W/L scoreboard.
+        /// with a zeroed record. Round-trips through SaveSchema (v34, REDS #4):
+        /// serialized in GameStateService.Snapshot (as the nullable <c>arena</c> wire
+        /// field), restored in ApplyPersisted, seeded to <see cref="ArenaProgress.Empty"/>
+        /// on older saves by SaveMigrator MigrateToV34 — so the W/L ledger now lives in
+        /// the signed/migrated/validated save, not only the loose ArenaProgressStore
+        /// PlayerPrefs mirror. The SKR wager balance itself is a SEPARATE client stub
+        /// (ArenaWalletService) — this is only the W/L scoreboard.
         /// </summary>
         public ArenaProgress Arena = ArenaProgress.Empty;
 

@@ -341,9 +341,11 @@ namespace DeNelle.Editor
         // =====================================================================
         private static void CheckSaveRoundTrip(Action<string> Fail)
         {
-            // The schema version this build asserts (WO-738 richer echoLanes token grammar).
-            if (SaveSchema.CurrentVersion != 33)
-                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 33 for the WO-738 echoLanes token bump)");
+            // Canary on unreviewed schema bumps. WO-738 established the richer echoLanes token at
+            // v33; the v34 bump (persist Tribes/Wards/Arena + pet active-slot, RED #3/#4) is additive
+            // and reviewed. Update this pin in the SAME breath as any future reviewed bump (CLAUDE.md 15).
+            if (SaveSchema.CurrentVersion != 34)
+                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 34; echoLanes token must survive the current schema)");
 
             // A rich echoLanes token survives the REAL serialize → deserialize → validate path.
             const string richToken = "harvest:3,idle,crafting:1";

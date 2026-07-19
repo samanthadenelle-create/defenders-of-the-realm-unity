@@ -216,14 +216,16 @@ namespace DeNelle.Core.Tests
         //  Authored straight onto the SO (like ApplyRichStateOntoSO) so it drives the
         //  service's own Snapshot() -> Save() -> Load() -> ApplyPersisted() path.
         //
+        //  NOW PERSISTED as of save v34 (REDS #3/#4) - asserted below:
+        //    - GameState.Tribes  (List<TribeState>)     - roaming-raider progress.
+        //    - GameState.Wards   (List<WardStoneState>)  - relit wards + earned reach.
+        //    - GameState.Arena   (ArenaProgress W/L ledger) - wins/losses/streak/purse
+        //      (DISTINCT from ArenaDefense, the placed-defender layout, persisted v19).
+        //    - GameState.PetActiveSlots (List<string>)   - the pet slot->species deploy
+        //      map (flag_17); PetAcquisitionService rebuilds its runtime slots from it.
+        //
         //  GENUINELY NOT PERSISTED (verified against Snapshot()/ApplyPersisted() - NOT
         //  asserted here, deliberately):
-        //    - GameState.Tribes  (List<TribeState>)  - in-memory only; the field's own
-        //      doc says "NOT yet wired into SaveSchema/SaveMigrator".
-        //    - GameState.Wards   (List<WardStoneState>) - in-memory only (same note).
-        //    - GameState.Arena   (ArenaProgress W/L ledger) - in-memory only, mirrored
-        //      to PlayerPrefs by ArenaProgressStore, NOT in the save round-trip.
-        //      (ArenaDefense - the placed-defender layout - IS persisted, v19.)
         //    - equippedRingId / equippedAmuletId - declared on SaveSchema.PersistedState
         //      and SEEDED by SaveMigrator v26, but there is NO matching GameState field
         //      and NO line in Snapshot()/ApplyPersisted(), so they do NOT round-trip
@@ -339,6 +341,31 @@ namespace DeNelle.Core.Tests
             // -- First-build freebies (v32) -----------------------------------
             Assert.That(a.FreeBuildsUsed, Is.EqualTo(new List<string> { "forge", "armorer" }),
                 "freeBuildsUsed");
+
+            // -- Tribes (v34, REDS #4) ----------------------------------------
+            Assert.That(a.Tribes, Is.Not.Null, "tribes not null");
+            Assert.That(a.Tribes.Count, Is.EqualTo(1), "tribes count");
+            Assert.That(a.Tribes[0].Id, Is.EqualTo("ashwood-cult-1"), "tribes[0].id");
+            Assert.That(a.Tribes[0].MembersRemaining, Is.EqualTo(2), "tribes[0].membersRemaining");
+            Assert.That(a.Tribes[0].Cleared, Is.True, "tribes[0].cleared");
+            Assert.That(a.Tribes[0].ClearCount, Is.EqualTo(1), "tribes[0].clearCount");
+
+            // -- Wards (v34, REDS #4) -----------------------------------------
+            Assert.That(a.Wards, Is.Not.Null, "wards not null");
+            Assert.That(a.Wards.Count, Is.EqualTo(1), "wards count");
+            Assert.That(a.Wards[0].Id, Is.EqualTo("ward_goldfields_1"), "wards[0].id");
+            Assert.That(a.Wards[0].Lit, Is.True, "wards[0].lit");
+            Assert.That(a.Wards[0].ReachRadiusGranted, Is.EqualTo(40f).Within(1e-3), "wards[0].reach");
+
+            // -- Arena W/L ledger (v34, REDS #4) ------------------------------
+            Assert.That(a.Arena.Wins, Is.EqualTo(3), "arena.wins");
+            Assert.That(a.Arena.Losses, Is.EqualTo(1), "arena.losses");
+            Assert.That(a.Arena.Streak, Is.EqualTo(2), "arena.streak");
+            Assert.That(a.Arena.TotalPurse, Is.EqualTo(500L), "arena.totalPurse");
+
+            // -- Pet active-slot deploy map (v34, REDS #3, flag_17) -----------
+            Assert.That(a.PetActiveSlots, Is.EqualTo(new List<string> { "ice-wolf", null, "flame-pup" }),
+                "petActiveSlots (incl. the empty middle slot)");
         }
 
         /// <summary>
@@ -410,6 +437,29 @@ namespace DeNelle.Core.Tests
             s.StrategicPlacementMigrated = true;
             s.EchoLanes = "harvest:3,idle,crafting:1";
             s.FreeBuildsUsed = new List<string> { "forge", "armorer" };
+            s.Tribes = new List<DeNelle.Core.World.TribeState>
+            {
+                new DeNelle.Core.World.TribeState
+                {
+                    Id = "ashwood-cult-1",
+                    RegionKey = "Ashwood",
+                    MembersRemaining = 2,
+                    Cleared = true,
+                    ClearCount = 1,
+                },
+            };
+            s.Wards = new List<DeNelle.Core.World.WardStoneState>
+            {
+                new DeNelle.Core.World.WardStoneState
+                {
+                    Id = "ward_goldfields_1",
+                    RegionKey = "Goldfields",
+                    ReachRadiusGranted = 40f,
+                    Lit = true,
+                },
+            };
+            s.Arena = new ArenaProgress { Wins = 3, Losses = 1, Streak = 2, TotalPurse = 500 };
+            s.PetActiveSlots = new List<string> { "ice-wolf", null, "flame-pup" };
         }
 
         // =====================================================================

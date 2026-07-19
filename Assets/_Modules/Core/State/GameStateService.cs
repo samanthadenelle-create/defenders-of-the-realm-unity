@@ -435,6 +435,10 @@ namespace DeNelle.Core.State
                 StrategicPlacementMigrated = s.StrategicPlacementMigrated,   // WO-673 — one-shot bake→BaseLayout migration marker (v30)
                 EchoLanes = s.EchoLanes,             // WO-681/658 — per-Echo gather-lane CSV (additive default-on-read)
                 FreeBuildsUsed = s.FreeBuildsUsed != null ? new List<string>(s.FreeBuildsUsed) : null,   // v32 — consumed first-build freebies (one-shot, never resets)
+                Tribes = s.Tribes != null ? new List<DeNelle.Core.World.TribeState>(s.Tribes) : null,   // WO-160 — roaming-raider progress (v34, REDS #4)
+                Wards = s.Wards != null ? new List<DeNelle.Core.World.WardStoneState>(s.Wards) : null,   // WO-112 — relit wards + earned reach (v34, REDS #4)
+                Arena = s.Arena,             // ARENA MVP — W/L ledger wins/losses/streak/totalPurse (v34, REDS #4); struct -> nullable wire field
+                PetActiveSlots = s.PetActiveSlots != null ? new List<string>(s.PetActiveSlots) : null,   // flag_17 — pet slot->species deploy map (v34, REDS #3)
             };
         }
 
@@ -517,6 +521,10 @@ namespace DeNelle.Core.State
             if (p.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = p.StrategicPlacementMigrated.Value; // WO-673 — migration marker (v30); absent → migrator seeds false
             if (p.EchoLanes != null) s.EchoLanes = p.EchoLanes;   // WO-681/658 — echo lane CSV; absent → keep the "wood" starter default
             if (p.FreeBuildsUsed != null) s.FreeBuildsUsed = p.FreeBuildsUsed;   // v32 — consumed freebies; absent → keep the fresh empty list (old save gains full freebies, correct)
+            if (p.Tribes != null) s.Tribes = p.Tribes;   // WO-160 — roaming-raider progress (v34); absent → keep the fresh empty list (migrator seeds [])
+            if (p.Wards != null) s.Wards = p.Wards;       // WO-112 — relit wards + earned reach (v34); absent → keep the fresh empty list
+            if (p.Arena.HasValue) s.Arena = p.Arena.Value;   // ARENA MVP — W/L ledger (v34); absent → keep the SO's zeroed default (migrator seeds Empty)
+            if (p.PetActiveSlots != null) s.PetActiveSlots = p.PetActiveSlots;   // flag_17 — pet slot->species deploy map (v34); absent → PetAcquisitionService falls back to the legacy starter-in-slot-0 rebuild
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -867,6 +875,10 @@ namespace DeNelle.Core.State
             s.EchoLanes = "harvest:1";                        // WO-738 — New Game: the starter Echo (Frosthowl, index 0) is assigned to the Harvest lane at level 1, so it visibly gathers from turn one (its PREFERRED lane is the stubbed Exploration, but the owner ruling is the first echo must gather). Later Echoes idle until assigned. Richer "lane:level" token grammar.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             s.FreeBuildsUsed = new List<string>();            // v32 — New Game: every catalog id's one-time FREE first build is live again (per-save flags; they replace the retired wood/iron founding seed).
+            s.Tribes = new List<DeNelle.Core.World.TribeState>();          // WO-160 (v34) — New Game: no claimed tribe progress (managers re-seed from defs).
+            s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).
+            s.Arena = ArenaProgress.Empty;                    // ARENA MVP (v34) — New Game: zeroed W/L ledger.
+            s.PetActiveSlots = new List<string>();            // flag_17 (v34) — New Game: no pet slotted (no pet owned on a fresh save).
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.

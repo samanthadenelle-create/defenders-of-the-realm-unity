@@ -26,9 +26,11 @@
 // it authors no Yarn and references no dialogue.
 //
 // ACTIVE SLOTS: start with 1 deploy slot; SetMaxSlots() raises the cap (Fenn's
-// questline → 2, village tier → 3). The slot->petId assignment is RUNTIME state
-// here (rebuilt from the deployed starter on load). FLAG: persisting the exact
-// slot assignment across logins needs a save-layer field — see notes at bottom.
+// questline → 2, village tier → 3). The slot->species assignment persists in
+// GameState.PetActiveSlots (save v34, REDS #3): SyncSlotsFromState rebuilds the
+// runtime map from it on load, and every slot mutation writes it back via
+// PersistSlots. flag_17 FIXED — a multi-slot roster survives a reload (a pre-v34
+// save with no persisted map falls back to the legacy starter-in-slot-0 rebuild).
 //
 // MODULE ISOLATION: DeNelle.Pets references DeNelle.Core only (asmdef). It reaches
 // GameState via DeNelle.Core.State.GameStateService (same as PetDeployer already
@@ -136,8 +138,10 @@ namespace DeNelle.Pets
             if (clamped == _maxSlots) return;
             _maxSlots = clamped;
             // Evict any slot now beyond the cap.
+            bool evicted = _activeSlots.Count > _maxSlots;
             while (_activeSlots.Count > _maxSlots)
                 _activeSlots.RemoveAt(_activeSlots.Count - 1);
+            if (evicted) PersistSlots();   // flag_17 (v34) — persist the eviction so the trimmed map survives a reload
             Changed?.Invoke();
         }
 
@@ -247,9 +251,10 @@ namespace DeNelle.Pets
             if (slot < 0)
                 FlowTrace.Warn("PetAcquire", $"'{species}' acquired but no free deploy slot (MaxSlots={MaxSlots}, filled={FilledSlotCount}) — rests at the Stables");
 
-            // 4) Persist through the unified save (never a stale balance).
-            // flag_17: the exact slot assignment is NOT persisted here — only StarterPetId's
-            // slot is auto-restored on load (SyncSlotsFromState), so multi-slot rosters reset.
+            // 4) Persist through the unified save (never a stale balance). flag_17 FIXED
+            // (v34): TryAssignFreeSlot above already wrote the slot map to
+            // GameState.PetActiveSlots via PersistSlots, so the exact slot assignment now
+            // survives a reload; this Save() also persists the new roster entry.
             svc.Save();
 
             FlowTrace.Step("PetAcquire", $"Acquired '{species}' via {source} — roster now {state.Pets.Count} pet(s), slot={slot}");
@@ -279,6 +284,7 @@ namespace DeNelle.Pets
 
             while (_activeSlots.Count <= slotIndex) _activeSlots.Add(null);
             _activeSlots[slotIndex] = species;
+            PersistSlots();   // flag_17 (v34) — the slot assignment now survives a reload
             RequestRedeploy();
             Changed?.Invoke();
             return true;
@@ -290,6 +296,7 @@ namespace DeNelle.Pets
             if (slotIndex < 0 || slotIndex >= _activeSlots.Count) return false;
             if (string.IsNullOrEmpty(_activeSlots[slotIndex])) return false;
             _activeSlots[slotIndex] = null;
+            PersistSlots();   // flag_17 (v34) — persist the recall
             RequestRedeploy();
             Changed?.Invoke();
             return true;
@@ -312,6 +319,7 @@ namespace DeNelle.Pets
                 if (string.IsNullOrEmpty(_activeSlots[i]))
                 {
                     _activeSlots[i] = species;
+                    PersistSlots();   // flag_17 (v34) — persist the auto-assignment
                     RequestRedeploy();
                     Changed?.Invoke();
                     return i;
@@ -330,11 +338,14 @@ namespace DeNelle.Pets
         // ── Internals ────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Rebuilds the runtime slot map from persisted state on load: the chosen
-        /// starter (GameState.StarterPetId) takes slot 0. Other owned pets stay
-        /// "rested at the Stables" until the player slots them (design §3) — until a
-        /// save field carries the exact assignment (FLAG), only the starter is
-        /// auto-restored so the loaded game matches the deployed starter.
+        /// Rebuilds the runtime slot map from persisted state on load. flag_17 fix
+        /// (REDS #3, save v34): the EXACT slot→species assignment now persists in
+        /// <see cref="GameState.PetActiveSlots"/>, so a multi-slot roster is restored
+        /// verbatim (each still-owned species back in its slot; a null entry = an empty
+        /// slot; a species no longer owned is dropped to null). When that map is absent
+        /// or empty (a pre-v34 save, or a fresh game), we fall back to the LEGACY rebuild:
+        /// the chosen starter (GameState.StarterPetId) takes slot 0 and everything else
+        /// rests at the Stables until slotted — exactly the prior behaviour.
         /// </summary>
         private void SyncSlotsFromState()
         {
@@ -342,6 +353,22 @@ namespace DeNelle.Pets
             var state = StateOrNull();
             if (state == null) { FlowTrace.Warn("PetAcquire", "SyncSlotsFromState: no GameState — slots left empty"); return; }
 
+            // ── Preferred: rebuild the EXACT persisted slot→species map (v34) ──
+            if (state.PetActiveSlots != null && state.PetActiveSlots.Count > 0)
+            {
+                int restored = 0;
+                for (int i = 0; i < state.PetActiveSlots.Count; i++)
+                {
+                    string sp = NormalizeSpecies(state.PetActiveSlots[i]);
+                    // Keep empties as null; drop any species no longer in the roster.
+                    if (!string.IsNullOrEmpty(sp) && Owns(sp)) { _activeSlots.Add(sp); restored++; }
+                    else _activeSlots.Add(null);
+                }
+                FlowTrace.Step("PetAcquire", $"SyncSlotsFromState: restored {restored} persisted slot(s) from GameState.PetActiveSlots (flag_17 fixed — v34)");
+                return;
+            }
+
+            // ── Legacy fallback: pre-v34 save (no slot map) → restore the starter to slot 0 ──
             string starter = null;
             if (!string.IsNullOrEmpty(state.StarterPetId))
             {
@@ -352,10 +379,23 @@ namespace DeNelle.Pets
             if (!string.IsNullOrEmpty(starter))
             {
                 _activeSlots.Add(starter); // slot 0
-                // flag_17: ONLY the starter is restored — any non-starter that was slotted
-                // last session is lost because slot assignment is not persisted.
-                FlowTrace.Step("PetAcquire", $"SyncSlotsFromState: restored starter '{starter}' to slot 0 (non-starter slots NOT persisted — flag_17)");
+                FlowTrace.Step("PetAcquire", $"SyncSlotsFromState: no persisted slot map — restored starter '{starter}' to slot 0 (legacy pre-v34 rebuild)");
             }
+        }
+
+        /// <summary>
+        /// flag_17 fix (v34) — writes the runtime slot map back to the persisted
+        /// <see cref="GameState.PetActiveSlots"/> and saves, so the exact slot→species
+        /// assignment survives a reload / scene transition. Called after every slot
+        /// mutation. No-op when no GameState is available.
+        /// </summary>
+        private void PersistSlots()
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null) { FlowTrace.Warn("PetAcquire", "PersistSlots no-op: no GameState — slot map not persisted"); return; }
+            state.PetActiveSlots = new List<string>(_activeSlots);
+            svc.Save();
         }
 
         /// <summary>

@@ -10,11 +10,12 @@
 // ancient (v1) save runs every step in order. The version-gate tests verify
 // MigrateForImport rejects a save newer than this build / a non-finite version.
 //
-// The chain has grown well past v10 (now v33). The LATER-STEP region below covers
-// v14/17/18/21/22/23/24/25/26/27/28/29/30/31/32/33: the two DATA-MOVING steps
+// The chain has grown well past v10 (now v34). The LATER-STEP region below covers
+// v14/17/18/21/22/23/24/25/26/27/28/29/30/31/32/33/34: the two DATA-MOVING steps
 // (v8 gate-id rename + v18 crystal-fold) are asserted end-to-end, each additive
-// seed is spot-checked, and a full v1->v33 smoke confirms an ancient save reaches
-// the current shape without losing the data it carried.
+// seed is spot-checked (incl. the v34 tribes/wards/arena/petActiveSlots gap-closers),
+// and a full v1->v34 smoke confirms an ancient save reaches the current shape without
+// losing the data it carried.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -500,7 +501,50 @@ namespace DeNelle.Core.Tests
                 "v32->v33 must not rewrite an existing echoLanes token");
         }
 
-        // -- Full-chain smoke - an ancient v1 save reaches v33 without loss ---
+        // -- v33 -> v34 - seed world-content + pet-slot persistence (REDS #3/#4) --
+        [Test]
+        public void migrate_v33_to_current_seeds_empty_world_content_and_pet_slots()
+        {
+            var migrated = SaveMigrator.Migrate(new SaveSchema.PersistedState(), 33);
+            Assert.That(migrated.Tribes, Is.Not.Null.And.Empty,
+                "v33->v34 seeds tribes = [] (a pre-v34 save never persisted tribe progress)");
+            Assert.That(migrated.Wards, Is.Not.Null.And.Empty,
+                "v33->v34 seeds wards = [] (a pre-v34 save never persisted relit wards)");
+            Assert.That(migrated.Arena.HasValue, Is.True, "v33->v34 seeds an arena W/L record");
+            Assert.That(migrated.Arena.Value.Wins, Is.EqualTo(0), "the seeded arena record is zeroed");
+            Assert.That(migrated.Arena.Value.TotalPurse, Is.EqualTo(0L), "the seeded arena purse is 0");
+            Assert.That(migrated.PetActiveSlots, Is.Not.Null.And.Empty,
+                "v33->v34 seeds petActiveSlots = [] (the acquisition service then uses the legacy starter-slot-0 rebuild)");
+        }
+
+        [Test]
+        public void migrate_v33_to_current_preserves_existing_world_content()
+        {
+            // A v33 save already carrying tribe/ward/arena data must keep it through v34
+            // (the step is additive-only — seeds ONLY when null).
+            var s = new SaveSchema.PersistedState
+            {
+                Tribes = new List<DeNelle.Core.World.TribeState>
+                {
+                    new DeNelle.Core.World.TribeState { Id = "ashwood-cult-1", MembersRemaining = 2, ClearCount = 1 },
+                },
+                Wards = new List<DeNelle.Core.World.WardStoneState>
+                {
+                    new DeNelle.Core.World.WardStoneState { Id = "ward_goldfields_1", Lit = true, ReachRadiusGranted = 40f },
+                },
+                Arena = new ArenaProgress { Wins = 3, Losses = 1, Streak = 2, TotalPurse = 500 },
+                PetActiveSlots = new List<string> { "ice-wolf", null, "flame-pup" },
+            };
+            var migrated = SaveMigrator.Migrate(s, 33);
+            Assert.That(migrated.Tribes.Count, Is.EqualTo(1), "v34 must not clobber carried tribes");
+            Assert.That(migrated.Tribes[0].MembersRemaining, Is.EqualTo(2), "carried tribe members-remaining kept");
+            Assert.That(migrated.Wards[0].Lit, Is.True, "carried lit ward kept");
+            Assert.That(migrated.Arena.Value.Wins, Is.EqualTo(3), "carried arena wins kept");
+            Assert.That(migrated.PetActiveSlots, Is.EqualTo(new List<string> { "ice-wolf", null, "flame-pup" }),
+                "carried pet slot map kept (including the empty middle slot)");
+        }
+
+        // -- Full-chain smoke - an ancient v1 save reaches v34 without loss ---
         [Test]
         public void migrate_from_v1_reaches_current_with_every_later_field_seeded()
         {
@@ -534,6 +578,10 @@ namespace DeNelle.Core.Tests
             Assert.That(migrated.StrategicPlacementMigrated.Value, Is.False, "v30 seeded the marker false");
             Assert.That(migrated.EchoLanes, Is.EqualTo("wood"), "v31 seeded the wood echo lane");
             Assert.That(migrated.FreeBuildsUsed, Is.Not.Null.And.Empty, "v32 seeded freeBuildsUsed");
+            Assert.That(migrated.Tribes, Is.Not.Null, "v34 seeded tribes");
+            Assert.That(migrated.Wards, Is.Not.Null, "v34 seeded wards");
+            Assert.That(migrated.Arena.HasValue, Is.True, "v34 seeded the arena record");
+            Assert.That(migrated.PetActiveSlots, Is.Not.Null, "v34 seeded petActiveSlots");
 
             // No loss: the carried value survives every step.
             Assert.That((int)migrated.BestWave.Value, Is.EqualTo(5),
