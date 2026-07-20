@@ -33,6 +33,12 @@ namespace DeNelle.Editor
             "Universal Render Pipeline/Unlit",
             "Universal Render Pipeline/Lit",
 
+            // URP terrain shader — MAT-02: without this the URP Terrain/Lit shader is
+            // stripped from the player build on machines whose build does not reference a
+            // terrain asset, so Shader.Find returns null and the ground renders PINK on
+            // other devices (the pink-floor ship-blocker). Pinning it here is the durable fix.
+            "Universal Render Pipeline/Terrain/Lit",
+
             // URP particle shaders — fixes magenta particles (WO-420).
             "Universal Render Pipeline/Particles/Unlit",
             "Universal Render Pipeline/Particles/Lit",
