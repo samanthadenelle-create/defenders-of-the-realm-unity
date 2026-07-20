@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
@@ -328,6 +329,7 @@ namespace DeNelle.Village
         public void Collapse(string armedDisplayName)
         {
             if (_canvas == null) return;
+            FlowTrace.Step("BuildHud", $"Collapse refs: topBar={_topBarGo!=null} tray={_trayGo!=null} tabRow={_tabRowGo!=null}");
             if (_topBarGo != null) _topBarGo.SetActive(false);
             if (_trayGo != null) _trayGo.SetActive(false);
             if (_tabRowGo != null) _tabRowGo.SetActive(false);
@@ -470,29 +472,55 @@ namespace DeNelle.Village
             btn.targetGraphic = img;
             // BM-2: a Built singleton stays TAPPABLE (so the tap can explain via the toast)
             // but never arms; an unaffordable non-built card greys out + is non-interactable.
+            // The Button is kept for its disabled-tint + press-transition visuals ONLY — the
+            // actual tap is delivered by CardTapGuard below (see WO note), so no onClick
+            // listener is attached (that avoids any desktop double-fire with the guard).
             btn.interactable = built || affordable;
-            btn.onClick.AddListener(() =>
+
+            // ── Touch-web tap-vs-scroll guard (WO: build carousel tap dead on mobile) ──
+            // The card Button is a grandchild of the horizontal ScrollRect (Scroll ->
+            // Content -> Card_*). On touch WebGL a few-px finger drift makes the ScrollRect
+            // claim the gesture as a DRAG, which flips the pointer's eligibleForClick off and
+            // CANCELS the Button's OnPointerClick — so OnEntrySelected -> Arm -> Collapse never
+            // fired (worked with a dev mouse, dead on a phone). CardTapGuard listens on
+            // IPointerDown/IPointerUp (which still fire even after the ScrollRect eats the drag
+            // stream): it records the pointer-down screen position and treats pointer-up as a
+            // CLICK only when travel stayed under a small scaled threshold (~a few % of screen),
+            // otherwise it was a scroll and it does nothing (the ScrollRect keeps the drag).
+            // Platform-agnostic — the same travel guard delivers the tap on desktop and touch,
+            // so no #if UNITY_WEBGL divergence. Routes through the SAME select path the old
+            // onClick used (_armedId + OnEntrySelected + Render), so Arm -> Collapse is unchanged.
+            var tapId = e.id;
+            var tapEntry = e;
+            bool tapBuilt = built;
+            bool tapAffordable = affordable;
+            cardGo.AddComponent<CardTapGuard>().Init(() =>
             {
+                FlowTrace.Step("BuildPalette", $"card onClick FIRED id={tapEntry.id}");
                 // BM-2 (WO-746): the singleton's one copy is already placed — arming is
                 // refused; the tap surfaces the SAME "Already built - your town has one" toast
                 // the WO-707 arm/commit gate uses, so the card stays discoverable but reads as
                 // not-buyable. (Enforcement semantics unchanged — presentation + this tap only.)
-                if (built)
+                if (tapBuilt)
                 {
-                    FlowTrace.Step("Build", $"palette: tapped BUILT singleton card '{e.id}' — arm refused, Singleton toast (WO-746 BM-2).");
+                    FlowTrace.Step("Build", $"palette: tapped BUILT singleton card '{tapId}' — arm refused, Singleton toast (WO-746 BM-2).");
                     BuildFeedbackToast.Show(BuildRejectReason.Singleton);
                     return;
                 }
+                // An unaffordable, non-built card was non-interactable under the old Button —
+                // preserve that: the tap is inert (the greyed card explains itself visually).
+                if (!tapAffordable) return;
                 // WO-352 — if a preview subscriber is attached, defer arming: raise
                 // OnCardTapped so the controller shows the Structure Info Preview panel
                 // (it calls SetArmed on "Place"). Otherwise keep the legacy immediate-arm.
                 if (OnCardTapped != null)
                 {
-                    OnCardTapped.Invoke(e);
+                    FlowTrace.Warn("BuildPalette", "card routed to preview (OnCardTapped) - immediate-arm bypassed");
+                    OnCardTapped.Invoke(tapEntry);
                     return;
                 }
-                _armedId = e.id;
-                OnEntrySelected?.Invoke(e);
+                _armedId = tapId;
+                OnEntrySelected?.Invoke(tapEntry);
                 Render();   // refresh the armed highlight
             });
 
@@ -760,6 +788,53 @@ namespace DeNelle.Village
             t.textWrappingMode = TextWrappingModes.Normal;
             ElarionUiKit.EnsureFont(t);
             return t;
+        }
+    }
+
+    /// <summary>
+    /// Tap-vs-scroll guard for a build-carousel card (WO: mobile card tap dead). The card
+    /// Button is a grandchild of a horizontal ScrollRect, which on touch claims a few-px
+    /// finger drift as a DRAG and cancels the Button's OnPointerClick — so the card never
+    /// armed on a phone (worked with a dev mouse). This component listens on IPointerDown /
+    /// IPointerUp — which STILL fire even after the ScrollRect consumes the drag stream — and
+    /// treats pointer-up as a CLICK only when the pointer travelled less than a small,
+    /// screen-scaled threshold; a larger travel was a scroll and is ignored (the ScrollRect
+    /// keeps its drag). Platform-agnostic: the same travel guard delivers a reliable tap on
+    /// desktop mouse and touch WebGL alike, so no per-platform branch is needed. Pure input
+    /// plumbing; self-contained; ASCII only; null-safe.
+    /// </summary>
+    internal sealed class CardTapGuard : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+    {
+        private System.Action _onTap;
+        private Vector2 _downPos;
+        private bool _tracking;
+        // A tap may drift this many screen pixels before it is re-classified as a scroll.
+        // Scaled to the device: ~2.5% of the smaller screen dimension (WebGL phone DPIs vary
+        // widely), floored at 20px so it is never tighter than comfortable finger jitter.
+        private float _thresholdPx = 20f;
+
+        /// <summary>Wire the confirmed-tap callback (idempotent per card build).</summary>
+        public void Init(System.Action onTap)
+        {
+            _onTap = onTap;
+            float dim = Mathf.Min(Screen.width, Screen.height);
+            _thresholdPx = Mathf.Max(20f, dim * 0.025f);
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData == null) return;
+            _downPos = eventData.position;
+            _tracking = true;
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            if (!_tracking || eventData == null) return;
+            _tracking = false;
+            float travel = (eventData.position - _downPos).magnitude;
+            if (travel <= _thresholdPx)
+                _onTap?.Invoke();
         }
     }
 
