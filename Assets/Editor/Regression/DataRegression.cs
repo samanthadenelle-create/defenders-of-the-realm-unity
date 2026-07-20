@@ -100,6 +100,13 @@ namespace DeNelle.Editor
             // Resources.Load<GameObject>("Enemies/<model>") returns a real prefab.
             CheckEnemies(failures, log);
 
+            // --- WAVE-SCALING (CITY-01 / CITY-06) + KILL REWARDS (BLIND-03-01) -----
+            // Proves the most-played mode (a) escalates per wave (the runtime DEFAULT
+            // WaveScalingCurve applies a multiplier >1 past wave 1 - the fallback
+            // WaveManager.EnsureScalingCurve now always creates) and (b) pays progression
+            // (every enemies.json row carries xp+coin rewards). Both were DEAD in the audit.
+            CheckWaveScaling(failures, log);
+
             // --- STRUCTURES (structures-catalog.json -> CatalogRegistry) -----------
             // The build-mode tower/structure catalog. Each CatalogEntry.visualPrefabPath
             // is a Resources-relative prefab path that StructureFactory.Create feeds to
@@ -265,6 +272,25 @@ namespace DeNelle.Editor
             if (!EchoSpecializationRegression.Run(out var echoSpecReason)) failures.Add(echoSpecReason); else log.AppendLine("[echo-spec] " + echoSpecReason);
             // --- WO-745 Room Forge pipeline gate (catalog/dual-copy/mate/seal/drift/overlap + spine+demo green) ---
             if (!DeNelle.Editor.Regression.RoomForgeRegression.Run(out var roomForgeReason)) failures.Add(roomForgeReason); else log.AppendLine("[room-forge] " + roomForgeReason);
+
+            // --- P1 FIX-PROOF SUITES (14) -- each PROVES one architect-plan P1 fix headless.
+            // Guard.Try-wrapped so one bad suite logs + is skipped, never aborting the batch.
+            // FAIL-BY-DESIGN suites (crystal-production, dungeon-dressing, modal-registration,
+            // ftue-honesty) fail TRUTHFULLY today and flip green when their fix lands.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wave-scaling suite", () => { if (!WaveScalingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wave-scaling] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-rewards suite", () => { if (!EnemyRewardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-rewards] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-mitigation suite", () => { if (!WallHeartMitigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-mitigation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "crystal-production suite", () => { if (!CrystalProductionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[crystal-production] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "sfx-resolve suite", () => { if (!SfxResolveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sfx-resolve] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-dressing suite", () => { if (!DungeonDressingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-dressing] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "modal-registration suite", () => { if (!ModalArbiterRegistrationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[modal-registration] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-reach suite", () => { if (!FoundingReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-reach] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ftue-honesty suite", () => { if (!FtueHonestyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ftue-honesty] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-copy suite", () => { if (!EchoCardCopyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-copy] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "shader-pin suite", () => { if (!ShaderPinRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shader-pin] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
@@ -759,6 +785,75 @@ namespace DeNelle.Editor
             }
             if (badField > 0)
                 failures.Add($"{badField} enemy(ies) have null/empty id or name");
+        }
+
+        // =====================================================================
+        //  WAVE-SCALING (CITY-01 / CITY-06) + KILL REWARDS (BLIND-03-01)
+        //  Two assertions that headlessly prove the core wave loop is no longer a
+        //  no-progression, no-escalation treadmill:
+        //   (1) the runtime DEFAULT WaveScalingCurve (the fallback WaveManager now
+        //       ALWAYS creates when no asset is wired) applies a stat multiplier >1
+        //       past wave 1 and keeps climbing - so wave 19 enemies are NOT wave-1
+        //       enemies (the CITY-01 "no headless proof" gap, CITY-06).
+        //   (2) every real enemies.json row carries xpReward>0 AND coinReward>0 - so
+        //       the most-played mode pays hero XP + gold on every kill (BLIND-03-01).
+        // =====================================================================
+        private static void CheckWaveScaling(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- [wave-scaling] default-curve escalation + kill rewards ---");
+
+            // (1) DEFAULT curve escalation. CreateInstance runs WaveScalingCurve's field
+            //     initializers, which seed the default HP/speed/damage curves - the exact
+            //     object WaveManager.EnsureScalingCurve now returns when no asset is wired.
+            var curve = ScriptableObject.CreateInstance<WaveScalingCurve>();
+            float hp1  = curve.HpMultiplier(1);
+            float hp10 = curve.HpMultiplier(10);
+            float hp19 = curve.HpMultiplier(19);
+            float dmg19 = curve.DamageMultiplier(19);
+            float spd19 = curve.SpeedMultiplier(19);
+            log.AppendLine($"  default curve HP x{hp1:0.00}@w1 -> x{hp10:0.00}@w10 -> x{hp19:0.00}@w19; " +
+                           $"dmg x{dmg19:0.00}@w19; spd x{spd19:0.00}@w19");
+            if (!(hp10 > 1f))
+                failures.Add($"[wave-scaling] default HP multiplier at wave 10 is {hp10:0.00} (expected >1 - wave scaling would be DEAD)");
+            if (!(hp19 > hp1))
+                failures.Add($"[wave-scaling] default HP multiplier does not increase by wave 19 ({hp19:0.00} <= wave-1 {hp1:0.00})");
+            if (!(dmg19 > 1f))
+                failures.Add($"[wave-scaling] default contact-damage multiplier at wave 19 is {dmg19:0.00} (expected >1)");
+            UnityEngine.Object.DestroyImmediate(curve);
+
+            // (2) enemies.json kill rewards. Parse through the same CanonicalJson bytes the
+            //     game reads (WaveDataLoader path), then assert every real row pays out.
+            string json = DeNelle.Core.CanonicalJson.Read(WaveDataLoader.EnemiesRelativePath);
+            EnemyCatalog catalog = null;
+            if (!string.IsNullOrEmpty(json))
+            {
+                try { catalog = JsonConvert.DeserializeObject<EnemyCatalog>(json); }
+                catch (System.Exception ex)
+                {
+                    failures.Add($"[wave-scaling] enemies.json failed to parse for reward check: {ex.Message}");
+                    return;
+                }
+            }
+            if (catalog == null || catalog.Enemies == null || catalog.Enemies.Count == 0)
+            {
+                failures.Add("[wave-scaling] enemies.json produced 0 rows for the reward check");
+                return;
+            }
+
+            int checkedRows = 0, noReward = 0;
+            foreach (var e in catalog.Enemies)
+            {
+                // Skip the schema-doc placeholder row (id carries a space - see CheckEnemies).
+                if (e == null || string.IsNullOrEmpty(e.Id) || e.Id.Contains(" ")) continue;
+                checkedRows++;
+                if (e.XpReward <= 0 || e.CoinReward <= 0)
+                {
+                    noReward++;
+                    failures.Add($"[wave-scaling] enemy '{e.Id}' missing kill rewards " +
+                                 $"(xpReward={e.XpReward}, coinReward={e.CoinReward}; both must be > 0)");
+                }
+            }
+            log.AppendLine($"  reward coverage: {checkedRows - noReward}/{checkedRows} enemy rows carry xp+coin rewards");
         }
 
         // =====================================================================
