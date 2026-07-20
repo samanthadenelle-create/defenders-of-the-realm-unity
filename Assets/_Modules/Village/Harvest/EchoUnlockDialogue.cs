@@ -165,23 +165,37 @@ namespace DeNelle.Village
                 0.05f, 0.40f, bold: true);
 
             // -- RIGHT: name + flavor ------------------------------------------------
-            var nameLabel = ElarionUiKit.Label(content, entry.DisplayName, 0.74f, 0.86f,
+            // NON-OVERLAP BUDGET (content fractions, top->bottom): name 0.75-0.87,
+            // flavor 0.44-0.73, then a ~0.055 gap, then the button block 0.185-0.385
+            // (which itself clears the shared bottom-center Close band that tops out
+            // near y=0.161). Each band is disjoint by construction so nothing can stack.
+            var nameLabel = ElarionUiKit.Label(content, entry.DisplayName, 0.75f, 0.87f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Left,
                 0.45f, 0.97f, bold: true);
             ElarionUiKit.FitSingleLine(nameLabel);
 
-            _flavorLabel = ElarionUiKit.Label(content, entry.Flavor, 0.44f, 0.72f,
+            // BUGFIX (owner F8 screenshot 2026-07-19: "button/text overlap"): the flavor
+            // block used TMP's default Overflow mode, so the longer founding/essence copy
+            // (and the even-longer Lore swapped in by "Tell me more") flowed top-down from
+            // 0.72 and painted PAST its 0.44 rect bottom straight over the buttons whose
+            // tops were at 0.435 (a mere ~0.005/~6px away). FitBlock bounds it to a legible
+            // auto-size range [FontFloor..FontBody] and switches overflow to TRUNCATE, so the
+            // text can NEVER paint below its own rect onto the buttons -- and its rect bottom
+            // (0.44) now sits a full ~0.055 above the button block top (0.385). Guaranteed
+            // no overlap at the LONGEST copy: worst case the tail truncates inside the band.
+            _flavorLabel = ElarionUiKit.Label(content, entry.Flavor, 0.44f, 0.73f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.TopLeft,
                 0.45f, 0.97f, bold: false);
-            _flavorLabel.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.FitBlock(_flavorLabel);
 
-            // -- RIGHT: the three action buttons -------------------------------------
+            // -- RIGHT: the three action buttons (block 0.185-0.385, below the flavor with a
+            //    ~0.055 gap and clear of the shared Close band at the card's bottom-center) --
             ElarionUiKit.Button(content, "I accept your power", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.45f, 0.335f), new Vector2(0.72f, 0.435f), OnAccept);
+                new Vector2(0.45f, 0.285f), new Vector2(0.72f, 0.385f), OnAccept);
             _tellMoreBtn = ElarionUiKit.Button(content, "Tell me more", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.45f, 0.235f), new Vector2(0.72f, 0.325f), OnTellMore);
+                new Vector2(0.45f, 0.185f), new Vector2(0.72f, 0.275f), OnTellMore);
             ElarionUiKit.Button(content, "Dismiss", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.76f, 0.285f), new Vector2(0.97f, 0.435f), OnDismiss);
+                new Vector2(0.76f, 0.185f), new Vector2(0.97f, 0.385f), OnDismiss);
         }
 
         // -- button handlers --------------------------------------------------------
