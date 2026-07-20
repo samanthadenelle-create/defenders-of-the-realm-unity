@@ -638,8 +638,17 @@ namespace DeNelle.Onboarding
             // (flag default ON) — single-hero V1 never shows PetSelect.
             if (FeatureFlags.BypassPetSelect)
             {
-                FlowTrace.Step("Onboarding", "OnDiveVillageClicked: single-hero V1 — GoCastle (PetSelect skipped).");
-                SceneRouter.GoCastle();
+                // FTUE-01 (2026-07-19): the WO-748 founding choice (Default Town vs Build
+                // Your Own) was wired ONLY on the PetSelect route (PetSelectController), so
+                // on this default BypassPetSelect path -- HeroSelect straight to the hub --
+                // it NEVER showed and every fresh founder silently got the blank template.
+                // Present it HERE, at the genuine HeroSelect->hub chokepoint, BEFORE the
+                // first Castle load (the choice must set StrategicPlacementMigrated before
+                // the Castle-scene migration writer runs). PresentOrContinue self-gates on
+                // ShouldOffer (a returning / already-founded player continues straight to
+                // GoCastle), so this only fires on a genuine fresh founding and is idempotent.
+                FlowTrace.Step("Onboarding", "OnDiveVillageClicked: single-hero V1 -- founding choice then GoCastle (PetSelect skipped).");
+                FoundingChoiceController.PresentOrContinue(SceneRouter.GoCastle);
                 return;
             }
 

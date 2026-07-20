@@ -126,6 +126,24 @@ namespace DeNelle.Core.UI
             "build.tab_town",       // WO-702 — BuildPaletteUI Town category tab (registers when the palette builds)
             "build.tab_defenses",   // WO-702 — BuildPaletteUI Defenses category tab (founding_defense beat)
             "build.card.lumberyard",// WO-746 BM-3 — founding_stores anchors its spotlight to the Lumberyard card (registered per Render as build.card.<entryId>)
+            "hud.pets",             // FTUE-04 — the persistent "Pets" pet-box button (EchoUnlockFeedback EchoPetBoxButton) the founding_echo beat spotlights; resolved lazily below
         };
+
+        // FTUE-04: the founding_echo tutorial step spotlights the Pets button, but that
+        // button (EchoUnlockFeedback.BuildPetBoxButton -> GameObject "EchoPetBoxButton")
+        // lives on a self-contained overlay canvas that never called Register. Wire a LAZY
+        // resolver here (in-lane) so the spotlight resolves the LIVE button at show time --
+        // no dependency from the Village button-build code back into Core. Idempotent; a
+        // missing/inactive button resolves to invalid (spotlight degrades gracefully).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void RegisterBuiltInResolvers()
+        {
+            RegisterResolver("hud.pets", () =>
+            {
+                var go = GameObject.Find("EchoPetBoxButton");
+                if (go == null) return default;
+                return go.transform is RectTransform rt ? new HighlightTarget(rt) : default;
+            });
+        }
     }
 }

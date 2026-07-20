@@ -131,8 +131,28 @@ namespace DeNelle.Village
                 // ── Building upgrades ─────────────────────────────────────────────
                 // <<TryUpgradeBuilding "arcane-tower" 2>> — city tier tree (WO-430).
                 case "TryUpgradeBuilding": if (!string.IsNullOrEmpty(a0)) Prog.BuildingUpgradeService.TryUpgrade(a0, ParseInt(a1)); break;
-                // <<structure_upgrade $id>> — resource-building level-up (spend + level).
-                case "structure_upgrade": if (!string.IsNullOrEmpty(a0)) Prog.ResourceBuildingState.TryUpgrade(a0); break;
+                // <<structure_upgrade $id>> — building level-up (spend + level).
+                // BLIND-03-02 dual-authority guard: overlapping ids (forge/lumbermill) live in
+                // BOTH the city-tier catalog AND ResourceBuildingProgression; firing both paths
+                // double-upgrades. Mirror BuildingUpgradeVM._isCity precedence
+                // (BuildingUpgradeVM.cs:114/119): normalize the id, then the CITY tier tree WINS
+                // for any overlapping building. Resource-only buildings (Farm etc.) still level
+                // via ResourceBuildingState.
+                case "structure_upgrade":
+                    if (!string.IsNullOrEmpty(a0))
+                    {
+                        string upId = DeNelle.Core.Catalog.CatalogRegistry.ResolveUpgradeId(a0);
+                        if (BuildingTierCatalog.IsUpgradable(upId))
+                        {
+                            FlowTrace.Step("Dialogue", $"structure_upgrade '{upId}' -> CITY tier authority (overlap precedence).");
+                            Prog.BuildingUpgradeService.TryUpgrade(upId, ParseInt(a1));
+                        }
+                        else
+                        {
+                            Prog.ResourceBuildingState.TryUpgrade(upId);
+                        }
+                    }
+                    break;
 
                 // ── Audio ─────────────────────────────────────────────────────────
                 case "play_sfx": PlaySfx(a0); break;

@@ -1218,11 +1218,11 @@
      "lines": [
       {
        "speaker": "Sylas",
-       "text": "There - and look what came out to meet you. That one's yours now, Keeper."
+       "text": "There - your Hollow stands, and your first Echo has answered. That spirit is yours now, Keeper."
       },
       {
        "speaker": "Sylas",
-       "text": "And that little light by the Hollow is an Echo - tap it sometime; it works for you now."
+       "text": "You'll find it under the Pets button by the tree - it works for you now."
       }
      ]
     }
@@ -1237,15 +1237,15 @@
      "lines": [
       {
        "speaker": "Sylas",
-       "text": "Choose your ground with care. Some roofs hold your stores - grain, timber, coin."
+       "text": "This one earns its keep. Some roofs work your land - grain, timber, coin - and a lumber yard turns the woods into planks."
       },
       {
        "speaker": "Sylas",
-       "text": "When the horde comes, they'll strike what they can reach - an exposed lumber yard burns first, and what burns stops earning."
+       "text": "Set your stores wherever the ground suits you. The raiders march on the Heart of Elarion - they pay your storehouses no mind."
       },
       {
        "speaker": "Sylas",
-       "text": "Put what you cannot afford to lose where you can afford to defend it."
+       "text": "Walls and towers are what hold a horde back. We'll raise those next - that is where your defense is won."
       }
      ]
     }
@@ -1279,11 +1279,11 @@
      "lines": [
       {
        "speaker": "Sylas",
-       "text": "See that little light? An Echo - the tree's helper. It came with your Hollow."
+       "text": "Your first Echo has woken - a spirit of the tree, and it came with your Hollow."
       },
       {
        "speaker": "Sylas",
-       "text": "Tap it and choose what it gathers for you - wood, iron or grain. While you rest, it works."
+       "text": "Open the Pets button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
       }
      ],
      "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."

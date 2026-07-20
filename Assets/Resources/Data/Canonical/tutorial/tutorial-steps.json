@@ -37,7 +37,7 @@
       "highlight": ["build.card.lumberyard"],
       "completion": { "signal": "build.structure_placed:lumberyard" },
       "skippable": true,
-      "objective": { "text": "Place your Lumberyard where you can defend it", "count": 1 }
+      "objective": { "text": "Place your Lumberyard - it harvests timber for you", "count": 1 }
     },
     {
       "id": "founding_town",
@@ -58,10 +58,10 @@
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_echo" },
-      "highlight": [],
+      "highlight": ["hud.pets"],
       "completion": { "signal": "dialogue.ended:tut_founding_echo" },
       "skippable": true,
-      "objective": { "text": "Meet your Echo - it gathers while you rest" },
+      "objective": { "text": "Open the Pets button and set your Echo to gather" },
       "_note": "WO-702 owner refinement: the first Echo is already owned; this beat teaches the gather assignment only. When WO-701 (offline structure repair) lands, add the repair line to tut_founding_echo in the copy pass. The contextual ctx_echo_assign row (echo.born:2) covers the SECOND Echo and stays."
     },
     {
