@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "notes": "Build-mode structure catalog \u2014 DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md \u00a74). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior \u2014 only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats.",
  "entries": [
   {
@@ -24,7 +24,7 @@
      "Structures/Tower_Tribal_Tier3"
     ],
     "navSurface": "Blocker",
-    "visualHeight": 5.0,
+    "visualHeight": 7.0,
     "range": 14.0,
     "damage": 6.0,
     "fireRate": 2.5,
@@ -73,7 +73,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 5.0,
+    "visualHeight": 7.0,
     "range": 22.0,
     "damage": 20.0,
     "fireRate": 0.5,
@@ -123,7 +123,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 2.0,
+    "visualHeight": 7.0,
     "range": 50.0,
     "damage": 45.0,
     "fireRate": 2.0,
@@ -172,7 +172,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 2.0,
+    "visualHeight": 7.0,
     "range": 28.0,
     "damage": 24.0,
     "fireRate": 0.8,
@@ -824,6 +824,7 @@
      "crystals": 0
     },
     "navSurface": "Blocker",
+    "visualHeight": 7.0,
     "placement": {
      "mustSitOn": "Ground",
      "footprint": 8.4,
@@ -875,7 +876,7 @@
      "Structures/ArcaneSpire_3_Albedo"
     ],
     "navSurface": "Blocker",
-    "visualHeight": 6.0,
+    "visualHeight": 7.0,
     "range": 16.0,
     "damage": 16.0,
     "fireRate": 0.6,

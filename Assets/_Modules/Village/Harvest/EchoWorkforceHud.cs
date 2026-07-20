@@ -100,7 +100,7 @@ namespace DeNelle.Village
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoHarvestPanel", "ECHO HARVEST",
                 new Vector2(0.30f, 0.28f), new Vector2(0.70f, 0.72f),
-                onClose: Hide, sortingOrder: 4600,   // above gameplay HUD, below the battle overlay (5000)
+                onClose: Hide, sortingOrder: 31000,   // canon MODAL band (was 4600: full-screen scrim modal drew UNDER runtime HUD overlays)
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
             var content = built.chrome.content.transform;

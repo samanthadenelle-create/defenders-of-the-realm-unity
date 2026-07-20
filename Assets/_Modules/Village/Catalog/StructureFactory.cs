@@ -40,6 +40,31 @@ namespace DeNelle.Village
     public static class StructureFactory
     {
         /// <summary>
+        /// WO-751 (Y-height normalization) - the ONE default fit-to-height (metres) every
+        /// structure with no authored <c>repo.visualHeight</c> normalizes to, so raw modeled
+        /// sizes no longer read inconsistent (owner felt-test on Seeker: "some look smaller").
+        /// ~2x the 1.8 m Knight. Towers OVERRIDE this upward via <c>repo.visualHeight</c> in the
+        /// catalog; everything else stays valueless and inherits this default. Replaces the old
+        /// legacy fit-to-largest-dimension fallback (which was the inconsistency source).
+        /// </summary>
+        public const float DefaultVisualHeight = 4f;
+
+        /// <summary>
+        /// WO-751 - the fit-to-HEIGHT target (metres) for <paramref name="entry"/>: the authored
+        /// <c>repo.visualHeight</c> override when &gt; 0, else <see cref="DefaultVisualHeight"/>.
+        /// Single source of truth so Create / ReskinForLevel / footprint-measure all fit to the
+        /// SAME height (no size jump between placement, upgrade, and ghost/footprint). Only the
+        /// override path changes WHICH height feeds the fit - the bounds+height scale math in
+        /// VisualFactory.Fit is untouched. <paramref name="isOverride"/> reports the source.
+        /// </summary>
+        private static float EffectiveVisualHeight(CatalogEntry entry, out bool isOverride)
+        {
+            float authored = entry != null && entry.repo != null ? entry.repo.visualHeight : 0f;
+            isOverride = authored > 0f;
+            return isOverride ? authored : DefaultVisualHeight;
+        }
+
+        /// <summary>
         /// Create one structure from <paramref name="entry"/> at <paramref name="pose"/>.
         /// Resolves the visual (via <see cref="VisualFactory"/>), attaches the
         /// behaviour component named by <c>entry.repo.behaviorId</c>, and parents
@@ -72,27 +97,20 @@ namespace DeNelle.Village
             FlowTrace.Step("Structure", $"'{entry.id}' root '{root.name}' created at {pose.position}.");
 
             // LOOK — skin the polyperfect/Resources visual under the root.
-            // DEF-208: a tall structure (tower) must fit to HEIGHT, not to its largest
-            // bounds dim. Fit-to-largest scaled a tower so its tallest axis = footprint
-            // (~2.5 m) → a squashed/wrong-scaled tower. When repo.visualHeight > 0 we
-            // fit-to-height (correct, data-driven right-size); otherwise keep the legacy
-            // footprint-largest fit for walls / props that read fine that way.
+            // DEF-208 + WO-751 (Y-height normalization): EVERY structure fits to HEIGHT now.
+            // A tall structure (tower) must fit to HEIGHT, not to its largest bounds dim
+            // (fit-to-largest scaled a tower so its tallest axis = footprint ~2.5 m -> a
+            // squashed/wrong-scaled tower). When repo.visualHeight > 0 we fit to that override
+            // (towers stand tall); otherwise we fit to DefaultVisualHeight so no-value structures
+            // normalize to ONE standard height instead of the old legacy footprint-largest fit
+            // (the inconsistency source the owner flagged).
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
-                SkinOptions opts;
-                float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
-                if (visualHeight > 0f)
-                {
-                    opts = SkinOptions.Structure(0f);   // clear FitLargest
-                    opts.FitHeight = visualHeight;       // fit to real-world height instead
-                }
-                else
-                {
-                    float fit = entry.repo != null && entry.repo.placement != null
-                        ? Mathf.Max(1f, entry.repo.placement.footprint)
-                        : 3f;
-                    opts = SkinOptions.Structure(fit);
-                }
+                float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);
+                var opts = SkinOptions.Structure(0f);   // clear FitLargest
+                opts.FitHeight = targetHeight;           // fit to real-world height (override or default)
+                FlowTrace.Step("Structure", $"'{entry.id}' fit-to-height target={targetHeight:0.##}m " +
+                    $"(source={(heightOverride ? "override" : "default")}).");
 
                 // G: Guard the Skin — a throwing VisualFactory (bad prefab path / Addressables
                 // hiccup) logs + rolls up instead of aborting the whole create. null => meshless.
@@ -336,21 +354,15 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>DEF-208 skin options for an entry — fit-to-height when repo.visualHeight
-        /// is authored, else legacy fit-to-footprint. Shared by Create + ReskinForLevel.</summary>
+        /// <summary>DEF-208 + WO-751 skin options for an entry - fit-to-HEIGHT always: the
+        /// authored repo.visualHeight override when &gt; 0, else DefaultVisualHeight. Shared by
+        /// Create + ReskinForLevel so a tier reskin fits to the SAME height as the base skin
+        /// (no size jump on upgrade for a no-value structure).</summary>
         private static SkinOptions OptsFor(CatalogEntry entry)
         {
-            float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
-            if (visualHeight > 0f)
-            {
-                var o = SkinOptions.Structure(0f);
-                o.FitHeight = visualHeight;
-                return o;
-            }
-            float fit = entry.repo != null && entry.repo.placement != null
-                ? Mathf.Max(1f, entry.repo.placement.footprint)
-                : 3f;
-            return SkinOptions.Structure(fit);
+            var o = SkinOptions.Structure(0f);   // clear FitLargest
+            o.FitHeight = EffectiveVisualHeight(entry, out _);
+            return o;
         }
 
         // V (render-verify) + footprint self-report. Mirrors HeroArmorVisual.VerifyArmorRendersNow:
@@ -573,10 +585,11 @@ namespace DeNelle.Village
                 // authored footprint (the temp object is still destroyed in finally), never throws up.
                 Guard.Try("Structure", $"measure upright footprint '{entry.id}'", () =>
                 {
-                    SkinOptions opts;
-                    float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
-                    if (visualHeight > 0f) { opts = SkinOptions.Structure(0f); opts.FitHeight = visualHeight; }
-                    else                   { opts = SkinOptions.Structure(authored); }
+                    // WO-751: match Create's fit-to-height (override or DefaultVisualHeight) so the
+                    // measured XZ footprint reflects the ACTUAL placed scale, not a footprint-fit
+                    // scale - otherwise ghost/placement footprint disagrees with the placed size.
+                    var opts = SkinOptions.Structure(0f);   // clear FitLargest
+                    opts.FitHeight = EffectiveVisualHeight(entry, out _);
 
                     var visual = VisualFactory.Skin(probe.transform, entry.visualPrefabPath, opts);
                     if (visual == null)

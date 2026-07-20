@@ -91,7 +91,7 @@ namespace DeNelle.Village
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoRoster", "ECHOES OF ELARION",
                 new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.90f),
-                onClose: Close, sortingOrder: 4650,
+                onClose: Close, sortingOrder: 31000,   // canon MODAL band (was 4650: drew UNDER runtime HUD overlays)
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
             var content = built.chrome.content.transform;

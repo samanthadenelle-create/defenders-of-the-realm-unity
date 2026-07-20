@@ -122,12 +122,12 @@ namespace DeNelle.Village
         private void Build()
         {
             // Whole modal in one call: canvas + scrim (tap-outside closes) + Obsidian
-            // chrome + ONE shared Close. Compact card, centred; sorting mirrors the
-            // Echo Harvest panel (above gameplay HUD, below the battle overlay).
+            // chrome + ONE shared Close. Compact card, centred; sits in the MODAL band,
+            // just above the roster (31000) so the per-echo picker stacks on top of it.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoCard", "ECHO",
                 new Vector2(0.28f, 0.24f), new Vector2(0.72f, 0.76f),
-                onClose: Close, sortingOrder: 4600,
+                onClose: Close, sortingOrder: 31010,   // >= roster (31000) so picker stacks on top (was 4600: under HUD)
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
             var content = built.chrome.content.transform;

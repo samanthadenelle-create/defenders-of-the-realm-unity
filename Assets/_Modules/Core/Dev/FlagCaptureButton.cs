@@ -147,20 +147,29 @@ namespace DeNelle.Core.Dev
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 5300;   // above gameplay HUD, below OwnerDev(5500)/DevPanel(9000) modals
 
+            // Mirror the HUD kit scaler (HudAreasHost: ScaleWithScreenSize, 1080x1920, match 0.5)
+            // so this dev chip lives in the SAME coordinate space as the vitals/heart cluster and
+            // its fractional anchor lands consistently across resolutions. ConstantPixelSize let the
+            // old hardcoded (12,-156) offset drift ON TOP of the HP/MP bars on scaled devices.
             var scaler = _canvasGo.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
 
-            // --- the FLAG chip: TOP-LEFT, seated below the vitals plate ---
+            // --- the FLAG chip: LEFT EDGE, in the EMPTY mid-left band (between the Dock area at
+            // y0.330-0.430 and the HeartStatus area at y0.700-0.792) so the dev overlay is clear
+            // of the real vitals plate (y0.800-0.985), the SKILL chip and the Heart of Elarion bar. ---
             var go = new GameObject("Btn_Flag", typeof(Image), typeof(Button));
             go.transform.SetParent(_canvasGo.transform, false);
             _buttonImage = go.GetComponent<Image>();
             _buttonImage.color = IdleColor;
 
             var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);   // top-left
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(12f, -156f);       // below a typical vitals plate
-            rt.sizeDelta = new Vector2(104f, 76f);               // ~104x76 touch target
+            rt.anchorMin = rt.anchorMax = new Vector2(0.012f, 0.55f);   // left edge, mid-left empty band
+            rt.pivot = new Vector2(0f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(120f, 84f);               // mobile-safe touch target (>=112 rule)
 
             var btn = go.GetComponent<Button>();
             btn.onClick.AddListener(OnFlagTapped);

@@ -88,12 +88,12 @@ namespace DeNelle.Village
             EnsureEventSystem();
 
             // Shared obsidian chrome + scrim (tap-outside closes) + ONE canon Close.
-            // Wide landscape card (portrait left, text right). Sorting above the harvest
-            // panel (4600), below the battle overlay (5000).
+            // Wide landscape card (portrait left, text right). Sits ABOVE both the roster
+            // (31000) and the echo card/picker (31010) in the canon MODAL band.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoesOfElarion", "ECHOES OF ELARION",
                 new Vector2(0.14f, 0.20f), new Vector2(0.86f, 0.82f),
-                onClose: Close, sortingOrder: 4700,
+                onClose: Close, sortingOrder: 31020,   // above roster+card so unlock card is topmost (was 4700: under HUD)
                 frameName: RpgUiCatalog.FrameCore);
             _canvas = built.canvas;
             var content = built.chrome.content.transform;
