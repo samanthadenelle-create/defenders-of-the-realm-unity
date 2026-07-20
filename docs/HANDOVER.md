@@ -15,6 +15,47 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-07-19 EVENING (felt-test fix wave) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-07-19.md` (still current). Branch `wip/village2-and-f8-tickets`.
+This block sits ON TOP of the 07-19 morning block below (WO-748/749 done, all 5 regression reds GREEN
+-> `REGRESSION_OK`, save v34, both known dictionaries, d4 purged). Do not act on the morning block's
+"WO next-free = 750" line — it advanced this evening.
+
+**THE EVENING FELT-TEST FIX WAVE (in progress; CLI is committing it):**
+- **Pet screen** sort-order fix.
+- **HUD** de-overlap pass.
+- **WO-751 Y-height normalization (IMPLEMENTED):** every placed item normalized by Y-height —
+  default **4m**, tower override **7m**, siege override **3m** — plus a Y-height audit tool.
+- **Echo modal single-arbiter:** routed through `PanelManager` so only one Echo modal can arbitrate.
+- **Upgrade panel visuals:** event-driven rebuild, text-fit, hotkey key-letters removed (mobile = no keys on HUD).
+- **Flag-screenshot** saves on release (not on press).
+- **In-flight (still being committed):** upgrade no-op blocker; white-ballista / magenta-weapon material
+  fixes; **WO-753 Destructible lifecycle** (destroyed items = NO rebuild + full-cost + VFX cleanup via a
+  new `Destructible` component).
+
+**NEW WOs MINTED 2026-07-19 evening:**
+- **750** — Right ActionBar naming + Warden's Grace redesign. SPEC (blocked on 2 clip IDs).
+- **751** — Y-height normalization. IMPLEMENTED this wave (default 4m / tower 7m / siege 3m + audit tool).
+- **752** — Echo founding-card overhaul + post-tutorial interjection. SPEC + creative sign-off (awaiting copy).
+- **753** — Destructible lifecycle (no-rebuild + full-cost + VFX cleanup). IN PROGRESS (spec file pending).
+
+**NEW DESIGN RULINGS / MEMORIES (2026-07-19):**
+- **Right ActionBar = Attack + Q/W/E/R named skills:** Sword Wielding / Sword Heroic / Shield Charge /
+  Warden's Grace / Radiant Strike. **Mobile HUD shows NO key-letters.**
+- **All placed items normalized by Y-height** (WO-751 tiers above).
+- **Echo = the essence of a person the tree guards** — 6 named people: Aldwin, Elowen, Corvin, Bran,
+  Doran, Maren (feeds WO-752 founding-card overhaul).
+- **Destroyed items = no rebuild + full-cost + VFX cleanup** via the `Destructible` component (WO-753).
+- **A headless UI-screenshot pass must run before builds.**
+
+**OPEN (owner):** felt-verify the fix wave on mobile (pet sort, HUD overlap, Y-heights, Echo modal,
+upgrade panel legibility, flag screenshot-on-release); confirm the 2 clip IDs for WO-750; copy sign-off
+for WO-752; then authorize the held push. `/mcp` still pending to unblock live Notion sync.
+**WO next-free = 754** (750-753 consumed).
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-07-19 (all 5 regression reds GREEN; WO-748/749 done; d4 purged) ★★
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-07-19.md` (read first). Branch `wip/village2-and-f8-tickets`,

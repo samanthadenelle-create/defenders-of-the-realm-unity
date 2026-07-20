@@ -22,6 +22,7 @@ ANYTHING until the boot sequence below is complete and reported.**
 | 7 | `docs/MASTER_CATALOG.md` → the `docs/MASTER_CATALOG/<area>.md` for whatever you'll touch | Be the SME before changing anything. Verified from code; comments lie. |
 | 8 | `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE_PRINCIPLES.md` | The HP B2B law: bounded contexts, presentation never touches objects, the One Model, queue by leverage. |
 | 9 | Auto-memory `MEMORY.md` index | Owner preferences + hard-won lessons. Index lines are pointers — read the file before asserting. |
+| 9b | `SUNDAY_HOUSEKEEPING.md` + `docs/reference/*` (known dictionaries) | The weekly full-sweep ritual (BINDING) + the stored registries (hero-animation dictionary, regression-coverage matrix). State stays known via these. |
 
 ## 2. WHO DOES WHAT (non-negotiable)
 

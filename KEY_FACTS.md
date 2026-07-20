@@ -143,10 +143,17 @@
 ## UI / input
 - ASCII-only TMP strings (non-ASCII glyphs = tofu □ on device); never meaning by color alone (owner red/green colorblind). HUDUI oracle locks the tofu class. *(2026-07-12)*
 - Build-mode touch: uGUI verb bar + PLACE + kit d-pad (publishes `HudMoveInput` → merged with arrow-key read). GhostPreview moves its CHILD visual — probe via `GhostPreview.CurrentPosition`, never the host transform. *(2026-07-12)*
+- **Right ActionBar = Attack + Q/W/E/R named skills:** Sword Wielding / Sword Heroic / Shield Charge / Warden's Grace / Radiant Strike. **Mobile HUD shows NO key-letters** (WO-750 SPEC). *(2026-07-19)*
+- **All placed items normalized by Y-height:** default **4m**, tower override **7m**, siege override **3m**, + a Y-height audit tool (WO-751 IMPLEMENTED). *(2026-07-19)*
+- **Destroyed items = NO rebuild + full-cost + VFX cleanup** via a new `Destructible` component (WO-753 in progress). *(2026-07-19)*
+- **Headless UI-screenshot pass must run before builds** (felt-test-wave standing rule). *(2026-07-19)*
+
+## Echo canon
+- **Echo = the essence of a person the tree of Elarion guards** — 6 named people: Aldwin, Elowen, Corvin, Bran, Doran, Maren. Feeds the WO-752 founding-card overhaul + post-tutorial interjection (SPEC + creative sign-off, awaiting copy). Balance/lane model unchanged (see the Echo model line under Data catalogs). *(2026-07-19)*
 
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
 - Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 750** as of 2026-07-19, 739-749 consumed; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 754** as of 2026-07-19 evening, 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ⛔ Apex dragon model = CC BY-NC — license/replace before commercial release.

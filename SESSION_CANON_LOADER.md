@@ -1,5 +1,20 @@
 # DeNelle Studios — Project Canon Loader
 
+> ## ▶ LIVE THREAD (2026-07-19 EVENING) — READ BEFORE WORKING
+> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-19.md` (still current).** On top of the 07-19
+> morning arc below: a **FELT-TEST FIX WAVE** (CLI committing) — pet-screen sort-order, HUD de-overlap,
+> **WO-751 Y-height normalization** (default 4m / tower 7m / siege 3m + audit tool), Echo modal single-
+> arbiter via `PanelManager`, upgrade-panel visuals (event-driven rebuild, text-fit, hotkeys removed),
+> flag-screenshot save-on-release; **in-flight:** upgrade no-op blocker, white-ballista/magenta-weapon
+> materials, **WO-753 Destructible** (no-rebuild + full-cost + VFX cleanup). **New WOs:** 750 (Right
+> ActionBar naming + Warden's Grace redesign, SPEC), 751 (Y-normalization, DONE), 752 (Echo founding-card
+> overhaul + post-tutorial interjection, SPEC + creative sign-off), 753 (Destructible, IN PROGRESS).
+> **New rulings:** Right ActionBar = Attack + Q/W/E/R named skills (Sword Wielding/Sword Heroic/Shield
+> Charge/Warden's Grace/Radiant Strike), mobile HUD shows NO key-letters; all items normalized by
+> Y-height; Echo = essence of a person the tree guards (Aldwin/Elowen/Corvin/Bran/Doran/Maren); destroyed
+> items never rebuild (full-cost + VFX cleanup); headless UI-screenshot pass runs before builds.
+> **WO next-free = 754** (750-753 consumed). **The morning 07-19 line below is still valid history.**
+>
 > ## ▶ LIVE THREAD (2026-07-19) — READ BEFORE WORKING
 > **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-19.md` (read it first).** Since 07-18: HEAD
 > `98ff1135`, **local ahead of origin by 7, PUSH HELD**. **DataRegression is `REGRESSION_OK` — ZERO reds**
@@ -68,7 +83,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 07-18 arc: WO-744 strict-MVVM whole-game migration + WO-740–745 Room Forge into mainline + WO-746 Build-Mode felt-fixes, pushed to origin (local == origin after each push).** Save schema **v33** (echoLanes `lane:level` token, WO-738; every 21→33 bump has a SaveMigrator step). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression at the **8-known-red baseline** (arena ground, B2 dual-wallet, pet-slot, core-save Tribes/Wards/Arena, fountain L2/L3, DATAWEB drift, HUDUI, orc-raider) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 07-18 arc: WO-744 strict-MVVM whole-game migration + WO-740–745 Room Forge into mainline + WO-746 Build-Mode felt-fixes, pushed to origin (local == origin after each push).** Save schema **v34** (persist Tribes/Wards/Arena + pet active-slot; every 21→34 bump has a SaveMigrator step). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).

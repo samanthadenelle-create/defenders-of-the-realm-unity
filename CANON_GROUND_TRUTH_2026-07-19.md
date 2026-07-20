@@ -1,5 +1,21 @@
 # CANON GROUND TRUTH — 2026-07-19
 
+> ## ⚠ EVENING ADDENDUM (2026-07-19 evening — supersedes the stale morning lines below)
+> The body below is the 07-19 MORNING snapshot. Current reality after the evening FELT-TEST FIX WAVE:
+> **WO next-free = 754** (739-753 consumed — the morning "750" line is stale). HEAD has advanced past
+> `98ff1135` (the felt-test fixes + docs). **Still `REGRESSION_OK` (0 reds).** Landed this evening: pet-screen
+> sort-order, HUD de-overlap, **WO-751 Y-height normalization** (default 4m/tower 7m/siege 3m + audit tool),
+> Echo modal single-arbiter (PanelManager), upgrade-panel visuals (event-driven + text-fit + hotkeys removed),
+> flag-screenshot save-on-release, **upgrade no-op blocker FIXED** (wrong-wallet: city path now spends the
+> GameState/ResourceLedger wallet), white-ballista/magenta-weapon materials, **WO-753 Destructible**
+> (no-rebuild + full-cost + VFX cleanup). **New WOs:** 750 (Right ActionBar naming + Warden's Grace, SPEC),
+> 751 (DONE), 752 (Echo founding-card + interjection, SPEC+creative sign-off), 753 (Destructible),
+> 754 (rewarded ads SPEC), 755 (pack catalog SPEC), 756 (sales banner + campaign tool SPEC). **New rulings:**
+> Right ActionBar = Attack + Q/W/E/R named skills (no mobile key-letters); Y-height normalization; Echo =
+> essence of a guarded person (Aldwin/Elowen/Corvin/Bran/Doran/Maren); destroyed = no-rebuild + Destructible;
+> headless UI-screenshot pass runs before builds. For the fullest current state read `KEY_FACTS.md` +
+> `docs/HANDOVER.md` newest block (both current).
+
 > **Purpose:** the single anchor of *current reality*, verified from the working tree, HEAD, the gates,
 > and owner rulings given live. **Supersedes `CANON_GROUND_TRUTH_2026-07-18.md`** (bannered). If a doc
 > contradicts a line here, the doc is STALE. Read this -> `KEY_FACTS.md` -> `SESSION_CANON_LOADER.md`

@@ -2,11 +2,25 @@
 
 Purpose: stand up a BRAND-NEW Notion instance for the project so that the instant the
 owner authenticates the Notion MCP server, setup is one import/paste away. Prepared
-2026-07-19 while the Notion MCP was DISCONNECTED (auth is an interactive owner-only step).
+2026-07-19; refreshed 2026-07-19 evening (felt-test fix wave).
+
+> ## !! BLOCKED ON OWNER: live Notion sync CANNOT run until `/mcp` auth !!
+> The Notion MCP server is currently **DISCONNECTED**. No agent can create or sync any Notion
+> content until the owner authenticates it (interactive, owner-only). **The kit in this folder is
+> fully import-ready** - the CSV + schema + all four DB seeds are staged and current. The ONE
+> unblocking action is STEP 0 below (`/mcp` -> Notion server -> OAuth sign-in -> "connected").
+> Until then this is a prepared kit, not a live board.
 
 Companion files in this folder:
 - `notion-schema.md` - exact schema for all four databases (properties, options, views).
-- `work-orders-seed.csv` - 665 rows, one per `WorkOrders/*.md`, git-reconciled status. Direct Notion import.
+- `work-orders-seed.csv` - one row per `WorkOrders/*.md`, git-reconciled status (refreshed 2026-07-19
+  evening: 748/749 -> Done+RESULT, added 750-753). Direct Notion import for DB 1.
+
+The other three DBs are ALSO seed-ready from the repo (import/paste once Notion is live):
+- **DB 2 Regression Coverage** <- `docs/reference/REGRESSION_COVERAGE_MATRIX.md` (KNOWN DICTIONARY, exists).
+- **DB 3 Known Dictionaries** <- `docs/reference/` (HERO_ANIMATION_DICTIONARY.md + REGRESSION_COVERAGE_MATRIX.md,
+  both exist) + the six-row list in `SUNDAY_HOUSEKEEPING.md`.
+- **DB 4 Sunday Sweep Log** <- first live row is written by the next `SUNDAY_HOUSEKEEPING.md` sweep after connect.
 
 Grounded in: `NOTION_SOURCE_OF_TRUTH.md` (retired board ids), `CLI_LANES_WO_NUMBERS.md`
 (numbering authority), CLAUDE.md 2 + 13 (WO protocol + QA->CLI->PO pipeline),
@@ -38,8 +52,8 @@ All four databases live as sub-pages / inline DBs under it.
 Add an intro callout on the page:
 - Numbering authority stays in git (`CLI_LANES_WO_NUMBERS.md` banner); Notion is the board VIEW.
 - Full WO specs + RESULTs stay in `WorkOrders/` in the repo.
-- As of 2026-07-19: banner next-free = 749, but a `WORK_ORDER_749_dungeon_ingredient_sourcing.md`
-  file now exists on disk -> effective next-free = 750 (flag for banner reconciliation on the next sweep).
+- As of 2026-07-19 evening: banner next-free = **754** (739-753 consumed; 750 SPEC, 751 DONE,
+  752 SPEC, 753 IN PROGRESS).
 
 ---
 
@@ -60,10 +74,12 @@ Add an intro callout on the page:
 4. Build the five views from `notion-schema.md` DB 1: By Status, By Silo, By Stage
    (pipeline), Live queue, Current arc.
 
-Seed data reality (as enumerated + git-reconciled 2026-07-19):
-- 665 rows total (the WorkOrders/ folder is a mostly-frozen archive; many pre-pivot
+Seed data reality (as enumerated + git-reconciled 2026-07-19, refreshed 07-19 evening):
+- ~669 rows total (the WorkOrders/ folder is a mostly-frozen archive; many pre-pivot
   WOs read "READY" in their spec header but are historical - see `WorkOrders/README.md`).
-- Status distribution: RESULT-filed 65, Done 20, In Implementation 3, Ready 478, Spec 99.
+  The 07-19-evening refresh reconciled 748/749 to Done+RESULT and appended 750-753.
+- Status distribution is dominated by Ready (historical specs) + RESULT-filed/Done; the live-arc
+  rows below carry the authoritative current status.
 - Current live arc (cite these; the rest of the folder is history):
   - WO-739 Ready (Enhancement Path obsidian upgrade panel; banner 2026-07-17b).
   - WO-740..743 + 745 Done/closed - Room Forge program, commit `f86e7f3f`
@@ -73,8 +89,12 @@ Seed data reality (as enumerated + git-reconciled 2026-07-19):
   - WO-747 Done - gear curation -> runtime; committed `7c843ad3`. NOTE: the spec header
     still reads "IN IMPLEMENTATION" - the CSV reconciles it to Done via git. Reconcile the
     spec header on the next sweep.
-  - WO-748 Ready - Founding "Default Town vs Build Your Own" choice; awaiting owner go.
-  - WO-749 Ready - dungeon ingredient sourcing; awaiting owner go.
+  - WO-748 Done + RESULT-filed - Founding "Default Town vs Build Your Own" choice (commit f5fcbde2).
+  - WO-749 Done + RESULT-filed - dungeon ingredient sourcing (commit 0c64daaa; +7 gear-component MaterialDefs).
+  - WO-750 Ready - Right ActionBar naming + Warden's Grace redesign; SPEC, blocked on 2 clip IDs.
+  - WO-751 Done - Y-height normalization (default 4m / tower 7m / siege 3m + audit tool), felt-test fix wave.
+  - WO-752 Ready - Echo founding-card overhaul + post-tutorial interjection; SPEC + creative sign-off, awaiting copy.
+  - WO-753 In Implementation - Destructible lifecycle (no-rebuild + full-cost + VFX cleanup); CLI committing, spec file pending.
 
 The Notion import inherits the CSV's Notes column, which carries each row's status
 citation (spec Status line / commit / RESULT-filed), so provenance survives the import.
@@ -87,9 +107,9 @@ citation (spec Status line / commit / RESULT-filed), so provenance survives the 
    (Finding title, Silo, Severity P1/P2/P3, Covered? Yes/No/Soft, Covering Suite,
    Proposed Regression, Source file:line, Sweep Date, WO relation -> Work Orders).
 2. Views: Uncovered (filter Covered? = No), By Silo, Soft coverage.
-3. Seed source: the current `docs/reference/REGRESSION_COVERAGE_MATRIX.md` (KNOWN
-   DICTIONARY). If that file exists, import/paste its matrix; otherwise leave empty and
-   let the first Sunday sweep populate it (SUNDAY_HOUSEKEEPING.md step 4).
+3. Seed source: `docs/reference/REGRESSION_COVERAGE_MATRIX.md` (KNOWN DICTIONARY) - **it EXISTS
+   as of 2026-07-19**, so import/paste its matrix directly. (Fallback if ever missing: leave empty
+   and let the first Sunday sweep populate it, SUNDAY_HOUSEKEEPING.md step 4.)
 
 ---
 
@@ -99,7 +119,9 @@ citation (spec Status line / commit / RESULT-filed), so provenance survives the 
    (Dictionary title, What it stores, Location, Last refreshed, Owner).
 2. Seed the six rows verbatim from `notion-schema.md` DB 3 / `SUNDAY_HOUSEKEEPING.md` 2
    (Hero Animation map, Regression-coverage matrix, WO ledger, Feature-flag registry,
-   Save-schema field map, Regression-oracle inventory).
+   Save-schema field map, Regression-oracle inventory). Two of the six are LIVE files in the
+   repo already - point their Location at `docs/reference/HERO_ANIMATION_DICTIONARY.md` and
+   `docs/reference/REGRESSION_COVERAGE_MATRIX.md` (both exist as of 2026-07-19).
 3. View: Stale watch (sort Last refreshed ascending).
 
 ---

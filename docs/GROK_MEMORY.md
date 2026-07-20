@@ -13,7 +13,7 @@
 | **Primary (prefer)** | `D:\EoA` | Branch `wip/village2-and-f8-tickets` — **Grok-03 pack copied here 2026-07-14 (uncommitted until sole committer stages)** |
 | Grok worktree | `C:\Users\Elden\.grok\worktrees\eoa\defenders` | Detached HEAD; safe to `git worktree remove` **after** verify files on `D:\EoA` |
 
-**Next free WO: 723** (banner `CLI_LANES_WO_NUMBERS.md` + `KEY_FACTS.md`).
+**Next free WO: 754** (banner `CLI_LANES_WO_NUMBERS.md` + `KEY_FACTS.md`). *(was 723; bumped 2026-07-19 evening — 738-753 consumed.)*
 
 ---
 

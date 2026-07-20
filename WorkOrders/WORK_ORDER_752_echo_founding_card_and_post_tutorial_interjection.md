@@ -1,0 +1,46 @@
+# WORK ORDER 752 — Echo founding card overhaul + post-tutorial Echo interjection
+
+**Status:** SPEC — READY TO IMPLEMENT (owner rulings 2026-07-19, felt-test). Awaiting owner go + copy sign-off.
+**Classification:** narrative + onboarding flow + UI layout. Player-felt.
+**PO:** Sam. Memory: [[echo-is-essence-of-guarded-person]], [[echo-lane-design-rulings]]. WO-738 Echo model.
+
+## Part A — Founding-Echo card overhaul (the card is failing on 4 fronts)
+The founding-Echo unlock card (`EchoUnlockDialogue`, fired by `EchoService.AnnounceFoundingEcho`) is broken:
+1. **Header** "Echo Leveled Up to 1!" is nonsense on a first-unlock (awakening, not a level-up; you START at 1).
+   -> Founding/first-unlock header = **"An Echo Awakens"** (or "<Echo> Awakens"). Keep "Leveled Up to N" ONLY
+   for real level-ups (2+). The founding path must pass an AWAKEN header, not the level-up template.
+2. **Layout** — the Show less / Dismiss / Close buttons OVERLAP each other and COVER the description text.
+   -> Lay buttons in a clean, non-overlapping row; give the description its own bounded scroll area.
+3. **Story** — copy never conveys the core concept: **an Echo is the awakened ESSENCE of one of the PEOPLE
+   the Heart of Elarion guards/remembers** (not a generic elemental). Rewrite the copy in `EchoRosterCatalog.cs`.
+4. **Subtitle** — "Ice Elemental" reads as a monster. -> a person's-essence subtitle (owner wording).
+
+**Approved reframe (owner 2026-07-19), Frosthowl — apply the same shape to all 6 echoes:**
+> **An Echo Awakens** / **Frosthowl** - *Essence of a fallen keeper*
+> "The Heart of Elarion remembers every soul it has guarded. I was one - a keeper of the old light, kept
+> safe in the tree until a new defender rose. Now I wake as Frosthowl, the Ice Echo. My essence is yours to
+> call. Together, we hold the last light."
+(Owner open q: keep name "Frosthowl", or give the person a name w/ Frosthowl as their ice-form.)
+
+## Part B — Post-tutorial Echo interjection -> pet tutorial (NEW onboarding beat)
+**When the tutorial is OVER — whether it ENDED naturally OR was INTERRUPTED/skipped — the founding Echo
+(Frosthowl) interjects.** Flow:
+1. **Interject** — Frosthowl speaks up (portrait/dialogue via DialogueService), in-character.
+2. **Ask how it can best help** — presents the lane offer (Harvest / Crafting / Defense / Exploration) — this
+   is the DEFERRED lane-assignment moment (canon: tutorial teaches the claim-loop first, then the echo asks).
+3. **Advise on actions** — short guidance on what to do next (claim resources / build / etc.), in Frosthowl's voice.
+4. **Tag the pet tutorial** — hand off / trigger the pet tutorial as the next onboarding beat.
+
+**Hooks:** `TutorialFlow` must fire this on BOTH completion AND interrupt/skip (one shared exit point ->
+`EchoService`/DialogueService interjection -> on-close -> start the pet tutorial). Idempotent (once per save,
+persisted flag, like `echo_founding_taught`). ASCII-only; code-built UI; mobile-input ruling (no key letters).
+
+## Acceptance
+- Card: awaken header, non-overlapping buttons, essence copy + subtitle, all 6 echoes.
+- Flow: after tutorial end OR interrupt, Frosthowl interjects, offers lane help, advises, then the pet
+  tutorial starts. Fires once per save on both exit paths.
+- Gate green; owner felt-verify the beat + copy on the Seeker.
+
+## Do NOT
+- Don't reuse the level-up header for the founding awaken. Don't block the pet tutorial if the echo beat is
+  dismissed (still hand off). ASCII-only; no UXML; dual-copy any dialogue JSON.
