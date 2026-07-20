@@ -193,33 +193,37 @@ namespace DeNelle.Village
             CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
         }
 
-        // #51 recorded-clip beats. These have NO synth fallback (the swing whoosh / weapon draw /
-        // dragon roar previously played nothing) — they no-op cleanly until the CC0 WAV is dropped
-        // at Resources/Sfx/<name>, exactly like LookoutHorn. Loaded once, cached, null-guarded.
+        // #51 recorded-clip beats. Authored CC0 WAVs at Resources/Sfx/<name> (mirrored
+        // from Assets/Audio/SFX/Combat by the Defenders/Audio/Mirror SFX to Resources
+        // editor tool) WIN. BLIND-02-A02/A03: a short/soft synth fallback now covers the
+        // fresh-clone-before-mirror case so the swing whoosh / weapon draw / dragon roar
+        // are NEVER silent (they previously no-op'd to silence). Loaded once, cached.
         private static AudioClip s_swordSwing;
         private static AudioClip s_weaponDraw;
         private static AudioClip s_dragonRoar;
-        private static bool s_swordSwingTried, s_weaponDrawTried, s_dragonRoarTried;
 
-        /// <summary>The whoosh BEFORE the clash — fired on every melee swing start (#51).</summary>
+        /// <summary>The whoosh BEFORE the clash - fired on every melee swing start (#51).</summary>
         public static void PlaySwordSwing()
         {
-            if (!s_swordSwingTried) { s_swordSwing = Resources.Load<AudioClip>("Sfx/SwordSwing"); s_swordSwingTried = true; }
-            if (s_swordSwing != null) CoreServices.Audio?.PlaySfx(s_swordSwing, 0.5f);
+            if (s_swordSwing == null)
+                s_swordSwing = Resources.Load<AudioClip>("Sfx/SwordSwing") ?? GenerateSwordSwing();
+            CoreServices.Audio?.PlaySfx(s_swordSwing, 0.5f);
         }
 
-        /// <summary>Steel-on-leather unsheathe — fired when the hero enters combat (#51).</summary>
+        /// <summary>Steel-on-leather unsheathe - fired when the hero enters combat (#51).</summary>
         public static void PlayWeaponDraw()
         {
-            if (!s_weaponDrawTried) { s_weaponDraw = Resources.Load<AudioClip>("Sfx/WeaponDraw"); s_weaponDrawTried = true; }
-            if (s_weaponDraw != null) CoreServices.Audio?.PlaySfx(s_weaponDraw, 0.7f);
+            if (s_weaponDraw == null)
+                s_weaponDraw = Resources.Load<AudioClip>("Sfx/WeaponDraw") ?? GenerateWeaponDraw();
+            CoreServices.Audio?.PlaySfx(s_weaponDraw, 0.6f);
         }
 
-        /// <summary>The dragon's roar — fired as it begins a swoop attack (#51).</summary>
+        /// <summary>The dragon's roar - fired as it begins a swoop attack (#51).</summary>
         public static void PlayDragonRoar()
         {
-            if (!s_dragonRoarTried) { s_dragonRoar = Resources.Load<AudioClip>("Sfx/DragonRoar"); s_dragonRoarTried = true; }
-            if (s_dragonRoar != null) CoreServices.Audio?.PlaySfx(s_dragonRoar, 0.85f);
+            if (s_dragonRoar == null)
+                s_dragonRoar = Resources.Load<AudioClip>("Sfx/DragonRoar") ?? GenerateDragonRoar();
+            CoreServices.Audio?.PlaySfx(s_dragonRoar, 0.85f);
         }
 
         /// <summary>
@@ -370,6 +374,31 @@ namespace DeNelle.Village
             var clip = AudioClip.Create("sfx_build_denied", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
+        }
+
+        // -- BLIND-02-A02/A03 -- short/soft fallbacks for the #51 recorded beats --
+        // Owner brief: present but NOT annoying -- short, mixed low. Only heard on a
+        // fresh clone before the authored WAV mirror runs; the real clip WINS.
+
+        // A quick airy whoosh -- noise-heavy, high sweep down, fast decay.
+        private static AudioClip GenerateSwordSwing()
+        {
+            return Synth("sfx_sword_swing", dur: 0.13f, f0: 1300f, f1: 480f,
+                         noise: 0.6f, amp: 0.45f, seed: 0x5311, decay: 4.5f);
+        }
+
+        // A metallic unsheathe "shing" -- a bright ring sweeping UP, light noise.
+        private static AudioClip GenerateWeaponDraw()
+        {
+            return Synth("sfx_weapon_draw", dur: 0.20f, f0: 520f, f1: 1650f,
+                         noise: 0.18f, amp: 0.45f, seed: 0x77DA, decay: 2.4f);
+        }
+
+        // A low guttural growl -- low sweep, heavy noise body, slow decay.
+        private static AudioClip GenerateDragonRoar()
+        {
+            return Synth("sfx_dragon_roar", dur: 0.6f, f0: 150f, f1: 72f,
+                         noise: 0.5f, amp: 0.7f, seed: 0xD204, decay: 1.3f);
         }
     }
 }
