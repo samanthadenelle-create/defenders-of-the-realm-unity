@@ -26,6 +26,7 @@
 // =============================================================================
 
 using System;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.State;
@@ -68,6 +69,10 @@ namespace DeNelle.Village
         public const int MaxLevel = 3;
         private const float CheckInterval = 0.15f;
 
+        /// <summary>Historical hard-coded +1@L3 yield — the null-safe fallback when
+        /// buildings.json omits the data-driven "crystalsPerWave" key (SSOT: WO crystal-production).</summary>
+        private const int DefaultCrystalsPerWave = 1;
+
         // ── Runtime ───────────────────────────────────────────────────────────
 
         private int _currentLevel = 1;
@@ -81,6 +86,7 @@ namespace DeNelle.Village
         private float _nextCheck;
         private WaveManager _wave;
         private GameObject _currentVisual;
+        private int? _crystalsPerWave;         // cached data-driven yield (buildings.json)
 
         public int CurrentLevel => _currentLevel;
         public bool IsMaxLevel => _currentLevel >= MaxLevel;
@@ -181,15 +187,58 @@ namespace DeNelle.Village
         {
             if (_currentLevel < MaxLevel) return;
 
-            // L3: guaranteed +1 crystal. L2 would be 50% — extend here if desired.
+            // L3: guaranteed crystal yield. L2 would be 50% — extend here if desired.
             var economy = CrystalEconomy.Instance;
             if (economy == null)
             {
                 Debug.LogWarning("[CrystalMine] CrystalEconomy service not found — no crystal awarded.");
                 return;
             }
-            economy.AddCrystals(1);
-            Debug.Log($"[CrystalMine] Wave {waveId} cleared — +1 Aether Crystal awarded (L3 mine).");
+            int yield = CrystalsPerWave();
+            economy.AddCrystals(yield);
+            Debug.Log($"[CrystalMine] Wave {waveId} cleared — +{yield} Aether Crystal awarded (L3 mine).");
+        }
+
+        /// <summary>
+        /// Per-wave crystal yield, read from buildings.json (the <c>crystal-mine</c> entry's
+        /// <c>crystalsPerWave</c> key) so the +1@L3 award is DATA-DRIVEN, not a C# literal.
+        /// Uses the same <see cref="DeNelle.Core.CanonicalJson"/> loader path as
+        /// <see cref="BuildingCatalog"/> (Resources-first, StreamingAssets fallback).
+        /// Null-safe: falls back to <see cref="DefaultCrystalsPerWave"/> (the historical +1)
+        /// when the key or file is absent, so runtime behaviour is unchanged. Cached after first read.
+        /// </summary>
+        private int CrystalsPerWave()
+        {
+            if (_crystalsPerWave.HasValue) return _crystalsPerWave.Value;
+
+            int perWave = DefaultCrystalsPerWave;   // fallback preserves historical hard-coded +1@L3
+            try
+            {
+                string json = DeNelle.Core.CanonicalJson.Read("Data/Canonical/buildings.json");
+                if (!string.IsNullOrEmpty(json))
+                {
+                    var arr = JObject.Parse(json)["buildings"] as JArray;
+                    if (arr != null)
+                    {
+                        foreach (var tok in arr)
+                        {
+                            if (tok is JObject o && (string)o["id"] == "crystal-mine")
+                            {
+                                var y = o["crystalsPerWave"];
+                                if (y != null) perWave = (int)y;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[CrystalMine] Could not read crystalsPerWave from buildings.json — using default {perWave}. {ex.Message}");
+            }
+
+            _crystalsPerWave = perWave;
+            return perWave;
         }
 
         // ── Upgrade ───────────────────────────────────────────────────────────

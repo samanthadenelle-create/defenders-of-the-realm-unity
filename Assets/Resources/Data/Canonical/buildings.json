@@ -14,7 +14,7 @@
     "footprint": "hex footprint size category — 'small' (1 hex tile), 'medium' (cluster), 'large' (the tall Arcane Tower silhouette). The build menu's hex-tile validity check reads this; large footprints need more clear neighbours.",
     "displayName": "displayName is a KEY into canon-strings.json, NOT a literal — the build menu resolves it through BuildingCatalog/CanonStrings so the canon names are never typed inline (port spec Part 4)."
   },
-  "version": 1,
+  "version": 2,
   "buildings": [
     {
       "id": "crystal-mine",
@@ -28,7 +28,8 @@
       "footprint": "small",
       "buildMenuOrder": 0,
       "isUpgradable": true,
-      "upgradeType": "resource"
+      "upgradeType": "resource",
+      "crystalsPerWave": 1
     },
     {
       "id": "farm",
