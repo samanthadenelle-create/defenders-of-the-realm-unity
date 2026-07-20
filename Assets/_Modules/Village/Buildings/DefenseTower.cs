@@ -103,9 +103,10 @@ namespace DeNelle.Village
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(Hp / _maxHp) : 0f;
 
         /// <summary>Fired once when enemies destroy this tower (HP reaches 0). Observers
-        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.
-        /// WO-672: fires at the BREAK moment (the tower now persists as an inoperable
-        /// shell) — listeners release targets exactly as before.</summary>
+        /// (persistence / target-release) can subscribe. WO-672: fires at the BREAK moment
+        /// (the tower persists as an inoperable shell) — listeners release targets exactly as
+        /// before. WO-753 (owner 2026-07-19): a destroyed tower is NOT auto-re-placed in-world;
+        /// it returns ONLY via full-cost build-mode placement — no in-place respawn observer.</summary>
         public event System.Action<DefenseTower> Destroyed;
 
         /// <summary>
@@ -158,6 +159,12 @@ namespace DeNelle.Village
                 // WO-672 Slice A: no Destroy(gameObject) — the tower persists as an
                 // inoperable shell ("either they exist or do not", F8-39) until Repair().
                 FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable until repaired");
+                // WO-753 (owner 2026-07-19 destroyed-items-...-vfx-cleanup): tear this tower's VFX
+                // down WITH it, synchronously, through the ONE-owner Destructible - no aura/effect
+                // outlives the dead tower (the "i see a vfx but no tower" orphan). Repair re-enables
+                // them (symmetric). Because the root stays active on a broken shell, no Unity
+                // lifecycle event fires here, so this explicit teardown is the guarantee.
+                Destructible.For(gameObject)?.NotifyBroken("DefenseTower hp0");
                 Destroyed?.Invoke(this);
                 if (_aimBeam != null) _aimBeam.enabled = false;   // drop the lock-on beam at the break
             }
@@ -167,6 +174,9 @@ namespace DeNelle.Village
         {
             if (_hp < 0f) _hp = _maxHp;
             EnsureContactCollider();
+            // WO-753: compose the ONE-owner VFX-teardown lifecycle onto this tower so a destroy /
+            // break tears every held effect down in one place (no orphaned VFX).
+            Destructible.Ensure(gameObject);
         }
 
         /// <summary>

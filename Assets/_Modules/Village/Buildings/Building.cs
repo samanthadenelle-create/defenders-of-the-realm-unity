@@ -18,6 +18,7 @@
 using System;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -219,17 +220,37 @@ namespace DeNelle.Village
             if (amount <= 0f || IsDestroyed) return;
             _hp = Mathf.Max(0f, _hp - amount);
             HpChanged?.Invoke(_hp, _maxHp);
-            if (_hp <= 0f) Destroyed?.Invoke(this);
+            if (_hp <= 0f)
+            {
+                // WO-753 (owner 2026-07-19 destroyed-items-no-rebuild-...-vfx-cleanup): a DESTROYED
+                // building tears its VFX down WITH it via the ONE-owner Destructible so nothing
+                // outlives the structure (no orphaned effects). No-op today (buildings carry no
+                // aura), but keeps the destroy path routed through the single owner - future-proof
+                // if a building ever gains a held effect.
+                Destructible.For(gameObject)?.NotifyBroken("Building hp0");
+                Destroyed?.Invoke(this);
+            }
         }
 
         /// <summary>
-        /// Repairs the building, clamped at <see cref="MaxHp"/>. A repair on a
-        /// destroyed building brings it back online.
+        /// Repairs a DAMAGED (still-standing) building, clamped at <see cref="MaxHp"/>.
+        /// WO-753 (owner 2026-07-19): a DESTROYED building is GONE - it returns ONLY via the
+        /// normal full-cost build-mode placement, NEVER an in-place repair-back-online. So a
+        /// repair on a destroyed building (HP 0) is a no-op; the DAMAGED repair path
+        /// (WallRepair / RepairTarget on a building with HP &gt; 0) is unchanged.
         /// </summary>
         /// <param name="amount">HP to restore. Non-positive values are ignored.</param>
         public void Repair(float amount)
         {
             if (amount <= 0f) return;
+            // Destroyed = gone: no in-place respawn. Only a full-cost rebuild returns it.
+            if (IsDestroyed)
+            {
+                FlowTrace.Step("Destroy",
+                    $"[Flow:Destroy] Repair ignored on DESTROYED building '{name}' - " +
+                    "destroyed items return only via full-cost build-mode placement (no in-place respawn).");
+                return;
+            }
             _hp = Mathf.Min(_maxHp, _hp + amount);
             HpChanged?.Invoke(_hp, _maxHp);
         }
@@ -245,6 +266,8 @@ namespace DeNelle.Village
         private void Awake()
         {
             if (_blocker == null) _blocker = GetComponent<BoxCollider>();
+            // WO-753: compose the ONE-owner VFX-teardown lifecycle onto this building.
+            Destructible.Ensure(gameObject);
         }
 
         private void Start()

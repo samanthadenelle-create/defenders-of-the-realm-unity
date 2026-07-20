@@ -120,9 +120,10 @@ namespace DeNelle.Village
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(Hp / _maxHp) : 0f;
 
         /// <summary>Fired once when enemies destroy this spire (HP reaches 0). Observers
-        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.
-        /// WO-672: fires at the BREAK moment (the spire now persists as an inoperable
-        /// shell) — listeners release targets exactly as before.</summary>
+        /// (persistence / target-release) can subscribe. WO-672: fires at the BREAK moment
+        /// (the spire persists as an inoperable shell) — listeners release targets exactly as
+        /// before. WO-753 (owner 2026-07-19): a destroyed spire is NOT auto-re-placed in-world;
+        /// it returns ONLY via full-cost build-mode placement — no in-place respawn observer.</summary>
         public event System.Action<ArcaneTower> Destroyed;
 
         /// <summary>Current HP (lazy-initialised to <see cref="_maxHp"/>).</summary>
@@ -168,6 +169,13 @@ namespace DeNelle.Village
                 // WO-672 Slice A: no Destroy(gameObject) — the spire persists as an
                 // inoperable shell ("either they exist or do not", F8-39) until Repair().
                 FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable until repaired");
+                // WO-753 (owner 2026-07-19 destroyed-items-...-vfx-cleanup): tear this spire's VFX
+                // down WITH it, synchronously, through the ONE-owner Destructible - the persistent
+                // Arcane_Aura loop (and any other held effect) is pool-returned in one place instead
+                // of looping over the dead shell (the ROOT "i see a vfx but no tower" orphan). Because
+                // the root stays active on a broken shell, no Unity lifecycle event fires, so this
+                // explicit teardown is the guarantee. Repair re-enables the aura (symmetric).
+                Destructible.For(gameObject)?.NotifyBroken("ArcaneTower hp0");
                 Destroyed?.Invoke(this);
             }
         }
@@ -179,6 +187,9 @@ namespace DeNelle.Village
             // Owner 2026-07-15 "arcane towers should have an aura" - a persistent magic-circle
             // aura loop (colorblind-safe: motion/luminance, not hue). Idempotent + self-managing.
             ArcaneAura.Ensure(gameObject);
+            // WO-753: compose the ONE-owner VFX-teardown lifecycle so the aura (and any held effect)
+            // is torn down WITH the spire on break / destroy — in one place, no orphans.
+            Destructible.Ensure(gameObject);
         }
 
         /// <summary>
