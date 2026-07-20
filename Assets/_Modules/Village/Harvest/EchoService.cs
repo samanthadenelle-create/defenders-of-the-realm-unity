@@ -56,7 +56,7 @@ namespace DeNelle.Village
         // -- Tunables (owner-tunable in playtest) ------------------------------
         [Header("Workforce")]
         [Tooltip("Hard cap on owned Echoes. 6 = the full canonical Echo roster (EchoRosterCatalog: " +
-                 "Frosthowl/Verdant Stag/Voidwing Raven/Stormcoil Serpent/Stonewarden Bear/Ember Phoenix). " +
+                 "the awakened souls Aldwin/Elowen/Corvin/Bran/Doran/Maren the Heart of Elarion guards). " +
                  "The wave hook earns them one per WavesPerEcho clears; the roster/unlock dialogue reads this cap.")]
         [Min(1)] public int MaxEchoes = 6;
 
@@ -481,7 +481,7 @@ namespace DeNelle.Village
         ///
         /// Fires EXACTLY ONCE per save: guarded by the persisted <see cref="FoundingTaughtKey"/>
         /// flag (read here as the gate). Raising EchoUnlocked(1) synchronously renders the card via
-        /// EchoUnlockFeedback.OnEchoUnlocked -> EchoUnlockDialogue.Show(ByCount(1)=Frosthowl). We
+        /// EchoUnlockFeedback.OnEchoUnlocked -> EchoUnlockDialogue.Show(ByCount(1)=Aldwin, the Ice Echo). We
         /// persist the flag ONLY AFTER the card is confirmed on screen
         /// (<see cref="EchoUnlockDialogue.IsShowing"/>) -- if the render failed we leave the flag
         /// unset so a later attempt (e.g. after the builder closes) still teaches it.

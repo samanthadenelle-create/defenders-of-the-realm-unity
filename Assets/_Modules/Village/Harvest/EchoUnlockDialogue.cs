@@ -15,8 +15,8 @@
 // chrome, code-built uGUI, NO UXML per PIPELINE_STATE S8):
 //   frame title "ECHOES OF ELARION"      (BuildObsidianModal header)
 //   gold "Echo Leveled Up to N!" banner  (top strip)
-//   LEFT : portrait (Sprite.Create) + element subtitle ("Ice Elemental")
-//   RIGHT: name ("Frosthowl (Ice Echo)") + flavor line + 3 buttons:
+//   LEFT : portrait (Sprite.Create) + essence subtitle ("Essence of a fallen keeper")
+//   RIGHT: name ("Aldwin, the Ice Echo") + flavor line + 3 buttons:
 //     "I accept your power" (primary, closes) / "Tell me more" (swaps flavor ->
 //     extended lore) / "Dismiss" (closes). The shared obsidian Close is canon extra.
 //
@@ -98,6 +98,16 @@ namespace DeNelle.Village
             return true;
         }
 
+        /// <summary>FTUE-09: the gold banner header. newCount==1 is the FOUNDING AWAKEN
+        /// -- there is no prior Echo to "level up" from, so "Echo Leveled Up to 1!" is
+        /// nonsense; render an AWAKEN header instead (mirrors EchoRosterView's awaken
+        /// wording). n>=2 is a genuine level-up. Pure + public so the copy is headlessly
+        /// assertable (EchoCardCopyRegression).</summary>
+        public static string HeaderFor(int newCount)
+        {
+            return newCount <= 1 ? "An Echo Awakens" : $"Echo Leveled Up to {newCount}!";
+        }
+
         private void Build(EchoRosterEntry entry, int newCount)
         {
             _entry = entry;
@@ -124,7 +134,7 @@ namespace DeNelle.Village
             var bimg = bannerGo.GetComponent<Image>();
             bimg.color = ElarionUi.Gold;
             bimg.raycastTarget = false;
-            ElarionUiKit.Label(content, $"Echo Leveled Up to {newCount}!", 0.885f, 0.98f,
+            ElarionUiKit.Label(content, HeaderFor(newCount), 0.885f, 0.98f,
                 ElarionUi.Ink, ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.06f, 0.94f, bold: true);
 

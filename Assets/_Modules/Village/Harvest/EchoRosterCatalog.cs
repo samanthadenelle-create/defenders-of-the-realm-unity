@@ -15,8 +15,12 @@
 // If the roster ever needs to grow owner-tunable, promote this to echoes.json under
 // Data/Canonical then (dual-copy + md5) -- not before (LIGHTWEIGHT mandate).
 //
-// ORDER = the echo COUNT it corresponds to: echo #1 (Frosthowl, the starter, owned
-// from EchoCount==1) .. echo #6 (Ember Phoenix). EchoService.EchoCount 1..MaxEchoes
+// ORDER = the echo COUNT it corresponds to: echo #1 (Aldwin, the founding Ice Echo,
+// owned from EchoCount==1) .. echo #6 (Maren, the Fire Echo). Each is the awakened
+// ESSENCE of a named soul the Heart of Elarion guards (Aldwin, Elowen, Corvin, Bran,
+// Doran, Maren -- memory echo-is-essence-of-guarded-person), NOT an elemental monster.
+// PortraitName stays the old element file base (Frosthowl, VerdantStag, ...) so the
+// Resources/Echoes/Portraits art keeps loading. EchoService.EchoCount 1..MaxEchoes
 // indexes straight into this (order == count). A wave-unlock that raises the count
 // to N fires the dialogue for ByCount(N) = the newly earned spirit.
 //
@@ -94,46 +98,47 @@ namespace DeNelle.Village
         {
             new EchoRosterEntry {
                 Id = "echo-frosthowl", Order = 1,
-                DisplayName = "Frosthowl (Ice Echo)", Element = "Ice Elemental",
+                DisplayName = "Aldwin, the Ice Echo", Element = "Essence of a fallen keeper",
                 PortraitName = "Frosthowl",
-                // Founding-echo copy (WO: wire founding-echo teaching). Order==1 is ONLY ever
-                // shown for the founding spirit (waves unlock #2-6), so this row carries the
-                // "first light your Heart kept" flavor -- the teaching card the founding echo
-                // now fires via EchoService.AnnounceFoundingEcho. ASCII only (-- not em-dash).
-                Flavor = "I am the first light your Heart has kept. While you rest, I gather; while you fight, I tend the fields. Name my task -- wood, iron, or grain -- and it is done.",
-                Lore = "Every keeper the tree remembers wakes one Echo before all others. I am yours. Bring the dark back from the Heart and I grow stronger with it.",
+                // Founding-echo copy (WO-752). Order==1 is ONLY ever shown for the founding
+                // spirit (waves unlock #2-6), so this row carries the awakening + the gather
+                // teach -- the card EchoService.AnnounceFoundingEcho fires. An Echo is the
+                // awakened ESSENCE of a soul the Heart of Elarion guards (memory
+                // echo-is-essence-of-guarded-person), NOT an elemental monster. ASCII only.
+                Flavor = "The Heart of Elarion remembers every soul it has guarded, and I was the first it kept -- Aldwin, a keeper of the old light, held safe in the tree until a new defender rose. I wake now as your Echo. While you rest I gather; while you fight I tend the fields. Name my task -- wood, iron, or grain -- and it is done.",
+                Lore = "In life I kept the last lantern of Elarion burning through the long dark. When I fell, the Heart drew my essence down among its roots and held it close. Every keeper the tree remembers wakes one Echo before all others -- I am yours. Bring the light back to the Heart, and I grow stronger with it.",
                 ElementType = ElementType.Frost, PreferredLane = LaneType.Exploration, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-verdant-stag", Order = 2,
-                DisplayName = "Verdant Stag (Nature Echo)", Element = "Verdant Elemental",
+                DisplayName = "Elowen, the Nature Echo", Element = "Essence of a grove-warden",
                 PortraitName = "VerdantStag",
-                Flavor = "Antlers of living wood break the loam, and the green spirit lifts its head to your call...",
-                Lore = "The Verdant Stag remembers every seed the forest ever sowed. Where it walks the land gives freely -- growth answering to your command.",
+                Flavor = "Green light stirs among the roots, and Elowen lifts her head to your call -- the grove-warden who once walked Elarion's every furrow, wakened now from the tree that keeps her.",
+                Lore = "Elowen tended the fields and the forest edge until her last season turned. The Heart could not let so gentle a hand go dark and drew her essence into the roots. Where her Echo walks the land gives freely -- growth answering your command.",
                 ElementType = ElementType.Nature, PreferredLane = LaneType.Harvest, HarvestResource = ResourceType.Wood,
             },
             new EchoRosterEntry {
                 Id = "echo-voidwing-raven", Order = 3,
-                DisplayName = "Voidwing Raven (Void Echo)", Element = "Void Elemental",
+                DisplayName = "Corvin, the Void Echo", Element = "Essence of a lost scout",
                 PortraitName = "VoidwingRaven",
-                Flavor = "A shadow with wings unfurls from nothing, its hollow eyes fixed upon your intent...",
-                Lore = "The Voidwing Raven slipped between worlds when the first star guttered out. It gathers what others cannot reach, carrying spoils across the dark.",
+                Flavor = "A shadow unfolds where none stood, and Corvin steps from it -- the scout who ranged the far dark for Elarion and never came home, kept safe within the Heart of the tree.",
+                Lore = "Corvin walked the paths between one light and the next, mapping the dark so others need not fear it. When the far road took him, the Heart gathered his essence back to Elarion. His Echo reaches what no other can, carrying spoils across the void.",
                 ElementType = ElementType.Shadow, PreferredLane = LaneType.Exploration, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stormcoil-serpent", Order = 4,
-                DisplayName = "Stormcoil Serpent (Storm Echo)", Element = "Storm Elemental",
+                DisplayName = "Bran, the Storm Echo", Element = "Essence of a fallen watchman",
                 PortraitName = "StormcoilSerpent",
-                Flavor = "Thunder coils and tightens, and a serpent of lightning tastes the charged air...",
-                Lore = "The Stormcoil Serpent was born of a sky that would not stop raging. Its restless energy drives the whole workforce faster than any whip could.",
+                Flavor = "Thunder gathers, and Bran stands within it -- the watchman who held Elarion's wall through every gale, wakened from the Heart that keeps him.",
+                Lore = "Bran stood the parapet through storms that broke lesser souls, calling every alarm in time. When he fell at his post, the Heart would not lose so steady a guard and kept his essence in its roots. His Echo drives the whole workforce on, restless as the sky that made it.",
                 ElementType = ElementType.Storm, PreferredLane = LaneType.Defense, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stonewarden-bear", Order = 5,
-                DisplayName = "Stonewarden Bear (Earth Echo)", Element = "Stone Elemental",
+                DisplayName = "Doran, the Earth Echo", Element = "Essence of an old mason",
                 PortraitName = "StonewardenBear",
-                Flavor = "The mountain shifts, stands, and shakes the dust of ages from its granite shoulders...",
-                Lore = "The Stonewarden Bear slept beneath the roots of the world. Tireless and unbreakable, it hauls the heaviest loads without complaint.",
+                Flavor = "The ground shifts and rises, and Doran shakes the dust of ages from his shoulders -- the mason who raised Elarion's stones, kept whole within the tree.",
+                Lore = "Doran laid the first stones of Elarion's walls and mended them all his life. When age took him, the Heart drew his essence down among the roots he had built upon. Tireless and unbreakable, his Echo hauls the heaviest loads without complaint.",
                 // Owner-final map says "Stone", but Stone is RETIRED (DEF-121) and NOT in ResourceType
                 // {Iron,Wood,Food,AetherCrystal}; the WO's reconciled table maps this Earth spirit to
                 // Iron ("hauls the heaviest loads" = ore). Real-resource-only, no invented type.
@@ -141,10 +146,10 @@ namespace DeNelle.Village
             },
             new EchoRosterEntry {
                 Id = "echo-ember-phoenix", Order = 6,
-                DisplayName = "Ember Phoenix (Fire Echo)", Element = "Ember Elemental",
+                DisplayName = "Maren, the Fire Echo", Element = "Essence of a hearth-keeper",
                 PortraitName = "EmberPhoenix",
-                Flavor = "From a single spark the firebird rises, wings scattering embers like falling stars...",
-                Lore = "The Ember Phoenix has burned and risen a thousand times. Its fervor sets the entire workforce alight -- fastest when the work is hardest.",
+                Flavor = "From a single spark a firebird rises, and Maren wakes within the flame -- the hearth-keeper whose forge never went cold, kept alight in the Heart of Elarion.",
+                Lore = "Maren kept Elarion's forge and hearth burning so no one went without warmth or a mended blade. When her fire finally guttered, the Heart caught the last ember of her essence and held it. Her Echo sets the whole workforce alight -- fastest when the work is hardest.",
                 ElementType = ElementType.Fire, PreferredLane = LaneType.Crafting, HarvestResource = null,
             },
         };
