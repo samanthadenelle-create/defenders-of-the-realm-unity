@@ -1423,12 +1423,15 @@ namespace DeNelle.Village
                 {
                     if (e == null) continue;
 
-                    // DEF-59: apply wave-scaling parity with the flat SpawnOne path.
-                    if (_scalingCurve != null)
-                        e.ApplyWaveScaling(
-                            _scalingCurve.HpMultiplier(_currentWaveId),
-                            _scalingCurve.SpeedMultiplier(_currentWaveId),
-                            _scalingCurve.DamageMultiplier(_currentWaveId));
+                    // DEF-59 / CITY-01: apply wave-scaling parity with the flat SpawnOne
+                    // path. EnsureScalingCurve NEVER returns null (falls back to a runtime
+                    // DEFAULT curve when no asset is wired), so enemies always escalate per
+                    // wave even in a scene that ships no WaveScalingCurve.asset.
+                    var composedCurve = EnsureScalingCurve();
+                    e.ApplyWaveScaling(
+                        composedCurve.HpMultiplier(_currentWaveId),
+                        composedCurve.SpeedMultiplier(_currentWaveId),
+                        composedCurve.DamageMultiplier(_currentWaveId));
 
                     e.Died         += HandleEnemyDied;
                     e.ReachedHeart += HandleEnemyReachedHeart;
@@ -1438,6 +1441,31 @@ namespace DeNelle.Village
             }
 
             return spawnedAny;
+        }
+
+        /// <summary>
+        /// CITY-01: returns the wave-scaling curve, lazily creating a DEFAULT runtime
+        /// instance when none is wired in the Inspector. The wave scenes ship NO
+        /// WaveScalingCurve.asset, so <see cref="_scalingCurve"/> deserializes null and
+        /// every enemy used to spawn at wave-1 stats forever (wave 19 == wave 1). This
+        /// guarantees a non-null curve: <see cref="ScriptableObject.CreateInstance"/> runs
+        /// WaveScalingCurve's field initializers, which seed the default HP/speed/damage
+        /// curves (1.0x at wave 1 -> 2.5x/1.4x/2.0x by wave 20, clamped after). Created
+        /// once and cached, so the applied multiplier is provably &gt;1 past wave 1
+        /// (headless: DataRegression [wave-scaling]). Never returns null.
+        /// </summary>
+        private WaveScalingCurve EnsureScalingCurve()
+        {
+            if (_scalingCurve == null)
+            {
+                _scalingCurve = ScriptableObject.CreateInstance<WaveScalingCurve>();
+                _scalingCurve.name = "WaveScalingCurve (runtime default)";
+                FlowTrace.Warn("Wave",
+                    "no WaveScalingCurve asset wired -> created runtime DEFAULT curve " +
+                    "(HP 1.0->2.5, speed 1.0->1.4, dmg 1.0->2.0 across waves 1..20); " +
+                    "enemies now escalate per wave.");
+            }
+            return _scalingCurve;
         }
 
         /// <summary>
@@ -1506,12 +1534,13 @@ namespace DeNelle.Village
             {
                 if (e == null) continue;
 
-                // DEF-59: wave-scaling parity with the flat SpawnOne / compose paths.
-                if (_scalingCurve != null)
-                    e.ApplyWaveScaling(
-                        _scalingCurve.HpMultiplier(_currentWaveId),
-                        _scalingCurve.SpeedMultiplier(_currentWaveId),
-                        _scalingCurve.DamageMultiplier(_currentWaveId));
+                // DEF-59 / CITY-01: wave-scaling parity with the flat SpawnOne / compose
+                // paths. EnsureScalingCurve never returns null (runtime DEFAULT fallback).
+                var smartCurve = EnsureScalingCurve();
+                e.ApplyWaveScaling(
+                    smartCurve.HpMultiplier(_currentWaveId),
+                    smartCurve.SpeedMultiplier(_currentWaveId),
+                    smartCurve.DamageMultiplier(_currentWaveId));
 
                 e.Died         += HandleEnemyDied;
                 e.ReachedHeart += HandleEnemyReachedHeart;
@@ -1765,13 +1794,15 @@ namespace DeNelle.Village
             Transform heartT = _heart != null ? _heart.transform : null;
             enemy.Configure(instanceId, def, heartT);
 
-            // DEF-59: apply wave-scaling multipliers if a curve SO is assigned.
-            if (_scalingCurve != null)
+            // DEF-59 / CITY-01: apply wave-scaling multipliers. EnsureScalingCurve NEVER
+            // returns null (falls back to a runtime DEFAULT curve when no asset is wired in
+            // the scene), so enemies escalate per wave in EVERY scene / spawn path.
             {
+                var flatCurve = EnsureScalingCurve();
                 enemy.ApplyWaveScaling(
-                    _scalingCurve.HpMultiplier(_currentWaveId),
-                    _scalingCurve.SpeedMultiplier(_currentWaveId),
-                    _scalingCurve.DamageMultiplier(_currentWaveId));
+                    flatCurve.HpMultiplier(_currentWaveId),
+                    flatCurve.SpeedMultiplier(_currentWaveId),
+                    flatCurve.DamageMultiplier(_currentWaveId));
             }
 
             enemy.Died += HandleEnemyDied;

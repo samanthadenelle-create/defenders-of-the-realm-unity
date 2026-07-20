@@ -20,6 +20,8 @@
 // placeholders until the owner's meshes land; see docs/PLAN_grid_coc_base_walls.md).
 // =============================================================================
 
+using System.Collections.Generic;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace DeNelle.Village.Walls
@@ -97,5 +99,117 @@ namespace DeNelle.Village.Walls
 
         /// <summary>Effective-HP multiplier at a tier (read-only mirror of WallSegment toughness).</summary>
         public static float ToughnessFor(int tier) => s_toughness[Mathf.Clamp(tier, MinTier, MaxTier)];
+    }
+
+    /// <summary>
+    /// CITY-02/03: the RUNTIME consumer of walls.json. Before this, walls.json was fully
+    /// orphaned - no loader existed and <c>heartDamageMultiplier</c> / <c>spikeDamagePerSecond</c>
+    /// had ZERO readers, so upgrading the perimeter gave the Heart no protection and the
+    /// Spiked Steel top tier did nothing (the upgrade UI's mitigation copy was a lie).
+    ///
+    /// This loads walls.json ONCE through the WebGL-safe <see cref="DeNelle.Core.CanonicalJson"/>
+    /// seam (Resources first, StreamingAssets fallback) and exposes the per-wall-level values
+    /// the <c>Enemy</c> strike path applies when it damages the Heart. Wall level is
+    /// <c>GameState.WallLevel</c> (0..3), which matches walls.json <c>tiers[].level</c>.
+    /// Fails safe to a code table with the SAME numbers as walls.json, so mitigation never
+    /// silently disappears if the JSON is missing.
+    /// </summary>
+    public static class WallDefense
+    {
+        private const string WallsRelativePath = "Data/Canonical/walls.json";
+
+        [System.Serializable]
+        private sealed class WallTierJson
+        {
+            [JsonProperty("level")] public int Level;
+            [JsonProperty("heartDamageMultiplier")] public float HeartDamageMultiplier = 1f;
+            [JsonProperty("spikeDamagePerSecond")]  public float SpikeDamagePerSecond  = 0f;
+        }
+
+        [System.Serializable]
+        private sealed class WallsFileJson
+        {
+            [JsonProperty("version")] public int Version;
+            [JsonProperty("tiers")]   public List<WallTierJson> Tiers = new List<WallTierJson>();
+        }
+
+        // Levels 0..3 (== walls.json). Seeded with the walls.json numbers so a missing/failed
+        // read is divergence-free (keep these in sync with walls.json).
+        private static float[] s_heartMult = { 1.0f, 0.85f, 0.70f, 0.70f };
+        private static float[] s_spikeDps  = { 0f,   0f,    0f,    9f    };
+        private static bool s_loaded;
+
+        private static void EnsureLoaded()
+        {
+            if (s_loaded) return;
+            s_loaded = true;   // one attempt per session; a failed read keeps the code fallback
+            try
+            {
+                string json = DeNelle.Core.CanonicalJson.Read(WallsRelativePath);
+                if (string.IsNullOrEmpty(json))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Wall",
+                        "walls.json not found -> using code fallback wall-defense table " +
+                        "(heartMult 1.0/0.85/0.70/0.70, spikeDps L3=9).");
+                    return;
+                }
+                var file = JsonConvert.DeserializeObject<WallsFileJson>(json);
+                if (file == null || file.Tiers == null || file.Tiers.Count == 0)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Wall",
+                        "walls.json parsed to 0 tiers -> keeping code fallback wall-defense table.");
+                    return;
+                }
+
+                int count = s_heartMult.Length;      // 4 levels (0..3)
+                var hm = new float[count];
+                var sp = new float[count];
+                for (int i = 0; i < count; i++) { hm[i] = s_heartMult[i]; sp[i] = s_spikeDps[i]; } // seed w/ fallback
+                foreach (var t in file.Tiers)
+                {
+                    if (t == null || t.Level < 0 || t.Level >= count) continue;
+                    if (t.HeartDamageMultiplier > 0f) hm[t.Level] = t.HeartDamageMultiplier;
+                    sp[t.Level] = Mathf.Max(0f, t.SpikeDamagePerSecond);
+                }
+                s_heartMult = hm;
+                s_spikeDps  = sp;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Wall",
+                    $"walls.json loaded: {file.Tiers.Count} tiers; heartMult L0..L3 = " +
+                    $"{s_heartMult[0]:0.00}/{s_heartMult[1]:0.00}/{s_heartMult[2]:0.00}/{s_heartMult[3]:0.00}, " +
+                    $"spikeDps L3={s_spikeDps[3]:0.#}. Wall upgrades now protect the Heart.");
+            }
+            catch (System.Exception ex)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Wall",
+                    $"walls.json read/parse failed ({ex.GetType().Name}: {ex.Message}) -> code fallback wall-defense table.");
+            }
+        }
+
+        /// <summary>Incoming-damage multiplier the wall grants the Heart at a wall level (0..3). &lt;1 = protection.</summary>
+        public static float HeartDamageMultiplier(int wallLevel)
+        {
+            EnsureLoaded();
+            return s_heartMult[Mathf.Clamp(wallLevel, 0, s_heartMult.Length - 1)];
+        }
+
+        /// <summary>Spike damage/sec a wall of this level deals to enemies crossing it (0 below the spiked tier).</summary>
+        public static float SpikeDamagePerSecond(int wallLevel)
+        {
+            EnsureLoaded();
+            return s_spikeDps[Mathf.Clamp(wallLevel, 0, s_spikeDps.Length - 1)];
+        }
+
+        /// <summary>The player's CURRENT wall level (GameState.WallLevel; 0 when no save is up yet).</summary>
+        public static int CurrentWallLevel()
+        {
+            var s = DeNelle.Core.State.GameStateService.Instance?.State;
+            return s != null ? Mathf.Clamp(s.WallLevel, 0, s_heartMult.Length - 1) : 0;
+        }
+
+        /// <summary>Heart-damage multiplier for the player's current wall level (Enemy strike-path convenience).</summary>
+        public static float CurrentHeartDamageMultiplier() => HeartDamageMultiplier(CurrentWallLevel());
+
+        /// <summary>Spike damage/sec at the player's current wall level (0 unless the spiked top tier is built).</summary>
+        public static float CurrentSpikeDamagePerSecond() => SpikeDamagePerSecond(CurrentWallLevel());
     }
 }

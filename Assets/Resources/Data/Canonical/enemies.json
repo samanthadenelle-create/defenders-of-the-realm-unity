@@ -21,7 +21,7 @@
     "height": "Approximate mesh height (world units) - sizes the NavMeshAgent capsule + the floating HP bar offset.",
     "boss": "true for a faction wave-boss (the Necromancer of the Wound). Orc 'elite' camp-bosses are role='elite', not boss=true (they lead a camp, not a village wave)."
   },
-  "version": 3,
+  "version": 4,
   "enemies": [
     {
       "id": "hollow-walker",
@@ -38,6 +38,8 @@
       "attackInterval": 1.3,
       "height": 1.7,
       "boss": false,
+      "xpReward": 10,
+      "coinReward": 4,
       "flavor": "A risen villager of the Hollow Ones - slow, certain, and without memory of the home it marches on."
     },
     {
@@ -55,6 +57,8 @@
       "attackInterval": 1.3,
       "height": 1.88,
       "boss": false,
+      "xpReward": 24,
+      "coinReward": 10,
       "flavor": "Armored bone in a weighted march — a wall of the dead that does not hurry and does not break."
     },
     {
@@ -72,6 +76,8 @@
       "attackInterval": 1.0,
       "height": 1.78,
       "boss": false,
+      "xpReward": 14,
+      "coinReward": 6,
       "flavor": "Quick and low to the ground - it slips the line and goes for the weakest ward."
     },
     {
@@ -89,6 +95,8 @@
       "attackInterval": 1.4,
       "height": 1.8,
       "boss": false,
+      "xpReward": 18,
+      "coinReward": 8,
       "flavor": "A robed thing that hums the dirge of the Wound — it mends the bone of its kin faster than you can break it. Cut it down first."
     },
     {
@@ -106,6 +114,8 @@
       "attackInterval": 1.3,
       "height": 2.7,
       "boss": true,
+      "xpReward": 220,
+      "coinReward": 120,
       "flavor": "A hand of Alduin the Mournful. Where it walks, the Hollowed rise to walk beside it."
     },
     {
@@ -123,6 +133,8 @@
       "attackInterval": 1.2,
       "height": 2.0,
       "boss": false,
+      "xpReward": 22,
+      "coinReward": 10,
       "flavor": "The Warband's front line - no patience, all axe. It hits the wall it sees, not the one that's weakest."
     },
     {
@@ -140,6 +152,8 @@
       "attackInterval": 1.5,
       "height": 1.9,
       "boss": false,
+      "xpReward": 16,
+      "coinReward": 7,
       "flavor": "Keeps to the back of the camp and mends what the Berserkers break. Drop it first."
     },
     {
@@ -157,6 +171,8 @@
       "attackInterval": 1.3,
       "height": 2.2,
       "boss": false,
+      "xpReward": 90,
+      "coinReward": 50,
       "flavor": "The elite that holds a Warband camp. Clear it and the node it squats on is yours to reclaim."
     },
     {
@@ -174,6 +190,8 @@
       "attackInterval": 1.3,
       "height": 2.0,
       "boss": false,
+      "xpReward": 24,
+      "coinReward": 11,
       "flavor": "The Warband's roving muscle - a greenskin raider who hunts the open Wildlands and garrisons the reclaimable camps. SINGLE-SOURCE stat block: whether it roams, guards an outpost, mounts a camp counterattack, or staffs a garrison, it reads these exact base stats (each spawner still scales by its own context)."
     },
     {
@@ -191,6 +209,8 @@
       "attackInterval": 1.8,
       "height": 2.6,
       "boss": false,
+      "xpReward": 46,
+      "coinReward": 24,
       "flavor": "A lumbering brute of the deep places - slow, but each blow lands like a falling oak."
     },
     {
@@ -208,6 +228,8 @@
       "attackInterval": 1.6,
       "height": 2.4,
       "boss": false,
+      "xpReward": 42,
+      "coinReward": 22,
       "flavor": "A hulking ogre dragged up from the warrens - it swings a whole tree and calls it a club."
     }
   ]

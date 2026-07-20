@@ -1425,7 +1425,7 @@ namespace DeNelle.Village
                 RequestFacing(targetMb.transform.position - transform.position);
 
             NoteHeroDamageSource(_currentTarget);
-            _currentTarget.ApplyContactDamage(_contactDamage);
+            DealStructureDamage(_currentTarget, _contactDamage, contact: true);
             _actor?.PlayAttack();
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
         }
@@ -1435,6 +1435,49 @@ namespace DeNelle.Village
         {
             if (target is HeroHealth hh)
                 hh.NoteDamageSource(transform.position);
+        }
+
+        /// <summary>
+        /// CITY-02/03: single damage-to-structure sink. When the struck structure is the
+        /// Heart, the village WALL mitigates the blow - the incoming damage is multiplied
+        /// by walls.json <c>heartDamageMultiplier</c> for the player's current wall level
+        /// (upgrades now actually protect the Heart; walls.json was previously orphaned and
+        /// every hit landed at full value). At the spiked top tier the wall also BITES a
+        /// MELEE breacher back (<c>spikeDamagePerSecond</c> over one attack interval), so
+        /// the top tier is no longer a cosmetic no-op. Walls, gates, buildings and the hero
+        /// take the raw hit unchanged. All three enemy strike paths (melee / ranged / caster)
+        /// route through here so mitigation is applied once, consistently.
+        /// </summary>
+        private void DealStructureDamage(IDamageableStructure target, float damage, bool contact = false)
+        {
+            if (target == null || damage <= 0f) return;
+
+            if (target is HeartController)
+            {
+                float mult = DeNelle.Village.Walls.WallDefense.CurrentHeartDamageMultiplier();
+                float mitigated = damage * mult;
+                if (mult < 1f)
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("Wall", $"heart-mit-{_enemyId}", 1f,
+                        $"heart hit mitigated x{mult:0.00}: {damage:0.#}->{mitigated:0.#} " +
+                        $"(wallLevel={DeNelle.Village.Walls.WallDefense.CurrentWallLevel()}).");
+                target.ApplyContactDamage(mitigated);
+
+                // CITY-03: at the spiked top tier the wall wounds a MELEE breacher.
+                if (contact && !_dead)
+                {
+                    float spikeDps = DeNelle.Village.Walls.WallDefense.CurrentSpikeDamagePerSecond();
+                    if (spikeDps > 0f)
+                    {
+                        float bite = spikeDps * Mathf.Max(0.25f, _attackInterval);
+                        DeNelle.Core.Diagnostics.FlowTrace.Throttle("Wall", $"spike-{_enemyId}", 1f,
+                            $"spiked wall bites breacher {_enemyId}: {bite:0.#} dmg (dps={spikeDps:0.#}).");
+                        TakeDamageFrom(bite, transform.position + transform.forward * 2f);
+                    }
+                }
+                return;
+            }
+
+            target.ApplyContactDamage(damage);
         }
 
         /// <summary>
@@ -1475,7 +1518,7 @@ namespace DeNelle.Village
 
             // ── Legacy instant ranged hit (flag OFF) ─────────────────────────
             NoteHeroDamageSource(structure);
-            structure.ApplyContactDamage(damage);
+            DealStructureDamage(structure, damage);   // CITY-02: wall mitigates Heart hits
             _actor?.PlayCast();
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
             return true;
@@ -1610,7 +1653,7 @@ namespace DeNelle.Village
                     if (s != null && s.IsAlive)
                     {
                         NoteHeroDamageSource(s);
-                        s.ApplyContactDamage(damage);
+                        DealStructureDamage(s, damage);   // CITY-02: wall mitigates Heart hits
                         PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
                     }
                 };
