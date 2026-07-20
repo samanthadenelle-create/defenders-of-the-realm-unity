@@ -91,6 +91,7 @@ namespace DeNelle.Editor
                 }
 
                 count += CaptureFoundingEchoCard();
+                count += CapturePauseMenu();
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -174,6 +175,102 @@ namespace DeNelle.Editor
                 // runtime Destroy, which errors in edit mode).
                 if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
                 if (dlg != null && dlg.gameObject != null) UnityEngine.Object.DestroyImmediate(dlg.gameObject);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the Pause overlay (PauseController) -- the code-built kit modal
+        //  (FrameOptions): Resume / Settings / Quit to Title over a scrim. The owner
+        //  reported the option buttons "stacked". We build the REAL modal headless
+        //  (attaching a bare SettingsController so the WORST case -- all three option
+        //  buttons -- renders) and shoot it at two mobile-landscape resolutions so any
+        //  overlap shows exactly as on device.
+        //
+        //  PauseController lives in the DeNelle.Settings assembly, which DeNelle.Editor
+        //  does NOT reference, so every touch is via reflection (type-load + private
+        //  field/method access) -- no compile-time dependency, no asmdef change.
+        // ---------------------------------------------------------------------
+        private static int CapturePauseMenu()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject pauseGo = null;
+            GameObject settingsGo = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                Type pauseType = ResolveType("DeNelle.Settings.PauseController");
+                if (pauseType == null)
+                {
+                    Debug.LogWarning("[UICap-HL] PauseController type not found -- pause menu capture skipped.");
+                    return 0;
+                }
+
+                // A pre-seeded EventSystem so kit UI construction never warns in edit mode.
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                pauseGo = new GameObject("~UICapPause");
+                var pause = pauseGo.AddComponent(pauseType);
+
+                // Attach a bare SettingsController so the Settings button (the 3-button worst case)
+                // builds. Guarded: if it cannot attach, the menu still builds with Resume + Quit.
+                Type settingsType = ResolveType("DeNelle.Settings.SettingsController");
+                if (settingsType != null)
+                {
+                    try
+                    {
+                        settingsGo = new GameObject("~UICapSettings");
+                        var settings = settingsGo.AddComponent(settingsType);
+                        SetPrivateField(pause, "_settings", settings);
+                    }
+                    catch (Exception se)
+                    {
+                        Debug.LogWarning("[UICap-HL] could not attach SettingsController (2-button capture): " + se.Message);
+                    }
+                }
+
+                // Build the REAL modal. EnsureBuilt is private; it constructs _modal and leaves the
+                // canvas INACTIVE. Pause() is deliberately NOT called, so there is no Time.timeScale
+                // freeze and no PanelManager.NotifyOpened side effect -- a pure, static build.
+                InvokePrivate(pause, "EnsureBuilt");
+
+                object modal = GetPrivateFieldValue(pause, "_modal");
+                if (modal == null)
+                {
+                    Debug.LogWarning("[UICap-HL] PauseController._modal null after EnsureBuilt -- pause menu did not build; skipped.");
+                    return 0;
+                }
+                canvasGo = GetFieldValue(modal, "canvas") as GameObject;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] Pause modal canvas null -- pause menu build produced no canvas; skipped.");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "PauseMenu_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "PauseMenu_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] pause menu capture threw: " + e);
+            }
+            finally
+            {
+                // Destroy the canvas FIRST so PauseController.OnDestroy sees _modal.canvas == null and
+                // never calls runtime Destroy() (illegal in edit mode -- same contract as the card).
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (settingsGo != null) UnityEngine.Object.DestroyImmediate(settingsGo);
+                if (pauseGo != null) UnityEngine.Object.DestroyImmediate(pauseGo);
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
             }
 
@@ -332,6 +429,47 @@ namespace DeNelle.Editor
             var m = target.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
             if (m != null) m.Invoke(target, null);
             else Debug.LogWarning("[UICap-HL] private method '" + methodName + "' not found -- lore state skipped.");
+        }
+
+        /// <summary>Find a type by full name across the loaded assemblies (the pause menu lives in
+        /// DeNelle.Settings, which this editor assembly does not reference at compile time).</summary>
+        private static Type ResolveType(string fullName)
+        {
+            if (string.IsNullOrEmpty(fullName)) return null;
+            var t = Type.GetType(fullName);
+            if (t != null) return t;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                t = asm.GetType(fullName);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        /// <summary>Read a private instance field's value as a boxed object (nulls are safe).</summary>
+        private static object GetPrivateFieldValue(object target, string fieldName)
+        {
+            if (target == null) return null;
+            var f = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            return f != null ? f.GetValue(target) : null;
+        }
+
+        /// <summary>Read a public-or-private instance field's value as a boxed object (nulls are safe).</summary>
+        private static object GetFieldValue(object target, string fieldName)
+        {
+            if (target == null) return null;
+            var f = target.GetType().GetField(fieldName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            return f != null ? f.GetValue(target) : null;
+        }
+
+        /// <summary>Set a private instance field (used to inject the SettingsController fixture).</summary>
+        private static void SetPrivateField(object target, string fieldName, object value)
+        {
+            if (target == null) return;
+            var f = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f != null) f.SetValue(target, value);
+            else Debug.LogWarning("[UICap-HL] private field '" + fieldName + "' not found.");
         }
     }
 }

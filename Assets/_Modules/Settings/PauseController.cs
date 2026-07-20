@@ -139,14 +139,21 @@ namespace DeNelle.Settings
 
             // Chrome Close = Resume. Sits above gameplay panels (31000), below
             // Settings (32000) so the settings screen opens over the top.
-            // Owner 2026-07-16: "spacing between these regardless of device or screen size, and
-            // all items must fit inside the container." The buttons had 0.06 fraction gaps, but the
-            // kit's MinTouchPx(112) floor grew each fraction-slot button to 112px and ate the gaps
-            // on a short modal (they read as flush). Fix: a taller modal + a VerticalLayoutGroup with
-            // a FIXED pixel gap and fixed-height buttons, so the spacing is guaranteed at any screen
-            // size and the stack always fits inside the frame.
+            //
+            // STACKING FIX (owner 2026-07-19 "pause button has options stacked"): the option
+            // buttons are laid out by the common VerticalLayoutGroup column (below), which cannot
+            // self-overlap. The overlap was the shared frame CLOSE button (== Resume): FrameOptions
+            // seats it at the bottom footer band and SeatSharedCloseInside grows it UPWARD ~132px
+            // INTO the body. On the previous short modal (frac height 0.64) the Close button's top
+            // reached ~content-frac 0.247 while the button column's body floor sat at 0.150 -- so the
+            // Close control climbed ~0.10 of the body (~50px) into the column's lower region and
+            // collided with the bottom option ("Quit to Title"). Fix, all inside this one file:
+            //   (a) a TALLER modal (frac height 0.78) for comfortable vertical room, and
+            //   (b) a bigger column bottomInset (0.18) so the stack floor clears the Close band --
+            // guaranteeing disjoint, gapped, >=MinTouchPx bands that always fit inside the frame at
+            // any screen size (verified headless: Builds/ui-capture/PauseMenu_<res>.png).
             _modal = ElarionUiKit.BuildObsidianModal("PauseUI", "Paused",
-                new Vector2(0.34f, 0.18f), new Vector2(0.66f, 0.82f), Resume,
+                new Vector2(0.33f, 0.11f), new Vector2(0.67f, 0.89f), Resume,
                 sortingOrder: 31500,
                 frameName: RpgUiCatalog.FrameOptions, medallionIcon: "settings");
 
@@ -155,9 +162,11 @@ namespace DeNelle.Settings
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
-            // Common spaced button column (ElarionUiKit) — one shared layout so buttons never
-            // overlap under the touch floor, at any screen size (owner 2026-07-16 "fix in common").
-            var stack = ElarionUiKit.BuildButtonColumn(body);
+            // Common spaced button column (ElarionUiKit) -- one shared VerticalLayoutGroup so buttons
+            // never overlap under the touch floor, at any screen size (owner 2026-07-16 "fix in
+            // common"). bottomInset 0.18 keeps the whole stack ABOVE the frame's shared Close button.
+            var stack = ElarionUiKit.BuildButtonColumn(body,
+                gapPx: 18f, sideInset: 0.08f, topInset: 0.05f, bottomInset: 0.18f);
             ElarionUiKit.AddColumnButton(stack, "Resume",
                 ElarionUiKit.ObsidianButtonColor.Green, Resume);
             // Settings button only when a settings screen is wired — never a dead control.
