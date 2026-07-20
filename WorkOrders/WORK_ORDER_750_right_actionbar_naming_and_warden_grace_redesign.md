@@ -64,6 +64,16 @@ fill them (dual-copy):
 overrides (WO-682 SFX_WEBGL_OK); on APK/native this is a non-issue. **Owner felt-verifies "not annoying";
 swap the clip id if any grates.**
 
+## Single source — Hero Select must read the SAME data (owner, 2026-07-19)
+The Hero Select creation carousel shows a "PRIMARY SKILLS" panel (`HeroSelectController.cs:479-498`,
+`BuildSkillRow` :554) but pulls from `HeroCatalog.cs` — a HAND-MIRRORED C# copy of abilities.json,
+SEPARATE from the combat `AbilityCatalog`/`HeroAbilities` (live abilities.json). Drift is already visible
+(Hero Select labels slots Q/F/E/R; combat uses Q/W/E/R). **Unify: Hero Select's skill rows must read the
+SAME live source (`AbilityCatalog`/abilities.json), not the HeroCatalog mirror** — so the 5 renames + the
+E redesign show identically on the carousel and the combat bar, forever, from one place. Also apply the
+mobile-input ruling here (icon over key-letter). If a full unify is too big this pass, at MINIMUM update
+HeroCatalog's mirrored names to match abilities.json so nothing shows stale — but the RIGHT fix is one source.
+
 ## Acceptance
 - 5 skills carry their canonical names in HUD + data; W/E/R have ids; hot-swap can address them.
 - E performs heal + Grace Shield (HoT + -20% dmg), on the Mage Spell Cast 5 clip; R plays Jump into Slash Up (no W dup).
