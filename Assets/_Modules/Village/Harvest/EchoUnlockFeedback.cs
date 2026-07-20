@@ -250,10 +250,14 @@ namespace DeNelle.Village
             var go = new GameObject("EchoPetBoxButton", typeof(Image), typeof(Button));
             go.transform.SetParent(_pipCanvas.transform, false);
             var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(20f, -212f);   // directly under the "Echoes N/6" pip
+            // Owner 2026-07-19: the pet-box access belongs BELOW the Tree of Life (lower-centre, at the
+            // tree's roots where the Echo-spirits gather) — NOT stranded top-left. Bottom-centre anchor,
+            // lifted above the bottom verb bar (Build/Talk/Bag/Quests). Y is felt-tunable on device.
+            // The roster it opens stays the full-screen 31000 single-arbiter modal (z-fix preserved).
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, 200f);   // base of the Tree of Life, clear of the verb bar
             rt.sizeDelta = new Vector2(230f, 56f);
 
             var img = go.GetComponent<Image>();
