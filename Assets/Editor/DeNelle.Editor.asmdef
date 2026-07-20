@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.EditorRegression",
         "DeNelle.Core",
+        "DeNelle.Village",
         "DeNelle.Data",
         "DeNelle.Dungeons",
         "DeNelle.Sandbox",
