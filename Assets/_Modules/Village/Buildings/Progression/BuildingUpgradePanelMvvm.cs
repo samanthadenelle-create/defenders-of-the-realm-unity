@@ -27,7 +27,7 @@
 //     RIGHT  DETAIL pane for the SELECTED tier — perk NAME + "TIER n - SELECTED"
 //           + a BENEFIT LIST (green-check active vs dim-box locked, colorblind
 //           law: glyph + luminance + text, never hue alone) + "UPGRADE COST" chips
-//           + a big gold Upgrade CTA + a small Hotkeys row.
+//           + a big gold Upgrade CTA. (No Hotkeys row — mobile game; removed 2026-07-19.)
 //   BODY (Skills tab) = the per-tier RESEARCH PERKS as a scroll list (unchanged
 //           row grammar), so the Skills side keeps its existing content/behaviour.
 //   FOOTER   : one centered gold-bordered "Close".
@@ -40,6 +40,7 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
@@ -90,6 +91,17 @@ namespace DeNelle.Village.Buildings.Progression
 
         // Status is transient: toast only NEW statuses, never the open-time baseline.
         private string _lastStatus;
+
+        // ── Render dedup (WO fix 2026-07-19) ──────────────────────────────────────
+        // EconomyService.OnChanged fires after EVERY mutation (passive income ticks,
+        // pet/outpost harvest, etc.) -> BuildingUpgradeVM re-raises Changed EVERY tick ->
+        // this View re-ran a FULL destroy+rebuild of every tier card + skills row each
+        // tick. That churned the layout (visual jitter), drained perf, and re-armed the
+        // one-shot UiKitTextFitGuard on every rebuilt label EVERY frame (the "band too
+        // short" warning spam). We now hash the RENDERED state (perks + selection +
+        // affordability + effect/cost strings); the expensive rebuild runs ONLY when that
+        // hash actually changes. Cheap per-tick work (pill values, status toast) still runs.
+        private string _lastContentSig;
 
         // Building-portrait cache (portraits import as plain Texture2D — wrap once).
         private static readonly Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>();
@@ -174,9 +186,14 @@ namespace DeNelle.Village.Buildings.Progression
             if (_vm == null) return;
 
             // Refresh the currency pills (plain set — no red/green flash, colorblind law).
+            // Only assign when the value string actually changed — avoids a TMP mesh regen
+            // on every idle income tick.
             for (int i = 0; i < _pills.Count; i++)
                 if (_pills[i].Value != null)
-                    _pills[i].Value.text = ElarionUi.CompactNumber(WalletValue(_pills[i].Kind));
+                {
+                    string v = ElarionUi.CompactNumber(WalletValue(_pills[i].Kind));
+                    if (_pills[i].Value.text != v) _pills[i].Value.text = v;
+                }
 
             // Status is transient — pop a toast only when it CHANGES to a new, non-empty message.
             string status = _vm.Status;
@@ -186,10 +203,54 @@ namespace DeNelle.Village.Buildings.Progression
                 BuildFeedbackToast.Show(status);
             }
 
-            RebuildUpgrade();
-            RebuildSkills();
+            // EVENT-DRIVEN rebuild: the full card/skills teardown+rebuild (and the fit-guard
+            // re-arm it triggers) runs ONLY when the rendered state changed, not every tick.
+            string sig = ContentSignature();
+            if (sig != _lastContentSig)
+            {
+                RebuildUpgrade();
+                RebuildSkills();
+                // RebuildUpgrade resolves _selectedTierId internally, so re-hash AFTER the
+                // rebuild to capture the settled selection — otherwise the first income tick
+                // would see a changed sig and rebuild once more for nothing.
+                _lastContentSig = ContentSignature();
+            }
+
             RestyleTabs();
             ApplyTabVisibility();
+        }
+
+        // Hash of everything the tier cards / detail pane / skills rows render from, so
+        // Render can skip the expensive rebuild when nothing visible actually changed.
+        // Includes affordability + effect/cost strings so a genuine state flip (e.g. income
+        // crosses a cost threshold -> a button becomes enabled) still repaints exactly once.
+        private string ContentSignature()
+        {
+            if (_vm == null) return "";
+            var sb = new StringBuilder(256);
+            sb.Append(_selectedTierId).Append('|').Append(_vm.Title);
+            foreach (var item in _vm.Perks)
+            {
+                sb.Append('#').Append(item.Id)
+                  .Append(';').Append(item.Name)
+                  .Append(';').Append(item.Equipped ? '1' : '0')
+                  .Append(item.Locked ? '1' : '0')
+                  .Append(item.Affordable ? '1' : '0')
+                  .Append(';').Append(item.LockReason)
+                  .Append(';').Append(_vm.EffectFor(item.Id))
+                  .Append(';').Append(_vm.CostFor(item.Id));
+            }
+            return sb.ToString();
+        }
+
+        // Tapping a tier card selects it (immediate repaint of the left cards + right detail).
+        // Refreshes the dedup cache so the next income-driven Render doesn't redundantly rebuild.
+        private void SelectTier(string id)
+        {
+            _selectedTierId = id;
+            FlowTrace.Step("UpgradeUI", "select " + id);
+            RebuildUpgrade();
+            _lastContentSig = ContentSignature();
         }
 
         // ── Chrome — CLEAN flat dark panel (no ornate frame) + zones ──────────────
@@ -590,7 +651,7 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.StyleButtonColors(selBtn);
             SoftenButton(selBtn);
             string id = item.Id;
-            selBtn.onClick.AddListener(() => { _selectedTierId = id; FlowTrace.Step("UpgradeUI", "select " + id); RebuildUpgrade(); });
+            selBtn.onClick.AddListener(() => SelectTier(id));
 
             // "TIER n" header.
             var head = ElarionUiKit.Label(card, TierHeader(item), 0.865f, 0.955f,
@@ -613,7 +674,9 @@ namespace DeNelle.Village.Buildings.Progression
                 var g = new GameObject("Building", typeof(Image));
                 g.transform.SetParent(card, false);
                 var rt = g.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.16f, 0.44f); rt.anchorMax = new Vector2(0.84f, 0.82f);
+                // Illustration shrunk (was 0.44..0.82) to free vertical room below for the
+                // perk name + effect to WRAP instead of ellipsize.
+                rt.anchorMin = new Vector2(0.20f, 0.56f); rt.anchorMax = new Vector2(0.80f, 0.855f);
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
                 var img = g.GetComponent<Image>();
                 img.sprite = art; img.preserveAspect = true; img.raycastTarget = false;
@@ -622,27 +685,29 @@ namespace DeNelle.Village.Buildings.Progression
             else
             {
                 // Consistent neutral placeholder (identical on every tier — no growth): a crest glyph.
-                var gl = ElarionUiKit.Label(card, ElarionUi.CrestGlyph, 0.44f, 0.82f,
+                var gl = ElarionUiKit.Label(card, ElarionUi.CrestGlyph, 0.56f, 0.855f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.7f * dim),
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.16f, 0.84f, bold: true);
                 gl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(gl);
             }
 
-            // Perk NAME.
-            var nameLbl = ElarionUiKit.Label(card, CardName(item), 0.26f, 0.38f,
+            // Perk NAME — WRAPPING block (was a single-line ellipsize: narrow cards cut
+            // "Reinforced Blades" mid-word). Taller band + FitBlock lets it wrap to 2 lines.
+            var nameLbl = ElarionUiKit.Label(card, CardName(item), 0.37f, 0.545f,
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             nameLbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(nameLbl);
+            ElarionUiKit.FitBlock(nameLbl);
 
-            // One-line EFFECT.
+            // EFFECT — WRAPPING block (was too short: "Wood productio[n]" clipped). Taller
+            // band + full width so the effect copy wraps to a readable 2-3 lines.
             string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
             if (!string.IsNullOrEmpty(effect))
             {
-                var eff = ElarionUiKit.Label(card, effect, 0.135f, 0.255f,
+                var eff = ElarionUiKit.Label(card, effect, 0.145f, 0.36f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
-                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
                 eff.raycastTarget = false;
                 ElarionUiKit.FitBlock(eff);
             }
@@ -665,7 +730,7 @@ namespace DeNelle.Village.Buildings.Progression
                 // Locked — a dim lock button carrying the requirement (colorblind: glyph + text, not hue).
                 string reason = !string.IsNullOrEmpty(item.LockReason) ? item.LockReason : "Locked";
                 BuildLockButton(card, reason, 0.06f, 0.94f, 0.02f, 0.125f,
-                    () => { _selectedTierId = id; RebuildUpgrade(); });
+                    () => SelectTier(id));
             }
         }
 
@@ -721,7 +786,9 @@ namespace DeNelle.Village.Buildings.Progression
                 }
             }
 
-            const float listTop = 0.845f, listBot = 0.455f, rowH = 0.092f;
+            // Taller rows (was 0.092) so a long preview line like "Opens Reinforced Blades
+            // (Wood production +25%)" WRAPS to ~2 legible lines instead of ellipsizing.
+            const float listTop = 0.845f, listBot = 0.455f, rowH = 0.126f;
             int maxRows = Mathf.Max(1, Mathf.FloorToInt((listTop - listBot) / rowH));
             int shown = Mathf.Min(lines.Count, maxRows);
             for (int i = 0; i < shown; i++)
@@ -749,12 +816,9 @@ namespace DeNelle.Village.Buildings.Progression
             // BIG CTA — Upgrade / Raise Village Tier / Unlocked / Locked reason.
             BuildDetailCta(_detailHost, tiers, sel, selNum);
 
-            // Hotkeys row (decorative hint per mockup).
-            var hk = ElarionUiKit.Label(_detailHost, "Hotkeys", 0.02f, 0.09f,
-                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.02f, 0.50f);
-            hk.raycastTarget = false;
-            BuildKeyBadge(_detailHost, "B", 0.55f, 0.72f);
-            BuildKeyBadge(_detailHost, "^", 0.75f, 0.92f);
+            // NOTE: the decorative "Hotkeys  B  ^" key-letter row was REMOVED (2026-07-19) —
+            // this is a mobile (Android) game, keyboard hotkeys have no player value and the
+            // letters read as noise. No keybinding logic lived here (badges were display-only).
         }
 
         private void BuildDetailCta(RectTransform host, List<ItemVM> tiers, ItemVM sel, int selNum)
@@ -820,16 +884,6 @@ namespace DeNelle.Village.Buildings.Progression
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, 0.10f, 1f);
             lbl.raycastTarget = false;
             ElarionUiKit.FitBlock(lbl);
-        }
-
-        private void BuildKeyBadge(RectTransform parent, string key, float x0, float x1)
-        {
-            RectTransform badge = RoundedCard(parent, "Key_" + key,
-                new Vector2(x0, 0.02f), new Vector2(x1, 0.088f), TabDark, BorderDim, 1.5f);
-            var lbl = ElarionUiKit.Label(badge, key, 0.05f, 0.95f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-            lbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(lbl);
         }
 
         // ── Shared clean buttons (gold CTA + dim lock) ────────────────────────────
@@ -1308,6 +1362,7 @@ namespace DeNelle.Village.Buildings.Progression
             _pills.Clear();
             _tabs.Clear();
             _lastStatus = null;
+            _lastContentSig = null;   // fresh chrome next Open -> force the first rebuild
             if (_ui != null)
             {
                 var fx = _ui.GetComponent<PanelOpenCloseFx>();

@@ -36,6 +36,7 @@ namespace DeNelle.Village
         private Image _fill;
         private TextMeshProUGUI _dumpLabel;
         private bool _open;
+        private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
 
         private EchoWorkforceVM _vm;
 
@@ -80,6 +81,17 @@ namespace DeNelle.Village
             if (_modal == null) return;
             _open = true;
             _modal.SetActive(true);
+
+            // HUD-1: register with the single-modal arbiter and announce the open. Opening the
+            // harvest panel CLOSES any other Echo modal (roster/card/unlock) that was up.
+            // Battle-lock (WO-437): a rejected open self-closes via the registered Hide.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("EchoHarvest", Hide, () => _open);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                FlowTrace.Warn("HUD", "EchoWorkforceHud open rejected by PanelManager (battle-lock).");
+                return;
+            }
             Refresh();
             FlowTrace.Step("HUD", "EchoWorkforceHud OPEN");
         }
@@ -89,6 +101,7 @@ namespace DeNelle.Village
             if (_modal == null) return;
             _open = false;
             _modal.SetActive(false);
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             FlowTrace.Step("HUD", "EchoWorkforceHud CLOSED");
         }
 

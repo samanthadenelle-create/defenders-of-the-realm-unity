@@ -75,10 +75,21 @@ namespace DeNelle.Village.Buildings.Progression
                     }
                 }
 
-                var cost = new DeNelle.Village.ResourceCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal };
-                var econ = EconomyService.Instance;
+                // SPEND - GameState-backed single-source wallet (building-upgrade blocker fix).
+                // The city-tier cost (Wood/Food/Crystal) is charged via ResourceLedger, the SAME
+                // GameState wallet the harvest economy, dev grants, and the resource-building
+                // upgrade path (ResourceBuildingState) already use. The OLD path charged
+                // EconomyService.TrySpend, whose Wood/Iron come from a DIVERGENT in-session pool
+                // (default 200, reset every scene load) that the player's harvested/reloaded/
+                // dev-granted wood NEVER reaches -> CanAfford saw ~200 wood and EVERY city tier
+                // silently no-op'd "can't afford" against a FULL GameState wallet (the reported
+                // Lumber Mill blocker: 997k wood on the HUD, but the in-session pool short). Food/
+                // Crystals were already GameState-backed; routing Wood/Iron through the ledger too
+                // makes the wallet the player SEES the wallet the tap SPENDS. City tiers never
+                // charge Gold, so ResourceLedger (Wood/Food/Iron/Crystals) covers the whole cost.
                 var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-                if (econ != null && state != null && econ.TrySpend(cost))
+                var cost = TierCost(def);
+                if (state != null && ResourceLedger.TrySpend(cost))
                 {
                     // F8-51 — cost charged above; the TIER applies at timer COMPLETION
                     // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyTier,
@@ -98,8 +109,46 @@ namespace DeNelle.Village.Buildings.Progression
                     ApplyTier(id, targetTier);
                     return true;
                 }
+
+                // CLAUDE.md 12 - a full-wallet player must NEVER hit a silent no-op again: name WHY
+                // the spend failed (the GameState wallet vs. the tier cost) on a [Flow:Upgrade] Fail
+                // line, so a future "tap does nothing" is one read, not a re-theorise.
+                FlowTrace.Fail("Upgrade", id + " tier-" + targetTier + " spend REJECTED - need W"
+                    + def.CostWood + "/F" + def.CostFood + "/C" + def.CostCrystal + ", wallet W"
+                    + ResourceLedger.Balance(HarvestResource.Wood) + "/F"
+                    + ResourceLedger.Balance(HarvestResource.Food) + "/C"
+                    + ResourceLedger.Balance(HarvestResource.Crystals)
+                    + (state == null ? " (no GameState)" : ""));
             }
             return false;
+        }
+
+        /// <summary>
+        /// The city-tier cost as a GameState-backed harvest cost list (Wood/Food/Crystals). City
+        /// tiers never charge Gold, so <see cref="ResourceLedger"/> - the single-source GameState
+        /// wallet - covers the full cost. Zero-amount lines are omitted. Shared by
+        /// <see cref="TryUpgrade"/> (the spend) and <see cref="CanAffordTier"/> (the panel's
+        /// affordance) so ONE wallet drives both.
+        /// </summary>
+        private static System.Collections.Generic.List<ResourceCost> TierCost(BuildingTierDef def)
+        {
+            var list = new System.Collections.Generic.List<ResourceCost>(3);
+            if (def == null) return list;
+            if (def.CostWood > 0)    list.Add(new ResourceCost(HarvestResource.Wood, def.CostWood));
+            if (def.CostFood > 0)    list.Add(new ResourceCost(HarvestResource.Food, def.CostFood));
+            if (def.CostCrystal > 0) list.Add(new ResourceCost(HarvestResource.Crystals, def.CostCrystal));
+            return list;
+        }
+
+        /// <summary>
+        /// GameState-backed affordability for a city tier - the SAME wallet <see cref="TryUpgrade"/>
+        /// charges, so the panel's gold affordance and the actual spend read ONE source of truth.
+        /// (Replaces the old EconomyService.CanAfford check that read the divergent in-session
+        /// Wood/Iron pool.) Public so BuildingUpgradeVM can light the tile honestly.
+        /// </summary>
+        public static bool CanAffordTier(BuildingTierDef def)
+        {
+            return def != null && ResourceLedger.CanAfford(TierCost(def));
         }
 
         /// <summary>

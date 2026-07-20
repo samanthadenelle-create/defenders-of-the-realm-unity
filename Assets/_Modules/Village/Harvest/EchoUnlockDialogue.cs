@@ -51,6 +51,8 @@ namespace DeNelle.Village
         private TextMeshProUGUI _flavorLabel;
         private Button _tellMoreBtn;
         private bool _showingLore;
+        private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
+        private bool _open;
 
         /// <summary>Build + show the unlock card for the spirit earned at
         /// <paramref name="newCount"/>. Idempotent: replaces any card on screen. Returns TRUE
@@ -63,7 +65,9 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Echo", "EchoUnlockDialogue.Show: null roster entry -- card skipped (SFX + pip still fire).");
                 return false;
             }
-            if (s_active != null) { Destroy(s_active.gameObject); s_active = null; }
+            // HUD-1: retire any card already up THROUGH its own Close so the arbiter is
+            // notified (NotifyClosed) before we replace it -- never a raw orphan Destroy.
+            if (s_active != null) { s_active.Close(); s_active = null; }
 
             var host = new GameObject("EchoUnlockDialogue");
             var dlg = host.AddComponent<EchoUnlockDialogue>();
@@ -76,6 +80,18 @@ namespace DeNelle.Village
             {
                 if (dlg != null) Destroy(dlg.gameObject);
                 s_active = null;
+                return false;
+            }
+
+            // HUD-1: register with the single-modal arbiter and announce the open. The unlock
+            // card CLOSES any other Echo modal (roster/card/harvest) that was up -- one modal only.
+            // Battle-lock (WO-437): a rejected open self-closes (SFX + pip still fire) -> return false
+            // so the founding-echo teaching does not persist its one-shot on an un-rendered card.
+            dlg._open = true;
+            dlg._panelHandle = PanelManager.Register("EchoUnlockDialogue", dlg.Close, () => dlg._open);
+            if (!PanelManager.NotifyOpened(dlg._panelHandle))
+            {
+                FlowTrace.Warn("Echo", "unlock dialogue rejected by PanelManager (battle-lock) -- not shown.");
                 return false;
             }
             FlowTrace.Step("Echo", $"unlock dialogue shown id={entry.Id} count={newCount}");
@@ -186,7 +202,11 @@ namespace DeNelle.Village
 
         private void Close()
         {
-            if (_canvas != null) Destroy(_canvas);
+            // HUD-1: notify the arbiter BEFORE teardown; null the handle so a double Close
+            // (self-replace + arbiter swap) never double-notifies. Guarded-safe on destroyed objects.
+            _open = false;
+            if (_panelHandle != null) { PanelManager.NotifyClosed(_panelHandle); _panelHandle = null; }
+            if (_canvas != null) { Destroy(_canvas); _canvas = null; }
             Destroy(gameObject);
         }
 

@@ -51,6 +51,7 @@ namespace DeNelle.Village
         private GameObject _modal;
         private bool _open;
         private EchoRosterVM _vm;
+        private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
 
         private static readonly Color OwnedGlass  = new Color(0.09f, 0.10f, 0.13f, 0.95f);
         private static readonly Color LockedGlass = new Color(0.05f, 0.05f, 0.06f, 0.95f);
@@ -75,6 +76,17 @@ namespace DeNelle.Village
             }
             _open = true;
             _modal.SetActive(true);
+
+            // HUD-1: register with the single-modal arbiter and announce the open. Opening the
+            // roster CLOSES any other Echo modal (card/picker, harvest, unlock dialogue) that was
+            // up -- no more stacked modals. Battle-lock (WO-437): a rejected open self-closes.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("EchoRoster", Close, () => _open);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                FlowTrace.Warn("Echo", "RosterOpen rejected by PanelManager (battle-lock) -- not shown.");
+                return;
+            }
             FlowTrace.Step("Echo", $"Echo roster OPEN (owned {_vm.Owned}/{_vm.MaxEchoes}).");
         }
 
@@ -82,6 +94,7 @@ namespace DeNelle.Village
         {
             _open = false;
             if (_modal != null) _modal.SetActive(false);
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             FlowTrace.Step("Echo", "Echo roster CLOSED.");
         }
 

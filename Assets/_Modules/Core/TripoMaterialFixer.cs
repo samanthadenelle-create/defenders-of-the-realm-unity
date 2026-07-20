@@ -113,6 +113,15 @@ namespace DeNelle.Core
         // callers pass their own colour and are unaffected.
         [SerializeField] private Color _fallbackTint = new Color(0.5f, 0.5f, 0.5f, 1f);
         [SerializeField] private bool _hasFallbackTint;
+        // WHITE-STRUCTURE FALLBACK (ballista fix 2026-07-19): a TEXTURE-MISS-ONLY tint. Unlike
+        // _fallbackTint (applied UNCONDITIONALLY when set — it multiplies onto real textures too),
+        // this is applied ONLY when a slot resolves NO texture at all (no source map, no fallback,
+        // no forced), replacing the would-be SOLID WHITE with a neutral tint. Textured slots are
+        // byte-unchanged. Structures (StructureFactory) set this so a model whose albedo didn't
+        // survive the build (gitignored .fbm, e.g. Structures/Ballista / WizardTower_1) degrades to
+        // flat stone instead of bright untextured white — the "white ballista" symptom.
+        [SerializeField] private Color _missTint = new Color(0.60f, 0.58f, 0.54f, 1f);
+        [SerializeField] private bool _hasMissTint;
         [SerializeField] private float _smoothness = 0.15f;
         [SerializeField] private float _metallic = 0f;
         [SerializeField] private bool _forceRebuild;
@@ -162,6 +171,20 @@ namespace DeNelle.Core
         {
             _fallbackTint = tint;
             _hasFallbackTint = true;
+        }
+
+        /// <summary>
+        /// Ballista fix 2026-07-19: register a TEXTURE-MISS-ONLY tint. Applied by the rebuild ONLY
+        /// when a slot resolves no texture at all (no source map, no fallback, no forced) — replacing
+        /// the default white so a textureless model degrades to a neutral tint instead of SOLID WHITE.
+        /// Non-destructive for textured slots (they keep their map + colour, byte-for-byte). Used by
+        /// StructureFactory: structures carry no species tint, so a model whose albedo didn't survive
+        /// the build (gitignored .fbm) rebuilt to bright white — this rescues that case only.
+        /// </summary>
+        public void SetMissTint(Color tint)
+        {
+            _missTint = tint;
+            _hasMissTint = true;
         }
 
         private bool _fallbackOptional;
@@ -299,6 +322,15 @@ namespace DeNelle.Core
                     // tint whenever it's been set — when a real texture also
                     // resolves the tint just multiplies (mild colour push).
                     if (_hasFallbackTint) col = _fallbackTint;
+
+                    // WHITE-STRUCTURE FALLBACK (ballista fix 2026-07-19): after ALL texture resolution,
+                    // a slot that STILL has no map (tex == null) would rebuild as a solid WHITE URP/Lit
+                    // (col defaulted to white above). For structures — which set no unconditional species
+                    // tint — that is the "white ballista": a model whose albedo didn't survive the build
+                    // (gitignored .fbm / untextured embedded material). Degrade the would-be white to the
+                    // registered neutral stone MISS-tint. Textured slots (tex != null) never reach here,
+                    // so they are byte-unchanged; an explicit _fallbackTint still wins when both are set.
+                    if (tex == null && _hasMissTint) col = _missTint;
 
                     // Preserve the normal map always (non-destructive).
                     Texture nrm = (src != null && src.HasProperty("_BumpMap")) ? src.GetTexture("_BumpMap") : null;

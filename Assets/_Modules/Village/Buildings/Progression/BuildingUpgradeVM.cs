@@ -268,7 +268,19 @@ namespace DeNelle.Village.Buildings.Progression
                         FlowTrace.Step("Upgrade", _buildingId + " unlocked tier-" + next);
                     }
                 }
-                else Status = "You can't afford that yet.";
+                else
+                {
+                    Status = "You can't afford that yet.";
+                    // CLAUDE.md 12 - never a silent no-op again: the service logs wallet-vs-cost;
+                    // mirror an honest [Flow:Upgrade] Fail here naming the tier cost that was short.
+                    if (nextDef != null)
+                        FlowTrace.Fail("Upgrade", _buildingId + " tier-" + next
+                            + " UpgradeNext -> TryUpgrade FALSE (needed W" + nextDef.CostWood
+                            + "/F" + nextDef.CostFood + "/C" + nextDef.CostCrystal
+                            + ", have W" + ResourceLedger.Balance(HarvestResource.Wood)
+                            + "/F" + ResourceLedger.Balance(HarvestResource.Food)
+                            + "/C" + ResourceLedger.Balance(HarvestResource.Crystals) + ")");
+                }
                 Rebuild();
                 Raise();
                 return;
@@ -458,7 +470,11 @@ namespace DeNelle.Village.Buildings.Progression
                     bool locked = tier > CurrentTier + 1 || gated;
 
                     var cost = new EcoCost { Wood = t.CostWood, Food = t.CostFood, Crystals = t.CostCrystal };
-                    bool affordable = isNext && !gated && (_economy == null || _economy.CanAfford(cost));
+                    // Affordability reads the GameState-backed wallet the tap actually charges
+                    // (building-upgrade blocker fix) -- NOT EconomyService's divergent in-session
+                    // Wood/Iron pool. Mirrors BuildResource's ResourceLedger check below so the
+                    // tile's gold affordance matches what BuildingUpgradeService.TryUpgrade will do.
+                    bool affordable = isNext && !gated && BuildingUpgradeService.CanAffordTier(t);
                     string costStr = CostString(cost);
 
                     string lockReason = null;

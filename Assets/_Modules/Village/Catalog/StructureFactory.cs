@@ -170,6 +170,18 @@ namespace DeNelle.Village
                     fixer?.SetForcedTexture(entry.visualTexturePath);
                 }
 
+                // WHITE-STRUCTURE FALLBACK (ballista fix 2026-07-19): heroes/pets pass a species tint
+                // to their fixer, but structures never did — so a model whose albedo didn't survive
+                // the build (gitignored .fbm, e.g. Structures/Ballista / WizardTower_1) rebuilt to
+                // SOLID WHITE. Register a neutral stone MISS-tint on the fixer VisualFactory.Skin just
+                // added: it is applied ONLY to slots that resolve no texture at all, so a textured
+                // structure is byte-unchanged and a textureless one degrades to flat stone (never
+                // bright white). Set before the fixer's next-frame Start (same as SetForcedTexture).
+                {
+                    var missFixer = visual?.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
+                    missFixer?.SetMissTint(new Color(0.60f, 0.58f, 0.54f, 1f));
+                }
+
                 // WO-707 texPath escape hatch (retained as a belt-and-suspenders secondary; the
                 // WO-719 fixer route above is the durable primary). Force a Resources texture onto
                 // the skinned materials when the model's embedded material lost its map link
@@ -338,6 +350,14 @@ namespace DeNelle.Village
             {
                 var fixer = visual?.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
                 fixer?.SetForcedTexture(texPath);
+            }
+
+            // WHITE-STRUCTURE FALLBACK (ballista fix 2026-07-19): mirror Create — a tier model whose
+            // albedo didn't survive the build would otherwise reskin to SOLID WHITE. Register the same
+            // neutral stone MISS-tint (texture-miss-only, so textured tiers are byte-unchanged).
+            {
+                var missFixer = visual?.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
+                missFixer?.SetMissTint(new Color(0.60f, 0.58f, 0.54f, 1f));
             }
 
             // Orientation entries are authored against the BASE visualPrefabPath model (the

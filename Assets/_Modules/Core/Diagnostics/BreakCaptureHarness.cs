@@ -190,6 +190,41 @@ namespace DeNelle.Core.Diagnostics
             return null;
         }
 
+        // MOBILE SCREENSHOT-PATH FIX (device RCA 2026-07-19): the FLAG tap wrote a "flagged"
+        // break-log record but NO flag_NN.png on the RELEASE Android APK. Root cause is a
+        // platform path-semantics mismatch, NOT a debug/editor gate: the break-log is written
+        // with File.AppendAllText(<absolute path>) which Android honours, but the PNG is written
+        // with ScreenCapture.CaptureScreenshot(...) which on Android/iOS treats its argument as
+        // a path RELATIVE to Application.persistentDataPath and PREPENDS that base itself. So the
+        // same absolute path becomes persistentDataPath + "/" + persistentDataPath + "/flag.png"
+        // (nested / invalid) and the frame is silently dropped. On Standalone/editor absolute
+        // paths work, which is why desktop F8 capture always produced a file. Fix: hand
+        // ScreenCapture a path RELATIVE to persistentDataPath on mobile, keep the absolute path
+        // on Standalone/editor. WebGL is unaffected (Install() early-outs there — screenshots
+        // are legitimately off on the ship surface).
+        string ScreenshotPath(string fileName)
+        {
+            string dir = _outDir ?? Application.persistentDataPath;
+            string abs = Path.Combine(dir, fileName);
+            if (Application.platform == RuntimePlatform.Android ||
+                Application.platform == RuntimePlatform.IPhonePlayer)
+            {
+                try
+                {
+                    string root = Application.persistentDataPath;
+                    if (!string.IsNullOrEmpty(root) &&
+                        abs.StartsWith(root, StringComparison.Ordinal))
+                    {
+                        // ScreenCapture prepends persistentDataPath on mobile, so pass only the
+                        // remainder (just the filename in normal play; autopilot-runs/<id>/... in fleet mode).
+                        return abs.Substring(root.Length).TrimStart('/', '\\');
+                    }
+                }
+                catch { /* fall through to absolute */ }
+            }
+            return abs;
+        }
+
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -424,7 +459,7 @@ namespace DeNelle.Core.Diagnostics
         {
             if (_noteMode) return;                                 // already flagging
             // screenshot the CLEAN frame first (the note box draws next frame)
-            try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_sessionStamp}_{_flagCount:00}.png")); }
+            try { ScreenCapture.CaptureScreenshot(ScreenshotPath($"flag_{_sessionStamp}_{_flagCount:00}.png")); }
             catch { }
             _noteBuffer = "";
             _noteShowFrame = Time.frameCount + 1;
@@ -461,8 +496,9 @@ namespace DeNelle.Core.Diagnostics
             try
             {
                 // clean-frame screenshot, same naming/counter as FlagHere() (F8) so the button's
-                // shot lands in the exact same flag_/break_ evidence set.
-                try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_sessionStamp}_{_flagCount:00}.png")); }
+                // shot lands in the exact same flag_/break_ evidence set. ScreenshotPath() makes the
+                // PNG land on the RELEASE Android APK (was silently dropped by the absolute-path bug).
+                try { ScreenCapture.CaptureScreenshot(ScreenshotPath($"flag_{_sessionStamp}_{_flagCount:00}.png")); }
                 catch { }
                 string msg = string.IsNullOrWhiteSpace(note) ? "on-screen FLAG button" : note.Trim();
                 Record("flagged", $"[{SafeScene()}] {msg}", null, screenshot: false);  // shot already taken
@@ -757,8 +793,8 @@ namespace DeNelle.Core.Diagnostics
             {
                 try
                 {
-                    string shot = Path.Combine(_outDir ?? Application.persistentDataPath, $"break_{_shotCount:00}_{kind}.png");
-                    ScreenCapture.CaptureScreenshot(shot);
+                    // ScreenshotPath(): mobile-relative on Android/iOS (else silently dropped), absolute on desktop.
+                    ScreenCapture.CaptureScreenshot(ScreenshotPath($"break_{_shotCount:00}_{kind}.png"));
                     _shotCount++;
                 }
                 catch { }

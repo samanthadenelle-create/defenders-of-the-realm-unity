@@ -2802,11 +2802,20 @@ namespace DeNelle.Village
                         fresh = BuildRecoveredWeaponMaterial(m);   // fresh URP/Lit, once per unique source
                         freshFor[m] = fresh;
                         recovered++;
-                        // FAIL (not Step): an invisible/magenta weapon in the shipped player IS a break —
-                        // surface it in the F8 break-log with the exact material + dead shader.
-                        FlowTrace.Fail("HeroWeapon",
-                            $"weapon '{weaponId ?? "<null>"}' material '{m.name}' on dead shader '{dead}' -> FRESH URP/Lit " +
-                            "(assigned to renderer so it sticks in the build) — was invisible/magenta in the hand.");
+                        // ROOT FIX 2026-07-19 (device: knight_starter magenta): the source .mat
+                        // (Blink MegaWeaponPack1/LowPolyWeaponMegaPack) is now re-authored to ship URP/Lit,
+                        // so on a correctly-imported build this recovery does NOT fire at all (the shader
+                        // reads URP/Lit -> IsBrokenPropShader false -> skipped). It STILL fires as a backstop
+                        // only when a gitignored pack is re-imported fresh and its .mat reverts to Built-in
+                        // Standard. That is a KNOWN, FULLY-HANDLED condition — the fresh URP/Lit carries the
+                        // authored albedo/colour, so the weapon renders correctly. It is therefore NOT a live
+                        // break: log Step (Player.log only), NOT Fail (which would spam the F8 break-log as a
+                        // false live-break on every equip). A genuinely unrecoverable case (URP/Lit shader not
+                        // found) still Fails, above.
+                        FlowTrace.Step("HeroWeapon",
+                            $"weapon '{weaponId ?? "<null>"}' material '{m.name}' shipped on dead shader '{dead}' -> " +
+                            "auto-healed to FRESH URP/Lit (assigned to renderer, sticks in build). Expected only when a " +
+                            "gitignored weapon pack is re-imported to Built-in Standard; source .mat now ships URP/Lit.");
                     }
                     work[i] = fresh;
                     changed = true;
