@@ -28,6 +28,24 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-07-20 overnight autonomous loop) — see `OVERNIGHT_RESULT_2026-07-20.md`
+- **Regression baseline = 13/14 SME P1 suites GREEN.** 14 new suites wired into `DataRegression.RunAll`.
+  Only `dungeon-dressing` RED (FAIL-BY-DESIGN, deferred content — RoomForge composer seats no props yet).
+  Green markers: WAVE_SCALING / ENEMY_REWARDS / WALL_MITIGATION / UPGRADE_AUTHORITY / PACK_GRANT /
+  SFX_RESOLVE / DUNGEON_EXIT / FOUNDING_REACH / FTUE_HONESTY / ECHO_CARD_COPY / SHADER_PIN /
+  MODAL_REGISTRATION / CRYSTAL_PRODUCTION. *(pushed to wip, origin d9653b05)*
+- **NEW TOOL — headless UI screenshot capture:** `DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless`
+  (edit-mode synchronous render; the old Play-mode path never worked under `-batchmode -quit`). Writes
+  `Builds\ui-capture\*.png` + `UI_CAPTURE_OK`. **Run it before shipping any UI change** (owner rule: never
+  be first to see a broken panel). It already caught 2 real Echo-card bugs pre-build tonight.
+- **Newly data-driven (SSOT):** `buildings.json` crystalsPerWave (v2, CrystalMine yield), `enemies.json`
+  xp/coinReward (v4), `walls.json` heartDamageMultiplier. All dual-copy identical + version-bumped.
+- **Echo card = 6 NAMED SOULS** (Aldwin/Elowen/Corvin/Bran/Doran/Maren) in `EchoRosterCatalog` — each the
+  awakened essence of a soul the Heart guards; founding header "An Echo Awakens" (not "Leveled Up to 1").
+  Founding card layout screenshot-verified (full copy fits, 3-across buttons, one dismiss).
+- **15 top-band modals** now register with PanelManager (back-button + battle-lock arbiter).
+- **Builds:** Seeker APK -> Windows -> WebGL launched detached ~06:28; WebGL DEPLOY pending owner `vercel` CLI.
+
 ## Persistence / save
 - Save schema **v34** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738; **v34** persists Tribes/Wards/Arena + pet active-slot, RED-3/4 2026-07-19). Every bump 21→33 carries a `SaveMigrator` step (additive ones are pass-throughs) so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs/SaveMigrator.cs 2026-07-17)*
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
