@@ -647,7 +647,11 @@ namespace DeNelle.HUD.Kit
             // rect via the shared Pill611* fractions — both widgets stretch the SAME
             // actionRail mount, so no cross-widget reference (and no drift) is possible.
             // Q sits nearest the pill's left, the arc sweeps up over the pill (owner design).
-            string[] keys611 = { "Q", "W", "E", "R" };
+            // WO-750 mobile-input ruling (owner 2026-07-19): this is a touch game — the ability
+            // ICON carries identity, so the medallions render with NO Q/W/E/R key-letter badge.
+            // The keyboard/gamepad bindings stay live in code (PC/dev fallback); they are just
+            // never surfaced on the touch HUD. Pass null keyBadge -> StyleAsRoundMedallion builds
+            // no key chip.
 
             for (int i = 0; i < 4; i++)
             {
@@ -669,7 +673,8 @@ namespace DeNelle.HUD.Kit
                     () => { if (_owner != null) _owner.AbilityRequested?.Invoke(slot); });
                 if (combat)
                 {
-                    ElarionUiKit.StyleAsRoundMedallion(_abilitySlots[i], keys611[i]);
+                    // WO-750: null keyBadge — no Q/W/E/R letter on the touch medallion (icon = identity).
+                    ElarionUiKit.StyleAsRoundMedallion(_abilitySlots[i], null);
                     _abilityGlows[i] = ElarionUiKit.AddSoftCooldownGlow(_abilitySlots[i]);
                 }
             }

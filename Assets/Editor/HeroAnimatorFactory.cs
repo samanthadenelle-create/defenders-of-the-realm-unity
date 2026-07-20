@@ -275,7 +275,7 @@ namespace DeNelle.Editor
         // block = raise shield (clear telegraph); hit = sword+shield stagger. All verified Humanoid
         // (animationType:3) + path-confirmed before referencing.
         private static readonly string[] MocapAttackClips = { "atk_slashright", "atk_slashleft", "atk_spin" };
-        private static readonly string[] MocapSpellClips  = { null, "atk_stab", "atk_slashleft", "atk_slashright", "atk_spin" };
+        private static readonly string[] MocapSpellClips  = { null, "atk_stab", "atk_slashleft", "atk_slashright", "atk_slashup" }; // R (variant 4) = "Jump into Slash Up" (WO-750; was atk_spin, de-dup from W)
         private const string MocapCastClip  = "atk_slashright"; // generic cast + upper-body (moving) swing
         private const string MocapBlockClip = "shield_blockup";
         private const string MocapHitClip   = "m-ss-damage-01"; // magical-moves stagger (same rig)

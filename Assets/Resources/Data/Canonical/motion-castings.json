@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11.",
+  "version": 3,
+  "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11. v3 (WO-750, 2026-07-19): knight castHeal rebound to Mage Spell Cast 5 (f-ss-magespellcast-05) for Warden's Grace; skill1/skill2 sfxId filled (Swords_Clash); castHeal sfxImpact Heal. NOTE: the R-slot 'Jump into Slash Up' (atk_slashup) clip and R cast/impact SFX are NOT wired here — atk_slashup is attack-taxonomy (would trip the cast-keyword lint) and CastVariant 4 (Cast_r) is a hardcoded HeroAnimatorFactory.MocapSpellClips[4] pick, not registry-resolved; rebinding R to atk_slashup + adding R sfx requires a factory edit + re-bake (out of this data lane).",
   "vocabulary": {
     "locomotion": [
       "idle",
@@ -167,7 +167,7 @@
         "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_flyingkick_m.fbx",
         "guid": "e51479a72a75d7a4a9c53a4e9763068d",
         "vfxKey": "",
-        "sfxId": "",
+        "sfxId": "Swords_Clash",
         "vfxDelay": 0.0,
         "attachBone": "",
         "playOneShot": false,
@@ -175,14 +175,14 @@
         "pickedUtc": "2026-07-12T03:54:30Z",
         "source": "motion-caster",
         "vfxImpact": "Melee_Impact",
-        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)",
+        "vfxNote": "WO-750: Sword Heroic (Q). sfxId Swords_Clash = the soft leap-swing (owner ask 'SwordSwing'; only sword clip in Resources/Sfx).",
         "sfxImpact": "Swords_Clash"
       },
       "skill2": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_whirlwindkick_m.fbx",
         "guid": "93668007519b4c442932f42eee845399",
         "vfxKey": "",
-        "sfxId": "",
+        "sfxId": "Swords_Clash",
         "vfxDelay": 0.0,
         "attachBone": "",
         "playOneShot": false,
@@ -190,7 +190,7 @@
         "pickedUtc": "2026-07-12T03:54:47Z",
         "source": "motion-caster",
         "vfxImpact": "Cleave_Impact",
-        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)",
+        "vfxNote": "WO-750: Shield Charge (W). sfxId/sfxImpact Swords_Clash = the muted metallic thud (owner ask 'SwordClash').",
         "sfxImpact": "Swords_Clash"
       },
       "block": {
@@ -201,16 +201,18 @@
         "source": "owner-pick"
       },
       "castHeal": {
-        "clip": "Assets/Action/Knight/Motion/studio-mocap-series-magical-moves/f-magiccontrol-01.fbx",
-        "guid": "989616476dd7e67438bb14e1274a7fc9",
-        "vfxKey": "Dash_Blink",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-series-magical-moves/f-ss-magespellcast-05.fbx",
+        "guid": "d2be6fe2ab0d3704ca777bbb5c48e378",
+        "vfxKey": "Heal_Cast",
         "sfxId": "Heal",
         "vfxDelay": 0.0,
         "attachBone": "",
         "playOneShot": true,
         "manual": true,
-        "pickedUtc": "2026-07-12T03:59:40Z",
-        "source": "motion-caster"
+        "pickedUtc": "2026-07-19T00:00:00Z",
+        "source": "owner-pick",
+        "sfxImpact": "Heal",
+        "vfxNote": "WO-750: rebound to 'Mage Spell Cast 5' (f-ss-magespellcast-05, sword+shield stance) for Warden's Grace (E) + every heal cast. vfxKey Heal_Cast (was Dash_Blink) = radiant heal cast; sfx Heal = soft chime."
       },
       "cast": {
         "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim",

@@ -138,13 +138,20 @@ namespace DeNelle.Onboarding
                 HeroClass.Knight, "hero.knight.name", "hero.knight.role", "hero.knight.blurb",
                 "G", new Color(0.98f, 0.84f, 0.40f),      // Grom — holy gold
                 hp: 5, attack: 3, speed: 2,
-                abilityName: "Bulwark Slam",
-                abilityDesc: "Cleaving slam — hits all foes in front.",
+                // WO-750 (owner 2026-07-19): mirror the LIVE knight kit names from
+                // abilities.json (Sword Heroic / Shield Charge / Warden's Grace / Radiant Strike)
+                // + the combat Q/W/E/R slot letters. This is the hand-mirror kept in sync
+                // (Onboarding references DeNelle.Core only, so it can't read AbilityCatalog in
+                // DeNelle.Village — a true single source needs an asmdef ref or a Core-side
+                // abilities reader; see the WO-750 report). Signature = the W-slot ability
+                // (matches the mage/ranger convention: Frost Nova / Snare Trap).
+                abilityName: "Shield Charge",
+                abilityDesc: "Charge behind your shield — knocks back, slows, breaks guard.",
                 primarySkills: new[]
                 {
-                    new HeroSkillInfo("Q", "Heroic Leap"),
-                    new HeroSkillInfo("F", "Shield Bash"),
-                    new HeroSkillInfo("E", "Defender's Call"),
+                    new HeroSkillInfo("Q", "Sword Heroic"),
+                    new HeroSkillInfo("W", "Shield Charge"),
+                    new HeroSkillInfo("E", "Warden's Grace"),
                     new HeroSkillInfo("R", "Radiant Strike"),
                 }),
             new HeroCardInfo(

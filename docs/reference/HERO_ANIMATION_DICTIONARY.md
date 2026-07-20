@@ -123,7 +123,20 @@ Canonical names for the Right ActionBar (theme tracks the ability's weapon):
 | E (mint `knight.e`) | **Warden's Grace** | **Mage Spell Cast 5** (owner-specified; supersedes `f-magiccontrol-01`) | REDESIGNED - see spec below |
 | R/ult (mint `knight.r`) | **Radiant Strike** | **Jump into Slash Up** (owner-specified; replaces the `fist_whirlwindkick_m` dup shared with W) | 220 dmg meteor |
 
-### E = Warden's Grace - REDESIGN SPEC (owner, 2026-07-19) -> needs a WO to implement
+### SHIPPED — WO-750 (2026-07-19)
+Landed in the data + hero-ability lane (compile pending the orchestrator batch-gate + a controller re-bake):
+- **Names + ids:** the 5 canonical names are in `abilities.json` (knight q/w/e/r); **`knight.w` / `knight.e` / `knight.r` ids minted** (was Q-only) so hot-swap can address them. Right-bar medallions now render with **NO Q/W/E/R key-letter badge** (mobile-input ruling — `HudKitController.BuildAbilityRow`, null keyBadge).
+- **E = Warden's Grace REDESIGN:** effect `taunt` -> new **`gracebuff`** shape (`HeroAbilities.ResolveWardensGrace`): heal **25% max HP** (authored in `damage`, read as a percent) + a **Defense (gear ArmorDefense)-scaled bonus**, then **Grace Shield** for `seconds` (8s): a **HoT 5% max HP / 2s** drip (shared `_hpOverTime` window) + a `grace-shield` HUD buff marker. Anim: `castAnim:"castHeal"` -> knight **castHeal rebound to Mage Spell Cast 5** (`f-ss-magespellcast-05.fbx`, guid d2be6fe2ab0d3704ca777bbb5c48e378). Support-cast safe (no melee swing / no foe-facing, F8-48).
+- **R = Radiant Strike:** `castAnim:"r"` -> resolves to **CastVariant 4 (its own Cast_r state)**, de-duping the `fist_whirlwindkick_m` it shared with W.
+- **SFX (`motion-castings.json`, Resources/Sfx real clips):** skill1/skill2 `sfxId` = `Swords_Clash`; castHeal `sfxId`/`sfxImpact` = `Heal`; castHeal cast VFX key `Dash_Blink` -> `Heal_Cast`.
+
+**STILL OPEN (out of the data/hero-ability lane — needs the orchestrator):**
+1. **R clip = the exact "Jump into Slash Up" (`atk_slashup`):** CastVariant 4's clip is the hardcoded `HeroAnimatorFactory.MocapSpellClips[4] = "atk_spin"`, NOT registry-resolved, and `atk_slashup` is attack-taxonomy so it can never be a cast-registry row (MotionCastings lint #5). Change that one array entry to `"atk_slashup"` + re-bake `BuildKnightMocapController`. Until then R plays `atk_spin` (distinct from W — de-dup already met).
+2. **E -20% incoming-damage mitigation:** `HeroHealth.TakeDamage` has no external per-cast DR seam (only `_gear.ArmorDefense` + talent DR). Add a small `SetGraceShield(frac, until)` that `TakeDamage` multiplies by, and have `ResolveWardensGrace` call it. Heal + HoT + marker already ship; only the -20% window is pending.
+3. **R cast/impact SFX (SpellCast/Spell_Impact):** CastVariant 4 has no registry keyword (`CastVariantKeyword[4]=null`, silent by design); wiring it needs an r-slot keyword, which requires extending the closed `ActionKeywords` vocabulary + factory consumption.
+4. **Ability icons:** the owner's pixel-art sheet is not in the project yet — icon slicing/import deferred until the PNG lands.
+
+### E = Warden's Grace - REDESIGN SPEC (owner, 2026-07-19) -> IMPLEMENTED (WO-750, see SHIPPED above)
 Was "Defender's Call" (taunt). Now a **Hybrid Support: Active Targeted / Area Heal + Buff**.
 - **Effect:** instantly heal the target ally (or self) for **25% of max HP + a small amount scaled by the Knight's Defense stat**. Applies **Grace Shield** for **8s**: **-20% incoming damage** + **HoT 5% max HP every 2s**.
 - **Visual:** radiant golden light pulsing from the knight's sword/shield, floating runes + particle beams connecting to allies; subtle mobile screen glow (optimized VFX).

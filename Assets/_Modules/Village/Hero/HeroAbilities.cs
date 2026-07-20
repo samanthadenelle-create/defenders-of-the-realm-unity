@@ -604,7 +604,9 @@ namespace DeNelle.Village
             // attack trigger is a sword swing, so a committed Mend read as "does an attack".
             // Heals play only the cast side (owner melee/caster rule).
             string fxRaw = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
-            bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime";
+            // WO-750: gracebuff (Warden's Grace) is a support cast — like a heal, it must NOT
+            // drive the melee attack trigger (F8-48: a support cast can't read as a sword swing).
+            bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime" || fxRaw == "gracebuff";
             if (!isHealCast) actor?.PlayAttack(0);
             // PER-ABILITY CAST ANIMATION (fix "swapped/equipped ability plays the wrong cast clip"):
             // the animation was selected by the pressed SLOT (castVariant == slot+1), so an ability
@@ -693,6 +695,8 @@ namespace DeNelle.Village
         private void FaceCastTarget(AbilityDef def, Vector3 origin)
         {
             if (def.EffectEnum == AbilityEffect.Heal) return;   // self/non-targeted — don't turn
+            // WO-750: Warden's Grace (gracebuff) is self-cast support — don't yaw toward a foe.
+            if ((def.Effect ?? string.Empty).Trim().ToLowerInvariant() == "gracebuff") return;
 
             if (_loco == null) _loco = GetComponent<HeroLocomotion>();
             if (_loco == null) return;
@@ -753,6 +757,7 @@ namespace DeNelle.Village
                 case "dot":          ResolveDot(def, origin);          return;   // WO-614 hook 1
                 case "healovertime": ResolveHealOverTime(def, origin); return;   // WO-614 hook 2
                 case "invuln":       ResolveInvuln(def, origin);       return;   // WO-614 hook 3
+                case "gracebuff":    ResolveWardensGrace(def, origin); return;   // WO-750 Warden's Grace
             }
 
             DamageElement element = ElementOf(def);
@@ -1271,6 +1276,68 @@ namespace DeNelle.Village
                 $"invuln {def.Id}: {secs:0}s full immunity granted (HeroHealth.ActivateInvuln).");
         }
 
+        // ── WO-750 Warden's Grace tuning (owner redesign 2026-07-19) ──────────────────
+        // Hybrid support: a big % heal + a Defense-scaled bonus, then an 8s Grace Shield
+        // (HoT drip + a -20% incoming-damage window). Percent-of-max-HP so it scales with
+        // the hero's real max, not a flat number. The heal % is authored in abilities.json
+        // (knight.e "damage" read as a PERCENT); the shield duration is the def "seconds".
+        private const float GraceHealPct         = 0.25f;  // 25% max HP base heal (fallback if def.Damage is 0)
+        private const float GraceDefenseHealBonus = 0.50f; // bonus heal = 50% of max HP scaled by Defense frac (0..0.70 -> up to +35%)
+        private const float GraceShieldSeconds   = 8f;     // Grace Shield duration (fallback if def.Seconds is 0)
+        private const float GraceHotPct          = 0.05f;  // HoT heals 5% max HP ...
+        private const float GraceHotTick         = 2f;     // ... every 2s (drip runs via the shared _hpOverTime window)
+        private const float GraceDamageReduction = 0.20f;  // -20% incoming damage (see report: needs a HeroHealth mitigation seam)
+
+        /// <summary>
+        /// WO-750 — "gracebuff" (Warden's Grace): the E-slot REDESIGN (was the taunt "Defender's
+        /// Call"). Instantly heals the caster for <see cref="GraceHealPct"/> of max HP (authored in
+        /// def.Damage as a percent) PLUS a bonus scaled by the Knight's Defense (gear ArmorDefense),
+        /// then opens the GRACE SHIELD for def.Seconds: an HP-over-time drip (<see cref="GraceHotPct"/>
+        /// of max HP per <see cref="GraceHotTick"/>s) through the existing shared _hpOverTime window,
+        /// and a HUD buff marker. The -<see cref="GraceDamageReduction"/> incoming-damage mitigation
+        /// needs a small HeroHealth.TakeDamage seam (out of this file's lane — see the WO-750 report);
+        /// the heal + Defense bonus + HoT + marker are all self-contained here. Reuses the pooled
+        /// VFXManager heal burst (single call — no new double-stack) and the class heal audio sting;
+        /// the radiant cast VFX rides the shared castHeal registry row (Heal_Cast). Self-targeted:
+        /// never drives the melee attack (F8-48) and does not face a foe.
+        /// </summary>
+        private void ResolveWardensGrace(AbilityDef def, Vector3 origin)
+        {
+            if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            float maxHp = _heroHealth != null ? _heroHealth.MaxHp : 100f;
+
+            // Defense (gear ArmorDefense, 0..0.70) scales a bonus heal on top of the flat % heal.
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            float defense = _gear != null ? _gear.ArmorDefense : 0f;
+
+            float healPct   = def.Damage > 0f ? def.Damage / 100f : GraceHealPct;
+            float baseHeal  = maxHp * healPct * HeroTalentModifiers.HealAmountMultiplier(_heroClass);
+            float bonusHeal = maxHp * GraceDefenseHealBonus * defense;
+            float heal      = baseHeal + bonusHeal;
+            _heroHealth?.Heal(heal);
+
+            // Grace Shield window: HoT drip (GraceHotPct max HP per GraceHotTick s) for def.Seconds.
+            // Reuse the shared _hpOverTime drip (Update ticks HeroHealth.RegenTick) — refresh, never
+            // shorten a longer live drip.
+            float secs     = def.Seconds > 0f ? def.Seconds : GraceShieldSeconds;
+            float hotPerSec = maxHp * GraceHotPct / Mathf.Max(0.5f, GraceHotTick);
+            _hpOverTimeRate  = Mathf.Max(_hpOverTimeRate, hotPerSec);
+            _hpOverTimeUntil = Mathf.Max(_hpOverTimeUntil, Time.time + secs);
+
+            // HUD buff marker for the Grace Shield window (the -20% DR reads this once the
+            // HeroHealth mitigation seam lands; until then the marker still shows the shield is up).
+            HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed("grace-shield", "Grace", secs, isBuff: true);
+
+            // Soft heal chime + a single pooled radiant heal burst (no new double-stack).
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
+            VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+
+            ReportRumble(heal);
+            FlowTrace.Step("HeroAbility",
+                $"Warden's Grace {def.Id}: heal {heal:0} ({baseHeal:0}+{bonusHeal:0} def={defense:P0}) + " +
+                $"Grace Shield {secs:0}s (HoT {hotPerSec:0.0}/s; -{GraceDamageReduction:P0} DR PENDING HeroHealth seam).");
+        }
+
         /// <summary>WO-494: the full damage chain (talent x level x timing x weapon) for a def's base damage.</summary>
         private float DamageFor(AbilityDef def)
         {
@@ -1389,6 +1456,7 @@ namespace DeNelle.Village
             switch (fx)
             {
                 case "heal":         return "castHeal";               // instant heal/ward -> Cast_e
+                case "gracebuff":    return "castHeal";               // WO-750 Warden's Grace -> Cast_e (Mage Spell Cast 5)
                 case "strike":
                 case "snare":        return "skill1";                 // single-target strike -> Cast_q
                 case "aoe":
