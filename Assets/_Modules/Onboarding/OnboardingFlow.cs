@@ -146,6 +146,11 @@ namespace DeNelle.Onboarding
         private bool _built;
         private CancellationTokenSource _cts;
 
+        // UIF: single-modal arbiter handle. Registering the coach-mark overlay makes it visible
+        // to the back-button / battle-lock arbiter; its close delegate skips the tutorial and
+        // isOpen reflects the live running state.
+        private PanelHandle _panelHandle;
+
         /// <summary>True while the coach-mark sequence is on screen.</summary>
         public bool IsRunning => _running;
 
@@ -235,6 +240,8 @@ namespace DeNelle.Onboarding
 
         private void OnDestroy()
         {
+            // UIF: don't leak the arbiter slot if destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_canvas != null) Destroy(_canvas);
         }
 
@@ -328,6 +335,11 @@ namespace DeNelle.Onboarding
                     "Tutorial may render but cannot be advanced.");
             }
 
+            // UIF: register with the single-modal arbiter once. Close delegate = Skip (the
+            // dismiss for this forced flow); isOpen reflects whether the coach-marks are live.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Onboarding", () => Finish(completed: false), () => _running);
+
             // Start hidden — Run() reveals it.
             SetOverlayVisible(false);
             _built = true;
@@ -402,6 +414,8 @@ namespace DeNelle.Onboarding
             _beatIndex = 0;
 
             SetOverlayVisible(true);
+            // UIF: announce the overlay opened so the arbiter closes any prior panel + arms the back button.
+            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
             ShowBeat(_beatIndex);
             FadeOverlay(0f, 1f).Forget();
 
@@ -528,6 +542,8 @@ namespace DeNelle.Onboarding
             if (!_running) { FlowTrace.Step("Onboarding", "Finish: not running — no-op."); return; }
             _running = false;
             HasFinished = true;
+            // UIF: release the arbiter slot as the coach-marks close (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
 
             // ── THE FIX (audit P0-11) ────────────────────────────────────────
             // Persist Onboarded = true through the Core save layer. FinishOnboarding

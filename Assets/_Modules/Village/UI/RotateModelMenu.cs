@@ -79,6 +79,11 @@ namespace DeNelle.Village
         private Action       _onCancel;
         private bool         _open;
 
+        // Single-modal arbiter handle. This placement panel routes through PanelManager so the
+        // back button / battle-lock can arbitrate it. Close delegate = Cancel (aborts placement);
+        // isOpen = _open. A build-mode panel (never during battle), so plain Register.
+        private PanelHandle  _panelHandle;
+
         /// <summary>
         /// Open the player rotate panel for a prefab model. <paramref name="initialYawSteps"/>
         /// seeds the readout/preview (0..3 → 0/90/180/270°). On Confirm,
@@ -114,6 +119,12 @@ namespace DeNelle.Village
             BuildPanel(displayName, cost, previewValid);
             ApplyRotation(); // seed preview rotation + readout
             _open = true;
+
+            // Join the single-modal arbiter: opening this closes any prior panel and lets the
+            // back button dismiss it (routed to Cancel). isOpen reflects the live panel state.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("RotateModel", Cancel, () => _open);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         private void Update()
@@ -184,6 +195,8 @@ namespace DeNelle.Village
         public void Close()
         {
             _open = false;
+            // Release the arbiter slot (no-op if already swapped out / never opened).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_preview != null) { _preview.Dispose(); _preview = null; }
             if (_root != null) { Destroy(_root); _root = null; }
             _previewImage = null;

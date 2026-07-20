@@ -30,6 +30,10 @@ namespace DeNelle.Village.Hero
     {
         private ShopVM _vm;
 
+        // UIF-01: single-modal arbiter handle. Opening ANY registered panel closes this one,
+        // and a global back/ESC (PauseGate) routes through PanelManager.CloseOpen to dismiss it.
+        private PanelHandle _panelHandle;
+
         private GameObject _ui;
         private string _vendorContext;
         private GearLoadout _activeLoadout;
@@ -98,6 +102,18 @@ namespace DeNelle.Village.Hero
                              onEquipRefreshHero: _ => ResolveActiveHero());
 
             Bind(_vm);
+
+            // UIF-01: join the single-modal arbiter. Register a lazy handle (Close hides it, IsOpen
+            // probes the built canvas), then announce open so any previously open panel is closed and
+            // the Android/ESC back button can route here via PanelManager.CloseOpen. A battle-lock
+            // rejection tears this panel down (handle.Close) and returns.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Shop", Close, () => _ui != null);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                FlowTrace.Warn("Store", "ShopPanel open rejected by PanelManager (battle-lock) — closed.");
+                return;
+            }
 
             Debug.Log($"[ShopPanel] Opened for vendor '{_vendorContext}'. Bound ShopVM (MVVM).");
         }
@@ -884,6 +900,8 @@ namespace DeNelle.Village.Hero
 
         private void Close()
         {
+            // UIF-01: clear the arbiter slot (no-op if we were already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             Unbind();
             _vm?.Dispose();
             _vm = null;
@@ -905,6 +923,8 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            // UIF-01: don't leak the arbiter slot if the host is destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             Unbind();
             _vm?.Dispose();
             _vm = null;

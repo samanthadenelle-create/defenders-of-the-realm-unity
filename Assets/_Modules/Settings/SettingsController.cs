@@ -68,6 +68,11 @@ namespace DeNelle.Settings
         private bool _open;
         private bool _suppressCallbacks;
 
+        // Single-modal arbiter handle. Settings is a SYSTEM modal reachable from the pause
+        // menu during an active battle, so it registers battle-allowed (never rejected by the
+        // battle-lock). Close delegate = Close (raises SettingsClosed); isOpen = _open.
+        private PanelHandle _panelHandle;
+
         /// <summary>True while the settings screen is open and visible.</summary>
         public bool IsOpen => _open;
 
@@ -81,6 +86,8 @@ namespace DeNelle.Settings
 
         private void OnDestroy()
         {
+            // Don't leak the arbiter slot if destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -96,6 +103,8 @@ namespace DeNelle.Settings
             RefreshFromModel();
             _modal.canvas.SetActive(true);
             _open = true;
+            // Announce the settings modal opened so the arbiter arms the back button.
+            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
         }
 
         /// <summary>Closes the settings screen and raises <see cref="SettingsClosed"/>.</summary>
@@ -103,6 +112,8 @@ namespace DeNelle.Settings
         {
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             _open = false;
+            // Release the arbiter slot as settings closes (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             SettingsClosed?.Invoke();
         }
 
@@ -124,6 +135,11 @@ namespace DeNelle.Settings
                 new Vector2(0.08f, 0.05f), new Vector2(0.92f, 0.95f), Close,
                 sortingOrder: 32000,   // settings sits above every other modal
                 frameName: RpgUiCatalog.FrameSettings, medallionIcon: "settings");
+
+            // Register with the single-modal arbiter (battle-allowed — a system settings screen
+            // must be openable from pause mid-combat and never rejected). Arbiter close = Close.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.RegisterBattleAllowed("Settings", Close, () => _open);
 
             var layout = _modal.chrome.layout;
 

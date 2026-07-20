@@ -85,6 +85,18 @@ namespace DeNelle.Village
             // when inactive (headless-safe); Close stays instant (controller destroys _ui).
             if (panelChrome.root != null)
                 ElarionUiKit.AttachPanelOpenFx(_ui, panelChrome.root.GetComponent<RectTransform>());
+
+            // Modal arbiter registration: THIS file builds the top-band (31000) inventory modal, so
+            // it routes the panel through the single-modal PanelManager arbiter here (back-button /
+            // battle-lock / one-modal-at-a-time). Shared _panelHandle with HeroInventoryController's
+            // Open()/Close(); the calls are idempotent (Register is guarded by the null check,
+            // NotifyOpened/NotifyClosed no-op when already applied). The close delegate releases the
+            // arbiter slot and then hides the modal via Close().
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Inventory",
+                    () => { if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle); Close(); },
+                    () => IsOpen);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         // ── Footer bar (mockup #41 bottom) ---

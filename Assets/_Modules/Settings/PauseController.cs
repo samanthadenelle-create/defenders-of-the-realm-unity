@@ -51,6 +51,11 @@ namespace DeNelle.Settings
         private ElarionUiKit.ObsidianModal _modal;
         private bool _paused;
 
+        // Single-modal arbiter handle. The pause menu is a SYSTEM modal that may open during
+        // an active battle, so it registers battle-allowed (a plain gameplay panel would be
+        // rejected + force-closed by the battle-lock). Close delegate = Resume; isOpen = _paused.
+        private PanelHandle _panelHandle;
+
         // The timeScale captured at the moment of pausing — restored on resume.
         // Captured (rather than assumed 1) so pausing during a slow-motion or
         // fast-forward effect restores that, not a hard 1.0.
@@ -111,6 +116,8 @@ namespace DeNelle.Settings
             // Safety net: never leave the engine frozen if this object dies
             // (scene unload, domain reload) while paused.
             if (_paused) Time.timeScale = _timeScaleBeforePause;
+            // Don't leak the arbiter slot if destroyed while paused (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -160,6 +167,11 @@ namespace DeNelle.Settings
             ElarionUiKit.AddColumnButton(stack, "Quit to Title",
                 ElarionUiKit.ObsidianButtonColor.Red, OnQuitClicked);
 
+            // Register with the single-modal arbiter (battle-allowed — a pause menu must be
+            // openable mid-combat and never rejected). The back button / arbiter close = Resume.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.RegisterBattleAllowed("Pause", Resume, () => _paused);
+
             _modal.canvas.SetActive(false);   // built hidden; Pause shows it
         }
 
@@ -186,6 +198,8 @@ namespace DeNelle.Settings
             _paused = true;
 
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(true);
+            // Announce the pause modal opened so the arbiter arms the back button + closes any prior panel.
+            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
             PauseStateChanged?.Invoke(true);
         }
 
@@ -202,6 +216,8 @@ namespace DeNelle.Settings
                 _settings.Close();
 
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
+            // Release the arbiter slot as the pause menu closes (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             PauseStateChanged?.Invoke(false);
         }
 
@@ -215,6 +231,10 @@ namespace DeNelle.Settings
         {
             if (_settings == null) return;
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
+            // Relinquish the arbiter slot BEFORE opening Settings so the settings modal does not
+            // swap-close the pause menu (whose close delegate is Resume — that would unfreeze the
+            // game). The pause panel stays paused + hidden and re-shows on SettingsClosed.
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             _settings.Open();
         }
 
@@ -235,6 +255,8 @@ namespace DeNelle.Settings
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
+            // Release the arbiter slot as we leave for the title (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
 
             SceneRouter.GoTitle();
         }

@@ -65,6 +65,11 @@ namespace DeNelle.Onboarding
         private bool _routed;
         private GameObject _canvas;
 
+        // UIF: single-modal arbiter handle. Registering the forced founding choice makes it
+        // visible to the back-button / battle-lock arbiter and closes any prior panel. The
+        // close delegate routes onward (Continue) since this is a no-dismiss forced choice.
+        private PanelHandle _panelHandle;
+
         /// <summary>
         /// True when a founding choice should be offered: a genuinely FRESH founding —
         /// the player has NOT completed onboarding and nothing is built yet (empty
@@ -169,6 +174,12 @@ namespace DeNelle.Onboarding
             ElarionUiKit.BuildObsidianButton(body, "Build Your Own",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.24f), OnBuildYourOwn);
+
+            // UIF: join the single-modal arbiter. isOpen reflects the live overlay; the close
+            // delegate routes onward (Continue) — the arbiter's back/close proceeds to the hub.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("FoundingChoice", Continue, () => !_routed && _canvas != null);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         // =====================================================================
@@ -233,6 +244,8 @@ namespace DeNelle.Onboarding
         {
             if (_routed) return;
             _routed = true;
+            // UIF: release the arbiter slot (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             var cont = _onContinue;
             _onContinue = null;
             if (_canvas != null) Destroy(_canvas);
@@ -242,6 +255,8 @@ namespace DeNelle.Onboarding
 
         private void OnDestroy()
         {
+            // UIF: don't leak the arbiter slot if destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_canvas != null) Destroy(_canvas);
         }
     }

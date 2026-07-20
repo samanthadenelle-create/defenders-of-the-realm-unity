@@ -47,6 +47,9 @@ namespace DeNelle.Village.Hero
     {
         private GameObject _ui;
         private RaidDeployVM _vm;                       // owns the party/army/power math (no GameState in the View)
+
+        // UIF-01: single-modal arbiter handle (opening this closes the raid grid; back/ESC dismisses it).
+        private PanelHandle _panelHandle;
         private RectTransform _troopListArea;          // list region inside the body zone
         private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
 
@@ -132,6 +135,13 @@ namespace DeNelle.Village.Hero
 
             // FOOTER action strip — Auto Recommend + the big glowing DEPLOY CTA.
             BuildDeployBar(footer);
+
+            // UIF-01: join the single-modal arbiter (closes the raid grid it opened over; back/ESC
+            // routes here). A battle-lock rejection tears this down (handle.Close) and returns.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Raid Deploy", Close, () => _ui != null);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+                return;
 
             Debug.Log($"[RaidDeployScreen] Opened for raid '{_vm.RaidId}' -> scene '{_vm.SceneName}'.");
         }
@@ -423,6 +433,8 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
+            // UIF-01: release the arbiter slot (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             _vm?.Dispose();
             _vm = null;
             // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
@@ -435,6 +447,8 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            // UIF-01: don't leak the arbiter slot if destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             _vm?.Dispose();
             _vm = null;
             if (_instance == this) _instance = null;

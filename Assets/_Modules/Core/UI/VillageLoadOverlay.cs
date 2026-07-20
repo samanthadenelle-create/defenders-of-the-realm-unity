@@ -48,6 +48,11 @@ namespace DeNelle.Core.UI
         private ElarionUiKit.BarHandle _progress;
         private TextMeshProUGUI _loreLabel;
 
+        // Single-modal arbiter handle. The load overlay is a full-screen SYSTEM overlay that must
+        // never be rejected or force-closed by the battle-lock, so it registers battle-allowed.
+        // Opening it closes any lingering gameplay panel before the scene swaps.
+        private PanelHandle _panelHandle;
+
         private float _spinSpeed = 220f;     // deg / sec
         private float _loreTimer;
         private int _loreIndex;
@@ -179,6 +184,12 @@ namespace DeNelle.Core.UI
             lRt.pivot = new Vector2(0.5f, 0.5f);
             lRt.anchoredPosition = new Vector2(0, -210);
             lRt.sizeDelta = new Vector2(820, 100);
+
+            // Register with the single-modal arbiter (battle-allowed — a loading screen must never
+            // be blocked). isOpen tracks the live overlay; the close delegate tears it down.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.RegisterBattleAllowed("VillageLoad", HideAndDestroy, () => this != null);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         private void Update()
@@ -207,7 +218,15 @@ namespace DeNelle.Core.UI
         /// <summary>Hides + destroys the overlay (call once the new scene is active).</summary>
         public void HideAndDestroy()
         {
+            // Release the arbiter slot as the overlay tears down (no-op if already released).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (this != null) Destroy(gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            // Safety net — don't leak the arbiter slot if destroyed by any other path.
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
         }
 
         // ── uGUI builder helpers ──────────────────────────────────────────────

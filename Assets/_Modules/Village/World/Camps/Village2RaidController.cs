@@ -64,6 +64,11 @@ namespace DeNelle.Village.World.Camps
         private bool _handled;     // victory handled once (guards a double OnCleared)
         private bool _returning;   // a return is already in flight
 
+        // Single-modal arbiter handle for the top-band (32000) victory banner. Registered
+        // battle-allowed so the terminal win banner is never rejected/force-closed by the
+        // battle-lock. Close delegate = ReturnHome; isOpen tracks the live banner.
+        private PanelHandle _panelHandle;
+
         // =====================================================================
         //  Self-install — one controller in the Village2 scene
         // =====================================================================
@@ -107,6 +112,8 @@ namespace DeNelle.Village.World.Camps
         private void OnDestroy()
         {
             if (_garrison != null) _garrison.OnCleared -= HandleCleared;
+            // Don't leak the arbiter slot if destroyed while the banner is up (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
         }
 
         private IEnumerator BindRoutine()
@@ -318,6 +325,13 @@ namespace DeNelle.Village.World.Camps
                 ElarionUiKit.Button(panel.transform, "Return to Castle", ElarionUiKit.ButtonKind.Gold,
                     new Vector2(0.28f, 0.10f), new Vector2(0.72f, 0.28f), ReturnHome);
 
+                // Register the top-band victory banner with the single-modal arbiter (battle-allowed
+                // — a terminal win banner must always show). The back button / arbiter close routes
+                // home via ReturnHome; isOpen tracks the live banner canvas.
+                if (_panelHandle == null)
+                    _panelHandle = PanelManager.RegisterBattleAllowed("Village2Victory", ReturnHome, () => _ui != null);
+                PanelManager.NotifyOpened(_panelHandle);
+
                 FlowTrace.Step("Raid", "RETURN — Village2 victory banner shown" +
                     (joinedCompanionName != null ? $" (+{joinedCompanionName})" : "") + "; tap or auto-return routes to the castle.");
             }
@@ -343,6 +357,8 @@ namespace DeNelle.Village.World.Camps
         {
             if (_returning) return;
             _returning = true;
+            // Release the arbiter slot as the banner routes home (no-op if already released).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             FlowTrace.Step("Raid", "RETURN -> SceneRouter.GoCastle() (loop continues, no soft-lock).");
             GameStateService.Instance?.Save();
             SceneOwnership.SetEnemyOwned(false);

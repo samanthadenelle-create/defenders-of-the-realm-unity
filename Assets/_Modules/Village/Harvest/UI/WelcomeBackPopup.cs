@@ -32,6 +32,11 @@ namespace DeNelle.Village.UI
 
         private OfflineHarvestResult _result;
 
+        // UIF-01: single-modal arbiter handle. Registering routes this reveal through PanelManager so
+        // opening it closes any other panel and the Android/ESC back button can dismiss it. Fully
+        // qualified to avoid any UnityEngine.UIElements name clash.
+        private DeNelle.Core.UI.PanelHandle _panelHandle;
+
         /// <summary>
         /// Reveal the welcome-back summary for <paramref name="result"/>. No-op when
         /// the haul is empty or a panel is already open. Borrows a PanelSettings from
@@ -66,11 +71,18 @@ namespace DeNelle.Village.UI
         {
             s_open = true;
             BuildUi();
+
+            // UIF-01: join the single-modal arbiter. Opening this reveal closes any prior panel and the
+            // back button reaches it via PanelManager.CloseOpen. Close action = Dismiss (destroys this GO).
+            _panelHandle = DeNelle.Core.UI.PanelManager.Register("Welcome Back", Dismiss, () => this != null);
+            DeNelle.Core.UI.PanelManager.NotifyOpened(_panelHandle);
         }
 
         private void OnDisable()
         {
             s_open = false;
+            // UIF-01: release the arbiter slot (no-op if already swapped out).
+            if (_panelHandle != null) DeNelle.Core.UI.PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void Dismiss()

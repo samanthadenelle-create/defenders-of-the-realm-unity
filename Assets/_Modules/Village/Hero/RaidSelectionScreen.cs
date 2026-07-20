@@ -46,6 +46,11 @@ namespace DeNelle.Village.Hero
         // vm.Raids + the per-card helpers and never touches the catalog itself.
         private RaidSelectionVM _vm;
 
+        // UIF-01: single-modal arbiter handle. Registering this makes opening the grid close
+        // any prior panel (Shop/Train/etc) and lets the Android/ESC back button dismiss it via
+        // PanelManager.CloseOpen. Mirrors the Echo roster->card single-modal precedent.
+        private PanelHandle _panelHandle;
+
         // Cached self-instance so the static entry never FindObjectsByType-scans the scene
         // (a View locating its own singleton screen — routed through this cache instead).
         private static RaidSelectionScreen _instance;
@@ -129,6 +134,13 @@ namespace DeNelle.Village.Hero
                 chrome.root != null ? chrome.root.transform as RectTransform : null);
 
             BuildCards();
+
+            // UIF-01: join the single-modal arbiter. A battle-lock rejection tears this down
+            // (handle.Close, which also clears IsScreenOpen) and returns before arming the Herald.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Raids", Close, () => _ui != null);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+                return;
 
             IsScreenOpen = true;   // WO-725: arm the Herald's prompt-suppression + close-edge trace
             Debug.Log("[RaidSelectionScreen] Opened — raid card grid.");
@@ -235,8 +247,9 @@ namespace DeNelle.Village.Hero
             var def = _vm != null ? _vm.DefFor(id) : null;
             if (def == null) return;
             RaidDeployScreen.Open(def);
-            // Leave the selection screen open underneath so closing the deploy screen
-            // returns the player to the raid grid (mirrors a drill-down flow).
+            // UIF-01: the deploy screen registers with the single-modal arbiter, so opening it
+            // now CLOSES this grid (one modal at a time — the Echo roster->card precedent). The
+            // deploy screen is the sole visible modal; closing it returns to the world, not the grid.
         }
 
         // ── Card data helpers (read straight off VM-projected values) ──────────
@@ -310,6 +323,8 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
+            // UIF-01: release the arbiter slot (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             _vm?.Dispose();
             _vm = null;
             // WO-714 P8: eased fade/scale-out through the ONE kit FX (falls back to an
@@ -323,6 +338,8 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            // UIF-01: don't leak the arbiter slot if destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             _vm?.Dispose();
             _vm = null;
             if (_instance == this) _instance = null;

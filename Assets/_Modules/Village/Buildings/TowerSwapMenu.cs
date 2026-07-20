@@ -72,6 +72,11 @@ namespace DeNelle.Village
 
         // ── Runtime state ─────────────────────────────────────────────────────
 
+        // UIF-01: single-modal arbiter handle. Opening the swap panel closes any other panel and
+        // the Android/ESC back button routes here via PanelManager.CloseOpen (this full-screen
+        // dimmer + card was a hand-rolled UI Toolkit modal that never joined the arbiter).
+        private PanelHandle _panelHandle;
+
         private VisualElement _root;
 
         // Populated during Open():
@@ -140,6 +145,12 @@ namespace DeNelle.Village
 
             BuildPanel();
             ShowPanel();
+
+            // UIF-01: announce to the single-modal arbiter (register a lazy handle first). A rejection
+            // (only if an ATB/Arena battle is somehow active) tears this down via handle.Close -> HidePanel.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Tower Swap", Close, () => _document != null && _document.enabled);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         /// <summary>Shows or hides a loading overlay with an optional message.</summary>
@@ -557,6 +568,9 @@ namespace DeNelle.Village
 
         private void HidePanel()
         {
+            // UIF-01: release the arbiter slot (no-op if already swapped out). Single hide choke,
+            // reached by Close, the delayed success-close, and OnDisable.
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
         }

@@ -48,6 +48,13 @@ namespace DeNelle.Village.UI
         private bool _fired;                      // primary-action latch (fires exactly once)
         private readonly List<Reveal> _reveals = new List<Reveal>();
 
+        // HUD-2 (GAP_AUDIT P2 #14): the FULL end-state modal now joins the single-modal arbiter so
+        // opening it closes any lingering panel (a shop left open at death) and the back button can
+        // dismiss it. RegisterBattleAllowed — an end-state is the decision node shown AT/after a battle,
+        // so the WO-437 battle-lock must never reject it (like the Battle HUD / Pause). Compact banners
+        // (no scrim, non-blocking, auto-dismiss) deliberately stay OUT of the arbiter -> handle is null.
+        private DeNelle.Core.UI.PanelHandle _panelHandle;
+
         private struct Reveal
         {
             public CanvasGroup Group;
@@ -61,8 +68,9 @@ namespace DeNelle.Village.UI
         /// <summary>Show the end-state screen for <paramref name="vm"/> (replaces any open one).</summary>
         public static EndStateView Show(EndStateVM vm,
             // F8-15 death forensic window: name WHO opened each end-state (GameOverScreen /
-            // HeroDeathEndState / BattleArenaHud / WaveCelebrationManager all funnel HERE, and
-            // this screen bypasses PanelManager — so this is the second screen chokepoint).
+            // HeroDeathEndState / BattleArenaHud / WaveCelebrationManager all funnel HERE). The
+            // FULL modal now routes through PanelManager (HUD-2 fixed, below); only the COMPACT
+            // banner stays out of the arbiter (non-blocking).
             [System.Runtime.CompilerServices.CallerMemberName] string openerMember = null,
             [System.Runtime.CompilerServices.CallerFilePath]  string openerFile   = null)
         {
@@ -71,13 +79,12 @@ namespace DeNelle.Village.UI
             {
                 string opener = DeathTrace.Describe(openerMember, openerFile);
                 DeathTrace.ScreenOpened("EndState '" + vm.Title + "'", opener);
-                // F8-15 KNOWN DEFECT self-report: EndStateView.Show NEVER calls
-                // PanelManager.NotifyOpened — it opens its own modal canvas directly. So every
-                // end-state popup BYPASSES the single-modal arbiter (the arbiter can neither swap
-                // it out nor dismiss it), which is exactly why death popups stack. Warn on it so
-                // the next run PROVES the bypass instead of us inferring it. (Instrument only —
-                // NOT routed through PanelManager here; that is the fix, tracked separately.)
-                DeathTrace.ScreenBypassedArbiter("EndState '" + vm.Title + "'", opener);
+                // HUD-2 FIXED: the FULL end-state modal now routes through PanelManager
+                // (RegisterBattleAllowed + NotifyOpened below), so it swaps out any prior panel and
+                // the arbiter can dismiss it. Only the COMPACT banner stays out of the arbiter on
+                // purpose (no scrim, non-blocking, auto-dismiss) — flag just that case in the window.
+                if (vm.Compact)
+                    DeathTrace.ScreenBypassedArbiter("EndState '" + vm.Title + "'", opener);
                 if (_open != null)
                     DeathTrace.ScreenClosed("EndState '" + (_open._vm != null ? _open._vm.Title : "?") + "'",
                         "EndStateView.Show (replaced by '" + vm.Title + "')");
@@ -128,6 +135,18 @@ namespace DeNelle.Village.UI
             var view = canvas.AddComponent<EndStateView>();
             view.Bind(vm, chrome);
             _open = view;
+
+            // HUD-2: the FULL modal joins the single-modal arbiter (battle-allowed - it shows at/after
+            // a battle, so the WO-437 lock must not reject it). NotifyOpened closes any lingering panel
+            // (e.g. a shop open at death) and records this as THE open modal. Compact banners are
+            // non-blocking (no scrim) and intentionally NOT registered.
+            if (!vm.Compact)
+            {
+                view._panelHandle = PanelManager.RegisterBattleAllowed("EndState",
+                    view.CloseFromArbiter, () => view != null);
+                PanelManager.NotifyOpened(view._panelHandle);
+            }
+
             // P23 (HUD_OBSIDIAN A4.6): the end-state is the DECISION NODE — while it is
             // up the posture is hostile(postbattle) and the HUD kit stands down.
             DeNelle.Core.HudModel.PostureSignals.SetEndState(true);
@@ -670,9 +689,21 @@ namespace DeNelle.Village.UI
             Destroy(gameObject);
         }
 
+        /// <summary>HUD-2: the single-modal arbiter swapped us out (another modal opened over the
+        /// end-state). Tear down WITHOUT firing the primary route — a displaced end-state must not
+        /// silently trigger continue/respawn (mirrors <see cref="OnSceneLoaded"/>).</summary>
+        private void CloseFromArbiter()
+        {
+            _fired = true;
+            if (this != null) Destroy(gameObject);
+        }
+
         private void OnDestroy()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            // HUD-2: release the arbiter slot (no-op for compact banners - handle is null - and a
+            // no-op if we were already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_open == this)
             {
                 // F8-15: close step-out for the death window — pairs with the ScreenOpened above so

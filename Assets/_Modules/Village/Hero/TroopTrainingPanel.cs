@@ -42,6 +42,9 @@ namespace DeNelle.Village.Hero
     {
         private TroopTrainingVM _vm;
 
+        // UIF-01: single-modal arbiter handle (opening any other panel closes this; back/ESC routes here).
+        private PanelHandle _panelHandle;
+
         private GameObject _ui;
         private Transform _troopHost;      // bodyLeft — dark list well (hosts the scroll zone)
         private RectTransform _listContent; // the scroll content the troop rows parent into
@@ -131,6 +134,17 @@ namespace DeNelle.Village.Hero
             // subscribes to economy changes, and owns train/HUD-push/Save. The View just binds it.
             _vm = TroopTrainingVM.CreateDefault(Close);
             Bind(_vm);
+
+            // UIF-01: join the single-modal arbiter (WO-737 was the only master-detail panel that
+            // never registered). Opening this now closes any prior panel and the back button reaches
+            // it via PanelManager.CloseOpen. A battle-lock rejection tears it down (handle.Close).
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Barracks", Close, () => IsOpen);
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                FlowTrace.Warn("Barracks", "TroopTrainingPanel open rejected by PanelManager (battle-lock) — closed.");
+                return;
+            }
 
             Debug.Log("[TroopTrainingPanel] Opened — barracks troop training.");
         }
@@ -560,6 +574,8 @@ namespace DeNelle.Village.Hero
 
         public void Close()
         {
+            // UIF-01: release the arbiter slot (no-op if already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             Unbind();
             _vm?.Dispose();
             _vm = null;
@@ -575,6 +591,8 @@ namespace DeNelle.Village.Hero
 
         private void OnDestroy()
         {
+            // UIF-01: don't leak the arbiter slot if the host is destroyed while open (scene unload).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             Unbind();
             _vm?.Dispose();
             _vm = null;
