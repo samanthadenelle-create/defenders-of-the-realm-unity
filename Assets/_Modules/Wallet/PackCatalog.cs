@@ -39,14 +39,18 @@ namespace DeNelle.Wallet
     [Serializable]
     public sealed class PackEconomy
     {
-        /// <summary>Glimmer (cosmetic-shop currency, carried for catalogue completeness).</summary>
+        /// <summary>Glimmer (cosmetic-shop currency - granted at runtime via GlimmerCurrencyService, ECON-01).</summary>
         [JsonProperty("glimmer")] public int Glimmer;
         /// <summary>Crystals — the primary build currency.</summary>
         [JsonProperty("crystals")] public int Crystals;
         /// <summary>Food.</summary>
         [JsonProperty("food")] public int Food;
-        /// <summary>Coins.</summary>
+        /// <summary>Coins (Gold).</summary>
         [JsonProperty("coins")] public int Coins;
+        /// <summary>Wood - build resource (additive; absent in older packs.json rows = 0, no migration break). Granted via EconomyService.GrantSpendable (ECON-01).</summary>
+        [JsonProperty("wood")] public int Wood;
+        /// <summary>Iron - build resource (additive; absent = 0). Granted via EconomyService.GrantSpendable (ECON-01).</summary>
+        [JsonProperty("iron")] public int Iron;
     }
 
     /// <summary>

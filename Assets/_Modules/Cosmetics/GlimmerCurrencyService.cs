@@ -246,6 +246,31 @@ namespace DeNelle.Cosmetics
             return true;
         }
 
+        /// <summary>
+        /// Marks a cosmetic SKU owned WITHOUT requiring it to be in CosmeticCatalog
+        /// (cosmetics.json). Used by the pack-store entitlement path (ECON-02): pack
+        /// cosmetic SKUs (e.g. "cosmetic.founders-vow.hero-outfit") are pack rewards,
+        /// not shop-catalog items, so GrantAchievement/TryPurchase — both of which
+        /// require CosmeticCatalog.Find(id) != null — no-op on them and leave
+        /// Owns(sku)==false (unequippable). This writes straight into the same
+        /// _ownedSet/_state.OwnedCosmetics backing that Owns() reads and persists via
+        /// the same Save() idiom, so a paid pack cosmetic is genuinely owned.
+        /// Returns true if the SKU was newly added.
+        /// </summary>
+        public bool MarkCosmeticOwned(string id)
+        {
+            FlowTrace.Step("Glimmer", $"MarkCosmeticOwned id='{id ?? "<null>"}'");
+            if (string.IsNullOrEmpty(id)) { FlowTrace.Warn("Glimmer", "MarkCosmeticOwned rejected: null/empty id"); return false; }
+            EnsureState();
+            if (_ownedSet.Contains(id)) { FlowTrace.Warn("Glimmer", $"MarkCosmeticOwned no-op: '{id}' already owned"); return false; }
+            _ownedSet.Add(id);
+            _state.OwnedCosmetics.Add(id);
+            FlowTrace.Step("Glimmer", $"cosmetic '{id}' marked owned (pack entitlement, catalog-independent) owned={_ownedSet.Count}");
+            Save();
+            Changed?.Invoke();
+            return true;
+        }
+
         // ─── Internals ──────────────────────────────────────────────────────
 
         private void EnsureState()
