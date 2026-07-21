@@ -53,18 +53,16 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
 (async () => {
     const browser = await chromium.launch({
         headless: !HEADED,
-        args: [
-            // Unity WebGL needs a working WebGL context. In headless Chrome the default is
-            // no GPU, so force a software rasterizer or the canvas never renders (black shots).
-            '--enable-unsafe-swiftshader',
-            '--use-gl=angle',
-            '--use-angle=swiftshader',
-            '--ignore-gpu-blocklist',
-            '--no-sandbox',
-        ],
+        args: HEADED
+            // HEADED on a machine WITH a GPU: use the real GPU. SwiftShader (software GL)
+            // mis-renders the Unity framebuffer to a bottom sub-rect (half-black shots) and is
+            // NOT representative of the real device. Let Chrome pick the hardware GL context.
+            ? ['--ignore-gpu-blocklist', '--no-sandbox']
+            // HEADLESS has no GPU -> force SwiftShader or the canvas never paints (black).
+            : ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'],
     });
     const ctx = await browser.newContext({
-        viewport: { width: 1600, height: 900 },   // landscape - the build HUD is landscape-first
+        viewport: { width: 2340, height: 1080 },   // phone landscape (Seeker/Pi Browser target aspect ~2.17)
         deviceScaleFactor: 1,
     });
     const page = await ctx.newPage();
@@ -115,12 +113,14 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
         let idx = 0;
         let currentTrace = [];
         let sweepComplete = false;
+        const uicapLog = [];   // every UICap harness line (drive diagnostics)
         const deadline = Date.now() + SECONDS * 1000;   // overall sweep timeout
 
         while (!sweepComplete && Date.now() < deadline) {
             while (idx < uicapLines.length) {
                 const line = uicapLines[idx++];
-                const mShown = line.match(/\[UICap\] SHOWN (.+)$/);
+                if (/UICap/i.test(line)) uicapLog.push(line.slice(0, 300));
+                const mShown = line.match(/\[UICap\] SHOWN (\S+)/);
                 if (mShown) {
                     const base = path.basename(mShown[1].trim()).replace(/\.png$/i, '');
                     currentTrace = [];
@@ -146,6 +146,7 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
             timedOut: !sweepComplete,
             panelsCaptured: shots.length,
             shotsDir: SHOTS,
+            uicapLog: uicapLog.slice(0, 200),
             panels: shots,
             signals: signals.slice(0, 60),
             errors: errors.slice(0, 40),

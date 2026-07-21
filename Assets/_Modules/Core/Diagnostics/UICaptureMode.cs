@@ -70,28 +70,80 @@ namespace DeNelle.Diagnostics
         private bool _running;
         private int _shotsShown;   // panels actually SHOWN across all passes (for SWEEP COMPLETE)
 
+        // WebGL bridge: reads the page URL (search + hash + href) for the uicapture=1
+        // flag DIRECTLY from window.location -- reliable even when Application.absoluteURL
+        // is empty/not-yet-populated at the initial boot hook. Only linked on the WebGL
+        // player; the DllImport is compiled out everywhere else.
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        private static extern int UICap_HasFlag();
+#endif
+
         // ---------------------------------------------------------------------
         //  Boot hook: spawn the harness once, only when a capture was requested.
         // ---------------------------------------------------------------------
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoBoot()
         {
+            // Always-on breadcrumb: proves the hook fired and shows what the URL looked
+            // like at this instant (it may be empty here on WebGL -- the poller covers that).
+            try
+            {
+                Debug.Log("[UICap] AutoBoot fired platform=" + Application.platform +
+                          " absoluteURL='" + Application.absoluteURL + "'");
+            }
+            catch { }
+
             if (s_booted) return;
             try
             {
-                if (!ShouldRun()) return;
-                s_booted = true;
-                ConsumeEditorFlag();
+                if (ShouldRun())
+                {
+                    Debug.Log("[UICap] trigger MATCHED (starting sweep)");
+                    StartSweep();
+                    return;
+                }
 
-                var go = new GameObject(HostName);
-                UnityEngine.Object.DontDestroyOnLoad(go);
-                go.hideFlags = HideFlags.HideAndDontSave;
-                go.AddComponent<UICaptureMode>();
+                // The flag/URL may not be usable yet at AfterSceneLoad on WebGL (window.location
+                // not wired, or absoluteURL not populated). Spawn an always-alive poller that
+                // re-checks ShouldRun() for a few seconds and starts the sweep the moment it
+                // goes true. The s_booted guard in StartSweep ensures it can only fire ONCE.
+                SpawnPoller();
             }
             catch (Exception e)
             {
                 // A diagnostic must never break startup.
                 try { Debug.LogWarning("[UICap] AutoBoot failed: " + e.Message); } catch { }
+            }
+        }
+
+        /// <summary>Spawn the capture host exactly once (guarded by s_booted).</summary>
+        private static void StartSweep()
+        {
+            if (s_booted) return;
+            s_booted = true;
+            ConsumeEditorFlag();
+
+            var go = new GameObject(HostName);
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            go.AddComponent<UICaptureMode>();
+        }
+
+        /// <summary>Spawn the fallback poller GameObject that re-checks ShouldRun() for a
+        /// short window -- survives the URL/flag not being ready at the first boot hook.</summary>
+        private static void SpawnPoller()
+        {
+            try
+            {
+                var go = new GameObject(HostName + "~Poller");
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                go.AddComponent<UICaptureBootPoller>();
+            }
+            catch (Exception e)
+            {
+                try { Debug.LogWarning("[UICap] SpawnPoller failed: " + e.Message); } catch { }
             }
         }
 
@@ -135,13 +187,23 @@ namespace DeNelle.Diagnostics
             catch { }
 
             // WebGL: no CLI args exist, so the -uiCapture flag can never trigger. Instead
-            // opt in from the page URL query string (?uicapture=1). Application.absoluteURL
-            // carries the full document URL on the WebGL player. Case-insensitive substring
-            // match keeps it simple (query is short) and guarded so a bad URL never breaks boot.
+            // opt in from the page URL query string (?uicapture=1). PRIMARY check reads
+            // window.location directly via the UICap_HasFlag jslib (reliable even when
+            // Application.absoluteURL is empty/not-yet-populated at the boot hook). SECONDARY
+            // fallback is the Application.absoluteURL substring. Both guarded so a bad URL /
+            // missing bridge never breaks boot.
             try
             {
                 if (Application.platform == RuntimePlatform.WebGLPlayer)
                 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                    try
+                    {
+                        if (UICap_HasFlag() == 1)
+                            return true;
+                    }
+                    catch { }
+#endif
                     var url = Application.absoluteURL;
                     if (!string.IsNullOrEmpty(url) &&
                         url.IndexOf("uicapture=1", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -254,6 +316,12 @@ namespace DeNelle.Diagnostics
             float settle = 0f;
             while (settle < 2.0f) { settle += Time.unscaledDeltaTime; yield return null; }
 
+            // Hide the gameplay HUD for the ENTIRE sweep so no HUD chrome (nav ring,
+            // resource chips, action diamond, quest banner) bleeds into a panel shot.
+            // VillageHudController lives in the DeNelle.HUD asmdef (Core cannot ref it),
+            // so resolve + invoke SetHudVisible(false) reflectively. Restored before Exit().
+            SetGameplayHudVisible(false);
+
             // LANDSCAPE pass (1920x1080).
             yield return CapturePass(string.Empty, 1920, 1080);
 
@@ -264,6 +332,10 @@ namespace DeNelle.Diagnostics
             Debug.Log("[UICap] SWEEP COMPLETE count=" + _shotsShown);
 
             FlowTrace.Step(Tag, "harness complete -> " + Path.GetFullPath(OutRoot));
+
+            // Restore the gameplay HUD before we exit -- never leave it hidden for a
+            // subsequent normal play session.
+            SetGameplayHudVisible(true);
             Exit();
         }
 
@@ -310,9 +382,21 @@ namespace DeNelle.Diagnostics
 
             foreach (var shot in Scenarios)
             {
-                // Clear any panel/overlay left open so shots never overlap.
+                // Clear any panel/overlay left open so shots never overlap. CloseAll only
+                // dismisses the single arbiter-tracked handle, so ALSO hard-close every
+                // reflected panel instance the arbiter isn't currently tracking.
                 Guard.Try(Tag, "CloseAll before " + shot.File, PanelManager.CloseAll);
-                yield return null;
+                HardCloseReflectedPanels();
+
+                // Real-time settle so a fading panel finishes closing before we assert
+                // clean + capture (a single frame is too short for a panel mid-fade).
+                { float ct = 0f; while (ct < 0.3f) { ct += Time.unscaledDeltaTime; yield return null; } }
+
+                // Assert the pre-shot state is clean: warn (never abort) if the arbiter
+                // still tracks an open panel right before we open this shot's target.
+                if (PanelManager.AnyOpen)
+                    FlowTrace.Warn(Tag, "pre-shot state NOT clean before " + shot.File +
+                                        " -- still open: " + PanelManager.OpenPanelName);
 
                 if (shot.Kind == Kind.Unsupported)
                 {
@@ -428,6 +512,62 @@ namespace DeNelle.Diagnostics
             }
         }
 
+        // ---------------------------------------------------------------------
+        //  Capture isolation helpers (clean single-panel shots)
+        // ---------------------------------------------------------------------
+
+        // The reflected panel types the single-slot arbiter (PanelManager) does NOT
+        // track -- force-closed before every shot so no untracked instance bleeds in.
+        private static readonly string[] ReflectedPanelTypes =
+        {
+            "DeNelle.Settings.SettingsController",
+            "DeNelle.Audio.MusicSelectionPanel",
+            "DeNelle.HUD.HelpMenu",
+            "DeNelle.HUD.BugReportView",
+        };
+
+        /// <summary>Reflectively hide/show the gameplay HUD (VillageHudController lives in
+        /// the DeNelle.HUD asmdef, which Core cannot reference). Best-effort; never throws.</summary>
+        private void SetGameplayHudVisible(bool visible)
+        {
+            Guard.Try(Tag, "SetHudVisible(" + visible + ")", () =>
+            {
+                var t = FindType("DeNelle.HUD.VillageHudController");
+                if (t == null) return;
+                var inst = UnityEngine.Object.FindAnyObjectByType(t);
+                if (inst == null) return;
+                var m = t.GetMethod("SetHudVisible", BindingFlags.Public | BindingFlags.Instance,
+                    null, new[] { typeof(bool) }, null);
+                if (m == null) return;
+                m.Invoke(inst, new object[] { visible });
+                Debug.Log(visible ? "[UICap] HUD restored" : "[UICap] HUD hidden for sweep");
+            });
+        }
+
+        /// <summary>Force-close every live instance of the reflected panel types the arbiter's
+        /// single-slot CloseAll can miss. Each reflect + invoke is guarded independently.</summary>
+        private void HardCloseReflectedPanels()
+        {
+            foreach (var typeName in ReflectedPanelTypes)
+            {
+                Guard.Try(Tag, "HardClose " + typeName, () =>
+                {
+                    var t = FindType(typeName);
+                    if (t == null) return;
+                    // Non-obsolete typed API; FindObjectsSortMode.None = cheapest.
+                    var instances = UnityEngine.Object.FindObjectsByType(t, FindObjectsSortMode.None);
+                    if (instances == null) return;
+                    var m = t.GetMethod("Close", BindingFlags.Public | BindingFlags.Instance);
+                    if (m == null) return;
+                    foreach (var inst in instances)
+                    {
+                        if (inst == null) continue;
+                        Guard.Try(Tag, "HardClose invoke " + typeName, () => m.Invoke(inst, null));
+                    }
+                });
+            }
+        }
+
         /// <summary>Resolve a type by full name across every loaded assembly (Core cannot
         /// reference the HUD/Settings/Audio asmdefs directly without a cycle).</summary>
         private static Type FindType(string fullName)
@@ -463,6 +603,59 @@ namespace DeNelle.Diagnostics
 #else
             Application.Quit();
 #endif
+        }
+
+        // -------------------------------------------------------------------------
+        //  Boot poller: covers the case where the URL / uicapture flag is not usable
+        //  at the first AfterSceneLoad hook (WebGL window.location not wired yet, or
+        //  Application.absoluteURL not populated). Re-checks ShouldRun() ~1/sec for a
+        //  short window and starts the sweep exactly once when it goes true.
+        // -------------------------------------------------------------------------
+        internal sealed class UICaptureBootPoller : MonoBehaviour
+        {
+            private const float PollWindowSeconds = 8f;
+            private const float PollIntervalSeconds = 1f;
+
+            private float _elapsed;
+            private float _sinceCheck = 999f;   // force an immediate first check
+
+            private void Update()
+            {
+                try
+                {
+                    // Another path (initial hook / a prior poll) already started it -> retire.
+                    if (s_booted) { SelfDestruct(); return; }
+
+                    _elapsed += Time.unscaledDeltaTime;
+                    _sinceCheck += Time.unscaledDeltaTime;
+
+                    if (_sinceCheck >= PollIntervalSeconds)
+                    {
+                        _sinceCheck = 0f;
+                        if (ShouldRun())
+                        {
+                            Debug.Log("[UICap] poller started sweep");
+                            StartSweep();
+                            SelfDestruct();
+                            return;
+                        }
+                    }
+
+                    if (_elapsed >= PollWindowSeconds)
+                        SelfDestruct();
+                }
+                catch (Exception e)
+                {
+                    // A diagnostic must never break startup.
+                    try { Debug.LogWarning("[UICap] poller failed: " + e.Message); } catch { }
+                    SelfDestruct();
+                }
+            }
+
+            private void SelfDestruct()
+            {
+                try { UnityEngine.Object.Destroy(gameObject); } catch { }
+            }
         }
     }
 }
