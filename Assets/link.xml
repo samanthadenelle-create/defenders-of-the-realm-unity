@@ -1,0 +1,67 @@
+<!--
+  ===========================================================================
+  Assets/link.xml : IL2CPP managed-stripping PRESERVE list (project-wide).
+
+  WHY THIS FILE EXISTS:
+  MobileSettings.cs raises the Android managed-stripping level to Medium to
+  shrink the APK. Medium stripping removes any managed type/member the static
+  analyzer cannot prove is used. That analyzer CANNOT see two things this
+  project relies on heavily:
+
+    1. Newtonsoft.Json (reflection) deserializes EVERY runtime catalog / data
+       file (rooms-catalog, dungeon graphs, gear curation, abilities, enemies,
+       waves, etc.). The data-model classes and their properties are built and
+       populated purely by reflection at runtime, so there is no direct call
+       the linker can follow; Medium stripping would silently delete the
+       fields/constructors and JSON loading would return empty/blank objects
+       in the built player (never in the editor: the classic works-in-editor,
+       breaks-in-build strip failure).
+
+    2. Cross-asmdef reflection bridges resolve services/types by name across
+       the DeNelle runtime assemblies, again invisible to the static analyzer.
+
+  THE SAFE, SUFFICIENT MOVE: preserve="all" on the whole assembly for the
+  Newtonsoft.Json engine, the loose-script Assembly-CSharp, and every DeNelle
+  RUNTIME data/service assembly. The Editor assemblies are intentionally
+  omitted (they never ship in the player). This keeps every JSON-deserialized
+  model and every reflectively-resolved service intact while Medium stripping
+  still trims the untouched engine/third-party surface.
+
+  Placed at the Assets/ root so IL2CPP honors it for the whole project.
+  ===========================================================================
+-->
+<linker>
+
+  <!-- JSON reflection engine: builds + populates all data models by reflection. -->
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
+
+  <!-- Loose gameplay scripts not inside an asmdef (e.g. Assets/_Village2 scripts). -->
+  <assembly fullname="Assembly-CSharp" preserve="all" />
+
+  <!-- DeNelle RUNTIME assemblies that hold JSON-deserialized data models and/or
+       reflectively-resolved services plus cross-asmdef reflection bridges. Every
+       runtime asmdef is preserved; Editor + Tests asmdefs are deliberately
+       excluded (they do not ship in the player). -->
+  <assembly fullname="DeNelle.Core" preserve="all" />
+  <assembly fullname="DeNelle.Data" preserve="all" />
+  <assembly fullname="DeNelle.Village" preserve="all" />
+  <assembly fullname="DeNelle.Cosmetics" preserve="all" />
+  <assembly fullname="DeNelle.Wallet" preserve="all" />
+  <assembly fullname="DeNelle.BattleATB" preserve="all" />
+  <assembly fullname="DeNelle.HUD" preserve="all" />
+  <assembly fullname="DeNelle.Audio" preserve="all" />
+  <assembly fullname="DeNelle.AI" preserve="all" />
+  <assembly fullname="DeNelle.Pets" preserve="all" />
+  <assembly fullname="DeNelle.Dungeons" preserve="all" />
+  <assembly fullname="DeNelle.Onboarding" preserve="all" />
+  <assembly fullname="DeNelle.Settings" preserve="all" />
+  <assembly fullname="DeNelle.DialogueUI" preserve="all" />
+  <assembly fullname="DeNelle.Web3" preserve="all" />
+  <assembly fullname="DeNelle.DevTools" preserve="all" />
+  <assembly fullname="DeNelle.Sandbox" preserve="all" />
+
+  <!-- Other runtime (non-Editor) asmdefs that ship in the player. -->
+  <assembly fullname="OffsetForge.Runtime" preserve="all" />
+  <assembly fullname="VfxParade.Runtime" preserve="all" />
+
+</linker>

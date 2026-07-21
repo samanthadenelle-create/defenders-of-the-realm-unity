@@ -213,12 +213,43 @@ namespace DeNelle.Editor
                 changes++;
             }
 
-            // Managed stripping level — audit §1.2 says set Low once IL2CPP is on.
-            if (PlayerSettings.GetManagedStrippingLevel(android) == ManagedStrippingLevel.Disabled)
+            // Managed stripping level -- APK size lever. Bumped Low -> Medium
+            // (audit sec 1.2 originally said Low once IL2CPP is on; Medium is the
+            // next low-risk download-shrink step). Medium is SAFE here ONLY
+            // because Assets/link.xml preserve="all"s the Newtonsoft.Json engine,
+            // Assembly-CSharp, and every DeNelle runtime data/service assembly --
+            // those hold the JSON-reflection-deserialized catalogs + cross-asmdef
+            // reflection bridges the static stripper cannot see. Without that
+            // link.xml, Medium would silently strip JSON models and break catalog
+            // loading in the built player. Do NOT raise to High. Idempotent:
+            // only writes (and logs) when the level is below Medium.
+            if (PlayerSettings.GetManagedStrippingLevel(android) != ManagedStrippingLevel.Medium
+                && PlayerSettings.GetManagedStrippingLevel(android) != ManagedStrippingLevel.High)
             {
-                log.AppendLine("[MobileSettings] P0-2 Android managed stripping level: Disabled -> Low.");
-                PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Low);
+                log.AppendLine($"[MobileSettings] P0-2 Android managed stripping level: " +
+                               $"{PlayerSettings.GetManagedStrippingLevel(android)} -> Medium " +
+                               "(guarded by Assets/link.xml).");
+                PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Medium);
                 changes++;
+            }
+            else
+            {
+                log.AppendLine("[MobileSettings] P0-2 Android managed stripping level: already " +
+                               $"{PlayerSettings.GetManagedStrippingLevel(android)} (>= Medium) -- no change.");
+            }
+
+            // Strip unused mesh components -- a low-risk size lever that drops
+            // vertex channels (colors, extra UVs, tangents) no material/shader
+            // actually reads, project-wide. Idempotent: only writes when off.
+            if (!PlayerSettings.stripUnusedMeshComponents)
+            {
+                log.AppendLine("[MobileSettings] P0-2 stripUnusedMeshComponents: false -> true.");
+                PlayerSettings.stripUnusedMeshComponents = true;
+                changes++;
+            }
+            else
+            {
+                log.AppendLine("[MobileSettings] P0-2 stripUnusedMeshComponents: already true -- no change.");
             }
 
             // ARM64 — audit §1.2 verified this GOOD; confirm and re-assert, do not weaken.
