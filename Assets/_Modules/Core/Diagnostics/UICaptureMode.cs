@@ -61,8 +61,14 @@ namespace DeNelle.Diagnostics
         private const string BootScene = "MainCastle_Hall";
         private const string OutRoot = "Builds/UICaps/";
 
+        // Web-paced dwell: on WebGL the real pixels come from the webbot's Playwright
+        // page.screenshot(), which needs the panel held on-screen long enough to grab.
+        // Configurable; only applied on the WebGL player (editor/desktop stays fast).
+        private static float s_webDwellSeconds = 1.2f;
+
         private static bool s_booted;
         private bool _running;
+        private int _shotsShown;   // panels actually SHOWN across all passes (for SWEEP COMPLETE)
 
         // ---------------------------------------------------------------------
         //  Boot hook: spawn the harness once, only when a capture was requested.
@@ -124,6 +130,22 @@ namespace DeNelle.Diagnostics
                             a.Equals("-captureUI", StringComparison.OrdinalIgnoreCase))
                             return true;
                     }
+                }
+            }
+            catch { }
+
+            // WebGL: no CLI args exist, so the -uiCapture flag can never trigger. Instead
+            // opt in from the page URL query string (?uicapture=1). Application.absoluteURL
+            // carries the full document URL on the WebGL player. Case-insensitive substring
+            // match keeps it simple (query is short) and guarded so a bad URL never breaks boot.
+            try
+            {
+                if (Application.platform == RuntimePlatform.WebGLPlayer)
+                {
+                    var url = Application.absoluteURL;
+                    if (!string.IsNullOrEmpty(url) &&
+                        url.IndexOf("uicapture=1", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return true;
                 }
             }
             catch { }
@@ -238,6 +260,9 @@ namespace DeNelle.Diagnostics
             // PORTRAIT pass (1080x2340).
             yield return CapturePass("portrait/", 1080, 2340);
 
+            // Terminal sync signal for the webbot: it stops listening once it sees this.
+            Debug.Log("[UICap] SWEEP COMPLETE count=" + _shotsShown);
+
             FlowTrace.Step(Tag, "harness complete -> " + Path.GetFullPath(OutRoot));
             Exit();
         }
@@ -295,6 +320,10 @@ namespace DeNelle.Diagnostics
                     continue;
                 }
 
+                // Per-panel sync signal (webbot listens on these): announce the panel we
+                // are about to open, at the current resolution.
+                Debug.Log("[UICap] SHOWING " + shot.File + " @" + Screen.width + "x" + Screen.height);
+
                 bool opened = OpenShot(shot);
                 if (!opened)
                 {
@@ -306,15 +335,32 @@ namespace DeNelle.Diagnostics
                 yield return null;
                 yield return null;
 
+                // Panel is up and laid out: this is the webbot's cue to grab pixels.
+                Debug.Log("[UICap] SHOWN " + shot.File);
+
                 string path = OutRoot + subDir + shot.File + ".png";
                 Guard.Try(Tag, "CaptureScreenshot " + path, () => ScreenCapture.CaptureScreenshot(path, 1));
                 FlowTrace.Step(Tag, shot.File + " captured " + Screen.width + "x" + Screen.height +
                                     " -> " + Path.GetFullPath(path));
 
-                // Let the end-of-frame async PNG write flush before we close/move on.
-                // (Plain frame waits -- WaitForEndOfFrame can hang in -nographics batchmode.)
-                yield return null;
-                yield return null;
+                // HOLD the panel visible long enough for the browser to screenshot it.
+                // WebGL: real-time dwell (the webbot needs the window on-screen). Elsewhere:
+                // just flush the async PNG write with plain frame waits (WaitForEndOfFrame
+                // can hang in -nographics batchmode), keeping editor/desktop fast.
+                if (Application.platform == RuntimePlatform.WebGLPlayer)
+                {
+                    float t = 0f;
+                    while (t < s_webDwellSeconds) { t += Time.unscaledDeltaTime; yield return null; }
+                }
+                else
+                {
+                    yield return null;
+                    yield return null;
+                }
+
+                // Panel captured + held: safe for the webbot to move on / for us to close.
+                Debug.Log("[UICap] DONE " + shot.File);
+                _shotsShown++;
 
                 CloseShot(shot);
                 yield return null;

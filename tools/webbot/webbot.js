@@ -19,6 +19,10 @@
 //
 // Usage:
 //   node webbot.js --url <deploy-url> [--seconds 120] [--headed] [--shots <dir>]
+//   node webbot.js --uicapture --url <deploy-url> [--headed] [--shots <dir>]
+//     ^ drives UICaptureMode's per-panel sweep (opens ?uicapture=1&trace=1), screenshots
+//       each panel on its "[UICap] SHOWN <file>" console signal into panel_<file>.png, and
+//       writes out/uicapture-report.json (each panel paired with its live trace lines).
 // =============================================================================
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -34,6 +38,7 @@ function arg(name, def) {
 const URL      = arg('url', 'https://defenders-of-the-realm-v2.vercel.app');
 const SECONDS  = parseInt(arg('seconds', '120'), 10);
 const HEADED   = !!arg('headed', false);
+const UICAPTURE = !!arg('uicapture', false);   // drive UICaptureMode's per-panel sweep
 const SHOTS    = arg('shots', path.join(process.env.USERPROFILE || '', 'AppData', 'LocalLow', 'DeNelle', 'Defenders of the Realm', 'ui-shots'));
 const OUT      = arg('out', path.join(__dirname, 'out'));
 
@@ -68,6 +73,7 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
     const signals = [];
     const diags = [];
     const errors = [];
+    const uicapLines = [];      // ordered console buffer consumed by --uicapture sweep
     let dragPanResult = null;   // set during --drive: did the web camera drag-pan engage?
 
     page.on('console', (msg) => {
@@ -75,6 +81,7 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
         console_lines.push(t);
         if (SIGNAL_RX.test(t)) signals.push(t);
         if (DIAG_RX.test(t)) diags.push(t);
+        if (UICAPTURE) uicapLines.push(t);
     });
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
     page.on('requestfailed', (r) => {
@@ -82,10 +89,82 @@ const DIAG_RX   = /TERRAINDIAG|FloorDiag|MagentaGuard|HubStructureVisualInjector
         errors.push('requestfailed: ' + r.url().split('/').pop() + ' -> ' + (r.failure() && r.failure().errorText));
     });
 
-    const target = URL + (URL.includes('?') ? '&' : '?') + 'trace=1';
+    let target = URL + (URL.includes('?') ? '&' : '?') + 'trace=1';
+    if (UICAPTURE) target += '&uicapture=1';   // opt UICaptureMode into the WebGL sweep
     console.log('[webbot] opening ' + target);
     const t0 = Date.now();
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 120000 });
+
+    // ---- --uicapture: drive UICaptureMode's deterministic panel sweep ------------------
+    // UICaptureMode (WebGL, ?uicapture=1) opens each UI panel in turn and emits a per-panel
+    // console signal: "[UICap] SHOWING <file>", "[UICap] SHOWN <file>", "[UICap] DONE <file>",
+    // then "[UICap] SWEEP COMPLETE count=N". We screenshot on each SHOWN (the panel is up and
+    // held ~1.2s), pairing each shot with the [Flow:*]/Exception/SIGNAL lines seen while that
+    // panel was on-screen. Real pixels come from THIS Playwright screenshot, not the in-build
+    // ScreenCapture (which writes to unreachable browser storage).
+    if (UICAPTURE) {
+        // Wait for the WebGL canvas to exist + paint before the driver reaches the hub.
+        let uiCanvasMs = null;
+        for (let i = 0; i < SECONDS && !uiCanvasMs; i++) {
+            await page.waitForTimeout(1000);
+            const has = await page.$('#unity-canvas, canvas');
+            if (has) { uiCanvasMs = Date.now() - t0; console.log('[webbot] canvas present at ' + uiCanvasMs + 'ms'); }
+        }
+
+        const shots = [];
+        let idx = 0;
+        let currentTrace = [];
+        let sweepComplete = false;
+        const deadline = Date.now() + SECONDS * 1000;   // overall sweep timeout
+
+        while (!sweepComplete && Date.now() < deadline) {
+            while (idx < uicapLines.length) {
+                const line = uicapLines[idx++];
+                const mShown = line.match(/\[UICap\] SHOWN (.+)$/);
+                if (mShown) {
+                    const base = path.basename(mShown[1].trim()).replace(/\.png$/i, '');
+                    currentTrace = [];
+                    const shotPath = path.join(SHOTS, 'panel_' + base + '.png');
+                    await page.screenshot({ path: shotPath });
+                    shots.push({ panel: base, file: shotPath, trace: currentTrace });
+                    console.log('[webbot] uicap shot ' + base + ' -> ' + shotPath);
+                    continue;
+                }
+                if (/\[UICap\] SWEEP COMPLETE/.test(line)) { sweepComplete = true; continue; }
+                // Attribute traces/exceptions/failures to the panel currently on-screen.
+                if (shots.length > 0 && (/\[Flow:/.test(line) || /Exception|NullReference/i.test(line) || SIGNAL_RX.test(line))) {
+                    currentTrace.push(line.slice(0, 300));
+                }
+            }
+            await page.waitForTimeout(150);
+        }
+
+        const uiReport = {
+            url: target,
+            canvasFirstSeenMs: uiCanvasMs,
+            sweepComplete: sweepComplete,
+            timedOut: !sweepComplete,
+            panelsCaptured: shots.length,
+            shotsDir: SHOTS,
+            panels: shots,
+            signals: signals.slice(0, 60),
+            errors: errors.slice(0, 40),
+        };
+        fs.writeFileSync(path.join(OUT, 'uicapture-report.json'), JSON.stringify(uiReport, null, 2));
+
+        console.log('\n============ WEBBOT UICAPTURE REPORT ============');
+        console.log('canvas first seen (ms) : ' + uiCanvasMs);
+        console.log('panels captured        : ' + shots.length + (sweepComplete ? ' (SWEEP COMPLETE)' : ' (TIMED OUT)'));
+        shots.forEach(s => console.log('   ++ panel_' + s.panel + '.png  (' + s.trace.length + ' trace lines)'));
+        console.log('SIGNAL lines           : ' + signals.length);
+        signals.slice(0, 12).forEach(s => console.log('   !! ' + s.slice(0, 200)));
+        console.log('page/asset errors      : ' + errors.length);
+        errors.slice(0, 10).forEach(s => console.log('   XX ' + s.slice(0, 200)));
+        console.log('=================================================');
+
+        await browser.close();
+        return;
+    }
 
     // Unity streams ~140MB; give it real time. Poll for the canvas to exist AND paint.
     let canvasSeenMs = null;
