@@ -202,6 +202,21 @@ namespace DeNelle.Editor.RoomForge
             light.intensity = 0.35f;
             light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
+            // Dress each composed room with real props (torches at the corners + barrels/crates/
+            // decor against the walls). Props have colliders STRIPPED, and the NavMesh below bakes
+            // from PhysicsColliders, so dressing does NOT block or carve the mesh regardless of
+            // order; placed against walls with doorway clearance so paths stay clear. Seeded by
+            // room index for reproducible bakes. Runs BEFORE the bake so dress+bake is one pass.
+            int dressedRooms = 0, dressedProps = 0, roomIdx = 0;
+            foreach (var kv in instances)
+            {
+                if (kv.Value == null) { roomIdx++; continue; }
+                int seated = DungeonDresser.DressRoom(kv.Value, roomIdx);
+                if (seated > 0) { dressedRooms++; dressedProps += seated; }
+                roomIdx++;
+            }
+            FlowTrace.Step("Dungeon", $"DRESS complete: rooms={dressedRooms}/{instances.Count} props={dressedProps}");
+
             // NavMesh + path-connectivity (stronger than a single origin sample): confirm a path
             // from the first placed room centre to the last actually completes.
             var navHost = new GameObject("NavMesh");
