@@ -29,11 +29,16 @@
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
 ## Latest (2026-07-20 overnight autonomous loop) — see `OVERNIGHT_RESULT_2026-07-20.md`
-- **Regression baseline = 13/14 SME P1 suites GREEN.** 14 new suites wired into `DataRegression.RunAll`.
-  Only `dungeon-dressing` RED (FAIL-BY-DESIGN, deferred content — RoomForge composer seats no props yet).
-  Green markers: WAVE_SCALING / ENEMY_REWARDS / WALL_MITIGATION / UPGRADE_AUTHORITY / PACK_GRANT /
-  SFX_RESOLVE / DUNGEON_EXIT / FOUNDING_REACH / FTUE_HONESTY / ECHO_CARD_COPY / SHADER_PIN /
-  MODAL_REGISTRATION / CRYSTAL_PRODUCTION. *(pushed to wip, origin d9653b05)*
+- **Regression baseline = REGRESSION_OK, ALL 16 SME P1 suites GREEN, ZERO reds** (2026-07-20). Added
+  WAVES_SCHEMA (EW-3) + PACK_COSMETIC_INTEGRITY (ECON-1) + flipped DUNGEON_DRESSING green (real
+  DungeonDresser prop pass). **All 5 audit P1s cleared + guarded.** Full green set: WAVE_SCALING /
+  ENEMY_REWARDS / WALL_MITIGATION / UPGRADE_AUTHORITY / PACK_GRANT / SFX_RESOLVE / DUNGEON_EXIT /
+  FOUNDING_REACH / FTUE_HONESTY / ECHO_CARD_COPY / SHADER_PIN / MODAL_REGISTRATION / CRYSTAL_PRODUCTION /
+  WAVES_SCHEMA / PACK_COSMETIC_INTEGRITY / DUNGEON_DRESSING. *(pushed to wip, origin 1d7512b0)*
+- **Composed dungeons now DRESSED:** `DungeonDresser.DressRoom` (Assets/Editor/RoomForge) seats ~8 real
+  KayKit props (corner torches + floor barrels/crates) per composed room, wired into `DungeonBaker`
+  pre-NavMesh (colliders stripped, doorway clearance). Broader dungeon VFX/lighting/battle dressing = next
+  pillar follow, NOT built yet.
 - **NEW TOOL — headless UI screenshot capture:** `DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless`
   (edit-mode synchronous render; the old Play-mode path never worked under `-batchmode -quit`). Writes
   `Builds\ui-capture\*.png` + `UI_CAPTURE_OK`. **Run it before shipping any UI change** (owner rule: never

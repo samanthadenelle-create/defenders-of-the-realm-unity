@@ -17,8 +17,10 @@
 > `ApplyPackContents` across all 13 packs and asserts every advertised cosmetic ends up owned; **EW-3** ->
 > `WavesSchemaRegression` (WAVES_SCHEMA_OK) asserts the `"waves"` key + >=1 wave on both dual copies AND
 > proves a renamed-key variant collapses to 0-wave and is caught, plus a loud runtime `FlowTrace.Fail` on
-> empty schedule. **All 5 audit P1s are now cleared + guarded.** Remaining RED by design: `dungeon-dressing`
-> (composer seats no props — deferred content). The body below is the
+> empty schedule. **All 5 audit P1s are now cleared + guarded.** **`dungeon-dressing` CLOSED 2026-07-20** (owner
+> greenlight): `DungeonDresser.DressRoom` seats ~8 real props/room, wired into `DungeonBaker`; oracle
+> upgraded name-scan -> behavioral (DUNGEON_DRESSING_OK). **DataRegression = REGRESSION_OK, all 16 suites
+> green, ZERO reds.** The body below is the
 > frozen 07-19 snapshot — do not rewrite; the next Sunday refresh reconciles the counts.
 
 # Regression-Coverage Proof — Full Silo Audit Synthesis
