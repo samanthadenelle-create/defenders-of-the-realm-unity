@@ -50,4 +50,44 @@ maximized with the item placed, greyed out for singleton items.** Prove via loca
 | _(pending first capture)_ | | | | | | |
 
 ## Iteration log
-- Iter 0 (setup): building capture infra + panel registry. Builds so far: APK shrink 462→383MB (side task).
+- Iter 0 (setup): building capture infra + panel registry. Side task: APK shrink 462→383MB (committed).
+- Iter 1 (pipeline PROVEN): webbot `--uicapture` drives UICaptureMode through all 16 panels + screenshots
+  each from the real WebGL canvas. Fixed 3 pipeline bugs to get here: (a) WebGL `?uicapture=1` trigger
+  (jslib `UICap_HasFlag`), (b) webbot SHOWN regex `$`-anchor vs Unity's multiline console, (c) viewport
+  set to phone-landscape 2340x1080. **First real web pixels of every panel captured.**
+- Iter 1 findings (raw, capture NOT yet clean):
+  - **Canvas probe: buffer FULLY fills viewport** (2340x1080 = display) → the SME's WebGL-template
+    canvas-sizing theory is REFUTED; template left untouched.
+  - **Capture BLEED confirmed** (Settings shot showed the music panel + HUD): `PanelManager.CloseAll`
+    closes only 1 arbiter slot + never hides the HUD. FIX IN PROGRESS (hide HUD via
+    `VillageHudController.SetHudVisible`, hard-close all reflected panels, real settle) — must land before
+    any per-panel QA is trustworthy.
+  - "Bottom-band + right-cutoff" render seen in raw shots is NOT yet judged real — it may be HUD-bleed +
+    half-open panels. Re-judge only on CLEAN isolated captures.
+- Iter 2 (capture isolation fixed, render band NOT cracked): HUD-hide + panel-isolation landed — shots
+  are now clean single-panel (no HUD/panel bleed). BUT the **bottom-band render persists**: the game
+  (3D world AND UI) renders into the lower ~50% of the canvas, black top ~48%, right cutoff.
+  **Ruled OUT with data (5 hypotheses):** SwiftShader-vs-real-GPU (identical), viewport 1600x900 vs
+  2340x1080 (identical fraction), capture isolation/HUD-bleed (fixed, band remains), canvas buffer size
+  (probe: buffer==display 2340x1080), framebuffer-fit `matchWebGLToCanvasSize`+resize (no change).
+  Contradiction unresolved: buffer measures full-size yet render is banded.
+- **ESCALATED (§13, past 2 failed attempts): headed-web render fidelity is an open blocker.** Not spun
+  further. Handed to owner with hypotheses below.
+
+## OPEN BLOCKER — headed-web capture renders game in a bottom band
+Remaining hypotheses (untested / owner-input):
+1. **Is the band even on the REAL device?** The webbot is Playwright/Chromium; the owner's reported bugs
+   were specific overlaps, never "half the screen is black." The band may be a Playwright+this-Unity-build
+   interaction, NOT her Pi Browser/phone. **Cheapest next test: open the deployed build in a NORMAL browser
+   tab (not Playwright) or on the phone — if it fills the screen, the band is purely a capture artifact.**
+2. A Unity camera viewport-rect / URP aspect-fit / letterbox rendering to a sub-rect (needs a camera-rect
+   + URP-asset trace at runtime on WebGL).
+3. A full-screen black overlay mis-anchored to the top half (needs a UI hierarchy dump at capture time).
+
+## RECOMMENDED PIVOT for the LAYOUT audit (works today)
+The **edit-mode `RunCaptureHeadless`** path renders panels FAITHFULLY (already used to fix the Echo card +
+Pause menu — centered, clean, no band). And the **Windows DevBuild + `-uiCapture`** writes faithful
+`Builds/UICaps/*.png` for all 16 panels. So the core ask (every screen: no overlap, even spacing, matches
+mockup) can proceed on the faithful exe/edit-mode capture NOW; the web↔exe PIXEL parity specifically waits
+on the render-band resolution (hypothesis 1 first). Owner to choose: fix headed-web render vs pivot to
+exe/edit-mode faithful capture for the layout pass.
