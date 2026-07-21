@@ -12,10 +12,13 @@
 > (pack `ApplyPackContents` now routes Glimmer); **DGN-P1-1** dungeon roach-motel (`DungeonExitRegression`
 > -> DUNGEON_EXIT_OK + runtime exit bootstrap). Plus new oracles: WAVE_SCALING, ENEMY_REWARDS,
 > WALL_MITIGATION, UPGRADE_AUTHORITY, SFX_RESOLVE, FOUNDING_REACH, FTUE_HONESTY, ECHO_CARD_COPY,
-> SHADER_PIN, MODAL_REGISTRATION, CRYSTAL_PRODUCTION. Still UNCOVERED from the P1 list: **ECON-1**
-> (pack-cosmetic∈cosmetics.json integrity check — MarkCosmeticOwned sidesteps catalog membership, so the
-> defect is defused but the proposed schema oracle is not written) and **EW-3** (waves.json key-rename ->
-> 0-wave). Remaining RED by design: `dungeon-dressing` (composer seats no props). The body below is the
+> SHADER_PIN, MODAL_REGISTRATION, CRYSTAL_PRODUCTION. **ECON-1 + EW-3 CLOSED 2026-07-20** (owner
+> request): **ECON-1** -> `PackCosmeticIntegrityRegression` (PACK_COSMETIC_INTEGRITY_OK) drives the real
+> `ApplyPackContents` across all 13 packs and asserts every advertised cosmetic ends up owned; **EW-3** ->
+> `WavesSchemaRegression` (WAVES_SCHEMA_OK) asserts the `"waves"` key + >=1 wave on both dual copies AND
+> proves a renamed-key variant collapses to 0-wave and is caught, plus a loud runtime `FlowTrace.Fail` on
+> empty schedule. **All 5 audit P1s are now cleared + guarded.** Remaining RED by design: `dungeon-dressing`
+> (composer seats no props — deferred content). The body below is the
 > frozen 07-19 snapshot — do not rewrite; the next Sunday refresh reconciles the counts.
 
 # Regression-Coverage Proof — Full Silo Audit Synthesis
