@@ -1,5 +1,4 @@
-{
-  "version": 1,
+﻿{
   "dungeonId": "dg_starter_loop",
   "cellSize": 1.0,
   "rooms": [
