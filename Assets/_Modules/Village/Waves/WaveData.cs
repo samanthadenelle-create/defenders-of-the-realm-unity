@@ -426,6 +426,16 @@ namespace DeNelle.Village
                 var schedule = JsonConvert.DeserializeObject<WaveSchedule>(json);
                 if (schedule == null || schedule.Waves == null || schedule.Waves.Count == 0)
                 {
+                    // EW-3 (CLAUDE.md section 12, NO SILENT FAILURE): a renamed/removed top-level
+                    // "waves" key (or an empty array) deserialises to a WaveSchedule whose Waves list
+                    // is empty -- the wave loop would then run a SILENT 0-wave loop and every gate stays
+                    // green. Scream it into the trace (break-log.jsonl) so a future key rename is caught,
+                    // not shipped. Expected key: WaveSchedule.Waves <- [JsonProperty("waves")] (WaveData.cs:363).
+                    FlowTrace.Fail("WaveData",
+                        $"waves.json produced 0 waves (schedule={schedule != null}, " +
+                        $"waves={(schedule?.Waves?.Count.ToString() ?? "null")}) -- the expected top-level " +
+                        "\"waves\" key is missing/renamed or the array is empty. The village wave loop " +
+                        "would run a 0-wave loop. Fix waves.json (top-level \"waves\": [ ... ]).");
                     Debug.LogError("[WaveDataLoader] waves.json deserialised to an empty schedule.");
                     return null;
                 }
