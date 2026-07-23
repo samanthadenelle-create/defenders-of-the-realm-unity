@@ -281,8 +281,11 @@ namespace DeNelle.Core
         /// Editor and in any Development build regardless of this flag. Default ON so it appears on the
         /// local tester APK the owner ships now ("since its only local"). SECURITY: it grants unlimited
         /// resources — SET PlayerPrefs "ff.devresourcetool" = 0 (or flip this default to false) BEFORE
-        /// ANY PUBLIC / STORE RELEASE build.</summary>
-        public static bool DevResourceTool => Get("devresourcetool", defaultOn: true);
+        /// ANY PUBLIC / STORE RELEASE build.
+        /// STORE-HARDENING (Path A, S2): default is now <see cref="IsDevBuild"/> — ON in Editor/Development
+        /// (owner keeps the tool while developing) but OFF in a RELEASE/store APK, so no unlimited-resource
+        /// exploit ships publicly. PlayerPrefs "ff.devresourcetool" = 1 still re-enables it on any build.</summary>
+        public static bool DevResourceTool => Get("devresourcetool", defaultOn: IsDevBuild);
 
         /// <summary>MOBILE FLAG BUTTON (owner felt-tests on Android and CANNOT press F8 - no keyboard).
         /// Gates the on-screen tap-to-capture chip <see cref="DeNelle.Core.Dev.FlagCaptureButton"/>, the
@@ -294,8 +297,11 @@ namespace DeNelle.Core
         /// FALSE there - same reasoning as <see cref="DevResourceTool"/>. The button ALSO always shows in
         /// the Editor and any Development build regardless of this flag. Default ON so the owner can flag
         /// bugs on-device now ("owner is never the bug detector", CLAUDE.md 14). HIDE for a public/store
-        /// release: set PlayerPrefs "ff.flagbutton" = 0 (or flip this default to false).</summary>
-        public static bool FlagButton => Get("flagbutton", defaultOn: true);
+        /// release: set PlayerPrefs "ff.flagbutton" = 0 (or flip this default to false).
+        /// STORE-HARDENING (Path A, S2): default is now <see cref="IsDevBuild"/> — ON in Editor/Development
+        /// (owner keeps the on-device flag chip while developing) but OFF in a RELEASE/store APK. PlayerPrefs
+        /// "ff.flagbutton" = 1 still re-enables it on any build.</summary>
+        public static bool FlagButton => Get("flagbutton", defaultOn: IsDevBuild);
 
         /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
         /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
@@ -505,9 +511,23 @@ namespace DeNelle.Core
         /// grant-recording build flips it ON: the Defenders/Debug menu, PlayerPrefs "ff.skrpreview" = 1,
         /// or the WebGL URL <c>?skrpreview=1</c> (allow-listed in <see cref="ApplyUrlActivationOnce"/> —
         /// read-only presentation, so a crafted link can at most show an info panel).</summary>
-        // Owner 2026-07-06: demo/grant recording — badge + showcase ON by default (the panel is
-        // self-labeling: PREVIEW · TESTNET stamp, no wallet call). "ff.skrpreview" = 0 to hide.
-        public static bool SkrPreview => Get("skrpreview", defaultOn: true);
+        // Owner 2026-07-06: demo/grant recording — badge + showcase (the panel is self-labeling:
+        // PREVIEW · TESTNET stamp, no wallet call).
+        // STORE-HARDENING (Path A, C4): default flipped to OFF so the honest ZERO-CRYPTO store build
+        // ships NO "Powered with SKR"/crypto marketing surface (no misleading badge). The grant-recording
+        // build flips it back ON via the Defenders/Debug menu, PlayerPrefs "ff.skrpreview" = 1, or the
+        // allow-listed ?skrpreview=1 URL — all preserved.
+        public static bool SkrPreview => Get("skrpreview", defaultOn: false);
+
+        /// <summary>STORE-HARDENING (Path A, M1) — gates the pack-store PURCHASE rail (the "Buy" CTA in
+        /// <see cref="DeNelle.Wallet.PackStore"/> BuildPackCard + the <c>Purchase</c> entry itself). The
+        /// pack cards ALWAYS render cosmetically (name / tagline / USD reference / contents); this flag
+        /// only controls whether a buy button is offered. Default is <see cref="IsDevBuild"/> — ON in
+        /// Editor/Development so the owner can exercise the (stub-wallet) purchase flow, but OFF in a
+        /// RELEASE/store APK so the honest ZERO-CRYPTO build ships NO dead "Buy" button routed to the
+        /// stub wallet. Reversible: PlayerPrefs "ff.realmstorepurchase" = 1 re-enables the rail on any
+        /// build. NOT URL-activatable (monetization surface — excluded from the allow-list).</summary>
+        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: IsDevBuild);
 
         /// <summary>WO-611 — when ON, the owner-designed COMBAT HUD renders inside the HudKit: a
         /// VIRTUAL D-PAD (cross/plus, steel body + gold chevrons + centre hub) for movement instead of
@@ -616,6 +636,13 @@ namespace DeNelle.Core
         /// PlayerPref away for an A/B. <see cref="DungeonFpv"/> wins over this if both are set. Default OFF.
         /// PlayerPrefs "ff.dungeoniso" = 1 to restore the top-down rig.</summary>
         public static bool DungeonCameraIso => Get("dungeoniso", defaultOn: false);
+
+        /// <summary>SECURITY (store-hardening Path A): TRUE in the Editor or any Development build,
+        /// FALSE in a release/store build (BuildOptions.None → Debug.isDebugBuild is false). Dev-only
+        /// tooling uses this as its <c>defaultOn</c> so the owner keeps the tool while developing but it
+        /// STRIPS OFF (defaults to hidden) in a public/store APK. The PlayerPrefs "ff.&lt;name&gt;"
+        /// override still wins, so a developer can flip the tool back on on any build.</summary>
+        private static bool IsDevBuild => Application.isEditor || Debug.isDebugBuild;
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

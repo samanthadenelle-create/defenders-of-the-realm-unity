@@ -367,6 +367,15 @@ namespace DeNelle.Wallet
                 MakeText(card, "Owned", 20, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
                     TextAlignmentOptions.Center, buyMin, buyMax);
             }
+            // SECURITY (store-hardening Path A, M1): the Buy CTA is gated by FeatureFlags.RealmStorePurchase
+            // (default OFF in release/store, ON in Editor/Development). In a zero-crypto public build the
+            // pack still renders cosmetically (above) but NO dead "Buy" button routed to the stub wallet
+            // ships — a "Coming soon" placeholder fills the right rail so the card is not blank.
+            else if (!DeNelle.Core.FeatureFlags.RealmStorePurchase)
+            {
+                MakeText(card, "Coming soon", 16, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, buyMin, buyMax);
+            }
             else
             {
                 var rail = SelectedCurrency(pack.Sku);   // SKR by default (_defaultCurrency)
@@ -453,6 +462,15 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Fail("Store", "Purchase: pack is null — aborted.");
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
+            }
+
+            // SECURITY (store-hardening Path A, M1): defense-in-depth — even though the Buy button is not
+            // built when the purchase rail is gated OFF, the public Purchase() entry is refused too, so a
+            // zero-crypto release build never routes to the stub wallet regardless of caller.
+            if (!DeNelle.Core.FeatureFlags.RealmStorePurchase)
+            {
+                FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' refused — RealmStorePurchase gate OFF (zero-crypto build).");
+                return PaymentResult.Failure(pack.Sku, currency, "Store purchases are not available in this build.");
             }
 
             if (_purchaseInFlight)

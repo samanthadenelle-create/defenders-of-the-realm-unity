@@ -67,12 +67,17 @@ namespace DeNelle.HUD
         // persisted unlock (PlayerPrefs) that reveals a minimal "Grant Resources"
         // action — the grant ONLY, not the full AdminOverlay, so the LB-11 release
         // lock on the admin panel itself stays intact.
+        // SECURITY (store-hardening Path A, S1): the 5-tap dev resource-grant is compile-STRIPPED from
+        // release (non-Development) builds so a public/store APK cannot self-grant unlimited resources.
+        // Preserved in Editor/Development builds so the owner keeps the on-phone dev grant while developing.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private const string DevUnlockPref = "dotr.devunlock";
         private int _titleTaps;
         private float _lastTitleTapTime;
         private UnityEngine.UI.Button _grantResourcesBtn;   // uGUI (UIElements.Button also in scope)
 
         private static bool DevUnlocked => PlayerPrefs.GetInt(DevUnlockPref, 0) == 1;
+#endif
         public PanelSettings ActivePanelSettings
         {
             get
@@ -146,8 +151,11 @@ namespace DeNelle.HUD
             ElarionUiKit.AddColumnButton(stack, "Credits",
                 ElarionUiKit.ObsidianButtonColor.Gray, OnShowCredits);
 
-            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" exists in ALL builds but stays
-            // hidden until the 5-tap title unlock; grants ONLY resources (AdminOverlay stays locked).
+            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" + the 5-tap title unlock exist in
+            // Editor/Development builds only — SECURITY (store-hardening Path A, S1): compile-STRIPPED from
+            // release so a public/store APK cannot self-grant unlimited resources (grant grants ONLY
+            // resources; AdminOverlay itself was already release-locked at LB-11).
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
             _grantResourcesBtn = ElarionUiKit.AddColumnButton(stack, "Grant Resources (dev)",
                 ElarionUiKit.ObsidianButtonColor.Yellow, OnGrantResources);
             if (_grantResourcesBtn != null)
@@ -164,6 +172,7 @@ namespace DeNelle.HUD
                 titleBtn.targetGraphic = _modal.chrome.title;
                 titleBtn.onClick.AddListener(OnTitleTapped);
             }
+#endif
 
             // Toast (status messages) — kit ToastCard, low-center, fades after 5s.
             // (dev-unlock handlers live below with the other On* handlers)
@@ -220,6 +229,9 @@ namespace DeNelle.HUD
             ShowToast("Defenders of the Realm v2 — DeNelle Studios. Models: KayKit + Tripo. Audio: original soundtrack.");
         }
 
+        // SECURITY (store-hardening Path A, S1): the 5-tap dev unlock + resource grant are stripped from
+        // release builds (see the guarded call sites + fields above). Preserved in Editor/Development.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         /// <summary>5-tap title counter (owner 2026-07-12): five taps inside a rolling 3s
         /// window flips the persisted dev unlock and reveals the Grant Resources row.</summary>
         private void OnTitleTapped()
@@ -265,6 +277,7 @@ namespace DeNelle.HUD
             FlowTrace.Step("UI", "HelpMenu: dev Grant Resources fired (50k wood/iron, 25k food/crystals, 50k coins).");
             ShowToast("Granted: 50k wood/iron, 25k food/crystals, 50k gold.");
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — 5-tap dev resource grant (store-hardening S1)
 
         /// <summary>Resets save state via reflection so the player can redo hero + pet
         /// selection, then routes back to HeroSelect.</summary>

@@ -28,6 +28,24 @@ work cannot be faked; the store's 0% fee means nothing is lost by shipping A fir
 
 ---
 
+## 0.1 PATH A — LOCKED EXECUTION CHECKLIST (owner, 2026-07-22)
+Fast honest launch (~1–2 weeks). `[CLI]` = orchestrator lane (code/host/build/CLI); `[OWNER]` = her hands.
+
+1. `[CLI]` **Fix the two one-line exploits** — HelpMenu 5-tap grant (S1) + DevResourceTool/FlagButton (S2),
+   release-safe (stripped from release APK, preserved in editor/dev).
+2. `[OWNER→CLI]` **Apex dragon + audio** — owner rules license-vs-replace; CLI wires the swap.
+3. `[OWNER→CLI]` **Privacy policy** — owner drafts; CLI hosts + wires the listing URL.
+4. `[CLI]` **"Powered with SKR" badge OFF + hide dead buy flows** (C4/M1) for the honest zero-crypto build.
+5. `[CLI]` build final release APK → `[OWNER]` sideload-test on Seeker.
+6. `[OWNER]` Publisher setup — DeNelle Studios **KYC/KYB** on publish.solanamobile.com.
+7. `[OWNER]` Mint **Publisher → App → Release** NFTs on mainnet (~0.2 SOL total; back up wallet + keystore).
+8. `[CLI+OWNER]` Submit via `dapp-store` CLI + assets (512px icon, ≥4 same-orientation screenshots, ≤30-char
+   blurb, privacy URL) using the owner's keypair/API key. **3–5 day review expected.**
+
+Path B (the $2/$5 SKR packs) follows as the first post-launch update once the wallet stack is real (§3 Phase 3).
+
+---
+
 ## 1. HOW THE dApp STORE WORKS (mechanics, cited)
 
 - **On-chain NFT trio (Solana mainnet-beta):** **Publisher NFT** (org identity, one-time), **App NFT** (one per
