@@ -4,6 +4,8 @@
 > Player hero = a **single Tripo self-rigged Knight ("Grom")**, static armor, **no mesh-swap / no body
 > swap** (combat pivot 2026-06-22; Blink hero rig JUNKED). Treat any "Blaise / class body swap / party"
 > prose below as historical. Current truth = `CANON_GROUND_TRUTH_2026-06-28.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
+>
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** live hero = a single Knight **Grom** (KnightV3 rig + `KnightMocap.controller`), no party / no body-swap; the "Blaise / class-bodies / party-of-4" body is retired. Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
 
 **Scope:** `Assets/_Modules/Village/Hero/` — the player-hero (Blaise + class bodies) feature
 area: locomotion, abilities, body swap, gear/equip, combat-feel, cameras, input, HUD bridges,

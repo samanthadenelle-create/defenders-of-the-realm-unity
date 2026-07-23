@@ -59,15 +59,20 @@ namespace DeNelle.Core.Diagnostics
     /// <summary>
     /// WO-443 — WebGL remote diagnostic-log sink. Installs itself at startup, and
     /// only when activated AND a backend endpoint is configured does it buffer and
-    /// batch-POST captured logs. Dormant (no-op) otherwise.
+    /// batch-POST captured logs. Both gates are OPEN by default in a shipped WebGL
+    /// build (FeatureFlags.WebTrace defaults ON; TraceEndpoint is the hardcoded PROD
+    /// url) and Awake flips FlowTrace.Enabled=true on activation — so a WebGL player
+    /// streams [Flow:*] to Neon by default. Dormant (no-op) only off-WebGL / in the
+    /// editor, where break-log.jsonl already exists.
     /// </summary>
     public sealed class WebTrace : MonoBehaviour
     {
         // ── Config ────────────────────────────────────────────────────────────
         // The backend endpoint that receives the trace batch (POST /api/trace).
-        // EMPTY by default → the sink no-ops until the backend lands. This is the
-        // single place to wire the URL; it carries NO secret (the Neon connstring
-        // stays server-side only, per WO-429). Mirrors GameStateService's BackendBase.
+        // SET to the live PROD url below (NOT empty) → the sink is active on WebGL.
+        // This is the single place to wire the URL; it carries NO secret (the Neon
+        // connstring stays server-side only, per WO-429). Mirrors GameStateService's
+        // BackendBase.
         private const string TraceEndpoint = "https://defenders-of-the-realm-v2.vercel.app/api/trace";
 
         // Bounded ring + batch cadence — sized so a log storm can't flood memory or

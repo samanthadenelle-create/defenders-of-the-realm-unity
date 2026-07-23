@@ -10,12 +10,15 @@
 // value is identity.
 //
 // OWNERSHIP (phase split): the VILLAGE layer (EchoService / a bonus-recompute pass)
-// WRITES these values in phase 2 from the per-echo lane assignment + element match
-// + cross/set bonuses. The HOST systems READ them when they land:
-//   CraftingMult    -> Forge / crafting yield+speed
-//   DefenseMult     -> the OFFLINE async city-raid resolver (echoes NEVER fight live)
-//   ExplorationMult -> the dungeon-run reward grant (dungeon loot ONLY)
-//   HarvestBonusMult-> EchoService.RatePerSecond / DumpSilos capped total bonus
+// WRITES all four values in phase 2 from the per-echo lane assignment + element match
+// + cross/set bonuses. CONSUMPTION STATUS (verified from code): only HarvestBonusMult
+// currently has a real reader; the other three are WRITE-ONLY STUBS -- computed and
+// stored, but NO production system reads them yet. They are the FORWARD SEAM, pending
+// host wiring:
+//   HarvestBonusMult-> CONSUMED: EchoService.RatePerSecond / DumpSilos capped total bonus
+//   CraftingMult    -> STUB (unconsumed): intended for Forge / crafting yield+speed
+//   DefenseMult     -> STUB (unconsumed): intended for the OFFLINE async city-raid resolver
+//   ExplorationMult -> STUB (unconsumed): intended for the dungeon-run reward grant
 //
 // This is a Core-owned STATIC holder (Core may not reference Village, so Village
 // writes INTO Core, hosts read FROM Core -- the GameModifiers/CoreServices pattern).

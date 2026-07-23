@@ -1,5 +1,13 @@
 # Audio System — Mixer + AudioService + per-scene BGM
 
+> ⚠ CORRECTION 2026-07-22: the 5-group / 5-exposed-param mixer described throughout this doc was
+> **never actually built into the asset**. `Assets/Audio/Resources/Audio/GameAudioMixer.mixer` as it
+> ships is a **STUB** — one **Master** group only, `m_ExposedParameters: []` (no Music/SFX/UI/Voice
+> groups, no `MasterVol`/`MusicVol`/`SfxVol`/`UiVol`/`VoiceVol` params). So `AudioMixer.SetFloat(...)`
+> volume/mute control does NOT work through the mixer; only the **AudioSource-direct fallback** in
+> `AudioService` actually drives volume/mute today. The group tree + exposed-param sections below
+> describe the intended design, not the current asset. (Verified from the `.mixer` YAML.)
+
 **Date:** 2026-05-19
 **Slice:** missing-components.md **P0-9** ("No audio system or Audio Mixer
 wiring — game ships silent") and the related Core gap ("No audio director

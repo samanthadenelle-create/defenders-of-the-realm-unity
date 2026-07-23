@@ -1,5 +1,7 @@
 # Master Catalog — Misc Modules
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** this file omits the entire Room Forge stack — `DungeonBaker` / `DungeonBakerChecks` / `DungeonDresser` / `DungeonLootGrant` / `DungeonChestInteract` / `DungeonExitInteractable`; the composed playable dungeon is now **`dg_starter_loop`** (`d4_sunken_crypt` purged). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Scope: `Assets/_Modules/Dungeons`, `Environment`, `Data`, `UI` (and any `_Modules` subfolder not owned by another code area). Verified by reading source, not comments. Out of scope (other areas): ATB, Audio, BattleATB, Characters, Core, Cosmetics, DevTools, DialogueUI, Economy, HUD, Onboarding, Pets, Settings, Village, Wallet, Web3.
 
 ---

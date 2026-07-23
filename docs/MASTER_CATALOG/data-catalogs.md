@@ -1,5 +1,7 @@
 # MASTER CATALOG — data-catalogs
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** there are now **~70 Resources + ~72 StreamingAssets canonical files** (not 26/32); the "6 WebGL-broken StreamingAssets-only" catalogs are all MIRRORED now (that risk is closed, DATAWEB pins them); ~40 catalogs this file never listed now exist. Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Area: the JSON catalogs under `Assets/Resources/Data`, `Assets/StreamingAssets/Data`,
 `Assets/Data`, plus the single WebGL-safe loader and the ~30 typed catalog classes that
 consume them. **Verified by reading the actual JSON + .cs files** (not comments).

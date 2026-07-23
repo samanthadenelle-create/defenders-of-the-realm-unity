@@ -1,5 +1,12 @@
 # WORK ORDER 584 — Dungeon / Outpost / Arena Consolidation (one space primitive)
 
+> ⚠ CORRECTION 2026-07-22: this WO's flag name is STALE. The gate as shipped is **`ff.dungeonrealtime`
+> (default TRUE)** — it routes dungeon/outpost fights INTO the real-time `BattleArena`; set it to 0 to
+> restore the legacy ATB path. There is **no `ff.atbdungeon`** flag (it was never created — grep-verified
+> 0 hits). Read every `ff.atbdungeon` below as `ff.dungeonrealtime` with **inverted sense** (real-time is
+> the default-ON path, ATB is the OFF fallback). Source: `Assets/_Modules/Core/FeatureFlags.cs`
+> (`DungeonRealtimeBattle => Get("dungeonrealtime", defaultOn: true)`), `EncounterTrigger.cs`, `DungeonStubEncounter.cs`.
+
 **Status:** READY TO IMPLEMENT (design owner-ratified 2026-06-28)
 **Silo:** Combat/AI + World/Environment (code + content; isolated spaces — no seam work)
 **Canon:** memory `dungeon-outpost-arena-one-space-primitive`; refines `overworld-encounter-isolated-battle`,

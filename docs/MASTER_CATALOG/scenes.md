@@ -1,5 +1,7 @@
 # MASTER CATALOG — Scenes
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** there are **23 build scenes** (not 13/14); the live home hub is **`Main_Castle_Overworld`** (MergedWorld ON — one continuous navmesh, no additive OuterWorld seam), not MainCastle_Hall; **`Village.unity` is DELETED from disk**; dungeon portals default ON (`ff.dungeonportals`). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Reference catalog of `Assets/Scenes/*.unity` (14 scene files) plus the boot/load-flow
 code that wires them. Verified by reading the scene files (root GameObject names) and the
 routing source — NOT comments. Stale comments are called out in FLAGS.

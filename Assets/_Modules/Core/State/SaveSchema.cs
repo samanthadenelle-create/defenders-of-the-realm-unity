@@ -8,9 +8,10 @@
 //   - Validate()             (the C# port of `safeParse` — rejects NaN/Infinity,
 //                             clamps numerics via NonNegInt/FiniteInt rules)
 //
-// CurrentVersion = 33, FileFormat = 1. PlayerPrefs key `dotr-save` replaces the
-// React localStorage key (storage layer mandated by the port spec — improvement
-// #4 NOT adopted).
+// CurrentVersion = 34, FileFormat = 1. (v34 appended tribes/wards/arena/
+// petActiveSlots — see the CurrentVersion const changelog.) PlayerPrefs key
+// `dotr-save` replaces the React localStorage key (storage layer mandated by the
+// port spec — improvement #4 NOT adopted).
 // =============================================================================
 
 using System;

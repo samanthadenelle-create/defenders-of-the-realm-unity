@@ -194,7 +194,9 @@ real and generating something worth protecting. Dependency order, not compromise
   flair, rewards (skill points / gear / resources). Hub (castle) = hero home + skill tree + raid launch.
   > **UPDATE 2026-06-28 (WO-584):** the dungeon/outpost fight is consolidated onto the **one warp-in
   > real-time `BattleArena` space primitive** (RegionGate warp → resolver → Arena skin → ownership flip);
-  > the flat **ATB dungeon route is retired behind `ff.atbdungeon` (OFF)**. See
+  > the flat **ATB dungeon route is retired behind `ff.dungeonrealtime` (default ON)** — that flag routes
+  > dungeon/outpost fights INTO the real-time `BattleArena` (set `ff.dungeonrealtime`=0 to restore the legacy ATB path).
+  > *(Corrected 2026-07-22: the flag is `ff.dungeonrealtime` default-TRUE, NOT `ff.atbdungeon` — that flag never existed.)* See
   > `WorkOrders/WORK_ORDER_584_dungeon_outpost_arena_consolidation.md`.
 - **V2 (gated `ff.basebuilding` OFF — REVISIT ONLY IF IT SHOWS VALUE):** build base defenses, troops
   auto-defend, the watch/continue raid-on-base event, resources feed base-building. Existing barracks /

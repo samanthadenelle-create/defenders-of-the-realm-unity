@@ -2,7 +2,7 @@
 ### The farm pillar's player-facing loop. Implement the MODEL against the REAL systems (not the placeholder pseudocode).
 
 ## The model (owner)
-- **Progression:** start 1 Echo (auto-assigned to a node). +1 Echo every 5 waves completed (4 normal + 1 boss). Wave 5→2, 10→3, 15→4 (MAX 4). Unlocks feel earned via the defense/wave pillar.
+- **Progression:** start 1 Echo (auto-assigned to a node). +1 Echo every 5 waves completed (4 normal + 1 boss). Wave 5→2, 10→3, 15→4, 20→5, 25→6 (**MAX 6** — corrected 2026-07-22; code ships `EchoService.MaxEchoes = 6` with the full 6-soul `EchoRosterCatalog`: Aldwin/Elowen/Corvin/Bran/Doran/Maren. The old "MAX 4" was never the shipped cap). Unlocks feel earned via the defense/wave pillar.
 - **Harvest:** each Echo auto-harvests a node at a fixed rate (resources/hour, configurable). Pooled silo for V1 (shared, simpler).
 - **Silos = buffer + engagement hook:** capacity in HOURS (base 4h → upgrades 6h/8h). Fills while online + offline, CAPPED. **"Dump"** = one-tap transfer silo → main resource bins, resets the timer. Come-back-claim-reset is the loop. Idle waste if ignored past cap (fair, not punishing — optional partial credit past cap).
 - **Balance:** Echoes = the free soft-currency faucet; waves are how you EARN more Echoes; Pi premium = overfill silo once / extend cap / instant-dump+bonus (NOT progression gates).
@@ -18,4 +18,4 @@
 - **Anti-tamper:** the light server-handshake (PI_INTEGRATION_SPEC §4) is a fast-follow; V1 = device clock via the existing OfflineHarvestService clamp.
 
 ## V1 acceptance
-Start 1 Echo auto-farming → silo fills (online + offline, capped) → Dump banks to bins (persisted, visible to upgrades) → beating 5 waves unlocks Echo 2 (…→4) → more Echoes = faster fill. Persists across sessions. Ties: waves → echoes → farm → build/upgrade.
+Start 1 Echo auto-farming → silo fills (online + offline, capped) → Dump banks to bins (persisted, visible to upgrades) → beating 5 waves unlocks Echo 2 (…→6, corrected 2026-07-22) → more Echoes = faster fill. Persists across sessions. Ties: waves → echoes → farm → build/upgrade.

@@ -1,5 +1,7 @@
 # Master Catalog — Editor Tools (`Assets/Editor`)
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** the live gate is **`DataRegression.RunAll`** (16 P1 suites + ratchets → `REGRESSION_OK`), NOT the legacy `RegressionSuite.cs`; the whole `Assets/Editor/Regression/` tree + `UICaptureLaunch` are unlisted here; the WebGL ship build uses **`BuildOptions.None`** (not Development). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Reference catalog of the scoped editor tooling. **All files live in the single
 `DeNelle.Editor.asmdef`** (namespace `DeNelle.Editor`, Editor-only platform). That
 asmdef references `DeNelle.Core`, `DeNelle.Data`, `DeNelle.Sandbox`,

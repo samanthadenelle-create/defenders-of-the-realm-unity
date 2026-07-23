@@ -1,5 +1,7 @@
 # MASTER CATALOG — Area: HUD (`DeNelle.HUD`)
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** the HUD was **rebuilt to HudKit** — `HudKitController` + `PostureEvaluator` + `hud-areas.json`, posture-driven; `VillageHudController` is now the command/host shell; the WO-744 MVVM migration is COMPLETE (ratchet closed, HardFailOnNew). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Scope: `Assets/_Modules/HUD/*` (asmdef `DeNelle.HUD`) plus the cross-asmdef HUD
 seams: the `*HudBridge` family in `DeNelle.Village`, `FloatingHealthBar`
 (Village), `PanelManager` (Core), `BreakCaptureHarness` (Core).

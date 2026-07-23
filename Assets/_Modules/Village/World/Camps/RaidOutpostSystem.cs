@@ -1,17 +1,18 @@
 // =============================================================================
-// RaidOutpostSystem - feature flag + self-bootstrapping spawner that drops ONE
-// walk-to ENEMY OUTPOST in the open world (the RAID bite of outpost->raid->loot).
+// RaidOutpostSystem - feature flag + self-bootstrapping spawner that drops FOUR
+// walk-to ENEMY OUTPOSTS (one per cardinal edge) in the open world (the RAID bite
+// of outpost->raid->loot).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
 //
 // Mirrors CampSystem's bootstrap exactly (AfterSceneLoad self-spawn, OuterWorld-
-// only, idempotent, feature-flagged) but spawns a single EnemyOutpost the owner
+// only, idempotent, feature-flagged) but spawns EnemyOutposts the owner
 // can WALK TO from the village and fight. ENABLED for testing; flip to DefaultEnabled
 // to ship it dark later.
 //
-// WHERE IT SPAWNS: a single reachable Goldfields-edge anchor (+X, tier 1 - the
-// nearest, easiest region) so the player can walk straight out of the village's
-// east gate and reach the outpost. Threat-scaled by ZoneManager at that anchor.
+// WHERE IT SPAWNS: four reachable edge anchors, one at each CARDINAL direction
+// (E/W/N/S, ~70m out), so the player can walk straight out of any of the village's
+// gates and reach an outpost. Threat-scaled by ZoneManager at each anchor.
 //
 // COMBAT IS FULL REUSE: the outpost's garrison are real Enemy; the hero + party
 // auto-fight them via TargetManager (already working in OuterWorld). NO new
@@ -28,8 +29,8 @@ namespace DeNelle.Village.World.Camps
 {
     /// <summary>
     /// Static feature flag + the AfterSceneLoad self-bootstrap that, ONLY when
-    /// <see cref="Enabled"/>, spawns ONE walk-to <see cref="EnemyOutpost"/> at a
-    /// reachable outer-world anchor. Inert (no-op) when disabled.
+    /// <see cref="Enabled"/>, spawns four walk-to <see cref="EnemyOutpost"/>s (one
+    /// per cardinal edge anchor) in the outer world. Inert (no-op) when disabled.
     /// </summary>
     public static class RaidOutpostSystem
     {
@@ -146,7 +147,8 @@ namespace DeNelle.Village.World.Camps
             SpawnNow();
         }
 
-        // OWNER (2026-06-10): a ~3-MINUTE DELAY before the outpost/garrison materialises,
+        // OWNER (2026-06-10): a DELAY before the outpost/garrison materialises (originally
+        // ~3 min; now SpawnDelaySeconds = 10s per the 2026-06-11 note below),
         // so the heavy fort+garrison realization NEVER lands on the city-emerge frame
         // (that single-frame spike contributed to the OuterWorld-load freeze). The slot is
         // claimed immediately (so we never double-schedule); the actual realize fires
@@ -231,7 +233,7 @@ namespace DeNelle.Village.World.Camps
             Debug.Log($"[RaidOutpostSystem] {OutpostAnchors.Length} cardinal enemy outposts realized (one per gate exit).");
         }
 
-        // Tiny host that waits SpawnDelaySeconds then realises the outpost (owner's 3-min delay).
+        // Tiny host that waits SpawnDelaySeconds (10s) then realises the cardinal outposts.
         private sealed class DelayedSpawnRunner : MonoBehaviour
         {
             private void Start() => StartCoroutine(WaitThenSpawn());

@@ -5,10 +5,14 @@
 // lets implementing modules register concrete services behind Core-defined
 // interfaces, so consumers never need an assembly reference to the implementor.
 //
-// Slots:
-//   Jupiter — IJupiterService (WO-43, DeNelle.Web3)
-//   Hud     — IVillageHud    (WO-41, DeNelle.HUD)
-//   Audio   — IAudioService  (WO-41, DeNelle.Audio)
+// Slots (7):
+//   Hud               — IVillageHud          (WO-41, DeNelle.HUD)
+//   HudModel          — IHudModel            (WO-541, HUD model layer)
+//   Population        — IPopulationService   (DeNelle.Core.Population)
+//   Audio             — IAudioService        (WO-41, DeNelle.Audio)
+//   Jupiter           — IJupiterService      (WO-43, DeNelle.Web3)
+//   WalletSigner      — IWalletSigner        (wallet signer service)
+//   SceneLinkResolver — ISceneLinkResolver   (DeNelle.Core.World)
 //
 // Each slot follows the same Register/Unregister pattern: the concrete
 // MonoBehaviour calls Register in Awake and Unregister in OnDestroy.

@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // THE FARM PILLAR'S PLAYER-FACING LOOP (owner-resolved 2026-06-26):
-//   - Start with 1 Echo; beating 5 waves unlocks the next (cap 4). Unlocks feel
+//   - Start with 1 Echo; beating 5 waves unlocks the next (cap 6). Unlocks feel
 //     EARNED via the defense/wave pillar (the wave hook below).
 //   - Each Echo auto-harvests at BaseRatePerHour; rate = echoCount x BaseRatePerHour.
 //   - A pooled SILO buffers the haul (shared, V1). Capacity in HOURS (4h -> 6h/8h
@@ -44,7 +44,7 @@ using DeNelle.Core.State;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Owns the Echo workforce: echo count (1..4), the pooled silo fill (online +
+    /// Owns the Echo workforce: echo count (1..6), the pooled silo fill (online +
     /// offline, capped in hours), the Dump-to-wallet transfer, and the wave-driven
     /// Echo unlocks. Persisted via <see cref="GameState"/> (schema v25).
     /// </summary>

@@ -1,5 +1,7 @@
 # Master Catalog — Area: economy-meta
 
+> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** `packs.json` now has **13 packs** (not 5); the pet active-slot now persists (save v34); the 3 pack→cosmetic ECON P1s are fixed + guarded (PACK_GRANT / PACK_COSMETIC_INTEGRITY). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+
 Scope: `Assets/_Modules/{Pets,Cosmetics,Wallet,Web3,Economy}` — pet system, wallet/crypto
 payment, pack store, Glimmer, battle pass, cosmetics, and the Solana/SKR/web3 (Jupiter) layer.
 Verified by reading every `.cs`, `.asmdef`, canonical `.json`, README, and test in scope.
