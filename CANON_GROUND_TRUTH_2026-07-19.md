@@ -1,5 +1,9 @@
 # CANON GROUND TRUTH — 2026-07-19
 
+> ## ⚠ SUPERSEDED 2026-07-22 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-22.md`
+> (the 17-agent SME fan-out synthesis + catalog-drift ledger + branch-hygiene). This file is frozen
+> point-in-time history; do not treat its lines as current. Read the 07-22 anchor first.
+
 > ## ⚠ EVENING ADDENDUM (2026-07-19 evening — supersedes the stale morning lines below)
 > The body below is the 07-19 MORNING snapshot. Current reality after the evening FELT-TEST FIX WAVE:
 > **WO next-free = 754** (739-753 consumed — the morning "750" line is stale). HEAD has advanced past

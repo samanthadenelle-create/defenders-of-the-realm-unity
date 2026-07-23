@@ -1,5 +1,18 @@
 # DeNelle Studios — Project Canon Loader
 
+> ## ▶ LIVE THREAD (2026-07-22) — READ BEFORE WORKING
+> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-22.md`** (supersedes 07-19). A **17-agent read-only
+> SME fan-out** (12 module + 5 high-level, verified from code) produced that anchor: the code is HEALTHY and
+> gates are GREEN (`COMPILE_GATE_OK` + `REGRESSION_OK`, 16 P1 suites, 0 reds, save v34, HEAD `148ab637`,
+> local==origin) — **the debt is DOCUMENTATION DRIFT.** The `MASTER_CATALOG/<area>` sections (dated 2026-06-12
+> on the stale `feat/tower-core-loop` label) have drifted weeks behind: see the 07-22 anchor's **§6
+> catalog-drift ledger** + **§7 comment-vs-code lies registry** (e.g. `ff.atbdungeon` doesn't exist — real
+> gate is `ff.dungeonrealtime`; home hub is `Main_Castle_Overworld` not `MainCastle_Hall`; save v34 not v33;
+> 23 build scenes not 13; audio 5-group mixer never built). **Branch hygiene done 07-22:** 2 stale agent
+> worktrees + 4 stale branches (2 local, 2 remote: `feat/tower-core-loop`, `samantha-village-progress-2025`)
+> purged; remotes now `master` + `wip` only. WO next-free = **754**. Push still HELD. **The 07-19 threads
+> below are SUPERSEDED.**
+>
 > ## ▶ LIVE THREAD (2026-07-19 EVENING) — READ BEFORE WORKING
 > **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-19.md` (still current).** On top of the 07-19
 > morning arc below: a **FELT-TEST FIX WAVE** (CLI committing) — pet-screen sort-order, HUD de-overlap,

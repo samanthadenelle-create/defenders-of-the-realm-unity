@@ -15,6 +15,36 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-07-22 (SME fan-out + canon refresh + branch hygiene) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-07-22.md` (NEW — supersedes 07-19, bannered). Branch
+`wip/village2-and-f8-tickets`, HEAD `148ab637`, local==origin, push HELD.
+
+**What this session did (read-only sweep + hygiene, no gameplay code touched):**
+- **17-agent SME fan-out** (12 module + 5 high-level), each verified **from code not comments** (§12).
+  Verdict: **code healthy, gates green (REGRESSION_OK 16 suites/0 reds, save v34)** — the debt is
+  **DOCUMENTATION DRIFT.** The `MASTER_CATALOG/<area>` sections (dated 2026-06-12) are weeks stale.
+- **Canon refresh (this doc's job):** minted the 07-22 anchor with a **§6 catalog-drift ledger** (every stale
+  section + its correction) + a **§7 comment-vs-code lies registry**. Bannered 07-19 SUPERSEDED; updated
+  `KEY_FACTS.md` + `SESSION_CANON_LOADER.md` same-breath (§15).
+- **Branch hygiene:** removed 2 stale agent worktrees + local branches (dungeon work verified already-merged
+  into wip); purged 2 stale remotes — `feat/tower-core-loop` (`cea673e4`), `samantha-village-progress-2025-05-23`
+  (`40a570a6`). Remotes now `master` + `wip` only.
+
+**Headline drift corrections (trust the 07-22 anchor over any catalog):** home hub = `Main_Castle_Overworld`
+(MergedWorld ON, one navmesh, `Village.unity` deleted); `ff.atbdungeon` doesn't exist (real gate
+`ff.dungeonrealtime` → dungeons into BattleArena); save v34 not v33; CoreServices 7 slots not 3; 23 build
+scenes; ~70 catalogs; packs 13 not 5; HudKit replaced the 3-canvas HUD; MVVM ratchet closed; audio 5-group
+mixer never built; HeroPortraits folder absent; deploy chain writes `CHAIN_DONE` on failure.
+
+**OPEN (owner):** (1) real bug **CS-1 — equipped ring/amulet don't persist across reload** (declared +
+migrator-seeded v26, no GameState field/Snapshot-Apply) → needs a ticket. (2) Queue the §6/§7 doc fixes as a
+housekeeping WO (mint 754). (3) `GAP_AUDIT_2026-07-18.md` edit is commit-ready (documents the 07-18 fix batch
++ surfaces CS-1). (4) Push authorization still held. (5) Felt-verify queue + minted-but-open WOs 750-756 +
+Grok 715-722 (PAIRWALK_716) unchanged from 07-20.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-07-19 EVENING (felt-test fix wave) ★★
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-07-19.md` (still current). Branch `wip/village2-and-f8-tickets`.

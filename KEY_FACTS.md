@@ -28,6 +28,22 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-07-22) — SME fan-out + canon refresh + branch hygiene
+- **Live anchor = `CANON_GROUND_TRUTH_2026-07-22.md`** (supersedes 07-19). A 17-agent read-only SME fan-out
+  (code-verified) confirmed: **code healthy, gates green** (HEAD `148ab637`, local==origin, `REGRESSION_OK`
+  16 suites/0 reds, save v34) — **the real debt is DOCUMENTATION DRIFT.** The `MASTER_CATALOG/<area>` sections
+  are weeks stale; the 07-22 anchor carries the **§6 catalog-drift ledger** + **§7 comment-vs-code lies
+  registry**. Key corrections: home hub = `Main_Castle_Overworld` (MergedWorld ON, one navmesh) not
+  MainCastle_Hall; `ff.atbdungeon` doesn't exist (real gate `ff.dungeonrealtime`, dungeons route into
+  BattleArena); 23 build scenes; ~70 catalogs; audio 5-group mixer never built (AudioSource-direct fallback only);
+  HeroPortraits folder absent; deploy chain writes `CHAIN_DONE` on failure.
+- **Branch hygiene:** 2 stale agent worktrees + local branches removed (dungeon work verified already-merged);
+  2 stale remotes purged — `feat/tower-core-loop` (`cea673e4`) + `samantha-village-progress-2025-05-23`
+  (`40a570a6`). Remotes now `master` + `wip` only.
+- **Real bug surfaced (CS-1):** equipped ring/amulet (`equippedRingId`/`AmuletId`) declared + migrator-seeded
+  (v26) but no GameState field / no Snapshot-Apply → **reset on reload.** Needs a ticket.
+- **Still queued:** §6 catalog-drift + §7 comment-lie fixes as a housekeeping WO; CS-1 ticket. Push HELD.
+
 ## Latest (2026-07-20 overnight autonomous loop) — see `OVERNIGHT_RESULT_2026-07-20.md`
 - **Regression baseline = REGRESSION_OK, ALL 16 SME P1 suites GREEN, ZERO reds** (2026-07-20). Added
   WAVES_SCHEMA (EW-3) + PACK_COSMETIC_INTEGRITY (ECON-1) + flipped DUNGEON_DRESSING green (real
