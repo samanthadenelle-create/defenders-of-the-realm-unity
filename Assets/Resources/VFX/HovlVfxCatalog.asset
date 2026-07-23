@@ -377,3 +377,360 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: PP_BigExplosion
+    Prefab: {fileID: 1121192042590650, guid: e1b08032bec16ba4eb1ae23cbd572664, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_BigSplash
+    Prefab: {fileID: 1722726733478836, guid: c1c88308ebb5d2541a282905b854ee4c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_Candles
+    Prefab: {fileID: 1529859801056418, guid: 86f883933a872f542994368197c83b5b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_Dissolve
+    Prefab: {fileID: 8594448520171598934, guid: afadc6fdacd43754a903476d963a596b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_DissolveSolidHorizontal
+    Prefab: {fileID: 3400239552853432727, guid: 29d22b3d9f25d9c498b05e5b9194c5ae, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_DustExplosion
+    Prefab: {fileID: 1025285306637258, guid: d8f0099df63275647a8bcf646df1ca00, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_DustMotesEffect
+    Prefab: {fileID: 1000012882023006, guid: 5ca4c580b3888314581688fa46fb142d, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_DustStorm
+    Prefab: {fileID: 1344314377593938, guid: 9e03786a9517b604d8e930182607a128, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_EarthShatter
+    Prefab: {fileID: 1314945738539566, guid: 32c9fd11a72259d45aa26ae41c34c5aa, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_ElectricalSparks
+    Prefab: {fileID: 1000011396044746, guid: 96b2ec0239d11fa4b9792311efceb8ed, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_ElectricalSparksEffect
+    Prefab: {fileID: 4749980201479958301, guid: a4cbca814b838a5458720cd2f8d6a501, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_EllenDissolve
+    Prefab: {fileID: 8000101993942077523, guid: 7d848c71239ddd742bc187ad72f3a319, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_EllenRespawn
+    Prefab: {fileID: 4708830163711251094, guid: c1cd05c496063794c9abd1f0b0354ce6, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_EnergyExplosion
+    Prefab: {fileID: 1329845292236604, guid: 9bba9cf244c53c5439505dfc96fdd11c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_FireBall
+    Prefab: {fileID: 1947871717301538, guid: a990e3ac1318b834488c784d851f42a9, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_FireFlies
+    Prefab: {fileID: 1775406099119076, guid: 379785de5e39005469c875710d3cc5a7, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_FlameStream
+    Prefab: {fileID: 1973075987484898, guid: bccc7a794e75b2a44a4b0dac69160b7b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_FlameThrower
+    Prefab: {fileID: 1634767862067424, guid: 007c57e2df8e9b144b99f471b84f3d56, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_FleshImpacts
+    Prefab: {fileID: 1096893136476370, guid: 24b82347924701148a13c746edfb6b22, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_GoopSpray
+    Prefab: {fileID: 1240250018707908, guid: 5656e7ea1f1a75d4c895547ec2b824b3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_GoopSprayEffect
+    Prefab: {fileID: 1000012909287652, guid: abb9f519b142e304d9c45b56afa768bc, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_GoopStreamEffect
+    Prefab: {fileID: 1000010675638318, guid: a3768c8a9d1b90d4bb0eb0e4bdbe730c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_GroundFog
+    Prefab: {fileID: 1269120730060968, guid: 1a365141225c22e49a7bb976869b22a8, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_HeatDistortion
+    Prefab: {fileID: 1293630020605024, guid: ea309e8646148c24ab067d84d5d22697, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_IceLance
+    Prefab: {fileID: 1820680284854294, guid: 1a1c02facd51d87458dcaa3a761e2c03, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_LargeFlames
+    Prefab: {fileID: 1901245927194888, guid: bb98861c48ad2024ca93498c7dd93a6c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_LightnigStormCloud
+    Prefab: {fileID: 2707303645313174804, guid: 3ac741c58ee37a941b5408ec58f21743, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_MediumFlames
+    Prefab: {fileID: 1478314613700728, guid: be6847dd39ab95f4daa2ed98e4f90564, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_MetalImpacts
+    Prefab: {fileID: 1892351807075712, guid: 44be68b4fc4366142a9cd1ae1f761ea4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_MuzzleFlash
+    Prefab: {fileID: 1743301284569550, guid: ad2ab49d0a2a17148bd51c93d977bdbc, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_PlasmaExplosionEffect
+    Prefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_PoisonGas
+    Prefab: {fileID: 1547757601392324, guid: 6f672a31584a6a748912a49c1dce2f0c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_PressurisedSteam
+    Prefab: {fileID: 1533138625715334, guid: 61bb62591466c3649bdf4905822d72f6, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_RainEffect
+    Prefab: {fileID: 1000010302070858, guid: d0c0b49979d372942ae5a964d9364111, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_Respawn
+    Prefab: {fileID: 3281665843732006339, guid: bd2fe1eb2e3ba454088c57397144535f, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_RisingSteam
+    Prefab: {fileID: 1475368415682648, guid: efe021d4c307b5449b8121d46791cf95, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_RocketTrail
+    Prefab: {fileID: 1722250247140862, guid: ef134ce1a2a98d94fb68c860d9c736c6, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_SandImpacts
+    Prefab: {fileID: 1312255355084822, guid: bca9020d2c9c915448fb5263a425faf4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_SandSwirlsEffect
+    Prefab: {fileID: 1000010715882420, guid: 14d81e2c407975245973a11cdfbeb902, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_Shower
+    Prefab: {fileID: 1907188104338014, guid: 3d19250bdd4e0df4c8da855e85a8d70b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_SmallExplosion
+    Prefab: {fileID: 1828176872806910, guid: 64891a0eb28db934898420d80ca07cb3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_SmokeEffect
+    Prefab: {fileID: 1273915125232972, guid: 73767e07adddc394d82b994801f89bbb, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_SparksEffect
+    Prefab: {fileID: 2695941719300977822, guid: d0467414c35f2b349a4bb1219e454466, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: PP_Steam
+    Prefab: {fileID: 1735024089641582, guid: 378b2c30ef426554495292cb902cb8f4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_StoneImpacts
+    Prefab: {fileID: 1341869769842038, guid: 8b7a1ffda5bb7474b8fae646c45ce7b4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_TinyExplosion
+    Prefab: {fileID: 1337198075554910, guid: 25c7aa9ad705fe143a4d71c1c8deb7d4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_TinyFlames
+    Prefab: {fileID: 1972207730512856, guid: ea4fb55d0227e604386f44f905cfe7c0, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_WaterFall
+    Prefab: {fileID: 6366868049136406802, guid: a04bb04bc7b97764a845f959b695addb, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_WaterLeak
+    Prefab: {fileID: 1540040260711024, guid: a82a87e68ab906d4bbf876f687e2a155, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_WildFire
+    Prefab: {fileID: 1956197547661106, guid: f293a2dcc753a4a489fefe7f8f312d69, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: PP_WoodImpacts
+    Prefab: {fileID: 1031560401822814, guid: 3c0b5f221ea995442b9d11dc526de1c0, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
