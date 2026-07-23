@@ -171,6 +171,27 @@ This is the pricing WO-755's spec was waiting on; fold the $2/$5-cap-SKR ladder 
 5. **Canon:** does this promote the Solana dApp Store to an official V1 platform (alongside/instead of Pi Browser)?
    If yes, update `KEY_FACTS`/`CANON_GROUND_TRUTH` platform lines same-breath (§15).
 
+## 7. V2 / POST-LAUNCH BACKLOG — deferred from Path A (owner, 2026-07-23)
+Explicitly **NOT in the listing path.** Captured so it's not lost; actioned after Path A (and typically after
+Path B). None of these block a dApp Store submission.
+
+- **Data-driven faction model + Synty faction expansion** — extend binary `CombatFaction` → faction id +
+  **alignment as a property** (owner: "Elven can be enemy OR friendly"); make `EnemyFactory` honor the JSON
+  `modelKey` (today ignored); add an `AllyCamp` component. Then new factions = data + art (Elven/Samurai/dark
+  camps, friendly or enemy). Source: the 2026-07-23 faction/camp utility audit. Gated on buying the Synty
+  bundle ($359.99, available). Effort S–M (enemy re-skin) → M–L (true alignment-aware ally faction).
+- **Dragon spectacle** *(the LICENSE SWAP stays Path A; THIS is V2)* — fly-in entrance (disable-agent-airborne →
+  descend → land → hand to DragonBoss AI), ground/air two-phase fight (the asset air-attacks), and an optional
+  **random world-event dragon** (timed flyover / descend-to-attack via `RaidOutpostSystem`-style timer +
+  BattleArena warp-in). Enabled by the new commercially-licensed low-poly dragon.
+- **Quaternius Ultimate Modular Ruins (CC0, free) → Room Forge dungeon kit expansion** + world ruins dressing
+  (feed `DungeonDresser` / build socketed room prefabs from the 90 modular pieces).
+- **Synty art-direction adoption** (world/enemies/dungeons re-skin to the POLYGON style; keep Grom/Tripo as
+  hero) — the deliberate "level-up fidelity, mobile-right" pivot, if pursued.
+- Dungeon MECHANICS gaps (composed-dungeon loot bank, lantern/darkness "hold the last light" pillar) — code/
+  design, separate from any art pack.
+
 ---
 *Sources: internal readiness ledger (code-verified, file:line) + external requirements research
-(docs.solanamobile.com primary, blueshift/helius corroborating). Draft — awaiting owner decisions in §6.*
+(docs.solanamobile.com primary, blueshift/helius corroborating) + the 2026-07-23 faction/camp audit. Path A
+decided (§0.1); V2 content backlog parked (§7); awaiting remaining owner decisions in §6.*
