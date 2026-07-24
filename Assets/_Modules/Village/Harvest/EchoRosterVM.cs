@@ -103,29 +103,27 @@ namespace DeNelle.Village
             _cards = list;
         }
 
-        /// <summary>Owned card status: element + live lane/level/bonus readout (colorblind-safe TEXT).</summary>
+        /// <summary>Owned card status: short lane/level/bonus only (colorblind-safe TEXT).
+        /// Does NOT prefix the catalog Element ("Essence of a fallen keeper") -- that line is
+        /// lore for the unlock dialogue; on the roster card it stacked over the display name
+        /// (owner F8 2026-07-24 pet screen).</summary>
         private static string OwnedStatus(int index, string element)
         {
             var ro = EchoBonusCalculator.ReadoutFor(index);
-            string line2;
             if (ro.Lane == LaneType.Idle)
-            {
-                line2 = "Idle -- tap to assign";
-            }
-            else
-            {
-                string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
-                line2 = laneLabel + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
-                if (ro.PreferredMatch) line2 += " (best)";
-            }
-            return element + "\n" + line2;
+                return "Idle -- tap to assign";
+
+            string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
+            string line = laneLabel + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
+            if (ro.PreferredMatch) line += " (best)";
+            return line;
         }
 
-        /// <summary>Locked card status: the real unlock cadence (order K at (K-1)*perEcho waves).</summary>
+        /// <summary>Locked card status: single line (no "Locked\n" stack under the name).</summary>
         private string LockedStatus(int index)
         {
             int unlockWave = index * Mathf.Max(1, PerEcho);
-            return "Locked\nUnlocks at wave " + unlockWave;
+            return "Unlocks at wave " + unlockWave;
         }
 
         // -- Commands -----------------------------------------------------------
