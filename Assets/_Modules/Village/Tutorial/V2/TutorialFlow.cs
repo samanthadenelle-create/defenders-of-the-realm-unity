@@ -112,32 +112,119 @@ namespace DeNelle.Village
             _step != null && _step.Dialogue != null ? _step.Dialogue.Intro : null;
 
         /// <summary>
-        /// F8 2026-07-08 ("during tutorial we need to not let anything spawn. died in tutorial"):
-        /// TRUE while the first-time tutorial (FTUE) is active/incomplete — ALL ambient hostile
-        /// spawners (WaveManager auto-loop, OverworldEncounter ring reps + scatter reps,
-        /// RegionMobSpawner) consult this and stay OFF so the player cannot die mid-tutorial.
+        /// F8 2026-07-08 ("died in tutorial") + the RECURRING F8 "enemies never spawn on the whole
+        /// first run": TRUE only while the hero stands in the roster-less VILLAGE zone during the
+        /// EARLY in-town FTUE. The ambient hostile spawners (WaveManager auto-loop, OverworldEncounter
+        /// ring/scatter reps, RegionMobSpawner) consult this and stay OFF so the player cannot be
+        /// killed while learning to build the town.
         /// <para>
-        /// Robust + INSTANCE-INDEPENDENT (reads GameState, not this component, so it holds even
-        /// before/without a TutorialFlow instance): the SAME <c>!Onboarded</c> gate
-        /// <see cref="WaveManager"/>'s IsFirstRun uses, qualified by <c>ff.tutorialv2</c> so it
-        /// never affects the legacy path. <see cref="GameState.Onboarded"/> flips true ONLY in
-        /// <see cref="FinishFlow"/> -> GameStateService.FinishOnboarding (set synchronously BEFORE
-        /// the FinishFlow BeginLoop kick), so this lifts EXACTLY when the tutorial completes and
-        /// the intended post-tutorial wave loop is never blocked.
+        /// DECOUPLED from the whole first run (owner fix): the old definition suppressed for the
+        /// entire run (ff.tutorialv2 and !Onboarded), and Onboarded only flips true when the tutorial
+        /// COMPLETES/skips -- so leaving town never resumed spawns. Now the peace window lifts the
+        /// instant the hero ventures OUT of the village (or reaches the venture-out beat), resuming
+        /// ambient spawns WITHOUT cancelling the tutorial, so the guided ending (world_encounter ->
+        /// return_home -> freedom) is preserved.
         /// </para>
-        /// NOTE: the tutorial's OWN scripted encounters (TutorialWaveSpawner via
-        /// WaveManager.SpawnEnemyForExternalMode; the staged world_encounter rep) do NOT route
-        /// through the gated ambient paths, so they still fire — only the AMBIENT sources suppress.
+        /// Suppressed only when ALL hold: <c>ff.tutorialv2</c> on AND <see cref="GameState.Onboarded"/>
+        /// false (outer guard -- a completed player is NEVER suppressed); a live TutorialFlow with the
+        /// flow still running; the current step is BEFORE the venture-out beat (world_encounter, the
+        /// arena.resolved:win step -- founding_defend and earlier stay suppressed); and the hero is in
+        /// the roster-less Village zone (RegionSpawnTable.HasRoster false -- the SAME zone test the
+        /// staged-rep probe uses). Any missing ref (no instance / no hero / thrown zone lookup) FAILS
+        /// OPEN (returns false = spawns allowed) -- it never NREs and never wedges the world empty.
+        /// <para>
+        /// NOTE: the tutorial's OWN scripted encounters do NOT route through the gated ambient paths
+        /// (the founding_defend teaching wave spawns via TutorialWaveSpawner ->
+        /// WaveManager.SpawnEnemyForExternalMode; the staged world_encounter rep via EnemyFactory
+        /// directly), so they still fire regardless of this flag -- only the AMBIENT sources suppress.
+        /// </para>
         /// </summary>
         public static bool HostilesSuppressedForTutorial
         {
             get
             {
+                // Outer guard: only the V2 FTUE, and only until onboarding completes. Once Onboarded
+                // flips true (FinishFlow / SkipAll -> FinishOnboarding) this is NEVER suppressed
+                // again -- a returning player always has live hostiles.
                 if (!FeatureFlags.TutorialV2) return false;
                 var svc = GameStateService.Instance;
-                if (svc == null || svc.State == null) return false;
-                return !svc.State.Onboarded;
+                if (svc == null || svc.State == null || svc.State.Onboarded) return false;
+
+                // Decoupled from !Onboarded ALONE (the recurring bug): the peace window now holds
+                // ONLY while the hero is in-town and early in the FTUE. No instance / not started
+                // yet -> fail open (spawns allowed), never suppress the whole first run.
+                var flow = s_instance;
+                if (flow == null) return false;
+                return flow.IsInTownEarlyFtue();
             }
+        }
+
+        // -- FTUE peace window (decoupled from !Onboarded) ---------------------
+        // The single live instance (set in Awake, cleared in OnDestroy) lets the static
+        // HostilesSuppressedForTutorial getter the spawners already call consult the running
+        // flow's current step + the hero's zone. One instance ever (Bootstrap dedupes).
+        private static TutorialFlow s_instance;
+
+        // Per-frame memo: HeroHealth consults the peace window on EVERY damage tick, so the zone
+        // lookup runs at most once per frame no matter how many spawners ask.
+        private int _suppressFrame = -1;
+        private bool _suppressCached;
+
+        // Cached order of the venture-out step (world_encounter -- the arena.resolved:win beat);
+        // int.MinValue = uncomputed. Suppression holds only for steps BEFORE this order.
+        private int _ventureOutOrder = int.MinValue;
+
+        /// <summary>TRUE only while the hero stands in the roster-less Village zone during the early
+        /// in-town FTUE (before the venture-out beat). Fails open on any missing ref.</summary>
+        private bool IsInTownEarlyFtue()
+        {
+            if (_suppressFrame == Time.frameCount) return _suppressCached;
+            _suppressFrame = Time.frameCount;
+            _suppressCached = ComputeInTownEarlyFtue();
+            return _suppressCached;
+        }
+
+        private bool ComputeInTownEarlyFtue()
+        {
+            // Flow must be live -- a fresh run in progress, never idle/returning/finished.
+            if (_phase == Phase.Idle || _phase == Phase.Finished) return false;
+
+            // Boundary: suppress only for steps BEFORE the venture-out beat. founding_defend
+            // (order 45) stays suppressed and its teaching wave still fires (TutorialWaveSpawner
+            // bypasses this gate); world_encounter (50) + return_home/freedom never re-suppress.
+            // During the pre-first-step Settling window (_step == null) treat as before-boundary.
+            if (_step != null && _step.Order >= VentureOutOrder()) return false;
+
+            // Zone: the hero must be in the roster-less Village zone. HasRoster is TRUE only in
+            // OuterWorld roster regions (the SAME test as the staged-rep zone check below), so
+            // in-village = NOT HasRoster. Resolve the hero lazily; no hero -> fail open.
+            var hero = _hero != null ? _hero : (_hero = FindAnyObjectByType<HeroLocomotion>());
+            if (hero == null) return false;
+
+            Vector3 heroPos = hero.transform.position;
+            bool hasRoster = true;   // fail-open: a thrown zone lookup => treat as not-in-village
+            Guard.Try("Tutorial", "hostile-suppression zone check", () =>
+                hasRoster = DeNelle.Core.World.RegionSpawnTable.HasRoster(
+                    DeNelle.Core.World.ZoneManager.GetZone(heroPos)));
+            return !hasRoster;
+        }
+
+        /// <summary>Order of the venture-out step (world_encounter -- the arena.resolved:win beat):
+        /// the boundary below which the in-town peace window holds. int.MaxValue when no such step
+        /// exists (data change) or the chain has not loaded yet -- the zone test still gates it.</summary>
+        private int VentureOutOrder()
+        {
+            if (_ventureOutOrder != int.MinValue) return _ventureOutOrder;
+            if (_steps == null) return int.MaxValue;   // chain not loaded yet -- do not cache
+            int found = int.MaxValue;
+            foreach (var s in _steps)
+            {
+                if (s == null || s.Completion == null) continue;
+                if (string.Equals(s.Completion.Signal, TutorialSignals.ArenaWin, StringComparison.OrdinalIgnoreCase))
+                { found = s.Order; break; }
+            }
+            _ventureOutOrder = found;
+            return found;
         }
 
         private enum Phase { Idle, Settling, WaitTrigger, Running, AwaitCompletion, Finished }
@@ -214,6 +301,14 @@ namespace DeNelle.Village
             FlowTrace.Step("Tutorial", $"Bootstrap({reason}): TutorialFlow armed in hub '{scene}'.");
         }
 
+        private void Awake()
+        {
+            // Publish the single live instance so the static HostilesSuppressedForTutorial getter
+            // the spawners call can reach this flow's current step + hero zone. Set as early as
+            // possible (before Start) so the peace window can hold from the first settle frame.
+            s_instance = this;
+        }
+
         private void Start()
         {
             var svc = GameStateService.Instance;
@@ -245,6 +340,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            if (s_instance == this) s_instance = null;
             TutorialSignals.Raised -= OnSignal;
             PressureHeld = false;
         }
