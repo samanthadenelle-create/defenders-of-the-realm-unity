@@ -1,44 +1,50 @@
 // =============================================================================
-// DragonBoss — the Black Dragon flying boss encounter (apex village wave-boss).
+// DragonBoss - Syndrath the Devourer, the apex village wave-boss (WO-760).
 // -----------------------------------------------------------------------------
-// THE ASSET. Assets/Black Dragon/Dragon_Baked_Actions_fbx_7.4_binary.fbx — a
-// rigged dragon (Generic rig) with FOUR baked animation takes the .fbx.meta
-// exposes: Fly_New / Idel_New (sic) / Run_New / Walk_New. There is NO bespoke
-// Attack or Death take, so this script DRIVES the encounter in code: the dragon
-// stays on the Fly clip throughout, and Attack / Death are realised as movement
-// + VFX beats rather than dedicated clips (see docs/port-notes/dragon-boss.md).
+// THE ASSET (2026-07-23). Assets/Dragon/Prefab/Dragon.prefab - the licensed
+// Asset-Store dragon (Unity Asset Store product 71047 "Dragon Animated",
+// WDallgraphics; commercial license). It carries a full clip set
+// (dragon@idle/walk/run/fly/glide/takeoff/landing/attack1-3/bite/hit/die/die2)
+// under Assets/Dragon/Animations. It REPLACES the old free 3DHaupt dragon
+// (formerly wired via Resources/Enemies/Boss_Dragon -> Dragon.fbx) which shipped
+// under CC-BY-NC - a commercial-ship blocker - and has been removed.
 //
-// WHERE IT FITS. The Black Dragon is NOT in docs/enemy-codex.md's roster — the
-// codex is a humanoid/quadruped KayKit slate. This boss is an apex encounter:
-// "Syndrath the Devourer" — a sky-boss that circles Elarion and dives on the
-// Heart, a set-piece above the eight-boss slate. The name was owner-ratified
-// (2026-05-19); the placement — a special apex village wave, above the
-// Necromancer — is the working design.
+// This script DRIVES the encounter in code. It sets the Animator params named in
+// the DragonAnim contract (Speed/Attack/Dead + Takeoff/Fly/Landing/Grounded +
+// Attack1-3); the wired controller (DragonAnimatorSetup) exposes exactly those.
+// Every Animator call is presence-guarded (see EnsureAnimator / the _params set)
+// so a rig whose controller lacks a param simply skips it.
 //
-// MODULE ISOLATION. Lives in DeNelle.Village (it threatens the village Heart,
-// like Enemy). It implements the cross-module DeNelle.Core.Combat.IDamageable
-// seam DIRECTLY (unlike Enemy, which uses the EnemyDamageable adapter) so the
-// hero's abilities and the isolated DeNelle.Pets module can damage it without
-// referencing this concrete type — exactly the seam IDamageable was built for.
+// WHERE IT FITS. "Syndrath the Devourer" - a sky-boss set-piece above the
+// eight-boss slate (owner-ratified 2026-05-19). The apex village wave releases it.
 //
-// FLIGHT, NOT NAVMESH. A flying boss does not path a baked NavMesh. DragonBoss
-// owns its own kinematic flight (hover / circle / swoop) — no NavMeshAgent, no
-// Rigidbody. It needs only its anchor (the Heart) and clear sky.
+// MODULE ISOLATION. Lives in DeNelle.Village (it threatens the village Heart). It
+// implements the cross-module DeNelle.Core.Combat.IDamageable seam DIRECTLY so
+// the hero's abilities and the isolated DeNelle.Pets module can damage it without
+// referencing this concrete type.
 //
-// PHASES. HP-gated behaviour, mirroring the codex's boss vocabulary (§4):
-//   Phase 1 (100-60%) — The Circling: high lazy orbit, occasional fire-breath.
-//   Phase 2 (60-25%)  — The Stooping: tighter/faster orbit, dive-bomb swoops.
-//   Phase 3 (25-0%)   — The Last Wing: relentless swoops, no respite.
-//   Death             — a long spiralling fall, then destroy.
+// FLIGHT, NOT NAVMESH. The dragon owns its own kinematic flight (fly-in / descend
+// / grounded-fire / climb / orbit / swoop) - no NavMeshAgent, no Rigidbody. Ground
+// height for the land-point is sampled with a guarded downward raycast (fallback
+// y = 0); nothing here depends on a baked NavMesh.
 //
-// ANIMATOR. The dragon rig carries an Animator; the integrator assigns
-// Assets/Generated/Animators/Dragon.controller (built by DragonAnimatorSetup).
-// This script drives it by the parameter names DragonAnimatorSetup writes:
-// Speed (float), Attack (trigger), Dead (bool). Every Animator call is
-// null-guarded — a dragon with no Animator still flies its full encounter.
+// SEQUENCE (WO-760, owner intent verbatim): the dragon "flies into town, lands,
+// and uses fire attacks to burn towers. After all towers are destroyed then
+// targets the tree of life." The behaviour is therefore a SEQUENCE state machine
+// (DragonState), not a pure HP-orbit:
+//   Approaching  - spawns off-map at altitude and flies in toward the town.
+//   Landing      - descends to a ground point beside the nearest tower.
+//   BurnTowers   - grounded; fire-attacks the nearest live DefenseTower/ArcaneTower,
+//                  advancing target-to-target until none remain alive.
+//   RetargetTree - takes off, retargets the Heart (Heart -> Boss state).
+//   Finale       - the original orbit + dive-swoop + fire-breath, aimed at the Heart.
+//   Death        - a long spiralling fall, then destroy.
+// HP still modulates aggression (DragonPhase: Circling/Stooping/LastWing) for the
+// phase auras + boss-bar label; the STATE progression above is the sequence.
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
@@ -46,45 +52,89 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// The flight behaviour phase the dragon is currently in. HP-threshold gated
-    /// — see <see cref="DragonBoss.ResolvePhase"/>.
+    /// The shared Animator parameter-name contract between <see cref="DragonBoss"/>
+    /// (which sets these) and <see cref="DeNelle.Editor.DragonAnimatorSetup"/> (which
+    /// declares them on the built controller). DeNelle.Editor cannot reference this
+    /// assembly, so the builder mirrors these string literals verbatim - they MUST
+    /// stay identical on both sides.
+    /// </summary>
+    public static class DragonAnim
+    {
+        /// <summary>Float - locomotion blend (Idle &lt;-&gt; Fly).</summary>
+        public const string Speed = "Speed";
+        /// <summary>Trigger - the legacy generic strike beat (finale swoop / breath).</summary>
+        public const string Attack = "Attack";
+        /// <summary>Bool - death latch.</summary>
+        public const string Dead = "Dead";
+        /// <summary>Trigger - launch from the ground into flight.</summary>
+        public const string Takeoff = "Takeoff";
+        /// <summary>Bool - true while airborne.</summary>
+        public const string Fly = "Fly";
+        /// <summary>Trigger - descend and settle to the ground.</summary>
+        public const string Landing = "Landing";
+        /// <summary>Bool - true while grounded (burning towers).</summary>
+        public const string Grounded = "Grounded";
+        /// <summary>Trigger - grounded fire attack variant 1.</summary>
+        public const string Attack1 = "Attack1";
+        /// <summary>Trigger - grounded fire attack variant 2.</summary>
+        public const string Attack2 = "Attack2";
+        /// <summary>Trigger - grounded fire attack variant 3.</summary>
+        public const string Attack3 = "Attack3";
+    }
+
+    /// <summary>
+    /// HP-threshold aggression phase - drives the phase auras + the boss-bar label
+    /// (BossHealthBar). Distinct from <see cref="DragonState"/>, which drives the
+    /// fly-in -&gt; land -&gt; burn -&gt; Tree sequence.
     /// </summary>
     public enum DragonPhase
     {
-        /// <summary>Phase 1 (100-60% HP) — high lazy orbit, occasional fire-breath.</summary>
+        /// <summary>Phase 1 (100-60% HP) - calm.</summary>
         Circling = 0,
-        /// <summary>Phase 2 (60-25% HP) — tighter, faster orbit punctuated by dive-swoops.</summary>
+        /// <summary>Phase 2 (60-25% HP) - enraged.</summary>
         Stooping = 1,
-        /// <summary>Phase 3 (25-0% HP) — relentless swoops, no respite.</summary>
+        /// <summary>Phase 3 (25-0% HP) - seething.</summary>
         LastWing = 2,
-        /// <summary>HP zero — the long spiralling fall to the ground.</summary>
+        /// <summary>HP zero - the long spiralling fall to the ground.</summary>
         Falling = 3,
     }
 
     /// <summary>
-    /// The Black Dragon flying boss — an apex set-piece encounter for the Elarion
-    /// village. Circles the Heart on its own kinematic flight, dives to strike,
-    /// loses HP through three behaviour phases and dies in a spiralling fall.
-    /// Implements <see cref="IDamageable"/> directly so the hero and the isolated
-    /// pets module can damage it through the Core seam.
+    /// The behaviour-sequence state the dragon is currently in (WO-760). State
+    /// PROGRESSION is scripted (not HP-gated): fly in, land, burn every tower, then
+    /// take off and finish on the Heart.
     /// </summary>
-    /// <remarks>
-    /// Boss name "Syndrath the Devourer" — owner-ratified 2026-05-19. The
-    /// apex-wave placement is the working design (see docs/port-notes/dragon-boss.md).
-    /// </remarks>
+    public enum DragonState
+    {
+        /// <summary>Spawned off-map at altitude; flying in toward the town.</summary>
+        Approaching = 0,
+        /// <summary>Descending to a ground point beside the nearest tower.</summary>
+        Landing = 1,
+        /// <summary>Grounded; fire-attacking towers one after another.</summary>
+        BurnTowers = 2,
+        /// <summary>Taking off and retargeting the Heart of Elarion.</summary>
+        RetargetTree = 3,
+        /// <summary>Orbit + dive-swoop + fire-breath finale, aimed at the Heart.</summary>
+        Finale = 4,
+    }
+
+    /// <summary>
+    /// The apex dragon boss - Syndrath the Devourer. Flies into the village, lands,
+    /// burns the defensive towers, then takes off and finishes on the Heart in a
+    /// swooping fire-breath finale. Implements <see cref="IDamageable"/> directly so
+    /// the hero and the isolated pets module can damage it through the Core seam.
+    /// </summary>
+    /// <remarks>Boss name "Syndrath the Devourer" - owner-ratified 2026-05-19.</remarks>
     [DisallowMultipleComponent]
     public sealed class DragonBoss : MonoBehaviour, IDamageable, ICombatLayered
     {
-        // ── Identity ──────────────────────────────────────────────────────────
+        // -- Identity --------------------------------------------------------------
 
         [Header("Identity")]
-        [Tooltip("Stable per-instance id — e.g. 'boss-dragon-1'.")]
+        [Tooltip("Stable per-instance id - e.g. 'boss-dragon-1'.")]
         [SerializeField] private string _bossId = "boss-dragon";
 
-        // ── Stats ─────────────────────────────────────────────────────────────
-        // Anchored well above the Necromancer of the Wound (canon hp 1700) — the
-        // dragon is the apex village boss. Tunable; the data layer can override
-        // via Configure.
+        // -- Stats -----------------------------------------------------------------
 
         [Header("Stats")]
         [Tooltip("Current hit points.")]
@@ -94,19 +144,19 @@ namespace DeNelle.Village
         [SerializeField] private float _maxHp = 4200f;
 
         // Owner directive 2026-07-10: dragon damage reduced 75% (now 0.25x). Was 60/34.
-        [Tooltip("Damage dealt to the Heart / a structure per swoop strike.")]
+        [Tooltip("Damage dealt to the Heart / a structure per swoop strike (finale).")]
         [SerializeField] private float _swoopDamage = 15f;
 
-        [Tooltip("Damage dealt by a fire-breath pass.")]
+        [Tooltip("Damage dealt by a fire-breath pass (finale).")]
         [SerializeField] private float _breathDamage = 8.5f;
 
-        // ── Flight tuning ─────────────────────────────────────────────────────
+        // -- Flight tuning ---------------------------------------------------------
 
-        [Header("Flight — orbit")]
-        [Tooltip("Radius of the lazy Phase-1 orbit around the anchor (world units).")]
+        [Header("Flight - orbit (finale)")]
+        [Tooltip("Radius of the lazy Phase-1 orbit around the Heart (world units).")]
         [SerializeField] private float _orbitRadius = 26f;
 
-        [Tooltip("Cruise height the dragon holds above the anchor while orbiting.")]
+        [Tooltip("Cruise height the dragon holds above the Heart while orbiting.")]
         [SerializeField] private float _orbitHeight = 22f;
 
         [Tooltip("Angular orbit speed in Phase 1 (degrees / second).")]
@@ -115,17 +165,17 @@ namespace DeNelle.Village
         [Tooltip("Forward flight speed used to drive the Animator Speed blend.")]
         [SerializeField] private float _cruiseSpeed = 14f;
 
-        [Header("Flight — swoop")]
+        [Header("Flight - swoop (finale)")]
         [Tooltip("Lowest height the dragon reaches at the bottom of a dive-swoop.")]
         [SerializeField] private float _swoopLowHeight = 4.5f;
 
         [Tooltip("Seconds a full dive-and-climb swoop takes.")]
         [SerializeField] private float _swoopDuration = 3.4f;
 
-        [Tooltip("Distance from the anchor at which a swoop counts as 'striking'.")]
+        [Tooltip("Distance from the Heart at which a swoop counts as 'striking'.")]
         [SerializeField] private float _strikeRadius = 7f;
 
-        [Header("Attack cadence")]
+        [Header("Attack cadence (finale)")]
         [Tooltip("Seconds between attacks in Phase 1 (fire-breath passes).")]
         [SerializeField] private float _phase1AttackInterval = 6.5f;
 
@@ -135,93 +185,152 @@ namespace DeNelle.Village
         [Tooltip("Seconds between attacks in Phase 3 (relentless swoops).")]
         [SerializeField] private float _phase3AttackInterval = 2.6f;
 
+        // -- Fly-in / land sequence (WO-760) ---------------------------------------
+
+        [Header("Fly-in / land sequence (WO-760)")]
+        [Tooltip("Horizontal distance off-map the dragon spawns before flying in.")]
+        [SerializeField] private float _approachDistance = 85f;
+
+        [Tooltip("Altitude the dragon holds on the fly-in approach.")]
+        [SerializeField] private float _approachHeight = 34f;
+
+        [Tooltip("Forward speed during the fly-in approach.")]
+        [SerializeField] private float _approachSpeed = 22f;
+
+        [Tooltip("Horizontal distance to the town aim-point at which the dragon begins its landing descent.")]
+        [SerializeField] private float _landTriggerDist = 14f;
+
+        [Tooltip("Descent speed while landing.")]
+        [SerializeField] private float _descendSpeed = 12f;
+
+        [Tooltip("How far from the target tower the dragon sets down (metres).")]
+        [SerializeField] private float _landStandoff = 7f;
+
+        [Tooltip("Distance to the land spot that counts as 'grounded'.")]
+        [SerializeField] private float _groundReachDist = 1.2f;
+
+        [Tooltip("Seconds the takeoff climb to the orbit ring takes before the finale.")]
+        [SerializeField] private float _takeoffSeconds = 1.6f;
+
+        // -- Burn towers (WO-760) --------------------------------------------------
+
+        [Header("Burn towers (WO-760)")]
+        [Tooltip("Seconds between grounded fire attacks on a tower.")]
+        [SerializeField] private float _groundBurnInterval = 2.2f;
+
+        [Tooltip("Damage dealt to a tower per grounded fire attack.")]
+        [SerializeField] private float _towerFireDamage = 22f;
+
+        [Tooltip("Seconds of Burn applied to a tower per fire attack (if the target supports it).")]
+        [SerializeField] private float _burnSeconds = 3f;
+
+        [Tooltip("Placeholder fire impact burst played at the target on each fire attack. WO-757 replaces this with the sustained breath cone.")]
+        [SerializeField] private VFXType _fireAttackVfx = VFXType.Impact_ExplosionFire;
+
         [Header("Death")]
         [Tooltip("Seconds the spiralling death fall takes before the dragon is destroyed.")]
         [SerializeField] private float _deathFallSeconds = 4.5f;
 
-        // ── Phase VFX (WO-66) ─────────────────────────────────────────────────
-        // Boss-fight visual phases driven entirely off the boss's own HP/state
-        // events (PhaseChanged / StruckHeart / Died) through the canonical
-        // DeNelle.Village VFXManager. Pooled (VFXManager owns the pool) — no
-        // per-frame alloc; auras are loop handles swapped once per transition.
+        // -- Phase VFX (WO-66) -----------------------------------------------------
 
         [Header("Phase VFX (WO-66)")]
-        [Tooltip("Master toggle — play phase-transition bursts, phase auras and " +
+        [Tooltip("Master toggle - play phase-transition bursts, phase auras and " +
                  "attack telegraphs through VFXManager. Off = silent (e.g. low-end).")]
         [SerializeField] private bool _phaseVfxEnabled = true;
 
         [Tooltip("One-shot enrage burst played at the boss when it crosses an HP threshold.")]
         [SerializeField] private VFXType _phaseTransitionVfx = VFXType.Boss_PhaseTransition;
 
-        [Tooltip("Wind-up tell played on the boss just before a swoop / fire-breath special.")]
+        [Tooltip("Wind-up tell played on the boss just before a swoop / fire attack.")]
         [SerializeField] private VFXType _telegraphVfx = VFXType.Boss_Telegraph;
 
-        [Tooltip("Oneshot impact burst at the Heart when a swoop / breath strike lands.")]
+        [Tooltip("Oneshot impact burst at the target when a swoop / breath / fire attack lands.")]
         [SerializeField] private VFXType _strikeImpactVfx = VFXType.Boss_AttackImpact;
 
         [Tooltip("Oneshot burst at the boss on death.")]
         [SerializeField] private VFXType _deathVfx = VFXType.Boss_Death;
 
-        [Tooltip("Persistent phase aura for Phase 1 (Circling) — calm.")]
+        [Tooltip("Persistent phase aura for Phase 1 (Circling) - calm.")]
         [SerializeField] private VFXType _phase1Aura = VFXType.Boss_Aura_Phase1;
 
-        [Tooltip("Persistent phase aura for Phase 2 (Stooping) — enraged.")]
+        [Tooltip("Persistent phase aura for Phase 2 (Stooping) - enraged.")]
         [SerializeField] private VFXType _phase2Aura = VFXType.Boss_Aura_Phase2;
 
-        [Tooltip("Persistent phase aura for Phase 3 (LastWing) — seething.")]
+        [Tooltip("Persistent phase aura for Phase 3 (LastWing) - seething.")]
         [SerializeField] private VFXType _phase3Aura = VFXType.Boss_Aura_Phase3;
 
-        // The single live aura loop handle — swapped (Stop old, Play new) on each
+        // The single live aura loop handle - swapped (Stop old, Play new) on each
         // phase transition so only ONE aura is ever attached to the boss.
         private VFXHandle _auraHandle;
 
-        // ── Phase thresholds (HP fraction) ────────────────────────────────────
+        // -- Phase thresholds (HP fraction) ----------------------------------------
 
-        /// <summary>Phase 1 → Phase 2 boundary — 60% HP.</summary>
+        /// <summary>Phase 1 -> Phase 2 boundary - 60% HP.</summary>
         private const float Phase2Threshold = 0.60f;
 
-        /// <summary>Phase 2 → Phase 3 boundary — 25% HP.</summary>
+        /// <summary>Phase 2 -> Phase 3 boundary - 25% HP.</summary>
         private const float Phase3Threshold = 0.25f;
 
-        // ── Runtime refs / state ──────────────────────────────────────────────
+        // -- Runtime refs / state --------------------------------------------------
 
-        private Transform _anchor;            // the Heart — what the dragon menaces
-        private IDamageableStructure _heartStructure; // optional — set by Configure
+        private Transform _anchor;                     // the Heart - the finale goal
+        private IDamageableStructure _heartStructure;  // the Heart as a damageable structure
+        private HeartController _heart;                 // the Heart controller (SetState hook)
         private DragonPhase _phase = DragonPhase.Circling;
-        private float _orbitAngleDeg;         // current position on the orbit ring
+        private DragonState _state = DragonState.Approaching;
+
+        // The current fire target - a tower while burning, the Heart in the finale.
+        private IDamageableStructure _currentTarget;
+        private Transform _currentTargetTf;
+
+        // Tower-destroyed subscriptions (advance-to-next signal) - one at a time.
+        private DefenseTower _subbedTower;
+        private ArcaneTower _subbedArcane;
+        private bool _retargetNow;                     // set by a Destroyed event
+
+        private Vector3 _landSpot;                      // ground point to set down on
+        private float _retargetElapsed;                 // takeoff-climb timer
+        private int _attackVariant;                     // cycles Attack1/2/3
+
+        private float _orbitAngleDeg;                   // current position on the orbit ring
         private float _attackCooldown;
-        private float _swoopElapsed;          // >0 while a swoop is mid-flight
-        private bool _swoopStruck;            // true once the current swoop landed its hit
+        private float _swoopElapsed;                    // >0 while a swoop is mid-flight
+        private bool _swoopStruck;                      // true once the current swoop landed its hit
         private float _deathElapsed;
+        private Vector3 _deathCenter;                   // where the death spiral is centred
         private bool _dead;
-        private Vector3 _anchorFallback;      // home position if no anchor is wired
-        private float _shownSpeed;            // smoothed Speed pushed to the Animator
+        private Vector3 _anchorFallback;                // home position if no anchor is wired
+        private float _shownSpeed;                      // smoothed Speed pushed to the Animator
 
-        // ── Animation ─────────────────────────────────────────────────────────
-        // Dragon.controller (DragonAnimatorSetup) — parameter names MUST match.
+        // -- Animation -------------------------------------------------------------
+        // Dragon.controller (DragonAnimatorSetup) - parameter names MUST match the
+        // DragonAnim contract. Presence is cached into _params so a controller that
+        // omits a param never logs a per-call "parameter not found".
         private Animator _animator;
-        private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
-        private static readonly int AnimAttack = Animator.StringToHash("Attack");
-        private static readonly int AnimDead   = Animator.StringToHash("Dead");
-        // WO-163: cached once when the Animator resolves — whether this rig's
-        // controller declares each param. Driving an absent param logs every
-        // frame (Speed) / on each event (Attack/Dead). Guard all setter calls.
-        private bool _hasSpeedParam;
-        private bool _hasAttackParam;
-        private bool _hasDeadParam;
+        private static readonly int HSpeed    = Animator.StringToHash(DragonAnim.Speed);
+        private static readonly int HAttack   = Animator.StringToHash(DragonAnim.Attack);
+        private static readonly int HDead     = Animator.StringToHash(DragonAnim.Dead);
+        private static readonly int HTakeoff  = Animator.StringToHash(DragonAnim.Takeoff);
+        private static readonly int HFly      = Animator.StringToHash(DragonAnim.Fly);
+        private static readonly int HLanding  = Animator.StringToHash(DragonAnim.Landing);
+        private static readonly int HGrounded = Animator.StringToHash(DragonAnim.Grounded);
+        private static readonly int HAttack1  = Animator.StringToHash(DragonAnim.Attack1);
+        private static readonly int HAttack2  = Animator.StringToHash(DragonAnim.Attack2);
+        private static readonly int HAttack3  = Animator.StringToHash(DragonAnim.Attack3);
+        private readonly HashSet<int> _params = new HashSet<int>();
 
-        // ── Events ────────────────────────────────────────────────────────────
+        // -- Events ----------------------------------------------------------------
 
         /// <summary>Raised when the dragon's HP reaches zero. Arg = this boss.</summary>
         public event Action<DragonBoss> Died;
 
-        /// <summary>Raised each time the boss crosses into a new flight phase.</summary>
+        /// <summary>Raised each time the boss crosses into a new HP-aggression phase.</summary>
         public event Action<DragonPhase> PhaseChanged;
 
-        /// <summary>Raised when a swoop strike or fire-breath lands on the anchor.</summary>
+        /// <summary>Raised when a swoop / fire-breath strike lands on the Heart (finale).</summary>
         public event Action<float> StruckHeart;
 
-        // ── Public surface ────────────────────────────────────────────────────
+        // -- Public surface --------------------------------------------------------
 
         /// <summary>Stable per-instance id.</summary>
         public string BossId => _bossId;
@@ -229,28 +338,31 @@ namespace DeNelle.Village
         /// <summary>Max hit points.</summary>
         public float MaxHp => _maxHp;
 
-        /// <summary>HP as a 0..1 fraction — drives the boss HP bar.</summary>
+        /// <summary>HP as a 0..1 fraction - drives the boss HP bar.</summary>
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
-        /// <summary>The flight phase the dragon is currently in.</summary>
+        /// <summary>The HP-aggression phase the dragon is currently in.</summary>
         public DragonPhase Phase => _phase;
+
+        /// <summary>The behaviour-sequence state the dragon is currently in (WO-760).</summary>
+        public DragonState State => _state;
 
         /// <summary>True once the dragon has died (HP hit zero).</summary>
         public bool IsDead => _dead;
 
-        // ── IDamageable (Core combat seam) ────────────────────────────────────
+        // -- IDamageable (Core combat seam) ----------------------------------------
 
         /// <summary>The dragon is hostile to the village's defenders.</summary>
         public CombatFaction Faction => CombatFaction.Hostile;
 
         /// <summary>
-        /// ICombatLayered — the apex dragon FLIES, so only anti-air (or "both")
-        /// towers can acquire and fire at it. This is the canonical flyer in the
-        /// air/ground targeting matrix.
+        /// ICombatLayered - the dragon is Flying while airborne. It briefly sets down
+        /// to burn towers, but stays the canonical flyer in the air/ground targeting
+        /// matrix (the anti-air Ballista is its counter) throughout the encounter.
         /// </summary>
         public CombatLayer Layer => CombatLayer.Flying;
 
-        /// <summary>World position of the dragon — used by range / nearest queries.</summary>
+        /// <summary>World position of the dragon - used by range / nearest queries.</summary>
         public Vector3 WorldPosition => transform.position;
 
         /// <summary>Current hit points. Non-positive means dead.</summary>
@@ -259,59 +371,72 @@ namespace DeNelle.Village
         /// <summary>True while the dragon is alive and a valid attack target.</summary>
         public bool IsAlive => !_dead && _hp > 0f;
 
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
         // Configuration
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
 
         /// <summary>
         /// Wires the dragon for an encounter. Called by the wave / encounter
-        /// controller right after instantiation.
+        /// controller right after instantiation. Repositions the dragon to an
+        /// off-map approach start so it FLIES IN (WO-760) - the caller's spawn
+        /// position is only a seed for the anchor/home point.
         /// </summary>
         /// <param name="bossId">Stable per-instance id.</param>
-        /// <param name="anchor">The Heart transform — the dragon's orbit centre and strike goal.</param>
-        /// <param name="maxHp">Optional max HP override (≤0 keeps the inspector value).</param>
+        /// <param name="anchor">The Heart transform - the finale target + orbit centre.</param>
+        /// <param name="maxHp">Optional max HP override (&lt;=0 keeps the inspector value).</param>
         public void Configure(string bossId, Transform anchor, float maxHp = 0f)
         {
             if (!string.IsNullOrEmpty(bossId)) _bossId = bossId;
             _anchor = anchor;
 
-            if (maxHp > 0f)
-            {
-                _maxHp = maxHp;
-            }
+            if (maxHp > 0f) _maxHp = maxHp;
             _hp = _maxHp;
 
-            // The anchor may also be an attackable structure (the Heart). If it
-            // is, swoop strikes route real contact damage into it; if not, the
-            // StruckHeart event still fires for the encounter controller to use.
+            // The anchor is the Heart: both the finale damage target and the state hook.
             if (anchor != null)
+            {
                 _heartStructure = anchor.GetComponentInParent<IDamageableStructure>();
+                _heart = anchor.GetComponentInParent<HeartController>();
+            }
 
             _dead = false;
             _deathElapsed = 0f;
             _phase = DragonPhase.Circling;
+            _state = DragonState.Approaching;
             _attackCooldown = _phase1AttackInterval;
             _swoopElapsed = 0f;
             _swoopStruck = false;
+            _retargetNow = false;
+            _retargetElapsed = 0f;
+            _currentTarget = null;
+            _currentTargetTf = null;
+            UnsubTower();
 
-            // Boss-fight phase VFX — attach the calm Phase-1 aura now. Later
-            // phases swap it via PlayPhaseAura on each PhaseChanged.
+            // Fly-in start: off-map at altitude, on a random compass bearing from the
+            // town centre, so the dragon reads as arriving from the horizon.
+            Vector3 centre = AnchorPosition();
+            float ang = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            Vector3 dir = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+            transform.position = centre + dir * _approachDistance + Vector3.up * _approachHeight;
+            SetGroundedFlags(false);
+
+            FlowTrace.Step("DragonBoss",
+                $"'{_bossId}' Configure -> Approaching from {transform.position} " +
+                $"(town centre {centre}, maxHp {_maxHp:0}).");
+
+            // Boss-fight phase VFX - attach the calm Phase-1 aura now.
             PlayPhaseAura(_phase);
         }
 
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
         // Lifecycle
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
 
         private void Awake()
         {
             EnsureAnimator();
             EnsureHitCollider();
-            // Remember a home point so a dragon with no wired anchor still flies
-            // a sane orbit instead of collapsing onto the origin.
             _anchorFallback = transform.position;
-            // Seed the orbit angle from the spawn position so multiple dragons
-            // (or a re-spawn) do not all start at the same point on the ring.
             _orbitAngleDeg = UnityEngine.Random.Range(0f, 360f);
         }
 
@@ -326,31 +451,370 @@ namespace DeNelle.Village
                 return;
             }
 
-            ResolvePhase();
+            ResolvePhase();   // HP-aggression phase (aura + boss-bar label)
 
-            // Flight — a swoop, if one is mid-flight, otherwise the orbit.
             float frameSpeed;
-            if (_swoopElapsed > 0f)
-                frameSpeed = TickSwoop(dt);
-            else
-                frameSpeed = TickOrbit(dt);
+            switch (_state)
+            {
+                case DragonState.Approaching:  frameSpeed = TickApproach(dt);     break;
+                case DragonState.Landing:      frameSpeed = TickLanding(dt);      break;
+                case DragonState.BurnTowers:   frameSpeed = TickBurnTowers(dt);   break;
+                case DragonState.RetargetTree: frameSpeed = TickRetargetTree(dt); break;
+                default:                       frameSpeed = TickFinale(dt);       break;
+            }
 
-            TickAttackCadence(dt);
             DriveAnimator(frameSpeed);
         }
 
-        // ---------------------------------------------------------------------
-        // Phase resolution
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Sequence: Approaching (fly-in)
+        // -------------------------------------------------------------------------
 
         /// <summary>
-        /// Re-derives the flight phase from current HP and raises
-        /// <see cref="PhaseChanged"/> on a transition.
+        /// Flies in from the off-map spawn toward the town aim-point (the nearest live
+        /// tower, or the Heart if there are none), descending from the approach height.
+        /// Begins the landing descent once within <see cref="_landTriggerDist"/>.
+        /// </summary>
+        private float TickApproach(float dt)
+        {
+            SetGroundedFlags(false);
+
+            Vector3 aim = TownAimPos();
+            Vector3 goal = new Vector3(aim.x, AnchorPosition().y + _orbitHeight, aim.z);
+
+            Vector3 prev = transform.position;
+            transform.position = Vector3.MoveTowards(prev, goal, _approachSpeed * dt);
+            FaceTravel(transform.position - prev);
+
+            Vector3 flat = transform.position - aim;
+            flat.y = 0f;
+            if (flat.magnitude <= _landTriggerDist)
+                EnterLanding(aim);
+
+            return _approachSpeed;
+        }
+
+        /// <summary>Begins the landing descent onto a ground spot beside <paramref name="aimPos"/>.</summary>
+        private void EnterLanding(Vector3 aimPos)
+        {
+            _landSpot = LandSpotNear(aimPos);
+            AnimTrigger(HLanding);
+            _state = DragonState.Landing;
+            FlowTrace.Step("DragonBoss", $"'{_bossId}' Approaching -> Landing at {_landSpot}.");
+        }
+
+        // -------------------------------------------------------------------------
+        // Sequence: Landing
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Descends to <see cref="_landSpot"/> and settles grounded. On touchdown it
+        /// enters BurnTowers if any tower is alive, else goes straight to RetargetTree.
+        /// </summary>
+        private float TickLanding(float dt)
+        {
+            Vector3 prev = transform.position;
+            transform.position = Vector3.MoveTowards(prev, _landSpot, _descendSpeed * dt);
+            FaceTravel(transform.position - prev);
+
+            if ((transform.position - _landSpot).sqrMagnitude <= _groundReachDist * _groundReachDist)
+            {
+                SetGroundedFlags(true);
+                if (NearestAliveTower(out var s, out var mb, out _))
+                {
+                    SetTowerTarget(s, mb);
+                    _attackCooldown = 0.4f;   // a beat before the first fire attack
+                    _state = DragonState.BurnTowers;
+                    FlowTrace.Step("DragonBoss",
+                        $"'{_bossId}' Landing -> BurnTowers (first target '{(mb != null ? mb.name : "<tower>")}').");
+                }
+                else
+                {
+                    EnterRetargetTree("no towers present at touchdown");
+                }
+            }
+
+            return _descendSpeed;
+        }
+
+        // -------------------------------------------------------------------------
+        // Sequence: BurnTowers (grounded)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Grounded fire loop: faces the current tower and fire-attacks it on a
+        /// cadence. Advances to the nearest remaining tower when the current one dies
+        /// (driven by the Destroyed event or an IsAlive re-check). Once no tower is
+        /// alive it takes off and retargets the Heart.
+        /// </summary>
+        private float TickBurnTowers(float dt)
+        {
+            SetGroundedFlags(true);
+
+            if (_retargetNow || _currentTarget == null || !_currentTarget.IsAlive)
+            {
+                _retargetNow = false;
+                if (NearestAliveTower(out var s, out var mb, out _))
+                {
+                    SetTowerTarget(s, mb);
+                }
+                else
+                {
+                    EnterRetargetTree("all towers destroyed");
+                    return 0f;
+                }
+            }
+
+            Vector3 tp = _currentTargetTf != null ? _currentTargetTf.position : AnchorPosition();
+            FacePoint(tp, dt);
+
+            _attackCooldown -= dt;
+            if (_attackCooldown <= 0f)
+            {
+                _attackCooldown = _groundBurnInterval;
+                FireAtTower(tp);
+            }
+
+            return 0f;   // grounded - Speed near zero so the idle/grounded pose plays
+        }
+
+        /// <summary>
+        /// One grounded fire attack on the current tower: an Attack1/2/3 clip, a fire
+        /// impact burst at the target, contact damage, and a Burn if the target
+        /// supports it. WO-757 replaces the placeholder impact with the breath cone.
+        /// </summary>
+        private void FireAtTower(Vector3 targetPos)
+        {
+            // Cycle the three grounded attack clips for variety.
+            _attackVariant = (_attackVariant + 1) % 3;
+            switch (_attackVariant)
+            {
+                case 0:  AnimTrigger(HAttack1); break;
+                case 1:  AnimTrigger(HAttack2); break;
+                default: AnimTrigger(HAttack3); break;
+            }
+
+            PlayTelegraph();
+
+            // FIRE VFX (placeholder). Everything routes through the single VFXManager
+            // pool - no second VFX stack (WO-760 landmine).
+            // WO-757: Boss_FireBreath cone slots in here (a sustained mouth-socket cone
+            // aimed at the tower) to replace these one-shot impact bursts.
+            if (_phaseVfxEnabled)
+            {
+                if (_fireAttackVfx != VFXType.None) VFXManager.Play(_fireAttackVfx, targetPos);
+                if (_strikeImpactVfx != VFXType.None) VFXManager.Play(_strikeImpactVfx, targetPos);
+            }
+
+            if (_currentTarget != null && _currentTarget.IsAlive)
+                _currentTarget.ApplyContactDamage(_towerFireDamage);
+
+            TryApplyBurn(_currentTargetTf);
+
+            DeNelle.Village.GameSfx.PlayDragonRoar();
+
+            FlowTrace.Throttle("DragonBoss", $"burn:{GetInstanceID()}", 1f,
+                $"'{_bossId}' fire-attacks tower for {_towerFireDamage:0.#} (variant {_attackVariant + 1}).");
+        }
+
+        /// <summary>
+        /// Applies Burn to the target if it supports the <see cref="IDamageable"/>
+        /// status seam. Towers are <see cref="IDamageableStructure"/> (no ApplyStatus),
+        /// so this is a guarded no-op for them today - forward-compatible for a burnable
+        /// tower. The dragon's contact damage always lands regardless.
+        /// </summary>
+        private void TryApplyBurn(Transform targetTf)
+        {
+            if (targetTf == null || _burnSeconds <= 0f) return;
+            Guard.Try("DragonBoss", "apply burn to fire target", () =>
+            {
+                var dmg = targetTf.GetComponentInParent<IDamageable>();
+                if (dmg != null) dmg.ApplyStatus(StatusEffect.Burn, _burnSeconds);
+            });
+        }
+
+        // -------------------------------------------------------------------------
+        // Sequence: RetargetTree (takeoff -> Heart)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Takes off, retargets the Heart of Elarion, flips the Heart into its Boss
+        /// state, and starts the climb to the orbit ring. The finale resumes once the
+        /// climb completes.
+        /// </summary>
+        private void EnterRetargetTree(string why)
+        {
+            UnsubTower();
+            _currentTarget = _heartStructure;
+            _currentTargetTf = _anchor;
+            if (_heart != null) _heart.SetState(HeartState.Boss);
+
+            SetGroundedFlags(false);
+            AnimTrigger(HTakeoff);
+            _retargetElapsed = 0f;
+            _state = DragonState.RetargetTree;
+
+            FlowTrace.Step("DragonBoss",
+                $"'{_bossId}' BurnTowers -> RetargetTree ({why}) - takeoff, Heart -> Boss, finale next.");
+        }
+
+        /// <summary>Climbs from the ground back up to the orbit ring, then hands to the finale.</summary>
+        private float TickRetargetTree(float dt)
+        {
+            SetGroundedFlags(false);
+
+            Vector3 centre = AnchorPosition();
+            Vector3 target = new Vector3(transform.position.x, centre.y + _orbitHeight, transform.position.z);
+            Vector3 prev = transform.position;
+            transform.position = Vector3.MoveTowards(prev, target, _cruiseSpeed * 1.2f * dt);
+            FaceTravel(transform.position - prev);
+
+            _retargetElapsed += dt;
+            bool atRing = Mathf.Abs(transform.position.y - (centre.y + _orbitHeight)) < 3f;
+            if (_retargetElapsed >= _takeoffSeconds && atRing)
+            {
+                // Seed the orbit angle from the current position so the finale orbit
+                // continues smoothly from where the climb ended.
+                Vector3 d = transform.position - centre;
+                _orbitAngleDeg = Mathf.Atan2(d.z, d.x) * Mathf.Rad2Deg;
+                _attackCooldown = CurrentAttackInterval();
+                _state = DragonState.Finale;
+                FlowTrace.Step("DragonBoss", $"'{_bossId}' RetargetTree -> Finale (orbit + swoop on the Heart).");
+            }
+
+            return _cruiseSpeed * 1.2f;
+        }
+
+        // -------------------------------------------------------------------------
+        // Sequence: Finale (the original orbit / swoop / fire-breath, on the Heart)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// The finale: orbit the Heart, punctuated by dive-swoops and fire-breath
+        /// passes - the original apex-boss behaviour, now retargeted onto
+        /// <see cref="_currentTarget"/> (the Heart). HP still gates the aggression.
+        /// </summary>
+        private float TickFinale(float dt)
+        {
+            float frameSpeed = _swoopElapsed > 0f ? TickSwoop(dt) : TickOrbit(dt);
+            TickAttackCadence(dt);
+            return frameSpeed;
+        }
+
+        // -------------------------------------------------------------------------
+        // Target enumeration + selection
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// The horizontal aim-point for the fly-in / land: the nearest live tower's
+        /// position, or the Heart if there are none.
+        /// </summary>
+        private Vector3 TownAimPos()
+        {
+            if (NearestAliveTower(out _, out _, out var p)) return p;
+            return AnchorPosition();
+        }
+
+        /// <summary>
+        /// Finds the nearest live defensive tower (<see cref="DefenseTower"/> or
+        /// <see cref="ArcaneTower"/>) by the established <c>IsAlive</c> filter. Returns
+        /// false when no tower is alive - the "all towers destroyed" gate.
+        /// </summary>
+        private bool NearestAliveTower(out IDamageableStructure best, out MonoBehaviour bestMb, out Vector3 bestPos)
+        {
+            best = null;
+            bestMb = null;
+            bestPos = default;
+            float bestSqr = float.MaxValue;
+            Vector3 here = transform.position;
+
+            foreach (var t in FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
+            {
+                if (t == null || !t.IsAlive) continue;
+                float sqr = (t.transform.position - here).sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = t; bestMb = t; bestPos = t.transform.position; }
+            }
+            foreach (var a in FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
+            {
+                if (a == null || !a.IsAlive) continue;
+                float sqr = (a.transform.position - here).sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = a; bestMb = a; bestPos = a.transform.position; }
+            }
+            return best != null;
+        }
+
+        /// <summary>
+        /// Sets the current fire target to a tower and subscribes to its Destroyed
+        /// event so the burn loop advances the instant it falls. Unsubscribes from any
+        /// previous tower first (one live subscription at a time).
+        /// </summary>
+        private void SetTowerTarget(IDamageableStructure structure, MonoBehaviour mb)
+        {
+            UnsubTower();
+            _currentTarget = structure;
+            _currentTargetTf = mb != null ? mb.transform : null;
+
+            if (mb is DefenseTower dt) { dt.Destroyed += OnTowerDestroyed; _subbedTower = dt; }
+            else if (mb is ArcaneTower at) { at.Destroyed += OnArcaneDestroyed; _subbedArcane = at; }
+        }
+
+        /// <summary>Drops both tower Destroyed subscriptions, if any.</summary>
+        private void UnsubTower()
+        {
+            if (_subbedTower != null) { _subbedTower.Destroyed -= OnTowerDestroyed; _subbedTower = null; }
+            if (_subbedArcane != null) { _subbedArcane.Destroyed -= OnArcaneDestroyed; _subbedArcane = null; }
+        }
+
+        private void OnTowerDestroyed(DefenseTower t) => _retargetNow = true;
+        private void OnArcaneDestroyed(ArcaneTower t) => _retargetNow = true;
+
+        /// <summary>
+        /// A ground point beside <paramref name="targetPos"/>, offset back toward the
+        /// dragon by <see cref="_landStandoff"/> and dropped to the sampled ground
+        /// height - so the dragon sets down next to the tower, not on top of it.
+        /// </summary>
+        private Vector3 LandSpotNear(Vector3 targetPos)
+        {
+            Vector3 back = transform.position - targetPos;
+            back.y = 0f;
+            if (back.sqrMagnitude < 0.01f) back = Vector3.back;
+            Vector3 xz = targetPos + back.normalized * _landStandoff;
+            float gy = SampleGroundY(xz);
+            return new Vector3(xz.x, gy, xz.z);
+        }
+
+        /// <summary>
+        /// Guarded downward raycast for a ground height at <paramref name="xz"/>;
+        /// falls back to y = 0 (NO NavMesh dependency - WO-760). The XZ's own y is
+        /// ignored; the cast starts well above it.
+        /// </summary>
+        private float SampleGroundY(Vector3 xz)
+        {
+            float y = 0f;
+            Guard.Try("DragonBoss", "sample ground height", () =>
+            {
+                Vector3 from = new Vector3(xz.x, transform.position.y + 50f, xz.z);
+                if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, 400f,
+                        ~0, QueryTriggerInteraction.Ignore))
+                    y = hit.point.y;
+            });
+            return y;
+        }
+
+        // -------------------------------------------------------------------------
+        // Phase resolution (HP aggression - aura + boss-bar label)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Re-derives the HP-aggression phase from current HP and raises
+        /// <see cref="PhaseChanged"/> on a transition. This gates the phase auras and
+        /// the boss-bar label; it does NOT drive the behaviour sequence (that is
+        /// <see cref="DragonState"/>).
         /// </summary>
         private void ResolvePhase()
         {
             float frac = HpFraction;
-            DragonPhase next = _phase;
+            DragonPhase next;
 
             if (frac > Phase2Threshold) next = DragonPhase.Circling;
             else if (frac > Phase3Threshold) next = DragonPhase.Stooping;
@@ -360,19 +824,15 @@ namespace DeNelle.Village
             {
                 DragonPhase prev = _phase;
                 _phase = next;
-                // §12 — phase transitions are captured so a headless run shows the
-                // boss is being worn down (i.e. an air-defense IS connecting).
                 FlowTrace.Step("DragonBoss",
                     $"'{_bossId}' phase {prev} -> {_phase} at HP {_hp:0.#}/{_maxHp:0.#} ({HpFraction:P0}).");
-                // Boss-fight phase VFX: a one-shot enrage burst on the boss, then
-                // swap the persistent phase aura to the new phase's loop.
                 PlayPhaseTransition();
                 PlayPhaseAura(_phase);
                 PhaseChanged?.Invoke(_phase);
             }
         }
 
-        /// <summary>Attack interval for the current phase.</summary>
+        /// <summary>Attack interval for the current phase (finale cadence).</summary>
         private float CurrentAttackInterval()
         {
             switch (_phase)
@@ -383,10 +843,7 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>
-        /// Orbit speed for the current phase — the orbit tightens and quickens
-        /// as the dragon's HP falls.
-        /// </summary>
+        /// <summary>Orbit speed for the current phase - quickens as HP falls.</summary>
         private float CurrentOrbitSpeed()
         {
             switch (_phase)
@@ -397,7 +854,7 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Orbit radius for the current phase — tighter in later phases.</summary>
+        /// <summary>Orbit radius for the current phase - tighter in later phases.</summary>
         private float CurrentOrbitRadius()
         {
             switch (_phase)
@@ -408,14 +865,13 @@ namespace DeNelle.Village
             }
         }
 
-        // ---------------------------------------------------------------------
-        // Flight — orbit
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Finale flight - orbit
+        // -------------------------------------------------------------------------
 
         /// <summary>
-        /// Advances the dragon one frame along its circular orbit around the
-        /// anchor at cruise height, banking to face its travel direction.
-        /// Returns the flight speed for the Animator blend.
+        /// Advances one frame along the circular orbit around the Heart at cruise
+        /// height, banking to face travel. Returns the flight speed for the blend.
         /// </summary>
         private float TickOrbit(float dt)
         {
@@ -438,29 +894,24 @@ namespace DeNelle.Village
             return _cruiseSpeed;
         }
 
-        // ---------------------------------------------------------------------
-        // Flight — swoop (the dive attack)
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Finale flight - swoop (the dive attack)
+        // -------------------------------------------------------------------------
 
-        /// <summary>
-        /// Begins a dive-swoop: the dragon drops from the orbit toward the anchor,
-        /// strikes at the bottom of the arc, then climbs back to cruise height.
-        /// No-op if a swoop is already running.
-        /// </summary>
+        /// <summary>Begins a dive-swoop toward the Heart. No-op if one is already running.</summary>
         private void BeginSwoop()
         {
             if (_swoopElapsed > 0f) return;
-            _swoopElapsed = Mathf.Epsilon; // mark active; TickSwoop drives it
+            _swoopElapsed = Mathf.Epsilon;
             _swoopStruck = false;
-            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
-            PlayTelegraph(); // wind-up tell before the dive
-            DeNelle.Village.GameSfx.PlayDragonRoar(); // #51: roar as the dragon commits to a swoop
+            AnimTrigger(HAttack);
+            PlayTelegraph();
+            DeNelle.Village.GameSfx.PlayDragonRoar();
         }
 
         /// <summary>
-        /// Advances an in-progress dive-swoop. The dragon arcs down toward the
-        /// anchor and back up over <see cref="_swoopDuration"/> seconds; at the
-        /// low point it deals <see cref="_swoopDamage"/>. Returns flight speed.
+        /// Advances an in-progress dive-swoop toward the Heart and back up, dealing
+        /// <see cref="_swoopDamage"/> at the low point. Returns flight speed.
         /// </summary>
         private float TickSwoop(float dt)
         {
@@ -469,15 +920,11 @@ namespace DeNelle.Village
 
             Vector3 centre = AnchorPosition();
 
-            // Height arc: cruise -> low at the midpoint -> cruise (a parabola).
-            float arc = 1f - 4f * (t - 0.5f) * (t - 0.5f); // 0 at ends, 1 mid
+            float arc = 1f - 4f * (t - 0.5f) * (t - 0.5f);
             float height = Mathf.Lerp(_orbitHeight, _swoopLowHeight, arc);
 
-            // Horizontal: sweep in toward the anchor on the way down, out on the
-            // way up — so the swoop reads as a real dive-past, not a hover-drop.
             float r = Mathf.Lerp(CurrentOrbitRadius(), _strikeRadius * 0.5f, arc);
             float rad = _orbitAngleDeg * Mathf.Deg2Rad;
-            // Keep drifting around the ring during the swoop so it spirals.
             _orbitAngleDeg += CurrentOrbitSpeed() * 0.5f * dt;
 
             Vector3 target = centre + new Vector3(
@@ -486,12 +933,10 @@ namespace DeNelle.Village
                 Mathf.Sin(rad) * r);
 
             Vector3 prev = transform.position;
-            // The dive is faster than cruise — a stoop accelerates.
             float swoopSpeed = _cruiseSpeed * 1.8f;
             transform.position = Vector3.MoveTowards(prev, target, swoopSpeed * dt);
             FaceTravel(transform.position - prev);
 
-            // Strike once, at the bottom of the arc, while inside strike range.
             if (!_swoopStruck && arc > 0.85f)
             {
                 Vector3 flat = transform.position - centre;
@@ -505,25 +950,20 @@ namespace DeNelle.Village
 
             if (t >= 1f)
             {
-                // Swoop complete — back to orbiting.
                 _swoopElapsed = 0f;
                 _swoopStruck = false;
             }
             return swoopSpeed;
         }
 
-        // ---------------------------------------------------------------------
-        // Attacks
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Finale attacks
+        // -------------------------------------------------------------------------
 
-        /// <summary>
-        /// Counts down to the next attack. Phase 1 favours a stationary
-        /// fire-breath pass; Phase 2+ launch dive-swoops. The cadence quickens
-        /// with each phase.
-        /// </summary>
+        /// <summary>Counts down to the next finale attack (fire-breath / dive-swoop).</summary>
         private void TickAttackCadence(float dt)
         {
-            if (_swoopElapsed > 0f) return; // already attacking
+            if (_swoopElapsed > 0f) return;
 
             _attackCooldown -= dt;
             if (_attackCooldown > 0f) return;
@@ -533,84 +973,69 @@ namespace DeNelle.Village
             switch (_phase)
             {
                 case DragonPhase.Circling:
-                    // Mostly fire-breath; an occasional probing swoop.
                     if (UnityEngine.Random.value < 0.55f) BeginSwoop();
                     else FireBreath();
                     break;
 
                 case DragonPhase.Stooping:
-                    // A mix — swoops dominate.
                     if (UnityEngine.Random.value < 0.65f) BeginSwoop();
                     else FireBreath();
                     break;
 
-                case DragonPhase.LastWing:
-                    // Relentless swoops.
+                default: // LastWing - relentless swoops
                     BeginSwoop();
                     break;
             }
         }
 
-        /// <summary>
-        /// A fire-breath pass — the dragon does not leave the orbit; it strafes
-        /// the anchor with breath. Deals <see cref="_breathDamage"/>.
-        /// </summary>
+        /// <summary>A stationary fire-breath pass on the current target (the Heart).</summary>
         private void FireBreath()
         {
-            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
-            PlayTelegraph(); // wind-up tell before the breath pass
+            AnimTrigger(HAttack);
+            PlayTelegraph();
             DealStrike(_breathDamage);
         }
 
         /// <summary>
-        /// Applies <paramref name="amount"/> damage to the anchor structure (the
-        /// Heart) if one is wired, and always raises <see cref="StruckHeart"/> so
-        /// the encounter controller can react (camera shake, Heart threat state).
+        /// Applies <paramref name="amount"/> damage to the current target structure
+        /// (the Heart in the finale) and raises <see cref="StruckHeart"/> so the
+        /// encounter controller can react (camera shake, Heart threat state).
         /// </summary>
         private void DealStrike(float amount)
         {
-            if (_heartStructure != null && _heartStructure.IsAlive)
-                _heartStructure.ApplyContactDamage(amount);
+            IDamageableStructure tgt = _currentTarget ?? _heartStructure;
+            if (tgt != null && tgt.IsAlive)
+                tgt.ApplyContactDamage(amount);
 
-            // Oneshot impact burst at the strike point (the anchor / Heart).
             if (_phaseVfxEnabled && _strikeImpactVfx != VFXType.None)
-                VFXManager.Play(_strikeImpactVfx, AnchorPosition());
+                VFXManager.Play(_strikeImpactVfx, TargetPosition());
 
             StruckHeart?.Invoke(amount);
         }
 
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
         // HP / death
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
 
-        /// <summary>
-        /// Applies <paramref name="amount"/> damage. At zero HP the dragon dies.
-        /// The <paramref name="element"/> is accepted for the <see cref="IDamageable"/>
-        /// contract; per-element resist math is a later tuning pass.
-        /// </summary>
+        /// <summary>Applies <paramref name="amount"/> damage. At zero HP the dragon dies.</summary>
         public void TakeDamage(float amount, DamageElement element)
         {
             if (_dead || amount <= 0f) return;
             _hp = Mathf.Max(0f, _hp - amount);
-            // §12 — throttled so a headless run PROVES a tower/air-defense is
-            // actually connecting (the F8-era "12 towers did 0 damage" symptom
-            // self-reports here the instant a real hit lands).
             FlowTrace.Throttle("DragonBoss", $"hit:{GetInstanceID()}", 1f,
                 $"'{_bossId}' took {amount:0.#} {element} dmg -> HP {_hp:0.#}/{_maxHp:0.#} " +
-                $"({HpFraction:P0}, phase {_phase}).");
+                $"({HpFraction:P0}, phase {_phase}, state {_state}).");
             if (_hp <= 0f) Die();
         }
 
         /// <summary>
-        /// Status effects (slow / freeze / burn) — a logged no-op for now. A
-        /// flying boss does not model a ground slow; a future pass could let
-        /// Freeze interrupt a swoop. Kept to satisfy the <see cref="IDamageable"/>
-        /// contract.
+        /// Status effects - a logged no-op for the dragon RECEIVING them. The dragon
+        /// applies Burn to towers; its own kinematic flight is not affected by
+        /// ground-target statuses. Kept to satisfy the <see cref="IDamageable"/> contract.
         /// </summary>
         public void ApplyStatus(StatusEffect effect, float seconds)
         {
-            // Intentionally inert — see summary. The dragon's flight is not
-            // affected by ground-target statuses.
+            // Intentionally inert - the dragon does not take ground statuses.
         }
 
         /// <summary>Kills the dragon immediately (e.g. an encounter time-out).</summary>
@@ -625,10 +1050,10 @@ namespace DeNelle.Village
             _phase = DragonPhase.Falling;
             _swoopElapsed = 0f;
             _deathElapsed = 0f;
-            if (_animator != null && _hasDeadParam) _animator.SetBool(AnimDead, true);
+            _deathCenter = transform.position;   // spiral where it died, not at the Heart
+            UnsubTower();
+            AnimBool(HDead, true);
 
-            // Phase VFX: stop the persistent aura and play the death burst at the
-            // boss. (The body keeps spiralling down; the burst marks the kill.)
             StopPhaseAura();
             if (_phaseVfxEnabled && _deathVfx != VFXType.None)
                 VFXManager.Play(_deathVfx, transform.position);
@@ -638,29 +1063,26 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Drives the spiralling death fall — the dragon corkscrews down to the
-        /// ground over <see cref="_deathFallSeconds"/>, then is destroyed. The
-        /// rig has no death clip, so the fall is the death animation.
+        /// Drives the spiralling death fall - the dragon corkscrews down to the ground
+        /// over <see cref="_deathFallSeconds"/> around where it died, then is destroyed.
         /// </summary>
         private void TickDeathFall(float dt)
         {
             _deathElapsed += dt;
             float t = Mathf.Clamp01(_deathElapsed / _deathFallSeconds);
 
-            Vector3 centre = AnchorPosition();
+            Vector3 centre = _deathCenter;
 
-            // Spiral inward and down — radius and height both ease to ground.
-            _orbitAngleDeg += 220f * dt; // tight death spin
+            _orbitAngleDeg += 220f * dt;
             float rad = _orbitAngleDeg * Mathf.Deg2Rad;
-            float r = Mathf.Lerp(CurrentOrbitRadius(), 3f, t);
-            float height = Mathf.Lerp(transform.position.y - centre.y, 0.5f, t * t);
+            float r = Mathf.Lerp(6f, 1.5f, t);
+            float height = Mathf.Lerp(transform.position.y, 0.5f, t * t);
 
-            transform.position = centre + new Vector3(
-                Mathf.Cos(rad) * r,
+            transform.position = new Vector3(
+                centre.x + Mathf.Cos(rad) * r,
                 Mathf.Max(0.5f, height),
-                Mathf.Sin(rad) * r);
+                centre.z + Mathf.Sin(rad) * r);
 
-            // Tumble — nose pitches down as it falls.
             float pitch = Mathf.Lerp(0f, 70f, t);
             transform.rotation = Quaternion.Euler(pitch, _orbitAngleDeg, Mathf.Sin(t * 12f) * 18f);
 
@@ -668,45 +1090,56 @@ namespace DeNelle.Village
                 Destroy(gameObject);
         }
 
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
         // Animation
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
 
-        /// <summary>
-        /// Feeds the Animator's <c>Speed</c> float (smoothed) so Dragon.controller
-        /// blends Idle ↔ Fly. The dragon is airborne almost always, so Speed is
-        /// near its cruise value the whole encounter. Null-guarded.
-        /// </summary>
+        /// <summary>Feeds the smoothed Speed float so the controller blends Idle &lt;-&gt; Fly.</summary>
         private void DriveAnimator(float rawSpeed)
         {
-            if (_animator == null || !_hasSpeedParam) return;
+            if (_animator == null) return;
             _shownSpeed = Mathf.Lerp(_shownSpeed, rawSpeed, Time.deltaTime * 4f);
-            _animator.SetFloat(AnimSpeed, _shownSpeed);
+            AnimFloat(HSpeed, _shownSpeed);
         }
 
-        // ---------------------------------------------------------------------
-        // Phase VFX (WO-66)
-        // ---------------------------------------------------------------------
-        // All boss-fight visual phases route through the canonical VFXManager
-        // (DeNelle.Village). Bursts are pooled oneshots; the phase aura is a
-        // single VFXHandle loop swapped per transition — no per-frame alloc.
+        /// <summary>Sets the airborne/grounded animator bools (presence-guarded).</summary>
+        private void SetGroundedFlags(bool grounded)
+        {
+            AnimBool(HFly, !grounded);
+            AnimBool(HGrounded, grounded);
+        }
 
-        /// <summary>The looping aura VFXType for the given flight phase.</summary>
+        private void AnimTrigger(int hash)
+        {
+            if (_animator != null && _params.Contains(hash)) _animator.SetTrigger(hash);
+        }
+
+        private void AnimBool(int hash, bool value)
+        {
+            if (_animator != null && _params.Contains(hash)) _animator.SetBool(hash, value);
+        }
+
+        private void AnimFloat(int hash, float value)
+        {
+            if (_animator != null && _params.Contains(hash)) _animator.SetFloat(hash, value);
+        }
+
+        // -------------------------------------------------------------------------
+        // Phase VFX (WO-66) - all through the canonical VFXManager (one pool).
+        // -------------------------------------------------------------------------
+
+        /// <summary>The looping aura VFXType for the given HP-aggression phase.</summary>
         private VFXType AuraForPhase(DragonPhase phase)
         {
             switch (phase)
             {
                 case DragonPhase.Stooping: return _phase2Aura;
                 case DragonPhase.LastWing: return _phase3Aura;
-                default:                   return _phase1Aura; // Circling
+                default:                   return _phase1Aura;
             }
         }
 
-        /// <summary>
-        /// Swaps the persistent phase aura to the one for <paramref name="phase"/>.
-        /// Stops the previous aura first so only one is ever attached. No-op when
-        /// phase VFX are disabled or VFXManager is not present.
-        /// </summary>
+        /// <summary>Swaps the persistent phase aura to the one for <paramref name="phase"/>.</summary>
         private void PlayPhaseAura(DragonPhase phase)
         {
             if (!_phaseVfxEnabled) return;
@@ -716,7 +1149,6 @@ namespace DeNelle.Village
             VFXType type = AuraForPhase(phase);
             if (type == VFXType.None) { StopPhaseAura(); return; }
 
-            // Swap: stop the old loop, then attach the new one to the boss.
             StopPhaseAura();
             _auraHandle = mgr.PlayAura(type, transform);
         }
@@ -745,70 +1177,71 @@ namespace DeNelle.Village
             VFXManager.Play(_telegraphVfx, transform.position, transform.rotation);
         }
 
-        /// <summary>Tear down the live aura loop so it does not leak the pooled object.</summary>
+        /// <summary>Tear down the live aura loop + tower subs so nothing leaks.</summary>
         private void OnDisable()
         {
             StopPhaseAura();
+            UnsubTower();
         }
 
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
         // Helpers
-        // ---------------------------------------------------------------------
+        // -------------------------------------------------------------------------
 
-        /// <summary>The orbit centre — the wired anchor, or the spawn home point.</summary>
+        /// <summary>The town centre / orbit centre - the wired Heart, or the spawn home point.</summary>
         private Vector3 AnchorPosition()
         {
             return _anchor != null ? _anchor.position : _anchorFallback;
         }
 
-        /// <summary>
-        /// Rotates the dragon to face its direction of travel (a small bank-in
-        /// would be a later polish pass; yaw-to-travel reads well enough).
-        /// </summary>
+        /// <summary>The current fire target's world position (Heart in the finale).</summary>
+        private Vector3 TargetPosition()
+        {
+            return _currentTargetTf != null ? _currentTargetTf.position : AnchorPosition();
+        }
+
+        /// <summary>Rotates the dragon to face its direction of travel (yaw-biased).</summary>
         private void FaceTravel(Vector3 delta)
         {
-            delta.y *= 0.5f; // flatten the pitch a little — keep it level-ish
+            delta.y *= 0.5f;
             if (delta.sqrMagnitude < 1e-5f) return;
             Quaternion want = Quaternion.LookRotation(delta.normalized, Vector3.up);
             transform.rotation = Quaternion.Slerp(
                 transform.rotation, want, Time.deltaTime * 4f);
         }
 
+        /// <summary>Rotates the dragon to face a world point (yaw only) - grounded aiming.</summary>
+        private void FacePoint(Vector3 point, float dt)
+        {
+            Vector3 d = point - transform.position;
+            d.y = 0f;
+            if (d.sqrMagnitude < 1e-4f) return;
+            Quaternion want = Quaternion.LookRotation(d.normalized, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, want, dt * 4f);
+        }
+
         /// <summary>
-        /// Resolves the Animator on the dragon rig — it sits on the FBX mesh
-        /// child, so children are searched too. Null when the prefab carries no
-        /// rig / no controller; every Animator call is null-guarded.
+        /// Resolves the Animator on the dragon rig (children searched) and caches which
+        /// DragonAnim params the controller actually declares, so a Set on an absent
+        /// param is skipped instead of logging every call.
         /// </summary>
         private void EnsureAnimator()
         {
             if (_animator == null)
                 _animator = GetComponentInChildren<Animator>();
 
-            // WO-163: cache which params the controller actually declares so the
-            // per-frame Speed drive (and Attack/Dead) never hit an absent param.
+            _params.Clear();
             if (_animator != null && _animator.runtimeAnimatorController != null)
             {
                 foreach (var p in _animator.parameters)
-                {
-                    if (p.nameHash == AnimSpeed)  _hasSpeedParam  = true;
-                    if (p.nameHash == AnimAttack) _hasAttackParam = true;
-                    if (p.nameHash == AnimDead)   _hasDeadParam   = true;
-                }
+                    _params.Add(p.nameHash);
             }
         }
 
         /// <summary>
-        /// Guarantees a NON-TRIGGER collider on the flying dragon so a dedicated
-        /// AIR-DEFENSE structure's ray / projectile physics query can HIT it at
-        /// altitude (mirrors DefenseTower.EnsureContactCollider). Idempotent: skips
-        /// if the rig already carries a solid collider. The <see cref="IDamageable"/>
-        /// + the <see cref="ICombatLayered"/> (<see cref="CombatLayer.Flying"/>) hook
-        /// both live on THIS root, so a child-collider hit resolves the boss via
-        /// GetComponentInParent&lt;IDamageable&gt;() / GetComponentInParent&lt;ICombatLayered&gt;().
-        /// The collider stays on the prefab's (default, raycastable) layer — a
-        /// cruising or swooping dragon is a real physics target either way. Towers
-        /// damage via a direct TakeDamage call once acquired, so this collider is
-        /// specifically for the new air-defense's ray/overlap acquisition + VFX hit.
+        /// Guarantees a NON-TRIGGER collider on the dragon so an air-defense structure's
+        /// ray / projectile query can HIT it (mirrors DefenseTower.EnsureContactCollider).
+        /// Idempotent: skips if the rig already carries a solid collider.
         /// </summary>
         private void EnsureHitCollider()
         {
@@ -826,7 +1259,6 @@ namespace DeNelle.Village
                 sc.center = transform.InverseTransformPoint(b.center);
                 Vector3 ext = b.extents;
                 float maxExt = Mathf.Max(ext.x, Mathf.Max(ext.y, ext.z));
-                // World extent -> local radius (guards a zero/negative lossyScale axis).
                 Vector3 ls = transform.lossyScale;
                 float sMax = Mathf.Max(0.01f,
                     Mathf.Max(Mathf.Abs(ls.x), Mathf.Max(Mathf.Abs(ls.y), Mathf.Abs(ls.z))));
@@ -835,7 +1267,7 @@ namespace DeNelle.Village
             else
             {
                 sc.center = Vector3.zero;
-                sc.radius = 2.5f;   // fallback body radius when the rig has no renderer
+                sc.radius = 2.5f;
             }
         }
 
@@ -844,7 +1276,6 @@ namespace DeNelle.Village
         {
             Vector3 c = Application.isPlaying ? AnchorPosition() : transform.position;
             Gizmos.color = new Color(0.85f, 0.35f, 0.15f, 0.7f);
-            // Orbit ring at cruise height.
             const int seg = 48;
             Vector3 prev = c + new Vector3(_orbitRadius, _orbitHeight, 0f);
             for (int i = 1; i <= seg; i++)
@@ -855,7 +1286,6 @@ namespace DeNelle.Village
                 Gizmos.DrawLine(prev, p);
                 prev = p;
             }
-            // Strike-radius marker at ground level.
             Gizmos.color = new Color(0.95f, 0.2f, 0.2f, 0.6f);
             Gizmos.DrawWireSphere(c, _strikeRadius);
         }
