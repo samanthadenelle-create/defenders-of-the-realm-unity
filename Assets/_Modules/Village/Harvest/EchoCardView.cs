@@ -121,28 +121,41 @@ namespace DeNelle.Village
 
         private void Build()
         {
-            // Whole modal in one call: canvas + scrim (tap-outside closes) + Obsidian
-            // chrome + ONE shared Close. Compact card, centred; sits in the MODAL band,
-            // just above the roster (31000) so the per-echo picker stacks on top of it.
+            // Same law as EchoRosterView (owner F8 2026-07-24): parent into layout.body so
+            // labels never paint over the FrameCore title plate or the shared Close.
+            // Compact card, centred; MODAL band above the roster (31000).
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoCard", "ECHO",
-                new Vector2(0.28f, 0.24f), new Vector2(0.72f, 0.76f),
-                onClose: Close, sortingOrder: 31010,   // >= roster (31000) so picker stacks on top (was 4600: under HUD)
+                new Vector2(0.22f, 0.16f), new Vector2(0.78f, 0.84f),
+                onClose: Close, sortingOrder: 31010,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
-            var content = built.chrome.content.transform;
 
-            // Portrait socket (sprite-first, null-fallback -- the VM owns the roster-catalog load;
-            // absent art just skips the image so the card is never blank).
+            if (built.chrome.title != null)
+            {
+                built.chrome.title.text = "ECHO";
+                ElarionUiKit.FitSingleLine(built.chrome.title);
+            }
+
+            Transform body = built.chrome.layout != null && built.chrome.layout.body != null
+                ? built.chrome.layout.body
+                : built.chrome.content.transform;
+
+            // Body bands (0..1 of body well only -- no cross-stack):
+            //   portrait + name   0.82-0.98
+            //   what (element)    0.74-0.80   single short line
+            //   state             0.66-0.72   single line
+            //   ask               0.58-0.64   single line
+            //   lane picker       0.04-0.56   above Close (body already reserved)
             var portraitSprite = Guard.Try("Echo", "load echo portrait",
                 () => _vm != null ? _vm.Portrait : null, fallback: null);
             if (portraitSprite != null)
             {
                 var pg = new GameObject("EchoPortrait", typeof(Image));
-                pg.transform.SetParent(content, false);
+                pg.transform.SetParent(body, false);
                 var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.06f, 0.80f);
-                prt.anchorMax = new Vector2(0.22f, 0.93f);
+                prt.anchorMin = new Vector2(0.04f, 0.82f);
+                prt.anchorMax = new Vector2(0.20f, 0.98f);
                 prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
                 _portrait = pg.GetComponent<Image>();
                 _portrait.sprite = portraitSprite;
@@ -150,36 +163,32 @@ namespace DeNelle.Village
                 _portrait.raycastTarget = false;
             }
 
-            // Name line (gilt header weight), offset right of the portrait socket.
-            _nameLabel = ElarionUiKit.Label(content, "", 0.885f, 0.945f,
+            _nameLabel = ElarionUiKit.Label(body, "", 0.84f, 0.97f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
-                0.24f, 0.94f, bold: true);
+                0.22f, 0.96f, bold: true);
             ElarionUiKit.FitSingleLine(_nameLabel);
 
-            // WHAT line -- the spirit's element + authored flavor (wraps).
-            _whatLabel = ElarionUiKit.Label(content, "", 0.71f, 0.86f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
-                0.08f, 0.92f, bold: false);
-            _whatLabel.textWrappingMode = TextWrappingModes.Normal;   // project TMP API (not the obsolete enableWordWrapping)
+            // Element only -- full Flavor was painting the entire card (F8 capture).
+            _whatLabel = ElarionUiKit.Label(body, "", 0.74f, 0.81f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                0.06f, 0.94f, bold: false);
+            ElarionUiKit.FitSingleLine(_whatLabel);
 
-            // STATE line -- live lane/level/bonus as TEXT (colorblind-safe; no hue-only cue).
-            _stateLabel = ElarionUiKit.Label(content, "", 0.635f, 0.70f,
+            _stateLabel = ElarionUiKit.Label(body, "", 0.66f, 0.73f,
                 new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
-                0.08f, 0.92f, bold: true);
+                0.06f, 0.94f, bold: true);
             ElarionUiKit.FitSingleLine(_stateLabel);
 
-            // The one ask.
-            _askLabel = ElarionUiKit.Label(content, "", 0.585f, 0.63f,
+            _askLabel = ElarionUiKit.Label(body, "", 0.58f, 0.65f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                0.08f, 0.92f, bold: false);
+                0.06f, 0.94f, bold: false);
+            ElarionUiKit.FitSingleLine(_askLabel);
 
-            // Lane-picker list host (transparent layout host -- no chrome of its own, SS6).
-            // Vertical stack of the four functional lanes; bottom >= 0.25 clears the shared Close band.
             var rowGo = new GameObject("LanePicker", typeof(RectTransform));
-            rowGo.transform.SetParent(content, false);
+            rowGo.transform.SetParent(body, false);
             var rowRt = rowGo.GetComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.08f, 0.26f);
-            rowRt.anchorMax = new Vector2(0.92f, 0.575f);
+            rowRt.anchorMin = new Vector2(0.06f, 0.04f);
+            rowRt.anchorMax = new Vector2(0.94f, 0.56f);
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
             _chipRow = rowGo.transform;
         }
@@ -189,10 +198,29 @@ namespace DeNelle.Village
         private void Refresh()
         {
             if (_vm == null || _modal == null || !_open) return;
-            if (_nameLabel != null) _nameLabel.text = _vm.NameText;
-            if (_whatLabel != null) _whatLabel.text = _vm.WhatText;
-            if (_stateLabel != null) _stateLabel.text = _vm.StateText;
-            if (_askLabel != null) _askLabel.text = _vm.AskText;
+            if (_nameLabel != null)
+            {
+                _nameLabel.text = _vm.NameText;
+                ElarionUiKit.FitSingleLine(_nameLabel);
+            }
+            if (_whatLabel != null)
+            {
+                _whatLabel.text = _vm.WhatText;
+                ElarionUiKit.FitSingleLine(_whatLabel);
+            }
+            if (_stateLabel != null)
+            {
+                _stateLabel.text = _vm.StateText;
+                ElarionUiKit.FitSingleLine(_stateLabel);
+            }
+            if (_askLabel != null)
+            {
+                _askLabel.text = _vm.AskText;
+                ElarionUiKit.FitSingleLine(_askLabel);
+            }
+            // Portrait can change if the card is re-opened for another Echo.
+            if (_portrait != null && _vm.Portrait != null)
+                _portrait.sprite = _vm.Portrait;
             RebuildChips();
         }
 
@@ -236,14 +264,13 @@ namespace DeNelle.Village
                     new Vector2(0f, btnBottom), new Vector2(1f, 1f),
                     () => OnChipTapped(laneId));
 
-                // Honesty / preferred note UNDER the button (TEXT-carried; Defense/Exploration say
-                // "passive - active in raids/dungeons" so the player is never misled -- never hue alone).
+                // Honesty / preferred note UNDER the button -- single line (was wrapping into Close).
                 if (hasNote)
                 {
-                    var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 0.40f,
+                    var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 0.38f,
                         chip.Preferred ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
-                        ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: false);
-                    note.textWrappingMode = TextWrappingModes.Normal;
+                        ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: false);
+                    ElarionUiKit.FitSingleLine(note);
                 }
             });
         }

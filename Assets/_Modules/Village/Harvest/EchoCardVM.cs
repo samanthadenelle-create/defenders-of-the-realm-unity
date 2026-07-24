@@ -98,17 +98,17 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The WHAT line: the spirit's own element + authored flavor (WO-738 diegetic identity, ASCII).</summary>
+        /// <summary>Short WHAT line under the name -- Element only (ASCII). Full Flavor/Lore
+        /// belongs on the unlock dialogue; dumping it here stacked over the lane picker
+        /// (owner F8 2026-07-24 Echo card screenshot).</summary>
         public string WhatText
         {
             get
             {
                 var entry = EchoRosterCatalog.ByIndex(EchoIndex);
-                string flavor = entry != null ? entry.Flavor : "";
                 string element = entry != null ? entry.Element : "";
-                if (string.IsNullOrEmpty(flavor))
-                    return "An Echo -- a spirit of Elarion. It works for you while you fight, even while you are away.";
-                return element + " -- " + flavor;
+                if (!string.IsNullOrEmpty(element)) return element;
+                return "A spirit of Elarion -- gathers while you fight.";
             }
         }
 
