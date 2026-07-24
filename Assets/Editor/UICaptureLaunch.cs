@@ -92,6 +92,7 @@ namespace DeNelle.Editor
 
                 count += CaptureFoundingEchoCard();
                 count += CapturePauseMenu();
+                count += CaptureEchoRoster();
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -271,6 +272,78 @@ namespace DeNelle.Editor
                 if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
                 if (settingsGo != null) UnityEngine.Object.DestroyImmediate(settingsGo);
                 if (pauseGo != null) UnityEngine.Object.DestroyImmediate(pauseGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the persistent Echo pip + "Pets" HUD button overlay
+        //  (EchoUnlockFeedback). WO 2026-07-24 moved this button from bottom-centre
+        //  (ate centre real estate) to the RIGHT screen edge, vertically centred, at
+        //  a >=112px square touch target -- this shot is the felt-verify that it now
+        //  hugs the right edge and did not drift back to centre.
+        //
+        //  We capture the pip+button OVERLAY canvas, NOT the full EchoRosterView modal
+        //  that the button opens: EchoRosterView.OpenPanel pulls heavy runtime deps
+        //  (EchoRosterVM.CreateDefault over EchoService state, PanelManager.NotifyOpened
+        //  side effects, a DontDestroyOnLoad host) that do not stand up cleanly in a
+        //  synchronous edit-mode render. The pip+button canvas is precisely the chrome
+        //  this WO repositioned, so it is the right thing to screenshot. (Per WO: do
+        //  NOT force EchoRoster headlessly.)
+        //
+        //  EchoUnlockFeedback lives in DeNelle.Village (already referenced here). Its
+        //  Start() does NOT run on AddComponent in edit mode, so we drive the same two
+        //  private builders Start calls -- BuildPip (creates _pipCanvas) then
+        //  BuildPetBoxButton (adds the right-edge Pets button onto it).
+        // ---------------------------------------------------------------------
+        private static int CaptureEchoRoster()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject pipCanvas = null;
+
+            try
+            {
+                // Pre-seed an EventSystem so BuildPetBoxButton's EnsureEventSystem no-ops
+                // (its DontDestroyOnLoad path warns harmlessly in edit mode; avoid the noise).
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapEchoFeedback");
+                var feedback = hostGo.AddComponent<EchoUnlockFeedback>();
+
+                // Build the pip, then the Pets button onto its canvas (the two private methods
+                // Start would call). Both are guarded/font-safe kit construction -- no play mode.
+                InvokePrivate(feedback, "BuildPip");
+                InvokePrivate(feedback, "BuildPetBoxButton");
+
+                pipCanvas = GetPrivateGameObject(feedback, "_pipCanvas");
+                if (pipCanvas == null)
+                {
+                    Debug.LogWarning("[UICap-HL] EchoUnlockFeedback._pipCanvas null after BuildPip -- pip/Pets capture skipped.");
+                    return 0;
+                }
+
+                pipCanvas.SetActive(true);   // scene-gate never ran (no Start); ensure it is visible
+
+                if (RenderCanvasToPng(pipCanvas, OutDir + "EchoPetButton_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(pipCanvas, OutDir + "EchoPetButton_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] echo pip/Pets button capture threw: " + e);
+            }
+            finally
+            {
+                // Edit-mode teardown MUST be DestroyImmediate (same contract as the card/pause shots).
+                if (pipCanvas != null) UnityEngine.Object.DestroyImmediate(pipCanvas);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
             }
 

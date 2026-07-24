@@ -250,15 +250,16 @@ namespace DeNelle.Village
             var go = new GameObject("EchoPetBoxButton", typeof(Image), typeof(Button));
             go.transform.SetParent(_pipCanvas.transform, false);
             var rt = go.GetComponent<RectTransform>();
-            // Owner 2026-07-19: the pet-box access belongs BELOW the Tree of Life (lower-centre, at the
-            // tree's roots where the Echo-spirits gather) — NOT stranded top-left. Bottom-centre anchor,
-            // lifted above the bottom verb bar (Build/Talk/Bag/Quests). Y is felt-tunable on device.
-            // The roster it opens stays the full-screen 31000 single-arbiter modal (z-fix preserved).
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, 200f);   // base of the Tree of Life, clear of the verb bar
-            rt.sizeDelta = new Vector2(230f, 56f);
+            // Owner 2026-07-24 felt-test: the bottom-centre placement ate scarce centre real estate.
+            // Move it to the RIGHT screen edge, vertically centred (the LEFT edge is the HudKit gear
+            // slide-dock, so RIGHT is the free edge). A square touch target that meets the mobile
+            // MinTouchPx ~112 standard. The roster it opens stays the full-screen 31000 single-arbiter
+            // modal (z-fix preserved).
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(-16f, 0f);   // small inset from the right edge
+            rt.sizeDelta = new Vector2(120f, 120f);        // >= MinTouchPx (112) -- comfortable tap target
 
             var img = go.GetComponent<Image>();
             img.color = new Color(0.06f, 0.06f, 0.08f, 0.92f);   // obsidian glass, matches HUD chrome
