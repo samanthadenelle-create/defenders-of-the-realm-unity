@@ -1543,11 +1543,12 @@ namespace DeNelle.Village
         // Display name for the rooted-cast ability (the visible arcane orb the cast fires).
         private const string RootedCastAbilityName = "Arcane Orb";
 
-        // WO-VFX-RANGED: fallback Hovl keys for the rooted ranged cast when this enemy has no
-        // _typeVfxSet (arena orcs, etc.). A per-type set overrides these (e.g. Fireball_*/Frost_*).
-        private const string DefaultCastVfxKey       = "Arcane_Cast";
-        private const string DefaultProjectileVfxKey = "Arcane_Projectile";
-        private const string DefaultImpactVfxKey     = "Arcane_Impact";
+        // WO-VFX-RANGED / owner VfxManualPicks (2026-07): fallback keys when this enemy has no
+        // _typeVfxSet (arena orcs, etc.). Per-type sets still override (e.g. Fireball_*/Frost_*).
+        // EnemyCast_Cast = dark casting gather; SimpleCast_Projectile = travel; FireImpact on land.
+        private const string DefaultCastVfxKey       = "EnemyCast_Cast";
+        private const string DefaultProjectileVfxKey = "SimpleCast_Projectile";
+        private const string DefaultImpactVfxKey     = "FireImpact_Impact";
         private static readonly Color DefaultRangedVfxTint = new Color(0.6f, 0.4f, 1f, 1f); // arcane violet
 
         // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").

@@ -73,7 +73,9 @@ namespace DeNelle.Village
         /// Doc-only path — the .asset row is authored in-editor later:
         ///   Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff heal.prefab
         /// Until the row exists PlayKey no-ops (fallback), so this compiles/runs regardless.</summary>
-        private const string AuraKey = "Fountain_Heal_Aura";
+        // Owner VfxManualPicks: HealingFountain_Aura (Druid aura). Fountain_Heal_Aura remains
+        // a catalog alias so older rows still resolve after regenerate.
+        private const string AuraKey = "HealingFountain_Aura";
 
         /// <summary>HDR gold tint for the aura — colorblind-safe (NEVER green). Applied as
         /// ParticleSystem StartColor via VFXManager.PlayKey when the aura row is Recolorable.</summary>

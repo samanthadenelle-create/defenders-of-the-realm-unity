@@ -563,6 +563,17 @@ namespace DeNelle.Village
                 anyHit = true;
                 lastHitDamage = damage;
 
+                // Owner VfxManualPicks: elemental sword on-hit (Weaponskillsword_Impact —
+                // "elemental Sword - New" roster). Layered on TakeDamage's central feedback;
+                // null-safe no-op if the catalog row is missing. Perfect hits also get the
+                // heavier Knight weaponskill burst so a timed connect reads bigger.
+                Guard.Try("Combat", "melee sword impact vfx", () =>
+                {
+                    VFXManager.PlayKey("Weaponskillsword_Impact", hitPos, Quaternion.identity, null, null);
+                    if (isPerfect)
+                        VFXManager.PlayKey("KnightWeaponskill_Impact", hitPos, Quaternion.identity, null, null, 1.15f);
+                });
+
                 // WO-566: v2 talent on-hit procs (Knight Emberbrand Strike burn). Apply each owned
                 // proc as a DoT on the struck enemy, rolling its chance. Data-driven + identity
                 // (no procs) until the node is learned. Enemy is the only hostile melee target.

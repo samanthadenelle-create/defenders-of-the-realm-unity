@@ -384,10 +384,11 @@ namespace DeNelle.Village
             // legacy Casting_Fire_2 (null-safe no-op if the key/prefab is missing). Reads by
             // MOTION (violet gather-and-flash) so it's colorblind-legible; BlastColor is a hint.
             // TIER ESCALATION: scale the cast by the upgrade tier so a maxed spire winds up bigger.
+            // Owner VfxManualPicks: SimpleCast_Cast (muzzle) + ARcaneTower_Projectile (travel).
             Guard.Try("TowerVfx", "arcane muzzle cast", () =>
-                VFXManager.PlayKey("Arcane_Cast", muzzle, default, null, BlastColor, VfxScale));
+                VFXManager.PlayKey("SimpleCast_Cast", muzzle, default, null, BlastColor, VfxScale));
             FlowTrace.Throttle("TowerVfx", $"arcane-fire:{GetInstanceID()}", 1f,
-                $"arcane spire level={_vfxLevel} fire cast='Arcane_Cast' scale={VfxScale:0.0}");
+                $"arcane spire level={_vfxLevel} fire cast='SimpleCast_Cast' scale={VfxScale:0.0}");
 
             // Flying body: Projectile_Fire_3 (hero fireball bolt) via SpawnFlying(Flame).
             // URP heal runs at spawn (FixUrpShaders).
@@ -422,7 +423,12 @@ namespace DeNelle.Village
                 // travelling shot reads as an arcane projectile in motion (colorblind-legible by its
                 // TRAIL/MOTION, not tint). Loop keys return a VFXHandle — Stop() it on arrival so the
                 // trail doesn't linger after detonation. Null-safe if the key/prefab is missing.
-                var boltFx = VFXManager.PlayKey("Arcane_Projectile", muzzle, default, null,
+                // Owner pick ARcaneTower_Projectile (Buff orange shot) — level 2+ can layer
+                // ArcaneTower-Baselevel pink bolt via tier; base always uses the arcane pick.
+                string travelKey = _vfxLevel >= 2
+                    ? "ArcaneTower-Baselevel_Projectile"
+                    : "ARcaneTower_Projectile";
+                var boltFx = VFXManager.PlayKey(travelKey, muzzle, default, null,
                                                 BlastColor, 0f, 0f, bolt.transform);
 
                 // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys, taking
@@ -455,13 +461,17 @@ namespace DeNelle.Village
             ProjectileVFXCatalog.SpawnImpact(impact, BoltVisualElement);
             ProjectileVFXCatalog.SpawnNamedOneShot(impact, BoltImpactExtraVfx);
 
-            // WO-VFX-TOWERS: Hovl arcane detonation burst at the impact point, layered on top of
+            // WO-VFX-TOWERS: Hovl catalog detonation burst at the impact point, layered on top of
             // the legacy explosion (null-safe no-op on a missing key). The following-bolt trail is
             // stopped by the arrival closure in FireBlast before this runs.
+            // Owner pick (2026-07): the arcane spire's impact-on-target burst is the Unity Particle
+            // Pack PlasmaExplosionEffect (catalog key PP_PlasmaExplosionEffect) — a one-shot plasma
+            // detonation, tinted to BlastColor (Recolorable) so it reads arcane-violet. Requires the
+            // catalog row to be IsLoop:false (a looping impact never auto-returns → leaks the pool).
             // TIER ESCALATION: scale the detonation by tier, and stack a heavier Cleave blast at L3
             // so an upgraded spire's hits land harder (reads by SIZE + extra layer, colorblind-safe).
             Guard.Try("TowerVfx", "arcane impact", () =>
-                VFXManager.PlayKey("Arcane_Impact", impact, default, null, BlastColor, VfxScale));
+                VFXManager.PlayKey("PP_PlasmaExplosionEffect", impact, default, null, BlastColor, VfxScale));
             if (_vfxLevel >= 3)
                 Guard.Try("TowerVfx", "arcane impact L3 cleave", () =>
                     VFXManager.PlayKey("Cleave_Impact", impact, default, null, BlastColor, 0.9f));

@@ -474,9 +474,10 @@ namespace DeNelle.Village
         {
             switch (element)
             {
-                case DamageElement.Flame:  return "Fireball_Cast";
-                case DamageElement.Aether: return "Arcane_Cast";
-                default:                   return null;   // Ice / None / Physical — no cast key
+                case DamageElement.Flame:  return "Fire_Cast";
+                case DamageElement.Aether: return "SimpleCast_Cast";
+                case DamageElement.Ice:    return "Freezing_Projectile";
+                default:                   return "PP_MuzzleFlash";
             }
         }
 
@@ -491,9 +492,9 @@ namespace DeNelle.Village
         {
             switch (element)
             {
-                case DamageElement.Flame:  return "Fireball_Impact";
-                case DamageElement.Ice:    return "Frost_Impact";
-                case DamageElement.Aether: return "Arcane_Impact";
+                case DamageElement.Flame:  return "FireImpact_Impact";
+                case DamageElement.Ice:    return "Freezing_Impact";
+                case DamageElement.Aether: return "PP_PlasmaExplosionEffect";
                 default:                   return "Spear_Impact";   // None / Physical
             }
         }

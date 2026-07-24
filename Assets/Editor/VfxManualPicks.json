@@ -1,501 +1,788 @@
 {
-    "rows":  [
-                 {
-                     "key":  "ARcaneTower_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "ArcaneTower-Baselevel_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 7 pink.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "DefenseUp-Offhand(Shield)_Aura",
-                     "prefabPath":  "Assets/Hovl Studio/Magic circles/Prefabs/Magic shield holy.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "EnhamcingBuff_Cast",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "Freezing_Impact",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "Freezing_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 10 blue laser.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "HealingFountain_Aura",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Druid aura.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "KnightThrust_Impact",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Dragon punch.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "LongCastSpell_Cast",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff chain.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "RangedAttack-DaggerThrow_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 8 dagger.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "RangedSpell-Powerful(Longcast)_Cast",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 17 nova violet.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "RangerTowerBaseProjectile_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 1 nature arrow.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "RangerTowerUpgraded_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 7 pink.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "RangerTowerlevel2Projectile_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 14 blue rapid.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "SimpleCast_Cast",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 16 fire.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "SimpleCast_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 10 blue laser.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "Water_Projectile",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 9 water.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "Weaponskillsword_Impact",
-                     "prefabPath":  "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 24 green explosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "softhealingaura_Aura",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "subtleHealinginarea(EnemySkill-Mage)_Cast",
-                     "prefabPath":  "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange circle.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_BigExplosion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/BigExplosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_BigSplash",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/BigSplash.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_Candles",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Candles.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_Dissolve",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Dissolve.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_DissolveSolidHorizontal",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/DissolveSolidHorizontal.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_DustExplosion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/DustExplosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_DustMotesEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/DustMotesEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_DustStorm",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/DustStorm.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_EarthShatter",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/EarthShatter.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_ElectricalSparks",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/ElectricalSparks.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_ElectricalSparksEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/ElectricalSparksEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_EllenDissolve",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/EllenDissolve.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_EllenRespawn",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/EllenRespawn.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_EnergyExplosion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/EnergyExplosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_FireBall",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/FireBall.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_FireFlies",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_FlameStream",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/FlameStream.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_FlameThrower",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/FlameThrower.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_FleshImpacts",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/FleshImpacts.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_GoopSpray",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopSpray.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_GoopSprayEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopSprayEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_GoopStreamEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopStreamEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_GroundFog",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/GroundFog.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_HeatDistortion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/HeatDistortion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_IceLance",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_LargeFlames",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/LargeFlames.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_LightnigStormCloud",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/LightnigStormCloud.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_MediumFlames",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/MediumFlames.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_MetalImpacts",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/MetalImpacts.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_MuzzleFlash",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/MuzzleFlash.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_PlasmaExplosionEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/PlasmaExplosionEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_PoisonGas",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/PoisonGas.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_PressurisedSteam",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/PressurisedSteam.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_RainEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/RainEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_Respawn",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Respawn.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_RisingSteam",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/RisingSteam.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_RocketTrail",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/RocketTrail.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_SandImpacts",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/SandImpacts.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_SandSwirlsEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/SandSwirlsEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_Shower",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/Shower.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_SmallExplosion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/SmallExplosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_SmokeEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/SmokeEffect.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_SparksEffect",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/SparksEffect.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_Steam",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke \u0026 Steam Effects/Prefabs/Steam.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_StoneImpacts",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/StoneImpacts.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_TinyExplosion",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/TinyExplosion.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_TinyFlames",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/TinyFlames.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_WaterFall",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/WaterFall.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_WaterLeak",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/WaterLeak.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_WildFire",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire \u0026 Explosion Effects/Prefabs/WildFire.prefab",
-                     "isLoop":  true,
-                     "scale":  1,
-                     "manual":  true
-                 },
-                 {
-                     "key":  "PP_WoodImpacts",
-                     "prefabPath":  "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/WoodImpacts.prefab",
-                     "isLoop":  false,
-                     "scale":  1,
-                     "manual":  true
-                 }
-             ]
+    "rows": [
+        {
+            "key": "ARcaneTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Aegis_Cast",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic shield holy.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcaneTower-Baselevel_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 7 pink.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Arcane_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 16 fire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Arcane_Impact",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/PlasmaExplosionEffect.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Arcane_Projectile",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcherTower-Fire_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 16 fire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcherTower-Ice_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 14 blue rapid.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcherTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 13 red laser.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Cleave_Impact",
+            "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Energy explosion.prefab",
+            "isLoop": false,
+            "scale": 1.15,
+            "manual": true
+        },
+        {
+            "key": "DefenseUp-Offhand(Shield)_Aura",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic shield holy.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "DragonFire_Cast",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Fire/Flamethrower.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "DragonFire_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 20 pink arrow.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ElectricitySpell_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ElectricitySpell_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Electricityimpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "EnemyCast_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark_3.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "EnhamcingBuff_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireImpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Fire_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 16 fire.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireballImpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireballTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 25 orange explosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Fireball_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 16 fire.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Fireball_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Fireball_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 25 orange explosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Fountain_Heal_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Druid aura.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Freezing_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Freezing_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 10 blue laser.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Frost_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Frost_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 14 blue rapid.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Heal_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Heal_Cast",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff white twist.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "HealingFountain_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Druid aura.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "IceWeaponAura_Aura",
+            "prefabPath": "Assets/Resources/VFX/Projectiles/Explosion_Ice.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Junk-DoNotuse_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile 16 fire.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "KnightThrust_Impact",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "KnightWeaponskill_Impact",
+            "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Energy explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "LongCastSpell_Cast",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff chain.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "MageMeoteorAOE_Cast",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Top_down_attack/top_down_stone_line.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Melee_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 24 green explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Melee_Slash",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "NoneMageHealingCast_Cast",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff white twist.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_BigExplosion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/BigExplosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_BigSplash",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/BigSplash.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_Candles",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Candles.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_Dissolve",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Dissolve.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_DissolveSolidHorizontal",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/DissolveSolidHorizontal.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_DustExplosion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/DustExplosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_DustMotesEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/DustMotesEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_DustStorm",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/DustStorm.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_EarthShatter",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/EarthShatter.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_ElectricalSparks",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/ElectricalSparks.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_ElectricalSparksEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/ElectricalSparksEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_EllenDissolve",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/EllenDissolve.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_EllenRespawn",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/EllenRespawn.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_EnergyExplosion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/EnergyExplosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_FireBall",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/FireBall.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_FireFlies",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_FlameStream",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/FlameStream.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_FlameThrower",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/FlameThrower.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_FleshImpacts",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/FleshImpacts.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_GoopSpray",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopSpray.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_GoopSprayEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopSprayEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_GoopStreamEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Goop Effects/Prefabs/GoopStreamEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_GroundFog",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/GroundFog.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_HeatDistortion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/HeatDistortion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_IceLance",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_LargeFlames",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/LargeFlames.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_LightnigStormCloud",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/LightnigStormCloud.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_MediumFlames",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/MediumFlames.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_MetalImpacts",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/MetalImpacts.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_MuzzleFlash",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/MuzzleFlash.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_PlasmaExplosionEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/PlasmaExplosionEffect.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_PoisonGas",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/PoisonGas.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_PressurisedSteam",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/PressurisedSteam.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_RainEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/RainEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_Respawn",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/Respawn.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_RisingSteam",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/RisingSteam.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_RocketTrail",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/RocketTrail.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_SandImpacts",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/SandImpacts.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_SandSwirlsEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/SandSwirlsEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_Shower",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/Shower.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_SmallExplosion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/SmallExplosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_SmokeEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/SmokeEffect.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_SparksEffect",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/SparksEffect.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_Steam",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/Steam.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_StoneImpacts",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/StoneImpacts.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_TinyExplosion",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/TinyExplosion.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_TinyFlames",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/TinyFlames.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_WaterFall",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Prefabs/WaterFall.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_WaterLeak",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Prefabs/WaterLeak.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_WildFire",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/WildFire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PP_WoodImpacts",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Prefabs/WoodImpacts.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PosionCloud_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 24 green explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "RangedAttack-DaggerThrow_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 8 dagger.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "RangedSpell-Powerful(Longcast)_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 17 nova violet.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "RangerTowerBaseProjectile_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 1 nature arrow.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "RangerTowerUpgraded_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 7 pink.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "RangerTowerlevel2Projectile_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 14 blue rapid.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "SimpleCast_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 16 fire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "SimpleCast_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 10 blue laser.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Spear_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 1 nature arrow.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Thunderbolt_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Thunderbolt_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Thunderbolt_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "TreeofLifeAura_Aura",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Water_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 9 water.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Weaponskillsword_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 24 green explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "icebasedprojectile_Projectile",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "onweaponskillmaybe_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 20 pink arrow.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "softhealingaura_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "subtleHealinginarea(EnemySkill-Mage)_Cast",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange circle.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        }
+    ]
 }

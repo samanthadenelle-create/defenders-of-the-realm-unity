@@ -611,7 +611,29 @@ namespace DeNelle.Village
                 // bolt already lies along the flight line (ProjectileMover re-faces per frame).
                 Vector3 dir = targetPos - muzzle;
                 if (dir.sqrMagnitude > 0.0001f) bolt.transform.rotation = Quaternion.LookRotation(dir);
-                bolt.AddComponent<ProjectileMover>().Launch(targetPos, 40f, CanHitAir ? 0.1f : 0.35f);
+
+                // Owner VfxManualPicks (2026-07): Hovl/PP projectile FOLLOWS the mover so Archer /
+                // Ballista / elemental bolts read as real shots, not bare pellets. Loop key returns
+                // a VFXHandle — StopSoft on arrive so the trail does not linger. Null-safe if the
+                // catalog row is missing (primitive bolt still flies). Impact fires on ARRIVAL so
+                // hitscan damage + visual connect still line up with the bolt land.
+                string projKey = ProjectileKeyFor(Element, ResolveStyle());
+                VFXHandle boltFx = null;
+                if (!string.IsNullOrEmpty(projKey))
+                {
+                    boltFx = VFXManager.PlayKey(projKey, muzzle, bolt.transform.rotation, null,
+                                                BoltColor, 0f, 0f, bolt.transform);
+                }
+                string impactKey = ImpactKeyFor(Element);
+                var impactType = ImpactVfxFor(Element);
+                bolt.AddComponent<ProjectileMover>().Launch(targetPos, 40f, CanHitAir ? 0.1f : 0.35f,
+                    () =>
+                    {
+                        boltFx?.StopSoft();
+                        VFXManager.Play(impactType, targetPos);   // legacy procedural fallback
+                        if (!string.IsNullOrEmpty(impactKey))
+                            VFXManager.PlayKey(impactKey, targetPos, default, null, BoltColor);
+                    });
             });
             return bolt;
         }
@@ -699,20 +721,16 @@ namespace DeNelle.Village
         /// </summary>
         private void PlayFireVfx(Vector3 muzzle, Vector3 targetPos)
         {
+            // Muzzle / cast only. Travelling Hovl projectile + impact-on-arrive are owned by
+            // SpawnProjectileVisual (owner VfxManualPicks wire) so spell/bolt/pellet all share
+            // one land beat — no double impact flash at fire time.
             if (ResolveStyle() == BoltStyle.Spell)
             {
                 VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
-                VFXManager.Play(ImpactVfxFor(Element), targetPos);
-                // WO-VFX-TOWERS: Hovl cast at the muzzle + Hovl impact at the target, LAYERED on
-                // top of the legacy VFXType calls (fallback stays). No following-bolt — Launch has
-                // no onArrive callback here, so muzzle + impact only. Null-safe on unknown keys.
                 VFXManager.PlayKey(CastKeyFor(Element), muzzle, default, null, BoltColor);
-                VFXManager.PlayKey(ImpactKeyFor(Element), targetPos, default, null, BoltColor);
                 return;
             }
             VFXManager.Play(MuzzleVfxFor(Element), muzzle);
-            // WO-VFX-TOWERS: Hovl cast burst at the muzzle for pellet/bolt styles too (layered on
-            // the legacy muzzle flash; null-safe no-op for Ice/None which have no cast key).
             VFXManager.PlayKey(CastKeyFor(Element), muzzle, default, null, BoltColor);
         }
 
@@ -739,17 +757,18 @@ namespace DeNelle.Village
             }
         }
 
-        // ── WO-VFX-TOWERS: DamageElement → Hovl catalog key (muzzle cast / impact) ──
-        // Maps the tower's element to the authored Hovl keys, layered on top of the VFXType
-        // calls above. Returns null where no cast burst is authored (Ice/None) — PlayKey no-ops
-        // on null, leaving the legacy flash as the sole visual there.
+        // ── WO-VFX-TOWERS / owner VfxManualPicks (2026-07): element + style → catalog keys ──
+        // Keys resolve through HovlVfxCatalog (manual overlay wins). Null = PlayKey no-op;
+        // legacy VFXType muzzle/impact still layers underneath for a safe fallback.
+
         private static string CastKeyFor(DamageElement element)
         {
             switch (element)
             {
-                case DamageElement.Flame:  return "Fireball_Cast";
-                case DamageElement.Aether: return "Arcane_Cast";
-                default:                   return null;   // Ice / None / Physical — no cast key
+                case DamageElement.Flame:  return "Fire_Cast";
+                case DamageElement.Aether: return "SimpleCast_Cast";
+                case DamageElement.Ice:    return "Freezing_Projectile"; // cold muzzle flash
+                default:                   return "PP_MuzzleFlash";      // physical bolt / ballista
             }
         }
 
@@ -757,10 +776,50 @@ namespace DeNelle.Village
         {
             switch (element)
             {
-                case DamageElement.Flame:  return "Fireball_Impact";
-                case DamageElement.Ice:    return "Frost_Impact";
-                case DamageElement.Aether: return "Arcane_Impact";
-                default:                   return "Spear_Impact";   // None / Physical
+                case DamageElement.Flame:  return "FireImpact_Impact";
+                case DamageElement.Ice:    return "Freezing_Impact";
+                case DamageElement.Aether: return "PP_PlasmaExplosionEffect";
+                default:                   return "Spear_Impact";   // None / Physical arrow
+            }
+        }
+
+        /// <summary>
+        /// Travelling projectile key from owner picks. Bolt style = archer/ballista family;
+        /// Spell = arcane/fire orbs; AirOnly ballista prefers the ranger spear bolt so AA
+        /// spears read heavier than ground archer arrows.
+        /// </summary>
+        private string ProjectileKeyFor(DamageElement element, BoltStyle style)
+        {
+            if (style == BoltStyle.Bolt || AirOnly)
+            {
+                switch (element)
+                {
+                    case DamageElement.Flame:  return "ArcherTower-Fire_Projectile";
+                    case DamageElement.Ice:    return "ArcherTower-Ice_Projectile";
+                    case DamageElement.Aether: return "RangerTowerUpgraded_Projectile";
+                    default:
+                        // Sky Ballista (airOnly) → ranger base spear; ground Archer → red laser bolt.
+                        return AirOnly
+                            ? "RangerTowerBaseProjectile_Projectile"
+                            : "ArcherTower_Projectile";
+                }
+            }
+            if (style == BoltStyle.Spell)
+            {
+                switch (element)
+                {
+                    case DamageElement.Flame: return "FireballTower_Projectile";
+                    case DamageElement.Ice:   return "icebasedprojectile_Projectile";
+                    default:                  return "ARcaneTower_Projectile";
+                }
+            }
+            // Pellet fallback — still prefer a real Hovl projectile over a bare sphere when possible.
+            switch (element)
+            {
+                case DamageElement.Flame:  return "FireballTower_Projectile";
+                case DamageElement.Ice:    return "ArcherTower-Ice_Projectile";
+                case DamageElement.Aether: return "ARcaneTower_Projectile";
+                default:                   return "ArcherTower_Projectile";
             }
         }
 
