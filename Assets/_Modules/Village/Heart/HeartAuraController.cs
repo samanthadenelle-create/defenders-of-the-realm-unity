@@ -85,6 +85,14 @@ namespace DeNelle.Village
         // meaning is ever carried by color. (Colorblind-safe: hue is a constant.)
         private static readonly Color GlowColor = new Color(1f, 0.96f, 0.9f);
 
+        // Owner VfxManualPick: the Heart of Elarion IS the world tree -- a persistent ambient
+        // Tree-of-Life aura loop sits at the trunk, held through the pooled VFXManager (the same
+        // PlayKey/VFXHandle held-loop pattern as HealingFountain's HealingFountain_Aura) and
+        // Stop()'d on destroy. It is ADDITIVE to the Aura_HeartPulse health-tell nucleus and is
+        // parented to the Heart ROOT (not the health-size pivot) so the ambient glow reads
+        // constant, unaffected by the color-free size pulse above.
+        private const string TreeAuraKey = "TreeofLifeAura_Aura";
+
         // HP tier cut points for the Step-traced readout (mirrors HeartwoodAmbient tiers).
         private const float HealthyMin  = 75f;
         private const float StrainedMin = 40f;
@@ -93,6 +101,7 @@ namespace DeNelle.Village
         private Transform _pivot;
         private Light _light;
         private VFXHandle _handle;
+        private VFXHandle _treeHandle;   // persistent Tree-of-Life ambient loop (TreeofLifeAura_Aura)
         private AuraTier _tier = AuraTier.Unknown;
         private float _pulsePhase;   // accumulated so a frequency change never snaps the wave
 
@@ -137,6 +146,8 @@ namespace DeNelle.Village
         {
             _handle?.Stop(immediate: true);
             _handle = null;
+            _treeHandle?.Stop(immediate: true);
+            _treeHandle = null;
         }
 
         // -- Aura construction ---------------------------------------------------
@@ -182,6 +193,34 @@ namespace DeNelle.Village
                         $"HeartAura '{name}': PlayAura(Aura_HeartPulse) returned a NULL handle -- loop did not start " +
                         "(loop-cap hit or missing catalog prefab + failed procedural fallback); glow light still active.");
                 }
+            }
+
+            // Persistent Tree-of-Life ambient loop (owner VfxManualPick). Held through the pooled
+            // VFXManager and parented to the Heart ROOT so it does NOT ride the health-size pivot --
+            // the ambient tree glow reads constant while the pulse nucleus above carries the health
+            // tell. Stop()'d in OnDestroy. Reuses the HealingFountain_Aura PlayKey/VFXHandle pattern.
+            if (VFXManager.Instance == null)
+            {
+                FlowTrace.Once("Heart", $"tree-aura-nomanager:{name}",
+                    $"HeartAura '{name}': VFXManager.Instance is null -- the pooled {TreeAuraKey} loop " +
+                    "will not appear (the pulse nucleus + glow light still read the health tell).");
+            }
+            else
+            {
+                _treeHandle = VFXManager.PlayKey(
+                    TreeAuraKey,
+                    transform.position + _auraOffset,
+                    Quaternion.identity,
+                    transform,          // parent to the Heart root (stable -- not the size pivot)
+                    null,               // keep the authored aura color (no tint)
+                    1f);
+                if (_treeHandle != null)
+                    FlowTrace.Step("Heart",
+                        $"HeartAura '{name}': {TreeAuraKey} ambient loop started + parented to Heart root (offset {_auraOffset}).");
+                else
+                    FlowTrace.Warn("Heart",
+                        $"HeartAura '{name}': PlayKey('{TreeAuraKey}') returned a NULL handle -- ambient tree loop " +
+                        "did not start (loop-cap hit or missing catalog row); the pulse + glow still read.");
             }
 
             // Seed the readout so tier one is traced from the first frame.

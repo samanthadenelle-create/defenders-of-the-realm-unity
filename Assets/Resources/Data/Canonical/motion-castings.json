@@ -305,7 +305,8 @@
       "heavy": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashdown.fbx",
         "guid": "36686f653952f124c8f21dd534b502e6",
-        "vfxKey": "",
+        "vfxKey": "Melee_Slash",
+        "vfxImpact": "KnightThrust_Impact",
         "sfxId": "",
         "vfxDelay": 0.0,
         "attachBone": "",
@@ -317,7 +318,7 @@
       "attack1": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_spin.fbx",
         "guid": "f28f30556d9dccc4bbd73511ffc26578",
-        "vfxKey": "",
+        "vfxKey": "Melee_Slash",
         "sfxId": "",
         "vfxDelay": 0.0,
         "attachBone": "",
@@ -329,7 +330,7 @@
       "attack2": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashright.fbx",
         "guid": "cdc0b23df563200439756e9804d4f548",
-        "vfxKey": "",
+        "vfxKey": "Melee_Slash",
         "sfxId": "",
         "vfxDelay": 0.0,
         "attachBone": "",
@@ -341,7 +342,8 @@
       "attack3": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_stab.fbx",
         "guid": "a8b13a3081b16c546a4f34ddfb946518",
-        "vfxKey": "",
+        "vfxKey": "Melee_Slash",
+        "vfxImpact": "KnightThrust_Impact",
         "sfxId": "",
         "vfxDelay": 0.0,
         "attachBone": "",
