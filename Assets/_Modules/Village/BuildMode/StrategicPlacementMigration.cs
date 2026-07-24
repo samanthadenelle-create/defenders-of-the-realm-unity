@@ -85,8 +85,8 @@ namespace DeNelle.Village
         private static readonly BakedRow[] BakedRows =
         {
             new BakedRow { bakedName = "Blacksmith_Weapons_Storefront", itemId = "workshop" },
-            new BakedRow { bakedName = "Lumbermill_Wood_Storefront",    itemId = "lumbermill" },
-            new BakedRow { bakedName = "Windmill_Food_Storefront",      itemId = "mill" },
+            new BakedRow { bakedName = "Lumbermill_Wood_Storefront",    itemId = "collector_lumbermill" },
+            new BakedRow { bakedName = "Windmill_Food_Storefront",      itemId = "collector_farm" },
             new BakedRow { bakedName = "EchoHollow_Pets_RoamingArea",   itemId = "pet-house" },
             new BakedRow { bakedName = "Forge_Armor_Storefront",        itemId = "forge" },
             new BakedRow { bakedName = "ArcaneTower_MagicUpgrades",     itemId = "arcane-tower" },

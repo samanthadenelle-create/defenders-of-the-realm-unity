@@ -103,6 +103,7 @@ namespace DeNelle.Editor
                 GateFive_PlacementDamageRepairChain(created, failures, log);
                 GateSix_YawRoundTrip45(failures, log);
                 GateSeven_ClaimInflation(grid, failures, log);
+                GateEight_SeedIdsPaletteVisible(failures, log);
             }
             catch (Exception ex)
             {
@@ -552,6 +553,86 @@ namespace DeNelle.Editor
             // not silently ignoring yaw.
             if (grid.FootprintCells(4.9f, 45f) == grid.FootprintCells(4.9f))
                 failures.Add("claim inflation: FootprintCells(4.9m, 45°) equals the unrotated claim — the yaw overload is not inflating (silently ignoring yawDegrees)");
+        }
+
+        // =====================================================================
+        //  GATE 8 -- the Default-Town seed never writes a palette-HIDDEN id
+        //  (WO felt-bug: a Farm/Lumbermill re-offered because the seed recorded
+        //   'mill'/'lumbermill' -- Town lockedIds -- which the singleton gate
+        //   scans by exact record.itemId==card.id and so never matches the
+        //   'collector_farm'/'collector_lumbermill' cards the palette renders)
+        // =====================================================================
+        private static void GateEight_SeedIdsPaletteVisible(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[gate 8] seeded baked ids are palette-visible (not Town-locked)");
+
+            // Every id the Default-Town seed writes (the REAL BakedRows census, read by
+            // reflection) must be a card the Town palette actually RENDERS -- otherwise the
+            // singleton 'already-built' gate (IsSingletonBuilt: scans BaseLayout for
+            // record.itemId == card.id) can never match the seeded record, and the
+            // building is offered for placement while a copy already exists. A baked id
+            // that lands in Town lockedIds is exactly that leak (Farm, Lumbermill).
+            var town = BuildCategoryRegistry.Get(DeNelle.Core.Catalog.BuildType.Town);
+            if (town == null || town.LockedIds == null)
+            { failures.Add("Town build-category / lockedIds not loaded -- cannot verify the seed against the palette"); return; }
+
+            var bakedIds = ReadCensusIds("BakedRows", failures);
+            if (bakedIds.Count == 0)
+            { failures.Add("BakedRows read empty by reflection -- the census table moved; re-point this oracle"); return; }
+            var bakedSet = new HashSet<string>(bakedIds, StringComparer.OrdinalIgnoreCase);
+
+            // POSITIVE guard (the exact WO-707 fix -- pins the rename so it can't regress):
+            // the seed MUST record the collector rename TARGETS ('collector_farm' /
+            // 'collector_lumbermill' -- the cards the Town palette renders) and MUST NOT
+            // record the RETIRED source ids ('mill' / 'lumbermill' -- Town lockedIds the
+            // palette hides). Recording a retired id while its replacement card is offered
+            // is exactly the duplicate-offer leak this gate exists to catch.
+            foreach (var target in new[] { "collector_farm", "collector_lumbermill" })
+                if (!bakedSet.Contains(target))
+                    failures.Add($"Default-Town seed does NOT record the WO-707 rename target '{target}' -- the food/wood collector the Town palette renders is unseeded (rename regressed)");
+            foreach (var retired in new[] { "mill", "lumbermill" })
+                if (bakedSet.Contains(retired))
+                    failures.Add($"Default-Town seed records the RETIRED id '{retired}' (a Town lockedId) while the palette renders its replacement 'collector_farm'/'collector_lumbermill' -- the singleton gate scans record.itemId==card.id, never matches the retired record, and the replacement is re-offered while a copy exists (WO-707 rename leak)");
+
+            // Ids that are LEGITIMATELY unlock-gated: a Town lockedId that has NO rendered
+            // replacement card the palette offers is NOT a duplicate-offer leak -- it simply
+            // hasn't been unlocked yet, so it can never be re-offered. 'jeweler' is exactly
+            // this: Gate 1 (~line 194) ASSERTS the Town verb MUST lock 'jeweler' ("stays
+            // unlock-gated"), and there is no 'collector_jeweler' card to re-offer it. Exempt
+            // it here so this gate does not contradict Gate 1. (A same-visualPrefabPath check
+            // was rejected: the real leak pair 'mill'->'collector_farm' uses DIFFERENT models
+            // -- Structures/Windmill_Medieval vs Structures/farm -- so a same-model heuristic
+            // would miss the very regression this gate must fail on. The retired-id census
+            // check above is the general, precise leak detector; jeweler is the one documented
+            // unlock-gate exemption.)
+            var unlockGateExempt = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "jeweler" };
+
+            // Town-type catalog rows (Resource/Collector) are the ids the Town palette can
+            // render; only those are subject to the Town singleton gate. A baked id that is
+            // a Town-type row MUST NOT be filtered out by Town lockedIds.
+            var townTypes = new HashSet<CatalogType>(town.Types);
+            int checkedTownIds = 0;
+            foreach (var id in bakedIds)
+            {
+                if (town.LockedIds.Contains(id) && !unlockGateExempt.Contains(id))
+                    failures.Add($"Default-Town seed writes '{id}', but it is a Town lockedId (palette-HIDDEN) with a rendered replacement -- the singleton gate can never match this record, so the building is re-offered while a copy exists (Farm/Lumbermill leak)");
+
+                var entry = CatalogRegistry.Get(id);
+                if (entry != null && townTypes.Contains(entry.type) && !unlockGateExempt.Contains(id))
+                {
+                    checkedTownIds++;
+                    // Positive parity: the seeded Town-type id resolves to a row the palette
+                    // would enumerate (CatalogRegistry.OfType) and is not locked out.
+                    bool rendered = false;
+                    foreach (var e in CatalogRegistry.OfType(entry.type))
+                        if (e != null && e.id == id && !town.LockedIds.Contains(e.id)) { rendered = true; break; }
+                    if (!rendered)
+                        failures.Add($"Default-Town seed writes Town-type id '{id}' (type {entry.type}) that the Town palette does NOT render -- the singleton gate has no card to match it against");
+                }
+            }
+            if (checkedTownIds == 0)
+                failures.Add("no seeded baked id resolved to a rendered Town-type (Resource/Collector) catalog row -- the food/wood collector seed ('collector_farm'/'collector_lumbermill') is missing or mis-typed");
+            else log.AppendLine($"  {bakedIds.Count} seeded id(s) checked, {checkedTownIds} rendered Town-type; retired-id census clean, jeweler unlock-gate exempt ok");
         }
 
         // =====================================================================
