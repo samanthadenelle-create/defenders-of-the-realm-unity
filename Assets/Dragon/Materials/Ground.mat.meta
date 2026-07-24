@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8e50202fc6da0f743bcc5d902be50f87
+timeCreated: 1517925325
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Materials/Ground.mat
+  uploadId: 228603

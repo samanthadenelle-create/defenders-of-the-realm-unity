@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 39413bdc4b4dbd44c94b564c1739bd53
+timeCreated: 1517940022
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Scripts/CameraLookAt.cs
+  uploadId: 228603

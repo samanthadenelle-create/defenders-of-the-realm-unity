@@ -2,10 +2,28 @@
 
 # Dragon Decision: Create Own vs License the Existing One
 
-**Current Asset:** Syndrath the Devourer (wave-20 boss)  
-**Source:** Dennis Haupt free Sketchfab dragon  
-**License:** **CC BY-NC** (Non-Commercial only) — confirmed via Sketchfab API  
-**Status:** **Ship blocker** if we want to sell the game.
+> ## ✅ DECISION 2026-07-23 (Option B.2) → SWAP ACTUALLY LANDED 2026-07-24 (WO-760)
+> ⚠ **The 07-23 "REMOVED/RESOLVED" claim below was PREMATURE** — that commit only repointed
+> comments; the CC-BY-NC model still SHIPPED (Resources includes unused assets) until the
+> 2026-07-24 builder-run + git-rm. As of 2026-07-24 the swap is REAL: licensed rig git-tracked
+> at `Assets/Dragon/`, ships as `Resources/Enemies/Boss_Dragon.prefab` (built by
+> `DragonAnimatorSetup` + force-tracked `SyndrathDragon.controller`); old CC-BY-NC files + the
+> orphan `Prefabs/Village/Generated/Boss_Dragon.prefab` git-rm'd; `RedDragon 1.2` deleted;
+> `EnemyFactory` dragon keys repointed to `Boss_Dragon`; fly->land->burn->Tree behavior built.
+>
+> The old CC-BY-NC 3DHaupt dragon has been **REMOVED and REPLACED** by a licensed
+> Asset-Store dragon: **Unity Asset Store product 71047 "Dragon Animated" (WDallgraphics),
+> commercial license**, now living at **`Assets/Dragon/`**. The old model + its files
+> (`Resources/Enemies/Dragon.fbx` + `Dragon.controller` + `Materials/Dragon_Bump_Col2.*` +
+> `Dragon_Nor_mirror2.jpg` + both `Boss_Dragon.prefab`s) were git-rm'd 2026-07-24 (WO-760).
+> **The CC-BY-NC ship blocker (KEY_FACTS "L1") is CLEARED.** The boss's creative name
+> ("Syndrath the Devourer", key `bossSyndrath`) is retained — only the model changed.
+> The prose below is the pre-decision options memo, kept for provenance.
+
+**Current Asset:** ~~Syndrath the Devourer (wave-20 boss)~~ → licensed Asset-Store dragon (Assets/Dragon, product 71047)  
+**Source:** ~~Dennis Haupt free Sketchfab dragon~~ → WDallgraphics, Unity Asset Store (commercial)  
+**License:** ~~**CC BY-NC** (Non-Commercial only)~~ → **commercial (Asset Store)** — blocker cleared 2026-07-23  
+**Status:** ~~**Ship blocker**~~ → **RESOLVED**
 
 ---
 

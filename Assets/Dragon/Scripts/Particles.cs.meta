@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: c02a1d3b73cb4bb42bcf4e05fd018bfd
+timeCreated: 1517948504
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Scripts/Particles.cs
+  uploadId: 228603

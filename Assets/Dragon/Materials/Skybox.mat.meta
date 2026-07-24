@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 821ca6c951a9ea74287b8afb1e9ee5d4
+timeCreated: 1517925218
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Materials/Skybox.mat
+  uploadId: 228603

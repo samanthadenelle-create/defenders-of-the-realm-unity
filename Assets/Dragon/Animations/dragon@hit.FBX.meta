@@ -1,0 +1,908 @@
+fileFormatVersion: 2
+guid: bfd841d2d80c0ef4597cbfe1eb25a8af
+timeCreated: 1517942324
+licenseType: Store
+ModelImporter:
+  serializedVersion: 19
+  fileIDToRecycleName:
+    100000: //RootNode
+    100002: dragon_Arrow_ctrl
+    100004: dragon_Arrow_ctrl001
+    100006: dragon_ArrowBase_ctrl
+    100008: dragon_ArrowBase_ctrl001
+    100010: dragon_ArrowEnd_ctrl
+    100012: dragon_ArrowEnd_ctrl001
+    100014: dragon_Body_mesh
+    100016: dragon_COM_ctrl
+    100018: dragon_Gum_mesh
+    100020: dragon_Head_bone
+    100022: dragon_Head_ctrl
+    100024: dragon_Hip_ctrl
+    100026: dragon_Jaw1_bone
+    100028: dragon_Jaw2-nub_bone
+    100030: dragon_Jaw2_bone
+    100032: dragon_Jaw_ctrl
+    100034: dragon_l_Ankle_bone
+    100036: dragon_l_ball_IKGoal
+    100038: dragon_l_Carpus_bone
+    100040: dragon_l_Clav_bone
+    100042: dragon_l_Clavicle_ctrl
+    100044: dragon_l_Claw_ctrl
+    100046: dragon_l_claw_IKGoal
+    100048: dragon_l_ClawLift_hlp
+    100050: dragon_l_ClawTap_hlp
+    100052: dragon_l_Finger-nub_bone
+    100054: dragon_l_Finger_bone
+    100056: dragon_l_Foot_ctrl
+    100058: dragon_l_Forearm_bone
+    100060: dragon_l_Forearm_ctrl
+    100062: dragon_l_Heel_hlp
+    100064: dragon_l_heel_IKGoal
+    100066: dragon_l_HeelPeel_hlp
+    100068: dragon_l_Humerus_bone
+    100070: dragon_l_Index1_bone
+    100072: dragon_l_Index1_ctrl
+    100074: dragon_l_Index2_bone
+    100076: dragon_l_Index2_ctrl
+    100078: dragon_l_Index3-nub_bone
+    100080: dragon_l_Index3_bone
+    100082: dragon_l_Index3_ctrl
+    100084: dragon_l_joint_IKGoal
+    100086: dragon_l_Knee_bone
+    100088: dragon_l_Middle1_bone
+    100090: dragon_l_Middle1_ctrl
+    100092: dragon_l_Middle2_bone
+    100094: dragon_l_Middle2_ctrl
+    100096: dragon_l_Middle3-nub_bone
+    100098: dragon_l_Middle3_bone
+    100100: dragon_l_Middle3_ctrl
+    100102: dragon_l_Pinky1_bone
+    100104: dragon_l_Pinky1_ctrl
+    100106: dragon_l_Pinky2_bone
+    100108: dragon_l_Pinky2_ctrl
+    100110: dragon_l_Pinky3-nub_bone
+    100112: dragon_l_Pinky3_bone
+    100114: dragon_l_Pinky3_ctrl
+    100116: dragon_l_Ring1_bone
+    100118: dragon_l_Ring1_ctrl
+    100120: dragon_l_Ring2_bone
+    100122: dragon_l_Ring2_ctrl
+    100124: dragon_l_Ring3-nub_bone
+    100126: dragon_l_Ring3_bone
+    100128: dragon_l_Ring3_ctrl
+    100130: dragon_l_Scapula_bone
+    100132: dragon_l_Scapula_ctrl
+    100134: dragon_l_Shoulder_bone
+    100136: dragon_l_Shoulder_ctrl
+    100138: dragon_l_Thigh_bone
+    100140: dragon_l_Toe-nub_bone
+    100142: dragon_l_Toe_bone
+    100144: dragon_l_toe_IKGoal
+    100146: dragon_l_ToeLift_hlp
+    100148: dragon_l_ToeTap_hlp
+    100150: dragon_l_Ulna_bone
+    100152: dragon_l_Wrist_bone
+    100154: dragon_l_Wrist_ctrl
+    100156: dragon_l_Wrist_hlp
+    100158: dragon_l_wrist_IKGoal
+    100160: dragon_l_WristPeel_hlp
+    100162: dragon_Main_ctrl
+    100164: dragon_Neck1_bone
+    100166: dragon_Neck2_bone
+    100168: dragon_Neck3_bone
+    100170: dragon_Neck4_bone
+    100172: dragon_Neck_ctrl
+    100174: dragon_NeckBase_ctrl
+    100176: dragon_Pelvis_bone
+    100178: dragon_r_Ankle_bone
+    100180: dragon_r_ball_IKGoal
+    100182: dragon_r_Carpus_bone
+    100184: dragon_r_Clav_bone
+    100186: dragon_r_Clavicle_ctrl
+    100188: dragon_r_Claw_ctrl
+    100190: dragon_r_claw_IKGoal
+    100192: dragon_r_ClawLift_hlp
+    100194: dragon_r_ClawTap_hlp
+    100196: dragon_r_Finger-nub_bone
+    100198: dragon_r_Finger_bone
+    100200: dragon_r_Foot_ctrl
+    100202: dragon_r_Forearm_bone
+    100204: dragon_r_Forearm_ctrl
+    100206: dragon_r_Heel_hlp
+    100208: dragon_r_heel_IKGoal
+    100210: dragon_r_HeelPeel_hlp
+    100212: dragon_r_Humerus_bone
+    100214: dragon_r_Index1_bone
+    100216: dragon_r_Index1_ctrl
+    100218: dragon_r_Index2_bone
+    100220: dragon_r_Index2_ctrl
+    100222: dragon_r_Index3-nub_bone
+    100224: dragon_r_Index3_bone
+    100226: dragon_r_Index3_ctrl
+    100228: dragon_r_joint_IKGoal
+    100230: dragon_r_Knee_bone
+    100232: dragon_r_Middle1_bone
+    100234: dragon_r_Middle1_ctrl
+    100236: dragon_r_Middle2_bone
+    100238: dragon_r_Middle2_ctrl
+    100240: dragon_r_Middle3-nub_bone
+    100242: dragon_r_Middle3_bone
+    100244: dragon_r_Middle3_ctrl
+    100246: dragon_r_Pinky1_bone
+    100248: dragon_r_Pinky1_ctrl
+    100250: dragon_r_Pinky2_bone
+    100252: dragon_r_Pinky2_ctrl
+    100254: dragon_r_Pinky3-nub_bone
+    100256: dragon_r_Pinky3_bone
+    100258: dragon_r_Pinky3_ctrl
+    100260: dragon_r_Ring1_bone
+    100262: dragon_r_Ring1_ctrl
+    100264: dragon_r_Ring2_bone
+    100266: dragon_r_Ring2_ctrl
+    100268: dragon_r_Ring3-nub_bone
+    100270: dragon_r_Ring3_bone
+    100272: dragon_r_Ring3_ctrl
+    100274: dragon_r_Scapula_bone
+    100276: dragon_r_Scapula_ctrl
+    100278: dragon_r_Shoulder_bone
+    100280: dragon_r_Shoulder_ctrl
+    100282: dragon_r_Thigh_bone
+    100284: dragon_r_Toe-nub_bone
+    100286: dragon_r_Toe_bone
+    100288: dragon_r_toe_IKGoal
+    100290: dragon_r_ToeLift_hlp
+    100292: dragon_r_ToeTap_hlp
+    100294: dragon_r_Ulna_bone
+    100296: dragon_r_Wrist_bone
+    100298: dragon_r_Wrist_ctrl
+    100300: dragon_r_Wrist_hlp
+    100302: dragon_r_wrist_IKGoal
+    100304: dragon_r_WristPeel_hlp
+    100306: dragon_Snout-nub_bone
+    100308: dragon_Snout_bone
+    100310: dragon_Snout_ctrl
+    100312: dragon_Spine1_bone
+    100314: dragon_Spine2_bone
+    100316: dragon_Spine3_bone
+    100318: dragon_SpineBase_ctrl
+    100320: dragon_Tail10_bone
+    100322: dragon_Tail11_bone
+    100324: dragon_Tail12_bone
+    100326: dragon_Tail13_bone
+    100328: dragon_Tail14_bone
+    100330: dragon_Tail15_bone
+    100332: dragon_Tail16_bone
+    100334: dragon_Tail17_bone
+    100336: dragon_Tail18-nub_bone
+    100338: dragon_Tail18_bone
+    100340: dragon_Tail1_bone
+    100342: dragon_Tail1_ctrl
+    100344: dragon_Tail2_bone
+    100346: dragon_Tail2_ctrl
+    100348: dragon_Tail2_ctrl001
+    100350: dragon_Tail2_ctrl002
+    100352: dragon_Tail3_bone
+    100354: dragon_Tail3_ctrl
+    100356: dragon_Tail3_ctrl001
+    100358: dragon_Tail4_bone
+    100360: dragon_Tail4_ctrl
+    100362: dragon_Tail4_ctrl001
+    100364: dragon_Tail5_bone
+    100366: dragon_Tail5_ctrl
+    100368: dragon_Tail5_ctrl001
+    100370: dragon_Tail6_bone
+    100372: dragon_Tail6_ctrl
+    100374: dragon_Tail6_ctrl001
+    100376: dragon_Tail7_bone
+    100378: dragon_Tail8_bone
+    100380: dragon_Tail9_bone
+    100382: dragon_TailBase_ctrl
+    100384: dragon_Toothdown_mesh
+    100386: dragon_Toothup_mesh
+    100388: Particle View 001
+    400000: //RootNode
+    400002: dragon_Arrow_ctrl
+    400004: dragon_Arrow_ctrl001
+    400006: dragon_ArrowBase_ctrl
+    400008: dragon_ArrowBase_ctrl001
+    400010: dragon_ArrowEnd_ctrl
+    400012: dragon_ArrowEnd_ctrl001
+    400014: dragon_Body_mesh
+    400016: dragon_COM_ctrl
+    400018: dragon_Gum_mesh
+    400020: dragon_Head_bone
+    400022: dragon_Head_ctrl
+    400024: dragon_Hip_ctrl
+    400026: dragon_Jaw1_bone
+    400028: dragon_Jaw2-nub_bone
+    400030: dragon_Jaw2_bone
+    400032: dragon_Jaw_ctrl
+    400034: dragon_l_Ankle_bone
+    400036: dragon_l_ball_IKGoal
+    400038: dragon_l_Carpus_bone
+    400040: dragon_l_Clav_bone
+    400042: dragon_l_Clavicle_ctrl
+    400044: dragon_l_Claw_ctrl
+    400046: dragon_l_claw_IKGoal
+    400048: dragon_l_ClawLift_hlp
+    400050: dragon_l_ClawTap_hlp
+    400052: dragon_l_Finger-nub_bone
+    400054: dragon_l_Finger_bone
+    400056: dragon_l_Foot_ctrl
+    400058: dragon_l_Forearm_bone
+    400060: dragon_l_Forearm_ctrl
+    400062: dragon_l_Heel_hlp
+    400064: dragon_l_heel_IKGoal
+    400066: dragon_l_HeelPeel_hlp
+    400068: dragon_l_Humerus_bone
+    400070: dragon_l_Index1_bone
+    400072: dragon_l_Index1_ctrl
+    400074: dragon_l_Index2_bone
+    400076: dragon_l_Index2_ctrl
+    400078: dragon_l_Index3-nub_bone
+    400080: dragon_l_Index3_bone
+    400082: dragon_l_Index3_ctrl
+    400084: dragon_l_joint_IKGoal
+    400086: dragon_l_Knee_bone
+    400088: dragon_l_Middle1_bone
+    400090: dragon_l_Middle1_ctrl
+    400092: dragon_l_Middle2_bone
+    400094: dragon_l_Middle2_ctrl
+    400096: dragon_l_Middle3-nub_bone
+    400098: dragon_l_Middle3_bone
+    400100: dragon_l_Middle3_ctrl
+    400102: dragon_l_Pinky1_bone
+    400104: dragon_l_Pinky1_ctrl
+    400106: dragon_l_Pinky2_bone
+    400108: dragon_l_Pinky2_ctrl
+    400110: dragon_l_Pinky3-nub_bone
+    400112: dragon_l_Pinky3_bone
+    400114: dragon_l_Pinky3_ctrl
+    400116: dragon_l_Ring1_bone
+    400118: dragon_l_Ring1_ctrl
+    400120: dragon_l_Ring2_bone
+    400122: dragon_l_Ring2_ctrl
+    400124: dragon_l_Ring3-nub_bone
+    400126: dragon_l_Ring3_bone
+    400128: dragon_l_Ring3_ctrl
+    400130: dragon_l_Scapula_bone
+    400132: dragon_l_Scapula_ctrl
+    400134: dragon_l_Shoulder_bone
+    400136: dragon_l_Shoulder_ctrl
+    400138: dragon_l_Thigh_bone
+    400140: dragon_l_Toe-nub_bone
+    400142: dragon_l_Toe_bone
+    400144: dragon_l_toe_IKGoal
+    400146: dragon_l_ToeLift_hlp
+    400148: dragon_l_ToeTap_hlp
+    400150: dragon_l_Ulna_bone
+    400152: dragon_l_Wrist_bone
+    400154: dragon_l_Wrist_ctrl
+    400156: dragon_l_Wrist_hlp
+    400158: dragon_l_wrist_IKGoal
+    400160: dragon_l_WristPeel_hlp
+    400162: dragon_Main_ctrl
+    400164: dragon_Neck1_bone
+    400166: dragon_Neck2_bone
+    400168: dragon_Neck3_bone
+    400170: dragon_Neck4_bone
+    400172: dragon_Neck_ctrl
+    400174: dragon_NeckBase_ctrl
+    400176: dragon_Pelvis_bone
+    400178: dragon_r_Ankle_bone
+    400180: dragon_r_ball_IKGoal
+    400182: dragon_r_Carpus_bone
+    400184: dragon_r_Clav_bone
+    400186: dragon_r_Clavicle_ctrl
+    400188: dragon_r_Claw_ctrl
+    400190: dragon_r_claw_IKGoal
+    400192: dragon_r_ClawLift_hlp
+    400194: dragon_r_ClawTap_hlp
+    400196: dragon_r_Finger-nub_bone
+    400198: dragon_r_Finger_bone
+    400200: dragon_r_Foot_ctrl
+    400202: dragon_r_Forearm_bone
+    400204: dragon_r_Forearm_ctrl
+    400206: dragon_r_Heel_hlp
+    400208: dragon_r_heel_IKGoal
+    400210: dragon_r_HeelPeel_hlp
+    400212: dragon_r_Humerus_bone
+    400214: dragon_r_Index1_bone
+    400216: dragon_r_Index1_ctrl
+    400218: dragon_r_Index2_bone
+    400220: dragon_r_Index2_ctrl
+    400222: dragon_r_Index3-nub_bone
+    400224: dragon_r_Index3_bone
+    400226: dragon_r_Index3_ctrl
+    400228: dragon_r_joint_IKGoal
+    400230: dragon_r_Knee_bone
+    400232: dragon_r_Middle1_bone
+    400234: dragon_r_Middle1_ctrl
+    400236: dragon_r_Middle2_bone
+    400238: dragon_r_Middle2_ctrl
+    400240: dragon_r_Middle3-nub_bone
+    400242: dragon_r_Middle3_bone
+    400244: dragon_r_Middle3_ctrl
+    400246: dragon_r_Pinky1_bone
+    400248: dragon_r_Pinky1_ctrl
+    400250: dragon_r_Pinky2_bone
+    400252: dragon_r_Pinky2_ctrl
+    400254: dragon_r_Pinky3-nub_bone
+    400256: dragon_r_Pinky3_bone
+    400258: dragon_r_Pinky3_ctrl
+    400260: dragon_r_Ring1_bone
+    400262: dragon_r_Ring1_ctrl
+    400264: dragon_r_Ring2_bone
+    400266: dragon_r_Ring2_ctrl
+    400268: dragon_r_Ring3-nub_bone
+    400270: dragon_r_Ring3_bone
+    400272: dragon_r_Ring3_ctrl
+    400274: dragon_r_Scapula_bone
+    400276: dragon_r_Scapula_ctrl
+    400278: dragon_r_Shoulder_bone
+    400280: dragon_r_Shoulder_ctrl
+    400282: dragon_r_Thigh_bone
+    400284: dragon_r_Toe-nub_bone
+    400286: dragon_r_Toe_bone
+    400288: dragon_r_toe_IKGoal
+    400290: dragon_r_ToeLift_hlp
+    400292: dragon_r_ToeTap_hlp
+    400294: dragon_r_Ulna_bone
+    400296: dragon_r_Wrist_bone
+    400298: dragon_r_Wrist_ctrl
+    400300: dragon_r_Wrist_hlp
+    400302: dragon_r_wrist_IKGoal
+    400304: dragon_r_WristPeel_hlp
+    400306: dragon_Snout-nub_bone
+    400308: dragon_Snout_bone
+    400310: dragon_Snout_ctrl
+    400312: dragon_Spine1_bone
+    400314: dragon_Spine2_bone
+    400316: dragon_Spine3_bone
+    400318: dragon_SpineBase_ctrl
+    400320: dragon_Tail10_bone
+    400322: dragon_Tail11_bone
+    400324: dragon_Tail12_bone
+    400326: dragon_Tail13_bone
+    400328: dragon_Tail14_bone
+    400330: dragon_Tail15_bone
+    400332: dragon_Tail16_bone
+    400334: dragon_Tail17_bone
+    400336: dragon_Tail18-nub_bone
+    400338: dragon_Tail18_bone
+    400340: dragon_Tail1_bone
+    400342: dragon_Tail1_ctrl
+    400344: dragon_Tail2_bone
+    400346: dragon_Tail2_ctrl
+    400348: dragon_Tail2_ctrl001
+    400350: dragon_Tail2_ctrl002
+    400352: dragon_Tail3_bone
+    400354: dragon_Tail3_ctrl
+    400356: dragon_Tail3_ctrl001
+    400358: dragon_Tail4_bone
+    400360: dragon_Tail4_ctrl
+    400362: dragon_Tail4_ctrl001
+    400364: dragon_Tail5_bone
+    400366: dragon_Tail5_ctrl
+    400368: dragon_Tail5_ctrl001
+    400370: dragon_Tail6_bone
+    400372: dragon_Tail6_ctrl
+    400374: dragon_Tail6_ctrl001
+    400376: dragon_Tail7_bone
+    400378: dragon_Tail8_bone
+    400380: dragon_Tail9_bone
+    400382: dragon_TailBase_ctrl
+    400384: dragon_Toothdown_mesh
+    400386: dragon_Toothup_mesh
+    400388: Particle View 001
+    2300000: dragon_l_Claw_ctrl
+    2300002: dragon_l_Foot_ctrl
+    2300004: dragon_r_Claw_ctrl
+    2300006: dragon_r_Foot_ctrl
+    3300000: dragon_l_Claw_ctrl
+    3300002: dragon_l_Foot_ctrl
+    3300004: dragon_r_Claw_ctrl
+    3300006: dragon_r_Foot_ctrl
+    4300000: dragon_Body_mesh
+    4300002: dragon_Gum_mesh
+    4300004: dragon_Toothup_mesh
+    4300006: dragon_Toothdown_mesh
+    4300008: dragon_r_Foot_ctrl
+    4300010: dragon_l_Foot_ctrl
+    4300012: dragon_r_Claw_ctrl
+    4300014: dragon_l_Claw_ctrl
+    7400000: hit
+    9500000: //RootNode
+    13700000: dragon_Body_mesh
+    13700002: dragon_Gum_mesh
+    13700004: dragon_Toothdown_mesh
+    13700006: dragon_Toothup_mesh
+  materials:
+    importMaterials: 1
+    materialName: 0
+    materialSearch: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleRotations: 1
+    optimizeGameObjects: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    clipAnimations:
+    - serializedVersion: 16
+      name: hit
+      takeName: Take 001
+      firstFrame: 867
+      lastFrame: 883
+      wrapMode: 0
+      orientationOffsetY: 0
+      level: 0
+      cycleOffset: 0
+      loop: 0
+      hasAdditiveReferencePose: 0
+      loopTime: 1
+      loopBlend: 1
+      loopBlendOrientation: 0
+      loopBlendPositionY: 1
+      loopBlendPositionXZ: 0
+      keepOriginalOrientation: 0
+      keepOriginalPositionY: 1
+      keepOriginalPositionXZ: 0
+      heightFromFeet: 0
+      mirror: 0
+      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+      curves: []
+      events: []
+      transformMask:
+      - path: 
+        weight: 1
+      - path: dragon_Body_mesh
+        weight: 1
+      - path: dragon_Gum_mesh
+        weight: 1
+      - path: dragon_Head_ctrl
+        weight: 1
+      - path: dragon_Hip_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_l_Thigh_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_l_Thigh_bone/dragon_l_Knee_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_l_Thigh_bone/dragon_l_Knee_bone/dragon_l_Ankle_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_l_Thigh_bone/dragon_l_Knee_bone/dragon_l_Ankle_bone/dragon_l_Toe_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_l_Thigh_bone/dragon_l_Knee_bone/dragon_l_Ankle_bone/dragon_l_Toe_bone/dragon_l_Toe-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_r_Thigh_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_r_Thigh_bone/dragon_r_Knee_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_r_Thigh_bone/dragon_r_Knee_bone/dragon_r_Ankle_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_r_Thigh_bone/dragon_r_Knee_bone/dragon_r_Ankle_bone/dragon_r_Toe_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_r_Thigh_bone/dragon_r_Knee_bone/dragon_r_Ankle_bone/dragon_r_Toe_bone/dragon_r_Toe-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Index1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Index1_bone/dragon_l_Index2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Index1_bone/dragon_l_Index2_bone/dragon_l_Index3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Index1_bone/dragon_l_Index2_bone/dragon_l_Index3_bone/dragon_l_Index3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Middle1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Middle1_bone/dragon_l_Middle2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Middle1_bone/dragon_l_Middle2_bone/dragon_l_Middle3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Middle1_bone/dragon_l_Middle2_bone/dragon_l_Middle3_bone/dragon_l_Middle3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Pinky1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Pinky1_bone/dragon_l_Pinky2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Pinky1_bone/dragon_l_Pinky2_bone/dragon_l_Pinky3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Pinky1_bone/dragon_l_Pinky2_bone/dragon_l_Pinky3_bone/dragon_l_Pinky3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Ring1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Ring1_bone/dragon_l_Ring2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Ring1_bone/dragon_l_Ring2_bone/dragon_l_Ring3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_bone/dragon_l_Forearm_bone/dragon_l_Wrist_bone/dragon_l_Ring1_bone/dragon_l_Ring2_bone/dragon_l_Ring3_bone/dragon_l_Ring3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Index1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Index1_ctrl/dragon_l_Index2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Index1_ctrl/dragon_l_Index2_ctrl/dragon_l_Index3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Middle1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Middle1_ctrl/dragon_l_Middle2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Middle1_ctrl/dragon_l_Middle2_ctrl/dragon_l_Middle3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Pinky1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Pinky1_ctrl/dragon_l_Pinky2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Pinky1_ctrl/dragon_l_Pinky2_ctrl/dragon_l_Pinky3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Ring1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Ring1_ctrl/dragon_l_Ring2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clav_bone/dragon_l_Shoulder_ctrl/dragon_l_Forearm_ctrl/dragon_l_Wrist_ctrl/dragon_l_Ring1_ctrl/dragon_l_Ring2_ctrl/dragon_l_Ring3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Clavicle_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone/dragon_l_Humerus_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone/dragon_l_Humerus_bone/dragon_l_Ulna_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone/dragon_l_Humerus_bone/dragon_l_Ulna_bone/dragon_l_Carpus_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone/dragon_l_Humerus_bone/dragon_l_Ulna_bone/dragon_l_Carpus_bone/dragon_l_Finger_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_bone/dragon_l_Humerus_bone/dragon_l_Ulna_bone/dragon_l_Carpus_bone/dragon_l_Finger_bone/dragon_l_Finger-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_l_Scapula_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Jaw1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Jaw1_bone/dragon_Jaw2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Jaw1_bone/dragon_Jaw2_bone/dragon_Jaw2-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Jaw_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Snout_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Snout_bone/dragon_Snout-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_Neck1_bone/dragon_Neck2_bone/dragon_Neck3_bone/dragon_Neck4_bone/dragon_Head_bone/dragon_Snout_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Index1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Index1_bone/dragon_r_Index2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Index1_bone/dragon_r_Index2_bone/dragon_r_Index3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Index1_bone/dragon_r_Index2_bone/dragon_r_Index3_bone/dragon_r_Index3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Middle1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Middle1_bone/dragon_r_Middle2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Middle1_bone/dragon_r_Middle2_bone/dragon_r_Middle3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Middle1_bone/dragon_r_Middle2_bone/dragon_r_Middle3_bone/dragon_r_Middle3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Pinky1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Pinky1_bone/dragon_r_Pinky2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Pinky1_bone/dragon_r_Pinky2_bone/dragon_r_Pinky3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Pinky1_bone/dragon_r_Pinky2_bone/dragon_r_Pinky3_bone/dragon_r_Pinky3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Ring1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Ring1_bone/dragon_r_Ring2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Ring1_bone/dragon_r_Ring2_bone/dragon_r_Ring3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_bone/dragon_r_Forearm_bone/dragon_r_Wrist_bone/dragon_r_Ring1_bone/dragon_r_Ring2_bone/dragon_r_Ring3_bone/dragon_r_Ring3-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Index1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Index1_ctrl/dragon_r_Index2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Index1_ctrl/dragon_r_Index2_ctrl/dragon_r_Index3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Middle1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Middle1_ctrl/dragon_r_Middle2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Middle1_ctrl/dragon_r_Middle2_ctrl/dragon_r_Middle3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Pinky1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Pinky1_ctrl/dragon_r_Pinky2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Pinky1_ctrl/dragon_r_Pinky2_ctrl/dragon_r_Pinky3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Ring1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Ring1_ctrl/dragon_r_Ring2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clav_bone/dragon_r_Shoulder_ctrl/dragon_r_Forearm_ctrl/dragon_r_Wrist_ctrl/dragon_r_Ring1_ctrl/dragon_r_Ring2_ctrl/dragon_r_Ring3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Clavicle_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone/dragon_r_Humerus_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone/dragon_r_Humerus_bone/dragon_r_Ulna_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone/dragon_r_Humerus_bone/dragon_r_Ulna_bone/dragon_r_Carpus_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone/dragon_r_Humerus_bone/dragon_r_Ulna_bone/dragon_r_Carpus_bone/dragon_r_Finger_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_bone/dragon_r_Humerus_bone/dragon_r_Ulna_bone/dragon_r_Carpus_bone/dragon_r_Finger_bone/dragon_r_Finger-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Spine1_bone/dragon_Spine2_bone/dragon_Spine3_bone/dragon_r_Scapula_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone/dragon_Tail15_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone/dragon_Tail15_bone/dragon_Tail16_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone/dragon_Tail15_bone/dragon_Tail16_bone/dragon_Tail17_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone/dragon_Tail15_bone/dragon_Tail16_bone/dragon_Tail17_bone/dragon_Tail18_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_Tail1_bone/dragon_Tail2_bone/dragon_Tail3_bone/dragon_Tail4_bone/dragon_Tail5_bone/dragon_Tail6_bone/dragon_Tail7_bone/dragon_Tail8_bone/dragon_Tail9_bone/dragon_Tail10_bone/dragon_Tail11_bone/dragon_Tail12_bone/dragon_Tail13_bone/dragon_Tail14_bone/dragon_Tail15_bone/dragon_Tail16_bone/dragon_Tail17_bone/dragon_Tail18_bone/dragon_Tail18-nub_bone
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001/dragon_ArrowBase_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001/dragon_ArrowBase_ctrl/dragon_Arrow_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001/dragon_ArrowBase_ctrl/dragon_Arrow_ctrl001/dragon_Arrow_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001/dragon_ArrowBase_ctrl/dragon_Arrow_ctrl001/dragon_Arrow_ctrl/dragon_ArrowEnd_ctrl001
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_COM_ctrl/dragon_Pelvis_bone/dragon_TailBase_ctrl/dragon_Tail1_ctrl/dragon_Tail2_ctrl001/dragon_Tail2_ctrl002/dragon_Tail2_ctrl/dragon_Tail3_ctrl001/dragon_Tail3_ctrl/dragon_Tail4_ctrl001/dragon_Tail4_ctrl/dragon_Tail5_ctrl001/dragon_Tail5_ctrl/dragon_Tail6_ctrl001/dragon_Tail6_ctrl/dragon_ArrowBase_ctrl001/dragon_ArrowBase_ctrl/dragon_Arrow_ctrl001/dragon_Arrow_ctrl/dragon_ArrowEnd_ctrl001/dragon_ArrowEnd_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp/dragon_l_ClawTap_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp/dragon_l_ClawTap_hlp/dragon_l_claw_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp/dragon_l_WristPeel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp/dragon_l_WristPeel_hlp/dragon_l_joint_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Claw_ctrl/dragon_l_Wrist_hlp/dragon_l_ClawLift_hlp/dragon_l_WristPeel_hlp/dragon_l_wrist_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp/dragon_l_HeelPeel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp/dragon_l_HeelPeel_hlp/dragon_l_ball_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp/dragon_l_HeelPeel_hlp/dragon_l_heel_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp/dragon_l_ToeTap_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_l_Foot_ctrl/dragon_l_Heel_hlp/dragon_l_ToeLift_hlp/dragon_l_ToeTap_hlp/dragon_l_toe_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp/dragon_r_ClawTap_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp/dragon_r_ClawTap_hlp/dragon_r_claw_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp/dragon_r_WristPeel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp/dragon_r_WristPeel_hlp/dragon_r_joint_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Claw_ctrl/dragon_r_Wrist_hlp/dragon_r_ClawLift_hlp/dragon_r_WristPeel_hlp/dragon_r_wrist_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp/dragon_r_HeelPeel_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp/dragon_r_HeelPeel_hlp/dragon_r_ball_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp/dragon_r_HeelPeel_hlp/dragon_r_heel_IKGoal
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp/dragon_r_ToeTap_hlp
+        weight: 1
+      - path: dragon_Main_ctrl/dragon_r_Foot_ctrl/dragon_r_Heel_hlp/dragon_r_ToeLift_hlp/dragon_r_ToeTap_hlp/dragon_r_toe_IKGoal
+        weight: 1
+      - path: dragon_Neck_ctrl
+        weight: 1
+      - path: dragon_NeckBase_ctrl
+        weight: 1
+      - path: dragon_SpineBase_ctrl
+        weight: 1
+      - path: dragon_Toothdown_mesh
+        weight: 1
+      - path: dragon_Toothup_mesh
+        weight: 1
+      - path: Particle View 001
+        weight: 1
+      maskType: 0
+      maskSource: {instanceID: 0}
+      additiveReferencePoseFrame: 867
+    isReadable: 1
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    importBlendShapes: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    optimizeMeshForGPU: 1
+    keepQuads: 0
+    weldVertices: 1
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+  importAnimation: 1
+  copyAvatar: 0
+  humanDescription:
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    rootMotionBoneName: dragon_Main_ctrl
+    hasTranslationDoF: 0
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  animationType: 2
+  humanoidOversampling: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Animations/dragon@hit.FBX
+  uploadId: 228603

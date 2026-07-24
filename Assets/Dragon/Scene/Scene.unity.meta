@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: efc1962fb2a9ce44eac4f5f000872205
+timeCreated: 1517925120
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Scene/Scene.unity
+  uploadId: 228603

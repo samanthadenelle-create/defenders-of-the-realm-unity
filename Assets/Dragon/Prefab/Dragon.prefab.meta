@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9be4ef07274f15a45984f9e8aca41464
+timeCreated: 1517951883
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71047
+  packageName: Dragon Animated
+  packageVersion: 5.3.8p2
+  assetPath: Assets/Dragon/Prefab/Dragon.prefab
+  uploadId: 228603

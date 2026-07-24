@@ -413,8 +413,12 @@ namespace DeNelle.Village
                 case "ogre":             return "Orc_Shaman";        // STAND-IN: ogre brute (was "OgreMage" — missing)
                 case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster (was "OgreMage" — missing)
                 case "demon":            return "Demon";             // demon
-                case "boss-dragon":      return "Dragon";            // wing boss → the Dragon
-                case "dragon":           return "Dragon";
+                // Apex flyer. The licensed Asset-Store dragon (product 71047, source at
+                // Assets/Dragon) ships as Resources/Enemies/Boss_Dragon.prefab, built by
+                // DragonAnimatorSetup (WO-760). The old 3DHaupt CC-BY-NC "Dragon" fbx was
+                // RETIRED 2026-07-24 — resolve the dragon keys to the licensed prefab.
+                case "boss-dragon":      return "Boss_Dragon";        // apex flyer -> licensed rig
+                case "dragon":           return "Boss_Dragon";
             }
 
             // ── FAMILY FALLBACK ──────────────────────────────────────────────────
@@ -429,7 +433,7 @@ namespace DeNelle.Village
                 case "ogre":  return "Orc_Shaman";      // STAND-IN (no OgreMage.fbx) — tinted grey below
                 case "demon":
                 case "cult":  return "Demon";
-                case "dragon": return "Dragon";
+                case "dragon": return "Boss_Dragon";
             }
 
             // ── DEFAULT (unknown family/id) → pick a skeleton by body size ───────
