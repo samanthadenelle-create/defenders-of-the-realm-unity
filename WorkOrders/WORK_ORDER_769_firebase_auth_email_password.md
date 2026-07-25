@@ -42,3 +42,10 @@
 ## 5. Notes
 - Firebase "skill" = `npx firebase-tools mcp` (MCP not connected this session; CLI used directly, logged in as samanthadenelle@gmail.com).
 - Sequence: gates 1-2 → Unity auth layer → gate 3 (Neon) → test build. Don't wire code before the SDK import.
+
+## 6. UPDATE 2026-07-25 — Google Sign-In added + all providers live
+- Email/Password ENABLED (owner, console). Google Sign-In ENABLED + SHA-1/256 registered (from dotr-release.keystore) + oauth clients in google-services.json.
+- App: `Sign in with Google` button wired (surgical GoogleSignIn plugin import — only Assets/GoogleSignIn, its old EDM4U/Parse skipped, Firebase's EDM4U kept; asmdef added; `SignInWithGoogleCredentialAsync` via GoogleAuthProvider). Commit 75d9fcd8, pushed.
+- APK (2026-07-25 15:24, 457MB, release-signed) contains libFirebaseCppAuth + libnative-googlesignin + play-services-auth — no EDM4U/Gradle conflict.
+- Test flow: new game -> login-or-guest gate -> Email/Password, Google, or Guest all work on-device.
+- STILL OPEN: Neon /api/game/save should verify the Firebase ID token + key by UID (server change, separate repo).
