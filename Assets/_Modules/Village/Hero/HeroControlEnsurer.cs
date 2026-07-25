@@ -114,6 +114,76 @@ namespace DeNelle.Village
             }
         }
 
+        // A1 (recover, don't fabricate): re-home a REAL hero that survived a Single-scene load parked
+        // in the special DontDestroyOnLoad scene. Mirrors DedupeHeroes' DDOL keying: SceneTransitionTrigger
+        // marks the hero root DontDestroyOnLoad before a Single load and re-homes it into the target scene
+        // LATER; and the carried root can be tag-only / renamed so FindLoco()+FindHeroByName() miss it while
+        // it still lives. Move the carried root into the active scene and seat it at the hero-start marker so
+        // combat reuses the real hero instead of a stand-in pill. Returns the recovered root, or null when
+        // there is genuinely nothing carried to recover (the caller then spawns the emergency hero). Fail-safe:
+        // every risky op is guarded so a bad object logs + is skipped, never NREs.
+        private GameObject TryRecoverCarriedHero(string activeSceneName)
+        {
+            GameObject carried = null;
+
+            // Prefer a carried REAL hero rig (HeroLocomotion) still parked in DDOL.
+            foreach (var h in FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (h == null) continue;
+                var root = h.transform.root.gameObject;
+                if (root != null && root.scene.name == "DontDestroyOnLoad") { carried = root; break; }
+            }
+            // Else any Player-tagged / "Hero (" root still parked in DDOL - the tag-only match that
+            // FindLoco() (component) and FindHeroByName() (name prefix) would both miss.
+            if (carried == null)
+            {
+                foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (t == null) continue;
+                    var root = t.transform.root.gameObject;
+                    if (root == null || root.scene.name != "DontDestroyOnLoad") continue;
+                    bool isHero = false;
+                    try { isHero = root.CompareTag("Player"); } catch (UnityEngine.UnityException) { isHero = false; }
+                    if (!isHero && root.name != null && root.name.StartsWith("Hero (")) isHero = true;
+                    if (isHero) { carried = root; break; }
+                }
+            }
+            if (carried == null) return null;
+
+            // Re-home the carried root out of the special DDOL scene into the active scene so it unloads
+            // normally on the next transition and combat resolves it in-scene (guarded - a MoveGameObject
+            // throw must not NRE the load).
+            var active = SceneManager.GetActiveScene();
+            if (active.IsValid() && active.isLoaded && carried.scene != active)
+            {
+                try { SceneManager.MoveGameObjectToScene(carried, active); }
+                catch (System.Exception e)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"recover: MoveGameObjectToScene failed: {e.Message}");
+                }
+            }
+            if (!carried.activeSelf) carried.SetActive(true);
+
+            // Seat it at the scene's hero-start marker when present (Village2/raid seat the entry away from
+            // the carry pose); else leave its carried world pose. Prefer the teleport-aware WarpTo so the
+            // NavMeshAgent re-warps onto the destination navmesh instead of fighting a hard transform set.
+            var marker = FindSpawnMarkerPosition();
+            if (marker.HasValue)
+            {
+                var loco = carried.GetComponentInChildren<HeroLocomotion>(true);
+                if (loco != null)
+                {
+                    try { loco.WarpTo(marker.Value); }
+                    catch (System.Exception) { carried.transform.position = marker.Value; }
+                }
+                else carried.transform.position = marker.Value;
+            }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
+                $"recover: re-homed carried hero '{carried.name}' into active scene '{activeSceneName}' at {carried.transform.position}.");
+            return carried;
+        }
+
         private void Ensure()
         {
             string scene = SceneManager.GetActiveScene().name;
@@ -125,12 +195,28 @@ namespace DeNelle.Village
             {
                 if (IsVillageScene(scene))
                 {
-                    // In primary scene (Village2), ensure a hero exists immediately on load so
-                    // camera can acquire target and not stay stuck on the tree. Watch() still
-                    // monitors for later destruction.
-                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"Ensure: no hero found in village scene '{scene}' — spawning emergency hero.");
-                    SpawnEmergencyHero();
-                    hero = FindLoco()?.gameObject ?? FindHeroByName();
+                    // A1 (RECOVER before FABRICATE): before spawning a stand-in pill, try to recover a
+                    // REAL hero that carried into the special DontDestroyOnLoad scene. SceneTransitionTrigger
+                    // marks the hero root DontDestroyOnLoad ahead of a Single load (outpost/raid/Village2) and
+                    // re-homes it into the target scene LATER (RepositionPlayerAfterLoad, after a fade + waits);
+                    // if this Ensure runs first, or the carried root is tag-only / renamed so FindLoco()+
+                    // FindHeroByName() miss it, we would fabricate a pill on top of a live carried hero. Re-home
+                    // the carried hero into the active scene instead so combat reuses the real Knight, not a pill.
+                    hero = TryRecoverCarriedHero(scene);
+                    if (hero != null)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
+                            $"Ensure: RECOVERED carried hero '{hero.name}' into '{scene}' - no emergency pill spawned.");
+                    }
+                    else
+                    {
+                        // In primary scene (Village2), ensure a hero exists immediately on load so
+                        // camera can acquire target and not stay stuck on the tree. Watch() still
+                        // monitors for later destruction.
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"Ensure: no hero found in village scene '{scene}' - spawning emergency hero.");
+                        SpawnEmergencyHero();
+                        hero = FindLoco()?.gameObject ?? FindHeroByName();
+                    }
                 }
                 if (hero == null)
                 {
@@ -313,9 +399,14 @@ namespace DeNelle.Village
             DeNelle.Core.Diagnostics.FlowTrace.Fail("Hero",
                 $"EMERGENCY pill spawned in scene '{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' — carried hero not found.");
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = "Hero (Blaise)";                       // so camera / NPCs find it by name
-            go.tag = "Player";                               // WO-450: canonical hero tag for all consumers
+            // A2 (no bare pill): build the emergency hero as a baked hero does - an EMPTY root with a
+            // child named "HeroBody". The attached HeroBodySwapper (below) finds + REPLACES that "HeroBody"
+            // child with the player's real animated class FBX (Knight -> ff.knightv3 -> KnightV3.fbx ->
+            // KnightMocap.controller), exactly like DungeonSceneBuilder / FolksGranaryBuilder do. So even on
+            // the fabricate path the hero becomes the real Knight, not a capsule. HeroLocomotion also looks
+            // for a "HeroBody" child, so this structure is the canonical one.
+            var go = new GameObject("Hero (Blaise)"); // so camera / NPCs find it by name
+            go.tag = "Player";                        // WO-450: canonical hero tag for all consumers
             // TKT-8: seat at the scene's hero-start marker when present (Village2 / raid scenes put the
             // entry point elsewhere — the old hardcoded (6,1,4) put the hero off-map there). Falls back
             // to MainCastle_Hall's courtyard spot (6, liftY+1, 4): WO-593 raised the castle onto its
@@ -324,25 +415,47 @@ namespace DeNelle.Village
             go.transform.position = FindSpawnMarkerPosition()
                 ?? new Vector3(6f, UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f) + 1f, 4f);
 
+            // The interim visual stand-in (only shown until HeroBodySwapper swaps in the Knight, or if that
+            // swap can't load an FBX). Child named "HeroBody" so the swapper destroys + replaces it.
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.name = "HeroBody";
+            body.transform.SetParent(go.transform, false);
+
             // Drop the primitive collider so HeroLocomotion's CapsuleCast can't
             // self-block (it sweeps against OTHER colliders for walls).
-            var col = go.GetComponent<Collider>();
+            var col = body.GetComponent<Collider>();
             if (col != null) Destroy(col);
 
-            var mr = go.GetComponent<Renderer>();
-            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            if (sh != null && mr != null)
-            {
-                var m = new Material(sh);
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(0.60f, 0.45f, 0.85f));
-                if (m.HasProperty("_Color"))     m.SetColor("_Color",     new Color(0.60f, 0.45f, 0.85f));
-                mr.sharedMaterial = m;
-            }
+            // B3 (NEVER magenta): do NOT degrade to Shader.Find("Standard") - a Standard material renders
+            // MAGENTA under URP in a stripped player build (the exact bug). Route through MagentaGuard's
+            // robust URP/Lit builder, which resolves the shader via Shader.Find and, if that returns null in
+            // a stripped build, BORROWS a URP/Lit shader already serialized in the loaded scene. Keep the
+            // intended lavender tint. If no URP shader can be resolved at all it returns null; leave the
+            // primitive's own material rather than force a magenta Standard.
+            var mr = body.GetComponent<Renderer>();
+            var lavender = new Color(0.60f, 0.45f, 0.85f);
+            var m = DeNelle.Core.MagentaGuard.BuildUrpLitMaterial(lavender);
+            if (m != null && mr != null) mr.sharedMaterial = m;
 
             go.AddComponent<HeroLocomotion>();
             go.AddComponent<HeroDeathLogger>();   // catch it too, in case the destroyer is periodic
             go.AddComponent<HeroTargetIndicator>();
             go.AddComponent<HeroLoadout>();        // emergency hero also gets the W/E/R loadout (loads from PlayerPrefs)
+
+            // A2 (belt-and-suspenders): attach HeroBodySwapper so the "HeroBody" capsule child above is
+            // replaced by the player's real animated class body at runtime - the same component the baked
+            // dungeon/granary/hub heroes carry. Direct AddComponent (both types are in DeNelle.Village, so no
+            // reflection is needed); guarded so a throw leaves the lavender stand-in in place rather than NRE.
+            try
+            {
+                if (go.GetComponent<HeroBodySwapper>() == null)
+                    go.AddComponent<HeroBodySwapper>();
+            }
+            catch (System.Exception e)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                    $"emergency hero: HeroBodySwapper attach failed ({e.Message}) - keeping the lavender stand-in body.");
+            }
 
             // Wire camera for emergency hero (prefer modern SmartMobileCamera; legacy fallback).
             // Prevents "camera stuck on tree" in recovery scenarios on WebGL / clean loads.

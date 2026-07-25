@@ -382,6 +382,60 @@ namespace DeNelle.Core
             return fresh;
         }
 
+        // Resolve a URP/Lit shader ROBUSTLY for a RUNTIME-spawned renderer (the emergency hero
+        // pill). Shader.Find can return null in a stripped player build; when it does, BORROW the
+        // shader from any material already living in the loaded scene(s) - those ARE guaranteed to be
+        // included in the build because they are serialized in a built scene (the very reason
+        // MagentaGuard exists). Falls back to nothing (returns null) only when truly none exist, so a
+        // caller can decide to leave a renderer alone rather than force a magenta Standard material.
+        public static Shader ResolveUrpLitShader()
+        {
+            if (_lit == null) _lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (_lit != null) return _lit;
+            try
+            {
+                foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                {
+                    if (r == null) continue;
+                    var mats = r.sharedMaterials;
+                    if (mats == null) continue;
+                    foreach (var m in mats)
+                    {
+                        var sh = m != null ? m.shader : null;
+                        if (sh != null && sh.name == "Universal Render Pipeline/Lit")
+                        {
+                            _lit = sh;
+                            return _lit;
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("MagentaGuard", $"ResolveUrpLitShader scene-borrow threw: {e.Message}");
+            }
+            return _lit; // may be null
+        }
+
+        // Build a FRESH URP/Lit material tinted <paramref name="baseColor"/> for a runtime placeholder
+        // (the emergency hero pill). GUARANTEES a NON-magenta material: it never degrades to the
+        // Standard shader (which renders magenta under URP). Returns null ONLY when no URP/Lit shader
+        // can be resolved at all - the caller then leaves the renderer's existing material rather than
+        // forcing magenta. Mirrors BuildRecoveredMaterial's opaque setup, but sources its colour from a
+        // caller instead of a dead source material and resolves the shader through the robust path above.
+        public static Material BuildUrpLitMaterial(Color baseColor)
+        {
+            var sh = ResolveUrpLitShader();
+            if (sh == null) return null;
+            var m = new Material(sh) { name = "EmergencyHero_URP" };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", baseColor);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", baseColor);
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 0f); // URP: 0 = Opaque
+            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 1f);
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+            return m;
+        }
+
         // A renderer whose mesh is one of Unity's BUILT-IN PRIMITIVES (the meshes
         // GameObject.CreatePrimitive produces). A magenta one is a stray placeholder, not art.
         private static bool IsPrimitivePlaceholder(Renderer r)
