@@ -21,6 +21,18 @@
 
 ## 1. Black Dragon
 
+> **⚠ SUPERSEDED 2026-07-23 — the Black Dragon (3DHaupt) has been REMOVED and REPLACED.**
+> The CC-BY-NC 3DHaupt "Black Dragon Rigged and Game Ready" documented in this section is no
+> longer in the project. It was replaced by a licensed **Asset-Store dragon (Unity Asset Store
+> product 71047 "Dragon Animated", WDallgraphics, commercial license)** at **`Assets/Dragon/`**.
+> The old files (`Resources/Enemies/Dragon.fbx` + `Dragon.controller` + `Materials/Dragon_Bump_Col2.*`
+> + `Dragon_Nor_mirror2.jpg` + both `Boss_Dragon.prefab`s) are deleted/git-rm'd. **The §1.1 "⚠ LICENSE
+> FLAG", the "Gaps & debt" item #1, and the DragonBoss/TripoMaterialFixer license notes below are
+> RESOLVED — the ship blocker is cleared.** (Note: this section's claim that the FBX lived at
+> `Assets/Black Dragon/` was already stale — it actually shipped at `Assets/Resources/Enemies/Dragon.fbx`.)
+> The boss's creative name "Syndrath the Devourer" is retained; only the model changed. Body below
+> frozen for provenance.
+
 ### 1.1 Identity + inventory
 
 **Not an Asset Store purchase and not Tripo-generated.** The single FBX's exact filename — `Dragon_Baked_Actions_fbx_7.4_binary.fbx` — identifies it as the free **"Black Dragon Rigged and Game Ready"** by **Dennis Haupt (3DHaupt / Sketchfab handle dennish2010)**, distributed on Free3D, Sketchfab, CGTrader, Blendswap and the author's own site. The `_fbx_7.4_binary` suffix is Blender's FBX 7.4 binary exporter naming; the author added the "baked actions" FBX to the package specifically because users reported animation-import problems in Unity. This matches the ledger's note that Black Dragon is *not* on the store ledger.
