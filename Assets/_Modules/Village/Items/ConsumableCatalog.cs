@@ -57,6 +57,11 @@ namespace DeNelle.Village.Items
         // stays as the fallback. Default 0 = use the flat magnitude path.
         [JsonProperty("magnitudePct")] public float MagnitudePct;
         [JsonProperty("duration")] public float Duration;   // seconds; 0 = instant
+        // Owner directive (2026-07-24): ENFORCED use-cooldown in seconds. > 0 = this
+        // consumable cannot be re-used until the timer elapses (mirrors ability Q/W/E/R
+        // cooldowns); the belt tile shows the radial sweep. Absent/0 = spammable (no cd),
+        // so only authored consumables (HP potion 8s, mana draught 10s) are gated.
+        [JsonProperty("useCooldown")] public float UseCooldown;
         [JsonProperty("usableInFight")] public bool UsableInFight = true;
         [JsonProperty("glyph")] public string Glyph;
         // WO-598: authored gold BUY price at goods vendors (the Market shelf). 0/absent =

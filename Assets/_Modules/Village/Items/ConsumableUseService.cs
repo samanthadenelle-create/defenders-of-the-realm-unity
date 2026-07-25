@@ -22,6 +22,7 @@
 // is unknown, the larder is short, or no hero is found. ASCII strings only.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Village.Crafting;
 using DeNelle.Core.Diagnostics; // WO3: FlowTrace self-reporting for the percent/over-time potions
@@ -30,6 +31,29 @@ namespace DeNelle.Village.Items
 {
     public static class ConsumableUseService
     {
+        // Owner directive (2026-07-24): ENFORCED, visually-told use-cooldown. Mirrors the
+        // Q/W/E/R ability model - state lives HERE in the service (never the View), the Try
+        // gate refuses while cooling, and HudModelProducers reads these to drive the belt
+        // tile's radial sweep. RUNTIME-ONLY: absolute Time.time end-stamps keyed by
+        // consumableId; never persisted, no save-schema bump (matches ability cooldowns).
+        private static readonly Dictionary<string, float> _nextReadyAt = new Dictionary<string, float>();
+
+        /// <summary>Seconds of use-cooldown left on <paramref name="id"/> (0 = ready). Read by the HUD.</summary>
+        public static float CooldownRemaining(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return 0f;
+            if (!_nextReadyAt.TryGetValue(id, out var readyAt)) return 0f;
+            float left = readyAt - Time.time;
+            return left > 0f ? left : 0f;
+        }
+
+        /// <summary>The full authored use-cooldown of <paramref name="id"/> (from consumables.json). 0 = spammable.</summary>
+        public static float CooldownTotal(string id)
+        {
+            var def = ConsumableCatalog.Find(id);
+            return def != null ? def.UseCooldown : 0f;
+        }
+
         /// <summary>
         /// Attempt to use one of <paramref name="consumableId"/> from the village
         /// larder. <paramref name="inFight"/> gates fight-only vs rest-only items.
@@ -62,10 +86,25 @@ namespace DeNelle.Village.Items
                 return false;
             }
 
+            // Cooldown gate: refuse while this consumable is still cooling (mirrors
+            // HeroAbilities.TryCast's ExtraCooldownRemaining>0 refusal). Only gates authored
+            // consumables (useCooldown > 0); spammable ones fall straight through.
+            if (def.UseCooldown > 0f && CooldownRemaining(consumableId) > 0f)
+            {
+                Debug.Log("[ConsumableUse] " + consumableId + " still cooling ("
+                    + CooldownRemaining(consumableId).ToString("0.0") + "s left).");
+                return false;
+            }
+
             // Consume FIRST (only spend on a real apply path).
             if (!inv.TryConsume(consumableId, 1)) return false;
 
             ApplyEffect(def);
+
+            // Start the cooldown ONLY on a successful use (runtime-only; not persisted).
+            if (def.UseCooldown > 0f)
+                _nextReadyAt[consumableId] = Time.time + def.UseCooldown;
+
             return true;
         }
 
@@ -128,6 +167,15 @@ namespace DeNelle.Village.Items
 
             if (amount <= 0f) return;
             hero?.Heal(amount);
+
+            // Owner 2026-07-24: drinking a heal potion now plays the SAME full-prefab Hovl heal read
+            // the Knight's Warden's Grace uses, so a heal is visibly a heal either way. Heal_Cast is a
+            // self-lifetiming radiant burst (a oneshot prefab — no leak from this static service), fired
+            // at the hero's chest through the ONE VFXManager pool (PlayKey). A missing key throttled-
+            // no-ops (no throw), so this is ship-safe even before the catalog row exists.
+            if (hero != null)
+                VFXManager.PlayKey("Heal_Cast", hero.transform.position + Vector3.up * 1.2f,
+                    Quaternion.identity, hero.transform);
         }
 
         /// <summary>

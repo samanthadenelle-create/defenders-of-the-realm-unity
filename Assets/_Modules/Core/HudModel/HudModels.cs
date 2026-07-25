@@ -291,7 +291,19 @@ namespace DeNelle.Core.HudModel
         /// <summary>Mana draughts in the village larder.</summary>
         public int ManaPotionCount { get; private set; }
 
-        /// <summary>Raised when either count changes.</summary>
+        // Owner directive (2026-07-24): ENFORCED use-cooldown, mirrored from the ability
+        // loadout model. Producer pushes remaining/total each tick; the belt tile renders
+        // the radial sweep + blocks taps while cooling. Runtime-only (never persisted).
+        /// <summary>Seconds of use-cooldown left on the HP potion (0 = ready).</summary>
+        public float HpCooldownRemaining { get; private set; }
+        /// <summary>The HP potion's full authored use-cooldown (0 = spammable).</summary>
+        public float HpCooldownTotal { get; private set; }
+        /// <summary>Seconds of use-cooldown left on the mana draught (0 = ready).</summary>
+        public float ManaCooldownRemaining { get; private set; }
+        /// <summary>The mana draught's full authored use-cooldown (0 = spammable).</summary>
+        public float ManaCooldownTotal { get; private set; }
+
+        /// <summary>Raised when either count or a cooldown changes.</summary>
         public event Action Changed;
 
         /// <summary>Producer-only mutator.</summary>
@@ -301,6 +313,18 @@ namespace DeNelle.Core.HudModel
             ManaPotionCount = manaCount;
             Changed?.Invoke();
             FlowTrace.Throttle("HUD", "consumablehotbar", 1f, $"pots hp={HpPotionCount} mana={ManaPotionCount}");
+        }
+
+        /// <summary>Producer-only mutator: update both potion cooldowns in place, fire Changed,
+        /// trace (throttled - hot per-tick cooldown sweep). Mirrors AbilityLoadoutModel.SetCooldown.</summary>
+        public void SetCooldown(float hpRemaining, float hpTotal, float manaRemaining, float manaTotal)
+        {
+            HpCooldownRemaining = hpRemaining;
+            HpCooldownTotal = hpTotal;
+            ManaCooldownRemaining = manaRemaining;
+            ManaCooldownTotal = manaTotal;
+            Changed?.Invoke();
+            FlowTrace.Throttle("HUD", "consumablecd", 1f, $"pot cd hp {hpRemaining:F1}/{hpTotal:F1} mana {manaRemaining:F1}/{manaTotal:F1}");
         }
     }
 

@@ -35,6 +35,7 @@ using DeNelle.Core.UI;         // ConceptIconResolver — resolvable concept key
 using DeNelle.Village;
 using DeNelle.Village.Arena;   // BattleStarRating
 using DeNelle.Village.Crafting;
+using DeNelle.Village.Items;   // ConsumableUseService — enforced potion use-cooldown readers
 using DeNelle.Core.HUD;
 using CoreWavePhase = DeNelle.Core.HudModel.WavePhase;
 
@@ -733,18 +734,38 @@ namespace DeNelle.Village.Hud
     internal sealed class ConsumableHotbarProducer : HudProducer
     {
         private int _hp = int.MinValue, _mana = int.MinValue;
+        // Cadence-smoothing choice: the base poll is tightened to 0.10s (was 0.50s) so the
+        // radial cooldown sweep STEPS smoothly (~10 fps) instead of jumping in half-second
+        // increments. Both the count push and the cooldown push are still change-gated, so
+        // the tighter tick costs two dictionary reads and adds NO model churn while idle.
+        private float _hpCd = -1f, _manaCd = -1f;
 
-        public ConsumableHotbarProducer(IHudModel m) : base(m, 0.50f) { }
+        public ConsumableHotbarProducer(IHudModel m) : base(m, 0.10f) { }
 
         protected override void Poll()
         {
             var inv = VillageInventory.Instance;
             int hp = inv != null ? inv.Get(HudCommands.HpPotionId) : 0;
             int mana = inv != null ? inv.Get(HudCommands.ManaPotionId) : 0;
-            if (hp == _hp && mana == _mana) return;
-            _hp = hp;
-            _mana = mana;
-            Model.Consumables.Set(hp, mana);
+            if (hp != _hp || mana != _mana)
+            {
+                _hp = hp;
+                _mana = mana;
+                Model.Consumables.Set(hp, mana);
+            }
+
+            // Enforced use-cooldown (owner directive): state lives in the SERVICE; the producer
+            // only reads remaining/total and pushes it to the model for the belt tile's sweep.
+            float hpCd = ConsumableUseService.CooldownRemaining(HudCommands.HpPotionId);
+            float manaCd = ConsumableUseService.CooldownRemaining(HudCommands.ManaPotionId);
+            if (hpCd != _hpCd || manaCd != _manaCd)
+            {
+                _hpCd = hpCd;
+                _manaCd = manaCd;
+                Model.Consumables.SetCooldown(
+                    hpCd, ConsumableUseService.CooldownTotal(HudCommands.HpPotionId),
+                    manaCd, ConsumableUseService.CooldownTotal(HudCommands.ManaPotionId));
+            }
         }
     }
 

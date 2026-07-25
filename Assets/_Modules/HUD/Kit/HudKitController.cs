@@ -1185,14 +1185,21 @@ namespace DeNelle.HUD.Kit
             if (_hpPotionSlot != null)
             {
                 _hpPotionSlot.SetCount(c.HpPotionCount);
+                // Cooldown sweep from the model (state owned by ConsumableUseService). SetCooldown
+                // drives cdRing/cdText AND sets interactable=!cooling; re-apply the count gate AFTER
+                // so a used-up or unbound potion still greys out even when not cooling.
+                _hpPotionSlot.SetCooldown(c.HpCooldownRemaining, c.HpCooldownTotal);
                 if (_hpPotionSlot.button != null)
-                    _hpPotionSlot.button.interactable = c.HpPotionCount > 0 && HudCommands.HasPotion;
+                    _hpPotionSlot.button.interactable =
+                        c.HpPotionCount > 0 && HudCommands.HasPotion && c.HpCooldownRemaining <= 0f;
             }
             if (_manaPotionSlot != null)
             {
                 _manaPotionSlot.SetCount(c.ManaPotionCount);
+                _manaPotionSlot.SetCooldown(c.ManaCooldownRemaining, c.ManaCooldownTotal);
                 if (_manaPotionSlot.button != null)
-                    _manaPotionSlot.button.interactable = c.ManaPotionCount > 0 && HudCommands.HasManaPotion;
+                    _manaPotionSlot.button.interactable =
+                        c.ManaPotionCount > 0 && HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f;
             }
         }
 
