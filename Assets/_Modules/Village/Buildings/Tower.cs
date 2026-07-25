@@ -142,6 +142,9 @@ namespace DeNelle.Village
         /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
+        /// <summary>Max HP (WO-761: lets StructureBurn size a percent-of-max fire tick).</summary>
+        public float MaxHp => _maxHp;
+
         /// <summary>
         /// Fired when enemies destroy this tower (HP hits 0).
         /// WaveManager / TowerPersistenceService can subscribe to clean up.

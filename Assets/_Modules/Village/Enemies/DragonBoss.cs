@@ -827,6 +827,12 @@ namespace DeNelle.Village
 
             TryApplyBurn(_currentTargetTf);
 
+            // WO-761: fire that drops a structure to <=50% HP leaves a LINGERING burn
+            // (damage-over-time + looping fire VFX) until it is repaired or destroyed.
+            // Offered AFTER the hit so it only ignites a now-critically-damaged structure;
+            // StructureBurn owns the whole mechanic (a no-op above 50% / on non-structures).
+            StructureBurn.TryIgniteFromFire(_currentTargetTf);
+
             DeNelle.Village.GameSfx.PlayDragonRoar();
 
             FlowTrace.Throttle("DragonBoss", $"burn:{GetInstanceID()}", 1f,

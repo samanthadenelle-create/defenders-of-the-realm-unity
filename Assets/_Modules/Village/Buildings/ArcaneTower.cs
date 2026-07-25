@@ -119,6 +119,9 @@ namespace DeNelle.Village
         /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(Hp / _maxHp) : 0f;
 
+        /// <summary>Max HP (WO-761: lets StructureBurn size a percent-of-max fire tick).</summary>
+        public float MaxHp => _maxHp;
+
         /// <summary>Fired once when enemies destroy this spire (HP reaches 0). Observers
         /// (persistence / target-release) can subscribe. WO-672: fires at the BREAK moment
         /// (the spire persists as an inoperable shell) — listeners release targets exactly as
