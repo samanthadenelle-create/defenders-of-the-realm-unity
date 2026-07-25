@@ -476,34 +476,40 @@ namespace DeNelle.Village.World
 
         // =====================================================================
         // Magical portal VFX (owner felt-test 2026-07-15 "the dungeon portal arch looks
-        // plain -- can creative make it magical?"). Reuses the EXISTING Hovl magic-circle
-        // loop through the shared VFXManager pool (catalog key "Dungeon_Portal_Gate") as a
-        // glowing arcane rune ring seated at the arch base -- so the entrance reads as an
-        // ACTIVE magical gateway ("step here"), on top of the arch's own PortalVFXController
-        // glow. ONE pooled looping system per portal (mobile-cheap, returned to the pool on
-        // teardown). COLORBLIND-SAFE (owner red/green): the read is MOTION + LUMINANCE (a slow
-        // rotating rune ring), the arcane-violet tint is only a hint. No new particle art.
+        // plain -- can creative make it magical?"; retuned 2026-07-24 "the harsh magenta
+        // swirl + light beams read too hot -- give me a SOFT aura spilling out of the portal").
+        // Uses the shared VFXManager pool (catalog key "PP_GroundFog") as a soft ground mist
+        // that pools at the arch base -- so the entrance reads as a gentle magical emanation,
+        // on top of the arch's own PortalVFXController soft-violet halo. ONE pooled looping
+        // system per portal (mobile-cheap, returned to the pool on teardown). COLORBLIND-SAFE
+        // (owner red/green): the read is soft LUMINANCE + slow drift, the faint violet is only a hint.
         // =====================================================================
-        private static readonly Color GateTint = new Color(0.6f, 0.35f, 1f, 1f); // HDR arcane violet -- a hint only
-        private const string GateVfxKey  = "Dungeon_Portal_Gate";
-        private const float  GateVfxScale = 2.6f;  // frames the ~1.8 m arch opening as a threshold ring
+        // SOFT aura spilling out of the portal (owner felt-test 2026-07-24: the harsh
+        // magenta rune-ring + light pillars read too hot -- swap the layer to a low, soft
+        // ground mist that POOLS around the arch base). Luminance-led + near-neutral: a
+        // pale cool white with only the faintest violet hint, at reduced alpha, so it reads
+        // as a gentle glow spilling out rather than a bright saturated ring. COLORBLIND-SAFE
+        // (owner red/green): the read is soft LUMINANCE + slow motion, hue is barely a whisper.
+        private static readonly Color GateTint = new Color(0.82f, 0.80f, 0.92f, 0.45f); // pale cool white, faint violet hint, low alpha
+        private const string GateVfxKey  = "PP_GroundFog";   // soft ground mist emanation (was harsh "Dungeon_Portal_Gate" rune-ring)
+        private const float  GateVfxScale = 3.4f;  // wide + low: mist pools around the ~1.8 m arch base, not a framed ring
 
         private void AttachGateVfx(Portal p)
         {
             if (p == null || p.Root == null) return;
             if (p.GateVfx != null) return;   // already holding the loop (idempotent)
 
-            // Seat the ring just above the arch base so it reads as a floor threshold
+            // Seat the mist just above the arch base so it pools on the floor threshold
             // without z-fighting the ground. Parent to the arch so it tracks + tears down with it.
-            Vector3 ringPos = p.Root.position + Vector3.up * 0.15f;
+            Vector3 mistPos = p.Root.position + Vector3.up * 0.05f;
             p.GateVfx = VFXManager.PlayKey(
-                GateVfxKey, ringPos, Quaternion.identity, p.Root,
+                GateVfxKey, mistPos, Quaternion.identity, p.Root,
                 GateTint, GateVfxScale);
 
             FlowTrace.Step("Portal",
-                $"AttachGateVfx: '{GateVfxKey}' rune-ring " +
+                $"AttachGateVfx: '{GateVfxKey}' soft ground mist " +
                 (p.GateVfx != null
-                    ? $"spawned at ({ringPos.x:F1}, {ringPos.y:F1}, {ringPos.z:F1}) (loop held) -- entrance now reads as an active arcane gateway."
+                    ? $"spawned at ({mistPos.x:F1}, {mistPos.y:F1}, {mistPos.z:F1}) (loop held) -- soft aura now spills out of the portal base."
                     : "no-op (VFXManager/catalog not ready or key unauthored -- regen the Hovl catalog) -- procedural glow remains."));
         }
 
