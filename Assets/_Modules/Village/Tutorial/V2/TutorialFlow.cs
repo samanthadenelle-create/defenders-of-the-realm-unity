@@ -120,15 +120,21 @@ namespace DeNelle.Village
         /// <para>
         /// DECOUPLED from the whole first run (owner fix): the old definition suppressed for the
         /// entire run (ff.tutorialv2 and !Onboarded), and Onboarded only flips true when the tutorial
-        /// COMPLETES/skips -- so leaving town never resumed spawns. Now the peace window lifts the
-        /// instant the hero ventures OUT of the village (or reaches the venture-out beat), resuming
-        /// ambient spawns WITHOUT cancelling the tutorial, so the guided ending (world_encounter ->
-        /// return_home -> freedom) is preserved.
+        /// COMPLETES/skips -- so leaving town never resumed spawns. The peace window still lifts the
+        /// instant the hero ventures OUT of the village (the zone test below), resuming ambient spawns
+        /// WITHOUT cancelling the tutorial.
+        /// <para>
+        /// END-AFTER-DEFEND (owner ruling 2026-07-24): the venture-out back half (world_encounter,
+        /// return_home, freedom) was SCRAPPED, so the chain now ENDS at founding_defend. There is no
+        /// longer an arena.resolved:win step, so VentureOutOrder returns int.MaxValue -- the ORDER
+        /// boundary never trips and suppression holds for the whole (shorter) in-village tutorial,
+        /// lifted normally by Onboarded when FinishFlow runs after the defend beat (the zone test still
+        /// resumes spawns the moment the hero leaves the village even mid-tutorial).
         /// </para>
         /// Suppressed only when ALL hold: <c>ff.tutorialv2</c> on AND <see cref="GameState.Onboarded"/>
         /// false (outer guard -- a completed player is NEVER suppressed); a live TutorialFlow with the
-        /// flow still running; the current step is BEFORE the venture-out beat (world_encounter, the
-        /// arena.resolved:win step -- founding_defend and earlier stay suppressed); and the hero is in
+        /// flow still running; the current step is BEFORE the venture-out beat (now moot -- no such
+        /// step exists post-scrap, so this order test never trips); and the hero is in
         /// the roster-less Village zone (RegionSpawnTable.HasRoster false -- the SAME zone test the
         /// staged-rep probe uses). Any missing ref (no instance / no hero / thrown zone lookup) FAILS
         /// OPEN (returns false = spawns allowed) -- it never NREs and never wedges the world empty.
@@ -170,8 +176,10 @@ namespace DeNelle.Village
         private int _suppressFrame = -1;
         private bool _suppressCached;
 
-        // Cached order of the venture-out step (world_encounter -- the arena.resolved:win beat);
-        // int.MinValue = uncomputed. Suppression holds only for steps BEFORE this order.
+        // Cached order of the venture-out step (world_encounter -- the arena.resolved:win beat).
+        // int.MinValue = uncomputed. END-AFTER-DEFEND (2026-07-24): that step was scrapped, so the
+        // scan finds nothing and this resolves to int.MaxValue -- the order boundary never trips and
+        // suppression is gated by the zone test alone (held in-village, lifted on leaving / Onboarded).
         private int _ventureOutOrder = int.MinValue;
 
         /// <summary>TRUE only while the hero stands in the roster-less Village zone during the early
@@ -189,10 +197,13 @@ namespace DeNelle.Village
             // Flow must be live -- a fresh run in progress, never idle/returning/finished.
             if (_phase == Phase.Idle || _phase == Phase.Finished) return false;
 
-            // Boundary: suppress only for steps BEFORE the venture-out beat. founding_defend
-            // (order 45) stays suppressed and its teaching wave still fires (TutorialWaveSpawner
-            // bypasses this gate); world_encounter (50) + return_home/freedom never re-suppress.
-            // During the pre-first-step Settling window (_step == null) treat as before-boundary.
+            // Boundary: suppress only for steps BEFORE the venture-out beat. END-AFTER-DEFEND
+            // (2026-07-24): the venture-out steps are scrapped, so VentureOutOrder is int.MaxValue and
+            // this order test never trips -- founding_defend (order 45, the final step) stays suppressed
+            // and its teaching wave still fires (TutorialWaveSpawner bypasses this gate). Suppression
+            // then lifts via Onboarded when FinishFlow runs after defend, or the moment the hero leaves
+            // the village (the zone test below). During the pre-first-step Settling window
+            // (_step == null) treat as before-boundary.
             if (_step != null && _step.Order >= VentureOutOrder()) return false;
 
             // Zone: the hero must be in the roster-less Village zone. HasRoster is TRUE only in
@@ -211,7 +222,9 @@ namespace DeNelle.Village
 
         /// <summary>Order of the venture-out step (world_encounter -- the arena.resolved:win beat):
         /// the boundary below which the in-town peace window holds. int.MaxValue when no such step
-        /// exists (data change) or the chain has not loaded yet -- the zone test still gates it.</summary>
+        /// exists (data change) or the chain has not loaded yet -- the zone test still gates it.
+        /// END-AFTER-DEFEND (2026-07-24): that step was scrapped from the chain, so this now ALWAYS
+        /// returns int.MaxValue -- kept as a graceful no-op boundary; the zone test is the live gate.</summary>
         private int VentureOutOrder()
         {
             if (_ventureOutOrder != int.MinValue) return _ventureOutOrder;
@@ -402,6 +415,24 @@ namespace DeNelle.Village
                     FlowTrace.Step("Tutorial", $"step '{_step.Id}' already seen — resuming past it.");
                     continue;
                 }
+
+                // Prebuilt / Default-Town skip (owner ruling 2026-07-24): a build-teaching step marked
+                // skipIfPrebuilt is SKIPPED when the town is already laid out (BaseLayout carries the
+                // Default-Town seed signature). CRITICAL: apply its GRANTS first (founding_hollow grants
+                // the starterPet — a Default-Town player must NOT be left pet-less), reusing the exact
+                // idempotent grant path SkipAll uses (ApplyPrepaidTowerGrant / ApplyStarterPetGrant),
+                // then mark it seen so a resume never replays it — but do NOT play its intro dialogue.
+                // A Build-Your-Own (blank template) town has no such signature (IsTownPrebuilt false),
+                // so the kept build-teaching steps still run in full.
+                if (_step.SkipIfPrebuilt && IsTownPrebuilt())
+                {
+                    FlowTrace.Step("Tutorial", $"step '{_step.Id}' skipIfPrebuilt — town is prebuilt (Default Town); " +
+                        "applying its grants + marking seen, intro suppressed (owner ruling 2026-07-24).");
+                    if (_step.Grant != null && _step.Grant.PrepaidTower) ApplyPrepaidTowerGrant(_step);
+                    if (_step.Grant != null && _step.Grant.StarterPet) ApplyStarterPetGrant(_step);
+                    GameStateService.Instance?.MarkTutorialSeen(SeenPrefix + _step.Id);
+                    continue;
+                }
                 break;
             }
 
@@ -557,10 +588,11 @@ namespace DeNelle.Village
         /// <summary>
         /// True when a placed record's itemId satisfies a wanted build id. Normally an
         /// ordinal-ignore-case equality, plus WO-748 id-drift reconciliation: the Default
-        /// Town migration writes the wood storefront as <c>lumbermill</c> (the CastleHubBuilder
-        /// ring id), but the founding_stores FTUE step keys on <c>lumberyard</c>. They are the
-        /// same wood-resource building under two catalog ids, so accept either — the guided-build
-        /// step auto-satisfies for a Default Town founding (and for a self-built lumberyard).
+        /// Town seed writes the wood storefront as <c>collector_lumbermill</c> (the seed's
+        /// collector id; earlier migrations used <c>lumbermill</c>), but the founding_stores
+        /// FTUE step keys on <c>lumberyard</c>. They are the same wood-resource building under
+        /// different catalog ids, so accept any — the guided-build step auto-satisfies for a
+        /// Default Town founding (and for a self-built lumberyard).
         /// </summary>
         private static bool BuildIdMatches(string recordId, string wantId)
         {
@@ -568,11 +600,34 @@ namespace DeNelle.Village
             return IsWoodResourceId(recordId) && IsWoodResourceId(wantId);
         }
 
-        /// <summary>The two interchangeable wood-resource building ids (WO-748 id drift).</summary>
+        /// <summary>The interchangeable wood-resource building ids (WO-748 id drift): the FTUE
+        /// step's <c>lumberyard</c>, the older migration's <c>lumbermill</c>, and the current
+        /// Default-Town seed's <c>collector_lumbermill</c> — all the same wood collector.</summary>
         private static bool IsWoodResourceId(string id)
         {
             return string.Equals(id, "lumberyard", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(id, "lumbermill", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(id, "lumbermill", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(id, "collector_lumbermill", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Prebuilt/Default-Town detection (owner ruling 2026-07-24): true when
+        /// GameState.BaseLayout carries the Default-Town seed signature — a seeded Echo Hollow
+        /// (<c>pet-house</c>) or wood collector (<c>collector_lumbermill</c> / lumbermill / lumberyard,
+        /// via <see cref="IsWoodResourceId"/>). This is the SAME BaseLayout presence the guided-build
+        /// auto-completer reads, NOT StrategicPlacementMigrated (already flipped back true by tutorial
+        /// time). A Build-Your-Own (blank template) town leaves BaseLayout without the signature, so this
+        /// returns false and the build-teaching steps (founding_hollow/stores/town) run in full.</summary>
+        private static bool IsTownPrebuilt()
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null || state.BaseLayout == null || state.BaseLayout.Count == 0) return false;
+            foreach (var rec in state.BaseLayout)
+            {
+                if (string.IsNullOrEmpty(rec.itemId)) continue;
+                if (string.Equals(rec.itemId, "pet-house", StringComparison.OrdinalIgnoreCase)) return true;
+                if (IsWoodResourceId(rec.itemId)) return true;
+            }
+            return false;
         }
 
         /// <summary>True when a placed itemId resolves to a Tower/Gate (Defense) in the catalog

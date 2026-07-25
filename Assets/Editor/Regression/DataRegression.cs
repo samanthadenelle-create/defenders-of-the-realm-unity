@@ -338,12 +338,13 @@ namespace DeNelle.Editor
 
             if (mandatory.Count == 0)
             { failures.Add("tutorial-steps.json deserialized to 0 mandatory steps (mapping break or empty)"); return; }
-            // WO-702 (owner ruling 2026-07-13): the founding arc = 7 founding beats
-            // (greet, hollow, stores, town, echo, defense, defend) + world_encounter +
-            // return_home + freedom = exactly 10 mandatory steps. Supersedes the 07-02
-            // "exactly 7" creative scope.
-            if (mandatory.Count != 10)
-                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided founding flow is exactly 10 (WO-702, 2026-07-13)");
+            // Owner ruling 2026-07-24 (end-after-defend): the founding arc ENDS at the
+            // defend/survive beat = exactly 7 mandatory steps (greet, hollow, stores, town,
+            // echo, defense, defend). The venture-out back half (world_encounter, return_home,
+            // freedom) was SCRAPPED — players learn to venture out automatically, and the guide
+            // lives under Settings -> Game Guide. Supersedes the WO-702 (2026-07-13) 10-step chain.
+            if (mandatory.Count != 7)
+                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided founding flow ends after defend at exactly 7 (2026-07-24)");
 
             // Known highlight-registry ids + completion-signal vocabulary.
             var knownHighlights = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds);

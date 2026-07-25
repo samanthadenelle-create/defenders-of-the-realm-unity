@@ -86,6 +86,13 @@ namespace DeNelle.Core.Tutorial
         [JsonProperty("grant")] public TutorialGrant Grant;
         [JsonProperty("completion")] public TutorialCompletion Completion = new TutorialCompletion();
         [JsonProperty("skippable")] public bool Skippable;
+        /// <summary>Prebuilt/Default-Town skip (owner ruling 2026-07-24): when the town is already laid
+        /// out (GameState.BaseLayout carries the seeded pet-house / collector_lumbermill signature),
+        /// this build-teaching step is SKIPPED by the interpreter -- its grants STILL apply (critically
+        /// founding_hollow's starterPet, so a Default-Town player is never left pet-less) but its intro
+        /// dialogue never plays. A Build-Your-Own (blank template) town leaves BaseLayout empty, so
+        /// these steps run in full. No effect on contextual steps.</summary>
+        [JsonProperty("skipIfPrebuilt")] public bool SkipIfPrebuilt;
         [JsonProperty("objective")] public TutorialObjective Objective;
         /// <summary>Contextual steps only: fire once per save, ever (persisted via the
         /// SeenTutorials key "tutorial_ctx:&lt;stepId&gt;").</summary>

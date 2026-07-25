@@ -22,6 +22,7 @@
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_hollow", "outro": "tut_founding_hollow_done" },
       "highlight": ["hud.build_button"],
+      "skipIfPrebuilt": true,
       "grant": { "starterPet": true },
       "completion": { "signal": "build.structure_placed:pet-house" },
       "skippable": true,
@@ -35,6 +36,7 @@
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_stores" },
       "highlight": ["build.card.lumberyard"],
+      "skipIfPrebuilt": true,
       "completion": { "signal": "build.structure_placed:lumberyard" },
       "skippable": true,
       "objective": { "text": "Place your Lumberyard - it harvests timber for you", "count": 1 }
@@ -47,6 +49,7 @@
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_town" },
       "highlight": ["hud.build_button"],
+      "skipIfPrebuilt": true,
       "completion": { "signal": "dialogue.ended:tut_founding_town" },
       "skippable": true,
       "objective": { "text": "Lay out your town - the rest is yours to place" }
@@ -88,43 +91,6 @@
       "skippable": true,
       "objective": { "text": "Defend the gate - clear the wave" },
       "_note": "WO-702: the old town_wave row's mechanics live on here verbatim - the wave.cleared completion keys TutorialFlow.StartScriptedTownWave (the TutorialWaveSpawner teaching wave, which bypasses the FTUE peace gates by design)."
-    },
-    {
-      "id": "world_encounter",
-      "order": 50,
-      "scene": "MainCastle_Hall",
-      "trigger": { "type": "prev_complete" },
-      "pausePressure": false,
-      "dialogue": { "intro": "tut_world_encounter", "outro": "tut_world_encounter_win" },
-      "highlight": ["world.gate_direction"],
-      "completion": { "signal": "arena.resolved:win" },
-      "skippable": false,
-      "objective": { "text": "Venture out and win your first field battle" }
-    },
-    {
-      "id": "return_home",
-      "order": 60,
-      "scene": "MainCastle_Hall",
-      "trigger": { "type": "prev_complete" },
-      "pausePressure": true,
-      "dialogue": { "intro": "tut_return_home" },
-      "highlight": [],
-      "completion": { "signal": "hero.reached:hub_anchor" },
-      "skippable": true,
-      "objective": { "text": "Return home through the gate" },
-      "_note": "STALE-COPY: 'through the gate' is stale for the single merged Main_Castle_Overworld (no separate hub<->outer scene transition now). Completion is real Heart-of-Elarion proximity (hub_anchor -> live HeartController, TutorialWorldAnchors); rewrite the copy to 'Return home to the Heart' in the next copy pass. The mechanical anchor fix (drop the Vector3.zero fallback) is the priority and is done."
-    },
-    {
-      "id": "freedom",
-      "order": 70,
-      "scene": "MainCastle_Hall",
-      "trigger": { "type": "prev_complete" },
-      "pausePressure": true,
-      "dialogue": { "intro": "tut_freedom" },
-      "highlight": [],
-      "completion": { "signal": "dialogue.ended:tut_freedom" },
-      "skippable": false,
-      "objective": { "text": "Elarion is yours" }
     },
 
     {
