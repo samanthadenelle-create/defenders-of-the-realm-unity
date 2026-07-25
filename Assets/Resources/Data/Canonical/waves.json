@@ -85,13 +85,19 @@
       ]
     },
     {
+      "_comment": "TEST ONLY (2026-07-24) — apex dragon 'Syndrath' bolted onto wave 5 so the owner reaches the flying boss fast for testing. REVERT before ship: delete the 'apexBoss' block below (the real apex wave is 20). Enemies left intact so the wave still plays; the dragon spawns alongside them via WaveManager.SpawnApexBoss.",
       "waveId": 5,
       "name": "Stonebreakers",
       "countdownSeconds": 300,
       "enemies": [
         { "type": "troll", "count": 2, "spawnPoint": "spawn-2", "delay": 0,   "interval": 1.6 },
         { "type": "ogre",  "count": 2, "spawnPoint": "spawn-2", "delay": 1.2, "interval": 1.6 }
-      ]
+      ],
+      "apexBoss": {
+        "id": "boss-dragon-syndrath",
+        "hp": 4200,
+        "nameKey": "bossSyndrath"
+      }
     },
     {
       "_comment": "BOSS WAVE (cadence 6): the Necromancer of the Wound walks with the Hollowed.",

@@ -30,15 +30,25 @@
 //
 // SEQUENCE (WO-760, owner intent verbatim): the dragon "flies into town, lands,
 // and uses fire attacks to burn towers. After all towers are destroyed then
-// targets the tree of life." The behaviour is therefore a SEQUENCE state machine
-// (DragonState), not a pure HP-orbit:
+// targets the tree of life." The ARC is a state machine (DragonState), not a pure
+// HP-orbit:
 //   Approaching  - spawns off-map at altitude and flies in toward the town.
 //   Landing      - descends to a ground point beside the nearest tower.
 //   BurnTowers   - grounded; fire-attacks the nearest live DefenseTower/ArcaneTower,
 //                  advancing target-to-target until none remain alive.
+//   AirAttack    - airborne; DIVES to fire-attack the current tower from the air.
 //   RetargetTree - takes off, retargets the Heart (Heart -> Boss state).
 //   Finale       - the original orbit + dive-swoop + fire-breath, aimed at the Heart.
 //   Death        - a long spiralling fall, then destroy.
+// AI-DRIVEN ATTACK STYLE (owner directive 2026-07-24): against the towers the dragon
+// does NOT follow a fixed "always land" order - the air-vs-land choice for each attack
+// is made by an EnemyBrain-style decision hook (DecideAttackMode), mirroring
+// EnemyBrain.UpdateTacticalState/ArchetypeDefaultState: a per-tick posture enum
+// (DragonAttackMode.Air/Land) selected from HP phase + engagement geometry, with a
+// Land fail-safe. DragonBoss is a kinematic flyer (no NavMeshAgent + no Enemy), so it
+// can't host the ground EnemyBrain component; it REUSES the brain's decision PATTERN
+// instead (approach iii). The fly-in, tower-advance, and retarget-Heart arc are all
+// preserved; only the per-attack style is now dynamic.
 // HP still modulates aggression (DragonPhase: Circling/Stooping/LastWing) for the
 // phase auras + boss-bar label; the STATE progression above is the sequence.
 // =============================================================================
@@ -100,9 +110,12 @@ namespace DeNelle.Village
     }
 
     /// <summary>
-    /// The behaviour-sequence state the dragon is currently in (WO-760). State
-    /// PROGRESSION is scripted (not HP-gated): fly in, land, burn every tower, then
-    /// take off and finish on the Heart.
+    /// The behaviour-sequence state the dragon is currently in (WO-760). The ARC is
+    /// scripted (fly in -&gt; engage towers -&gt; take off and finish on the Heart), but
+    /// the ATTACK STYLE against the towers - a grounded burn (<see cref="Landing"/> -&gt;
+    /// <see cref="BurnTowers"/>) versus an aerial fire pass (<see cref="AirAttack"/>) -
+    /// is chosen per attack by the EnemyBrain-style decision hook
+    /// (<see cref="DragonBoss"/>.DecideAttackMode), not fixed.
     /// </summary>
     public enum DragonState
     {
@@ -116,6 +129,22 @@ namespace DeNelle.Village
         RetargetTree = 3,
         /// <summary>Orbit + dive-swoop + fire-breath finale, aimed at the Heart.</summary>
         Finale = 4,
+        /// <summary>Airborne; diving to fire-attack the current tower from the air (AI-chosen).</summary>
+        AirAttack = 5,
+    }
+
+    /// <summary>
+    /// The attack posture the AI brain chooses for a single tower strike
+    /// (<see cref="DragonBoss"/>.DecideAttackMode). Mirrors <see cref="DeNelle.Village.EnemyTacticalState"/>:
+    /// a posture enum selected each decision tick from state (HP phase + geometry),
+    /// so air-vs-land is a dynamic decision rather than a scripted order.
+    /// </summary>
+    public enum DragonAttackMode
+    {
+        /// <summary>Descend and burn the tower on the ground (WO-760 default / fail-safe).</summary>
+        Land = 0,
+        /// <summary>Stay airborne and strike the tower in a diving fire pass.</summary>
+        Air = 1,
     }
 
     /// <summary>
@@ -223,6 +252,10 @@ namespace DeNelle.Village
 
         [Tooltip("Seconds of Burn applied to a tower per fire attack (if the target supports it).")]
         [SerializeField] private float _burnSeconds = 3f;
+
+        [Tooltip("EnemyBrain-style air/land decision: horizontal distance to the tower " +
+                 "beyond which the AI favours an aerial fire pass over a full grounded descent.")]
+        [SerializeField] private float _airEngageDistance = 22f;
 
         [Tooltip("Placeholder fire impact burst played at the target on each fire attack. WO-757 replaces this with the sustained breath cone.")]
         [SerializeField] private VFXType _fireAttackVfx = VFXType.Impact_ExplosionFire;
@@ -459,6 +492,7 @@ namespace DeNelle.Village
                 case DragonState.Approaching:  frameSpeed = TickApproach(dt);     break;
                 case DragonState.Landing:      frameSpeed = TickLanding(dt);      break;
                 case DragonState.BurnTowers:   frameSpeed = TickBurnTowers(dt);   break;
+                case DragonState.AirAttack:    frameSpeed = TickAirAttack(dt);    break;
                 case DragonState.RetargetTree: frameSpeed = TickRetargetTree(dt); break;
                 default:                       frameSpeed = TickFinale(dt);       break;
             }
@@ -489,9 +523,170 @@ namespace DeNelle.Village
             Vector3 flat = transform.position - aim;
             flat.y = 0f;
             if (flat.magnitude <= _landTriggerDist)
-                EnterLanding(aim);
+                EnterTowerEngagement(aim);
 
             return _approachSpeed;
+        }
+
+        // -------------------------------------------------------------------------
+        // Tower engagement - EnemyBrain-style air/land decision (per attack)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Arrival at the town: acquire the nearest live tower and let the AI brain
+        /// open on it - an aerial fire pass or a grounded burn. No towers present
+        /// (already levelled) skips straight to the Heart.
+        /// </summary>
+        private void EnterTowerEngagement(Vector3 aimPos)
+        {
+            if (!NearestAliveTower(out var s, out var mb, out var tp))
+            {
+                EnterRetargetTree("no towers present on arrival");
+                return;
+            }
+            SetTowerTarget(s, mb);
+            BeginTowerAttack(tp);
+        }
+
+        /// <summary>
+        /// The per-attack AIR-vs-LAND CHOICE. Reads <see cref="DecideAttackMode"/> and
+        /// routes to an aerial fire pass (<see cref="EnterAirAttack"/>) or a grounded
+        /// descent+burn (<see cref="EnterLanding"/>). Called on arrival, after every
+        /// air pass, and each time the grounded loop re-evaluates - so the attack style
+        /// is a live AI decision, never a scripted order.
+        /// </summary>
+        private void BeginTowerAttack(Vector3 towerPos)
+        {
+            if (DecideAttackMode(towerPos) == DragonAttackMode.Air)
+                EnterAirAttack(towerPos);
+            else
+                EnterLanding(towerPos);
+        }
+
+        /// <summary>
+        /// The AI decision hook - mirrors <see cref="EnemyBrain"/>.UpdateTacticalState /
+        /// ArchetypeDefaultState: a priority-ordered read of HP-phase aggression then
+        /// engagement geometry that returns a posture enum, in place of a fixed order.
+        /// Fully guarded; the fail-safe default is <see cref="DragonAttackMode.Land"/>
+        /// (the WO-760 sane behaviour) so an undecidable state never freezes the dragon.
+        /// </summary>
+        private DragonAttackMode DecideAttackMode(Vector3 targetPos)
+        {
+            DragonAttackMode mode = DragonAttackMode.Land;   // fail-safe default
+            Guard.Try("DragonBoss", "decide air/land attack mode", () =>
+            {
+                Vector3 flat = targetPos - transform.position;
+                flat.y = 0f;
+                float dist = flat.magnitude;
+
+                // 1) HP-phase aggression: the seething LastWing phase drives relentless
+                //    aerial swoops (mirror of EnemyBrain's low-HP posture switch).
+                if (_phase == DragonPhase.LastWing) { mode = DragonAttackMode.Air; return; }
+
+                // 2) Engagement geometry: a distant tower is reached faster by an air
+                //    pass than a full descent-and-ground commit (mirror of Rush/Kite by
+                //    range in ComputeTacticalDestination).
+                if (dist > _airEngageDistance) { mode = DragonAttackMode.Air; return; }
+
+                // 3) Enraged Stooping phase mixes both so it uses air AND land.
+                if (_phase == DragonPhase.Stooping)
+                {
+                    mode = (_attackVariant % 2 == 0) ? DragonAttackMode.Air : DragonAttackMode.Land;
+                    return;
+                }
+
+                // 4) Calm Circling + close target: land and burn (WO-760 default).
+                mode = DragonAttackMode.Land;
+            });
+            return mode;
+        }
+
+        /// <summary>
+        /// Begins an airborne diving fire pass on the current tower. Triggers a takeoff
+        /// (harmless if already airborne) and reuses the swoop timer machinery; the pass
+        /// itself is driven by <see cref="TickAirAttack"/>.
+        /// </summary>
+        private void EnterAirAttack(Vector3 towerPos)
+        {
+            SetGroundedFlags(false);
+            AnimTrigger(HTakeoff);   // lifts off if grounded; a no-op trigger if already flying
+            AnimTrigger(HAttack);
+            PlayTelegraph();
+            _swoopElapsed = Mathf.Epsilon;
+            _swoopStruck = false;
+            _state = DragonState.AirAttack;
+            FlowTrace.Step("DragonBoss", $"'{_bossId}' -> AirAttack (aerial fire pass) on tower at {towerPos}.");
+        }
+
+        /// <summary>
+        /// Drives one airborne diving fire pass at the current tower: a cruise-height ->
+        /// low-over-tower -> climb arc that fires the shared tower payload
+        /// (<see cref="FireAtTowerCore"/>) at the low point. Advances to the next tower
+        /// (or the Heart) when the current one falls; re-runs the air/land decision at
+        /// the end of each pass so the style stays dynamic.
+        /// </summary>
+        private float TickAirAttack(float dt)
+        {
+            SetGroundedFlags(false);
+
+            // Tower fell (Destroyed event or dead) -> advance to the next, or take the
+            // fight to the Heart. Same advance/retarget gate as the grounded loop.
+            if (_retargetNow || _currentTarget == null || !_currentTarget.IsAlive)
+            {
+                _retargetNow = false;
+                _swoopElapsed = 0f;
+                _swoopStruck = false;
+                if (NearestAliveTower(out var s, out var mb, out var np))
+                {
+                    SetTowerTarget(s, mb);
+                    BeginTowerAttack(np);   // re-decide air/land for the new tower
+                }
+                else
+                {
+                    EnterRetargetTree("all towers destroyed (air)");
+                }
+                return _cruiseSpeed * 1.8f;
+            }
+
+            Vector3 tp = _currentTargetTf != null ? _currentTargetTf.position : AnchorPosition();
+
+            _swoopElapsed += dt;
+            float t = Mathf.Clamp01(_swoopElapsed / _swoopDuration);
+
+            // Dive arc: cruise height at the ends, low over the tower at mid-pass.
+            float arc = 1f - 4f * (t - 0.5f) * (t - 0.5f);
+            float cruiseY = AnchorPosition().y + _orbitHeight;
+            float lowY = tp.y + _swoopLowHeight;
+            float wantY = Mathf.Lerp(cruiseY, lowY, arc);
+
+            Vector3 prev = transform.position;
+            Vector3 hereXZ = new Vector3(prev.x, 0f, prev.z);
+            Vector3 tpXZ = new Vector3(tp.x, 0f, tp.z);
+            Vector3 nextXZ = Vector3.MoveTowards(hereXZ, tpXZ, _cruiseSpeed * 1.8f * dt);
+            float nextY = Mathf.MoveTowards(prev.y, wantY, _descendSpeed * 2f * dt);
+            transform.position = new Vector3(nextXZ.x, nextY, nextXZ.z);
+            FaceTravel(transform.position - prev);
+
+            // Strike at the low point of the pass - reuse the ONE fire payload.
+            if (!_swoopStruck && arc > 0.85f)
+            {
+                Vector3 f = transform.position - tp;
+                f.y = 0f;
+                if (f.magnitude <= _strikeRadius * 1.6f)
+                {
+                    _swoopStruck = true;
+                    FireAtTowerCore(tp);
+                }
+            }
+
+            // Pass complete -> AI re-decides (another air pass, or land and burn).
+            if (t >= 1f)
+            {
+                _swoopElapsed = 0f;
+                _swoopStruck = false;
+                BeginTowerAttack(tp);
+            }
+            return _cruiseSpeed * 1.8f;
         }
 
         /// <summary>Begins the landing descent onto a ground spot beside <paramref name="aimPos"/>.</summary>
@@ -572,6 +767,16 @@ namespace DeNelle.Village
             if (_attackCooldown <= 0f)
             {
                 _attackCooldown = _groundBurnInterval;
+
+                // Per-attack AI choice (EnemyBrain-style): keep burning on the ground,
+                // or take off for an aerial pass if the brain now favours air (the phase
+                // dropped, or the advanced-to tower is far). Dynamic, not scripted.
+                if (DecideAttackMode(tp) == DragonAttackMode.Air)
+                {
+                    EnterAirAttack(tp);
+                    return 0f;
+                }
+
                 FireAtTower(tp);
             }
 
@@ -585,7 +790,7 @@ namespace DeNelle.Village
         /// </summary>
         private void FireAtTower(Vector3 targetPos)
         {
-            // Cycle the three grounded attack clips for variety.
+            // Cycle the three grounded attack clips for variety, then fire the payload.
             _attackVariant = (_attackVariant + 1) % 3;
             switch (_attackVariant)
             {
@@ -594,6 +799,17 @@ namespace DeNelle.Village
                 default: AnimTrigger(HAttack3); break;
             }
 
+            FireAtTowerCore(targetPos);
+        }
+
+        /// <summary>
+        /// The shared fire payload - telegraph, fire VFX, contact damage + Burn, roar,
+        /// trace - used by BOTH the grounded burn (<see cref="FireAtTower"/>, which adds
+        /// the ground clip) and the aerial pass (<see cref="TickAirAttack"/>, which plays
+        /// its own Attack trigger). ONE VFXManager pool - no second VFX stack.
+        /// </summary>
+        private void FireAtTowerCore(Vector3 targetPos)
+        {
             PlayTelegraph();
 
             // FIRE VFX (placeholder). Everything routes through the single VFXManager
