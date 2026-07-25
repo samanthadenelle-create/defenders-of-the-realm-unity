@@ -2083,20 +2083,14 @@ namespace DeNelle.Village.Arena
             summary.Xp = xp;
             FlowTrace.Step("BattleArena", $"GrantWinReward: +{xp} XP (family={family} threat={threat}).");
 
-            // 2) SKILL POINTS (Wisdom) — 1 base + 1 per 2 family members + 1 per 2 threat
-            // tiers, so a bigger/deadlier family pays a felt skill-point bump.
-            int wisdom = Mathf.RoundToInt((1 + family / 2 + threat / 2) * mult);
-            var wallet = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
-            if (wallet != null)
-            {
-                wallet.Grant(wisdom);
-                summary.Wisdom = wisdom;
-                FlowTrace.Step("BattleArena", $"GrantWinReward: +{wisdom} Wisdom (skill points).");
-            }
-            else
-            {
-                FlowTrace.Warn("BattleArena", "GrantWinReward: WisdomCurrencyService null - skill points not granted.");
-            }
+            // 2) SKILL POINTS (Wisdom) — WO-763 (owner 2026-07-25): arena wins NO LONGER
+            // grant Wisdom DIRECTLY. Wisdom is minted only at LEVEL-UP (+ level-gated tier
+            // milestones) so new skills/magic feel EARNED over real time, not farmed by
+            // repeat arena wins (the old (1 + family/2 + threat/2)*mult paid ~3–8/win and
+            // was re-payable — the "lots of wisdom on exit of win" leak). The win STILL
+            // earns Wisdom INDIRECTLY: its generous XP (below) levels the hero, and level-up
+            // is the Wisdom gate. Summary Wisdom stays 0 so the victory screen is honest.
+            summary.Wisdom = 0;
 
             // 3) RESOURCES — a small wood/iron bundle via the existing EconomyService
             // (same grant surface EnemyOutpost uses; no new resource path).

@@ -106,6 +106,17 @@ namespace DeNelle.Editor
                     log.AppendLine($"Wisdom curve: W(8)=2 W(9)=3; cumulative L2..L20 = {cumulative} (want 50)");
                 }
 
+                // (2b) WISDOM IS LEVEL-UP-GATED (WO-763) — per-wave Wisdom must stay 0.
+                //      The old flat +2/wave was the "lots of wisdom on every win" leak;
+                //      arena-win + daily-quest direct grants were removed/redirected too.
+                //      This asserts the wave leak stays closed (the checkable seam); if a
+                //      future edit re-adds a per-wave Wisdom trickle this fails the gate.
+                if (WaveFeedbackDirector.WisdomPerWave != 0)
+                    failures.Add($"WaveFeedbackDirector.WisdomPerWave = {WaveFeedbackDirector.WisdomPerWave} but WO-763 requires 0 " +
+                                 "(Wisdom is a level-up reward, not per-wave income — the 'earned not given' rule)");
+                else
+                    log.AppendLine("Wisdom source: per-wave = 0 (level-up-gated, WO-763)");
+
                 // (3) LIVE LEVEL-UP through the REAL public API on a REAL instance.
                 throwaway = new GameObject("HeroProgressionRegression_throwaway");
                 var prog = throwaway.AddComponent<HeroProgression>();

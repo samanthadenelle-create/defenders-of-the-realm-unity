@@ -109,8 +109,11 @@ namespace DeNelle.Village
         /// through L8, then +3/level. That is ~70% of the 71 needed for a WHOLE hero tree
         /// (hero 55 + 8 shared @2 = 16), so the player MUST pick a focus rather than buy
         /// everything. (Prior curve 2/3/4 paid ~63 by L20 ≈ 89% — too generous.)
-        /// NOTE: levels are NOT the only Wisdom source — see file-level report; waves /
-        /// arena wins / daily quests / tier milestones also grant Wisdom.
+        /// NOTE (WO-763, owner 2026-07-25): Wisdom is now a LEVEL-UP reward. The old
+        /// per-wave (+2/wave), arena-win, and daily-quest Wisdom grants were REMOVED /
+        /// redirected so skills feel EARNED, not sprayed by combat. Direct Wisdom sources
+        /// today = THIS level-up grant + level-gated tier milestones (TierSystem). Combat
+        /// (kills / waves / arena wins) still earns Wisdom INDIRECTLY via XP -> level-up.
         /// </summary>
         private static int WisdomForLevel(int level)
         {

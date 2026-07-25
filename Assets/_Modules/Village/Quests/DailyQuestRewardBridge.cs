@@ -133,11 +133,15 @@ namespace DeNelle.Village.Quests
                 FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardFood} food");
             }
 
-            // Wisdom -> the talent currency (self-installing singleton).
+            // Wisdom (WO-763, owner 2026-07-25): dailies NO LONGER pay Wisdom — Wisdom is
+            // a LEVEL-UP reward only so new skills/magic feel EARNED, not handed out. The
+            // daily's value is PRESERVED by redirecting the RewardWisdom amount into
+            // crystals (the canonical wallet) rather than dropping it, so dailies stay
+            // worth claiming without cheapening the skill economy.
             if (reward.RewardWisdom > 0)
             {
-                WisdomCurrencyService.Instance?.Grant(reward.RewardWisdom);
-                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardWisdom} wisdom");
+                GameStateService.Instance?.AddCrystals(reward.RewardWisdom);
+                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' redirected {reward.RewardWisdom} wisdom -> crystals (WO-763)");
             }
 
             // Glimmer -> the cosmetic-shop currency. A steady, non-grindy trickle.
