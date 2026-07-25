@@ -101,7 +101,17 @@ namespace DeNelle.Onboarding
         /// </summary>
         public static void PresentOrContinue(Action onContinue)
         {
-            using var _ = FlowTrace.Enter("Founding", "FoundingChoiceController.PresentOrContinue");
+            // WO-769: gate the new-game founding on LOGIN-OR-GUEST first, then the founding
+            // choice. This is the single new-game chokepoint (HeroSelect/PetSelect route here);
+            // returning players (Title -> Continue) never pass through, so they aren't re-prompted.
+            // LoginPanelController.PresentOrContinue skips itself when already signed in, and
+            // Play-as-Guest always proceeds — the boot flow can never soft-lock.
+            LoginPanelController.PresentOrContinue(() => PresentFoundingChoice(onContinue));
+        }
+
+        private static void PresentFoundingChoice(Action onContinue)
+        {
+            using var _ = FlowTrace.Enter("Founding", "FoundingChoiceController.PresentFoundingChoice");
 
             if (!ShouldOffer)
             {

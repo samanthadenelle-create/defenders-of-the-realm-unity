@@ -62,6 +62,31 @@ namespace DeNelle.Onboarding
             FlowTrace.Step("Auth", "login panel presented (email/password + guest).");
         }
 
+        /// <summary>
+        /// Init-aware boot entry: if a returning player is already signed in (Firebase
+        /// caches the session), continue straight through; otherwise present the
+        /// login-or-guest surface. Safe if Firebase init fails — falls through to the
+        /// panel, where Play-as-Guest always works, so the boot flow can never lock.
+        /// </summary>
+        public static async void PresentOrContinue(Action onContinue)
+        {
+            bool signedIn = false;
+            try
+            {
+                await FirebaseAuthService.Instance.EnsureInitializedAsync();
+                signedIn = FirebaseAuthService.Instance.IsSignedIn;
+            }
+            catch (Exception e) { FlowTrace.Warn("Auth", "login init check threw: " + e.Message); }
+
+            if (signedIn)
+            {
+                FlowTrace.Step("Auth", "already signed in — skipping login, continuing.");
+                onContinue?.Invoke();
+                return;
+            }
+            Present(onContinue);
+        }
+
         // =====================================================================
         //  Overlay construction (code-built uGUI on the Obsidian kit)
         // =====================================================================
