@@ -350,3 +350,7 @@ tools/webbot/out/
 
 # Firebase App Distribution (App ID is non-secret but keep it local)
 firebase-appid.txt
+
+# Firebase EDM4U-generated Android lib (mirrors gitignored google-services.json)
+Assets/Plugins/Android/FirebaseApp.androidlib/
+Assets/Plugins/Android/FirebaseApp.androidlib.meta

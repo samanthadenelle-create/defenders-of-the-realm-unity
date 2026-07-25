@@ -47,3 +47,13 @@ Assets/Scenes/Outpost2.unity  binary
 # Under the *.unity text eol=lf rule a renormalize/clone would EOL-mangle the blob and
 # reproduce the d4_sunken_crypt corruption. Force them binary (builder-generated, never hand-edited).
 Assets/Scenes/DungeonCompose/*.unity binary
+
+# Firebase Unity SDK binaries -> LFS (WO-769; scoped to Assets/Firebase so other repo DLLs are untouched)
+Assets/Firebase/**/*.dll filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.pdb filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.so filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.bundle filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.srcaar filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.aar filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.jar filter=lfs diff=lfs merge=lfs -text
+Assets/Firebase/**/*.exe filter=lfs diff=lfs merge=lfs -text
