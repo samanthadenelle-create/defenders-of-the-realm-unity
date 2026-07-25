@@ -11,9 +11,14 @@
 - **Firestore = secondary** (us-central1), not the save store.
 - **Wallet = payments only.**
 
-## 1. Done (headless, 2026-07-24)
+## 1. Done (headless, 2026-07-24/25)
 - Android app registered: App ID `1:264518851517:android:8e193b012cba6986d050d4`, package `com.denellestudios.echoesofelarion`, project `defenders-of-the-realm-echos` (264518851517).
-- `Assets/google-services.json` in place.
+- `Assets/google-services.json` in place (gitignored).
+- **Firebase Unity SDK 13.14.0 imported headlessly** (reconstructed FirebaseAuth.unitypackage → `Assets/Firebase`; App+Auth+Platform DLLs, EDM4U, Android m2repository; binaries git-LFS-tracked). EDM4U generated `FirebaseApp.androidlib/google-services.xml` from the config. Commit `0e21fe6b`.
+- **`FirebaseAuthService`** (`Assets/_Modules/Core/Auth/`, DeNelle.Core): EnsureInitializedAsync + SignUp/SignIn/SignOut + GetIdTokenAsync, FlowTrace-instrumented. Compiles green vs the SDK.
+- **`LoginPanelController`** (View) + **`LoginViewModel`** (MVVM logic) in DeNelle.Onboarding: Obsidian modal (email + masked password + Sign In + Create Account + **Play-as-Guest**), PanelManager-registered, UI-MVVM + Obsidian conformance GREEN. Commit `1f789013`.
+- **Boot wired**: `FoundingChoiceController.PresentOrContinue` gates login-or-guest first at the new-game chokepoint (returning players not re-prompted; guest never soft-locks). Commit `0fbea11c`.
+- Compile + regression green throughout.
 
 ## 2. GATES (not headless — do before the C# lands)
 1. **Enable Email/Password** provider — Firebase console → Authentication → Sign-in providers → Email/Password → Enable. (No CLI/gcloud on this machine flips it.)
