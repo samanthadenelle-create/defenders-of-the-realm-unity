@@ -6,7 +6,12 @@ App package id: **`com.denellestudios.echoesofelarion`**. The APK is release-sig
 
 ---
 
-## Option A — Diawi (fastest, one-off "here's a link tonight")
+> ⚠ **Size note (this build): our APK is ~453 MB.** Diawi's FREE tier caps at **50 MB**
+> (their paid plan ~€29.99 lifts it) — so **Diawi free will NOT work for our build.** Use
+> **Firebase App Distribution** (Option B) instead: free, no practical size cap, plus
+> auto-update. Diawi below is kept only for the future case of a <50 MB thin build.
+
+## Option A — Diawi (fastest, one-off — but 50 MB FREE cap; too small for our 453 MB APK)
 
 1. Go to **https://www.diawi.com**.
 2. Drag `Builds/Android/DefendersOfTheRealm.apk` onto the page.
