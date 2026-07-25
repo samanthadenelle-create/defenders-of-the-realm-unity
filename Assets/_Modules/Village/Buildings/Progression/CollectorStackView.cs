@@ -46,10 +46,17 @@ namespace DeNelle.Village.Buildings.Progression
         private const float BobAmplitude = 0.12f;   // FULL bob height (world units)
         private const float BobSpeed     = 2.2f;
 
+        // NEAR-FULL threshold (owner articulation 2026-07-24): the tight collect-loop wants the
+        // player to SEE a collector filling up before it caps. At/above this fill fraction the
+        // bar shifts to the amber "near-full" tint (a redundant tell layered on the always-present
+        // fill % / step count — never hue-alone, colorblind-safe).
+        private const float NearFullFraction = 0.85f;
+
         // Fallback-bar palette (kept high-luminance-contrast; meaning carried by fill %, not hue).
-        private static readonly Color BarTrack = new Color(0f, 0f, 0f, 0.55f);
-        private static readonly Color BarFill  = new Color(0.85f, 0.72f, 0.30f, 1f);  // amber gold
-        private static readonly Color BarFull  = new Color(1f, 0.92f, 0.55f, 1f);     // bright gold at full
+        private static readonly Color BarTrack   = new Color(0f, 0f, 0f, 0.55f);
+        private static readonly Color BarFill    = new Color(0.85f, 0.72f, 0.30f, 1f);  // amber gold
+        private static readonly Color BarNearFull = new Color(0.95f, 0.62f, 0.15f, 1f); // deeper amber at ~85%+
+        private static readonly Color BarFull    = new Color(1f, 0.92f, 0.55f, 1f);     // bright gold at full
 
         // ── Model seam (read-only) ────────────────────────────────────────────
         private ResourceCollector _collector;
@@ -305,12 +312,16 @@ namespace DeNelle.Village.Buildings.Progression
                 if (broken) ScatterProps();
             }
 
-            // Fallback bar: width = fill fraction; brighten at full.
+            // Fallback bar: width = fill fraction; amber near-full (~85%+), bright gold at full.
+            // The tint is a REDUNDANT tell on top of the width (fill %) + numeric readout —
+            // shape/height + words carry the meaning, never hue alone (colorblind-safe).
             if (!_usesProps && _fillRect != null)
             {
                 float frac = broken ? 0f : Mathf.Clamp01(steps / (float)ResourceCollector.StepCount);
                 _fillRect.sizeDelta = new Vector2(_barSize.x * frac, 0f);
-                if (_fillImg != null) _fillImg.color = full ? BarFull : BarFill;
+                if (_fillImg != null)
+                    _fillImg.color = full ? BarFull
+                                   : (frac >= NearFullFraction ? BarNearFull : BarFill);
             }
 
             // Numeric readout (redundant, colorblind-safe channel).
@@ -359,7 +370,10 @@ namespace DeNelle.Village.Buildings.Progression
         private void ShowFullToast()
         {
             string label = ResolveBuildingLabel();
-            GearGrantToast.Show($"{label} is full — collect or defend!");
+            // Singleton-correct wording (owner 2026-07-24): a collector is one-of-a-kind, so
+            // "place another" is wrong — the player collects it, or upgrades it to hold more.
+            // ASCII-only (hyphen, not em dash).
+            GearGrantToast.Show($"{label} is full - collect it, or upgrade it to hold more.");
         }
 
         private string ResolveBuildingLabel()

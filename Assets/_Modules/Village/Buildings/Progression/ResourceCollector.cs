@@ -239,15 +239,35 @@ namespace DeNelle.Village.Buildings.Progression
             return def != null ? def.Yields : HarvestResource.Wood;
         }
 
-        /// <summary>~2 hours of max production at current level (CoC internal storage),
-        /// scaled by the STEWARD `collectorCap` talent sum (WO-676 Deep Reserves; x1 at sum 0).</summary>
+        /// <summary>
+        /// Collector reserve capacity. PRIMARY path (owner creative 2026-07-24, TIGHT
+        /// collect-loop): the DATA-authored base reserve from the structures-catalog
+        /// `capacity` field (designer-tunable), deepened +50% per LEVEL above 1 so
+        /// upgrading a collector holds more. FALLBACK (field absent/0): the legacy
+        /// ~2 hours of max production formula (which over-sized the buffer so collectors
+        /// never filled). The STEWARD `collectorCap` talent sum (WO-676 Deep Reserves;
+        /// x1 at sum 0) multiplies ON TOP of whichever base is used.
+        /// </summary>
         private double ComputeCapacity()
         {
-            int yield = ResourceBuildingState.CurrentEffectiveYield(_buildingId);
-            float interval = ResourceBuildingState.CurrentHarvestInterval(_buildingId);
-            double baseCap = (yield <= 0 || interval <= 0f)
-                ? 50.0
-                : System.Math.Max(50.0, yield * (3600.0 / interval) * 2.0);
+            double baseCap;
+            double catalogCap = CatalogCapacity();
+            if (catalogCap > 0.0)
+            {
+                // DATA base reserve; +50% per level above 1 (upgrading deepens the reserve).
+                int level = ResourceBuildingState.GetLevel(_buildingId);
+                double levelScale = 1.0 + 0.5 * System.Math.Max(0, level - 1);
+                baseCap = catalogCap * levelScale;
+            }
+            else
+            {
+                // Legacy fallback: ~2 hours of max production at current level.
+                int yield = ResourceBuildingState.CurrentEffectiveYield(_buildingId);
+                float interval = ResourceBuildingState.CurrentHarvestInterval(_buildingId);
+                baseCap = (yield <= 0 || interval <= 0f)
+                    ? 50.0
+                    : System.Math.Max(50.0, yield * (3600.0 / interval) * 2.0);
+            }
 
             // WO-676 STEWARD (Deep Reserves): ONE HeroTalentModifiers read at this existing
             // capacity calc — `collectorCap` grows how much pending the collector holds
@@ -262,6 +282,25 @@ namespace DeNelle.Village.Buildings.Progression
                     $"collectorCap x{1f + capBonus:0.###} applied to collector capacity (WO-676 Deep Reserves).");
             }
             return baseCap;
+        }
+
+        /// <summary>
+        /// The DATA-authored base collector reserve (structures-catalog `repo.capacity`) for
+        /// this collector's building, or 0 when none is authored. A collector is registered
+        /// under its catalog id (e.g. "collector_farm") but keyed on the bare
+        /// <see cref="_buildingId"/> ("farm"), so we match on <c>repo.collectorBuildingId</c>
+        /// (falling back to the entry id) across the Collector catalog type — mirroring
+        /// StructureFactory's collector resolution. Null-safe: 0 if the registry is empty.
+        /// </summary>
+        private double CatalogCapacity()
+        {
+            foreach (var e in DeNelle.Core.Catalog.CatalogRegistry.OfType(DeNelle.Core.Catalog.CatalogType.Collector))
+            {
+                if (e == null || e.repo == null) continue;
+                string bid = !string.IsNullOrEmpty(e.repo.collectorBuildingId) ? e.repo.collectorBuildingId : e.id;
+                if (bid == _buildingId) return e.repo.capacity;
+            }
+            return 0.0;
         }
 
         private void LoadState()

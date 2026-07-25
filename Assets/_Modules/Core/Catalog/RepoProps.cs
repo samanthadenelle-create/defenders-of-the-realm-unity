@@ -151,6 +151,20 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public bool IsStorageContainer => storageCapacity > 0;
 
+        /// <summary>
+        /// COLLECTOR RESERVE capacity (owner creative 2026-07-24, TIGHT collect-loop) — the
+        /// base number of units a resource COLLECTOR (behaviorId "ResourceCollector") holds
+        /// in its pending buffer before it reads FULL, at level 1. ResourceCollector.ComputeCapacity
+        /// reads this when &gt;0 and deepens it +50% per level above 1 (upgrading a collector
+        /// holds more); the STEWARD collectorCap talent still multiplies on top. 0 (default)
+        /// = not authored → the collector falls back to its legacy ~2h-of-production formula.
+        /// Right-sizes the collect loop so collectors actually fill (a farm at ~150/min fills
+        /// 1000 in ~7 min). DESIGNER-TUNABLE DATA — never hardcode the number in C#. Distinct
+        /// from <see cref="storageCapacity"/> (that flags a raidable stock CONTAINER; this sizes
+        /// a collector's pending buffer). JSON deserializes "capacity" straight in.
+        /// </summary>
+        public int capacity = 0;
+
         /// <summary>Placement conditions, evaluated at the free cursor.</summary>
         public PlacementRules placement = new PlacementRules();
 

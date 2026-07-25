@@ -920,6 +920,7 @@
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "farm",
+    "capacity": 1000,
     "buildCost": 90,
     "cost": {
      "wood": 60,
@@ -962,6 +963,7 @@
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "lumbermill",
+    "capacity": 800,
     "buildCost": 90,
     "cost": {
      "wood": 40,
@@ -1004,6 +1006,7 @@
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "forge",
+    "capacity": 600,
     "buildCost": 120,
     "cost": {
      "wood": 60,
