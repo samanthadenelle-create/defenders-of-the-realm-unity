@@ -42,3 +42,8 @@ LightingData.asset  binary
 Assets/Scenes/Outpost1.unity  binary
 Assets/Scenes/Dungeon.unity   binary
 Assets/Scenes/Outpost2.unity  binary
+# Same class again: the Room Forge composer (DungeonBaker) writes DungeonCompose scenes
+# BINARY in batchmode (58% NUL, proven 2026-07-24 architect review) even under ForceText.
+# Under the *.unity text eol=lf rule a renormalize/clone would EOL-mangle the blob and
+# reproduce the d4_sunken_crypt corruption. Force them binary (builder-generated, never hand-edited).
+Assets/Scenes/DungeonCompose/*.unity binary
