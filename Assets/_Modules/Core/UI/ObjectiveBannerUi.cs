@@ -201,58 +201,33 @@ namespace DeNelle.Core.UI
             _skipHost.SetActive(false);
 
             // Persistent "Skip Tutorial" affordance — top-right SCREEN corner (child of the
-            // canvas root, not the strip), so it stays put while the tutorial runs. Confirmed
-            // before it fires. Kit chrome vocabulary (obsidian glass + gold trim + parchment).
-            _skipAllHost = new GameObject("SkipTutorial", typeof(RectTransform), typeof(Image), typeof(Button));
-            _skipAllHost.transform.SetParent(transform, false);
-            var sart = (RectTransform)_skipAllHost.transform;
-            // Owner 2026-07-16: "Skip Tutorial should not be over top the Menu button." The HUD
-            // Menu/gear lives in the top-right corner; drop Skip Tutorial DOWN the right edge below
-            // it (clear of Menu above and the ability rail lower) so the two never overlap.
-            sart.anchorMin = new Vector2(1f, 1f);
-            sart.anchorMax = new Vector2(1f, 1f);
-            sart.pivot = new Vector2(1f, 1f);
-            // Owner 2026-07-16 "Skip Tutorial is tiny vs everything else" — size it to the HUD button
-            // scale (was 180x44, dwarfed by Menu + the action bar). Pushed further down so the taller
-            // box clears the Menu button above it.
-            sart.anchoredPosition = new Vector2(-14f, -116f);   // was -92: clear the taller box under Menu
-            sart.sizeDelta = new Vector2(248f, 72f);            // was 180x44 — HUD-consistent
-            var saimg = _skipAllHost.GetComponent<Image>();
-            saimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
-                                    ElarionUiKit.ObsidianFill.b, 0.90f);
-            _skipAllBtn = _skipAllHost.GetComponent<Button>();
-            _skipAllBtn.targetGraphic = saimg;
-            ElarionUiKit.StyleButtonColors(_skipAllBtn);
-            _skipAllBtn.onClick.AddListener(RequestSkipAll);
+            // canvas root, not the strip), so it stays put while the tutorial runs.
+            // Presentation-separation law (MVVM): a DUMB, kit-styled view from the Obsidian
+            // button factory — frame/face/label ink/font/hover feedback all live in the kit —
+            // whose ONLY injected dependency is the onClick Action. That Action stays
+            // RequestSkipAll: presentation raises the kit confirm and only then invokes the
+            // caller's _onSkipAll (→ TutorialFlow.SkipAll). No hand-rolled Image/Button/trim/
+            // label assembly. Style1/Gray = the standardized quiet obsidian HUD face.
+            _skipAllBtn = ElarionUiKit.BuildObsidianButton(
+                transform, "Skip Tutorial",                    // ASCII only (no glyphs in TMP)
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(1f, 1f), new Vector2(1f, 1f),
+                onClick: RequestSkipAll);
+            _skipAllHost = _skipAllBtn != null ? _skipAllBtn.gameObject : null;
+            if (_skipAllHost != null)
+            {
+                var sart = (RectTransform)_skipAllHost.transform;
+                // Owner 2026-07-16: "Skip Tutorial should not be over top the Menu button." The HUD
+                // Menu/gear lives in the top-right corner; drop Skip Tutorial DOWN the right edge below
+                // it (clear of Menu above and the ability rail lower) so the two never overlap. The kit
+                // anchored at (1,1) with zero offsets; collapse that to the HUD-consistent fixed box.
+                sart.pivot = new Vector2(1f, 1f);
+                sart.anchoredPosition = new Vector2(-14f, -116f);   // clear the taller box under Menu
+                sart.sizeDelta = new Vector2(248f, 72f);            // HUD-consistent (owner 2026-07-16)
+                ElarionUiKit.ClampMinTouch(_skipAllBtn);            // kit touch floor guard (never shrinks)
 
-            // Gold trim rule along the bottom edge (kit chrome).
-            var satrim = new GameObject("Trim", typeof(RectTransform), typeof(Image));
-            satrim.transform.SetParent(sart, false);
-            var satr = (RectTransform)satrim.transform;
-            satr.anchorMin = new Vector2(0f, 0f);
-            satr.anchorMax = new Vector2(1f, 0f);
-            satr.pivot = new Vector2(0.5f, 0f);
-            satr.sizeDelta = new Vector2(0f, 2f);
-            var satimg = satrim.GetComponent<Image>();
-            satimg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
-            satimg.raycastTarget = false;
-
-            var saTextGo = new GameObject("Label", typeof(RectTransform));
-            saTextGo.transform.SetParent(sart, false);
-            var satxrt = (RectTransform)saTextGo.transform;
-            satxrt.anchorMin = Vector2.zero;
-            satxrt.anchorMax = Vector2.one;
-            satxrt.offsetMin = Vector2.zero;
-            satxrt.offsetMax = Vector2.zero;
-            var sat = saTextGo.AddComponent<TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(sat);
-            sat.fontSize = 26f;   // HUD-consistent (owner 2026-07-16); >=20px mobile floor
-            sat.color = ElarionUi.Parchment;
-            sat.alignment = TextAlignmentOptions.Center;
-            sat.text = "Skip Tutorial";   // ASCII only (no glyphs in TMP)
-            sat.raycastTarget = false;
-
-            _skipAllHost.SetActive(false);
+                _skipAllHost.SetActive(false);
+            }
         }
 
         /// <summary>The persistent Skip-Tutorial tap: presentation raises a lightweight

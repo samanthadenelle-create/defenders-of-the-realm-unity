@@ -14,9 +14,9 @@
 //                    specialization bonus %; the readout math lives in the calculator)
 //   idle          -> "Idle - waiting for your word."
 // Identity (name / element / flavor / portrait) is read from EchoRosterCatalog.ByIndex
-// (the six named spirits), NOT hardcoded. The lane picker offers the four functional
-// lanes; Defense + Exploration carry an HONEST "passive - active in raids/dungeons" tag
-// so the player is never misled that they pay off now (full agency, honestly labeled).
+// (the six named spirits), NOT hardcoded. The lane picker offers only the LIVE lanes --
+// Harvest + Crafting (EchoAssignments.PickableLanes); Defense + Exploration are omitted
+// because their unlock is not designed yet (owner ruling 2026-07-24; no teaser rows).
 // ASCII-only separators ('-' not the middle-dot) -- glyph-safe on the shipped TMP
 // font; states read as TEXT, never by color alone (colorblind owner).
 // =============================================================================
@@ -34,10 +34,10 @@ namespace DeNelle.Village
     /// </summary>
     public sealed class EchoCardVM : IDisposable
     {
-        /// <summary>One pickable functional lane for the "What should this Echo focus on?" picker
-        /// (WO-738: harvest / crafting / defense / exploration). All four are fully assignable;
-        /// Defense + Exploration are HONESTLY labeled (via <see cref="Note"/>) as passive bonuses that
-        /// only pay off in offline raids / dungeons -- state carried in TEXT, never hue (colorblind owner).</summary>
+        /// <summary>One pickable functional lane for the "Assign &lt;Echo&gt; to a task" picker.
+        /// Only the LIVE lanes are offered (harvest / crafting); Defense + Exploration are omitted
+        /// because their unlock is not designed yet (owner ruling 2026-07-24). Selected/preferred
+        /// state is carried in TEXT, never hue (colorblind owner).</summary>
         public readonly struct LaneChip
         {
             public readonly string Id;        // functional lane token ("harvest"/"crafting"/"defense"/"exploration")
@@ -128,8 +128,17 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The action-row prompt (one ask, one row).</summary>
-        public string AskText => "What should this Echo focus on?";
+        /// <summary>The action-row prompt (one ask, one row) -- reads PICK-ONE, not a bonus list,
+        /// naming the Echo's short name from the roster catalog (pattern from NameText).</summary>
+        public string AskText
+        {
+            get
+            {
+                var entry = EchoRosterCatalog.ByIndex(EchoIndex);
+                string name = entry != null ? entry.DisplayName : "this Echo";
+                return "Assign " + name + " to a task";
+            }
+        }
 
         /// <summary>The Echo's portrait sprite (roster catalog -> Sprite.Create; null-safe, cached).
         /// The View binds this to the portrait socket and skips the image when null.</summary>
@@ -142,14 +151,14 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The four functional lane chips (harvest/crafting/defense/exploration). Selected state,
-        /// the element-preferred "best" tag, and the Defense/Exploration passive-honesty tags are all
-        /// carried AS TEXT (never hue) so the picker never misleads a colorblind player about what pays off now.</summary>
+        /// <summary>The live lane chips (harvest/crafting only -- EchoAssignments.PickableLanes). Selected
+        /// state and the element-preferred "best" tag are carried AS TEXT (never hue) so the picker never
+        /// misleads a colorblind player. Defense/Exploration are not offered (unlock undesigned, no teaser).</summary>
         public LaneChip[] LaneChips()
         {
             string current = EchoAssignments.LaneOf(EchoIndex);
             var entry = EchoRosterCatalog.ByIndex(EchoIndex);
-            var lanes = EchoAssignments.Lanes;
+            var lanes = EchoAssignments.PickableLanes;
             var chips = new LaneChip[lanes.Length];
             for (int i = 0; i < lanes.Length; i++)
             {

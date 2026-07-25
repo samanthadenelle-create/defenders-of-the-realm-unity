@@ -6,7 +6,9 @@
 // A small Obsidian modal (master factory: ElarionUiKit.BuildObsidianModal +
 // FrameCore -- UI_BLINK_TEMPLATE_CANON SS2, ONE shared Close) that introduces an
 // Echo (real name/element/flavor/portrait from EchoRosterCatalog) and hosts the
-// WO-738 functional lane picker (harvest/crafting/defense/exploration). The View
+// functional lane picker. Only the LIVE lanes are offered -- Harvest + Crafting
+// (EchoAssignments.PickableLanes); Defense + Exploration are not shown because their
+// unlock is not designed (owner ruling 2026-07-24; no stub/teaser rows). The View
 // reads NOTHING from services -- every string/state/sprite comes from EchoCardVM;
 // the only outbound call is vm.AssignLane on a lane tap. PanelManager-registered
 // (one modal at a time; battle-lock respected -- a rejected open never shows a half-card).
@@ -14,8 +16,8 @@
 // Layout mirrors EchoWorkforceHud's fraction-in-content approach (same kit, same
 // chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). The vertical lane
 // picker keeps its bottom edge above the shared Close band (>= 0.25, the WO-555
-// clearance lesson documented in EchoWorkforceHud.Build). Defense + Exploration lanes
-// carry an HONEST "passive - active in raids/dungeons" note (TEXT-carried, never hue).
+// clearance lesson documented in EchoWorkforceHud.Build). With only the two live lanes
+// offered, the modal height is shrunk to hug that content (no dead black space).
 //
 // Reached via a TAP on an OWNED roster card (EchoRosterView) -> EchoCard.Open(echoIndex).
 // Singleton view host on a DDOL GameObject.
@@ -123,10 +125,12 @@ namespace DeNelle.Village
         {
             // Same law as EchoRosterView (owner F8 2026-07-24): parent into layout.body so
             // labels never paint over the FrameCore title plate or the shared Close.
-            // Compact card, centred; MODAL band above the roster (31000).
+            // Compact card, centred; MODAL band above the roster (31000). Height shrunk to
+            // hug the two-live-lane content (owner ruling 2026-07-24) so it no longer floats
+            // in dead black space.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoCard", "ECHO",
-                new Vector2(0.22f, 0.16f), new Vector2(0.78f, 0.84f),
+                new Vector2(0.22f, 0.30f), new Vector2(0.78f, 0.80f),
                 onClose: Close, sortingOrder: 31010,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
@@ -146,7 +150,7 @@ namespace DeNelle.Village
             //   what (element)    0.74-0.80   single short line
             //   state             0.66-0.72   single line
             //   ask               0.58-0.64   single line
-            //   lane picker       0.04-0.56   above Close (body already reserved)
+            //   lane picker       0.06-0.54   two live lanes, above Close (body already reserved)
             var portraitSprite = Guard.Try("Echo", "load echo portrait",
                 () => _vm != null ? _vm.Portrait : null, fallback: null);
             if (portraitSprite != null)
@@ -187,8 +191,8 @@ namespace DeNelle.Village
             var rowGo = new GameObject("LanePicker", typeof(RectTransform));
             rowGo.transform.SetParent(body, false);
             var rowRt = rowGo.GetComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.06f, 0.04f);
-            rowRt.anchorMax = new Vector2(0.94f, 0.56f);
+            rowRt.anchorMin = new Vector2(0.06f, 0.06f);
+            rowRt.anchorMax = new Vector2(0.94f, 0.54f);
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
             _chipRow = rowGo.transform;
         }

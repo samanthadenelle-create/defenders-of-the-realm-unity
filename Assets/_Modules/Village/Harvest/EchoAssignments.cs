@@ -52,6 +52,13 @@ namespace DeNelle.Village
         /// <summary>The assignable functional lanes, in display order (Idle is a state, not a pick).</summary>
         public static readonly string[] Lanes = { LaneHarvest, LaneCrafting, LaneDefense, LaneExploration };
 
+        /// <summary>The lanes the picker actually OFFERS right now -- only the LIVE lanes (Harvest,
+        /// Crafting). Defense + Exploration stay in <see cref="Lanes"/> (constants + LabelFor +
+        /// NormalizeLane intact) so any already-stored token still reads back, but they are NOT
+        /// offered as picks: their unlock is not designed, so the card shows no stub/teaser rows
+        /// (owner ruling 2026-07-24).</summary>
+        public static readonly string[] PickableLanes = { LaneHarvest, LaneCrafting };
+
         /// <summary>Raised after any lane/level assignment changes (the card + HUD listen).</summary>
         public static event Action Changed;
 

@@ -247,35 +247,39 @@ namespace DeNelle.Village
                 _pipCanvas.AddComponent<GraphicRaycaster>();
             EnsureEventSystem();
 
-            var go = new GameObject("EchoPetBoxButton", typeof(Image), typeof(Button));
-            go.transform.SetParent(_pipCanvas.transform, false);
-            var rt = go.GetComponent<RectTransform>();
-            // Owner 2026-07-24 felt-test: the bottom-centre placement ate scarce centre real estate.
-            // Move it to the RIGHT screen edge, vertically centred (the LEFT edge is the HudKit gear
-            // slide-dock, so RIGHT is the free edge). A square touch target that meets the mobile
-            // MinTouchPx ~112 standard. The roster it opens stays the full-screen 31000 single-arbiter
-            // modal (z-fix preserved).
-            rt.anchorMin = new Vector2(1f, 0.5f);
-            rt.anchorMax = new Vector2(1f, 0.5f);
-            rt.pivot = new Vector2(1f, 0.5f);
-            rt.anchoredPosition = new Vector2(-16f, 0f);   // small inset from the right edge
-            rt.sizeDelta = new Vector2(120f, 120f);        // >= MinTouchPx (112) -- comfortable tap target
+            // Presentation-separation law (MVVM): the button is a DUMB, kit-styled view.
+            // It comes from the presentation kit's Obsidian button factory -- frame, face,
+            // label ink, font, and hover feedback all live in the kit -- and the ONLY thing
+            // this call site injects is the onClick Action (EchoRoster.Open). No hand-rolled
+            // GameObject/Image/Button assembly, no per-caller styling. Style1/Gray = the
+            // quiet obsidian face standardized across the HUD (matches ObsidianCloseButton).
+            var btn = ElarionUiKit.BuildObsidianButton(
+                _pipCanvas.transform, "Pets",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                onClick: () =>
+                {
+                    FlowTrace.Step("Echo", "Pets pet-box button tapped -> open Echo roster.");
+                    EchoRoster.Open();
+                });
+            if (btn == null) return;
 
-            var img = go.GetComponent<Image>();
-            img.color = new Color(0.06f, 0.06f, 0.08f, 0.92f);   // obsidian glass, matches HUD chrome
-            var btn = go.GetComponent<Button>();
-            btn.targetGraphic = img;
-            btn.onClick.AddListener(() =>
+            // Owner 2026-07-24 felt-test placement, preserved: RIGHT screen edge, vertically
+            // centred (the LEFT edge is the HudKit gear slide-dock, so RIGHT is the free edge).
+            // A square touch target that meets the mobile MinTouchPx ~112 standard. The roster it
+            // opens stays the full-screen 31000 single-arbiter modal (z-fix preserved). The kit
+            // anchored the button at (1,0.5) with zero offsets; collapse that to a fixed-size box
+            // pinned to the right edge (pivot 1,0.5 + inset), then clamp to the touch floor.
+            var rt = btn.transform as RectTransform;
+            if (rt != null)
             {
-                FlowTrace.Step("Echo", "Pets pet-box button tapped -> open Echo roster.");
-                EchoRoster.Open();
-            });
-
-            // TMP label via the kit (font-safe) -- "[Echoes] Pets": icon-word + text,
-            // colorblind-safe (never hue alone).
-            var txt = ElarionUiKit.Label(go.transform, "Pets", 0f, 1f,
-                ElarionUi.Parchment, 24, TextAlignmentOptions.Center, 0f, 1f, bold: true);
-            txt.raycastTarget = false;
+                rt.anchorMin = new Vector2(1f, 0.5f);
+                rt.anchorMax = new Vector2(1f, 0.5f);
+                rt.pivot = new Vector2(1f, 0.5f);
+                rt.anchoredPosition = new Vector2(-16f, 0f);   // small inset from the right edge
+                rt.sizeDelta = new Vector2(120f, 120f);        // >= MinTouchPx (112) -- comfortable tap target
+            }
+            ElarionUiKit.ClampMinTouch(btn);                   // kit touch floor guard (never shrinks)
         }
 
         private static void EnsureEventSystem()
