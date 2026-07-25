@@ -347,3 +347,6 @@ tools/docs/__pycache__/
 # webbot (Playwright) — deps + captures are local-only
 tools/webbot/node_modules/
 tools/webbot/out/
+
+# Firebase App Distribution (App ID is non-secret but keep it local)
+firebase-appid.txt

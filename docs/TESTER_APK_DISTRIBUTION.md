@@ -58,8 +58,17 @@ firebase appdistribution:distribute Builds/Android/DefendersOfTheRealm.apk \
 Testers: accept the invite once → install the **App Tester** app (or use the emailed link)
 → every new build notifies them automatically; they tap Update.
 
-> Once you have the Firebase App ID, I can add a `distribute-android.ps1` wrapper so a build
-> **builds + distributes in one command** (CLI path above). Ask and I'll wire it.
+> **Wrapper (exists): `distribute-android.ps1`** (repo root) — one command to (optionally build
+> then) push to testers. App ID resolves from `-AppId`, `$env:FIREBASE_APP_ID`, or a
+> `firebase-appid.txt`. Examples:
+> ```
+> .\distribute-android.ps1 -AppId 1:...:android:... -Testers "friend@email.com"
+> .\distribute-android.ps1 -Groups testers -Build        # rebuild APK first; App ID from file/env
+> ```
+> Doc source for the CLI: https://firebase.google.com/docs/app-distribution/android/distribute-cli?apptype=apk
+> Prereqs (one-time, interactive/yours): `firebase login`; create project + register Android app
+> (package `com.denellestudios.echoesofelarion`) → copy App ID; App Distribution → Get started.
+> Distributed builds live 150 days; tester invites expire in 30.
 
 ---
 
