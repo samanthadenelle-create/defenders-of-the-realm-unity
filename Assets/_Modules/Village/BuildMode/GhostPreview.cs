@@ -15,6 +15,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 
@@ -42,6 +43,18 @@ namespace DeNelle.Village
         // re-arm for the rest of the session.
         private readonly List<Material> _createdMaterials = new List<Material>();
         private MaterialPropertyBlock _mpb;
+
+        // ── Reject-reason label (owner 2026-07-24 "tell me why it's red") ────────
+        // A silent world-space label that floats above the ghost showing WHY it can't be
+        // placed while blocked. NON-buzzing + no toast spam: the place loop just feeds it
+        // the reason string every frame (MessageFor / shortfall) and it shows/hides with
+        // the red tint. Parented to the host (persists across re-arm); follows the tracked
+        // visual and billboards to the camera each frame. Fail-safe: build/positioning is
+        // guarded so a UI hiccup never throws into the place loop.
+        private GameObject _reasonGo;
+        private Text _reasonText;
+        private Camera _reasonCam;
+        private const float ReasonLabelHeight = 2.4f;   // world units above the ghost base
 
         /// <summary>
         /// (Re)build the ghost for <paramref name="entry"/>. No-op if the same entry
@@ -184,6 +197,31 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// Show the floating "why it's red" label above the ghost (owner 2026-07-24). Pass a
+        /// message (e.g. "Ground is too uneven here", "Not enough Wood (70)") while the ghost
+        /// is blocked; pass null/empty to clear it (valid placement, or ghost hidden). Silent
+        /// (no buzz) and idempotent per frame so passive hover never spams a toast/sound.
+        /// Fail-safe: any build hiccup just leaves the label hidden.
+        /// </summary>
+        public void SetReason(string message)
+        {
+            bool show = !string.IsNullOrEmpty(message) && _visual != null && _visual.activeSelf;
+            try
+            {
+                if (show && _reasonGo == null) BuildReasonLabel();
+                if (_reasonGo == null) return;
+                if (_reasonGo.activeSelf != show) _reasonGo.SetActive(show);
+                if (show && _reasonText != null && _reasonText.text != message)
+                    _reasonText.text = message;
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("Ghost", $"SetReason failed (label hidden): {e.Message}");
+                if (_reasonGo != null) _reasonGo.SetActive(false);
+            }
+        }
+
+        /// <summary>
         /// The ghost's CURRENT world position — the TRACKED VISUAL's transform, not the
         /// host. WO-683 fleet RCA (run detail "stuck at (15, 15)" = WorldToCell(origin)):
         /// MoveTo drives the child <c>_visual</c>; the GhostPreview host GameObject never
@@ -196,6 +234,7 @@ namespace DeNelle.Village
         public void Hide()
         {
             if (_visual != null) _visual.SetActive(false);
+            if (_reasonGo != null) _reasonGo.SetActive(false);   // no floating label on a hidden ghost
         }
 
         /// <summary>Destroy the ghost entirely (placement landed / cancelled).</summary>
@@ -211,11 +250,74 @@ namespace DeNelle.Village
             _visual = null;
             _builtForId = null;
             _orientation = null;
+            if (_reasonGo != null) _reasonGo.SetActive(false);   // keep the label object; just hide it
         }
 
         private void OnDestroy() => Clear();
 
+        /// <summary>Keep the reason label floating above the ghost + facing the camera.</summary>
+        private void Update()
+        {
+            if (_reasonGo == null || !_reasonGo.activeSelf) return;
+            try
+            {
+                if (_reasonCam == null) _reasonCam = Camera.main;
+                _reasonGo.transform.position = CurrentPosition + Vector3.up * ReasonLabelHeight;
+                if (_reasonCam != null)
+                    _reasonGo.transform.rotation = Quaternion.LookRotation(
+                        _reasonGo.transform.position - _reasonCam.transform.position, Vector3.up);
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("Ghost", $"reason-label follow failed (hidden): {e.Message}");
+                _reasonGo.SetActive(false);
+            }
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Lazily build the world-space reason label: a dark pill with soft-red WebGL-safe
+        /// Text (LegacyRuntime.ttf), parented to the host so it survives ghost re-arms.
+        /// </summary>
+        private void BuildReasonLabel()
+        {
+            _reasonGo = new GameObject("GhostReasonLabel");
+            _reasonGo.transform.SetParent(transform, false);
+
+            var canvas = _reasonGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+
+            var crt = (RectTransform)_reasonGo.transform;
+            crt.sizeDelta = new Vector2(360f, 64f);
+            crt.localScale = Vector3.one * 0.012f;   // 360px * 0.012 ~= 4.3 world units wide
+
+            // Dark pill so the text reads over any terrain colour.
+            var bg = new GameObject("bg");
+            bg.transform.SetParent(_reasonGo.transform, false);
+            var bgImg = bg.AddComponent<Image>();
+            bgImg.color = new Color(0f, 0f, 0f, 0.72f);
+            var bgrt = (RectTransform)bg.transform;
+            bgrt.anchorMin = Vector2.zero; bgrt.anchorMax = Vector2.one;
+            bgrt.offsetMin = Vector2.zero; bgrt.offsetMax = Vector2.zero;
+
+            var txtGo = new GameObject("text");
+            txtGo.transform.SetParent(_reasonGo.transform, false);
+            _reasonText = txtGo.AddComponent<Text>();
+            _reasonText.font = ReasonFont();
+            _reasonText.fontSize = 28;
+            _reasonText.alignment = TextAnchor.MiddleCenter;
+            _reasonText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _reasonText.verticalOverflow = VerticalWrapMode.Overflow;
+            _reasonText.color = new Color(1f, 0.55f, 0.5f, 1f);   // soft red, matches the blocked tint
+            var trt = (RectTransform)txtGo.transform;
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = new Vector2(10f, 4f); trt.offsetMax = new Vector2(-10f, -4f);
+        }
+
+        private static Font ReasonFont() =>
+            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+            ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
 
         private void CollectRenderers(Transform root)
         {

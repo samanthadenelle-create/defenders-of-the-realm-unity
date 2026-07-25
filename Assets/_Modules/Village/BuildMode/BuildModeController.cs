@@ -1017,6 +1017,10 @@ namespace DeNelle.Village
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
             _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
+            // Owner 2026-07-24 "tell me why it's red": surface the already-computed reason on
+            // the ghost's silent floating label while blocked (no buzz, no toast spam); clear
+            // it when valid. The drop/place taps still pop the buzzing toast (ShowRejectToast).
+            _ghost.SetReason(valid ? null : ReasonLabelText(reason));
 
             // §12 heartbeat — EVERY gate above passed this frame: the PlaceConfirm latch IS
             // polled below. If the owner clicks and still nothing happens while these LIVE
@@ -1074,12 +1078,19 @@ namespace DeNelle.Village
         /// the generic "Not enough resources".
         /// </summary>
         private void ShowRejectToast(BuildRejectReason reason)
-        {
-            if (reason == BuildRejectReason.CannotAfford)
-                BuildFeedbackToast.Show(ShortfallMessage(EffectiveCostFor(_armed)));
-            else
-                BuildFeedbackToast.Show(reason);
-        }
+            => BuildFeedbackToast.Show(ReasonLabelText(reason));
+
+        /// <summary>
+        /// The player-facing text for a reject reason -- the specialized "Not enough
+        /// &lt;Resource&gt; (N)" shortfall for CannotAfford, else the tightened
+        /// <see cref="BuildFeedbackToast.MessageFor"/> line. Shared by the buzzing drop/place
+        /// toast (<see cref="ShowRejectToast"/>) and the silent floating ghost reason label
+        /// (owner 2026-07-24 "tell me why it's red") so both read identically.
+        /// </summary>
+        private string ReasonLabelText(BuildRejectReason reason)
+            => reason == BuildRejectReason.CannotAfford
+                ? ShortfallMessage(EffectiveCostFor(_armed))
+                : BuildFeedbackToast.MessageFor(reason);
 
         /// <summary>
         /// TWO-STEP dropped state (owner ruling 2026-07-13): the pending ghost sits frozen
@@ -1119,6 +1130,7 @@ namespace DeNelle.Village
                 TraceBlockedWhileArmed("pending-ground miss",
                     $"down-ray at pending point {_dropWorldPoint} hit NOTHING — pending drop invalid");
                 _ghost.SetValid(false);
+                _ghost.SetReason(ReasonLabelText(BuildRejectReason.BadSurface));   // "tell me why it's red"
                 if (confirm == ConfirmKind.UiPlace) ShowRejectToast(BuildRejectReason.BadSurface);
                 return;
             }
@@ -1131,6 +1143,7 @@ namespace DeNelle.Village
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
             _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
+            _ghost.SetReason(valid ? null : ReasonLabelText(reason));   // silent "why it's red" label
 
             // §12 heartbeat for the dropped state — mirrors the hover placeloop-live line.
             FlowTrace.Throttle("Build", "placeloop-pending", 1f,
@@ -2494,14 +2507,41 @@ namespace DeNelle.Village
             };
 
         /// <summary>
-        /// Placement freebie policy (owner rulings 2026-07-17). Two lanes:
-        ///  - FOUNDING KIT (see <see cref="FoundingKit"/>): each of the three founding
-        ///    pieces is free UNTIL that specific id is in <c>GameState.FreeBuildsUsed</c>
-        ///    (per-item freebie), so all three seed free during the FTUE even with zero
-        ///    resources. These founding burns do NOT consume the general freebie.
-        ///  - EVERYTHING ELSE: ONE free placement TOTAL, counting ONLY non-founding
-        ///    entries in the ledger -- free only while no non-founding id has been burned
-        ///    yet; from then on every non-founding placement is charged.
+        /// Wooden starter towers whose FIRST TWO placements TOTAL are free (owner ruling
+        /// 2026-07-24: "only the first 2 towers, both WOODEN, are free; everything else
+        /// including Arcane is paid from placement 1"). Only the basic wooden Archer Tower
+        /// qualifies -- the Ballista/Wizard tower carries a Crystal cost and the Arcane
+        /// Spire / arcane-tower are magic towers, so NONE of them are wooden starters and
+        /// all are charged from the first placement. <see cref="tower_ground_archer"/> is
+        /// ALSO in <see cref="FoundingKit"/>; the wooden 2-cap is checked first and is the
+        /// MORE generous rule, so it supersedes (and still honours) the founding per-id
+        /// freebie for the first archer tower.
+        /// </summary>
+        private static readonly HashSet<string> WoodenTowerFreeKit =
+            new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                "tower_ground_archer",
+            };
+
+        /// <summary>How many wooden-tower placements are free in total (owner 2026-07-24).</summary>
+        private const int WoodenTowerFreeCap = 2;
+
+        /// <summary>
+        /// Placement freebie policy (owner rulings 2026-07-17, revised 2026-07-24). Three lanes,
+        /// checked in this order:
+        ///  - WOODEN STARTER TOWERS (see <see cref="WoodenTowerFreeKit"/>): the first
+        ///    <see cref="WoodenTowerFreeCap"/> (=2) wooden-tower placements TOTAL are free --
+        ///    free while the count of wooden ids already in <c>GameState.FreeBuildsUsed</c> is
+        ///    under the cap, charged from the third on. This is checked FIRST and supersedes the
+        ///    founding per-id freebie for the archer tower (the 2-cap already covers the one free
+        ///    founding tower and grants a second).
+        ///  - FOUNDING KIT (see <see cref="FoundingKit"/>, the non-tower pieces pet-house /
+        ///    lumberyard): each is free UNTIL that specific id is in the ledger (per-item freebie),
+        ///    so a zero-resource first run still founds its stores + pet house free.
+        ///  - EVERYTHING ELSE: PAID from placement #1 -- the old "one free non-founding build
+        ///    TOTAL" branch is RETIRED (owner 2026-07-24), so arcane-tower / tower_arcane_spire /
+        ///    the Ballista and every other non-wooden, non-founding entry costs resources from the
+        ///    very first placement.
         /// The ledger never resets (selling/destroying a building does not restore a
         /// freebie). Service-less/state-less = no freebie (fall back to normal cost,
         /// never a free exploit path). Additive default: a never-written list is treated
@@ -2514,16 +2554,27 @@ namespace DeNelle.Village
             if (st == null) return false;
             var used = st.FreeBuildsUsed;
 
-            // Founding kit: per-id freebie -- free until THIS founding id has been burned.
+            // Wooden starter towers: the first WoodenTowerFreeCap (2) placements TOTAL are free.
+            // Count how many wooden ids are already committed in the never-reset ledger; free
+            // while under the cap, charged from then on. Checked FIRST so it governs the archer
+            // tower (also a founding id) with the more-generous 2-cap.
+            if (WoodenTowerFreeKit.Contains(entry.id))
+            {
+                if (used == null) return true;   // additive default -- nothing burned yet
+                int woodenUsed = 0;
+                foreach (var id in used)
+                    if (WoodenTowerFreeKit.Contains(id)) woodenUsed++;
+                return woodenUsed < WoodenTowerFreeCap;
+            }
+
+            // Founding kit (non-tower pieces): per-id freebie -- free until THIS founding id
+            // has been burned, so a zero-resource first run still founds free.
             if (FoundingKit.Contains(entry.id))
                 return used == null || !used.Contains(entry.id);
 
-            // Non-founding: one free build TOTAL, but the founding freebies must NOT
-            // count against it -- free only while no NON-founding id has been burned yet.
-            if (used == null) return true;   // additive default -- never-written list = general freebie still live
-            foreach (var id in used)
-                if (!FoundingKit.Contains(id)) return false;   // a real (non-founding) freebie already spent
-            return true;
+            // EVERYTHING ELSE is PAID from placement #1 (owner 2026-07-24): the old
+            // one-free-non-founding-total branch is retired.
+            return false;
         }
 
         /// <summary>

@@ -127,15 +127,18 @@ namespace DeNelle.Village
         /// <summary>The default player-facing message for each rejection reason.</summary>
         public static string MessageFor(BuildRejectReason reason)
         {
+            // Owner vocabulary 2026-07-24 ("tell me why it's red"): concrete, plain-words
+            // reasons. CannotAfford keeps the generic line here; callers with a cost in hand
+            // prefer the specialized "Not enough <Resource> (N)" shortfall (ShortfallMessage).
             switch (reason)
             {
-                case BuildRejectReason.BadSurface:   return "Can't build there";
-                case BuildRejectReason.Occupied:     return "No space here";
+                case BuildRejectReason.BadSurface:   return "Ground is too uneven here";
+                case BuildRejectReason.Occupied:     return "Too close to another building";
                 case BuildRejectReason.BlocksGate:   return "Would block the gate";
                 case BuildRejectReason.OutOfBounds:  return "Outside the build area";
                 case BuildRejectReason.CannotAfford: return "Not enough resources";
                 case BuildRejectReason.Locked:       return "Locked";
-                case BuildRejectReason.Singleton:    return "Already built - your town has one";
+                case BuildRejectReason.Singleton:    return "Already built";
                 default:                             return "Can't build there";
             }
         }
