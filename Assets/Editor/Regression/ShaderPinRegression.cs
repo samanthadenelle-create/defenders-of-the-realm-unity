@@ -6,9 +6,11 @@
 //   (1) a FIRST-PARTY IPreprocessBuildWithReport hook exists AND references
 //       EnsureShadersIncluded (so the always-included list is pinned on every build),
 //       and EnsureShadersIncluded itself is present, AND
-//   (2) GraphicsSettings.asset's m_AlwaysIncludedShaders ALREADY contains both
-//       "Universal Render Pipeline/Lit" and "Universal Render Pipeline/Terrain/Lit"
-//       (read via SerializedObject -- the same list the pin edits).
+//   (2) GraphicsSettings.asset's m_AlwaysIncludedShaders ALREADY contains
+//       "Universal Render Pipeline/Lit", "Universal Render Pipeline/Terrain/Lit",
+//       "Universal Render Pipeline/Unlit" and "Sprites/Default" (read via
+//       SerializedObject -- the same list the pin edits). The last two keep the
+//       runtime marker/decal quads (RepairHighlight etc.) off magenta.
 //
 // Marker: SHADER_PIN_OK / SHADER_PIN_FAIL. Expected: GREEN.
 //
@@ -29,6 +31,11 @@ namespace DeNelle.Editor
     {
         private const string UrpLit = "Universal Render Pipeline/Lit";
         private const string UrpTerrainLit = "Universal Render Pipeline/Terrain/Lit";
+        // Runtime-built marker/decal quads (RepairHighlight, TowerRangeRing, HeroReachRing,
+        // StructureAttackAlert, HeroTargetIndicator, DecalSpawner) Shader.Find these at run
+        // time and render MAGENTA if stripped - so the pin MUST include them too.
+        private const string UrpUnlit = "Universal Render Pipeline/Unlit";
+        private const string SpritesDefault = "Sprites/Default";
 
         public static bool Run(out string reason)
         {
@@ -105,6 +112,10 @@ namespace DeNelle.Editor
                         failures.Add($"[shader-pin] always-included shaders do NOT contain '{UrpLit}' -- URP Lit would strip (pink materials in the player)");
                     if (!names.Contains(UrpTerrainLit))
                         failures.Add($"[shader-pin] always-included shaders do NOT contain '{UrpTerrainLit}' -- the URP Terrain shader would strip (pink terrain)");
+                    if (!names.Contains(UrpUnlit))
+                        failures.Add($"[shader-pin] always-included shaders do NOT contain '{UrpUnlit}' -- runtime marker/decal quads (RepairHighlight etc.) would strip (magenta quads in the player)");
+                    if (!names.Contains(SpritesDefault))
+                        failures.Add($"[shader-pin] always-included shaders do NOT contain '{SpritesDefault}' -- the marker/decal built-in fallback would strip (magenta quads in the player)");
                 }
             }
             catch (Exception ex)

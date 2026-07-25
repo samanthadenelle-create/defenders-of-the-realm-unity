@@ -76,7 +76,11 @@ namespace DeNelle.Village
             disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             disc.transform.localPosition = new Vector3(0f, 0.06f, 0f);
             _discRenderer = disc.GetComponent<MeshRenderer>();
-            _discRenderer.sharedMaterial = mat;
+            // FAIL-SAFE: mat is null only when no shader could be resolved. Never leave
+            // the primitive's DEFAULT material on it (renders magenta under URP) - hide
+            // the renderer instead so the marker is invisible, never magenta.
+            if (mat != null) _discRenderer.sharedMaterial = mat;
+            else _discRenderer.enabled = false;
             _discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _discRenderer.receiveShadows = false;
 
@@ -88,7 +92,8 @@ namespace DeNelle.Village
             ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             ring.transform.localPosition = new Vector3(0f, 0.5f, 0f);
             _ringRenderer = ring.GetComponent<MeshRenderer>();
-            _ringRenderer.sharedMaterial = mat;
+            if (mat != null) _ringRenderer.sharedMaterial = mat;
+            else _ringRenderer.enabled = false;
             _ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _ringRenderer.receiveShadows = false;
 
@@ -133,14 +138,37 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Builds an unlit, transparent, additive-leaning material for the marker.
-        /// Tries the URP unlit shader first, then the built-in unlit fallback so
+        /// Tries the URP unlit shader first, then the built-in unlit fallbacks so
         /// the marker still renders if the project is not on URP.
+        /// FAIL-SAFE (magenta guard): if EVERY <see cref="Shader.Find"/> misses
+        /// (the unlit shaders were STRIPPED from the player build) we borrow a URP
+        /// shader guaranteed present in the build from a live scene material via
+        /// <see cref="DeNelle.Core.MagentaGuard.ResolveUrpLitShader"/>; if even that
+        /// resolves nothing we return NULL rather than <c>new Material(null)</c>
+        /// (which renders opaque MAGENTA). A null result makes the caller SKIP
+        /// drawing the marker - so it is either its intended translucent violet or
+        /// invisible, NEVER magenta. Mirrors GroundZFightFixer's disable-rather-than
+        /// -show-a-bad-material pattern.
         /// </summary>
         private static Material BuildMarkerMaterial()
         {
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null) shader = Shader.Find("Unlit/Color");
             if (shader == null) shader = Shader.Find("Sprites/Default");
+            // Final fallback: borrow a URP shader that IS in the build from a live
+            // scene material (the same runtime-resolve MagentaGuard uses for the
+            // emergency hero pill). Guaranteed included because it is serialized in a
+            // built scene - so it survives shader stripping.
+            if (shader == null) shader = DeNelle.Core.MagentaGuard.ResolveUrpLitShader();
+            if (shader == null)
+            {
+                // No shader resolved at all - do NOT build a magenta material.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Repair",
+                    "RepairHighlight: no marker shader resolved (URP/Unlit + Unlit/Color + " +
+                    "Sprites/Default + URP scene-borrow all missed) - skipping marker material " +
+                    "to avoid a magenta quad.");
+                return null;
+            }
             var mat = new Material(shader) { name = "RepairHighlightMat" };
             // Best-effort transparency setup — harmless if a property is absent.
             if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f); // transparent
