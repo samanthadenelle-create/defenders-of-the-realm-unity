@@ -152,7 +152,7 @@ namespace DeNelle.Village
                     behaviorId = "DefenseTower",
                     buildCost  = 100,
                     navSurface = NavSurfaceKind.Blocker,
-                    visualHeight = 5f,
+                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 5)
                     range = 14f, damage = 6f, fireRate = 2.5f,
                     canHitAir = false, element = DamageElement.None,
                     projectileStyle = "bolt",   // owner 2026-07-08: arrows, not pellets
@@ -177,7 +177,7 @@ namespace DeNelle.Village
                     behaviorId = "DefenseTower",
                     buildCost  = 150,
                     navSurface = NavSurfaceKind.Blocker,
-                    visualHeight = 5f,
+                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 5)
                     // Owner 2026-07-08 tower-identity ladder: the Ballista is the SNIPER —
                     // longest range of the three, slowest fire, heaviest PHYSICAL single hit
                     // (55 m map-wide range + Aether were the pre-ladder values).
@@ -210,7 +210,7 @@ namespace DeNelle.Village
                     behaviorId = "ArcaneTower",
                     buildCost  = 200,
                     navSurface = NavSurfaceKind.Blocker,
-                    visualHeight = 6f,
+                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 6)
                     range = 16f, damage = 16f, fireRate = 0.6f,   // owner 2026-07-08: mid-range zone caster
                     canHitAir = true, element = DamageElement.Aether,
                     projectileStyle = "spell",

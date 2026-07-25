@@ -169,11 +169,23 @@ namespace DeNelle.Core.Catalog
         public PlacementRules placement = new PlacementRules();
 
         /// <summary>
-        /// Real-world VISUAL height (metres) the skinned model is fit to. &gt;0 fits to
-        /// HEIGHT (correct for tall structures like towers, so they read upright and
-        /// right-sized regardless of the source asset's import scale); 0 (default)
-        /// falls back to the legacy footprint-largest fit. DEF-208: a watchtower wants
-        /// ~5 m, not its footprint (2.5 m) which squashed it.
+        /// WO-764 — the per-item Y-height MULTIPLIER against the ONE global base ceiling
+        /// (StructureFactory.YHeightVariable = 4 m). The skinned model is fit-to-HEIGHT so its
+        /// world-bounds Y == <c>YHeightVariable * heightMul</c>. DEFAULT 1.0 = every building
+        /// normalizes to the base ceiling (uniform, script-built town — the owner-locked model).
+        /// Author an exception only for a class that should read taller/shorter: towers = 1.25
+        /// (5 m at base 4), siege engines = 0.75 (3 m). Change the base in ONE place and the whole
+        /// town re-scales together. JSON deserializes "heightMul" straight in. SUPERSEDES the
+        /// deprecated absolute <see cref="visualHeight"/> below.
+        /// </summary>
+        public float heightMul = 1.0f;
+
+        /// <summary>
+        /// DEPRECATED (WO-764) — the legacy ABSOLUTE visual height (metres) the model was fit to.
+        /// Superseded by <see cref="heightMul"/> (base × multiplier) and NO LONGER READ by
+        /// StructureFactory.EffectiveVisualHeight. Retained only so any older serialized JSON that
+        /// still carries a "visualHeight" key deserializes without error. Do NOT author new rows
+        /// against it — use <see cref="heightMul"/>.
         /// </summary>
         public float visualHeight = 0f;
 

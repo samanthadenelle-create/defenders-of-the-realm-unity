@@ -15,7 +15,9 @@
 // CastleHubBuilder bake would, since it never fixes materials).
 //
 // TO REPLACE ANOTHER STRUCTURE: drop the model in Resources/Structures and add ONE row
-// to Swaps below — { baked structure NAME, model path, target size (m), yaw° }. The
+// to Swaps below — { baked structure NAME, model path, height multiplier, yaw° }. WO-764:
+// every landmark is fit-to-HEIGHT (StructureFactory.YHeightVariable × heightMul, uniform 1.0
+// base) exactly like a player-built catalog structure — no more per-item hand-dialed sizeM. The
 // baked names (from CastleHubBuilder) are:
 //   Blacksmith_Weapons_Storefront · Lumbermill_Wood_Storefront · Windmill_Food_Storefront
 //   EchoHollow_Pets_RoamingArea · Forge_Armor_Storefront · ArcaneTower_MagicUpgrades
@@ -40,7 +42,8 @@ namespace DeNelle.Village
         {
             public string bakedName;   // the structure's baked GameObject name (CastleHubBuilder)
             public string modelPath;   // Resources path of the lightweight model
-            public float  sizeM;       // fit the model's largest dimension to this many metres
+            public float  heightMul;   // WO-764: Y-height multiplier vs StructureFactory.YHeightVariable
+                                       // (4 m base). 0/unset -> 1.0 (uniform base); towers author 1.25.
             public float  yawDeg;      // Y rotation to correct a wrong-facing Tripo FBX (convention: 90)
             public float  pitchDeg;    // X rotation — when a model imports lying down (default 0)
             public float  rollDeg;     // Z rotation — rarely needed (default 0)
@@ -52,8 +55,8 @@ namespace DeNelle.Village
             public string texPath;     // OPTIONAL Resources texture to force onto the model when its
                                        // embedded material didn't bind one (renders colorless). Default null.
             public float  scaleX;      // OPTIONAL explicit (non-uniform) local scale. When scaleX>0 it
-            public float  scaleY;      // OVERRIDES the uniform sizeM fit with (scaleX,scaleY,scaleZ) —
-            public float  scaleZ;      // for a model the owner sized by hand. Default 0 -> use sizeM fit.
+            public float  scaleY;      // OVERRIDES the fit-to-height with (scaleX,scaleY,scaleZ) — for a
+            public float  scaleZ;      // model the owner sized by hand. Default 0 -> use the height fit.
         }
 
         // ── THE SWAP TABLE — add a row per lightweight structure ──────────────────
@@ -63,17 +66,22 @@ namespace DeNelle.Village
             // ALL need yawDeg=90 to face the plaza, and their embedded materials are URP-fixed
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
-            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
-            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
-            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 180f },   // owner hand-dialed 2026-06-21
-            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 110.4f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },
-            new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
-            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // owner hand-dialed 2026-06-21
+            // WO-764: NO sizeM — every landmark is fit-to-HEIGHT (YHeightVariable × heightMul). All
+            // buildings inherit the uniform 1.0 base (heightMul unset); ONLY the arcane tower is a
+            // tower (heightMul 1.25). yaw/pitch/roll/pos/scale hand-dials are orientation/placement,
+            // untouched. (Jeweler still carries an explicit scaleX so it keeps its bespoke proportions,
+            // superseding the height fit — see note; clear its scaleX to make it obey uniform height.)
+            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
+            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", heightMul = 1.25f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // WO-764: tower = 1.25 × base. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
+            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 0f,   pitchDeg = -90f, rollDeg = 180f },   // owner hand-dialed 2026-06-21
+            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 0f,   pitchDeg = -90f, rollDeg = 110.4f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },
+            new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
+            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // owner hand-dialed 2026-06-21
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
-            // visual swap only — its training function is already wired. Size/yaw owner-dialed.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 180f, pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
+            // visual swap only — its training function is already wired. Yaw/pos owner-dialed; height uniform.
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     yawDeg = 180f, pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
             // (ArenaMonument was deleted; the colosseum is a NEW placement at the arena herald
             //  spot (15,0,6) — see the Places table below, not a swap.)
         };
@@ -105,13 +113,14 @@ namespace DeNelle.Village
             public string  name;       // unique object name (idempotency guard)
             public string  modelPath;
             public Vector3 worldPos;
-            public float   sizeM;
+            public float   heightMul;  // WO-764: Y-height multiplier vs StructureFactory.YHeightVariable
+                                       // (4 m base). 0/unset -> 1.0 (uniform base). Mirrors Swap.heightMul.
             public float   yawDeg;
             public float   pitchDeg;
             public float   rollDeg;    // Z rotation (owner hand-dial; default 0) — mirrors Swap.rollDeg
-            public float   scaleX;     // OPTIONAL explicit non-uniform scale; scaleX>0 OVERRIDES the sizeM
+            public float   scaleX;     // OPTIONAL explicit non-uniform scale; scaleX>0 OVERRIDES the height
             public float   scaleY;     // fit with (scaleX,scaleY,scaleZ) — for a model the owner sized by
-            public float   scaleZ;     // hand. Default 0 -> use sizeM fit. Mirrors Swap.scaleX/Y/Z.
+            public float   scaleZ;     // hand. Default 0 -> use the height fit. Mirrors Swap.scaleX/Y/Z.
         }
 
         // The old ArenaMonument was deleted; place the colosseum (arena.fbx) at the arena herald spot
@@ -126,9 +135,9 @@ namespace DeNelle.Village
             // lifts the bounds base off the floor — SetBottomToGround (called in TryPlace) then pins
             // the bottom to the scripted GroundY (0) so the ring sits ON the ground, not floating.
             new Place { name = "Colosseum_ArenaEntrance", modelPath = "Structures/arena",
-                        worldPos = new Vector3(-0.39f, 0f, 23.1f), sizeM = 16f,
+                        worldPos = new Vector3(-0.39f, 0f, 23.1f), heightMul = 1f,
                         yawDeg = 0f, pitchDeg = -90f, rollDeg = 90f,
-                        scaleX = 5.3f, scaleY = 4.2f, scaleZ = 5.265f },   // 50% of owner hand-dialed 2026-06-21
+                        scaleX = 5.3f, scaleY = 4.2f, scaleZ = 5.265f },   // WO-764: heightMul 1.0 uniform base, BUT the explicit scaleX below still supersedes the height fit (owner hand-dialed proportions) — clear scaleX to make it obey uniform height. 50% of owner hand-dialed 2026-06-21
         };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -218,7 +227,11 @@ namespace DeNelle.Village
                 $"place '{p.name}': authored y={p.worldPos.y:0.###} -> GroundY={GroundY:0.###} " +
                 $"(scripted category ground variable — no raycast/sample) — deterministic base-on-ground seat.");
             host.transform.position = seated;
-            var opts = SkinOptions.Structure(p.sizeM);
+            // WO-764: fit-to-HEIGHT (YHeightVariable × per-item multiplier), FitLargest cleared — the
+            // SAME normalization player-built catalog structures use (StructureFactory.Create). No sizeM.
+            float placeMult = p.heightMul > 0f ? p.heightMul : 1f;
+            var opts = SkinOptions.Structure(0f);   // clears FitLargest (SeatOnGround + Tripo-fix retained)
+            opts.FitHeight = StructureFactory.YHeightVariable * placeMult;
             opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, p.rollDeg);
             var vis = VisualFactory.Skin(host.transform, p.modelPath, opts);
             if (vis == null)
@@ -227,7 +240,7 @@ namespace DeNelle.Village
                 Object.Destroy(host);
                 return;
             }
-            if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the uniform sizeM fit
+            if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the fit-to-height
                 vis.transform.localScale = new Vector3(p.scaleX, p.scaleY, p.scaleZ);
             // Owner 2026-07-04 exact rule: `if (object is a building) object.SetBottom = ground y=0`.
             // Capability check → set the bottom. One code path over all building-type objects, once at
@@ -282,9 +295,13 @@ namespace DeNelle.Village
             foreach (var r in bakedRenderers)
                 if (r != null) r.enabled = false;
 
-            // Skin the lightweight model in: bounds-fit + seat-on-ground + URP-fix Tripo materials.
-            // LocalRotation (yaw) is applied BEFORE fit/seat so the fit measures it final-facing.
-            var opts = SkinOptions.Structure(s.sizeM);
+            // Skin the lightweight model in: WO-764 fit-to-HEIGHT (YHeightVariable × per-item multiplier,
+            // FitLargest cleared) + seat-on-ground + URP-fix Tripo materials — the SAME normalization
+            // player-built catalog structures use. LocalRotation (yaw) is applied BEFORE fit/seat so the
+            // fit measures it final-facing.
+            float swapMult = s.heightMul > 0f ? s.heightMul : 1f;
+            var opts = SkinOptions.Structure(0f);   // clears FitLargest (SeatOnGround + Tripo-fix retained)
+            opts.FitHeight = StructureFactory.YHeightVariable * swapMult;
             opts.LocalRotation = Quaternion.Euler(s.pitchDeg, s.yawDeg, s.rollDeg);
             var vis = VisualFactory.Skin(target, s.modelPath, opts);
             if (vis == null)
@@ -314,7 +331,7 @@ namespace DeNelle.Village
                 lp.y += s.posY;
                 vis.transform.localPosition = lp;
             }
-            if (s.scaleX > 0f)   // explicit (non-uniform) scale overrides the uniform sizeM fit
+            if (s.scaleX > 0f)   // explicit (non-uniform) scale overrides the fit-to-height
                 vis.transform.localScale = new Vector3(s.scaleX, s.scaleY, s.scaleZ);
             // Escape hatch: force a texture when the model's embedded material didn't bind one
             // (renders colorless). The Tripo fixer reads the source material's _MainTex/_BaseMap;
@@ -390,7 +407,7 @@ namespace DeNelle.Village
 
         // Capability check for the owner's rule `if (object is a building) SetBottom = ground`.
         // Everything the injector PLACES via the Places table is a building/structure — it is skinned
-        // through SkinOptions.Structure(sizeM) and registered as a solid structure (EnsureStructure
+        // through SkinOptions.Structure + FitHeight and registered as a solid structure (EnsureStructure
         // collider). So the whole placed category carries the building capability; this is the single
         // predicate to narrow if a non-building prop is ever added to Places.
         private static bool IsBuilding(Place p) => true;

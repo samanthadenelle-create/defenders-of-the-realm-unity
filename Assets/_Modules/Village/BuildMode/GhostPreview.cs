@@ -83,13 +83,13 @@ namespace DeNelle.Village
             // visualHeight (DEF-208 tall-structure fix) and FitLargest(footprint) otherwise — so the ghost
             // must do the SAME, not always FitLargest. Mirrors StructureFactory.cs:79-94. (`fit` stays
             // method-scoped — the pack-missing fallback disc below also uses it.)
-            // WO-751: EVERY structure now fits-to-HEIGHT (override visualHeight when > 0, else the
-            // shared DefaultVisualHeight) — the ghost must match Create for no-value structures too, or
-            // the dragged ghost and the placed building end up different sizes.
+            // WO-764: EVERY structure now fits-to-HEIGHT = YHeightVariable * repo.heightMul (uniform
+            // base × the per-item multiplier; buildings inherit 1.0, towers 1.25). The ghost must match
+            // Create's centralized formula EXACTLY or the dragged ghost and the placed building end up
+            // different sizes.
             SkinOptions opts = SkinOptions.Structure(0f);
-            opts.FitHeight = (entry.repo != null && entry.repo.visualHeight > 0f)
-                ? entry.repo.visualHeight
-                : StructureFactory.DefaultVisualHeight;
+            float ghostMul = (entry.repo != null && entry.repo.heightMul > 0f) ? entry.repo.heightMul : 1f;
+            opts.FitHeight = StructureFactory.YHeightVariable * ghostMul;
 
             GameObject skinned = null;
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))

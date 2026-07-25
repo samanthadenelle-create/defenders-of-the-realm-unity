@@ -40,28 +40,32 @@ namespace DeNelle.Village
     public static class StructureFactory
     {
         /// <summary>
-        /// WO-751 (Y-height normalization) - the ONE default fit-to-height (metres) every
-        /// structure with no authored <c>repo.visualHeight</c> normalizes to, so raw modeled
-        /// sizes no longer read inconsistent (owner felt-test on Seeker: "some look smaller").
-        /// ~2x the 1.8 m Knight. Towers OVERRIDE this upward via <c>repo.visualHeight</c> in the
-        /// catalog; everything else stays valueless and inherits this default. Replaces the old
-        /// legacy fit-to-largest-dimension fallback (which was the inconsistency source).
+        /// WO-764 (Y-height normalization, centralized) - the ONE global base ceiling (metres)
+        /// every structure is fit-to-height against:
+        /// <c>EffectiveHeight = YHeightVariable * repo.heightMul</c>. Every building uses the
+        /// default 1.0 multiplier so the whole script-built town reads at ONE uniform height;
+        /// towers author 1.25 (5 m here) and siege engines 0.75 (3 m). Change THIS ONE number and
+        /// the entire town re-scales together (the owner-locked model). Was the WO-751
+        /// per-item-absolute DefaultVisualHeight (also 4 m); the old absolute overrides became
+        /// per-item <c>heightMul</c> multipliers.
         /// </summary>
-        public const float DefaultVisualHeight = 4f;
+        public const float YHeightVariable = 4f;
 
         /// <summary>
-        /// WO-751 - the fit-to-HEIGHT target (metres) for <paramref name="entry"/>: the authored
-        /// <c>repo.visualHeight</c> override when &gt; 0, else <see cref="DefaultVisualHeight"/>.
-        /// Single source of truth so Create / ReskinForLevel / footprint-measure all fit to the
-        /// SAME height (no size jump between placement, upgrade, and ghost/footprint). Only the
-        /// override path changes WHICH height feeds the fit - the bounds+height scale math in
-        /// VisualFactory.Fit is untouched. <paramref name="isOverride"/> reports the source.
+        /// WO-764 - the fit-to-HEIGHT target (metres) for <paramref name="entry"/>:
+        /// <c>YHeightVariable * repo.heightMul</c> (multiplier default 1.0, guarded &gt; 0). Single
+        /// source of truth so Create / ReskinForLevel / footprint-measure all fit to the SAME height
+        /// (no size jump between placement, upgrade, and ghost/footprint). Only the multiplier changes
+        /// WHICH height feeds the fit - the bounds+height scale math in VisualFactory.Fit is untouched.
+        /// <paramref name="isOverride"/> is true when the item's multiplier != 1.0 (a deliberate class
+        /// exception like a tower), false when it inherits the uniform base.
         /// </summary>
         private static float EffectiveVisualHeight(CatalogEntry entry, out bool isOverride)
         {
-            float authored = entry != null && entry.repo != null ? entry.repo.visualHeight : 0f;
-            isOverride = authored > 0f;
-            return isOverride ? authored : DefaultVisualHeight;
+            float mult = entry != null && entry.repo != null ? entry.repo.heightMul : 1f;
+            if (mult <= 0f) mult = 1f;   // guard a zero/unset/negative authored multiplier -> uniform base
+            isOverride = !Mathf.Approximately(mult, 1f);
+            return YHeightVariable * mult;
         }
 
         /// <summary>
@@ -100,10 +104,9 @@ namespace DeNelle.Village
             // DEF-208 + WO-751 (Y-height normalization): EVERY structure fits to HEIGHT now.
             // A tall structure (tower) must fit to HEIGHT, not to its largest bounds dim
             // (fit-to-largest scaled a tower so its tallest axis = footprint ~2.5 m -> a
-            // squashed/wrong-scaled tower). When repo.visualHeight > 0 we fit to that override
-            // (towers stand tall); otherwise we fit to DefaultVisualHeight so no-value structures
-            // normalize to ONE standard height instead of the old legacy footprint-largest fit
-            // (the inconsistency source the owner flagged).
+            // squashed/wrong-scaled tower). WO-764: every structure fits to YHeightVariable *
+            // repo.heightMul — buildings inherit the uniform 1.0 base, towers/siege author a
+            // multiplier (1.25 / 0.75) so a tall structure stands tall while the town stays uniform.
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
                 float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);
@@ -374,10 +377,10 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>DEF-208 + WO-751 skin options for an entry - fit-to-HEIGHT always: the
-        /// authored repo.visualHeight override when &gt; 0, else DefaultVisualHeight. Shared by
+        /// <summary>WO-764 skin options for an entry - fit-to-HEIGHT always:
+        /// YHeightVariable * repo.heightMul (uniform base × the per-item multiplier). Shared by
         /// Create + ReskinForLevel so a tier reskin fits to the SAME height as the base skin
-        /// (no size jump on upgrade for a no-value structure).</summary>
+        /// (no size jump on upgrade).</summary>
         private static SkinOptions OptsFor(CatalogEntry entry)
         {
             var o = SkinOptions.Structure(0f);   // clear FitLargest
@@ -605,7 +608,7 @@ namespace DeNelle.Village
                 // authored footprint (the temp object is still destroyed in finally), never throws up.
                 Guard.Try("Structure", $"measure upright footprint '{entry.id}'", () =>
                 {
-                    // WO-751: match Create's fit-to-height (override or DefaultVisualHeight) so the
+                    // WO-764: match Create's fit-to-height (YHeightVariable * heightMul) so the
                     // measured XZ footprint reflects the ACTUAL placed scale, not a footprint-fit
                     // scale - otherwise ghost/placement footprint disagrees with the placed size.
                     var opts = SkinOptions.Structure(0f);   // clear FitLargest

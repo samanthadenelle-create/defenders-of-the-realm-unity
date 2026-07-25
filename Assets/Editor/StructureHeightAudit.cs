@@ -3,7 +3,7 @@
 // entry's fit-to-HEIGHT relationship. For each entry it loads the visualPrefabPath
 // prefab, measures its combined-renderer Y-extent (raw bounds at identity/scale-1 -
 // exactly the value VisualFactory.Fit divides into), resolves the effective target
-// height (repo.visualHeight override when >0, else the WO-751 DefaultVisualHeight),
+// height (WO-764: YHeightVariable * repo.heightMul, multiplier default 1.0),
 // computes the resulting uniform scale (targetH / measuredY - the factor
 // StructureFactory actually applies), and prints one table row per entry:
 //
@@ -33,11 +33,11 @@ namespace DeNelle.Editor
 {
     public static class StructureHeightAudit
     {
-        // MIRROR of StructureFactory.DefaultVisualHeight (DeNelle.Village). The Editor
+        // MIRROR of StructureFactory.YHeightVariable (DeNelle.Village). The Editor
         // assembly does not reference DeNelle.Village, so this is duplicated by necessity -
-        // it MUST stay equal to StructureFactory.DefaultVisualHeight (WO-751 = 4 m). If that
-        // const changes, change this too (both are the ONE normalized default height).
-        private const float DefaultVisualHeight = 4f;
+        // it MUST stay equal to StructureFactory.YHeightVariable (WO-764 = 4 m base ceiling). If
+        // that const changes, change this too (both are the ONE global base height).
+        private const float YHeightVariable = 4f;
 
         // Wild-scale flag thresholds (WO-751 acceptance): a fit that up-scales past 3x or
         // down-scales below 0.3x means the prefab's native Y fights the target height.
@@ -82,7 +82,7 @@ namespace DeNelle.Editor
 
             var sb = new StringBuilder();
             sb.AppendLine($"[StructureHeightAudit] catalog v{version}, {entries.Count} entries. " +
-                          $"DefaultVisualHeight={DefaultVisualHeight:0.##}m (mirror of StructureFactory).");
+                          $"YHeightVariable={YHeightVariable:0.##}m (mirror of StructureFactory).");
             sb.AppendLine("id                        | measuredY | targetH | source   | scale | flag");
             sb.AppendLine("--------------------------|-----------|---------|----------|-------|-----");
 
@@ -98,9 +98,10 @@ namespace DeNelle.Editor
                 {
                     string vp = entry.Value<string>("visualPrefabPath");
                     var repo = entry["repo"] as JObject;
-                    float authored = repo != null ? (repo.Value<float?>("visualHeight") ?? 0f) : 0f;
-                    bool isOverride = authored > 0f;
-                    float targetH = isOverride ? authored : DefaultVisualHeight;
+                    float mult = repo != null ? (repo.Value<float?>("heightMul") ?? 1f) : 1f;
+                    if (mult <= 0f) mult = 1f;
+                    bool isOverride = !Mathf.Approximately(mult, 1f);
+                    float targetH = YHeightVariable * mult;
                     string source = isOverride ? "override" : "default";
 
                     if (string.IsNullOrEmpty(vp))

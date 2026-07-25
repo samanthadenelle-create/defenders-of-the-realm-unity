@@ -24,7 +24,7 @@
      "Structures/Tower_Tribal_Tier3"
     ],
     "navSurface": "Blocker",
-    "visualHeight": 7.0,
+    "heightMul": 1.25,
     "range": 14.0,
     "damage": 6.0,
     "fireRate": 2.5,
@@ -73,7 +73,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 7.0,
+    "heightMul": 1.25,
     "range": 22.0,
     "damage": 20.0,
     "fireRate": 0.5,
@@ -123,7 +123,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 3.0,
+    "heightMul": 0.75,
     "range": 50.0,
     "damage": 45.0,
     "fireRate": 2.0,
@@ -172,7 +172,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 3.0,
+    "heightMul": 0.75,
     "range": 28.0,
     "damage": 24.0,
     "fireRate": 0.8,
@@ -824,7 +824,7 @@
      "crystals": 0
     },
     "navSurface": "Blocker",
-    "visualHeight": 7.0,
+    "heightMul": 1.25,
     "placement": {
      "mustSitOn": "Ground",
      "footprint": 8.4,
@@ -876,7 +876,7 @@
      "Structures/ArcaneSpire_3_Albedo"
     ],
     "navSurface": "Blocker",
-    "visualHeight": 7.0,
+    "heightMul": 1.25,
     "range": 16.0,
     "damage": 16.0,
     "fireRate": 0.6,
