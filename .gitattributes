@@ -57,3 +57,7 @@ Assets/Firebase/**/*.srcaar filter=lfs diff=lfs merge=lfs -text
 Assets/Firebase/**/*.aar filter=lfs diff=lfs merge=lfs -text
 Assets/Firebase/**/*.jar filter=lfs diff=lfs merge=lfs -text
 Assets/Firebase/**/*.exe filter=lfs diff=lfs merge=lfs -text
+
+# Google Sign-In plugin native lib -> LFS
+Assets/GoogleSignIn/**/*.srcaar filter=lfs diff=lfs merge=lfs -text
+Assets/GoogleSignIn/**/*.aar filter=lfs diff=lfs merge=lfs -text

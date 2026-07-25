@@ -44,6 +44,7 @@ namespace DeNelle.Onboarding
         private TextMeshProUGUI _status;
         private Button _signIn;
         private Button _createAccount;
+        private Button _google;
         private Button _guest;
         private bool _busy;
 
@@ -126,26 +127,25 @@ namespace DeNelle.Onboarding
                 new Vector2(0.08f, 0.59f), new Vector2(0.92f, 0.69f));
 
             _status = ElarionUiKit.Label(body, "",
-                0.50f, 0.57f, ElarionUi.Parchment, ElarionUi.FontMicro,
+                0.505f, 0.565f, ElarionUi.Parchment, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             _status.raycastTarget = false;
 
             _signIn = ElarionUiKit.BuildObsidianButton(body, "Sign In",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.08f, 0.37f), new Vector2(0.92f, 0.48f), OnSignIn);
+                new Vector2(0.08f, 0.40f), new Vector2(0.92f, 0.49f), OnSignIn);
 
             _createAccount = ElarionUiKit.BuildObsidianButton(body, "Create Account",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.24f), new Vector2(0.92f, 0.35f), OnCreateAccount);
+                new Vector2(0.08f, 0.295f), new Vector2(0.92f, 0.385f), OnCreateAccount);
 
-            var orLabel = ElarionUiKit.Label(body, "- or -",
-                0.185f, 0.225f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
-                TextAlignmentOptions.Center, 0.06f, 0.94f);
-            orLabel.raycastTarget = false;
+            _google = ElarionUiKit.BuildObsidianButton(body, "Sign in with Google",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.08f, 0.19f), new Vector2(0.92f, 0.28f), OnGoogleSignIn);
 
             _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.15f), OnPlayAsGuest);
+                new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.13f), OnPlayAsGuest);
 
             if (_panelHandle == null)
                 _panelHandle = PanelManager.Register("Login", Continue, () => !_routed && _canvas != null);
@@ -168,6 +168,15 @@ namespace DeNelle.Onboarding
             if (!BeginAttempt(out string email, out string password)) return;
             SetStatus("Creating your account...", info: true);
             AuthOutcome outcome = await _vm.SignUpAsync(email, password);
+            HandleOutcome(outcome);
+        }
+
+        private async void OnGoogleSignIn()
+        {
+            if (_busy || _routed) return;
+            SetBusy(true);
+            SetStatus("Opening Google sign-in...", info: true);
+            AuthOutcome outcome = await _vm.SignInWithGoogleAsync();
             HandleOutcome(outcome);
         }
 
@@ -213,6 +222,7 @@ namespace DeNelle.Onboarding
             _busy = busy;
             if (_signIn != null) _signIn.interactable = !busy;
             if (_createAccount != null) _createAccount.interactable = !busy;
+            if (_google != null) _google.interactable = !busy;
             if (_guest != null) _guest.interactable = !busy;
         }
 

@@ -119,6 +119,26 @@ namespace DeNelle.Core.Auth
             catch (Exception e) { return AuthOutcome.Fail(Explain(e)); }
         }
 
+        /// <summary>
+        /// Federated sign-in with a Google ID token (obtained by the GoogleSignIn plugin) —
+        /// exchanges it for a Firebase credential and signs in, so a Google account resolves to
+        /// the same Firebase UID model as email/password.
+        /// </summary>
+        public async Task<AuthOutcome> SignInWithGoogleCredentialAsync(string googleIdToken)
+        {
+            if (string.IsNullOrEmpty(googleIdToken)) return AuthOutcome.Fail("no Google ID token");
+            if (!await EnsureInitializedAsync()) return AuthOutcome.Fail("auth not initialized");
+            try
+            {
+                Credential credential = GoogleAuthProvider.GetCredential(googleIdToken, null);
+                FlowTrace.Step("Auth", "Google credential -> Firebase sign-in");
+                AuthResult result = await _auth.SignInAndRetrieveDataWithCredentialAsync(credential);
+                FlowTrace.Step("Auth", $"Google sign-in OK uid={result.User?.UserId}");
+                return AuthOutcome.Ok(result.User);
+            }
+            catch (Exception e) { return AuthOutcome.Fail(Explain(e)); }
+        }
+
         public void SignOut()
         {
             if (_auth == null) return;

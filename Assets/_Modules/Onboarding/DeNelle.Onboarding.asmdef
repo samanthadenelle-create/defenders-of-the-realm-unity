@@ -8,7 +8,8 @@
         "UniTask",
         "Unity.Timeline",
         "UnityEngine.UI",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "GoogleSignIn"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -10,10 +10,12 @@
 // /api/game/save (Neon) keys by that UID. Guest needs no bind — GameStateService
 // mints a stable guest-local-* id on load when not signed in.
 // =============================================================================
+using System;
 using System.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using Google;
 
 namespace DeNelle.Onboarding
 {
@@ -35,6 +37,40 @@ namespace DeNelle.Onboarding
         public async Task<AuthOutcome> SignUpAsync(string email, string password)
         {
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignUpAsync(email, password);
+            if (outcome.Success) BindPlayer(outcome.UserId);
+            return outcome;
+        }
+
+        // The OAuth 2.0 WEB client id (google-services.json oauth_client type 3). Google Sign-In
+        // needs this to mint an ID token Firebase will accept.
+        private const string WebClientId = "264518851517-q9i3gj5dfocqme8v9vh8ria4na6avlj1.apps.googleusercontent.com";
+
+        /// <summary>
+        /// Sign in with a Google account: pops the native Google picker (GoogleSignIn plugin),
+        /// gets an ID token, exchanges it for a Firebase sign-in, then binds the UID.
+        /// </summary>
+        public async Task<AuthOutcome> SignInWithGoogleAsync()
+        {
+            string idToken;
+            try
+            {
+                GoogleSignIn.Configuration = new GoogleSignInConfiguration
+                {
+                    WebClientId = WebClientId,
+                    RequestIdToken = true,
+                    RequestEmail = true,
+                    UseGameSignIn = false,
+                };
+                GoogleSignInUser user = await GoogleSignIn.DefaultInstance.SignIn();
+                idToken = user != null ? user.IdToken : null;
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Warn("Auth", "Google sign-in cancelled/failed: " + e.Message);
+                return AuthOutcome.Fail("Google sign-in was cancelled.");
+            }
+            if (string.IsNullOrEmpty(idToken)) return AuthOutcome.Fail("Google returned no ID token.");
+            AuthOutcome outcome = await FirebaseAuthService.Instance.SignInWithGoogleCredentialAsync(idToken);
             if (outcome.Success) BindPlayer(outcome.UserId);
             return outcome;
         }
