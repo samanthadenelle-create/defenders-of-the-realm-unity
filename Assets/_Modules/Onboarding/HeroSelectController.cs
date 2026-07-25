@@ -219,9 +219,14 @@ namespace DeNelle.Onboarding
             // Owner F8 2026-07-03: lifted the stage floor from 0.020 -> 0.145 so the
             // bottom of the (now full-height FrameCore) body well is reserved for the
             // confirm CTA — "move everything up a little so the [CTA] stays in the frame."
-            _classColumn = MakeZone(body, "ClassColumn", new Vector2(0.000f, 0.145f), new Vector2(0.215f, 0.920f));
-            _stageCenter = MakeZone(body, "HeroStage",   new Vector2(0.235f, 0.145f), new Vector2(0.590f, 0.920f));
-            _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.610f, 0.145f), new Vector2(1.000f, 0.920f));
+            // Cosmetic flag C (owner 2026-07-24): widen the inter-column gutters (0.020 -> 0.040)
+            // so the columns don't crowd each other, and widen the SpecsPanel (0.390 -> 0.405) for
+            // horizontal breathing on its dense lore/stats/signature/skills stack — the slack is
+            // taken from the center 3D-preview stage, which can afford it. Vertical layout below is
+            // left intact (FitBlock/FitLine already guard overflow) to stay conservative.
+            _classColumn = MakeZone(body, "ClassColumn", new Vector2(0.000f, 0.145f), new Vector2(0.205f, 0.920f));
+            _stageCenter = MakeZone(body, "HeroStage",   new Vector2(0.245f, 0.145f), new Vector2(0.555f, 0.920f));
+            _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.595f, 0.145f), new Vector2(1.000f, 0.920f));
 
             BuildClassColumn();
 

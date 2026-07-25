@@ -247,21 +247,13 @@ namespace DeNelle.HUD.Kit
             // targetCycle: up to 4 compact enemy rows -> HudCommands.CycleSelect.
             BuildTargetCycle(pool);
 
-            // ── system: settings + flee ──
-            var settings = ElarionUiKit.BuildObsidianButton(pool, "Menu",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.10f, 0.55f), new Vector2(0.98f, 0.98f), () =>
-                {
-                    // Owner 2026-07-03: the gear/Menu opens the HELP/SETTINGS card (Report Bug /
-                    // Controls / Reset / Dev Tools / Credits) — restoring the prior behavior the
-                    // kit conversion broke by routing the gear straight to the Game Guide. Game
-                    // Guide is reachable FROM Settings; keep it as the fallback if Help is absent.
-                    if (DeNelle.HUD.HelpMenu.Instance != null)
-                        DeNelle.HUD.HelpMenu.Instance.ToggleOverlay();
-                    else if (!PanelRouter.Open(PanelId.GameGuide))
-                        FlowTrace.Warn("HudKit", "settings tapped but neither HelpMenu nor GameGuide available");
-                });
-            Register("settingsButton", WrapAsWidget("settingsButton", settings.gameObject));
+            // ── system: flee ──
+            // 3-settings-doors -> 1 (owner cosmetic flag A, 2026-07-24): the top-right "Menu"
+            // TEXT button was REMOVED here. It reached the same HelpMenu/Settings card the LEFT
+            // gold-gear slide-dock's Settings tab already opens, so it was a duplicate door. The
+            // single settings entry point is now the left gear (BuildSlideDock: Chat/Leaderboard/
+            // Music/Settings/Pause). hud-areas.json "settingsButton" rows go inert automatically
+            // (posture only iterates REGISTERED widgets). Flee stays below.
 
             // Two-tap arm/confirm (anti-misfire, carried from the retired BattleArenaHud
             // flee button): first tap arms for 2s ("Flee?"), second tap inside the window
@@ -1328,7 +1320,9 @@ namespace DeNelle.HUD.Kit
             dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
             dockPanelRt.pivot = new Vector2(0f, 0.5f);
             dockPanelRt.anchoredPosition = Vector2.zero;
-            dockPanelRt.sizeDelta = new Vector2(400f, 560f);
+            // Height carries FIVE tabs now (Pause folded in — cosmetic flag A) at ~112px
+            // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx.
+            dockPanelRt.sizeDelta = new Vector2(400f, 700f);
             var dockTabRt = (RectTransform)_slideDock.tab.transform;
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
@@ -1340,6 +1334,11 @@ namespace DeNelle.HUD.Kit
             AddDockTab(_slideDock.panel, 1, "Leaderboard", "leaderboard", OpenLeaderboard);
             AddDockTab(_slideDock.panel, 2, "Music",       "music",       OpenJukebox);
             AddDockTab(_slideDock.panel, 3, "Settings",    "settings",    OpenSettings);
+            // Pause folded into the LEFT gear (cosmetic flag A, 2026-07-24): the standalone
+            // top-right pause chip (PauseHudBootstrap.PauseHudButton) was culled to leave ONE
+            // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
+            // tab is the caller that opens Pause/Quit-to-Title via PauseGate.RequestBack().
+            AddDockTab(_slideDock.panel, 4, "Pause",       "pause",       () => PauseGate.RequestBack());
 
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
@@ -1347,7 +1346,7 @@ namespace DeNelle.HUD.Kit
         // One labelled + icon-badged tab inside the slide-out (stacked vertically, top-to-bottom).
         private void AddDockTab(RectTransform panel, int i, string label, string iconConcept, Action onTap)
         {
-            const int n = 4;
+            const int n = 5;   // Chat/Leaderboard/Music/Settings/Pause (Pause folded in, flag A)
             float y1 = 1f - (i / (float)n) - 0.02f;
             float y0 = 1f - ((i + 1) / (float)n) + 0.02f;
             var btn = ElarionUiKit.BuildObsidianButton(panel, label,

@@ -91,10 +91,15 @@ namespace DeNelle.Settings
             var settings = go.AddComponent<SettingsController>();
             var pause = go.AddComponent<PauseController>();
             pause.AttachSettings(settings);   // serialized ref is scene-only; wire at runtime
-            go.AddComponent<PauseHudButton>();
+            // 3-settings-doors -> 1 (owner cosmetic flag A, 2026-07-24): the standalone on-screen
+            // PauseHudButton chip (top-right) was CULLED so there is ONE settings/pause door — the
+            // LEFT gold gear. Pause/Quit-to-Title now lives as the "Pause" tab in HudKitController's
+            // BuildSlideDock, which calls PauseGate.RequestBack() (the same caller this chip used).
+            // PauseController + SettingsController stay installed here — only the chip is gone.
+            // (PauseHudButton class is retained below in case a scene wants the standalone chip.)
             FlowTrace.Step("Pause",
-                "PauseHudBootstrap: installed PauseController+SettingsController+PauseHudButton in '" +
-                scene.name + "'.");
+                "PauseHudBootstrap: installed PauseController+SettingsController in '" +
+                scene.name + "' (pause chip folded into left gear dock — flag A).");
         }
     }
 

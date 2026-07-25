@@ -143,8 +143,12 @@ namespace DeNelle.Onboarding
 
             // Centred Obsidian panel — the shared Close is hidden (this is a forced
             // choice, no dismiss). withBackdrop:false — the scrim above already dims.
+            // Cosmetic flag C (owner 2026-07-24): the panel was short (0.24-0.76) so the header
+            // crowded the copy top and the copy band sat tight to the buttons. Raise it taller
+            // (0.18-0.82) to open the header<->copy and copy<->button gaps — the body content
+            // below is body-fraction relative, so it simply gains absolute pixels to breathe.
             var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "FOUND YOUR TOWN",
-                new Vector2(0.12f, 0.24f), new Vector2(0.88f, 0.76f), onClose: null,
+                new Vector2(0.12f, 0.18f), new Vector2(0.88f, 0.82f), onClose: null,
                 withBackdrop: false);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
@@ -163,6 +167,9 @@ namespace DeNelle.Onboarding
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             copy.textWrappingMode = TextWrappingModes.Normal;
             copy.raycastTarget = false;
+            // Cosmetic flag C: autosize + ellipsize the copy inside its 0.56-0.94 band so it can
+            // never overflow down onto the "Default Town" button (the reported bug).
+            ElarionUiKit.FitBlock(copy);
 
             // Two stacked full-width buttons (large mobile touch targets). Meaning is in
             // the LABEL, not the colour (owner colourblind): "Default Town" (Green CTA)

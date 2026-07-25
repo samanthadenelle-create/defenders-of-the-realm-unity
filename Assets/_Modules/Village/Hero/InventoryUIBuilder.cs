@@ -13,6 +13,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Hero;
@@ -38,11 +39,45 @@ namespace DeNelle.Village
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
             // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
             // dark solidFill + ember glow + rune strip + per-panel "X".
+            // Cosmetic flag B (owner 2026-07-24): the medallion "bag" glyph is REMOVED — the
+            // hero portrait is seated into the socket below instead (no medallionIcon here).
             var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "INVENTORY",
                 new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                 Close, headerX0: 0.05f, headerX1: 0.80f,
-                frameName: RpgUiCatalog.FrameInventory, medallionIcon: "bag");
+                frameName: RpgUiCatalog.FrameInventory);
             var panel = panelChrome.content;
+
+            // Cosmetic flag B — drop the hero portrait (Grom) into the medallion socket. Grom.jpg
+            // is a plain Texture2D (spriteMode:0), so it MUST load as Texture2D into a RawImage,
+            // NOT as a Sprite (mirrors HeroSelectController.ApplyPortrait). preserveAspect=false via
+            // a full stretch fills the oval. FALLBACK: an ASCII "GROM" label if the texture is
+            // missing (zero-risk floor). Canon note: Resources/HeroPortraits/ DOES exist (Grom/
+            // Elara/Thrain/Sylas .jpg) — any stale doc claiming otherwise is wrong.
+            var medallion = panelChrome.layout != null ? panelChrome.layout.medallion : null;
+            if (medallion != null)
+            {
+                var portraitTex = Resources.Load<Texture2D>("HeroPortraits/Grom");
+                if (portraitTex != null)
+                {
+                    var raw = new GameObject("HeroPortrait", typeof(RawImage));
+                    var rrt = raw.GetComponent<RectTransform>();
+                    rrt.SetParent(medallion, false);
+                    rrt.anchorMin = Vector2.zero;
+                    rrt.anchorMax = Vector2.one;
+                    rrt.offsetMin = Vector2.zero;
+                    rrt.offsetMax = Vector2.zero;
+                    var rawImg = raw.GetComponent<RawImage>();
+                    rawImg.texture = portraitTex;
+                    rawImg.color = Color.white;   // preserveAspect=false: fill the oval
+                    rawImg.raycastTarget = false;
+                }
+                else
+                {
+                    var grom = ElarionUiKit.Label(medallion, "GROM", 0f, 1f,
+                        ElarionUi.Gilt, 40, TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                    grom.raycastTarget = false;
+                }
+            }
 
             // Left: Narrow portrait area to match mockup exactly - ornate gold frame with hero portrait, Lvl, name, colored bars, stats.
             // Matches the mockup's left panel width and style.
