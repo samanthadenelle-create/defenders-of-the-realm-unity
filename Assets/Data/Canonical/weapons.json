@@ -668,6 +668,23 @@
       "iconPath": "ItemIcons/tripo_wand_a",
       "reach": 0.0,
       "flavor": "The smallest form the craft takes; what a student carries before anyone trusts them with something that could burn a room."
+    },
+    {
+      "id": "knight_flameblade",
+      "name": "Flameblade",
+      "icon": "🗡️",
+      "job": "knight",
+      "rarity": "uncommon",
+      "element": "fire",
+      "damageMult": 1.2,
+      "reach": 3.2,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 40,
+      "buyIron": 120,
+      "makersMark": "Emberhand",
+      "flavor": "Quenched in ember-oil at the Emberhand forge, its edge wakes to fire when it bites. A cheap early brand a warden can carry to SEE what an elemental edge does."
     }
   ]
 }

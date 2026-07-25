@@ -572,6 +572,17 @@ namespace DeNelle.Village
                     VFXManager.PlayKey("Weaponskillsword_Impact", hitPos, Quaternion.identity, null, null);
                     if (isPerfect)
                         VFXManager.PlayKey("KnightWeaponskill_Impact", hitPos, Quaternion.identity, null, null, 1.15f);
+
+                    // ELEMENTAL brand on-hit (data-driven via WeaponDef.element; WeaponVfxMap is
+                    // the ONE reader). A weapon carrying element:"fire" ADDS a full multi-layer
+                    // fire impact burst at the hit point, layered on the weaponskill impact — so an
+                    // elemental blade is VISUALLY read in combat. Reuses the shared VFXManager pool
+                    // (no raw Instantiate). No element -> null key -> unchanged behavior. Not
+                    // hardcoded to one weapon id: any element:"fire" weapon lights up.
+                    string elementKey = WeaponVfxMap.ElementalOnHitKey(_gear != null ? _gear.EquippedWeapon : null);
+                    if (!string.IsNullOrEmpty(elementKey))
+                        VFXManager.PlayKey(elementKey, hitPos, Quaternion.identity, null, null,
+                                           isPerfect ? 1.25f : 0f);
                 });
 
                 // WO-566: v2 talent on-hit procs (Knight Emberbrand Strike burn). Apply each owned

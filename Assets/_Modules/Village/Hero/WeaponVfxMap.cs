@@ -171,5 +171,33 @@ namespace DeNelle.Village
 
         private static string Normalize(string s) =>
             string.IsNullOrEmpty(s) ? string.Empty : s.Trim().ToLowerInvariant();
+
+        // =====================================================================
+        //  ELEMENTAL ON-HIT (data-driven; WeaponDef.element -> a Hovl impact KEY)
+        // -----------------------------------------------------------------------
+        //  A weapon carrying element:"fire" plays a FULL multi-layer fire IMPACT
+        //  burst at the melee hit point, layered on the weaponskill impact. The
+        //  returned key resolves in HovlVfxCatalog and spawns the COMPLETE prefab
+        //  (all child layers) through the ONE shared VFXManager pool - no stripped
+        //  single-layer effect (WO-758: prefab = recipe, don't flatten layers).
+        //  Fireball_Impact is IsLoop:0 (a proper one-shot that auto-returns to the
+        //  pool), so a fire-and-forget on-hit never leaks / hits the loop cap.
+        //  Null/empty (or unknown) element -> null: NO elemental layer, unchanged
+        //  behavior. Add a case here to light up a new element - one reader, no
+        //  per-weapon branching anywhere else.
+        // =====================================================================
+
+        /// <summary>The full-prefab HovlVfxCatalog impact key to play at a melee hit for this
+        /// weapon's element, or null when the weapon has no (recognised) element. Data-driven
+        /// off <see cref="WeaponDef.element"/> so ANY future element:"fire" weapon shows the
+        /// effect. Null-safe (null weapon / null element -> null).</summary>
+        public static string ElementalOnHitKey(WeaponDef w)
+        {
+            switch (Normalize(w != null ? w.element : null))
+            {
+                case "fire": return "Fireball_Impact";   // full multi-layer Hovl fire impact (IsLoop:0, one-shot)
+                default:     return null;                 // no element -> no elemental on-hit layer
+            }
+        }
     }
 }

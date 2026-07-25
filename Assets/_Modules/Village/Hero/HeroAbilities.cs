@@ -802,7 +802,13 @@ namespace DeNelle.Village
                         var heroHp = GetComponent<HeroHealth>();
                         if (heroHp == null) heroHp = HeroHealth.Instance;
                         if (heroHp != null) heroHp.Heal(healAmount);
-                        VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+                        // FULL-PREFAB heal read (owner 2026-07-24): Heal_Cast burst + a short
+                        // Heal_Aura loop on the hero, both through the ONE VFXManager pool (PlayKey).
+                        // Replaces the placeholder enum burst. Missing key throttled-no-ops (no throw).
+                        VFXManager.PlayKey("Heal_Cast", origin + Vector3.up * 1.2f, Quaternion.identity, transform);
+                        var healAura = VFXManager.PlayKey("Heal_Aura", transform.position + Vector3.up * 0.1f,
+                            Quaternion.identity, transform);
+                        if (healAura != null) StartCoroutine(StopHandleAfter(healAura, 1.5f));
                     }
                     // WO-VFX-003: a brief Hovl heal aura on the hero (reads by shape+motion, not hue —
                     // owner is colorblind). Instant heals get a short 1.5s glow.
@@ -1328,9 +1334,17 @@ namespace DeNelle.Village
             // HeroHealth mitigation seam lands; until then the marker still shows the shield is up).
             HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed("grace-shield", "Grace", secs, isBuff: true);
 
-            // Soft heal chime + a single pooled radiant heal burst (no new double-stack).
+            // Soft heal chime + the FULL-PREFAB Hovl heal read (owner 2026-07-24: use the full
+            // multi-layer prefabs, not flattened keys). Heal_Cast = a radiant cast burst at chest
+            // height; Heal_Aura = the soft healing aura loop parented to the hero for the Grace
+            // shield window (auto-stopped after `secs`). Both route through the ONE VFXManager pool
+            // (PlayKey) — a missing key throttled-no-ops (no throw), so this is ship-safe. Replaces
+            // the placeholder enum burst so the E heal is unmistakably visible on the hero.
             AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
-            VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+            VFXManager.PlayKey("Heal_Cast", origin + Vector3.up * 1.2f, Quaternion.identity, transform);
+            var graceAura = VFXManager.PlayKey("Heal_Aura", transform.position + Vector3.up * 0.1f,
+                Quaternion.identity, transform);
+            if (graceAura != null) StartCoroutine(StopHandleAfter(graceAura, secs));
 
             ReportRumble(heal);
             FlowTrace.Step("HeroAbility",

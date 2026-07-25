@@ -1544,12 +1544,22 @@ namespace DeNelle.Village
         private const string RootedCastAbilityName = "Arcane Orb";
 
         // WO-VFX-RANGED / owner VfxManualPicks (2026-07): fallback keys when this enemy has no
-        // _typeVfxSet (arena orcs, etc.). Per-type sets still override (e.g. Fireball_*/Frost_*).
-        // EnemyCast_Cast = dark casting gather; SimpleCast_Projectile = travel; FireImpact on land.
-        private const string DefaultCastVfxKey       = "EnemyCast_Cast";
-        private const string DefaultProjectileVfxKey = "SimpleCast_Projectile";
-        private const string DefaultImpactVfxKey     = "FireImpact_Impact";
-        private static readonly Color DefaultRangedVfxTint = new Color(0.6f, 0.4f, 1f, 1f); // arcane violet
+        // _typeVfxSet (arena orcs, wave casters, etc.). Per-type sets still override.
+        // Owner 2026-07-24: upgraded from the flattened placeholder keys to the FULL MULTI-LAYER
+        // prefabs (WO-758: prefab = recipe, don't flatten layers) so a caster VISIBLY hurls a rich
+        // fireball. Fire_Cast = a full Hovl fire gather at the hands (oneshot); PP_FireBall = the full
+        // ParticlePack fireball body that TRAVELS, followed by the projectile mover and soft-stopped on
+        // arrival (like the old SimpleCast_Projectile, also a loop); FireballImpact_Impact = the full
+        // multi-layer Hovl fireball explosion on land. LIFECYCLE NOTE: the impact is fired
+        // fire-and-forget (no handle captured in the land closure below), so it MUST be a ONESHOT
+        // (IsLoop:0) prefab that self-lifetimes — a loop impact (e.g. PP_EnergyExplosion) would never
+        // stop, pin the active-loop cap, and starve every other loop/aura. FireballImpact_Impact is a
+        // full-layer explosion that is also oneshot, so it reads rich AND self-cleans. All three
+        // resolve to full prefabs in HovlVfxCatalog and route through the ONE VFXManager pool (PlayKey).
+        private const string DefaultCastVfxKey       = "Fire_Cast";
+        private const string DefaultProjectileVfxKey = "PP_FireBall";
+        private const string DefaultImpactVfxKey     = "FireballImpact_Impact";
+        private static readonly Color DefaultRangedVfxTint = new Color(1f, 0.55f, 0.15f, 1f); // fire orange (recolorable rows only; shape/motion reads regardless)
 
         // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").
         // Lazily added so the enemy fires a real arcane orb that the player SEES leave + land.

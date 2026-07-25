@@ -46,6 +46,15 @@ namespace DeNelle.Village
         public string job;        // "mage" | "knight" | "ranger" | "any"
         public string rarity;
 
+        // ELEMENTAL brand (fire-VFX verification pipeline). OPTIONAL; empty/null = no element
+        // (unchanged behavior). When set (e.g. "fire"), the melee on-hit path plays a full
+        // multi-layer elemental impact VFX at the hit point via the shared VFXManager pool,
+        // LAYERED on the existing weaponskill impact — so an elemental blade is VISUALLY read
+        // in combat. Catalog-driven: WeaponVfxMap.ElementalOnHitKey is the ONE reader that maps
+        // this string to a HovlVfxCatalog key, so ANY future element:"fire" weapon shows the
+        // effect (never hardcoded to one weapon id). Newtonsoft leaves it null when the row omits it.
+        public string element;
+
         // HAND-SLOT model (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md "Equip-slot rules").
         // These three fields exist in the canonical weapons.json but were previously DROPPED on
         // deserialize because WeaponDef didn't declare them. Now read so the equip layer can
