@@ -86,20 +86,20 @@ namespace DeNelle.Core.Diagnostics
 
             if (roots.Count == 0)
             {
-                FlowTrace.Fail("ArcaneDiag",
+                FlowTrace.Step("ArcaneDiag",
                     "no GameObject named '" + TargetObject + "' found in scene '" + TargetScene +
                     "' at steady state (structure absent/renamed/deactivated) - cannot classify white-tower cause.");
                 return;
             }
 
-            FlowTrace.Fail("ArcaneDiag",
+            FlowTrace.Step("ArcaneDiag",
                 "===== ARCANE TOWER RENDER DUMP (" + TargetScene + ", post-MagentaGuard + post-reskin) roots=" + roots.Count + " =====");
 
             int ri = 0;
             foreach (var root in roots)
             {
                 var rends = root.GetComponentsInChildren<Renderer>(true);
-                FlowTrace.Fail("ArcaneDiag",
+                FlowTrace.Step("ArcaneDiag",
                     "ROOT[" + (ri++) + "] '" + Path(root) + "' activeSelf=" + root.gameObject.activeSelf +
                     " renderers=" + (rends != null ? rends.Length : 0));
                 if (rends == null) continue;
@@ -120,9 +120,11 @@ namespace DeNelle.Core.Diagnostics
                         string col = ColorProp(m, "_Color");
                         bool baseMap = m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null;
                         bool mainTex = m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null;
-                        // FlowTrace.Fail => lands in the errors-only break-log.jsonl the device pulls.
+                        // FlowTrace.Step => stays in Player.log for diagnosis but does NOT flood the
+                        // errors-only break-log.jsonl / trip the F8 daemon (demoted from Fail: this is a
+                        // DIAGNOSTIC dump, not a failure).
                         // VISIBLE=True is the row that names the cause; VISIBLE=False rows are the hidden layer.
-                        FlowTrace.Fail("ArcaneDiag",
+                        FlowTrace.Step("ArcaneDiag",
                             "SLOT[" + (si++) + "] rend='" + r.name + "' path='" + Path(r.transform) + "' VISIBLE=" + visible +
                             " (enabled=" + r.enabled + " activeInHier=" + r.gameObject.activeInHierarchy + ")" +
                             " mat='" + mn + "' shader='" + sh + "' baseColor=" + bc + " color=" + col +
@@ -131,7 +133,7 @@ namespace DeNelle.Core.Diagnostics
                 }
             }
 
-            FlowTrace.Fail("ArcaneDiag", "===== END ARCANE TOWER RENDER DUMP =====");
+            FlowTrace.Step("ArcaneDiag", "===== END ARCANE TOWER RENDER DUMP =====");
 
             // WO-719 gap-closer: the baked 'ArcaneTower_MagicUpgrades' above is DEACTIVATED
             // (standdown) and its LightSkin re-skin never spawns - so the VISIBLE white spire the
@@ -186,13 +188,13 @@ namespace DeNelle.Core.Diagnostics
 
             if (candidates.Count == 0)
             {
-                FlowTrace.Fail("ArcaneDiag",
+                FlowTrace.Step("ArcaneDiag",
                     "VISIBLE-SPIRE: no active renderer named '*arcane*' AND no tall visible renderer within 10m of the " +
                     "baked tower - the visible spire is either absent or an unexpected object (widen the search next pass).");
                 return;
             }
 
-            FlowTrace.Fail("ArcaneDiag",
+            FlowTrace.Step("ArcaneDiag",
                 "===== VISIBLE SPIRE DUMP (active re-skin / BaseLayout replay) candidates=" + candidates.Count +
                 " haveBakedRef=" + haveRef + " =====");
 
@@ -205,7 +207,7 @@ namespace DeNelle.Core.Diagnostics
                 bool hasFixer = HasComp(top.gameObject, "TripoMaterialFixer");
                 bool hasAura  = HasComp(top.gameObject, "ArcaneAura");
                 Bounds b = r.bounds;
-                FlowTrace.Fail("ArcaneDiag",
+                FlowTrace.Step("ArcaneDiag",
                     "VIS[" + (ci++) + "] root='" + top.name + "' path='" + Path(r.transform) + "' pos=" + r.transform.position +
                     " boundsSize=(" + b.size.x.ToString("F1") + "," + b.size.y.ToString("F1") + "," + b.size.z.ToString("F1") + ")" +
                     " hasTripoFixer=" + hasFixer + " hasArcaneAura=" + hasAura);
@@ -222,13 +224,13 @@ namespace DeNelle.Core.Diagnostics
                     string bmName = "-";
                     if (m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null) bmName = m.GetTexture("_BaseMap").name;
                     else if (m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null) bmName = m.GetTexture("_MainTex").name;
-                    FlowTrace.Fail("ArcaneDiag",
+                    FlowTrace.Step("ArcaneDiag",
                         "  VIS-SLOT[" + i + "] mat='" + mn + "' shader='" + sh + "' baseColor=" + ColorProp(m, "_BaseColor") +
                         " color=" + ColorProp(m, "_Color") + " baseMap=" + baseMap + " mainTex=" + mainTex + " texName='" + bmName + "'");
                 }
             }
 
-            FlowTrace.Fail("ArcaneDiag", "===== END VISIBLE SPIRE DUMP =====");
+            FlowTrace.Step("ArcaneDiag", "===== END VISIBLE SPIRE DUMP =====");
         }
 
         // Name-based component probe (no cross-assembly ref: ArcaneAura lives in DeNelle.Village,

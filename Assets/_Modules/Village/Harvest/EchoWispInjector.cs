@@ -134,7 +134,12 @@ namespace DeNelle.Village
             // this injector inert (never spawns a body) rather than deleting it, so the abstract
             // EchoService workforce/silo is untouched. Any previously-built wisps are cleared.
             Clear();
-            FlowTrace.Step("Echo", $"WispInjector: wisp bodies SCRAPPED (echoes are portrait cards now); no 3D echo body spawned ({reason}).");
+            // Once (not Step): RebuildIfHub fires on every workforce/accrual tick (the SCRAPPED path
+            // returns before _builtForCount is updated, so the count-dedup never latches) -- a plain
+            // Step logged this dozens of times per session and flooded the trace. Once() keeps the
+            // FIRST occurrence's info in Player.log and drops the per-tick spam. Behavior unchanged
+            // (wisps are still cleared / never spawned).
+            FlowTrace.Once("Echo", "wisp-scrapped", $"WispInjector: wisp bodies SCRAPPED (echoes are portrait cards now); no 3D echo body spawned ({reason}).");
             return;
 #pragma warning disable CS0162 // unreachable-by-design: the spawn path is retained (dormant) for reference only
             string scene = SceneManager.GetActiveScene().name;

@@ -205,9 +205,12 @@ namespace DeNelle.Core
                             fresh = BuildRecoveredMaterial(m);   // fresh URP/Lit, once per unique source
                             freshFor[m] = fresh;
                             recovered++;
-                            // FAIL (not Step): a magenta in the shipped player IS a break — surface it in the
-                            // F8 break-log with the EXACT object so the source can be fixed at root too.
-                            FlowTrace.Fail("MagentaGuard",
+                            // WARN (not Fail): this line is a RECOVERY (the material was fixed in place), not a
+                            // failure, and it fired ~8x per castle load — flooding the errors-only break-log and
+                            // masking the owner's real F8 flags. Demoted to Warn so it stays in Player.log for
+                            // diagnosis (with the EXACT object, so the source can still be fixed at root) but no
+                            // longer trips the F8 error capture. Recovery behavior unchanged.
+                            FlowTrace.Warn("MagentaGuard",
                                 $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
                                 $"material '{m.name}' dead-shader '{dead}' -> FRESH URP/Lit (assigned to renderer so it sticks; fix at source).");
                         }
