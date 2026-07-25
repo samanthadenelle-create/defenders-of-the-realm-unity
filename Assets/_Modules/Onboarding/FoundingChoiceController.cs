@@ -174,13 +174,15 @@ namespace DeNelle.Onboarding
             // Two stacked full-width buttons (large mobile touch targets). Meaning is in
             // the LABEL, not the colour (owner colourblind): "Default Town" (Green CTA)
             // and "Build Your Own" (Gray).
-            ElarionUiKit.BuildObsidianButton(body, "Default Town",
+            // Owner 2026-07-25: the two choices must read as SEPARATE buttons (wider gap, not
+            // edge-connected) + a benefit subtitle on each (inline, single-line-safe).
+            ElarionUiKit.BuildObsidianButton(body, "Default Town  (Faster Onboarding)",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.48f), OnDefaultTown);
+                new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.52f), OnDefaultTown);
 
-            ElarionUiKit.BuildObsidianButton(body, "Build Your Own",
+            ElarionUiKit.BuildObsidianButton(body, "Build Your Own  (Customize Locations)",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.24f), OnBuildYourOwn);
+                new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.22f), OnBuildYourOwn);
 
             // UIF: join the single-modal arbiter. isOpen reflects the live overlay; the close
             // delegate routes onward (Continue) — the arbiter's back/close proceeds to the hub.
