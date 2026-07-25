@@ -169,7 +169,8 @@ namespace DeNelle.Editor
                     go.name == "DungeonHeroPlaceholder" ||
                     go.name == "ExitPad" ||
                     go.name == "EventSystem" ||
-                    go.name == "DungeonSign")
+                    go.name == "DungeonSign" ||
+                    go.name == "FollowCameraRig")   // was leaked each rebuild (root, not in nuke-list) -> 5 stacked rigs / 5 CinemachineCameras fighting one brain
                 {
                     UnityEngine.Object.DestroyImmediate(go);
                 }
