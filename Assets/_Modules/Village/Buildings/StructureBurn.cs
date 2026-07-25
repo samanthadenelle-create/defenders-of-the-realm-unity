@@ -26,10 +26,12 @@
 //     paths) with no hook into WallRepairController - one owner, zero coupling.
 //   * DESTROY: if a tick kills the structure, the fire VFX is Stop()'d and the
 //     Destructible lifecycle (WO-753) is nudged so no VFX outlives the shell.
-//   * VISUAL: a LOOPING fire VFX (VFXType.Aura_Flame - a real Lana flame particle,
+//   * VISUAL: a LOOPING fire VFX (owner-tagged Hovl key "BurningStructure_Aura" -
 //     shape + upward motion, colourblind-safe: not hue alone) parented to the
 //     structure through the SINGLE VFXManager pool, held by ONE handle, stopped on
-//     extinguish / death / disable / destroy - no second stack, no orphaned loop.
+//     extinguish / death / disable / destroy - no second stack, no orphaned loop. A
+//     one-shot "BurningStructure_Impact" flare fires the moment it ignites (captured +
+//     timed-stopped since the catalog authors that key as a loop) - no leaked slot.
 //   * STACK = REFRESH: re-igniting a burning structure resets the tick cadence but
 //     never stacks a second burn or a second VFX handle.
 //
@@ -69,10 +71,17 @@ namespace DeNelle.Village
                  "the per-tick damage scales with this so the DPS stays constant.")]
         [SerializeField, Min(0.1f)] private float _tickInterval = 0.5f;
 
-        [Header("Fire VFX (single VFXManager pool, handle-managed loop)")]
-        [Tooltip("Looping fire effect shown on a burning structure. Aura_Flame is a real flame " +
-                 "particle (shape + upward motion) - colourblind-safe, not hue alone.")]
-        [SerializeField] private VFXType _fireVfx = VFXType.Aura_Flame;
+        [Header("Fire VFX (single VFXManager Hovl pool, handle-managed loop)")]
+        [Tooltip("Owner-tagged looping fire effect (Hovl catalog key) shown on a burning structure. " +
+                 "Reads by shape + upward motion - colourblind-safe, not hue alone.")]
+        [SerializeField] private string _fireVfxKey = "BurningStructure_Aura";
+
+        [Tooltip("Owner-tagged one-shot fire flare fired the MOMENT the structure ignites. " +
+                 "Authored as a loop in the catalog, so it is captured + timed-stopped (no leak).")]
+        [SerializeField] private string _igniteImpactKey = "BurningStructure_Impact";
+
+        [Tooltip("Seconds the ignite flare plays before it is stopped and returned to the pool.")]
+        [SerializeField, Min(0.2f)] private float _igniteImpactSeconds = 1.4f;
 
         [Tooltip("Vertical offset (world units) for the fire loop so the flame sits on the structure body.")]
         [SerializeField] private float _fireVfxYOffset = 0.6f;
@@ -172,6 +181,7 @@ namespace DeNelle.Village
 
             _burning = true;
             StartFireVfx();
+            FireIgniteImpact();   // one-shot fire flare on the FIRST ignite only (refresh returns above)
             FlowTrace.Step("StructureBurn",
                 $"[Flow:StructureBurn] '{name}' IGNITED at {_lastFraction:P0} HP - burning " +
                 $"{_burnFractionPerSecond:P0}/s of {_maxHp:0} max until repaired or destroyed.");
@@ -274,11 +284,43 @@ namespace DeNelle.Village
             var mgr = VFXManager.Instance;
             if (mgr == null || _vfxAnchor == null) return;            // null-safe (e.g. edit-mode)
 
-            _fireHandle = mgr.PlayAura(_fireVfx, _vfxAnchor);
+            // Owner-tagged looping fire (BurningStructure_Aura) via the ONE VFXManager Hovl pool,
+            // parented to the anchor so the flame tracks the structure body. Held by one handle,
+            // stopped on extinguish / death / disable / destroy - no second stack, no orphan.
+            _fireHandle = VFXManager.PlayKey(
+                _fireVfxKey, _vfxAnchor.position, Quaternion.identity, _vfxAnchor);
             // Register with the Destructible owner so ANY removal path also returns the
             // loop to its pool (no orphaned loop - the loop-cap starvation class).
             if (_fireHandle != null)
                 Destructible.For(gameObject)?.RegisterHandle(_fireHandle);
+        }
+
+        /// <summary>
+        /// Fire the owner-tagged one-shot fire flare (BurningStructure_Impact) at the moment of
+        /// ignite so the structure visibly CATCHES fire. The catalog authors this key as a LOOP
+        /// (it shares the burn-aura prefab), so PlayKey returns a handle instead of auto-returning;
+        /// we capture it, parent it to the anchor (so a host destroyed mid-flare is reclaimed by the
+        /// VFXManager loop sweep), register it with the Destructible owner, and timed-Stop it after a
+        /// short flare - a burst-then-fade with NO leaked loop slot. Null-safe throughout.
+        /// </summary>
+        private void FireIgniteImpact()
+        {
+            EnsureVfxAnchor();
+            var mgr = VFXManager.Instance;
+            if (mgr == null || _vfxAnchor == null) return;   // null-safe (edit-mode / no catalog)
+
+            var impact = VFXManager.PlayKey(
+                _igniteImpactKey, _vfxAnchor.position, Quaternion.identity, _vfxAnchor, default, 1.3f);
+            if (impact == null) return;   // missing key / cap hit -> safe no-op
+
+            Destructible.For(gameObject)?.RegisterHandle(impact);   // torn down if the shell dies first
+            StartCoroutine(StopHandleAfter(impact, Mathf.Max(0.2f, _igniteImpactSeconds)));
+        }
+
+        private System.Collections.IEnumerator StopHandleAfter(VFXHandle handle, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (handle != null) handle.Stop();
         }
 
         private void StopFireVfx()

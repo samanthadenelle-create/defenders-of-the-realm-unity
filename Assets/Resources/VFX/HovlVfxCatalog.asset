@@ -167,6 +167,20 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: BurningStructure_Aura
+    Prefab: {fileID: 190248, guid: 782858ba45394bd449001638b8382178, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: BurningStructure_Impact
+    Prefab: {fileID: 190248, guid: 782858ba45394bd449001638b8382178, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Cleave_Impact
     Prefab: {fileID: 1535640691960112, guid: d79f03dd3c9b07c41a430faecdcdf500, type: 3}
     PoolSize: 6
@@ -841,6 +855,20 @@ MonoBehaviour:
     IsLoop: 1
   - Key: TreeofLifeAura_Aura
     Prefab: {fileID: 1775406099119076, guid: 379785de5e39005469c875710d3cc5a7, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: UpgradeStructureComplete_Aura
+    Prefab: {fileID: 1240633652960690, guid: fe612ab21356f6e48a3f6f5be321e1d7, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: UpgradeVisual_Aura
+    Prefab: {fileID: 3546323823116515695, guid: 8d1dff39f05ce0e44804cb469b83a578, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0

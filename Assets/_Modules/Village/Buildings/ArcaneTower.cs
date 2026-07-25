@@ -190,6 +190,14 @@ namespace DeNelle.Village
             // Owner 2026-07-15 "arcane towers should have an aura" - a persistent magic-circle
             // aura loop (colorblind-safe: motion/luminance, not hue). Idempotent + self-managing.
             ArcaneAura.Ensure(gameObject);
+            // TODO(owner 2026-07-24): a DEDICATED owner-tagged arcane-tower-aura key is not yet
+            // tagged in the VFX Caster. When she supplies it, wire a persistent striking loop here
+            // through the ONE pool, e.g.:
+            //   var _arcaneAuraHandle = VFXManager.PlayKey("<owner-tagged arcane aura key>",
+            //       transform.position + Vector3.up * 0.5f, Quaternion.identity, transform);
+            //   Destructible.For(gameObject)?.RegisterHandle(_arcaneAuraHandle);   // torn down on death/sell
+            // Do NOT pick a key here - leave the existing ArcaneAura (Arcane_Aura) as the current
+            // aura until the owner-tagged WOW key arrives.
             // WO-753: compose the ONE-owner VFX-teardown lifecycle so the aura (and any held effect)
             // is torn down WITH the spire on break / destroy — in one place, no orphans.
             Destructible.Ensure(gameObject);

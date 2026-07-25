@@ -38,6 +38,13 @@ namespace DeNelle.Village
         private Behaviour _disabledTower;
         private TextMeshPro _label;
 
+        // Owner 2026-07-24: the CALM "work in progress" tell — the owner-tagged
+        // "UpgradeVisual_Aura" (a slowly-circling orb) held as ONE persistent loop parented to
+        // the structure WHILE the build/upgrade timer runs. Handle-managed through the single
+        // VFXManager Hovl pool; Stop()'d in Reveal (completion) + OnDestroy (cancel/teardown) so
+        // it never lingers under the completion fireworks and never leaks a loop slot.
+        private VFXHandle _upgradeLoop;
+
         /// <summary>Job key for a placed structure — unique per placement (id + cell).</summary>
         public static string KeyFor(PlacedStructureData data)
             => $"{data.itemId}@{data.cellX}_{data.cellZ}";
@@ -158,9 +165,18 @@ namespace DeNelle.Village
                 _label.text = "…";
             });
 
+            // Start the CALM slow-circling "being worked on" loop (owner-tagged key). Parented to
+            // the structure so the orb orbits it; a persistent LOOP (returns a handle) held for the
+            // duration of the timer. Null-safe no-op if the key/prefab is missing; motion-based =>
+            // colorblind-safe. Reveal()/OnDestroy() Stop() it (immediate) so the fireworks payoff is
+            // never muddied by a lingering circle.
+            _upgradeLoop = VFXManager.PlayKey("UpgradeVisual_Aura",
+                transform.position + Vector3.up * 1f, Quaternion.identity, transform);
+
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.JobCompleted += OnJobCompleted;
-            FlowTrace.Step("Build", $"under-construction armed for '{_key}'");
+            FlowTrace.Step("Build", $"under-construction armed for '{_key}'"
+                + (_upgradeLoop != null ? " (circling upgrade loop held)." : " (upgrade loop no-op — key/catalog not ready)."));
         }
 
         /// <summary>
@@ -215,14 +231,28 @@ namespace DeNelle.Village
                 if (_disabledTower != null) _disabledTower.enabled = true;
                 if (_label != null) Destroy(_label.gameObject);
             });
+            // Stop the circling loop IMMEDIATELY on completion so it can't linger under the
+            // UpgradeStructureComplete_Aura fireworks the upgrade-apply path fires this same beat.
+            StopUpgradeLoop();
             FlowTrace.Step("Build", $"construction complete — revealed '{_key}'");
             Destroy(this);
         }
 
         private void OnDestroy()
         {
+            // Catch-all for cancel / host-destroy / scene teardown: never leak the circling loop.
+            StopUpgradeLoop();
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.JobCompleted -= OnJobCompleted;
+        }
+
+        /// <summary>Return the circling upgrade loop to its pool (idempotent — safe to call from
+        /// both Reveal and OnDestroy; the handle is nulled so the second call is a no-op).</summary>
+        private void StopUpgradeLoop()
+        {
+            if (_upgradeLoop == null) return;
+            _upgradeLoop.Stop(immediate: true);
+            _upgradeLoop = null;
         }
     }
 }

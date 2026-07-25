@@ -2218,12 +2218,28 @@ namespace DeNelle.Village
             // change to the upgrade LOGIC (stats/tier/cost already applied above).
             //   (a) ASCII toast — derive the building name from the catalog, fall back to
             //       "Structure" if the entry is null.
-            //   (b) Pooled level-up VFX burst via the existing VFXManager pool (null-safe;
-            //       motion/particle-based => colorblind-safe). No new pool, no raw Instantiate.
+            //   (b) WOW payoff (owner 2026-07-24): the owner-tagged "UpgradeStructureComplete_Aura"
+            //       FIREWORKS burst (Mirza Beig), fired the MOMENT the upgrade lands through the ONE
+            //       VFXManager Hovl pool. Shared by BOTH paths (instant apply + timer completion),
+            //       so every DefenseTower/ArcaneTower/wall celebrates identically. Seated ABOVE the
+            //       structure so the fireworks read as a loud burst over it, scaled 1.5x for WOW.
+            //       Motion/particle-based => colorblind-safe. Null-safe no-op if the key/prefab is
+            //       missing (throttled log), never throws. No new pool, no raw Instantiate.
             string tellName = (entry != null && !string.IsNullOrEmpty(entry.displayName))
                 ? entry.displayName : "Structure";
             BuildFeedbackToast.Show($"{tellName} upgraded to Tier {newLevel}.");
-            VFXManager.Play(VFXType.LevelUp_Celebration, ps.transform.position + Vector3.up * 1.5f);
+            Vector3 burstAt = ps.transform.position + Vector3.up * 2.5f;
+            VFXManager.PlayKey("UpgradeStructureComplete_Aura", burstAt,
+                               Quaternion.identity, null, null, 1.5f);
+            //   (c) CRACKLE SFX (owner: "a crackling sound tied to the fireworks/celebration").
+            //       No dedicated Crackle clip exists in Resources/Sfx, so the closest AUTHORED event
+            //       is used: SfxId.FireExplosion (doc = "boom + crackle", noisy synth). Layered with
+            //       the LevelUp rising chime the prior VFXManager.Play path fired via VfxToSfx, so
+            //       the celebration keeps its progression tone AND gains the crackle. Both null-safe
+            //       (procedural fallback when no library clip is authored) — never a silent no-op.
+            var audio = DeNelle.Audio.AudioService.Instance;
+            audio?.PlaySfxAtPosition(DeNelle.Audio.SfxId.LevelUp, burstAt);
+            audio?.PlaySfxAtPosition(DeNelle.Audio.SfxId.FireExplosion, burstAt);
         }
 
         /// <summary>

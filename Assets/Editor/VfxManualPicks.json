@@ -64,10 +64,24 @@
             "manual": true
         },
         {
+            "key": "BurningStructure_Aura",
+            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_fire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "BurningStructure_Impact",
+            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_fire.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Cleave_Impact",
             "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Energy explosion.prefab",
             "isLoop": false,
-            "scale": 1.15,
+            "scale": 1.149999976158142,
             "manual": true
         },
         {
@@ -738,6 +752,20 @@
         {
             "key": "TreeofLifeAura_Aura",
             "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "UpgradeStructureComplete_Aura",
+            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Demos/Fireworks/Fireworks.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "UpgradeVisual_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Orbs/Orbs_fire.prefab",
             "isLoop": true,
             "scale": 1.0,
             "manual": true
