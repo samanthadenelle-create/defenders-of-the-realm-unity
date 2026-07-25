@@ -2173,7 +2173,9 @@ namespace DeNelle.Village
                 ApplyUpgradeLevel(ps, newLevel);
                 FlowTrace.Step("BuildUpgrade",
                     $"'{ps.itemId}' upgraded INSTANTLY to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
-                BuildFeedbackToast.Show($"Upgraded to tier {newLevel}.");
+                // Success toast + level-up VFX now fire inside ApplyUpgradeLevel (shared by both
+                // the instant path here AND the timer-completion path), so no toast here — that
+                // would double-toast the instant path.
                 // Re-show the panel at the new tier (refreshed cost / Max-tier state).
                 ShowSelectionPanel(ps);
             });
@@ -2207,6 +2209,21 @@ namespace DeNelle.Village
 
             // Persist the new level in the live BaseLayout (so Exit()'s Save() round-trips it).
             UpdateLayoutLevel(ps.itemId, ps.gridCell, newLevel);
+
+            // ── Upgrade-success TELL (shared by BOTH paths) ── the stats change but were near-
+            // silent, and the TIMER-completion path had NO feedback at all ("looks like nothing
+            // happened"). This is the ONE hook both the instant apply (BuildUpgrade) and the timer
+            // completion (CompletedUpgradeApplier) call, so putting the tell here covers every
+            // DefenseTower/ArcaneTower/wall that upgrades, on either path. Feedback ONLY — no
+            // change to the upgrade LOGIC (stats/tier/cost already applied above).
+            //   (a) ASCII toast — derive the building name from the catalog, fall back to
+            //       "Structure" if the entry is null.
+            //   (b) Pooled level-up VFX burst via the existing VFXManager pool (null-safe;
+            //       motion/particle-based => colorblind-safe). No new pool, no raw Instantiate.
+            string tellName = (entry != null && !string.IsNullOrEmpty(entry.displayName))
+                ? entry.displayName : "Structure";
+            BuildFeedbackToast.Show($"{tellName} upgraded to Tier {newLevel}.");
+            VFXManager.Play(VFXType.LevelUp_Celebration, ps.transform.position + Vector3.up * 1.5f);
         }
 
         /// <summary>
@@ -2527,21 +2544,25 @@ namespace DeNelle.Village
         private const int WoodenTowerFreeCap = 2;
 
         /// <summary>
-        /// Placement freebie policy (owner rulings 2026-07-17, revised 2026-07-24). Three lanes,
-        /// checked in this order:
+        /// Placement freebie policy (owner ruling 2026-07-24, LOCKED -- "lay out a full
+        /// starter town without a resource wall"). Three lanes, checked in this order:
         ///  - WOODEN STARTER TOWERS (see <see cref="WoodenTowerFreeKit"/>): the first
         ///    <see cref="WoodenTowerFreeCap"/> (=2) wooden-tower placements TOTAL are free --
         ///    free while the count of wooden ids already in <c>GameState.FreeBuildsUsed</c> is
-        ///    under the cap, charged from the third on. This is checked FIRST and supersedes the
-        ///    founding per-id freebie for the archer tower (the 2-cap already covers the one free
-        ///    founding tower and grants a second).
-        ///  - FOUNDING KIT (see <see cref="FoundingKit"/>, the non-tower pieces pet-house /
-        ///    lumberyard): each is free UNTIL that specific id is in the ledger (per-item freebie),
-        ///    so a zero-resource first run still founds its stores + pet house free.
-        ///  - EVERYTHING ELSE: PAID from placement #1 -- the old "one free non-founding build
-        ///    TOTAL" branch is RETIRED (owner 2026-07-24), so arcane-tower / tower_arcane_spire /
-        ///    the Ballista and every other non-wooden, non-founding entry costs resources from the
-        ///    very first placement.
+        ///    under the cap, charged from the third on. Checked FIRST so the more-generous
+        ///    2-cap governs the archer tower.
+        ///  - NON-WOODEN TOWERS: PAID from placement #1. Tower-ness is read from the CATALOG
+        ///    (<c>entry.type == CatalogType.Tower</c>, with the DefenseTower/ArcaneTower
+        ///    <c>repo.behaviorId</c> as a belt-and-braces fallback) -- NOT a fragile id-prefix
+        ///    guess -- so arcane-tower / tower_arcane_spire / tower_wall_wizard /
+        ///    tower_siege_tower / tower_catapult and every other magic/heavy tower is charged
+        ///    from the very first placement.
+        ///  - EVERYTHING ELSE (any NON-tower building): FIRST placement of EACH distinct
+        ///    building id is FREE; a second of the same id is PAID. Free while THIS id is not
+        ///    yet in the ledger (per-id first-of-each-type freebie). This subsumes the old
+        ///    founding lane -- pet-house / lumberyard are non-tower buildings, so first-of-each
+        ///    free still founds a zero-resource first run -- and covers farm / lumbermill /
+        ///    forge / market / jeweler / echo-hollow / pet-house / etc.
         /// The ledger never resets (selling/destroying a building does not restore a
         /// freebie). Service-less/state-less = no freebie (fall back to normal cost,
         /// never a free exploit path). Additive default: a never-written list is treated
@@ -2554,10 +2575,10 @@ namespace DeNelle.Village
             if (st == null) return false;
             var used = st.FreeBuildsUsed;
 
-            // Wooden starter towers: the first WoodenTowerFreeCap (2) placements TOTAL are free.
-            // Count how many wooden ids are already committed in the never-reset ledger; free
-            // while under the cap, charged from then on. Checked FIRST so it governs the archer
-            // tower (also a founding id) with the more-generous 2-cap.
+            // Lane 1 -- WOODEN STARTER TOWERS: the first WoodenTowerFreeCap (2) placements
+            // TOTAL are free. Count how many wooden ids are already committed in the never-
+            // reset ledger; free while under the cap, charged from then on. Checked FIRST so
+            // it governs the archer tower with the more-generous 2-cap.
             if (WoodenTowerFreeKit.Contains(entry.id))
             {
                 if (used == null) return true;   // additive default -- nothing burned yet
@@ -2567,14 +2588,23 @@ namespace DeNelle.Village
                 return woodenUsed < WoodenTowerFreeCap;
             }
 
-            // Founding kit (non-tower pieces): per-id freebie -- free until THIS founding id
-            // has been burned, so a zero-resource first run still founds free.
-            if (FoundingKit.Contains(entry.id))
-                return used == null || !used.Contains(entry.id);
+            // Lane 2 -- NON-WOODEN TOWERS: PAID from placement #1. Classify tower-ness from the
+            // CATALOG (entry.type == CatalogType.Tower, plus the DefenseTower/ArcaneTower
+            // behaviorId as a fallback for any tower row that omitted the type) -- never an
+            // id-prefix guess. The wooden lane above already claimed the free towers, so any
+            // tower reaching here (arcane-tower, tower_arcane_spire, tower_wall_wizard,
+            // tower_siege_tower, tower_catapult, ...) is charged.
+            bool isTower = entry.type == CatalogType.Tower
+                || (entry.repo != null
+                    && (string.Equals(entry.repo.behaviorId, "DefenseTower", System.StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(entry.repo.behaviorId, "ArcaneTower",  System.StringComparison.OrdinalIgnoreCase)));
+            if (isTower) return false;
 
-            // EVERYTHING ELSE is PAID from placement #1 (owner 2026-07-24): the old
-            // one-free-non-founding-total branch is retired.
-            return false;
+            // Lane 3 -- EVERYTHING ELSE (any NON-tower building): the FIRST placement of each
+            // distinct building id is FREE, a second of the same id is PAID. Free while THIS id
+            // is not yet in the never-reset ledger. Subsumes the old founding lane (pet-house /
+            // lumberyard are non-tower buildings) and unwalls the full starter town.
+            return used == null || !used.Contains(entry.id);
         }
 
         /// <summary>
