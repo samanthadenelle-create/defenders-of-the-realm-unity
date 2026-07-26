@@ -47,15 +47,15 @@ namespace DeNelle.Core.UI
         private const float MaxShowSeconds = 30f;
         /// <summary>Fade-out duration when dismissing.</summary>
         private const float FadeSeconds = 0.3f;
-        /// <summary>Spinner spin rate (degrees / second).</summary>
-        private const float SpinDegPerSec = 220f;
+        /// <summary>Time for one full 0->100% sweep of the indeterminate loading bar.</summary>
+        private const float BarSweepSeconds = 1.1f;
 
         // One on-screen at a time.
         private static LoadingOverlay s_active;
 
         private CanvasGroup _group;
-        private RectTransform _spinner;
-        private float _spinAngle;
+        private RectTransform _barFill;   // the animated fill of the standard loading bar
+        private float _barT;              // 0..1 sweep progress (indeterminate)
 
         private float _shownAt;          // unscaled time the overlay was shown
         private bool _sceneLoaded;       // has a scene loaded since Show?
@@ -129,14 +129,22 @@ namespace DeNelle.Core.UI
                 TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
             if (label != null) label.raycastTarget = false;
 
-            // Simple spinner — a small gold square just below the message, rotated each
-            // frame in Update. Centred, ~120 ref px at the 1080x1920 reference res.
-            var spin = ElarionUiKit.AddImage(transform, "Spinner",
-                new Vector2(0.444f, 0.53f), new Vector2(0.556f, 0.59f),
-                ElarionUi.Gold, rounded: true);
-            _spinner = spin != null ? spin.transform as RectTransform : null;
-            var spinImg = spin != null ? spin.GetComponent<Image>() : null;
-            if (spinImg != null) spinImg.raycastTarget = false;
+            // Standard loading BAR (owner 2026-07-26 "can we do a standard loading bar"): a dark rounded
+            // track with a gold fill that sweeps 0->100% and repeats — indeterminate, since the async scene
+            // load has no reliable progress value to bind. Centred just below the message.
+            var track = ElarionUiKit.AddImage(transform, "LoadingBarTrack",
+                new Vector2(0.30f, 0.53f), new Vector2(0.70f, 0.552f),
+                new Color(1f, 1f, 1f, 0.14f), rounded: true);
+            var trackImg = track != null ? track.GetComponent<Image>() : null;
+            if (trackImg != null) trackImg.raycastTarget = false;
+
+            // The fill is left-anchored with zero initial width; Update drives anchorMax.x = sweep.
+            var fill = ElarionUiKit.AddImage(track != null ? track.transform : transform, "LoadingBarFill",
+                Vector2.zero, new Vector2(0f, 1f), ElarionUi.Gold, rounded: true);
+            _barFill = fill != null ? fill.transform as RectTransform : null;
+            if (_barFill != null) { _barFill.offsetMin = Vector2.zero; _barFill.offsetMax = Vector2.zero; }
+            var fillImg = fill != null ? fill.GetComponent<Image>() : null;
+            if (fillImg != null) fillImg.raycastTarget = false;
 
             _shownAt = Time.unscaledTime;
         }
@@ -152,12 +160,13 @@ namespace DeNelle.Core.UI
 
         private void Update()
         {
-            // Spin the spinner (unscaled so a paused game still animates it).
-            if (_spinner != null)
+            // Animate the loading bar fill (unscaled so a paused game still animates it): sweep the
+            // fill 0->100% then reset — an indeterminate "working" bar.
+            if (_barFill != null)
             {
-                _spinAngle -= SpinDegPerSec * Time.unscaledDeltaTime;
-                if (_spinAngle <= -360f) _spinAngle += 360f;
-                _spinner.localRotation = Quaternion.Euler(0f, 0f, _spinAngle);
+                _barT += Time.unscaledDeltaTime / Mathf.Max(0.01f, BarSweepSeconds);
+                if (_barT >= 1f) _barT -= 1f;
+                _barFill.anchorMax = new Vector2(Mathf.Clamp01(_barT), 1f);
             }
 
             if (_dismissing)
