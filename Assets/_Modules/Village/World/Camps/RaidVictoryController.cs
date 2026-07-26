@@ -172,11 +172,56 @@ namespace DeNelle.Village.World.Camps
             // STEP 3 — on a NEW claim, unlock the next companion (the rescue beat).
             string joined = newClaim ? UnlockNextCompanion() : null;
 
+            // STEP 3.5 (WO-771.6) — settle the V1 SCORE (0-3 stars from the real-time
+            // clear/clock) and GRANT the loot. This is the win/stars/loot half that was
+            // flagged OUT (this file :34). Null-safe: with no scorer the screen falls
+            // back to the star-less banner and no loot is granted.
+            RaidScoring scoring = RaidScoring.Instance;
+            RaidResult result = scoring != null ? scoring.Finalize(true) : null;
+            ResourceCost loot = scoring != null ? scoring.LootFor(result) : default(ResourceCost);
+            GrantLoot(loot);
+
             // STEP 4 — show the victory screen + route home (anti-soft-lock). The shared
             // Obsidian EndState template owns the presentation, the ONE primary action
             // (Return to Castle -> ReturnHome), the EventSystem, and the auto-dismiss
             // softlock guard (fed the same _autoReturnSeconds so the timing is unchanged).
-            ShowVictoryScreen(configId, joined);
+            ShowVictoryScreen(configId, joined, result, loot);
+        }
+
+        // =====================================================================
+        //  LOOT GRANT (WO-771.6) — reuse the village economy, never invent one.
+        // =====================================================================
+
+        /// <summary>
+        /// Grants the raid loot into the player's economy. Prefers the canonical village
+        /// <see cref="EconomyService"/> reward grant (the same path wave rewards use);
+        /// falls back to the persistent <see cref="GameStateService"/> crystal/food
+        /// mutators when a raid scene has no EconomyService (both target the SAME
+        /// GameState.Resources wallet, so the grant lands and persists either way).
+        /// </summary>
+        private void GrantLoot(ResourceCost loot)
+        {
+            if (loot.IsZero) return;
+
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                eco.Grant(loot);
+                FlowTrace.Step("Raid", $"LOOT granted via EconomyService: +{loot.Crystals} crystals, +{loot.Food} food.");
+                return;
+            }
+
+            var gs = GameStateService.Instance;
+            if (gs != null)
+            {
+                if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
+                if (loot.Food != 0) gs.AddFood(loot.Food);
+                FlowTrace.Step("Raid", $"LOOT granted via GameStateService fallback: +{loot.Crystals} crystals, +{loot.Food} food.");
+            }
+            else
+            {
+                FlowTrace.Warn("Raid", "LOOT NOT granted — no EconomyService and no GameStateService present.");
+            }
         }
 
         // The raid's scene-config id: prefer the spawner's stored id (via the public
@@ -259,7 +304,8 @@ namespace DeNelle.Village.World.Camps
         //  STEP 4 — RETURN. Victory banner + route home (never soft-lock).
         // =====================================================================
 
-        private void ShowVictoryScreen(string configId, string joinedCompanionName)
+        private void ShowVictoryScreen(string configId, string joinedCompanionName,
+                                       RaidResult result, ResourceCost loot)
         {
             try
             {
@@ -267,8 +313,13 @@ namespace DeNelle.Village.World.Camps
                 // single primary action (Return to Castle) fires ReturnHome, and its
                 // AutoDismissSeconds (fed _autoReturnSeconds) IS the anti-soft-lock guard
                 // that previously lived in AutoReturnRoutine — same route, same timing.
+                // WO-771.6: the win now carries stars + %-destruction + the loot breakdown.
                 EndStateView.Show(EndStateVM.FromRaidVictory(
-                    joinedCompanionName, ReturnHome, _autoReturnSeconds));
+                    joinedCompanionName, ReturnHome, _autoReturnSeconds,
+                    result != null ? result.Stars : -1,
+                    result != null ? result.DestructionPercent : -1,
+                    result != null ? result.ElapsedSeconds : -1f,
+                    loot.Crystals, loot.Food));
 
                 FlowTrace.Step("Raid", $"RETURN — victory screen shown for '{configId}' " +
                     (joinedCompanionName != null ? $"(+{joinedCompanionName})" : "(party already full)") +

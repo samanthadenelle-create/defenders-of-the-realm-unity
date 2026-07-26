@@ -232,23 +232,47 @@ namespace DeNelle.Village.UI
         /// auto-return is the template's AutoDismissSeconds (fires the same route).
         /// </summary>
         public static EndStateVM FromRaidVictory(string joinedCompanionName,
-            Action onReturn, float autoReturnSeconds = 20f)
+            Action onReturn, float autoReturnSeconds = 20f,
+            int stars = -1, int destructionPercent = -1, float elapsedSeconds = -1f,
+            int lootCrystals = 0, int lootFood = 0)
         {
+            // WO-771.6: the LOCKED-V1 scoring/loot now rides the raid victory screen —
+            // stars (0-3), the %-destruction of the base, the clear time, and the loot
+            // breakdown. All fields are opt-in (a caller with no scorer passes the old
+            // three args and the screen renders exactly as before).
             string body = !string.IsNullOrEmpty(joinedCompanionName)
                 ? "The base is CLAIMED - it is yours now.\n" + joinedCompanionName + " joins your party."
                 : "The base is CLAIMED - it is yours now.";
+            if (destructionPercent >= 0)
+                body += "\n" + destructionPercent + "% razed.";
 
-            return new EndStateVM
+            var vm = new EndStateVM
             {
                 Kind = EndStateKind.Victory,
                 Title = "Victory!",
                 Subtitle = body,
+                Stars = stars >= 0 ? Mathf.Clamp(stars, 0, 3) : -1,
+                TimeSeconds = elapsedSeconds >= 0f ? elapsedSeconds : -1f,
                 Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
                 PrimaryLabel = "Return to Castle",
                 PrimaryRoute = "return-home",
                 Primary = onReturn,
                 AutoDismissSeconds = Mathf.Max(2f, autoReturnSeconds),
             };
+
+            // Loot breakdown (null Icon -> BuildSpoilRow resolves the concept icon from
+            // the label, then a generic fallback — a reward row never blanks).
+            if (lootCrystals > 0)
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    Label = "Crystals", Amount = "+" + ElarionUi.CompactNumber(lootCrystals),
+                });
+            if (lootFood > 0)
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    Label = "Food", Amount = "+" + ElarionUi.CompactNumber(lootFood),
+                });
+            return vm;
         }
 
         /// <summary>

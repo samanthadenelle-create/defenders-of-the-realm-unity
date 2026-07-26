@@ -29,6 +29,7 @@
 // the owner can tune by feel later.
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -142,18 +143,50 @@ namespace DeNelle.Village
         //  Lifecycle
         // =====================================================================
 
+        // The raid scorer (WO-771.6) — bound a few frames after Start so its clock can
+        // END the raid (retreat) when time runs out. Null when scoring isn't present.
+        private RaidScoring _scoring;
+
         private void Start()
         {
             _camera = Camera.main;
             BuildHud();
+            StartCoroutine(BindScoringRoutine());
         }
 
         private void OnDestroy()
         {
             // Don't let a rally leak across scenes.
             TroopRally.Clear();
+            if (_scoring != null) _scoring.OnTimeExpired -= OnRaidTimeExpired;
             if (_rallyFlag != null) Destroy(_rallyFlag);
             if (_ui != null) Destroy(_ui);
+        }
+
+        // The scorer self-installs the same frame this HUD does; poll a few frames for
+        // it, then subscribe so the 180s clock expiry ends the raid via the retreat path
+        // (survivors reconciled, no soft-lock). Mirrors RaidVictoryController.BindRoutine.
+        private IEnumerator BindScoringRoutine()
+        {
+            for (int i = 0; i < 10 && _scoring == null; i++)
+            {
+                _scoring = RaidScoring.Instance;
+                if (_scoring != null) break;
+                yield return null;
+            }
+            if (_scoring != null)
+            {
+                _scoring.OnTimeExpired -= OnRaidTimeExpired;
+                _scoring.OnTimeExpired += OnRaidTimeExpired;
+            }
+        }
+
+        // The raid clock ran out (RaidScoring.OnTimeExpired): call off the assault and
+        // evac through the normal retreat (reconciles survivors/wounded, GoCastle).
+        private void OnRaidTimeExpired()
+        {
+            SetStatus("Time! The assault is called off - your warband retreats.");
+            DoRetreat();
         }
 
         private void Update()
@@ -262,6 +295,8 @@ namespace DeNelle.Village
             }
 
             _deployed.Add(new Deployed { Controller = troop, OwnedId = next.Id });
+            // Feed the scorer (WO-771.6): count the deploy + log it for re-watch. Null-safe.
+            RaidScoring.Instance?.RecordDeploy(_armedDefId, hit.point);
             SetStatus($"Deployed {DisplayName(_armedDefId)}. Tap again to deploy more.");
             RefreshTiles();
         }
