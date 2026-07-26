@@ -310,6 +310,12 @@ namespace DeNelle.Dungeons
             using var _flow = FlowTrace.Enter("Dungeon",
                 $"EncounterTrigger.LaunchBattle id='{EncounterId}' boss={_isBossTrigger}");
 
+            // WO-770.2 (fixes D3): return to the CURRENT dungeon scene. A fight started in any
+            // dungeon must round-trip back to THAT dungeon — not always the Healer's Cottage
+            // (the old hardcode dumped a Folk's Granary fight into the Cottage). Village breaches
+            // never reach this path (they build BattleParams elsewhere with the default Village).
+            string returnScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+
             // GUARD the handoff (both paths): the caller already set _inCombat=true + stashed the
             // encounter handoff BEFORE this call. If the handoff FAILS (throw, or the arena refusing
             // to stage) the scene never starts a fight, so the run is left permanently combat-LOCKED
@@ -332,7 +338,7 @@ namespace DeNelle.Dungeons
                         EnemyIds        = enemyTypes ?? System.Array.Empty<string>(),
                         Threat          = _isBossTrigger ? 3 : 1,   // boss fights scale up
                         BackdropContext = "cavern",                 // underground dungeon look
-                        ReturnScene     = SceneRouter.DungeonHealersCottage,
+                        ReturnScene     = returnScene,              // WO-770.2: current dungeon, not always Cottage
                         ReturnPosition  = returnPos,
                         ReturnYaw       = returnYaw,
                     };
@@ -368,8 +374,9 @@ namespace DeNelle.Dungeons
                 ParticipatingPetIds = System.Array.Empty<string>(),
                 // BUG-008 fix: the battle must return to the dungeon, not the
                 // village. ReturnScene carries the round-trip destination so
-                // BattleController hands control back into Dungeon_HealersCottage.
-                ReturnScene = SceneRouter.DungeonHealersCottage,
+                // BattleController hands control back into the dungeon it was
+                // started from. WO-770.2: use the CURRENT scene, not the hardcoded Cottage.
+                ReturnScene = returnScene,
             };
             // waveLabel is the authored pre-fight banner; the battle scene reads
             // it off the params. (BattleParams gains a Label field when the
