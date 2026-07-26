@@ -61,6 +61,24 @@ namespace DeNelle.Village
         private BoltStyle _style;
         private bool _styleResolved;
 
+        // TOWER TIER (owner VfxManualPicks per-tier archer keys, 2026-07): the placed upgrade
+        // level (1..3) read from this tower's OWN PlacedStructure marker — the SAME level
+        // BuildModeController.ApplyTierStats scales range/damage from (both live on this
+        // GameObject). The component ref is resolved once and cached; .level is a cheap field
+        // read, safe in the fire hot-loop. Null (an EnemyOwned garrison turret or an un-placed
+        // tower) -> tier 1. Purely a VISUAL selector: picks the per-tier archer arrow key in
+        // ProjectileKeyFor; damage/targeting/travel are untouched.
+        private PlacedStructure _placed;
+        private bool _placedResolved;
+        private int Tier
+        {
+            get
+            {
+                if (!_placedResolved) { _placed = GetComponent<PlacedStructure>(); _placedResolved = true; }
+                return _placed != null ? Mathf.Clamp(_placed.level, 1, 3) : 1;
+            }
+        }
+
         // Allegiance — PlayerOwned (default) preserves every existing tower's
         // behaviour byte-for-byte; EnemyOwned garrison turrets target the player
         // party. Set by the spawner (GarrisonController) for garrison towers.
@@ -825,10 +843,18 @@ namespace DeNelle.Village
                     case DamageElement.Ice:    return "ArcherTower-Ice_Projectile";
                     case DamageElement.Aether: return "RangerTowerUpgraded_Projectile";
                     default:
-                        // Sky Ballista (airOnly) → ranger base spear; ground Archer → red laser bolt.
-                        return AirOnly
-                            ? "RangerTowerBaseProjectile_Projectile"
-                            : "ArcherTower_Projectile";
+                        // Sky Ballista (airOnly) → ranger base spear (element variants + this
+                        // AA path are UNCHANGED — owner-mapped verbatim).
+                        if (AirOnly) return "RangerTowerBaseProjectile_Projectile";
+                        // Ground Archer, per-tier arrow (owner VfxManualPicks 2026-07, keys named
+                        // by tier — the names ARE the mapping): tier 1 red arrow, tier 2 pink arrow,
+                        // tier 3 (max/top) the base ArcherTower red-laser bolt.
+                        switch (Tier)
+                        {
+                            case 1:  return "ArcherTowerLevel1_Projectile";
+                            case 2:  return "ArcherTowerLevel2_Projectile";
+                            default: return "ArcherTower_Projectile";
+                        }
                 }
             }
             if (style == BoltStyle.Spell)
