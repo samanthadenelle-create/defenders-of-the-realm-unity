@@ -43,6 +43,14 @@ namespace DeNelle.Village
     {
         public static CastleVendorNpcInjector Instance { get; private set; }
 
+        // TIMING-PROOF NOTIFY (owner F8 "still no NPC"): NotifyBuildingPlaced can fire from
+        // BuildModeController.Place / BaseLayoutLoader.Spawn BEFORE the injector's AfterSceneLoad
+        // Bootstrap set Instance (a placement/replay that beats Awake). The old guard DROPPED those
+        // — the collector's only non-poll seat path — so a reloaded Farm/Lumbermill silently got no
+        // NPC. Instead we ENQUEUE the (id, transform) here and DRAIN it in Awake once Instance is set.
+        private static readonly System.Collections.Generic.List<(string id, Transform tf)> s_pendingPlacements =
+            new System.Collections.Generic.List<(string id, Transform tf)>();
+
         private const string TargetScene = "MainCastle_Hall";
         // WO-608 merge: MainCastle_Hall + OuterWorld collapse into Main_Castle_Overworld.
         // Castle-hub chrome must fire on the merged scene too, while staying castle-only
@@ -157,6 +165,31 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (IsCastleHubScene(SceneManager.GetActiveScene().name)) Inject();
+
+            // Drain any placement that fired before Instance was set (timing race). AFTER Inject so the
+            // fresh HolderName exists — draining first would parent vendors to a holder Inject then nukes.
+            DrainPendingPlacements();
+        }
+
+        /// <summary>Seat any vendor NPCs whose NotifyBuildingPlaced arrived before this injector's
+        /// Awake set <see cref="Instance"/> (the AfterSceneLoad/BaseLayoutLoader replay race). Idempotent:
+        /// SpawnVendorForPlaced is scene-gated + per-building idempotent (VendorSeatMarker).</summary>
+        private void DrainPendingPlacements()
+        {
+            if (s_pendingPlacements.Count == 0) return;
+            var queued = s_pendingPlacements.ToArray();
+            s_pendingPlacements.Clear();
+            FlowTrace.Step("NpcSeat", $"draining {queued.Length} deferred placement(s) now that the injector is up.");
+            foreach (var (id, tf) in queued)
+            {
+                if (tf == null)
+                {
+                    FlowTrace.Warn("NpcSeat",
+                        $"deferred placement '{id}' dropped — building transform was destroyed before the injector booted.");
+                    continue;
+                }
+                SpawnVendorForPlaced(id, tf);
+            }
         }
 
         private void OnDestroy()
@@ -219,6 +252,11 @@ namespace DeNelle.Village
             ("Windmill",      "collector_farm"),       // WO-707: Mill retires from the palette — anchor to the Farm tile; dialogue structureId stays "farm" (VendorFor)
             ("EchoHollow",    "pet-house"),
             ("Forge",         "forge"),
+            ("Forge",         "collector_forge"), // WO-707 palette: the placeable Forge is a ResourceCollector
+                                                  // (structures-catalog id "collector_forge", bare id "forge") — NOT a
+                                                  // Building — so this second Forge anchor lets the widened poll seat it
+                                                  // via the collector scan below. Per-role settle means whichever Forge
+                                                  // (Building "forge" OR collector) exists first gets the one NPC.
             ("ArcaneTower",   "arcane-tower"),
             ("Jeweler",       "jeweler"),
             ("Marketplace",   "market"),
@@ -246,6 +284,15 @@ namespace DeNelle.Village
                 if (holder == null) yield break;   // injector re-ran / tearing down
 
                 var live = FindObjectsByType<Building>();
+                // COLLECTOR VISION (owner F8 2026-07-24 "Lumbermill/Farm have no NPC"): the
+                // Lumbermill/Farm/Forge are placed as ResourceCollector components (StructureFactory
+                // "ResourceCollector" case, StructureFactory.cs:744 — NO Building component), so the
+                // Building scan above is STRUCTURALLY BLIND to them and their roles (Lumbermill/Windmill/
+                // Forge) awaited a building that never arrives. Enumerate the live collectors too and
+                // match a "collector_*" anchor by the collector's BARE BuildingId (repo.collectorBuildingId
+                // in structures-catalog.json: collector_lumbermill->"lumbermill", collector_farm->"farm",
+                // collector_forge->"forge").
+                var liveCollectors = FindObjectsByType<DeNelle.Village.Buildings.Progression.ResourceCollector>();
                 foreach (var (role, buildingId) in AnchorRoles)
                 {
                     if (!pending.Contains(role)) continue;
@@ -258,15 +305,32 @@ namespace DeNelle.Village
                         continue;
                     }
 
-                    Building anchor = null;
+                    Transform anchorTf = null;
                     foreach (var b in live)
-                        if (b != null && b.IsAlive && b.BuildingId == buildingId) { anchor = b; break; }
+                        if (b != null && b.IsAlive && b.BuildingId == buildingId) { anchorTf = b.transform; break; }
 
-                    if (anchor == null)
+                    // Collector branch: a "collector_*" anchor whose Building scan missed — look for a
+                    // live ResourceCollector carrying the matching BARE id (the poll's structural blind
+                    // spot that left the Lumbermill/Farm/Forge NPC-less).
+                    if (anchorTf == null && buildingId.StartsWith("collector_"))
+                    {
+                        string bareId = buildingId.Substring("collector_".Length);
+                        foreach (var c in liveCollectors)
+                            if (c != null && c.IsAlive && c.BuildingId == bareId)
+                            {
+                                anchorTf = c.transform;
+                                FlowTrace.Once("Vendor", $"collector-match-{buildingId}",
+                                    $"{role}: matched live ResourceCollector (bare id '{bareId}') for anchor " +
+                                    $"'{buildingId}' — the Building scan is blind to collectors, so this is the seat path.");
+                                break;
+                            }
+                    }
+
+                    if (anchorTf == null)
                     {
                         // Skip decision — Once per id so the poll never spams the trace.
                         FlowTrace.Once("Vendor", $"await-{buildingId}",
-                            $"{role} awaiting building '{buildingId}' — vendor not spawned.");
+                            $"{role} awaiting building/collector '{buildingId}' — vendor not spawned.");
                         continue;
                     }
 
@@ -275,7 +339,7 @@ namespace DeNelle.Village
                     // to the building's Heart-facing side, exactly like the baked markers and
                     // the station deferred passes above.
                     var marker = new GameObject($"NPC_{role}_Marker (runtime)");
-                    marker.transform.SetParent(anchor.transform, false);
+                    marker.transform.SetParent(anchorTf, false);
                     marker.transform.localPosition = new Vector3(0f, 0f, 6f);
 
                     bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
@@ -284,7 +348,7 @@ namespace DeNelle.Village
                     {
                         pending.Remove(role);
                         FlowTrace.Step("Vendor",
-                            $"{role} anchored to placed '{buildingId}' @ {anchor.transform.position}");
+                            $"{role} anchored to placed '{buildingId}' @ {anchorTf.position}");
                     }
                     else
                     {
@@ -315,17 +379,26 @@ namespace DeNelle.Village
         /// + falls back to a placeholder rather than silently leaving the storefront vendorless.</summary>
         public static void NotifyBuildingPlaced(string buildingId, Transform buildingTransform)
         {
-            if (Instance == null || buildingTransform == null || string.IsNullOrEmpty(buildingId))
+            if (buildingTransform == null || string.IsNullOrEmpty(buildingId))
             {
-                // SHOW-STOPPER RCA (owner "still no NPC", 2026-07-16): this guard was FULLY SILENT.
-                // A placement that fired the notify before the injector bootstrapped (Instance null)
-                // produced ZERO trace, reading to the owner as "no NPC" with an EMPTY errors-only
-                // break-log. Fail-loud (lands in break-log) so the next capture names the dead
-                // precondition instead of vanishing. Instance is normally set by the AfterSceneLoad
-                // Bootstrap, so a null here means the placement beat the injector's Awake.
+                // Genuinely un-actionable input (no transform / no id) — Fail-loud (lands in the
+                // errors-only break-log) rather than vanishing. This is NOT the timing race below.
                 FlowTrace.Fail("NpcSeat",
-                    $"NotifyBuildingPlaced NO-OP: injectorReady={(Instance != null)}, hasTransform={(buildingTransform != null)}, " +
-                    $"id='{buildingId ?? "<null>"}' — vendor NPC NOT spawned for the placed building.");
+                    $"NotifyBuildingPlaced NO-OP: hasTransform={(buildingTransform != null)}, " +
+                    $"id='{buildingId ?? "<null>"}' — cannot spawn/queue a vendor NPC.");
+                return;
+            }
+            if (Instance == null)
+            {
+                // TIMING RACE (AfterSceneLoad Bootstrap ordering vs BaseLayoutLoader replay / a fast
+                // placement): the notify fired before Awake set Instance. DO NOT DROP it (the old
+                // silent-then-Fail no-op that left reloaded collectors NPC-less) — ENQUEUE so Awake's
+                // DrainPendingPlacements seats it the moment the injector boots. Warn (captured) so a
+                // capture shows the defer, not a vanish.
+                s_pendingPlacements.Add((buildingId, buildingTransform));
+                FlowTrace.Warn("NpcSeat",
+                    $"NotifyBuildingPlaced DEFERRED: injector not up yet (Instance null) — queued '{buildingId}' " +
+                    $"(pending={s_pendingPlacements.Count}) to seat in Awake.");
                 return;
             }
             Instance.SpawnVendorForPlaced(buildingId, buildingTransform);
