@@ -337,6 +337,10 @@ namespace DeNelle.Core
             if (sh == null) return true;
             string sn = sh.name;
             if (string.IsNullOrEmpty(sn)) return true;
+            // Android magenta/white slab: a shader that FAILS to compile on-device keeps its NAME
+            // (so the name-only checks below skip it) but renders magenta/white with isSupported==false.
+            // Flag it so the recovery re-assigns a fresh URP/Lit (which compiles + sticks).
+            if (!sh.isSupported) return true;
             return sn == "Standard"
                 || sn == "Standard (Specular setup)"
                 || sn.StartsWith("Legacy Shaders/")

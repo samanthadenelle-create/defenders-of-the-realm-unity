@@ -5,9 +5,16 @@
 // Owner question 2026-05-20: "why do colors not show on models?"
 //
 // Root cause: every Tripo AI-generated FBX (Wizard, Knight, Ranger, fairy,
-// dragon, fox, castle ballast tower) ships with FbxSurfacePhong materials.
-// Unity 6 URP can't render Phong shaders — the mesh appears as a transparent
-// pink ghost or a magenta error.
+// fox, castle ballast tower) ships with FbxSurfacePhong materials. Unity 6
+// URP can't render Phong shaders — the mesh appears as a transparent pink
+// ghost or a magenta error.
+//
+// NOTE (2026-07-23): the apex dragon is deliberately NOT in that list. The old
+// dragon that used to render through this fixer was a 3DHaupt Blender export
+// (CC-BY-NC — a commercial-ship blocker), NOT a Tripo asset; it has been
+// REMOVED and REPLACED by the separately-licensed Asset-Store dragon at
+// Assets/Dragon (product 71047), whose materials ship URP-ready and need no
+// runtime Phong→URP rebuild. Do not re-add "dragon" here.
 //
 // This component walks every Renderer in its hierarchy on Awake and rebuilds
 // each material under "Universal Render Pipeline/Lit", carrying the texture
@@ -459,13 +466,17 @@ namespace DeNelle.Core
                                  (sn.StartsWith("Universal Render Pipeline/") || sn.StartsWith("URP/"));
                     bool isError = !string.IsNullOrEmpty(sn) &&
                                    (sn.Contains("InternalErrorShader") || sn.Contains("Hidden/"));
-                    if (isUrp && !isError) continue;
+                    // Android white/magenta slab: a shader that fails to COMPILE on-device keeps a valid
+                    // (even URP) name but renders magenta/white with isSupported==false — flag it too.
+                    bool unsupported = m != null && m.shader != null && !m.shader.isSupported;
+                    if (isUrp && !isError && !unsupported) continue;
 
                     broken++;
                     FlowTrace.Fail("TripoMatFix",
                         $"VERIFY FAILED on '{gameObject.name}' renderer '{r.name}' slot {i}: shader='{sn ?? "<null>"}' " +
-                        "is NOT a URP shader after rebuild (magenta/pink/grey risk) — the URP/Lit rebuild did not take " +
-                        "for this slot. Mesh will render as the error/legacy fallback.");
+                        $"(supported={(m != null && m.shader != null ? m.shader.isSupported.ToString() : "n/a")}) " +
+                        "is NOT a usable URP shader after rebuild (magenta/pink/grey/white risk) — the URP/Lit rebuild did " +
+                        "not take for this slot. Mesh will render as the error/legacy/unsupported fallback.");
                 }
             }
             if (broken == 0)
