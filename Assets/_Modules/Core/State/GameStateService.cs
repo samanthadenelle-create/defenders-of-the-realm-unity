@@ -1025,7 +1025,17 @@ namespace DeNelle.Core.State
                 return;
             }
 
-            await req.SendWebRequest();
+            // WO-769: guard the throwing awaiter (401/non-2xx) so a cloud-load failure
+            // never propagates (it runs on scene-enter via PersistenceBridge). Skip + keep local.
+            try
+            {
+                await req.SendWebRequest();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Sync] Load request threw ({req.responseCode}): {e.Message} — keeping local save.");
+                return;
+            }
 
             if (req.result != UnityWebRequest.Result.Success)
             {
@@ -1184,7 +1194,17 @@ namespace DeNelle.Core.State
             using var req = UnityWebRequest.Get(url);
             req.SetRequestHeader("Accept", "application/json");
 
-            await req.SendWebRequest();
+            // WO-769: the awaiter throws on non-2xx; honor the documented "null on any
+            // failure rather than throwing" contract by catching it.
+            try
+            {
+                await req.SendWebRequest();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Sync] Nonce fetch threw ({req.responseCode}): {e.Message}");
+                return null;
+            }
 
             if (req.result != UnityWebRequest.Result.Success)
             {
@@ -1317,7 +1337,19 @@ namespace DeNelle.Core.State
                 return false;
             }
 
-            await req.SendWebRequest();
+            // WO-769: a non-2xx (e.g. 401 while Neon isn't verifying the Firebase token yet)
+            // makes the UniTask awaiter THROW UnityWebRequestException — which previously
+            // propagated out and aborted scene navigation (see SceneRouter guard). Catch it
+            // so SendDelta always fulfills its bool contract: log + re-queue offline (false).
+            try
+            {
+                await req.SendWebRequest();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Sync] Save request threw ({req.responseCode}): {e.Message} — re-queued offline.");
+                return false;
+            }
 
             if (req.result == UnityWebRequest.Result.Success)
             {

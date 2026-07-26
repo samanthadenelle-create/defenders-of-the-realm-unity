@@ -226,9 +226,23 @@ namespace DeNelle.Core
 
             // WO1: flush local + backend before the scene tears down. Runs during
             // the fade-out so there is no perceptible delay added to the transition.
+            // WO-769 FIX (device data 2026-07-26): the backend flush must NEVER abort
+            // navigation. A signed-in player's save-sync POSTs to Neon /api/game/save;
+            // if that 401s (Neon not yet verifying the Firebase token) or the network
+            // faults, the thrown UnityWebRequestException used to propagate out of this
+            // .Forget()'d task and SILENTLY strand the player on the front-end scene
+            // (LoadSceneAsync below never ran). The local save already persisted; a
+            // failed cloud sync re-queues offline — it must not block the scene load.
             var svc = DeNelle.Core.State.GameStateService.Instance;
             if (svc != null)
-                await svc.SaveBeforeSceneChange();
+            {
+                try { await svc.SaveBeforeSceneChange(); }
+                catch (System.Exception e)
+                {
+                    FlowTrace.Warn("SceneRouter",
+                        $"SaveBeforeSceneChange failed — loading '{sceneName}' anyway (save re-queues): {e.Message}");
+                }
+            }
 
             if (Fader != null)
                 await Fader.FadeOut(fadeSeconds);
