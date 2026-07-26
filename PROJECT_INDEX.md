@@ -4,6 +4,8 @@ How to navigate the ~370 markdown files at project root without reading them all
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
+> STALE: 2026-07-26 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor). Every "current anchor" named below in this file (07-08/07-12) is superseded; read the 07-26 anchor first. Branch HEAD = `7dec0e07`, local==origin. WO next-free = 774. Dungeons functional; raid loop locked to Teleport/Deploy; see `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
+>
 > STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md`; the 07-08 anchor named below (and in the table) is superseded (see CANON_GROUND_TRUTH_2026-07-12.md)
 
 > **Branch = `wip/village2-and-f8-tickets`**. The live anchor of current reality is

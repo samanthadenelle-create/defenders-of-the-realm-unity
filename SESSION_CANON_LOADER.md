@@ -1,7 +1,22 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-22) — READ BEFORE WORKING
-> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-22.md`** (supersedes 07-19). A **17-agent read-only
+> ## ▶ LIVE THREAD (2026-07-26) — READ BEFORE WORKING
+> **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (supersedes 07-22). A large **dungeon+raid
+> felt-test wave** landed on `wip/village2-and-f8-tickets` and **is PUSHED** (HEAD `7dec0e07`, local==origin —
+> a change from 07-22's push-HELD). **Dungeons are now a functional end-to-end loop** (enter → explore → read
+> lore → fight with a REAL win/loss → settle → leave → Village): WO-770.1/.2/.3/.3b/.4/.7/.9 shipped, plus
+> DungeonHero sole-mover / taller camera / Bryn pill-hide. **The raid loop is LOCKED to Teleport/Deploy** (COC
+> model, owner 2026-07-26); walk-to retired as the raid loop. **WO-770 (dungeon), 771 (raid v2), 772 (shared
+> enemy system), 773 (Obsidian job queue)** are firmed + validation-signed-off (`docs/qa/`), but only 770 is
+> partly built — 770.5/.6/.8/.10/.11 + all of 771 + 773 are BACKLOG; **772 is BLOCKED on owner enemy-codex
+> ratification.** Non-dungeon felt fixes shipped: enemies-out-of-castle + battle-lock, towers-no-longer-through-
+> walls, MagentaGuard Android, loading overlay+bar, gate-traversal-teleport off, collector vendor NPCs, Alchemy
+> scroll-fix. **WO next-free = 774** (761–773 consumed). Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
+> Save still **v34** (no new persisted fields this wave). **The 07-22 thread below is SUPERSEDED** (its §5/§6/§7
+> module digests remain the deep reference).
+>
+> ## ▶ LIVE THREAD (2026-07-22) — SUPERSEDED (see 07-26 above; deep module state still valid)
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-07-22.md`** (supersedes 07-19). A **17-agent read-only
 > SME fan-out** (12 module + 5 high-level, verified from code) produced that anchor: the code is HEALTHY and
 > gates are GREEN (`COMPILE_GATE_OK` + `REGRESSION_OK`, 16 P1 suites, 0 reds, save v34, HEAD `148ab637`,
 > local==origin) — **the debt is DOCUMENTATION DRIFT.** The `MASTER_CATALOG/<area>` sections (dated 2026-06-12

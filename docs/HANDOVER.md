@@ -15,6 +15,43 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-07-26 (dungeon+raid felt-test wave + Sunday housekeeping) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-07-26.md` (NEW — supersedes 07-22, bannered). Branch
+`wip/village2-and-f8-tickets`, HEAD `7dec0e07`, **local==origin — the wave IS pushed** (a change from
+07-22's push-HELD). Prod untouched. Save still v34.
+
+**What this session shipped (felt-test wave, committed AND pushed):**
+- **Dungeons are now a functional end-to-end loop.** WO-770 sub-orders: 770.1 (always-open exit + boss
+  back-door), 770.2 (return to the CORRECT dungeon), 770.3 (real victory/defeat carrier — a lost fight ends
+  the run), 770.3b (real-time `BattleArena.OnBattleEnded` → shared `SettleEncounter`, fixes the never-releases
+  combat lock), 770.4 (readable lore stones + code-built modal), 770.7 (toast layer + live Bryn dialogue),
+  770.9 (stale-read `OnEnable` clear). Plus DungeonHero sole-mover + taller camera + exit interaction
+  (`82e1f3a4`), Bryn pill-hide over a skinned body (`f42e6f7e`).
+- **Non-dungeon felt fixes:** enemies-stay-out-of-castle + battle-mode BattleLock (`e05f92f7`), towers no
+  longer shoot through walls (Structure layer + LoS, `2cb3c40d`), MagentaGuard Android compile-failed-shader
+  catch (`386a932f`), loading overlay + standard loading bar (`4edf8dcc`/`7dec0e07`), gate-traversal teleport
+  disabled (`8c35332f`), collector buildings get vendor NPCs (`804a02a2`, Lever 1 in progress), Alchemy
+  recipe list scroll-fix (`8ca95735`).
+- **Firmed the dungeon/raid/enemy/queue WO set** (`docs/qa/`): WO-770 (dungeon functional, 11 sub-orders),
+  WO-771 v2 (COC **Teleport/Deploy** raid — owner-LOCKED loop; walk-to retired), WO-772 (shared enemy
+  system — classes/families/armor/weapons + `EnemyResolver`, fixes generic-skeleton bug), WO-773 (common
+  Obsidian job queue). Validation sign-off: `docs/qa/dungeon-raid-validation-2026-07-26.md`.
+
+**Sunday housekeeping (this doc-only pass):** minted the 07-26 anchor (delta over 07-22); refreshed the
+read-first set (SESSION_CANON_LOADER, this doc, KEY_FACTS, PIPELINE_STATE, START_HERE, PROJECT_INDEX,
+MASTER_CATALOG top); produced `docs/qa/SUNDAY_STATUS_2026-07-26.md` (full WO/ticket table); reconciled WO
+numbering to **next-free = 774** in `CLI_LANES_WO_NUMBERS.md`.
+
+**OPEN (owner):** (1) **WO-772 owner-ratification gate** — route `docs/enemy-codex.md` for review-and-approve;
+it blocks dungeon enemy-placement (770.11) AND raid art (771.13). (2) Dungeon backlog 770.5/.6/.8/.10/.11.
+(3) Raid V1 spine (771.0→771.1→771.1b→771.4→reuse combat→771.9+773→771.6→771.10→771.11→771.13+772) — nothing
+built. (4) WO-773 Obsidian queue (or generalize CLI's `BuildTimerService`/WO-762). (5) CS-1 ring/amulet
+non-persist ticket still open. (6) §6/§7 catalog-drift housekeeping WO still queued. (7) Re-run
+`DataRegression.RunAll` before the next build ship (last certified `REGRESSION_OK` = 07-22).
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-07-22 (SME fan-out + canon refresh + branch hygiene) ★★
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-07-22.md` (NEW — supersedes 07-19, bannered). Branch

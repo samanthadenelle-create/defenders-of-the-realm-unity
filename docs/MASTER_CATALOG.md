@@ -14,6 +14,8 @@ here and in the section files is STALE metadata only.
 > `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`. The per-area code mechanics below
 > remain trustworthy; the hero-identity / party / Defend-the-Tower framing does not.
 
+> STALE: 2026-07-26 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor); HEAD is `7dec0e07`, local==origin. The `docs/MASTER_CATALOG/<area>.md` section files below are still dated **2026-06-12** — their "how it works" mechanics are largely accurate but their COUNTS + STATE facts are weeks stale (fix-list = the 07-22 anchor §6 catalog-drift ledger + §7 comment-lie registry). **`misc-modules.md` (Dungeons) is doubly stale** — it predates the RoomForge pipeline AND the 07-26 dungeon functional-loop wave (WO-770.1/.2/.3/.3b/.4/.7/.9: exits, correct-return, real win/loss, real-time settle, readable lore, toasts, live Bryn). Trust the 07-26 anchor for live dungeon/raid state.
+>
 > STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 06-26 anchor below is superseded), and HEAD is `f123859d`, not `8aa24c32` (see CANON_GROUND_TRUTH_2026-07-12.md)
 
 > READ ORDER for a cold start: `CANON_GROUND_TRUTH_2026-06-26.md` (live anchor) → this file → the relevant

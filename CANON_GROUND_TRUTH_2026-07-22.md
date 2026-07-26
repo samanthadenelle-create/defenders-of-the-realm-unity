@@ -1,5 +1,13 @@
 # CANON GROUND TRUTH — 2026-07-22 (SME fan-out synthesis)
 
+> ## ⚠ SUPERSEDED 2026-07-26 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-26.md`
+> The 07-26 anchor is a DELTA over this one: it records the dungeon functional-loop wave (WO-770.1/.2/.3/.3b/.4/.7/.9
+> shipped), the Teleport/Deploy raid-loop lock, the firmed WO-770/771/772/773 set, and the non-dungeon felt-test
+> fixes (enemies-in-castle, towers-through-walls, MagentaGuard Android, loading overlay, vendor NPCs). **HEAD is now
+> `7dec0e07`, local==origin (the wave IS pushed) — not `148ab637`/push-HELD below.** THIS document's §5 module
+> digests, §6 catalog-drift ledger, §7 comment-lie registry, and §8 landmines **remain the deep reference** except
+> where the 07-26 anchor changes a line. Read the 07-26 anchor first.
+
 > **LIVE ANCHOR (owner-blessed 2026-07-22).** Produced by a 17-agent read-only SME fan-out (12 module +
 > 5 high-level), each verifying **from code, not comments** (§12), against the live tree at HEAD `148ab637`.
 > **Supersedes `CANON_GROUND_TRUTH_2026-07-19.md`** (bannered). If a doc contradicts a line here, the doc is

@@ -28,6 +28,34 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-07-26) — dungeon+raid felt-test wave + Sunday housekeeping
+- **Live anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (delta over 07-22, which stays the deep module
+  reference). Branch `wip/village2-and-f8-tickets`, HEAD `7dec0e07`, **local==origin — this wave IS pushed**
+  (change from 07-22 push-HELD). Prod untouched. Save still **v34** (no new persisted fields this wave).
+- **Dungeons = functional end-to-end loop** (enter → explore → read lore → fight with REAL win/loss → settle
+  → leave → Village). Shipped: WO-770.1 (exit + boss back-door), .2 (correct-dungeon return), .3 (real
+  victory/defeat carrier via `SceneRouter.PendingBattle.LastOutcome` — a lost fight ends the run), .3b
+  (real-time `BattleArena.OnBattleEnded` → shared `SettleEncounter`; fixes the never-released combat lock),
+  .4 (readable lore stones + code-built modal), .7 (toast layer + live Bryn dialogue), .9 (stale-read
+  `OnEnable` clear). Plus DungeonHero sole-mover + taller camera + Bryn pill-hide. *(2026-07-26)*
+- **Raid loop LOCKED to Teleport/Deploy** (COC model, owner 2026-07-26); walk-to retired as the raid loop
+  (its `EnemyOutpost`s may return as a light overworld patrol side-activity). When raid work starts, set
+  `ff.overworldencounter=0` + `ff.raidwalk` OFF first. WO-771 v2 is the build plan; **nothing built yet.**
+  Reuse `RaidBaseGenerator` + `EnemyFactory→Enemy→TargetManager` combat; `IDamageableStructure` must move
+  Village→Core; tower-fire is greenfield. V1 = PvE generated bases (skip the deterministic sim). *(2026-07-26)*
+- **Firmed WO set (`docs/qa/`):** 770 (dungeon), 771 (raid v2), 772 (shared enemy system — classes/families/
+  armor/weapons + `EnemyResolver`, fixes generic-skeleton bug), 773 (common Obsidian job queue). Validation:
+  `docs/qa/dungeon-raid-validation-2026-07-26.md`. **772 is BLOCKED on owner ratifying `docs/enemy-codex.md`**
+  (review-and-approve gate) — it blocks 770.11 + 771.13. *(2026-07-26)*
+- **Non-dungeon felt fixes shipped:** enemies-out-of-castle + battle-mode BattleLock (`e05f92f7`), towers no
+  longer shoot through walls (Structure layer + LoS, `2cb3c40d`), MagentaGuard catches Android compile-failed
+  shaders (`386a932f`), loading overlay + standard bar (`4edf8dcc`/`7dec0e07`), gate-traversal teleport off —
+  walk through the arch (`8c35332f`), collector buildings get vendor NPCs (`804a02a2`, Lever 1 in progress),
+  Alchemy recipe scroll-fix (`8ca95735`). *(2026-07-26)*
+- **WO next-free = 774** (761–773 consumed; 770–773 are decimal-sub-order specs in `docs/qa/`). Ticket table:
+  `docs/qa/SUNDAY_STATUS_2026-07-26.md`. §6/§7 catalog-drift housekeeping WO + CS-1 ring/amulet non-persist
+  ticket still open. *(2026-07-26)*
+
 ## Latest (2026-07-22) — SME fan-out + canon refresh + branch hygiene
 - **Live anchor = `CANON_GROUND_TRUTH_2026-07-22.md`** (supersedes 07-19). A 17-agent read-only SME fan-out
   (code-verified) confirmed: **code healthy, gates green** (HEAD `148ab637`, local==origin, `REGRESSION_OK`
@@ -193,6 +221,6 @@
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
 - Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 754** as of 2026-07-19 evening, 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 774** as of 2026-07-26; 761–773 consumed — 762 builder-queue, 763 Wisdom, 764 hub-Y-height, 765 capture-Default-Town, 766 Seeker wallet, 767 texture caps, 768 thin-client, 769 Firebase auth, 770 dungeon, 771 raid, 772 enemy, 773 Obsidian queue; earlier: 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ✅ Apex dragon model = **SWAP LANDED 2026-07-24 (WO-760)** — the licensed Asset-Store dragon (product 71047 "Dragon Animated", WDallgraphics; source `Assets/Dragon/`, now git-tracked, not gitignored) ships as `Resources/Enemies/Boss_Dragon.prefab`, built by `DragonAnimatorSetup` + force-tracked `Assets/Generated/Animators/SyndrathDragon.controller`. Old CC-BY-NC 3DHaupt `Dragon.fbx`/2 controllers/materials + the orphan `Prefabs/Village/Generated/Boss_Dragon.prefab` git-rm'd; unlicensed `RedDragon 1.2` stray deleted; `EnemyFactory` dragon keys repointed to `Boss_Dragon`. ⚠ **The earlier "RESOLVED 2026-07-23" claim was PREMATURE** — that commit only repointed comments; the CC-BY-NC model still SHIPPED (Resources includes unused assets) until the 07-24 builder-run + git-rm. Commercial-ship blocker now ACTUALLY cleared; boss "Syndrath the Devourer" retained; fly-in->land->burn-towers->retarget-Tree behavior built (WO-760, felt-verify pending).

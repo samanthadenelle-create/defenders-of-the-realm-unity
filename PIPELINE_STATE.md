@@ -10,9 +10,21 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-12.md`)
+## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-26.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
+> Live anchor of current reality = `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor).
+
+- **2026-07-26 delta — DUNGEONS FUNCTIONAL + RAID LOOP LOCKED (felt-test wave, pushed to `wip`, HEAD `7dec0e07`):**
+  Dungeons are now a real end-to-end loop (enter → explore → read lore → fight with a REAL win/loss → settle →
+  leave → Village) — WO-770.1/.2/.3/.3b/.4/.7/.9 **DONE** (real-time `BattleArena.OnBattleEnded` now settles the
+  encounter; a lost fight ends the run; lore stones readable; toasts + live Bryn). Dungeon backlog:
+  770.5/.6/.8/.10/.11. **Raid loop LOCKED to Teleport/Deploy** (COC model, owner ruling; walk-to retired as the
+  raid loop) — WO-771 v2 is the build plan, **nothing built yet** (reuse `RaidBaseGenerator` + real-time combat;
+  V1 skips the deterministic sim). WO-772 (shared enemy system) **BLOCKED** on owner ratifying `docs/enemy-codex.md`;
+  WO-773 (common Obsidian job queue) **BACKLOG**. Non-dungeon fixes: enemies-out-of-castle + battle-lock,
+  towers-no-longer-through-walls, MagentaGuard Android, loading overlay+bar, gate-teleport off, collector vendor
+  NPCs, Alchemy scroll-fix. WO next-free = **774**. Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
 
 - **2026-07-16 delta — BARRACKS 7-TROOP TIER-UNLOCKED ROSTER (program WO-732→737, VERIFIED):** the army is a
   **7-type roster trained at the Barracks**, gated by Barracks building tier — Footman + Archer day-one (tier 1),
