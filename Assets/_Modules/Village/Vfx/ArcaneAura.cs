@@ -197,6 +197,22 @@ namespace DeNelle.Village
             _handle = null;
         }
 
+        /// <summary>
+        /// Retarget this aura to a DIFFERENT catalog loop key (owner 2026-07-24: the node /
+        /// Cathedral of Magic / combat Arcane Spire must each read as a SUBTLE, DISTINCT aura —
+        /// they used to all resolve to the one "Magic circle sun loop" prefab via Arcane_Aura/
+        /// Poi_NodeAura). Idempotent (no-op when the key is unchanged); if a loop is already held
+        /// it is restarted so the new key takes effect live. Colorblind-safe: each key still reads
+        /// by MOTION + LUMINANCE, never hue. These are SWAPPABLE DEFAULTS — the owner may retag any
+        /// surface in the VFX Caster later and regen the catalog.
+        /// </summary>
+        public void SetAuraKey(string auraKey)
+        {
+            if (string.IsNullOrEmpty(auraKey) || auraKey == _auraKey) return;
+            _auraKey = auraKey;
+            if (_handle != null) { StopAura(immediate: true); StartAura(); }   // live retarget
+        }
+
         // ── Tier escalation API ───────────────────────────────────────────────
 
         /// <summary>
@@ -290,6 +306,26 @@ namespace DeNelle.Village
             if (root == null) return;
             if (root.GetComponentInChildren<ArcaneAura>(true) != null) return;
             root.AddComponent<ArcaneAura>();
+        }
+
+        /// <summary>
+        /// Ensure an <see cref="ArcaneAura"/> on <paramref name="root"/> AND pin it to a specific
+        /// catalog loop <paramref name="auraKey"/> — the seam each arcane SURFACE uses to declare
+        /// its own subtle, DISTINCT aura (owner 2026-07-24). Authoritative on the key: if an aura
+        /// already exists (e.g. a default one the tier-escalation path Ensured first) its key is
+        /// UPDATED to <paramref name="auraKey"/>, so the surface-specific call always wins
+        /// regardless of call order. Null-/empty-safe. Current assignments:
+        ///   - combat Arcane Spire (ArcaneTower.Awake) .......... "Aura_HeartPulse"   (gentle pulse)
+        ///   - Cathedral of Magic (StructureFactory arcane-tower,
+        ///     HubStructureVisualInjector ArcaneTower_MagicUpgrades) "Fountain_Heal_Aura" (soft shimmer)
+        /// (Harvest NODES use their own key in PoiCalloutSystem, not this component.)
+        /// </summary>
+        public static void Ensure(GameObject root, string auraKey)
+        {
+            if (root == null) return;
+            var aura = root.GetComponentInChildren<ArcaneAura>(true);
+            if (aura == null) aura = root.AddComponent<ArcaneAura>();
+            aura.SetAuraKey(auraKey);
         }
     }
 }

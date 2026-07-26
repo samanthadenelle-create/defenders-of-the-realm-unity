@@ -40,7 +40,11 @@ namespace DeNelle.Village
         public float TickInterval = 0.35f;
 
         // Catalog keys — must match the rows HovlVfxCatalogGenerator authors.
-        private const string NodeAuraKey = "Poi_NodeAura";
+        // Owner 2026-07-24: harvest NODES get a SUBTLE, DISTINCT aura (drifting motes, no ring) —
+        // TreeofLifeAura_Aura (ParticlePack FireFlies) instead of the old "Poi_NodeAura" magic-circle
+        // (which shared the "Magic circle sun loop" prefab with the Arcane Spire + Cathedral). Reads by
+        // MOTION/LUMINANCE, colorblind-safe. SWAPPABLE default — the owner may retag in the VFX Caster.
+        private const string NodeAuraKey = "TreeofLifeAura_Aura";
         private const string LandmarkKey = "Poi_Landmark";
 
         // ── Live callout handles (one per beacon currently showing) ──────────

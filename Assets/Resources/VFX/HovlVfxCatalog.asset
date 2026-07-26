@@ -160,8 +160,29 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: ArcherTowerLevel1_Projectile
+    Prefab: {fileID: 1249710063744722, guid: b5142b50d0087484da65aa5c35349656, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: ArcherTowerLevel2_Projectile
+    Prefab: {fileID: 1481244868773408, guid: 61809825016d2464385a5703b4fe1d0b, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: ArcherTower_Projectile
     Prefab: {fileID: 1082213743303154, guid: 7d01073e4f2f6184bb4515ded3368307, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: AuraOverArcaneTower_Aura
+    Prefab: {fileID: 1531814124222292, guid: 0dc5d7207c20d6b4ab08f4ef524bdfc4, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -239,6 +260,13 @@ MonoBehaviour:
     IsLoop: 1
   - Key: EnhamcingBuff_Cast
     Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: FireFromTower-ArcaneTowerLevel3_Aura
+    Prefab: {fileID: 1171190231128718, guid: d9467a10b94fb3b428cc539326c9579b, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -866,7 +894,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: UpgradeVisual_Aura
     Prefab: {fileID: 3546323823116515695, guid: 8d1dff39f05ce0e44804cb469b83a578, type: 3}
     PoolSize: 6
@@ -890,6 +918,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: icebasedprojectile_Projectile
     Prefab: {fileID: 1820680284854294, guid: 1a1c02facd51d87458dcaa3a761e2c03, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: lighteningOnSpellLand_Impact
+    Prefab: {fileID: 1029683450922114, guid: 911d39b31e356794d971139c547d1e61, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0

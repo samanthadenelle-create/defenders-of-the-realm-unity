@@ -189,7 +189,10 @@ namespace DeNelle.Village
             EnsureContactCollider();
             // Owner 2026-07-15 "arcane towers should have an aura" - a persistent magic-circle
             // aura loop (colorblind-safe: motion/luminance, not hue). Idempotent + self-managing.
-            ArcaneAura.Ensure(gameObject);
+            // Owner 2026-07-24: the combat Arcane Spire gets its OWN subtle, DISTINCT aura
+            // ("Aura_HeartPulse" — gentle pulse) so it no longer shares the one "Magic circle sun
+            // loop" prefab with the harvest nodes + the Cathedral of Magic. SWAPPABLE default.
+            ArcaneAura.Ensure(gameObject, "Aura_HeartPulse");
             // TODO(owner 2026-07-24): a DEDICATED owner-tagged arcane-tower-aura key is not yet
             // tagged in the VFX Caster. When she supplies it, wire a persistent striking loop here
             // through the ONE pool, e.g.:

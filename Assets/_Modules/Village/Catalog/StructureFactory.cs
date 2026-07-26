@@ -801,8 +801,12 @@ namespace DeNelle.Village
                     // Owner 2026-07-15 "arcane towers should have an aura": the arcane-tower
                     // landmark (this GameplayBuilding path replays it from BaseLayout) holds a
                     // persistent magic-circle aura. Idempotent; colorblind-safe (motion, not hue).
+                    // Owner 2026-07-26: the Cathedral of Magic (id "arcane-tower") gets a subtle, DISTINCT,
+                    // NON-HEAL aura ("Aegis_Shield" magic dome). The earlier "Fountain_Heal_Aura" was a
+                    // Druid heal-shimmer that read as a "healing VFX floating in town" (felt-test bug).
+                    // Distinct from the combat Arcane Spire's "Aura_HeartPulse" + nodes' "TreeofLifeAura_Aura".
                     if (string.Equals(entry.id, "arcane-tower", System.StringComparison.OrdinalIgnoreCase))
-                        ArcaneAura.Ensure(root);
+                        ArcaneAura.Ensure(root, "Aegis_Shield");
                     break;
                 }
 

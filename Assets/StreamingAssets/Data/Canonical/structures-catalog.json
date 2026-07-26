@@ -808,7 +808,7 @@
   },
   {
    "id": "arcane-tower",
-   "displayName": "Arcane Tower",
+   "displayName": "Cathedral of Magic",
    "type": "Resource",
    "kind": "Cell",
    "visualPrefabPath": "Structures/arcane tower",

@@ -57,8 +57,29 @@
             "manual": true
         },
         {
+            "key": "ArcherTowerLevel1_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 21 red arrow.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcherTowerLevel2_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 20 pink arrow.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "ArcherTower_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 13 red laser.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "AuraOverArcaneTower_Aura",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 18 nova orange.prefab",
             "isLoop": true,
             "scale": 1.0,
             "manual": true
@@ -136,6 +157,13 @@
         {
             "key": "EnhamcingBuff_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireFromTower-ArcaneTowerLevel3_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
             "isLoop": true,
             "scale": 1.0,
             "manual": true
@@ -759,7 +787,7 @@
         {
             "key": "UpgradeStructureComplete_Aura",
             "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Demos/Fireworks/Fireworks.prefab",
-            "isLoop": true,
+            "isLoop": false,
             "scale": 1.0,
             "manual": true
         },
@@ -787,6 +815,13 @@
         {
             "key": "icebasedprojectile_Projectile",
             "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "lighteningOnSpellLand_Impact",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Electro splash.prefab",
             "isLoop": true,
             "scale": 1.0,
             "manual": true
