@@ -5,8 +5,8 @@
 // `bool victory = true` hardcode can never creep back:
 //   1. SceneRouter defines the Core-level BattleResultKind carrier + LastOutcome.
 //   2. BattleController.HandleOutcome STAMPS LastOutcome before the hand-back.
-//   3. DungeonController.ResolvePendingEncounter READS the carrier (no hardcode)
-//      and on defeat calls ExitToVillage().
+//   3. DungeonController.ResolvePendingEncounter READS the carrier (no hardcode) and routes
+//      through the shared SettleEncounter (770.3b), whose defeat path calls ExitToVillage().
 // Source-lint (edit-mode, no PlayMode). Wired into DataRegression.RunAll. Never throws.
 // =============================================================================
 using System.Collections.Generic;
@@ -38,10 +38,10 @@ namespace DeNelle.Editor
             if (!Regex.IsMatch(battleTxt, @"LastOutcome\s*=\s*"))
                 fails.Add("BattleController.HandleOutcome does not stamp PendingBattle.LastOutcome");
 
-            // (3) READER — DungeonController reads the carrier, the hardcode is GONE,
-            //     and a defeat ends the run via ExitToVillage.
+            // (3) READER — DungeonController reads the carrier, the hardcode is GONE, and the ATB
+            //     resume routes through the shared SettleEncounter authority (refactored in WO-770.3b).
             string ctrlTxt = File.Exists(ctrl) ? File.ReadAllText(ctrl) : "";
-            // Isolate ResolvePendingEncounter so an ExitToVillage elsewhere can't mask a regression.
+            // Isolate ResolvePendingEncounter so a match elsewhere can't mask a regression.
             var m = Regex.Match(ctrlTxt,
                 @"void\s+ResolvePendingEncounter\s*\(\s*\)\s*\{(?<body>.*?)\n        \}",
                 RegexOptions.Singleline);
@@ -50,8 +50,17 @@ namespace DeNelle.Editor
                 fails.Add("ResolvePendingEncounter still hardcodes `bool victory = true` — a lost fight is scored a win (D4)");
             if (!Regex.IsMatch(body, @"LastOutcome\s*==\s*BattleResultKind\.Victory"))
                 fails.Add("ResolvePendingEncounter does not read the LastOutcome carrier to decide victory");
-            if (!body.Contains("ExitToVillage()"))
-                fails.Add("ResolvePendingEncounter does not ExitToVillage() on defeat (locked defeat behavior missing)");
+            if (!body.Contains("SettleEncounter("))
+                fails.Add("ResolvePendingEncounter does not route through the shared SettleEncounter authority (770.3b)");
+
+            // The locked defeat behavior (ExitToVillage on a loss) now lives in SettleEncounter —
+            // assert it there (both battle paths funnel through this one routine).
+            var ms = Regex.Match(ctrlTxt,
+                @"void\s+SettleEncounter\s*\([^)]*\)\s*\{(?<body>.*?)\n        \}",
+                RegexOptions.Singleline);
+            string settleBody = ms.Success ? ms.Groups["body"].Value : "";
+            if (!settleBody.Contains("ExitToVillage"))
+                fails.Add("SettleEncounter does not ExitToVillage() on defeat (locked defeat behavior missing)");
 
             if (fails.Count == 0)
             {

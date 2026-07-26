@@ -187,6 +187,9 @@ namespace DeNelle.Dungeons
         /// </summary>
         private CraftingDataSet _craftingData;
 
+        // WO-770.3b: true while subscribed to BattleArena.OnBattleEnded (the real-time settle bridge).
+        private bool _arenaSubscribed;
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         private void Start()
@@ -196,6 +199,8 @@ namespace DeNelle.Dungeons
 
         private void OnDestroy()
         {
+            UnsubscribeRealtimeSettle(); // WO-770.3b: drop the arena hook FIRST (survives the early-returns below)
+
             if (_runtimeState == null || !_runtimeState.RunActive) return;
 
             // CRITICAL (BUG-008 round-trip): when an encounter battle is pending,
@@ -312,6 +317,7 @@ namespace DeNelle.Dungeons
             DressTraversalLinks();
             SweepPlaceholderCubes();
             StartAmbientAudio();
+            SubscribeRealtimeSettle(); // WO-770.3b: hook BattleArena so a real-time fight settles the dungeon
 
             // Settle any in-flight ATB encounter — the dungeon module's side of
             // the BUG-008 round-trip. The matching EncounterTrigger marks itself
@@ -920,59 +926,88 @@ namespace DeNelle.Dungeons
         {
             if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
 
-            // WO-770.3 (fixes D4): the Core-level result carrier now exists — read the settled
-            // outcome that BattleController stamped onto SceneRouter.PendingBattle before the
-            // hand-back. Only a stamped Victory counts as a win; a Defeat OR a missing carrier
-            // (dev/direct-play with no battle) is treated as a loss. NOTE: the real-time
-            // BattleArena path settles IN-SCENE (warps the hero back, no scene round-trip) and
-            // never reaches here — this governs the legacy ATB (ff.dungeonrealtime OFF) round-trip.
+            // WO-770.3 (fixes D4): read the settled outcome off the Core-level carrier BattleController
+            // stamped before the hand-back. Only a stamped Victory is a win; a Defeat OR a missing
+            // carrier (dev/direct-play with no battle) is a loss. This is the ATB (ff.dungeonrealtime
+            // OFF) resume, reached only on the scene-reload round-trip — the real-time path has NO
+            // round-trip and settles via OnRealtimeBattleEnded (WO-770.3b) instead of ever reaching here.
             var battleCarrier = SceneRouter.PendingBattle;
             bool victory = battleCarrier != null && battleCarrier.LastOutcome == BattleResultKind.Victory;
-
-            // Capture the boss flag BEFORE the resume/exit clears the pending handoff below.
             bool wasBoss = _runtimeState.PendingEncounterIsBoss;
 
-            // WO-770.3 LOCKED defeat behavior: a lost fight ENDS the run and returns to the
-            // Village. Clear the encounter handoff + combat lock (so the run is not wedged and the
-            // encounter is NOT re-armed for a free retry), grant NO loot, and do NOT mark the boss
-            // defeated (the boss-gated back-door stays sealed). Then ExitToVillage — no resume-in-place.
+            FlowTrace.Step("Dungeon",
+                $"ResolvePendingEncounter (ATB reload): id='{_runtimeState.PendingEncounterId}' victory={victory} " +
+                $"boss={wasBoss} carrier={(battleCarrier == null ? "none" : battleCarrier.LastOutcome.ToString())}.");
+            SettleEncounter(victory, wasBoss);
+        }
+
+        /// <summary>
+        /// WO-770.3b — the ONE encounter-settlement authority, shared by BOTH battle paths so a
+        /// win/loss behaves identically whichever path ran:
+        ///   • VICTORY: credit the per-encounter loot + clear the combat lock. ResumeAfterEncounter(true)
+        ///     credits the mini-boss internally when the pending fight WAS the boss — which unlocks the
+        ///     WO-770.1 back-door. The hero resumes in place.
+        ///   • DEFEAT: the WO-770.3 LOCKED path — clear the lock with NO boss credit + NO loot, then
+        ///     ExitToVillage (the run ends; the boss-gated back-door stays sealed).
+        /// The ATB path calls this from <see cref="ResolvePendingEncounter"/> on the scene-reload resume;
+        /// the real-time path calls it from <see cref="OnRealtimeBattleEnded"/> (BattleArena warps the
+        /// hero back in-scene with NO round-trip, so its completion event is the dungeon's only signal).
+        /// The trigger-ownership loop the ATB path used is gone: the owning trigger's fired-flag already
+        /// restores from HasFiredScriptedEncounter on the reload, so the settle only needs the state.
+        /// </summary>
+        internal void SettleEncounter(bool victory, bool wasBoss)
+        {
+            if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
+
             if (!victory)
             {
                 FlowTrace.Warn("Dungeon",
-                    $"ResolvePendingEncounter: DEFEAT on '{_runtimeState.PendingEncounterId}' " +
-                    $"(carrier={(battleCarrier == null ? "none" : battleCarrier.LastOutcome.ToString())}) — " +
-                    "ending the run + returning to Village (no loot, boss NOT credited, encounter not re-armed).");
-                _runtimeState.ResumeAfterEncounter(false); // clear pending handoff + combat lock (records the loss)
+                    $"SettleEncounter: DEFEAT (boss={wasBoss}) — ending the run + returning to Village " +
+                    "(no loot, boss NOT credited, no back-door unlock).");
+                _runtimeState.ResumeAfterEncounter(false); // clears _inCombat + handoff; victory=false => no boss credit
                 ExitToVillage().Forget();
                 return;
             }
 
-            // WO-749 gap 3: the ATB/cottage encounter path credited NO loot (only the
-            // composed-chain live-Enemy path fed the larder). Grant a per-encounter
-            // dungeon roll into the larder on a victory resume.
-            DungeonLootGrant.GrantEncounter(wasBoss);
+            DungeonLootGrant.GrantEncounter(wasBoss);       // WO-749: credit the per-encounter loot on a win
+            _runtimeState.ResumeAfterEncounter(true);        // clears _inCombat + handoff; credits the boss when wasBoss
+            FlowTrace.Step("Dungeon",
+                $"SettleEncounter: VICTORY settled (boss={wasBoss}) — combat lock cleared, hero resumes in place.");
+        }
 
-            string pendingId = _runtimeState.PendingEncounterId;
-            bool settled = false;
-            foreach (EncounterTrigger trigger in _encounterTriggers)
-            {
-                if (trigger == null) continue;
-                if (trigger.ResumePendingEncounter(victory))
-                {
-                    settled = true;
-                    break;
-                }
-            }
+        // ── WO-770.3b: real-time BattleArena settlement bridge ───────────────────
+        // The real-time dungeon fight (ff.dungeonrealtime ON, the DEFAULT) stages in an isolated
+        // BattleArena and warps the hero back IN-SCENE — there is NO scene round-trip, so the
+        // OnDestroy/EnterDungeon resume never fires and ResolvePendingEncounter is never reached.
+        // Without this hook nothing clears the combat lock, credits the boss, or ends the run on a
+        // loss (the "real-time resume seam" gap). Subscribe to BattleArena's completion event and
+        // route it through the SAME SettleEncounter the ATB path uses so the two paths stay in parity.
 
-            // No trigger owned the pending id (a layout/scene drift) — clear the
-            // handoff anyway so the run is not wedged in a permanent combat lock.
-            if (!settled)
-            {
-                FlowTrace.Warn("Dungeon",
-                    $"ResolvePendingEncounter: no encounter trigger matched pending id " +
-                    $"'{pendingId}' on resume — clearing the handoff to unwedge the run (no combat-lock).");
-                _runtimeState.ResumeAfterEncounter(victory);
-            }
+        private void SubscribeRealtimeSettle()
+        {
+            if (_arenaSubscribed || !FeatureFlags.DungeonRealtimeBattle) return;
+            var arena = DeNelle.Village.Arena.BattleArena.Instance; // lazy persistent (DontDestroyOnLoad) singleton
+            if (arena == null) return;
+            arena.OnBattleEnded += OnRealtimeBattleEnded;
+            _arenaSubscribed = true;
+            FlowTrace.Step("Dungeon", "WO-770.3b: subscribed to BattleArena.OnBattleEnded (real-time encounter settle).");
+        }
+
+        private void UnsubscribeRealtimeSettle()
+        {
+            if (!_arenaSubscribed) return;
+            var arena = DeNelle.Village.Arena.BattleArena.Existing; // never CREATE a host just to unsubscribe
+            if (arena != null) arena.OnBattleEnded -= OnRealtimeBattleEnded;
+            _arenaSubscribed = false;
+        }
+
+        private void OnRealtimeBattleEnded(DeNelle.Village.Arena.EncounterParams _, bool won)
+        {
+            // Only settle a dungeon encounter WE launched — guards a stray arena event + double-settle.
+            if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
+            bool wasBoss = _runtimeState.PendingEncounterIsBoss;
+            FlowTrace.Step("Dungeon", $"WO-770.3b: real-time BattleArena ended (won={won}, boss={wasBoss}) — settling.");
+            SettleEncounter(won, wasBoss);
         }
 
         // ── Traversal ports (WO-711 items 3-4 — owner rulings, live walk) ────
