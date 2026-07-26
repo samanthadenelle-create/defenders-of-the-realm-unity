@@ -42,9 +42,16 @@ namespace DeNelle.Village.Items
         private CraftingVM _vm;
 
         private GameObject _ui;
-        private Transform _recipeHost;   // bodyLeft — dark list well
-        private Transform _detailHost;   // bodyRight — parchment detail well
+        private Transform _recipeHost;          // bodyLeft — dark list well (hosts the scroll zone)
+        private Transform _recipeListContent;   // scroll-zone content the recipe rows stack into
+        private Transform _detailHost;          // bodyRight — parchment detail well
         private TextMeshProUGUI _headerLabel;
+
+        // Recipe-row height in reference px. MUST stay >= ElarionUiKit.MinTouchPx (112): rows
+        // are FIXED-height cells in a MakeScrollZone (VerticalLayoutGroup), so the kit touch-floor
+        // (ClampMinTouch) never grows a row and rows can never overlap the one below — the bug the
+        // old fraction-anchored list had (grown 112px rects overlapping a sub-112px slot pitch).
+        private const float RowHeightPx = 116f;
 
         private string _selectedRecipeId;
         private PanelHandle _panelHandle;
@@ -116,7 +123,7 @@ namespace DeNelle.Village.Items
 
         private void RebuildMasterDetail()
         {
-            if (_recipeHost == null || _detailHost == null || _vm == null) return;
+            if (_recipeHost == null || _recipeListContent == null || _detailHost == null || _vm == null) return;
 
             var recipes = _vm.Recipes;
             int n = recipes != null ? recipes.Count : 0;
@@ -125,22 +132,23 @@ namespace DeNelle.Village.Items
             if (n > 0 && (string.IsNullOrEmpty(_selectedRecipeId) || FindIndex(recipes) < 0))
                 _selectedRecipeId = recipes[0].RecipeId;
 
-            // Recipe rows (dark well, left).
-            for (int i = _recipeHost.childCount - 1; i >= 0; i--)
-                Destroy(_recipeHost.GetChild(i).gameObject);
+            // Recipe rows (dark well, left) — FIXED-height cells stacked in the scroll zone.
+            // (The scroll zone's VerticalLayoutGroup + RectMask2D own spacing + clipping, so the
+            // list fits when short and scrolls when long; never overlaps chrome or its neighbour.)
+            for (int i = _recipeListContent.childCount - 1; i >= 0; i--)
+                Destroy(_recipeListContent.GetChild(i).gameObject);
 
             if (n == 0)
             {
-                var none = MakeText(_recipeHost, "No recipes.\nDefeat enemies to gather ingredients.",
+                var host = NewRowHost(_recipeListContent, RowHeightPx * 1.6f);
+                var none = MakeText(host, "No recipes.\nDefeat enemies to gather ingredients.",
                     ElarionUi.FontLabel, ElarionUi.ParchmentDim, FontStyles.Italic,
                     TextAlignmentOptions.Center,
-                    new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.62f));
+                    new Vector2(0.05f, 0f), new Vector2(0.95f, 1f));
                 ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
             }
             else
             {
-                const float rowH = 0.105f, gap = 0.015f;
-                float top = 0.98f;
                 for (int i = 0; i < n; i++)
                 {
                     var r = recipes[i];
@@ -149,16 +157,17 @@ namespace DeNelle.Village.Items
                     string name = string.IsNullOrEmpty(r.OutputName) ? r.DisplayName : r.OutputName;
                     // WO-693: no dangling "+/-" suffix — the row carries a readable right-
                     // aligned state ("+ Ready" / "2 of 3"); selection keeps the gold rim (Yellow).
-                    var rowBtn = ElarionUiKit.BuildObsidianButton(_recipeHost, name,
+                    // The Obsidian button FILLS its fixed-height host (zero..one), so ClampMinTouch
+                    // measures a >=112px rect and never inflates/overlaps it.
+                    var host = NewRowHost(_recipeListContent, RowHeightPx);
+                    var rowBtn = ElarionUiKit.BuildObsidianButton(host, name,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                                  : ElarionUiKit.ObsidianButtonColor.Gray,
-                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        Vector2.zero, Vector2.one,
                         () => { _selectedRecipeId = id; RebuildMasterDetail(); });
                     ElarionUiKit.AddRowStateSuffix(rowBtn, RowState(r),
                         r.CanCraft ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
-                    top -= rowH + gap;
-                    if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
             }
 
@@ -267,6 +276,12 @@ namespace DeNelle.Village.Items
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
+            // FIT-OR-SCROLL recipe list (§1.14): the dark left well becomes a masked, vertical-only
+            // scroll zone ONCE here; RebuildMasterDetail stacks fixed-height rows into its content.
+            // This replaces the old hand-anchored fraction rows whose ClampMinTouch-grown rects
+            // overlapped on a short well (top rows z-covered/clipped by the rows built below them).
+            _recipeListContent = ElarionUiKit.MakeScrollZone(_recipeHost, 6f, 6).content;
+
             // WO-693: the tiny footer instruction strip is DELETED — its content lives on
             // the CTA blocker text and the empty-state explanation (one-action law).
 
@@ -295,6 +310,24 @@ namespace DeNelle.Village.Items
             return t;
         }
 
+        /// <summary>One fixed-height list cell for the scroll zone. The kit scroll content runs
+        /// a VerticalLayoutGroup with childControlHeight OFF, so a cell must carry its OWN height —
+        /// pinned here via both a LayoutElement (min = preferred) AND an explicit sizeDelta.y so it
+        /// never collapses to zero. Keeping the height >= MinTouchPx stops ClampMinTouch inflating
+        /// any child button into its neighbour (the old fraction-anchored overlap).</summary>
+        private static RectTransform NewRowHost(Transform parent, float heightPx)
+        {
+            var go = new GameObject("RecipeRow", typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.sizeDelta = new Vector2(0f, heightPx);
+            var le = go.GetComponent<LayoutElement>();
+            le.minHeight = heightPx;
+            le.preferredHeight = heightPx;
+            le.flexibleHeight = 0f;
+            return rt;
+        }
+
         // ── Teardown ──────────────────────────────────────────────────────────────
 
         private void Close()
@@ -303,6 +336,7 @@ namespace DeNelle.Village.Items
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
             _recipeHost = null;
+            _recipeListContent = null;
             _detailHost = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
