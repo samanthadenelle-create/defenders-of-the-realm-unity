@@ -213,6 +213,15 @@ namespace DeNelle.Village
             // Long axis is local X (matches the WallLayout rotation rule).
             _blocker.size = new Vector3(_length, _height, _thickness);
             _blocker.center = new Vector3(0f, _height * 0.5f, 0f);
+
+            // "towers shoot through walls" fix (owner 2026-07): put the wall on the "Structure"
+            // physics layer so the towers' line-of-sight linecast (TowerCombat.BlockedByWall +
+            // DefenseTower/ArcaneTower) — which is masked to "Structure" — actually HITS this
+            // collider. Without it the shot passes straight through. GUARD: NameToLayer returns
+            // -1 when the layer is absent; only assign a real layer so a misconfigured project
+            // is left untouched rather than moved to layer 0.
+            int structureLayer = LayerMask.NameToLayer("Structure");
+            if (structureLayer >= 0) gameObject.layer = structureLayer;
         }
     }
 }

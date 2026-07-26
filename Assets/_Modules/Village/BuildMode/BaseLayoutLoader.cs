@@ -314,6 +314,25 @@ namespace DeNelle.Village
 
             AddFootprintBlocker(go, blockerFootprint, grid.cellSize);
 
+            // "towers shoot through walls" fix (owner 2026-07): a build-mode WALL or GATE must sit on
+            // the "Structure" physics layer so the towers' line-of-sight linecast (masked to
+            // "Structure") HITS it. Build-mode walls attach a bare WallSegment WITHOUT Configure()
+            // (StructureFactory.AttachBehaviorImpl), so WallSegment.RebuildCollider's own layer set
+            // never runs for them — this is where the placed-base wall/gate gets the layer. SCOPED to
+            // walls + gates ONLY (component probe) so friendly buildings/towers never occlude tower
+            // fire. The footprint BoxCollider is the collider-of-record on the ROOT `go` (child
+            // colliders are stripped in AddFootprintBlocker), so the root layer is sufficient.
+            if (go.GetComponent<WallSegment>() != null || go.GetComponent<Gate>() != null)
+            {
+                int structureLayer = LayerMask.NameToLayer("Structure");
+                if (structureLayer >= 0)
+                {
+                    go.layer = structureLayer;
+                    FlowTrace.Step("Structure",
+                        $"'{go.name}' placed on the \"Structure\" layer (wall/gate LoS — towers can no longer shoot through it).");
+                }
+            }
+
             var ps = go.AddComponent<PlacedStructure>();
             ps.itemId = data.itemId;
             ps.gridCell = cell;

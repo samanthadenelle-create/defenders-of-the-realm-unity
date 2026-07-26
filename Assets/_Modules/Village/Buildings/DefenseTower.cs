@@ -476,6 +476,11 @@ namespace DeNelle.Village
                         $"'{name}' (anti-air Ballista) ACQUIRES flyer '{(d as MonoBehaviour)?.name ?? "<t>"}' (CombatLayer.Flying) at {Mathf.Sqrt(sqr):0.#}m.");
                 }
                 else if (p.y > AirThreshold && !CanHitAir) continue;   // ground tower can't reach a flier
+                // LoS gate ("towers shoot through walls" fix, owner 2026-07) — a wall on the
+                // "Structure" layer between the muzzle and the target blocks the shot. Mirrors
+                // TowerCombat.BlockedByWall exactly (flyer-exempt, degrade-open). DefenseTower's
+                // Acquire had NO LoS check, so it fired through every perimeter wall.
+                if (BlockedByWall(d)) continue;
                 int pri = Priority(d);
                 if (pri < bestPri || (pri == bestPri && sqr < bestSqr))
                 {
@@ -483,6 +488,25 @@ namespace DeNelle.Village
                 }
             }
             return best;
+        }
+
+        // LoS gate ("towers shoot through walls" fix, owner 2026-07) — a DIRECT mirror of
+        // TowerCombat.BlockedByWall: true when a wall on the "Structure" layer sits between the
+        // muzzle and the target, so the shot is blocked. DEGRADE OPEN — if the Structure layer is
+        // absent (mask 0), never block (a misconfigured scene must not make towers inert). FLYER
+        // EXEMPTION — a flier (the apex dragon) is engaged from above; a ground "Structure" wall
+        // does NOT block the arcing shot (same exemption TowerCombat uses, so a high flyer is not
+        // wrongly rejected by a muzzle→sky line clipping the castle roof). Muzzle matches Fire()'s
+        // `transform.position + up*2`.
+        private int _structureMask = -1;
+        private bool BlockedByWall(IDamageable target)
+        {
+            if (target == null) return true;
+            if (target is ICombatLayered layered && layered.Layer == CombatLayer.Flying) return false;
+            if (_structureMask < 0) _structureMask = LayerMask.GetMask("Structure");
+            if (_structureMask == 0) return false;
+            Vector3 fPos = transform.position + Vector3.up * 2f;
+            return Physics.Linecast(fPos, target.WorldPosition, _structureMask, QueryTriggerInteraction.Ignore);
         }
 
         // "Scamper to the DPS and healers" — squishy backline first, tanks last.

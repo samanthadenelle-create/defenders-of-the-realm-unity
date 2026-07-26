@@ -348,6 +348,11 @@ namespace DeNelle.Village
                 float sqr = (p - transform.position).sqrMagnitude;
                 if (sqr > range * range) continue;
                 if (p.y > AirThreshold && !CanHitAir) continue;
+                // LoS gate ("towers shoot through walls" fix, owner 2026-07) — a wall on the
+                // "Structure" layer between the spire muzzle and the target blocks the shot.
+                // Mirrors TowerCombat.BlockedByWall (flyer-exempt, degrade-open). ArcaneTower's
+                // Acquire had NO LoS check, so it lobbed blasts through every perimeter wall.
+                if (BlockedByWall(d)) continue;
                 int pri = Priority(d);
                 if (pri < bestPri || (pri == bestPri && sqr < bestSqr))
                 {
@@ -355,6 +360,22 @@ namespace DeNelle.Village
                 }
             }
             return best;
+        }
+
+        // LoS gate ("towers shoot through walls" fix, owner 2026-07) — a DIRECT mirror of
+        // TowerCombat.BlockedByWall: true when a wall on the "Structure" layer sits between the
+        // spire muzzle and the target. DEGRADE OPEN — no Structure layer (mask 0) → never block.
+        // FLYER EXEMPTION — a flier is engaged from above, a ground wall does not block the arcing
+        // lob (same exemption TowerCombat uses). Muzzle matches FireBlast()'s `up*2.5`.
+        private int _structureMask = -1;
+        private bool BlockedByWall(IDamageable target)
+        {
+            if (target == null) return true;
+            if (target is ICombatLayered layered && layered.Layer == CombatLayer.Flying) return false;
+            if (_structureMask < 0) _structureMask = LayerMask.GetMask("Structure");
+            if (_structureMask == 0) return false;
+            Vector3 fPos = transform.position + Vector3.up * 2.5f;
+            return Physics.Linecast(fPos, target.WorldPosition, _structureMask, QueryTriggerInteraction.Ignore);
         }
 
         private static int Priority(IDamageable d)

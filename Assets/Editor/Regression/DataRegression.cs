@@ -303,6 +303,7 @@ namespace DeNelle.Editor
             // --- audit P1 closers (owner 2026-07-20): EW-3 waves.json schema guard + ECON-1 pack->cosmetic grantability integrity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "waves-schema suite", () => { if (!WavesSchemaRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[waves-schema] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

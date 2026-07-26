@@ -271,6 +271,7 @@ public class Village2Generator : MonoBehaviour
             var pos = center;
             if (alongX) pos.x = center.x + off; else pos.z = center.z + off;
             var w = Place(wallStraight, pos, yRot, seat:true);   // DEF-254: seat wall base at Y=0
+            MarkStructureWall(w);   // "towers shoot through walls" fix: Structure layer + solid collider
             // DEF-254: stack the rampart walkway on the wall's ACTUAL measured top, not a
             // guessed wallHeight (which floated/sank the balcony when the mesh differed).
             if (balconyStraight != null && w != null)
@@ -289,7 +290,8 @@ public class Village2Generator : MonoBehaviour
         var side = Quaternion.Euler(0, yRot, 0) * new Vector3(gateHalf + 2f, 0, 0);
         Place(towerBase, pos + side, yRot, seat:true);
         Place(towerBase, pos - side, yRot, seat:true);
-        Place(gatePrefab, pos, yRot, seat:true);   // gate arch base at ground, not submerged
+        var gate = Place(gatePrefab, pos, yRot, seat:true);   // gate arch base at ground, not submerged
+        MarkStructureWall(gate);   // gate arch is a wall/gate barrier — same Structure-layer LoS fix as walls
         if (placeGateStairs && stairsPrefab != null)
             // Opt-in only (default OFF — rampart access is hand-designed; auto-stairs scattered
             // disconnected "spare steps" in the field).
@@ -441,6 +443,43 @@ public class Village2Generator : MonoBehaviour
     {
         if (go == null) return;
         foreach (var c in go.GetComponentsInChildren<Collider>(true)) DestroyImmediate(c);
+    }
+
+    // "towers shoot through walls" fix (owner 2026-07): a Village2 WALL/GATE piece must sit on the
+    // "Structure" physics layer so the towers' line-of-sight linecast (masked to "Structure") HITS
+    // it instead of passing straight through, AND it must carry a SOLID (non-trigger) collider for
+    // that linecast to hit. Quaternius Wall_UnevenBrick_Straight / Wall_Arch normally ship a
+    // MeshCollider, but a prefab with only-trigger / no collider would be see-through, so this
+    // GUARANTEES one (box from rendered bounds). SCOPED to wall + gate pieces only — houses, towers,
+    // decoration, moat, torches stay on Default so friendly structures never occlude tower fire.
+    // The layer is set recursively because the hittable collider may live on a child mesh.
+    private static void MarkStructureWall(GameObject go)
+    {
+        if (go == null) return;
+
+        // Ensure a solid, hittable collider exists for the linecast.
+        bool hasSolid = false;
+        foreach (var c in go.GetComponentsInChildren<Collider>(true))
+            if (c != null && !c.isTrigger) { hasSolid = true; break; }
+        if (!hasSolid)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends != null && rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                var box = go.AddComponent<BoxCollider>();
+                box.isTrigger = false;
+                box.center = go.transform.InverseTransformPoint(b.center);
+                Vector3 ls = go.transform.InverseTransformVector(b.size);
+                box.size = new Vector3(Mathf.Abs(ls.x), Mathf.Abs(ls.y), Mathf.Abs(ls.z));
+            }
+        }
+
+        int structureLayer = LayerMask.NameToLayer("Structure");
+        if (structureLayer < 0) return;   // layer absent — leave untouched (degrade safe)
+        foreach (var t in go.GetComponentsInChildren<Transform>(true))
+            t.gameObject.layer = structureLayer;
     }
 
     // DEPTH: scatters a wood ring OUTSIDE the walls — the single biggest "alive" lever for a
