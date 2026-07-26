@@ -31,7 +31,37 @@ gitignored → packs travel by zip; prefabs resolve by GUID; a builder reconstru
 
 ---
 
-## Shared determinism discipline (BINDING on WO-771.3, .7, .9, .10)
+## LOCKED — canonical raid loop = Teleport / Deploy (owner, 2026-07-26)
+
+The owner picked the **teleport/deploy** loop (the COC model this WO targets). Retire
+**walk-to** as the raid loop (its `EnemyOutpost`s may return later as a light overworld
+"patrol" side-activity — not the raid loop).
+
+- **Do first, unconditionally:** set `ff.overworldencounter=0` (a leftover preview default)
+  and `ff.raidwalk` OFF — otherwise neither loop spawns and raids look broken out of the box.
+- **Reuse the canonical foundation — do NOT rebuild it** (CLI to seam-verify names/APIs):
+  - **`RaidBaseGenerator`** — config-driven base baking (rings/gates/towers/boss + garrison
+    spawner). A raid target = *a config row + "Build All Raid Scenes."* This **is** the base
+    authoring; the WO-771.2 snapshot layer is only needed for **async player-base PvP (V2)**.
+  - **`EnemyFactory → Enemy → TargetManager` real-time combat** — the auto-battle is **free**.
+    This changes WO-771.3's scope (below); no bespoke raid combat, ATB retired.
+- **V1 vs V2 split (recommended, reversible — flag if you disagree):**
+  - **V1 — PvE, reuse combat:** raid **generated** bases (RaidBaseGenerator); the "watch" is
+    the existing real-time combat; build the deploy screen (771.4), troop defs (771.1),
+    barracks/roster economy (771.9 + WO-773), scoring/stars/loot (771.6), troop art
+    (771.13/WO-772). **Skip the deterministic sim** — "replay" is a re-watch from the recorded
+    deploy log + stored result, not byte-exact.
+  - **V2 — rewarded PvP:** the deterministic fixed-point sim (**771.3**), async player-base
+    snapshots + matchmaking (**771.2 / 771.7**), and server byte-exact anti-cheat — build these
+    **only** when a rewarded/SKR PvP ladder needs server-verifiable results. Until then they're
+    over-engineering; the determinism discipline below applies to them **when V2 lands.**
+
+**Net effect on the sub-orders:** for V1, 771.3 (deterministic sim) and 771.2/771.7 (player-base
+snapshot + async matchmaking/anti-cheat) drop to V2; the V1 spine is 771.0/771.1/771.1b →
+771.4 (deploy) + reuse combat → 771.9+773 (economy) → 771.6 (scoring) → 771.10 (towers, if the
+generated base's towers don't already fire) → 771.11 (HUD) → 771.13+772 (art).
+
+## Shared determinism discipline (BINDING on WO-771.3, .7, .9, .10 — V2)
 
 The replay + server anti-cheat contract requires `{seed, deployLog, baseSnapshot} →
 byte-identical result on any machine (mobile ARM play vs x86 server re-sim)`. The ATB

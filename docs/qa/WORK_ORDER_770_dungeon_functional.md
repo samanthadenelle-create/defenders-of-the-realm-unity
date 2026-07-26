@@ -219,15 +219,19 @@ also **auto-routes on trigger-touch with no confirm** (`DungeonPortal.cs:84`), a
 its serialized default `_dungeonId = "Dungeon_HealersCottage"` is a latent
 double-prefix footgun (`:27,117`).
 
-**Fix (owner picks one system):**
-- **Recommend keeping `DungeonEntrance` + `DungeonEntranceBootstrap`** (the WO-19
-  data-driven ring): it's `DungeonDef`-driven, uses `SceneRouter.LoadScene(full
-  name)` (no prefix math), needs an explicit F, and scales to the 5 scaffold
-  dungeons. Remove the baked `DungeonPortal`s from `VillageSceneBuilder`
-  (`SpawnDungeonPortal`) and delete/retire `DungeonPortal.cs`.
-- If `DungeonPortal` is kept instead: remove the no-confirm `OnTriggerEnter`
-  auto-route, fix the `_dungeonId` default to a short id, and delete the ring.
-- Either way: **exactly one** door per dungeon, requiring an explicit interact.
+**DECIDED — keep the data-driven ring, retire the portal.** Keep `DungeonEntrance` +
+`DungeonEntranceBootstrap` (the WO-19 ring): it's `DungeonDef`-driven, uses
+`SceneRouter.LoadScene(full name)` (no prefix math), needs an explicit interact, and
+scales to the scaffold dungeons. Remove the baked `DungeonPortal`s from
+`VillageSceneBuilder.SpawnDungeonPortal` and retire `DungeonPortal.cs`. Result:
+**exactly one** door per dungeon, explicit interact, no walk-by teleport, no
+double-prefix footgun.
+
+**Canonical-verify FIRST (seam may differ):** the "two systems" finding is from the
+read-only tree. On `wip/village2-and-f8-tickets` the village is more evolved (raid
+`EnemyOutpost`s, walk-to loop) — confirm which entry components the current Village
+actually instantiates before deleting anything. If canonical already consolidated to
+one, this WO is just the double-prefix/auto-route hardening on whichever survives.
 
 **Acceptance:**
 - The Village has one door per existing dungeon (2 today), each requiring an
@@ -241,31 +245,50 @@ double-prefix footgun (`:27,117`).
 
 ---
 
-## WO-770.6 — Promote Folk's Granary from stub to real dungeon (P2) [CODE + OWNER-GATED]
+## WO-770.6 — Folk's Granary = the first-torch tutorial dungeon (P2) [CODE + OWNER-GATED]
 
-**Fixes D2.** `Dungeon_FolksGranary.unity` is a 134-object stub: no
-`DungeonController`, no `folks-granary.json`, no lore/checkpoints/Bryn/audio; its
-lone `EncounterTrigger` is never hydrated (no controller) so it's dead. It's still
-in Build Settings and reachable — a dead end that reads as broken.
+**Fixes D2 by giving the stub a purpose (owner decision, 2026-07-26).** Instead of
+deleting the dead-end or authoring a second full dungeon, make Folk's Granary the
+**onboarding dungeon** that teaches the two core dungeon systems — the **lantern/torch
+darkness mechanic** and **crafting** — by having the player **gather an ingredient and
+craft their first torch**, then use it to light the dark and reach the exit. It reuses
+the Healer's Cottage systems verbatim (no new mechanic code), in a small guided layout.
 
-**Fix (owner chooses scope):**
-- **Minimum (unblock):** author `StreamingAssets/Data/Canonical/dungeons/folks-granary.json`
-  (rooms/spawn/1–2 scripted encounters/mini-boss/exit) and rebuild the scene via a
-  real `DungeonController` path (extend `FolksGranaryBuilder` to wire a controller
-  like `DungeonSceneBuilder` does, or fold Granary into the D1 builder). Then
-  770.2's return-scene fix makes its fights round-trip correctly.
-- **Or (defer):** if the Granary isn't ready for players, **remove it from
-  `EditorBuildSettings` and its village door** until authored — so default play
-  never dead-ends. Document as intentionally scaffolded.
+**Spec.**
+1. **Author `StreamingAssets/Data/Canonical/dungeons/folks-granary.json`** — small +
+   deliberately dark: `entrance`/`exit` blocks (WO-770.1 schema), 2–3 rooms, low ambient
+   so the torch matters, `disableRandomEncounters: true`, at most one gentle scripted
+   encounter (tutorial-safe — or none). Place one **oil/ingredient pickup** and one
+   **crafting pedestal**.
+2. **Add a "first torch" recipe** to `crafting-recipes.json` (gathered ingredient → torch /
+   lantern fuel) — the craft target the tutorial guides toward.
+3. **Wire a real `DungeonController`** into `Dungeon_FolksGranary` — extend
+   `FolksGranaryBuilder` to match `DungeonSceneBuilder`'s controller wiring (hero, camera,
+   `Lantern`, `DungeonInventory`, `CraftingPedestal`, `CraftingPanelController`, HUD, and
+   the `DungeonExit` from 770.1). All of these already exist; this is wiring, not new systems.
+4. **Guided prompts** via the 770.7 toast/Obsidian seam: "gather the oil-moss" → "craft a
+   torch at the pedestal (E)" → "light the dark and find the way out."
+5. **Prologue link (DECIDED):** completing the Granary **leads into `Dungeon_HealersCottage`** —
+   the Granary is the on-ramp that teaches torch + craft, then hands the player into the first
+   real dungeon. On the Granary exit, route to the Cottage (not the Village). This is the
+   onboarding arc: learn the mechanics in the Granary → use them in the Cottage. (A "return to
+   Village" exit can still exist as a bail-out, but the *forward* path is into the Cottage.)
 
-**Acceptance:**
-- Either the Granary is a real, exitable dungeon with a loaded layout and working
-  encounters that return to the Granary; OR it's removed from the build + village
-  and marked scaffold. No reachable empty-stub dead end remains.
+**Acceptance.**
+- Entering the Granary the player is in a dark space; the prompt teaches gathering the
+  ingredient; crafting at the pedestal (`E`) yields the **first torch**; the torch visibly
+  lights the dark (lantern reach/intensity change); the player reaches the exit and returns
+  to the Village (via 770.1/770.2/770.3).
+- Uses only existing `Lantern` + crafting systems (no new mechanic code); the torch recipe
+  lives in `crafting-recipes.json`.
+- No reachable empty-stub dead end remains; fights (if any) round-trip to the Granary (770.2).
+- (If owner confirms the prologue) completing the Granary leads into the Healer's Cottage.
+- `WORK_ORDER_770_6_*.RESULT.md`.
 
-**Key files:** `Assets/Editor/FolksGranaryBuilder.cs`, new/absent
-`folks-granary.json`, `ProjectSettings/EditorBuildSettings.asset`,
-`Assets/Resources/Dungeons/FolksGranary.asset`.
+**Key files:** new `folks-granary.json`, `crafting-recipes.json` (torch recipe),
+`Assets/Editor/FolksGranaryBuilder.cs` (wire `DungeonController`); reuse `Lantern.cs`,
+`Crafting/CraftingPedestal.cs`, `Crafting/IngredientPickup.cs`, `Crafting/DungeonInventory.cs`,
+`UI/CraftingPanelController.cs`, `DungeonExit` (770.1). `Resources/Dungeons/FolksGranary.asset`.
 
 ---
 
@@ -277,9 +300,11 @@ heal silently, crafting completes with no confirmation. `WandererDialogue`'s
 `FirstMeet[]`/`Idle[]` canon lines are never surfaced by `Bryn`.
 
 **Fix:**
-1. Add a lightweight dungeon toast view (reuse `DungeonHudController`'s UI-Toolkit
-   root) and subscribe it to the three toast events (`Checkpoint.ToastRequested`,
-   `Checkpoint.Activated`, `CraftingPedestal.ToastRequested`).
+1. Add a lightweight dungeon toast view and subscribe it to the three toast events
+   (`Checkpoint.ToastRequested`, `Checkpoint.Activated`, `CraftingPedestal.ToastRequested`).
+   **Build it code-built on the Obsidian kit, NOT uxml** — mirror the `LoreReadingModal`
+   pattern CLI built for 770.4 (canonical CLAUDE.md §8: uxml does not work in builds). Reuse
+   the same `DeNelle.Dungeons` UI seam the lore modal uses.
 2. **D14 — decided, not optional.** Surface Bryn's first-meet line: on first
    proximity `Bryn` calls `WandererDialogue.PickFirstMeetLine(...)` and raises it
    through the same toast; idle lines use `PickIdleLine(...)`. **This WO firmly owns
@@ -300,9 +325,12 @@ lines are surfaced (the `FirstMeet[]`/`Idle[]` pickers are no longer dead code).
 **Fixes D8 + D9 + D16.** Content/asset gaps (D10/D12 hero-integration split out to
 WO-770.10). **Requires off-repo staged assets** — a developer cannot complete the first
 two items from repo contents alone.
-- **KayKit Dungeon Remastered 1.1** absent → placeholder primitives in both scenes.
-  Stage the pack per **WO-23** (`Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/`,
-  gitignored) and re-run the builders; placeholders resolve to real meshes.
+- **KayKit Dungeon geometry** — placeholder primitives in both scenes until the pack is
+  staged. **`KayKit Dungeon Pack 1.0.zip` is already in Downloads** (CLI spotted it) — stage
+  it into `Assets/Models/KayKit/` (gitignored, per WO-23) and re-run the dungeon builders in
+  batchmode; placeholders resolve to real meshes. **Keep the bake %YAML** — for the RoomForge/
+  composed scenes note the binary-scene gotcha (batchmode `SaveScene` can't honor ForceText);
+  Healer's Cottage / Village / Granary bake clean.
 - **`echoes-beneath-elarion.mp3`** absent → silent dungeon. Import to
   `Assets/Audio/dungeons/` and assign `DungeonController._ambientBgmClip` (guarded null
   today; no code change).
