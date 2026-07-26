@@ -514,7 +514,13 @@ namespace DeNelle.Dungeons
 
         // ScriptableObject assets persist edits between play sessions in the
         // editor; a runtime-only SO must reset itself on enable so a stale run
-        // never leaks into a fresh session.
+        // never leaks into a fresh session. OnEnable fires on SO load/domain reload
+        // (NOT per scene load), so clearing the pending encounter here is safe — the
+        // battle round-trip keeps the SO loaded and does not re-fire this.
+        // WO-770.9 (fixes D11): also clear the run IDENTITY (_dungeonId/_currentRoomId)
+        // and the five progress lists — previously only the flags reset, so a fresh
+        // session could read the PRIOR run's dungeon id, room, and read/cleared lists
+        // in the window before StartRun overwrites them.
         private void OnEnable()
         {
             _runActive = false;
@@ -527,6 +533,15 @@ namespace DeNelle.Dungeons
             _heroMaxHp = -1f;
             _heroMana = -1f;
             _heroMaxMana = -1f;
+
+            // WO-770.9: run identity + progress lists (the stale-read window, D11).
+            _dungeonId = string.Empty;
+            _currentRoomId = string.Empty;
+            _checkpointsReached.Clear();
+            _loreStonesRead.Clear();
+            _scriptedEncountersFired.Clear();
+            _chestsOpened.Clear();
+            _secretRoomsFound.Clear();
         }
     }
 }

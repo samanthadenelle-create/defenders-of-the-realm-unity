@@ -288,6 +288,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-dressing suite", () => { if (!DungeonDressingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-dressing] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-return suite", () => { if (!DungeonReturnSceneRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-return] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-lore suite", () => { if (!DungeonLoreReadableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-lore] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-state-reset suite", () => { if (!DungeonStateResetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-state-reset] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "modal-registration suite", () => { if (!ModalArbiterRegistrationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[modal-registration] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-reach suite", () => { if (!FoundingReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-reach] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ftue-honesty suite", () => { if (!FtueHonestyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ftue-honesty] " + r); });
