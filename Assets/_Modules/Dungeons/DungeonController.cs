@@ -598,6 +598,10 @@ namespace DeNelle.Dungeons
             if (_bryn == null || Layout?.bryn == null) return;
             _bryn.Configure(Layout.bryn, _runtimeState);
             _bryn.SetHero(_hero);
+            // WO-770.7 (D14): surface Bryn's greeting through the toast too, so her voice reads even
+            // when the world-space speech bubble is unwired (MUTE). Bryn keeps its HUD-free isolation
+            // via this delegate seam (same idiom as IWandererBubble).
+            _bryn.SetToastSink(DungeonToastView.Show);
             if (_loreFragments != null)
                 _bryn.SetLoreFragments(_loreFragments);
         }
@@ -670,6 +674,11 @@ namespace DeNelle.Dungeons
             {
                 _craftingPedestal.Configure(
                     _craftingData.Pedestal, _craftingData, _dungeonInventory, _hero);
+
+                // WO-770.7 (D13): surface the craft — CraftingPedestal.ToastRequested fired into
+                // the void (0 subscribers) before, so a completed craft gave no confirmation.
+                _craftingPedestal.ToastRequested.RemoveListener(DungeonToastView.Show);
+                _craftingPedestal.ToastRequested.AddListener(DungeonToastView.Show);
 
                 // Subscribe the UI panel to the pedestal's open/close events —
                 // keeps the pedestal a pure scene actor and the panel a pure view.
@@ -844,6 +853,10 @@ namespace DeNelle.Dungeons
                 int idx = i;
                 FlowTrace.Try("Dungeon", $"configure checkpoint[{idx}]",
                     () => shrines[idx].Configure(Layout.checkpoints[idx], _runtimeState, _hero));
+                // WO-770.7 (D13): surface the reach — Checkpoint.ToastRequested fired into the
+                // void (0 subscribers) before, so checkpoints healed silently.
+                shrines[idx].ToastRequested.RemoveListener(DungeonToastView.Show);
+                shrines[idx].ToastRequested.AddListener(DungeonToastView.Show);
             }
             FlowTrace.Step("Dungeon", $"HydrateCheckpoints: hydrated {n} of {total} checkpoint(s).");
         }

@@ -88,6 +88,14 @@ namespace DeNelle.Dungeons
         private IWandererBubble _bubble;
 
         /// <summary>
+        /// WO-770.7 (D14): sink that surfaces Bryn's greeting as a dungeon toast (set by the
+        /// controller to <c>DungeonToastView.Show</c>). Null-safe — Bryn stays HUD-free (same
+        /// isolation idiom as the <see cref="IWandererBubble"/> seam), so a toast surface is
+        /// optional and carries no HUD dependency into this MonoBehaviour.
+        /// </summary>
+        private System.Action<string> _toastSink;
+
+        /// <summary>
         /// The loaded lore-fragment set — supplies Bryn's entrance line from
         /// <c>lore-fragments.json</c> when present. Null until the controller
         /// hands it over; Bryn then falls back to the layout JSON / canon inline.
@@ -169,6 +177,16 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
+        /// WO-770.7 (D14): sets the toast sink Bryn raises her first-meet / idle greeting through
+        /// (the controller wires it to the dungeon toast). Optional — when never called Bryn simply
+        /// speaks through the bubble alone.
+        /// </summary>
+        public void SetToastSink(System.Action<string> sink)
+        {
+            _toastSink = sink;
+        }
+
+        /// <summary>
         /// Hands Bryn the loaded lore-fragment set so her entrance line is sourced
         /// from <c>lore-fragments.json#bryn-cottage-entry</c> (port-table Week-6).
         /// Optional — when never called Bryn falls back to the layout JSON's
@@ -238,15 +256,20 @@ namespace DeNelle.Dungeons
                 string line = ChooseLine();
                 _bubble?.Show(DisplayName, line);
 
-                // First-meet introduction — fires once per session, the first
-                // time Bryn would ever speak. On a fresh visit the authored
-                // Cottage line IS the first-meet line so bubble + intro agree.
-                if (!_firstMeetFired)
+                // WO-770.7 (D14): also surface Bryn through the toast sink, so her voice reads even
+                // when the world-space bubble is unwired (MUTE). The FIRST range-entry uses the
+                // first-meet intro; later entries rotate an idle line. This makes WandererDialogue's
+                // FirstMeet[]/Idle[] pickers LIVE (they were dead code). Fires on range-ENTRY only
+                // (this branch), never per-frame, so it never spams.
+                if (_toastSink != null)
                 {
-                    _firstMeetFired = true;
-                    // The intro is surfaced by the same bubble line on a fresh
-                    // visit; no separate toast seam is needed in v2 foundation.
+                    string greeting = !_firstMeetFired
+                        ? WandererDialogue.PickFirstMeetLine(_showCount)
+                        : WandererDialogue.PickIdleLine(_showCount);
+                    if (!string.IsNullOrEmpty(greeting))
+                        _toastSink.Invoke($"{DisplayName}: {greeting}");
                 }
+                _firstMeetFired = true;
             }
             else if (Speaking && dist > _speakRadius + _speakHysteresis)
             {
