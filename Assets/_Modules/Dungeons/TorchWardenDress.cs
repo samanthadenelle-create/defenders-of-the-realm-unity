@@ -84,8 +84,12 @@ namespace DeNelle.Dungeons
 
             // Locate the pill — the builder's capsule child. Missing is non-fatal: the
             // body still spawns at Bryn's root (there is just nothing to hide).
+            // BUG (Bryn-is-a-pill): when the baked BrynBody is a KayKit body, its renderer is a
+            // SkinnedMeshRenderer on a CHILD — GetComponent<MeshRenderer>() came back null, so the
+            // pill/baked body was NEVER hidden (Bryn-body + Mevina overlapped). Broaden to every
+            // Renderer (MeshRenderer AND SkinnedMeshRenderer) under the pill, inactive included.
             Transform pill = bryn.transform.Find(PillName);
-            MeshRenderer pillRenderer = pill != null ? pill.GetComponent<MeshRenderer>() : null;
+            Renderer[] pillRenderers = pill != null ? pill.GetComponentsInChildren<Renderer>(true) : null;
             if (pill == null)
                 FlowTrace.Warn("Dungeon",
                     $"DressEntranceNpc: pill child '{PillName}' not found under '{bryn.name}' - " +
@@ -104,7 +108,11 @@ namespace DeNelle.Dungeons
 
             // Only hide the pill once a real body verifiably renders (SpawnBody returns
             // null when no enabled renderer came up) — never trade a pill for nothing.
-            if (pillRenderer != null) pillRenderer.enabled = false;
+            // Disable ALL of the pill's renderers (MeshRenderer + any child SkinnedMeshRenderer).
+            bool pillHidden = false;
+            if (pillRenderers != null)
+                foreach (var pr in pillRenderers)
+                    if (pr != null) { pr.enabled = false; pillHidden = true; }
 
             Guard.Try("Dungeon", "attach torch-warden Talk", () =>
             {
@@ -113,7 +121,8 @@ namespace DeNelle.Dungeons
             });
 
             FlowTrace.Step("Dungeon",
-                $"DressEntranceNpc: pill hidden={(pillRenderer != null ? "yes" : "n/a")}, body " +
+                $"DressEntranceNpc: pill hidden={(pillHidden ? "yes" : "n/a")} " +
+                $"({(pillRenderers != null ? pillRenderers.Length : 0)} renderer(s)), body " +
                 $"'{BodyName}' up at {body.transform.position}, Talk plays '{DialogueId}'.");
         }
 
