@@ -239,6 +239,8 @@ namespace DeNelle.Editor
             if (!CompanionRosterRegression.Run(out var compRosterReason)) failures.Add(compRosterReason); else log.AppendLine("[companion-roster] " + compRosterReason);
             // --- WO-736: Barracks 7-type troop roster + tier-unlock ladder (program 732-737 close) ---
             if (!TroopRosterRegression.Run(out var troopRosterReason)) failures.Add(troopRosterReason); else log.AppendLine("[troop-roster] " + troopRosterReason);
+            // --- WO-771.6/771.11: raid V1 win/stars/loot + live HUD (LOCKED teleport/deploy loop) ---
+            if (!RaidScoringRegression.Run(out var raidScoringReason)) failures.Add(raidScoringReason); else log.AppendLine("[raid-scoring] " + raidScoringReason);
             if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
             if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);
@@ -293,6 +295,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitReachableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-defeat-realtime suite", () => { if (!DungeonRealtimeSettleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-defeat-realtime] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-toast suite", () => { if (!DungeonToastRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-toast] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-fpv suite", () => { if (!DungeonFpvRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-fpv] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "modal-registration suite", () => { if (!ModalArbiterRegistrationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[modal-registration] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-reach suite", () => { if (!FoundingReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-reach] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ftue-honesty suite", () => { if (!FtueHonestyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ftue-honesty] " + r); });
@@ -304,6 +307,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "waves-schema suite", () => { if (!WavesSchemaRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[waves-schema] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-aura-diff suite", () => { if (!VfxAuraDifferentiationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-aura-diff] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
