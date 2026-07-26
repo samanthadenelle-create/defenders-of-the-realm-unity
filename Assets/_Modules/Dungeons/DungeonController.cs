@@ -723,6 +723,12 @@ namespace DeNelle.Dungeons
                     stones[idx].Configure(Layout.loreStones[idx], _runtimeState, _hero, total);
                     if (_loreFragments != null)
                         stones[idx].SetLoreFragments(_loreFragments);
+                    // WO-770.4 (fixes D6): the missing subscriber. A tap (via the stone's
+                    // MobileInteractButton) raises ReadRequested; the code-built Obsidian
+                    // LoreReadingModal renders the canon fragment. Closes the triple gap
+                    // (input + subscriber + view) so lore is actually readable in gameplay.
+                    stones[idx].ReadRequested.RemoveListener(LoreReadingModal.Show);
+                    stones[idx].ReadRequested.AddListener(LoreReadingModal.Show);
                 });
             }
             FlowTrace.Step("Dungeon", $"HydrateLoreStones: hydrated {n} of {total} lore stone(s).");

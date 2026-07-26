@@ -24,6 +24,7 @@
 
 using System;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village;   // MobileInteractButton (the shared dungeon interact button)
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -181,6 +182,19 @@ namespace DeNelle.Dungeons
                 if (_interactPrompt != null)
                     _interactPrompt.SetActive(InRange && !HasBeenRead);
             }
+
+            // WO-770.4 (fixes D6): drive the shared interact button so an in-range tap actually
+            // READS the stone (mirrors DungeonExitInteractable). This is the missing input layer —
+            // previously Read() had no caller, so lore could never be opened. Re-readable by design.
+            if (MobileInteractButton.Suppressed) { MobileInteractButton.Release(this); return; }
+            if (InRange) MobileInteractButton.Request(this, "Read", Read);
+            else MobileInteractButton.Release(this);
+        }
+
+        // Never leak the shared interact button if the stone is disabled/scene-unloaded mid-range.
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         // ── Interaction ──────────────────────────────────────────────────────
