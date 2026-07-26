@@ -75,17 +75,17 @@ namespace DeNelle.Dungeons
                  "(X = right of the hero for the shoulder, Y = up to the eyeline, " +
                  "Z = forward). ~1.55u Y keeps the camera at head height - well " +
                  "under the ~4u room ceiling, no roof clip.")]
-        [SerializeField] private Vector3 _otsShoulderOffset = new Vector3(0.5f, 1.55f, 0f);
+        [SerializeField] private Vector3 _otsShoulderOffset = new Vector3(0.5f, 2.2f, 0f); // felt-test 2026-07-26: taller (was 1.55 eyeline)
 
         [Tooltip("Extra vertical lift of the camera 'hand' above the shoulder " +
                  "pivot - a small value tips the view slightly down so the floor " +
                  "ahead reads. Keep modest to stay under the ceiling.")]
-        [SerializeField] private float _otsVerticalArmLength = 0.35f;
+        [SerializeField] private float _otsVerticalArmLength = 0.7f; // felt-test 2026-07-26: taller/more top-down (was 0.35)
 
         [Tooltip("How far BEHIND the Keeper the camera sits (world units). ~3u " +
                  "frames the hero in the lower third and shows the corridor ahead " +
                  "without floating far back into the wall behind.")]
-        [SerializeField] private float _otsCameraDistance = 3.0f;
+        [SerializeField] private float _otsCameraDistance = 3.8f; // felt-test 2026-07-26: pulled back a touch (was 3.0)
 
         [Tooltip("Which shoulder the camera favours: 0 = left, 0.5 = centred, " +
                  "1 = right. ~0.6 gives a gentle right-shoulder over-the-shoulder bias.")]
@@ -204,6 +204,15 @@ namespace DeNelle.Dungeons
 
             _boundHero = hero;
             _mode = ResolveMode();
+
+            // Felt-test 2026-07-26 ("the dungeon needs a taller camera"): lift the over-the-shoulder rig
+            // from the old eyeline (~1.55u) to an elevated, slightly-down-looking third-person view.
+            // Applied at RUNTIME so the ALREADY-BAKED rig gets the new framing with NO re-bake (the
+            // SerializeField defaults are updated to match for future bakes). Kept under the ~4u room
+            // ceiling (2.2 + 0.7 arm ≈ 2.9u camera height) so it never clips the roof.
+            _otsShoulderOffset = new Vector3(_otsShoulderOffset.x, 2.2f, _otsShoulderOffset.z);
+            _otsVerticalArmLength = 0.7f;
+            _otsCameraDistance = 3.8f;
 
             ApplyLens();
 

@@ -86,8 +86,13 @@ namespace DeNelle.Dungeons
             }
 
             Vector3 pos = ResolveExitPosition(composeRoot);
-            DungeonExitInteractable.Spawn(pos);
-            FlowTrace.Step(Sys, $"injected RETURN exit into composed scene '{scene.name}' at {pos} (routes -> SceneRouter.Castle)");
+            var exit = DungeonExitInteractable.Spawn(pos);
+            // Push the Player-tagged hero (canon §7) so the prompt/walk-in never depends on a
+            // HeroLocomotion mover-type lookup (which excludes a disabled/neutralized component).
+            var taggedHero = GameObject.FindGameObjectWithTag("Player");
+            if (taggedHero != null) exit.SetHero(taggedHero.transform);
+            FlowTrace.Step(Sys, $"injected RETURN exit into composed scene '{scene.name}' at {pos} " +
+                $"(routes -> SceneRouter.Castle, hero={(taggedHero != null ? "tagged" : "unresolved")})");
         }
 
         // The exit seats at the ENTRY room (where the hero spawns) so the player leaves
@@ -207,9 +212,26 @@ namespace DeNelle.Dungeons
             }
         }
 
+        /// <summary>
+        /// Push the hero rig explicitly so the prompt never depends on HeroLocomotion's enabled
+        /// state (rich scene: DungeonController._hero; composed scene: the Player-tagged hero).
+        /// The dungeon neutralizes the injected HeroLocomotion but KEEPS it enabled — this seam
+        /// makes the exit robust either way, and independent of a mover-type lookup entirely.
+        /// </summary>
+        public void SetHero(Transform hero)
+        {
+            if (hero == null) return;
+            _hero = hero;
+            _heroFound = true;
+        }
+
         private void ResolveHero()
         {
             if (_heroFound) return;
+            // Prefer the Player-tagged hero (canon §7) — independent of HeroLocomotion being
+            // enabled. Fall back to HeroLocomotion only if the tag is somehow unset.
+            var tagged = GameObject.FindGameObjectWithTag("Player");
+            if (tagged != null) { _hero = tagged.transform; _heroFound = true; return; }
             var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) { _hero = hero.transform; _heroFound = true; }
         }
@@ -250,10 +272,20 @@ namespace DeNelle.Dungeons
         private void OnTriggerEnter(Collider other)
         {
             if (_leaving || !_armed || other == null) return;
-            var hero = other.GetComponentInParent<HeroLocomotion>();
-            if (hero == null) return;
+            if (!IsHeroCollider(other)) return;
             FlowTrace.Step(Sys, "hero walked into the RETURN exit");
             Leave();
+        }
+
+        // True when `other` belongs to the hero rig — WITHOUT depending on HeroLocomotion's enabled
+        // state: the pushed/known hero first, then the Player tag up the parent chain (canon §7),
+        // then HeroLocomotion as a last resort (composed scenes where nothing pushed a hero).
+        private bool IsHeroCollider(Collider other)
+        {
+            if (_hero != null && (other.transform == _hero || other.transform.IsChildOf(_hero))) return true;
+            for (Transform t = other.transform; t != null; t = t.parent)
+                if (t.CompareTag("Player")) return true;
+            return other.GetComponentInParent<HeroLocomotion>() != null;
         }
 
         private void Leave()

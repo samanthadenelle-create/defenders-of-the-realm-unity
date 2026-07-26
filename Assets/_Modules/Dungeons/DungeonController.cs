@@ -190,6 +190,20 @@ namespace DeNelle.Dungeons
         // WO-770.3b: true while subscribed to BattleArena.OnBattleEnded (the real-time settle bridge).
         private bool _arenaSubscribed;
 
+        // Felt-test 2026-07-26 ("cannot move — it slides me around"): the dungeon Keeper ends up with TWO
+        // movers — DungeonHero (CharacterController, the intended dungeon mover) AND an injected
+        // HeroLocomotion (a NavMeshAgent added by the village HeroBodySwapper during the body swap). No
+        // navmesh is baked in the cottage, so the agent runs its OFF-MESH fall-snap, sliding the hero and
+        // stomping DungeonHero's CharacterController.Move every frame (input appears dead). We keep
+        // DungeonHero the SOLE mover by NEUTRALIZING the injected HeroLocomotion's MOVEMENT while leaving
+        // the component ENABLED — disabling it would make FindAnyObjectByType<HeroLocomotion>() (excludes
+        // disabled) return null, orphaning the exit prompt AND breaking dungeon enemy targeting (§7). The
+        // swap is async, so this is polled from Update until enforced (and re-applied if a later swap
+        // re-enables the agent). The two statics it toggles are restored on teardown (RestoreInjectedHeroMover).
+        private DeNelle.Village.HeroLocomotion _injectedHeroLoco;
+        private UnityEngine.AI.NavMeshAgent _injectedHeroAgent;
+        private bool _moverNeutralized;   // true while the injected HeroLocomotion's movement is gated off
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         private void Start()
@@ -199,6 +213,11 @@ namespace DeNelle.Dungeons
 
         private void OnDestroy()
         {
+            // Restore the injected HeroLocomotion's movement + the shared statics FIRST, before ANY of the
+            // early-returns below — otherwise the ATB round-trip teardown (HasPendingEncounter) would leave
+            // GroundSnapEnabled=false + a zeroed scripted-move on the hero, freezing it in the battle scene.
+            RestoreInjectedHeroMover();
+
             UnsubscribeRealtimeSettle(); // WO-770.3b: drop the arena hook FIRST (survives the early-returns below)
 
             if (_runtimeState == null || !_runtimeState.RunActive) return;
@@ -346,6 +365,10 @@ namespace DeNelle.Dungeons
         /// </summary>
         public UniTask ExitToVillage()
         {
+            // Hand the hero's movement back before we leave — re-enable the injected HeroLocomotion's agent
+            // and restore the shared GroundSnap/scripted-move statics so the village hero is never left frozen.
+            RestoreInjectedHeroMover();
+
             if (_runtimeState != null && _runtimeState.RunActive)
                 _runtimeState.EndRun();
             // The crafting inventory is per-run — bank the gathered scatter to the
@@ -369,6 +392,10 @@ namespace DeNelle.Dungeons
         private void Update()
         {
             if (!Ready || _runtimeState == null || _hero == null) return;
+
+            // Felt-fix: keep DungeonHero the sole mover (kill the injected village NavMeshAgent locomotion
+            // that slides the hero on the un-navmeshed cottage floor). Polled — the body swap is async.
+            EnsureSingleDungeonMover();
 
             // Push the hero's live position into the run state — drives the
             // encounter engine and the proximity checks on every interactable.
@@ -426,7 +453,8 @@ namespace DeNelle.Dungeons
             if (entry?.bounds != null)
             {
                 Vector3 pos = SeatExitOnFloor(entry.bounds.Center);
-                DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Leave Dungeon");
+                var normalExit = DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Leave Dungeon");
+                normalExit.SetHero(_hero);   // push the rig so the prompt is independent of HeroLocomotion's enabled state
                 FlowTrace.Step("Dungeon", $"HydrateExits: NORMAL exit at entry room '{entry.id}' centre {pos}.");
             }
             else
@@ -442,6 +470,7 @@ namespace DeNelle.Dungeons
             {
                 Vector3 pos = SeatExitOnFloor(workshop.bounds.Center);
                 _bossBackDoor = DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Secret Exit");
+                _bossBackDoor.SetHero(_hero);   // push the rig so the prompt is independent of HeroLocomotion's enabled state
                 bool alreadyBeaten = _runtimeState != null && _runtimeState.BossDefeated;
                 _bossBackDoor.gameObject.SetActive(alreadyBeaten);
                 FlowTrace.Step("Dungeon", $"HydrateExits: BOSS back-door at 'workshop' centre {pos} (active={alreadyBeaten}).");
@@ -473,6 +502,78 @@ namespace DeNelle.Dungeons
             DungeonRoom entry = Layout?.FindRoom(Layout.entryRoomId);
             if (entry?.bounds != null) return entry.bounds.Center;
             return Vector3.zero;
+        }
+
+        /// <summary>
+        /// Felt-fix (2026-07-26): guarantee ONE mover on the dungeon Keeper. The village HeroBodySwapper
+        /// injects a HeroLocomotion (NavMeshAgent) during the async body swap; with no navmesh baked in the
+        /// cottage the agent's off-mesh fall-snap slides the hero and stomps DungeonHero's input.
+        ///
+        /// We keep DungeonHero the SOLE mover WITHOUT disabling the HeroLocomotion component (that would
+        /// orphan every FindAnyObjectByType&lt;HeroLocomotion&gt; type-resolver — the exit prompt AND §7 enemy
+        /// targeting — because those exclude disabled components). Instead we NEUTRALIZE its movement, three
+        /// levers (no per-instance freeze API exists on HeroLocomotion):
+        ///   • disable the injected NavMeshAgent — kills its internal off-mesh drive,
+        ///   • HeroLocomotion.GroundSnapEnabled=false — kills the off-mesh fall-snap/slide on the un-navmeshed
+        ///     cottage floor (HeroLocomotion:~391-409 / the snap at :1094),
+        ///   • HeroLocomotion.SetScriptedMove(Vector2.zero) — forces its ReadMoveInput() to zero (:1412) so the
+        ///     input-driven `transform.position += step` (:905) never fires against DungeonHero.
+        /// Both statics are RESTORED on teardown (<see cref="RestoreInjectedHeroMover"/>) so they never leak
+        /// to the village hero. Polled from Update (the swap finishes a frame or two late) and re-applied if a
+        /// later swap re-enables the agent.
+        /// </summary>
+        private void EnsureSingleDungeonMover()
+        {
+            if (_hero == null) return;
+            if (_injectedHeroLoco == null)
+                _injectedHeroLoco = _hero.GetComponent<DeNelle.Village.HeroLocomotion>();
+            if (_injectedHeroLoco == null) return; // not injected yet — nothing to neutralize
+
+            // CRITICAL: keep the component ENABLED (type-resolution + enemy targeting rely on it). If an
+            // earlier build/hot-reload left it disabled, undo that here.
+            if (!_injectedHeroLoco.enabled)
+                _injectedHeroLoco.enabled = true;
+
+            if (_injectedHeroAgent == null)
+                _injectedHeroAgent = _hero.GetComponent<UnityEngine.AI.NavMeshAgent>();
+
+            bool flippedAgent = false;
+            if (_injectedHeroAgent != null && _injectedHeroAgent.enabled)
+            {
+                _injectedHeroAgent.enabled = false;
+                flippedAgent = true;
+            }
+
+            // Re-assert the movement gates each poll (a later body swap could re-enable the agent / reset these).
+            DeNelle.Village.HeroLocomotion.GroundSnapEnabled = false;
+            DeNelle.Village.HeroLocomotion.SetScriptedMove(Vector2.zero);
+
+            bool firstApply = !_moverNeutralized;
+            _moverNeutralized = true;
+            if (firstApply || flippedAgent)
+                FlowTrace.Step("Dungeon",
+                    "felt-fix: neutralized injected HeroLocomotion (kept ENABLED for type-resolution/enemy targeting) — " +
+                    "NavMeshAgent disabled, GroundSnapEnabled=false (no off-mesh fall-snap slide), scripted-move zeroed " +
+                    "(no input-driven transform write). DungeonHero (CharacterController) is the sole mover.");
+        }
+
+        /// <summary>
+        /// Undo <see cref="EnsureSingleDungeonMover"/>'s neutralize on dungeon teardown so the movement
+        /// state — and the two STATIC gates the injected HeroLocomotion shares with the village hero — never
+        /// leak past the dungeon: re-enable the NavMeshAgent, restore GroundSnapEnabled, and clear the
+        /// scripted-move override. Guarded on <see cref="_moverNeutralized"/>, so it is safe to call from
+        /// both the explicit exit and OnDestroy (and on paths where nothing was ever neutralized).
+        /// </summary>
+        private void RestoreInjectedHeroMover()
+        {
+            if (!_moverNeutralized) return;
+            _moverNeutralized = false;
+            DeNelle.Village.HeroLocomotion.GroundSnapEnabled = true;
+            DeNelle.Village.HeroLocomotion.ClearScriptedMove();
+            if (_injectedHeroAgent != null) _injectedHeroAgent.enabled = true;
+            if (_injectedHeroLoco != null) _injectedHeroLoco.enabled = true;
+            FlowTrace.Step("Dungeon",
+                "restored injected HeroLocomotion mover on teardown — NavMeshAgent re-enabled, GroundSnapEnabled=true, scripted-move cleared.");
         }
 
         /// <summary>Moves the Keeper to <paramref name="spawnPos"/> facing the layout's heading.</summary>
