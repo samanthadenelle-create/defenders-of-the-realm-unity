@@ -21,11 +21,25 @@ namespace DeNelle.Core.World
 {
     public static class ZoneManager
     {
-        // Wall footprint half-extents (mirror VillageSceneBuilder WallHalfX/Z =
-        // 28/21 at base, ×~1.5 for the poly curtain ≈ 42/33). Inside this box on
-        // both axes = the safe Village home zone.
-        private const float VillageHalfX = 42f;
-        private const float VillageHalfZ = 33f;
+        // Safe home-zone half-extents. Inside this box on BOTH axes = the safe Village
+        // home zone (no roaming roster; the FTUE peace window + the encounter spawner's
+        // "castle = safe" guard both read RegionSpawnTable.HasRoster, which is FALSE only
+        // inside here).
+        //
+        // WO felt-fix (2026-07-26, "enemies spawn inside the castle during the tutorial"):
+        // these were 42/33 — mirroring the RETIRED Village.unity wall footprint (28/21 ×~1.5).
+        // The live home is the MERGED Main_Castle_Overworld castle (CastleSpawnPointInjector,
+        // root at origin): WALLS SPAN ±44 and the cardinal GATES sit at ±50. So the old 33u Z
+        // box did not even contain the castle walls — the northern/southern courtyard (|z| 33..44)
+        // and the wall band (|x| 42..44) classified as OUTER regions (HasRoster=true), which
+        // simultaneously (1) LIFTED the FTUE peace window while the hero placed defenses in that
+        // part of the courtyard and (2) let OverworldEncounterSpawner anchor ambient reps on
+        // castle-interior navmesh — enemies spawning INSIDE the walls. Sized to 52 (symmetric,
+        // matching the symmetric castle): covers the walls (±44) + the gate threshold (±50), with
+        // the outer world beginning past the moat/drawbridge (±58). Outer content lives well past
+        // the gates, so this only reclaims the castle interior as safe.
+        private const float VillageHalfX = 52f;
+        private const float VillageHalfZ = 52f;
 
         /// <summary>Static region table — danger tier + display name per RegionId.</summary>
         public static readonly IReadOnlyDictionary<RegionId, RegionZone> Regions =

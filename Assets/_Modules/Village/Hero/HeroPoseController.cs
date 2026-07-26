@@ -286,6 +286,11 @@ namespace DeNelle.Village
         /// </summary>
         private bool EvaluateCombat()
         {
+            // BattleLock covers combat that does NOT run through the WaveManager loop — ATB/Arena
+            // raids AND the FTUE teaching wave (TutorialWaveSpawner, which spawns via
+            // SpawnEnemyForExternalMode so _wave.Phase stays Idle). Without this the hero never
+            // drew for the tutorial defend beat (felt-fix 2026-07-26 "battle mode did NOT trigger").
+            if (DeNelle.Core.Combat.BattleLock.IsInBattle()) return true;
             if (_wave == null) return false;
             var phase = _wave.Phase;
             return phase == WavePhase.Countdown || phase == WavePhase.Active;

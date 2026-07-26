@@ -62,6 +62,12 @@ namespace DeNelle.Village
         // defend moment would keep playing town music. See BattleMusicManager.NotifyExternal*.
         private bool _combatMusicActive;
 
+        // BattleLock probe (felt-fix 2026-07-26): registered while the teaching wave is live so
+        // HudContextEvaluator/HeroPoseController read Battle mode (the wave bypasses WaveManager.
+        // Phase). Stable field so Register/Unregister match the same delegate. Reads _combatMusicActive
+        // (true from spawn-live until the last teaching enemy dies), so it self-clears on wave end.
+        private System.Func<bool> _battleLockProbe;
+
         /// <summary>True once every spawned tutorial enemy is dead / gone.</summary>
         public bool IsCleared
         {
@@ -153,6 +159,18 @@ namespace DeNelle.Village
                 _combatMusicActive = true;
                 FlowTrace.Step("TutorialWave", "teaching wave live → BattleMusicManager.NotifyExternalCombatActive()");
                 BattleMusicManager.NotifyExternalCombatActive();
+
+                // BATTLE MODE (felt-fix 2026-07-26 "battle mode did NOT trigger"): the teaching
+                // wave spawns via SpawnEnemyForExternalMode, bypassing the WaveManager wave loop —
+                // so WaveManager.Phase stays Idle and HudContextEvaluator.IsWaveActive() reads
+                // FALSE (the defend beat otherwise renders as Town). Its enemies march the Heart,
+                // not the hero, so PostureSignals.PursuitActive never trips either. Register a
+                // BattleLock probe for the wave's lifetime so HudContextEvaluator (BattleLock.
+                // IsInBattle()) + HeroPoseController flip to Battle exactly like an ambient wave.
+                // Paired with the unregister in ClearCombatMusicIfDone / OnDestroy.
+                if (_battleLockProbe == null) _battleLockProbe = () => _combatMusicActive;
+                DeNelle.Core.Combat.BattleLock.RegisterProbe(_battleLockProbe);
+                FlowTrace.Step("TutorialWave", "teaching wave live → BattleLock probe registered (HUD/hero enter Battle mode)");
             }
         }
 
@@ -167,6 +185,13 @@ namespace DeNelle.Village
             _combatMusicActive = false;
             FlowTrace.Step("TutorialWave", "teaching wave cleared → BattleMusicManager.NotifyExternalCombatEnded()");
             BattleMusicManager.NotifyExternalCombatEnded();
+
+            // Leave Battle mode: drop the BattleLock probe now the last teaching enemy is down.
+            if (_battleLockProbe != null)
+            {
+                DeNelle.Core.Combat.BattleLock.UnregisterProbe(_battleLockProbe);
+                FlowTrace.Step("TutorialWave", "teaching wave cleared → BattleLock probe unregistered (leave Battle mode)");
+            }
         }
 
         /// <summary>
@@ -247,6 +272,14 @@ namespace DeNelle.Village
             _spawned.Clear();
             // Never leave the battle music stuck on if the spawner is torn down mid-fight.
             ClearCombatMusicIfDone();
+            // Belt-and-suspenders: drop the BattleLock probe on teardown even if the wave never
+            // reached the cleared path (ClearCombatMusicIfDone no-ops when _combatMusicActive is
+            // already false), so a torn-down spawner never leaves the HUD stuck in Battle mode.
+            if (_battleLockProbe != null)
+            {
+                DeNelle.Core.Combat.BattleLock.UnregisterProbe(_battleLockProbe);
+                _battleLockProbe = null;
+            }
         }
     }
 }
