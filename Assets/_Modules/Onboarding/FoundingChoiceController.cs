@@ -269,6 +269,12 @@ namespace DeNelle.Onboarding
             _onContinue = null;
             if (_canvas != null) Destroy(_canvas);
             Destroy(gameObject);
+            // Owner felt-test 2026-07-24: cont is SceneRouter.GoCastle — a fade-load of the
+            // big Castle/hub scene (streams OuterWorld additively). With this founding overlay
+            // torn down above, the screen would otherwise go blank/frozen for the whole load.
+            // Put a loading cover up FIRST; it DontDestroyOnLoads and auto-dismisses once the
+            // first hub frame settles. Both buttons funnel through here, so this covers both.
+            DeNelle.Core.UI.LoadingOverlay.Show("Founding your town...");
             cont?.Invoke();
         }
 
