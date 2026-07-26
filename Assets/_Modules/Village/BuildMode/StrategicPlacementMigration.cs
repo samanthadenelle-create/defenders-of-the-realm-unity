@@ -121,6 +121,33 @@ namespace DeNelle.Village
             return null;
         }
 
+        // ── LEVER 1 read-only census accessors (owner 2026-07-24, "stores pre-stand on a
+        //    fresh hub", WWCD) ─────────────────────────────────────────────────────────
+        // CastleVendorNpcInjector anchors a vendor NPC to EVERY baked storefront / runtime
+        // station even when standdown deactivated it on a fresh save (nothing replayed ->
+        // the old poll waited forever -> zero vendors). It reads THESE tables so the
+        // role->anchor map stays single-sourced here (no duplicated list, no reflection).
+
+        /// <summary>Read-only view of the baked storefront census (bakedName, itemId).</summary>
+        public static IReadOnlyList<(string bakedName, string itemId)> BakedStorefronts()
+        {
+            var list = new List<(string, string)>(BakedRows.Length);
+            for (int i = 0; i < BakedRows.Length; i++)
+                list.Add((BakedRows[i].bakedName, BakedRows[i].itemId));
+            return list;
+        }
+
+        /// <summary>Read-only view of the runtime crafting-station census
+        /// (holderName, itemId, fallbackPos) — so a station's speaker NPC can be seated at
+        /// its anchor even when the station injector stood down on a fresh save.</summary>
+        public static IReadOnlyList<(string holderName, string itemId, Vector3 fallbackPos)> StationAnchors()
+        {
+            var list = new List<(string, string, Vector3)>(StationRows.Length);
+            for (int i = 0; i < StationRows.Length; i++)
+                list.Add((StationRows[i].holderName, StationRows[i].itemId, StationRows[i].fallbackPos));
+            return list;
+        }
+
         // Scene-load latch: the handle of the scene load the migration executed in.
         // StanddownActive stays FALSE for that load (bakes already visible; loader
         // must not replay the freshly-written records) and flips true on the next

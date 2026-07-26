@@ -326,13 +326,34 @@ namespace DeNelle.Village
                             }
                     }
 
+                    // LEVER 1 FALLBACK (owner 2026-07-24, WWCD "stores pre-stand on a fresh
+                    // hub"): no live/replayed Building for this role — anchor the vendor to the
+                    // BAKED storefront (or the runtime station's anchor) so every trade gets its
+                    // NPC on a FRESH hub WITHOUT the player having to place it. On a fresh save
+                    // the baked ring is stood down (SetActive false) + the stations skipped, so
+                    // nothing replayed and the old poll waited forever (the captured "awaiting
+                    // building — vendor not spawned" for every role). Safe: this only fires when
+                    // NO live building carries the id, so it can never double-seat a placed one.
+                    bool anchorIsTemp = false;
+                    if (anchorTf == null)
+                    {
+                        var fb = ResolveBakedOrStationAnchor(role, buildingId);
+                        anchorTf = fb.tf;
+                        anchorIsTemp = fb.temp;
+                    }
+
                     if (anchorTf == null)
                     {
                         // Skip decision — Once per id so the poll never spams the trace.
                         FlowTrace.Once("Vendor", $"await-{buildingId}",
-                            $"{role} awaiting building/collector '{buildingId}' — vendor not spawned.");
+                            $"{role} awaiting building/collector '{buildingId}' — no live building AND no baked/station anchor in scene; vendor not spawned.");
                         continue;
                     }
+
+                    // Capture BEFORE spawning: the synthetic marker (and a temp anchor) are
+                    // destroyed right after SpawnVendor, so read the trace inputs first.
+                    string anchorLabel = anchorIsTemp ? $"fallback anchor '{anchorTf.name}'" : $"'{anchorTf.name}'";
+                    Vector3 anchorPos = anchorTf.position;
 
                     // Synthetic marker at the baked marker's front offset (local (0,0,6)) —
                     // SpawnVendor derives the front DISTANCE from it and redirects the vendor
@@ -344,18 +365,19 @@ namespace DeNelle.Village
 
                     bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
                     Destroy(marker);
+                    if (anchorIsTemp) Destroy(anchorTf.gameObject);   // temp anchor served its purpose
                     if (ok)
                     {
                         pending.Remove(role);
                         FlowTrace.Step("Vendor",
-                            $"{role} anchored to placed '{buildingId}' @ {anchorTf.position}");
+                            $"{role} anchored to {anchorLabel} for '{buildingId}' @ {anchorPos}");
                     }
                     else
                     {
                         // SpawnVendor self-reported the failure — keep the role pending so the
                         // next tick retries (e.g. Resources not yet loaded).
                         FlowTrace.Fail("Vendor",
-                            $"{role} spawn FAILED at placed '{buildingId}' — will retry next poll.");
+                            $"{role} spawn FAILED at {anchorLabel} for '{buildingId}' — will retry next poll.");
                     }
                 }
 
@@ -363,6 +385,92 @@ namespace DeNelle.Village
                 yield return new WaitForSecondsRealtime(PollSeconds);
             }
             FlowTrace.Step("Vendor", "vendor anchor poll complete — every role has its NPC.");
+        }
+
+        // ── LEVER 1 baked/station anchor resolver (owner 2026-07-24, WWCD) ─────────────
+        // Resolve the anchor for a role whose live Building/collector does not exist yet, so
+        // a FRESH hub still seats every trade's speaker. Returns the transform to seat at and
+        // whether it is a TEMP anchor the caller must destroy after spawning:
+        //   • runtime station role (apothecary/jewelers-bench) -> the live station holder if
+        //     present, else a temp anchor at the station's census fallbackPos (WO-703 stands
+        //     the station injector down on a fresh save; the speaker still seats). Closes gap #2c.
+        //   • baked storefront role -> the baked GameObject named "<Role>_..." (census:
+        //     StrategicPlacementMigration.BakedStorefronts). Matched by the ROLE TOKEN, so the
+        //     Blacksmith role resolves to Blacksmith_Weapons_Storefront even though its
+        //     migration itemId is 'workshop' (closes gap #2a — its OWN vendor, not a Forge one).
+        //     Re-surfaced (made visible) so the store pre-stands instead of the NPC floating.
+        //   • Jeweler (removed from the baked ring + no station) -> a temp anchor at a commerce
+        //     fallback beside the Marketplace so the trade still gets an NPC without a placed/
+        //     replayed jeweler (closes gap #2b). OWNER-TUNABLE position.
+        private (Transform tf, bool temp) ResolveBakedOrStationAnchor(string role, string buildingId)
+        {
+            // Runtime crafting stations first (matched by catalog id).
+            foreach (var (holderName, itemId, fallbackPos) in StrategicPlacementMigration.StationAnchors())
+            {
+                if (!string.Equals(itemId, buildingId, System.StringComparison.OrdinalIgnoreCase)) continue;
+                var holder = FindByNameInclInactive(holderName);
+                if (holder != null) return (holder, false);
+                var anchor = new GameObject($"CastleVendorAnchor_{role}");
+                anchor.transform.position = fallbackPos;
+                return (anchor.transform, true);
+            }
+
+            // Baked storefronts (matched by ROLE token — CastleHubBuilder names them "<Role>_...").
+            foreach (var (bakedName, itemId) in StrategicPlacementMigration.BakedStorefronts())
+            {
+                if (!FirstTokenEquals(bakedName, role)) continue;
+                var baked = FindByNameInclInactive(bakedName);
+                if (baked == null) continue;                                // not in this scene bake
+                HubStructureVisualInjector.ResurfaceStorefront(bakedName);  // pre-stand: make the store visible
+                return (baked, false);
+            }
+
+            // Jeweler: no baked object (removed from the ring) + no station. Seat its speaker at a
+            // commerce-cluster fallback (beside the Marketplace if present) so the trade still gets
+            // an NPC. OWNER-TUNABLE — flagged in the work-order report.
+            if (string.Equals(role, "Jeweler", System.StringComparison.OrdinalIgnoreCase))
+            {
+                Vector3 pos = new Vector3(12f, 0f, 32f);   // beside Marketplace_Monetization (0,0,32)
+                var market = FindByNameInclInactive("Marketplace_Monetization");
+                if (market != null) pos = market.position + market.right * 8f;
+                var anchor = new GameObject($"CastleVendorAnchor_{role}");
+                anchor.transform.position = pos;
+                return (anchor.transform, true);
+            }
+
+            return (null, false);
+        }
+
+        // Baked names encode the role as their first "_"-delimited token (CastleHubBuilder:
+        // "Blacksmith_Weapons_Storefront" -> "Blacksmith"). Same convention CastleHubBuilder
+        // uses to name the NPC_<Role>_Interactable marker.
+        private static bool FirstTokenEquals(string bakedName, string role)
+        {
+            if (string.IsNullOrEmpty(bakedName) || string.IsNullOrEmpty(role)) return false;
+            int us = bakedName.IndexOf('_');
+            string token = us > 0 ? bakedName.Substring(0, us) : bakedName;
+            return string.Equals(token, role, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Name match across the loaded scene(s), INCLUDING inactive — the baked ring is
+        // SetActive(false) under standdown, so the active-only lookups can't see the anchors.
+        private static Transform FindByNameInclInactive(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.name == name) return t;
+            return null;
+        }
+
+        /// <summary>The DISTINCT vendor roles the hub must seat an NPC for (every action
+        /// storefront/collector/station). The AutoPilot coverage oracle (AssertVendorCoverage)
+        /// walks THIS — the injector's own role map, not a hardcoded test list.</summary>
+        public static System.Collections.Generic.IReadOnlyList<string> VendorRoles()
+        {
+            var seen = new System.Collections.Generic.List<string>();
+            foreach (var a in AnchorRoles)
+                if (!seen.Contains(a.Role)) seen.Add(a.Role);
+            return seen;
         }
 
         // ── PLACEMENT HOOK (owner device felt-test 2026-07-16, SHOW-STOPPER) ──────────
@@ -479,8 +587,9 @@ namespace DeNelle.Village
         /// WO-707 palette ids that carry no AnchorRoles entry but ARE storefronts the player
         /// places (workshop/mill/lumbermill/lumberyard/foundry/silo). Returns null for
         /// non-storefront ids (towers/walls/gates/deco) so placing those never spawns a
-        /// spurious merchant.</summary>
-        private static string RoleForBuildingId(string buildingId)
+        /// spurious merchant. PUBLIC so the AutoPilot coverage oracle (AssertVendorCoverage)
+        /// asserts the non-action exclusion against the injector's OWN map, not a copy.</summary>
+        public static string RoleForBuildingId(string buildingId)
         {
             if (string.IsNullOrEmpty(buildingId)) return null;
             foreach (var (role, id) in AnchorRoles)

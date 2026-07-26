@@ -263,6 +263,13 @@ namespace DeNelle.DevTools
                 // the HUD Talk button fires) and assert SHOPPABLE vendors open the Buy/Sell dialogue,
                 // not the upgrade panel (the regression). Closes the castle-vendor headless coverage hole.
                 yield return RunPhase("AssertVendorTalkRoute", AssertVendorTalkRoute());
+                // LEVER 1 confirming test (owner 2026-07-24, "stores pre-stand on a fresh hub"):
+                // the DATA-confirmed hub bug was store NPCs NEVER appearing (the injector anchored
+                // only to live/replayed Buildings, but standdown stands the baked ring + stations
+                // down -> nothing replayed -> zero vendors). This oracle asserts EVERY vendor role
+                // (CastleVendorNpcInjector.VendorRoles) has a seated NPC AND no non-action id maps
+                // to a vendor — FAILING loudly (FlowTrace.Fail) on any action anchor with no NPC.
+                yield return RunPhase("AssertVendorCoverage", AssertVendorCoverage());
                 // ASSERTION-DEPTH EXPANSION: the bot used to mostly verify "didn't crash" +
                 // the vendor STOCK contract. These two phases assert real CORRECTNESS of the
                 // economy + equip wiring — that a buy actually deducts the cost AND grows the
@@ -2615,6 +2622,7 @@ namespace DeNelle.DevTools
                 case "OpenEachVendor":    return VendorTimeout * 12f;
                 case "AssertVendorContracts": return ContractTimeout * 8f; // covers the known-context set
                 case "AssertVendorTalkRoute": return ContractTimeout * 8f; // one Interact() per castle vendor
+                case "AssertVendorCoverage": return 22f;   // LEVER 1 — ~14s seat-poll for the anchor fallback + slack
                 case "AssertEconomyDeduct": return EconomyDeductTimeout;
                 case "AssertEquip":       return EquipTimeout;
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
@@ -3723,6 +3731,72 @@ namespace DeNelle.DevTools
 
             _lastDetail = $"{checkedCount} castle vendors ({shoppableChecked} shoppable), {violations} talk-route violation(s)";
             FlowTrace.Step("Auto", $"AssertVendorTalkRoute: {_lastDetail}.");
+        }
+
+        // =====================================================================
+        //  PHASE: AssertVendorCoverage  (LEVER 1 confirming test, owner 2026-07-24)
+        //  DATA-confirmed hub bug: store NPCs NEVER appeared — the vendor injector anchored
+        //  ONLY to a live/replayed Building/collector, but strategic-placement standdown
+        //  (always-on, WO-682) stands the baked ring + the two stations down, so on a fresh
+        //  hub nothing replayed -> zero vendors ([Flow:Vendor] "<role> awaiting building —
+        //  vendor not spawned" for EVERY role). The fix seats a vendor at each baked-storefront
+        //  / station ANCHOR even under standdown. This oracle encodes the "should this structure
+        //  have an NPC" logic from the INJECTOR'S OWN role map (CastleVendorNpcInjector.
+        //  VendorRoles / RoleForBuildingId), NOT a hardcoded list:
+        //    1. EVERY vendor role must have a seated CastleVendor_<role> NPC in the hub.
+        //    2. NO non-action id (tower/wall/gate/mine/fountain/deco) may map to a vendor role.
+        //  A violation is FlowTrace.Fail -> break-log -> ranked ticket (fails loudly).
+        // =====================================================================
+        private IEnumerator AssertVendorCoverage()
+        {
+            const string Tag = "Auto";
+            var roles = CastleVendorNpcInjector.VendorRoles();
+            if (roles == null || roles.Count == 0)
+            {
+                _lastDetail = "no vendor roles declared";
+                FlowTrace.Warn(Tag, "AssertVendorCoverage: CastleVendorNpcInjector.VendorRoles() is empty — nothing to verify.");
+                yield break;
+            }
+
+            // The injector's anchor poll ticks every ~2s; give the baked/station fallback time
+            // to seat every role on this (possibly fresh) hub before asserting.
+            var missing = new System.Collections.Generic.List<string>(roles);
+            float t0 = Time.realtimeSinceStartup;
+            while (missing.Count > 0 && Time.realtimeSinceStartup - t0 < 14f)
+            {
+                missing.RemoveAll(r =>
+                    GameObject.Find($"CastleVendor_{r}") != null ||
+                    GameObject.Find($"CastleVendor_{r}_Placeholder") != null);
+                if (missing.Count == 0) break;
+                yield return Wait(1f);
+            }
+
+            int seated = roles.Count - missing.Count;
+            if (missing.Count > 0)
+                FlowTrace.Fail(Tag, $"VENDOR-COVERAGE VIOLATION: {missing.Count}/{roles.Count} action storefront/station role(s) " +
+                    $"have NO seated vendor NPC after 14s — [{string.Join(", ", missing)}]. The hub bug (store NPCs never appear) " +
+                    "is present for these roles — the baked/station anchor fallback failed to seat them.");
+            else
+                FlowTrace.Step(Tag, $"AssertVendorCoverage: all {roles.Count} vendor role(s) have a seated NPC (LEVER 1 pre-stand OK).");
+
+            // Non-action exclusion (gap #3): tower/wall/gate/mine/fountain/deco/repair ids must map
+            // to NO vendor role, so placing a defense/decoration never spawns a spurious merchant.
+            int leaks = 0;
+            foreach (var nonAction in new[] { "tower_ground_archer", "wall_stone", "gate_main", "mine_gold", "fountain_plaza", "deco_banner", "repair_kit" })
+            {
+                string role = CastleVendorNpcInjector.RoleForBuildingId(nonAction);
+                if (!string.IsNullOrEmpty(role))
+                {
+                    leaks++;
+                    FlowTrace.Fail(Tag, $"NON-ACTION LEAK: id '{nonAction}' maps to vendor role '{role}' — a defense/deco must " +
+                        "NEVER get a vendor (RoleForBuildingId must return null for it).");
+                }
+            }
+            if (leaks == 0)
+                FlowTrace.Step(Tag, "AssertVendorCoverage: non-action exclusion holds (towers/walls/gates/mines/fountains/deco map to no vendor role).");
+
+            _lastDetail = $"{seated}/{roles.Count} roles seated, {missing.Count} missing, {leaks} non-action leak(s)";
+            FlowTrace.Step(Tag, $"AssertVendorCoverage: {_lastDetail}.");
         }
 
         // =====================================================================

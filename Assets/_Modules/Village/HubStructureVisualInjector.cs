@@ -287,6 +287,36 @@ namespace DeNelle.Village
                 target.gameObject.SetActive(false);
                 return;
             }
+            SkinStorefront(s, target);
+        }
+
+        // LEVER 1 (owner 2026-07-24, "stores pre-stand on a fresh hub", WWCD): re-surface a
+        // baked storefront that STANDDOWN deactivated on a fresh save, so its vendor NPC
+        // (seated by CastleVendorNpcInjector's baked-anchor fallback) does not stand at an
+        // invisible lot. Re-activates the baked GameObject (found INCLUDING inactive) and
+        // applies its lightweight skin, BYPASSING TrySwap's standdown gate — the caller has
+        // already decided this storefront must pre-stand because no live/replayed Building
+        // owns its id (so there is nothing to double-spawn). Idempotent: SkinStorefront
+        // no-ops if the LightSkin_ marker child already exists.
+        public static void ResurfaceStorefront(string bakedName)
+        {
+            if (string.IsNullOrEmpty(bakedName)) return;
+            Transform target = null;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.name == bakedName) { target = t; break; }
+            if (target == null) return;   // not in this scene bake
+            if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+            for (int i = 0; i < Swaps.Length; i++)
+                if (Swaps[i].bakedName == bakedName) { SkinStorefront(Swaps[i], target); return; }
+            // No Swap row (a storefront with no lightweight model): the re-activated baked
+            // prefab renderers already make it visible — nothing more to do.
+        }
+
+        // The lightweight-skin body of a swap (extracted from TrySwap so ResurfaceStorefront
+        // can apply it without re-running the standdown/barracks gates). Idempotent by the
+        // LightSkin_ marker child.
+        private static void SkinStorefront(Swap s, Transform target)
+        {
             string marker = MarkerPrefix + s.bakedName;
             if (target.Find(marker) != null) return;                // already swapped (idempotent)
 
@@ -367,8 +397,13 @@ namespace DeNelle.Village
             // (ArcaneTower_MagicUpgrades) holds a persistent magic-circle aura. Idempotent;
             // colorblind-safe (reads by motion/luminance, not hue). Seated on the baked root so
             // it tracks the structure regardless of the swapped visual child.
+            // Owner 2026-07-26: the baked Cathedral of Magic hub landmark gets a subtle, DISTINCT,
+            // NON-HEAL aura ("Aegis_Shield" magic dome) — the earlier "Fountain_Heal_Aura" read as a
+            // healing shimmer floating in town (Druid-aura prefab) and was the felt-test "floating heal"
+            // bug. Distinct from the combat Arcane Spire (Aura_HeartPulse) + harvest nodes
+            // (TreeofLifeAura_Aura). SWAPPABLE default — retag in the Caster during the visual pass.
             if (s.bakedName == "ArcaneTower_MagicUpgrades")
-                ArcaneAura.Ensure(target.gameObject);
+                ArcaneAura.Ensure(target.gameObject, "Aegis_Shield");
 
             Debug.Log("[HubStructureVisualInjector] " + s.bakedName + " re-skinned to " + s.modelPath + ".");
         }
