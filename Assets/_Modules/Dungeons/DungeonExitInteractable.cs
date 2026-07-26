@@ -141,12 +141,22 @@ namespace DeNelle.Dungeons
         private bool _armed;                          // walk-in only after hero first steps clear
         private float _nextProximityCheck;
 
+        // WO-770.1: a RICH dungeon (DungeonController) supplies a leave action so the exit routes
+        // through ExitToVillage (banks the run's crafting scatter + ends the run cleanly) instead
+        // of the composed-scene default (direct SceneRouter.Castle). Null => composed-scene behavior.
+        private System.Action _onLeave;
+        private string _label = "Leave Dungeon";      // prompt text (e.g. "Secret Exit" for the boss back-door)
+
         /// <summary>Create the exit at <paramref name="position"/> and build its visual.</summary>
-        public static DungeonExitInteractable Spawn(Vector3 position)
+        /// <param name="onLeave">Optional rich-scene leave action (ExitToVillage). Null => Castle route.</param>
+        /// <param name="label">Interact-button prompt text.</param>
+        public static DungeonExitInteractable Spawn(Vector3 position, System.Action onLeave = null, string label = "Leave Dungeon")
         {
             var go = new GameObject("DungeonExit (Return)");
             go.transform.position = position;
             var exit = go.AddComponent<DungeonExitInteractable>();
+            exit._onLeave = onLeave;
+            exit._label = string.IsNullOrEmpty(label) ? "Leave Dungeon" : label;
             exit.BuildVisual();
             return exit;
         }
@@ -232,7 +242,7 @@ namespace DeNelle.Dungeons
             }
 
             if (_isInRange)
-                MobileInteractButton.Request(this, "Leave Dungeon", Leave);
+                MobileInteractButton.Request(this, _label, Leave);
             else
                 MobileInteractButton.Release(this);
         }
@@ -251,6 +261,15 @@ namespace DeNelle.Dungeons
             if (_leaving) return;
             _leaving = true;
             MobileInteractButton.Release(this);
+            // WO-770.1: a RICH dungeon supplies ExitToVillage (banks the run's crafting scatter to
+            // the larder + ends the run), so prefer it. A composed scene has no DungeonRuntimeState /
+            // crafting inventory to bank, so it falls through to the direct Castle route below.
+            if (_onLeave != null)
+            {
+                FlowTrace.Step(Sys, "taking RETURN exit -> DungeonController.ExitToVillage (rich scene)");
+                _onLeave.Invoke();
+                return;
+            }
             // Route HOME exactly like DungeonController.ExitToVillage - the merged
             // overworld hub (SceneRouter.Castle). A composed scene has no DungeonRuntimeState
             // / crafting inventory to bank, so this is the whole exit.

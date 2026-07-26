@@ -307,6 +307,7 @@ namespace DeNelle.Dungeons
             HydrateEncounters();
             ConfigureCrafting();
             HydrateChests();
+            HydrateExits();
             ConfigureDungeonHud();
             DressTraversalLinks();
             SweepPlaceholderCubes();
@@ -379,6 +380,14 @@ namespace DeNelle.Dungeons
                 if (room.secret) _runtimeState.MarkSecretRoomFound(room.id);
             }
 
+            // WO-770.1: reveal the boss-gated back-door exit the instant the mini-boss falls
+            // (it is spawned hidden at the Workshop). The always-open normal exit is separate.
+            if (_bossBackDoor != null && !_bossBackDoor.gameObject.activeSelf && _runtimeState.BossDefeated)
+            {
+                _bossBackDoor.gameObject.SetActive(true);
+                FlowTrace.Step("Dungeon", "WO-770.1: boss back-door exit revealed (BossDefeated).");
+            }
+
             // Advance the encounter cooldown clock (no-op while in combat). v1
             // gates random encounters off (Layout.disableRandomEncounters) — the
             // clock still ticks so v1.1 can flip them on without a code change.
@@ -386,6 +395,68 @@ namespace DeNelle.Dungeons
         }
 
         // ── Hero placement ───────────────────────────────────────────────────
+
+        // WO-770.1: the boss-gated back-door exit, spawned HIDDEN and revealed by Update once
+        // the mini-boss falls (BossDefeated). Null when the layout has no "workshop" room.
+        private DungeonExitInteractable _bossBackDoor;
+
+        /// <summary>
+        /// WO-770.1 (fixes the roach-motel D-finding): inject the dungeon's RETURN exits at
+        /// runtime (no scene rebake). The rich Healer's Cottage previously only left via the
+        /// post-boss Apothecary back-door — a hero who could not (or would not) beat the mini-boss
+        /// was trapped. Two exits close that:
+        ///   • NORMAL — always open, at the ENTRY room centre, so you can leave any time.
+        ///   • BOSS BACK-DOOR — at the Workshop, spawned hidden, revealed once the mini-boss falls.
+        /// Both mirror <see cref="DungeonExitInteractable"/>'s walk-in + Interact-button pattern and
+        /// route through <see cref="ExitToVillage"/> (banks the run's crafting scatter, ends the run).
+        /// Positions come straight off the layout's room bounds — no invented coordinates.
+        /// </summary>
+        private void HydrateExits()
+        {
+            if (Layout == null) { FlowTrace.Warn("Dungeon", "HydrateExits: no Layout — no exits placed."); return; }
+
+            // NORMAL exit — the entry room the hero spawned into (spawn.roomId, else entryRoomId).
+            DungeonRoom entry = Layout.FindRoom(Layout.spawn?.roomId ?? Layout.entryRoomId);
+            if (entry?.bounds != null)
+            {
+                Vector3 pos = SeatExitOnFloor(entry.bounds.Center);
+                DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Leave Dungeon");
+                FlowTrace.Step("Dungeon", $"HydrateExits: NORMAL exit at entry room '{entry.id}' centre {pos}.");
+            }
+            else
+            {
+                FlowTrace.Warn("Dungeon", "HydrateExits: entry room has no bounds — NORMAL exit NOT placed (run could be un-leavable!).");
+            }
+
+            // BOSS BACK-DOOR — the Workshop room (present in the Healer's Cottage layout). Spawned
+            // hidden; Update reveals it on BossDefeated. Absent room = another dungeon id: skip it,
+            // the normal exit still frees the run.
+            DungeonRoom workshop = Layout.FindRoom("workshop");
+            if (workshop?.bounds != null)
+            {
+                Vector3 pos = SeatExitOnFloor(workshop.bounds.Center);
+                _bossBackDoor = DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Secret Exit");
+                bool alreadyBeaten = _runtimeState != null && _runtimeState.BossDefeated;
+                _bossBackDoor.gameObject.SetActive(alreadyBeaten);
+                FlowTrace.Step("Dungeon", $"HydrateExits: BOSS back-door at 'workshop' centre {pos} (active={alreadyBeaten}).");
+            }
+            else
+            {
+                FlowTrace.Step("Dungeon", "HydrateExits: no 'workshop' room in this layout — no boss back-door (normal exit still frees the run).");
+            }
+        }
+
+        /// <summary>
+        /// Seat an exit's origin on the room floor so its arch stands rather than floating at the
+        /// room's mid-height bounds centre (a short ray down, the townsfolk y-band idiom). Falls
+        /// back to the raw point when nothing is hit.
+        /// </summary>
+        private static Vector3 SeatExitOnFloor(Vector3 p)
+        {
+            if (Physics.Raycast(p + Vector3.up * 3f, Vector3.down, out RaycastHit hit, 12f, ~0, QueryTriggerInteraction.Ignore))
+                return hit.point + Vector3.up * 0.05f;
+            return p;
+        }
 
         /// <summary>The layout's spawn world position, falling back to the origin.</summary>
         private Vector3 ResolveSpawnPosition()
