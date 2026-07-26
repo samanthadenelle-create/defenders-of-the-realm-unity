@@ -1103,20 +1103,47 @@ namespace DeNelle.Dungeons
             var arena = DeNelle.Village.Arena.BattleArena.Instance; // lazy persistent (DontDestroyOnLoad) singleton
             if (arena == null) return;
             arena.OnBattleEnded += OnRealtimeBattleEnded;
+            // Dungeon-FPV combat-camera switch (2026-07-26): a real-time fight forces the dungeon
+            // rig to OVER-THE-SHOULDER on stage-in and restores FPV traversal on end — OTS combat,
+            // FPV walking. Null-safe on the rig; no-op when FPV is off (SetCombatFraming still just
+            // toggles OTS<->the resolved mode).
+            arena.OnBattleStaged += OnRealtimeBattleStaged;
             _arenaSubscribed = true;
-            FlowTrace.Step("Dungeon", "WO-770.3b: subscribed to BattleArena.OnBattleEnded (real-time encounter settle).");
+            FlowTrace.Step("Dungeon", "WO-770.3b: subscribed to BattleArena.OnBattleStaged/OnBattleEnded (real-time settle + combat-camera switch).");
         }
 
         private void UnsubscribeRealtimeSettle()
         {
             if (!_arenaSubscribed) return;
             var arena = DeNelle.Village.Arena.BattleArena.Existing; // never CREATE a host just to unsubscribe
-            if (arena != null) arena.OnBattleEnded -= OnRealtimeBattleEnded;
+            if (arena != null)
+            {
+                arena.OnBattleEnded -= OnRealtimeBattleEnded;
+                arena.OnBattleStaged -= OnRealtimeBattleStaged;
+            }
             _arenaSubscribed = false;
+        }
+
+        /// <summary>
+        /// A real-time BattleArena encounter just staged — force the dungeon camera to
+        /// over-the-shoulder for the fight (only meaningful while WE have a pending
+        /// dungeon encounter; DungeonController lives only in the dungeon scene, so any
+        /// arena stage reached here is a dungeon fight). Restored on
+        /// <see cref="OnRealtimeBattleEnded"/>.
+        /// </summary>
+        private void OnRealtimeBattleStaged(DeNelle.Village.Arena.EncounterParams _)
+        {
+            if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
+            FlowTrace.Step("Dungeon", "dungeon-fpv: BattleArena staged — SetCombatFraming(true) (OTS for the fight).");
+            _cameraRig?.SetCombatFraming(true);
         }
 
         private void OnRealtimeBattleEnded(DeNelle.Village.Arena.EncounterParams _, bool won)
         {
+            // Restore FPV/iso traversal framing regardless of who launched the fight (a no-op
+            // when combat framing was never forced) BEFORE the pending-encounter guard below.
+            _cameraRig?.SetCombatFraming(false);
+
             // Only settle a dungeon encounter WE launched — guards a stray arena event + double-settle.
             if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
             bool wasBoss = _runtimeState.PendingEncounterIsBoss;

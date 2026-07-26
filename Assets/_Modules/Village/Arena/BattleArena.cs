@@ -224,6 +224,11 @@ namespace DeNelle.Village.Arena
         /// <summary>Raised when a battle resolves: (params, won).</summary>
         public event Action<EncounterParams, bool> OnBattleEnded;
 
+        /// <summary>Raised the moment a battle is STAGED (in <see cref="BeginEncounter"/>), before the
+        /// stage coroutine runs. Lets a scene owner switch camera framing for the fight — the dungeon
+        /// FPV rig forces over-the-shoulder here and restores FPV on <see cref="OnBattleEnded"/>.</summary>
+        public event Action<EncounterParams> OnBattleStaged;
+
         /// <summary>
         /// The enemies STAGED for the current encounter (the orc family + any rare boss), in spawn
         /// order. Read-only view so presentation (BattleHud9Zone roster) binds to the ENCOUNTER's
@@ -361,6 +366,10 @@ namespace DeNelle.Village.Arena
             var beHero = GameObject.FindWithTag("Player");
             FlowTrace.Step("BattleArena",
                 $"BeginEncounter HERO-POS: pos={(beHero != null ? beHero.transform.position.ToString() : "<no Player>")} inArena={(beHero != null && IsArenaPosition(beHero.transform.position))} centre={ArenaCentre}.");
+
+            // Battle-STAGED signal (before the stage coroutine): lets a scene owner switch camera
+            // framing for the fight (dungeon FPV -> over-the-shoulder). Null-safe; never blocks staging.
+            OnBattleStaged?.Invoke(p);
 
             StartCoroutine(StageRoutine(p));
             return true;

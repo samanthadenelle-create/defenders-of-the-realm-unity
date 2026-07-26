@@ -14,9 +14,12 @@
 //   - OverShoulder (DEFAULT)  - CinemachineThirdPersonFollow behind+above a
 //                               heading-corrected pivot; rotates to stay behind
 //                               the Keeper as they turn, looks down the corridor.
-//   - FirstPerson (ff.dungeonfpv) - the SAME ThirdPersonFollow with ~0 distance +
-//                               eyeline offset (an FPV STUB - camera placement
-//                               only; see "What a full FPV still needs" below).
+//   - FirstPerson (ff.dungeonfpv, DEFAULT-ON 2026-07-26) - the SAME ThirdPersonFollow
+//                               with ~0 distance + eyeline offset, now a FULL FPV:
+//                               an independent yaw+pitch LOOK layer drives the pivot's
+//                               WORLD rotation each LateUpdate (decoupled from
+//                               FaceHeading), the hero body renderers are hidden
+//                               (ShadowsOnly), and AvoidObstacles + head-bob stay OFF.
 //   - Iso (ff.dungeoniso)     - the legacy CinemachineFollow top-down chase, kept
 //                               verbatim for an A/B against the old look.
 //
@@ -30,12 +33,14 @@
 // that UNDOES the FBX offset - pivot.forward == the Keeper's visual heading. If a
 // dungeon ever ships a hero rig with NO such offset, zero _headingYawOffset.
 //
-// -- What a full FPV still needs (this is a STUB) --
-//   - Independent look: mouse-delta / touch-drag yaw+pitch decoupled from the
-//     movement heading (today FPV looks wherever the Keeper is walking).
-//   - Hide the hero body (or just the head) so the camera is not inside the mesh.
-//   - Clamp pitch + optional head-bob. None of that is wired here - this seam only
-//     places the camera at the eyeline so the owner can felt-judge FPV vs OTS.
+// -- FPV look layer (implemented 2026-07-26) --
+//   - Independent look: RIGHT-half touch-drag / desktop mouse-delta accumulate into
+//     _lookYaw/_lookPitch (pitch clamped ~±70), written to the pivot's WORLD rotation
+//     in LateUpdate so look is decoupled from the movement heading. The LEFT of the
+//     screen is reserved for DungeonHero's movement joystick (never stolen).
+//   - The hero body renderers are set ShadowsOnly on FPV bind (restored on mode
+//     change / teardown) so the camera is not inside the mesh but the shadow survives.
+//   - SetCombatFraming(bool) forces OverShoulder for arena fights and restores FPV.
 //
 // -- Occlusion / ceiling --
 // OTS seats the camera ~1.9u up and ~3u back - well under the ~4u ceiling, so no
@@ -49,10 +54,13 @@
 // unit-reasoned in isolation.
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using Unity.Cinemachine;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 
 namespace DeNelle.Dungeons
 {
@@ -123,6 +131,21 @@ namespace DeNelle.Dungeons
                  "eyes looking forward. A hair above 0 avoids a degenerate arm.")]
         [SerializeField] private float _fpvCameraDistance = 0.05f;
 
+        [Tooltip("FPV look sensitivity in degrees per input pixel (touch-drag delta on " +
+                 "the RIGHT half of the screen / desktop mouse delta). Owner felt-tunes.")]
+        [SerializeField] private float _fpvLookSensitivity = 0.14f;
+
+        [Tooltip("FPV pitch clamp (degrees up/down) so the free-look never rolls past " +
+                 "vertical - held modest (~70) to fight motion sickness.")]
+        [Range(10f, 89f)]
+        [SerializeField] private float _fpvPitchClamp = 70f;
+
+        [Tooltip("Fraction of the screen WIDTH from the left that is reserved for the " +
+                 "movement joystick and IGNORED by the look-drag (so a left-thumb walk " +
+                 "never rotates the camera). 0.5 = right half of the screen looks.")]
+        [Range(0f, 0.9f)]
+        [SerializeField] private float _fpvLookScreenLeftReserve = 0.5f;
+
         // -- Tuning - legacy top-down iso (ff.dungeoniso) ---------------------
 
         [Header("Legacy top-down iso (ff.dungeoniso)")]
@@ -164,6 +187,25 @@ namespace DeNelle.Dungeons
         private Transform _pivot;      // heading-corrected follow target for OTS/FPV
         private Transform _boundHero;
         private CamMode _mode = CamMode.OverShoulder;
+
+        // -- FPV independent-look accumulator (decoupled from FaceHeading) -----
+        // _fpvActive is true while the first-person look layer drives the pivot each
+        // LateUpdate; _lookYaw/_lookPitch accumulate the drag/mouse delta (pitch clamped).
+        private bool _fpvActive;
+        private float _lookYaw;
+        private float _lookPitch;
+
+        // -- Combat framing override ------------------------------------------
+        // True while an arena fight has forced over-the-shoulder framing (SetCombatFraming);
+        // FPV/iso is restored to the resolved mode when it clears.
+        private bool _combatFramingActive;
+
+        // -- Hidden hero body (FPV) -------------------------------------------
+        // The hero mesh renderers switched to ShadowsOnly on FPV bind (so the camera is
+        // not inside the mesh but the shadow survives), with their prior cast mode saved
+        // for a clean restore on mode change / teardown.
+        private readonly List<Renderer> _hiddenBodyRenderers = new List<Renderer>();
+        private readonly List<ShadowCastingMode> _hiddenBodyPriorModes = new List<ShadowCastingMode>();
 
         /// <summary>The CinemachineCamera this rig drives.</summary>
         public CinemachineCamera Camera => _camera;
@@ -266,6 +308,11 @@ namespace DeNelle.Dungeons
                 _follow = null;
             }
 
+            // Switching INTO OTS (or re-applying) must undo any FPV body-hide from a
+            // prior first-person bind; the FPV branch below re-hides when needed.
+            RestoreHeroBody();
+            _fpvActive = firstPerson;
+
             EnsurePivot(hero);
 
             // Follow the heading-corrected pivot (not the hero directly): the pivot
@@ -283,6 +330,16 @@ namespace DeNelle.Dungeons
                 _tpf.VerticalArmLength = 0f;
                 _tpf.CameraDistance = Mathf.Max(0.01f, _fpvCameraDistance);
                 _tpf.CameraSide = 0.5f;
+
+                // Seed the independent look from the Keeper's VISUAL forward so FPV opens
+                // looking down the corridor (transform yaw + the FBX heading offset), then
+                // the LateUpdate look layer takes over decoupled from FaceHeading.
+                _lookYaw = hero.eulerAngles.y + _headingYawOffset;
+                _lookPitch = 0f;
+                DriveFpvPivot();   // orient the pivot NOW so the immediate seat matches
+
+                // Hide the hero body (ShadowsOnly) so the camera is not buried in the mesh.
+                HideHeroBody(hero);
             }
             else
             {
@@ -356,6 +413,152 @@ namespace DeNelle.Dungeons
             Vector3 lookDir = (hand + fwd * 4f) - camPos;
             if (lookDir.sqrMagnitude > 0.0001f)
                 transform.rotation = Quaternion.LookRotation(lookDir, up);
+        }
+
+        // -- First-person independent look ------------------------------------
+
+        /// <summary>
+        /// Drives the FPV free-look each frame: samples the RIGHT-half touch-drag /
+        /// desktop mouse delta, accumulates yaw + (pitch-clamped) pitch, and writes the
+        /// pivot's WORLD rotation so the view is DECOUPLED from DungeonHero.FaceHeading
+        /// (the Keeper can look one way and walk another). No-op unless FPV is the active
+        /// framing. AvoidObstacles + head-bob stay OFF here (motion sickness).
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (!_fpvActive || _combatFramingActive || _pivot == null) return;
+
+            Vector2 look = SampleLookDelta();
+            _lookYaw += look.x * _fpvLookSensitivity;
+            _lookPitch -= look.y * _fpvLookSensitivity;   // drag/mouse up => look up
+            _lookPitch = Mathf.Clamp(_lookPitch, -_fpvPitchClamp, _fpvPitchClamp);
+
+            DriveFpvPivot();
+        }
+
+        /// <summary>Writes the accumulated look onto the pivot's world rotation (FPV).</summary>
+        private void DriveFpvPivot()
+        {
+            if (_pivot == null) return;
+            _pivot.rotation = Quaternion.Euler(_lookPitch, _lookYaw, 0f);
+        }
+
+        /// <summary>
+        /// This frame's look delta in input pixels. Mobile: the FIRST active touch whose
+        /// contact STARTED on the right side of the screen (past
+        /// <see cref="_fpvLookScreenLeftReserve"/>) — so the left-thumb movement joystick
+        /// is never stolen. Desktop: the mouse delta. Zero when nothing is dragging.
+        /// </summary>
+        private Vector2 SampleLookDelta()
+        {
+            var ts = Touchscreen.current;
+            if (ts != null)
+            {
+                float minX = Screen.width * _fpvLookScreenLeftReserve;
+                bool anyTouch = false;
+                foreach (var t in ts.touches)
+                {
+                    if (t == null) continue;
+                    var phase = t.phase.ReadValue();
+                    if (phase != UnityEngine.InputSystem.TouchPhase.Began
+                        && phase != UnityEngine.InputSystem.TouchPhase.Moved
+                        && phase != UnityEngine.InputSystem.TouchPhase.Stationary)
+                        continue;
+                    anyTouch = true;
+                    // Reserve the left of the screen for the movement joystick.
+                    if (t.startPosition.ReadValue().x < minX) continue;
+                    return t.delta.ReadValue();
+                }
+                // On a real touch device with a finger down (but only on the left),
+                // do NOT fall through to a synthesized mouse delta.
+                if (anyTouch || Application.isMobilePlatform) return Vector2.zero;
+            }
+
+            var mouse = Mouse.current;
+            return mouse != null ? mouse.delta.ReadValue() : Vector2.zero;
+        }
+
+        // -- Combat framing override ------------------------------------------
+
+        /// <summary>
+        /// Temporarily forces OVER-THE-SHOULDER framing (for an arena fight) and restores
+        /// the resolved mode (FPV / iso) when cleared. DungeonController calls
+        /// <c>SetCombatFraming(true)</c> when a real-time BattleArena encounter stages and
+        /// <c>SetCombatFraming(false)</c> when it ends — giving OTS combat + FPV traversal.
+        /// Null-safe: a no-op until the rig is bound.
+        /// </summary>
+        public void SetCombatFraming(bool on)
+        {
+            if (_boundHero == null) return;
+            if (on == _combatFramingActive) return;
+
+            if (on)
+            {
+                _combatFramingActive = true;
+                // Force OTS regardless of the resolved mode (restores the body + clears FPV).
+                ApplyThirdPerson(_boundHero, firstPerson: false);
+                FlowTrace.Step("DungeonCam", "SetCombatFraming(true): forced over-the-shoulder for the fight.");
+            }
+            else
+            {
+                _combatFramingActive = false;
+                // Restore the resolved traversal mode.
+                if (_mode == CamMode.Iso) ApplyIso(_boundHero);
+                else ApplyThirdPerson(_boundHero, firstPerson: _mode == CamMode.FirstPerson);
+                FlowTrace.Step("DungeonCam",
+                    $"SetCombatFraming(false): restored traversal mode={_mode}.");
+            }
+        }
+
+        // -- Hero body hide (FPV) ---------------------------------------------
+
+        /// <summary>
+        /// Switches the Keeper's mesh renderers to ShadowsOnly on FPV bind so the camera
+        /// (seated at the eyeline) is not looking at the inside of the body, while the
+        /// floor shadow is kept. Prior cast modes are saved for <see cref="RestoreHeroBody"/>.
+        /// </summary>
+        private void HideHeroBody(Transform hero)
+        {
+            if (hero == null) return;
+            RestoreHeroBody();   // never double-capture
+
+            // SkinnedMeshRenderer is the KayKit rig; also catch any MeshRenderer body parts.
+            var smrs = hero.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var r in smrs) StashAndHide(r);
+            var mrs = hero.GetComponentsInChildren<MeshRenderer>(true);
+            foreach (var r in mrs) StashAndHide(r);
+
+            FlowTrace.Step("DungeonCam",
+                $"HideHeroBody (FPV): {_hiddenBodyRenderers.Count} renderer(s) set ShadowsOnly on '{hero.name}'.");
+        }
+
+        private void StashAndHide(Renderer r)
+        {
+            if (r == null) return;
+            _hiddenBodyRenderers.Add(r);
+            _hiddenBodyPriorModes.Add(r.shadowCastingMode);
+            r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+        }
+
+        /// <summary>Restores every hero renderer hidden by <see cref="HideHeroBody"/>.</summary>
+        private void RestoreHeroBody()
+        {
+            for (int i = 0; i < _hiddenBodyRenderers.Count; i++)
+            {
+                var r = _hiddenBodyRenderers[i];
+                if (r == null) continue;
+                r.shadowCastingMode = i < _hiddenBodyPriorModes.Count
+                    ? _hiddenBodyPriorModes[i]
+                    : ShadowCastingMode.On;
+            }
+            _hiddenBodyRenderers.Clear();
+            _hiddenBodyPriorModes.Clear();
+        }
+
+        private void OnDestroy()
+        {
+            // Never leak the FPV body-hide onto the shared hero rig (it survives the scene).
+            RestoreHeroBody();
         }
 
         // -- Legacy top-down iso ----------------------------------------------

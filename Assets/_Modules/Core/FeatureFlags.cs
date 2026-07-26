@@ -82,7 +82,10 @@ namespace DeNelle.Core
         /// RaidSelectionScreen -> RaidDeployScreen -> SceneRouter.GoRaid teleport path is restored
         /// verbatim (the raid icon opens the selection screen; RaidOutpostSystem does not spawn the
         /// walk-to outpost). Default ON. PlayerPrefs "ff.raidwalk".</summary>
-        public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: true);
+        // WO-771 LOCKED (2026-07-26): raid loop = Teleport/Deploy, NOT walk-to. raidwalk OFF makes the
+        // RaidSelectionScreen deploy loop the default from the raid icon (RaidEntryBridge routes to
+        // PingNearestRaidOutpost only when this is ON). ff.raidwalk=1 restores the old walk-to path.
+        public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: false);
 
         /// <summary>When ON (default), only the family REP/leader roams the overworld; the full
         /// family (leader + followers) spawns in the BattleArena on engage from the recipe carried
@@ -148,7 +151,7 @@ namespace DeNelle.Core
         /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
         /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
-        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: true);  // PREVIEW 2026-06-26 (HUD): temporarily ON so the BattleArena runs and the 9-zone HUD renders for the owner to felt-judge. REVERT to false after the HUD decision. (V1 DESCOPE note: arena was CUT for V1; V1 raid = walk-to EnemyOutpost (RaidOutpostSystem). PlayerPrefs "ff.overworldencounter"=0 to force the V1 walk-to raid.)
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);  // WO-771 LOCKED (2026-07-26): reverted the 2026-06-26 preview default OFF so the leftover wandering-encounter loop no longer shadows the Teleport/Deploy raid loop out of the box (audit: "fix that flag first regardless"). ff.overworldencounter=1 restores the preview.
 
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
@@ -588,7 +591,10 @@ namespace DeNelle.Core
         /// When OFF (default): the baked CastleBarracks is hidden at runtime, BarracksNpcInjector
         /// no-ops, and the barracks dialogue/training entry points are unreachable. Disable-not-
         /// delete; flip ON for V2 via PlayerPrefs "ff.barracks" = 1.</summary>
-        public static bool Barracks => Get("barracks", defaultOn: false);
+        // WO-771 V1 (2026-07-26): the raid deploy loop pulls troops from the barracks-gated roster, so the
+        // barracks must be reachable in normal play. Roster/training (TroopTrainingPanel/BarracksUnlock/
+        // GameState.Army) already exists — flip ON. ff.barracks=0 to hide it again if it needs more polish.
+        public static bool Barracks => Get("barracks", defaultOn: true);
 
         /// <summary>WO-703 / ticket BLANK-1 (owner ruling 2026-07-13 "should be completely flagged
         /// off for now"): the Colosseum / arena-entrance structure visual in the home hub. When OFF
@@ -624,15 +630,16 @@ namespace DeNelle.Core
         // ff.strategicplacement is REMOVED — strategic building placement (WO-673) is
         // ALWAYS ON in every build. All former call sites are the unconditional TRUE path.
 
-        /// <summary>DUNGEON CAMERA — FIRST-PERSON (owner 2026-07-17, dungeon camera felt-test: the
-        /// top-down iso rig floated near the ~4u ceiling so the room could not be seen; we moved to an
-        /// OVER-THE-SHOULDER dungeon camera as the DEFAULT and left first-person as the easy A/B). When ON,
-        /// <see cref="DeNelle.Dungeons.DungeonCameraRig"/> seats the camera at the Keeper's eyeline looking
-        /// forward down the corridor (an FPV STUB — camera placement only; it rides the movement heading and
-        /// does NOT yet add independent mouse/touch look or hide the hero body — see the rig header for what a
-        /// full FPV needs). Default OFF => the over-the-shoulder rig. PlayerPrefs "ff.dungeonfpv" = 1 to
-        /// preview first-person.</summary>
-        public static bool DungeonFpv => Get("dungeonfpv", defaultOn: false);
+        /// <summary>DUNGEON CAMERA — FIRST-PERSON (owner 2026-07-17 felt-test; DEFAULT-ON 2026-07-26 — an
+        /// architect chose FPV traversal over raising the ~4u ceiling, and the owner wants it). The original
+        /// top-down iso rig floated near the ceiling so the room could not be seen; the STUB then only placed
+        /// the camera at the eyeline. This is now a FULL FPV: <see cref="DeNelle.Dungeons.DungeonCameraRig"/>
+        /// adds an independent yaw+pitch LOOK layer (right-half touch-drag / mouse-delta, pitch-clamped ±70,
+        /// DECOUPLED from the movement heading), HIDES the hero body renderers (ShadowsOnly) so the camera is
+        /// not inside the mesh, and keeps obstacle-avoidance + head-bob OFF (motion sickness). Arena fights
+        /// temporarily force over-the-shoulder via <c>SetCombatFraming</c>. Default ON — set PlayerPrefs
+        /// "ff.dungeonfpv" = 0 to REVERT to the fixed over-the-shoulder rig.</summary>
+        public static bool DungeonFpv => Get("dungeonfpv", defaultOn: true);
 
         /// <summary>DUNGEON CAMERA — LEGACY TOP-DOWN ISO escape hatch (owner 2026-07-17). When ON, the
         /// dungeon rig restores the pre-2026-07-17 fixed top-down isometric framing (pitch ~52, height-capped

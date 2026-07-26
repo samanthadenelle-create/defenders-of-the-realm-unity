@@ -38,6 +38,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Dungeons
@@ -237,8 +238,49 @@ namespace DeNelle.Dungeons
                 return keyboard;
             }
 
-            TrySampleTap();
+            // Mobile: the shared on-screen movement joystick (reused village
+            // VirtualJoystick — bottom-left stick, touch-only). Camera-relative like WASD.
+            Vector3 stick = SampleJoystickMove();
+            if (stick.sqrMagnitude > 0.0001f)
+            {
+                _hasMoveTarget = false;
+                return stick;
+            }
+
+            // TAP-TO-MOVE FPV GATE: in first-person a screen tap is a LOOK, not a walk
+            // (DungeonCameraRig consumes right-half drags for the free-look), so do not
+            // arm a tap-to-move destination while FPV is active. The over-the-shoulder /
+            // iso modes keep tap-to-move.
+            if (!FeatureFlags.DungeonFpv)
+                TrySampleTap();
             return ResolveTapDirection();
+        }
+
+        /// <summary>
+        /// Reads the shared on-screen <see cref="DeNelle.Village.VirtualJoystick"/> (the
+        /// same bottom-left thumbstick the village hero uses; touch-only, self-bootstrapping)
+        /// and returns a camera-relative move vector on the XZ plane, magnitude 0..1 for
+        /// analog speed. Zero when the stick is idle or absent (desktop uses WASD).
+        /// </summary>
+        private Vector3 SampleJoystickMove()
+        {
+            Vector2 stick = DeNelle.Village.VirtualJoystick.Move;
+            if (stick.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;   // deadzone
+
+            Vector3 fwd = Vector3.forward, right = Vector3.right;
+            if (_moveCamera != null)
+            {
+                fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
+                right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
+                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+                if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
+                fwd.Normalize();
+                right.Normalize();
+            }
+
+            Vector3 dir = right * stick.x + fwd * stick.y;
+            if (dir.sqrMagnitude > 1f) dir.Normalize();   // clamp; keep analog magnitude below 1
+            return dir;
         }
 
         /// <summary>
