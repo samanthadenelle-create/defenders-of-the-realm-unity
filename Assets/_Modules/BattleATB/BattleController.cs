@@ -612,6 +612,17 @@ namespace DeNelle.BattleATB
             if (result == null || _returnScheduled) return;
             _returnScheduled = true;
             FlowTrace.Step("AtbBattle", $"HandleOutcome: battle ended outcome={result.Outcome} source={result.Source} — scheduling return.");
+
+            // WO-770.3 (fixes D4): stamp the settled outcome onto the Core-level carrier so a
+            // module that only references DeNelle.Core (the dungeon resume) can tell a win from a
+            // loss — the engine's own BattleOutcome is invisible below Core. Any non-Victory
+            // engine outcome (Defeat, or a None the engine never returns at settle) maps to Defeat.
+            var pending = SceneRouter.PendingBattle;
+            if (pending != null)
+                pending.LastOutcome = result.Outcome == BattleOutcome.Victory
+                    ? BattleResultKind.Victory
+                    : BattleResultKind.Defeat;
+
             ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer
             ReturnAfterResult(result).Forget();
         }

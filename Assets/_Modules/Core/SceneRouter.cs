@@ -35,6 +35,16 @@ using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
+    /// <summary>
+    /// WO-770.3 (fixes D4): a Core-level battle-result carrier. A module that only
+    /// references <c>DeNelle.Core</c> (the dungeon) cannot see the engine's own
+    /// <c>DeNelle.BattleATB.BattleOutcome</c>, so this Core mirror lets the dungeon resume
+    /// tell a won ATB round-trip from a lost one. Named distinctly (NOT "BattleOutcome")
+    /// on purpose — an identically-named Core enum would collide (CS0104) with the engine
+    /// enum inside BattleController, which imports both namespaces.
+    /// </summary>
+    public enum BattleResultKind { None, Victory, Defeat }
+
     /// <summary>Hand-off parameters for the ATB battle scene (detailed in the Week-2 spec).</summary>
     [Serializable]
     public sealed class BattleParams
@@ -54,6 +64,17 @@ namespace DeNelle.Core
         /// Empty / null also resolves to the village default.
         /// </summary>
         public string ReturnScene = SceneRouter.Village;
+
+        /// <summary>
+        /// WO-770.3 (fixes D4): the settled outcome of the ATB round-trip, stamped by
+        /// <see cref="BattleParams"/>'s reader — actually written by
+        /// <c>BattleController.HandleOutcome</c> just before the scene hand-back. The dungeon
+        /// resume (<c>DungeonController.ResolvePendingEncounter</c>) reads it to END the run on
+        /// a defeat instead of assuming victory. Default <see cref="BattleResultKind.None"/>;
+        /// a village breach IGNORES it (the village return is by <see cref="ReturnScene"/>,
+        /// and the Heart/building settle is driven off the ATB runtime result, not this).
+        /// </summary>
+        public BattleResultKind LastOutcome = BattleResultKind.None;
     }
 
     /// <summary>

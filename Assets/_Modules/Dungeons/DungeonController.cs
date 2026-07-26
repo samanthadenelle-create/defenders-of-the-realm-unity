@@ -849,22 +849,37 @@ namespace DeNelle.Dungeons
         {
             if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
 
-            // v1's ATB engine fully restores HP/MP after every fight, so a clean
-            // resume is treated as a victory unless a battle-result carrier says
-            // otherwise. The ATB outcome lands on the battle runtime state; the
-            // dungeon module references DeNelle.Core only, so until a Core-level
-            // result carrier exists the resume assumes victory (the cleared
-            // encounter never re-fires either way — ResumePendingEncounter
-            // re-arms _hasFired).
-            bool victory = true;
+            // WO-770.3 (fixes D4): the Core-level result carrier now exists — read the settled
+            // outcome that BattleController stamped onto SceneRouter.PendingBattle before the
+            // hand-back. Only a stamped Victory counts as a win; a Defeat OR a missing carrier
+            // (dev/direct-play with no battle) is treated as a loss. NOTE: the real-time
+            // BattleArena path settles IN-SCENE (warps the hero back, no scene round-trip) and
+            // never reaches here — this governs the legacy ATB (ff.dungeonrealtime OFF) round-trip.
+            var battleCarrier = SceneRouter.PendingBattle;
+            bool victory = battleCarrier != null && battleCarrier.LastOutcome == BattleResultKind.Victory;
+
+            // Capture the boss flag BEFORE the resume/exit clears the pending handoff below.
+            bool wasBoss = _runtimeState.PendingEncounterIsBoss;
+
+            // WO-770.3 LOCKED defeat behavior: a lost fight ENDS the run and returns to the
+            // Village. Clear the encounter handoff + combat lock (so the run is not wedged and the
+            // encounter is NOT re-armed for a free retry), grant NO loot, and do NOT mark the boss
+            // defeated (the boss-gated back-door stays sealed). Then ExitToVillage — no resume-in-place.
+            if (!victory)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"ResolvePendingEncounter: DEFEAT on '{_runtimeState.PendingEncounterId}' " +
+                    $"(carrier={(battleCarrier == null ? "none" : battleCarrier.LastOutcome.ToString())}) — " +
+                    "ending the run + returning to Village (no loot, boss NOT credited, encounter not re-armed).");
+                _runtimeState.ResumeAfterEncounter(false); // clear pending handoff + combat lock (records the loss)
+                ExitToVillage().Forget();
+                return;
+            }
 
             // WO-749 gap 3: the ATB/cottage encounter path credited NO loot (only the
             // composed-chain live-Enemy path fed the larder). Grant a per-encounter
-            // dungeon roll into the larder on a victory resume. Capture the boss flag
-            // BEFORE the trigger's resume clears the pending handoff below.
-            bool wasBoss = _runtimeState.PendingEncounterIsBoss;
-            if (victory)
-                DungeonLootGrant.GrantEncounter(wasBoss);
+            // dungeon roll into the larder on a victory resume.
+            DungeonLootGrant.GrantEncounter(wasBoss);
 
             string pendingId = _runtimeState.PendingEncounterId;
             bool settled = false;
