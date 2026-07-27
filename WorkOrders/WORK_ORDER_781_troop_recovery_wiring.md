@@ -1,4 +1,6 @@
-# WO-779 — Wire ArmyStorage.TickRecovery (wounded troops never heal)
+# WO-781 — Wire ArmyStorage.TickRecovery (wounded troops never heal)
+
+> ⚠ Renumbered 779→781 on 2026-07-26: WO-779 was reassigned by the owner to the UI spacing/layout conformance sweep. The implementation agent may reference the old "779" label — the WORK is unchanged.
 
 **Status:** READY TO IMPLEMENT
 **Minted:** 2026-07-26 (CLI, from gameplay-gap ledger — borderline P0)
