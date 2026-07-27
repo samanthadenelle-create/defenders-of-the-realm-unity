@@ -1,9 +1,12 @@
 // =============================================================================
 // RoomForgeMaterials — ONE shared wall mat + ONE shared floor mat for all rooms.
 // -----------------------------------------------------------------------------
-// Uses KayKit Dungeon atlas (dungeon_texture.png) already in the repo. Flat URP/Lit,
-// tiled simply so procedural cube shells look like dungeon stone without per-piece
-// UV authoring. Props from KayKit keep their own pack materials (Fix KayKit Materials).
+// SOLID STONE URP/Lit — deliberately NO texture. The procedural room shells are
+// Unity PRIMITIVE CUBES; a cube maps the full 0→1 UV across every face, so sampling
+// the KayKit colormap atlas (dungeon_texture.png = grid of solid-color swatches)
+// repeats the WHOLE palette across each face = a rainbow patchwork. Flat stone
+// _BaseColor sidesteps that. Props from KayKit keep their own pack materials (they
+// are real FBX with authored UVs — Fix KayKit Materials — do NOT touch those).
 // =============================================================================
 
 using System.IO;
@@ -30,21 +33,19 @@ namespace DeNelle.Editor.RoomForge
             "Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/Assets/fbx(unity)/dungeon_texture.png",
         };
 
-        private static readonly string[] ExistingMatCandidates =
-        {
-            "Assets/Models/KayKit/dungeon/dungeon_texture_URP.mat",
-            "Assets/Models/KayKit/dungeon/fbx(unity)/dungeon_texture_URP.mat",
-            "Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/Assets/fbx/dungeon_texture_URP.mat",
-        };
+        // Solid stone tones (no texture — see header for why atlas-on-cube = rainbow).
+        private static readonly Color WallStone = new Color(0.42f, 0.42f, 0.45f, 1f);
+        private static readonly Color FloorStone = new Color(0.30f, 0.30f, 0.33f, 1f);
+        private static readonly Color AccentStone = new Color(0.46f, 0.41f, 0.35f, 1f); // warm stone
 
-        /// <summary>Shared wall material (tiling ~1–2 on large faces).</summary>
-        public static Material Wall => GetOrCreate(WallMatPath, tiling: 1.5f, darken: 0.92f);
+        /// <summary>Shared wall material — solid mid-grey stone.</summary>
+        public static Material Wall => GetOrCreate(WallMatPath, WallStone);
 
-        /// <summary>Shared floor material (higher tiling so 6u cells read as tiles).</summary>
-        public static Material Floor => GetOrCreate(FloorMatPath, tiling: 2.5f, darken: 1f);
+        /// <summary>Shared floor material — solid darker stone.</summary>
+        public static Material Floor => GetOrCreate(FloorMatPath, FloorStone);
 
-        /// <summary>Optional accent (boss/reward) — same atlas, slight warm tint.</summary>
-        public static Material Accent => GetOrCreate(AccentMatPath, tiling: 1.5f, darken: 1f, warmTint: true);
+        /// <summary>Optional accent (boss/reward) — solid warm stone.</summary>
+        public static Material Accent => GetOrCreate(AccentMatPath, AccentStone);
 
         [MenuItem("Defenders/Dungeon/Ensure Room Forge Materials (KayKit atlas)")]
         public static void EnsureMenu()
@@ -79,74 +80,69 @@ namespace DeNelle.Editor.RoomForge
             }
         }
 
-        private static Material GetOrCreate(string matPath, float tiling, float darken, bool warmTint = false)
+        private static Material GetOrCreate(string matPath, Color stoneColor)
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (existing != null)
             {
-                // Re-point base map if atlas moved / was fixed.
-                Texture2D tex = LoadAtlas();
-                if (tex != null && existing.GetTexture("_BaseMap") != tex)
+                // Regeneration: force solid stone. STRIP any atlas map (older versions of this
+                // asset assigned dungeon_texture.png → rainbow on cube shells) and set stone color.
+                bool dirty = false;
+                if (existing.HasProperty("_BaseMap") && existing.GetTexture("_BaseMap") != null)
                 {
-                    existing.SetTexture("_BaseMap", tex);
-                    existing.SetTextureScale("_BaseMap", new Vector2(tiling, tiling));
-                    EditorUtility.SetDirty(existing);
+                    existing.SetTexture("_BaseMap", null);
+                    dirty = true;
                 }
+                if (existing.HasProperty("_MainTex") && existing.GetTexture("_MainTex") != null)
+                {
+                    existing.SetTexture("_MainTex", null);
+                    dirty = true;
+                }
+                if (existing.mainTexture != null)
+                {
+                    existing.mainTexture = null;
+                    dirty = true;
+                }
+                ApplyStone(existing, stoneColor, ref dirty);
+                if (dirty) EditorUtility.SetDirty(existing);
                 return existing;
-            }
-
-            // Prefer cloning an already-good KayKit URP mat if present.
-            Material sourcePack = null;
-            foreach (var p in ExistingMatCandidates)
-            {
-                sourcePack = AssetDatabase.LoadAssetAtPath<Material>(p);
-                if (sourcePack != null) break;
             }
 
             Shader shader = Shader.Find(UrpLit);
             if (shader == null)
             {
                 Debug.LogError("[RoomForgeMaterials] URP Lit shader missing.");
-                return sourcePack;
+                return null;
             }
 
             EnsureFolder(OutFolder);
-            Material mat = sourcePack != null ? new Material(sourcePack) : new Material(shader);
+            // Fresh URP/Lit with NO texture — solid stone. Cube shells must not sample the atlas.
+            Material mat = new Material(shader);
             mat.name = Path.GetFileNameWithoutExtension(matPath);
 
-            Texture2D atlas = LoadAtlas();
-            if (atlas != null)
-            {
-                mat.SetTexture("_BaseMap", atlas);
-                mat.SetTextureScale("_BaseMap", new Vector2(tiling, tiling));
-                // URP also uses mainTexture on some paths
-                mat.mainTexture = atlas;
-                mat.mainTextureScale = new Vector2(tiling, tiling);
-            }
-            else
-            {
-                Debug.LogWarning("[RoomForgeMaterials] dungeon_texture.png not found under KayKit — " +
-                                 "rooms will use flat URP Lit until pack is present. Run Fix KayKit Materials after import.");
-            }
-
-            mat.SetFloat("_Smoothness", 0f);
-            mat.SetFloat("_Metallic", 0f);
-            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
-
-            Color baseCol = warmTint
-                ? new Color(1f, 0.92f, 0.78f, 1f)
-                : new Color(darken, darken, darken, 1f);
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", baseCol);
-            else mat.color = baseCol;
+            bool _ = false;
+            ApplyStone(mat, stoneColor, ref _);
 
             AssetDatabase.CreateAsset(mat, matPath);
             return mat;
         }
 
-        private static Texture2D LoadAtlas()
+        private static void ApplyStone(Material mat, Color stoneColor, ref bool dirty)
         {
-            string path = FindAtlasPath();
-            return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+
+            if (mat.HasProperty("_BaseColor"))
+            {
+                if (mat.GetColor("_BaseColor") != stoneColor) { mat.SetColor("_BaseColor", stoneColor); dirty = true; }
+            }
+            else if (mat.color != stoneColor) { mat.color = stoneColor; dirty = true; }
+
+            if (mat.HasProperty("_Color") && mat.GetColor("_Color") != stoneColor)
+            {
+                mat.SetColor("_Color", stoneColor);
+                dirty = true;
+            }
         }
 
         public static string FindAtlasPath()
