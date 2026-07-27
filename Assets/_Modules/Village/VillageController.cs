@@ -143,7 +143,6 @@ namespace DeNelle.Village
             EnsureGateProximityOpeners();
             EnsureHeartHudBridge();
             EnsureComboHudBridge();
-            EnsureDungeonEntrances();
             EnsureOnboardingIntegrator();
         }
 
@@ -195,21 +194,11 @@ namespace DeNelle.Village
                 gameObject.AddComponent<OnboardingIntegrator>();
         }
 
-        /// <summary>
-        /// Attaches the <see cref="DungeonEntranceBootstrap"/> at runtime (WO-19) so
-        /// the village gets its in-world dungeon entrances. Runtime-attached for the
-        /// same reason as the gate openers / Heart HUD bridge: the scene is
-        /// builder-baked. Idempotent ([DisallowMultipleComponent]).
-        /// </summary>
-        private void EnsureDungeonEntrances()
-        {
-            // DISABLED (owner 2026-05-27): this WO-19 runtime ring placed a SECOND
-            // set of dungeon entrances (the "(F) to enter" doorways) at radius 25m
-            // OUTSIDE the gate, duplicating the baked DungeonPortals (disc + arch +
-            // "Healer's Cottage" label) inside the village. The SW ring entrance also
-            // routed to a broken "hero vs 2 pills" encounter. Keep only the baked
-            // portals; re-enable this only if those are ever removed.
-        }
+        // WO-777 (2026-07-26): the EnsureDungeonEntrances runtime hook was removed. It attached the
+        // WO-19 DungeonEntranceBootstrap ring — a SECOND village→dungeon entry system
+        // that duplicated the DungeonWorldPortalSpawner's DungeonPortals. It had been a
+        // disabled no-op since 2026-05-27; the whole redundant system (DungeonEntrance +
+        // DungeonEntranceBootstrap) is now retired. Sole entry = DungeonPortal.
 
         /// <summary>
         /// Attaches a <see cref="HeartHudBridge"/> at runtime (WO-20) so the HUD

@@ -23,6 +23,10 @@ namespace DeNelle.Tests.EditMode
     [TestFixture]
     public class DungeonRuntimeStateResetTests
     {
+        // WO-775: the seed reads the LIVE hero rig — never the retired 120/60 placeholder literals.
+        private const float OldPlaceholderHp = 120f;
+        private const float OldPlaceholderMana = 60f;
+
         private static void InvokeOnEnable(DungeonRuntimeState state)
         {
             var mi = typeof(DungeonRuntimeState).GetMethod(
@@ -30,6 +34,15 @@ namespace DeNelle.Tests.EditMode
             Assert.That(mi, Is.Not.Null,
                 "DungeonRuntimeState.OnEnable() must exist — it is the stale-run reset hook");
             mi.Invoke(state, null);
+        }
+
+        private static void SetPrivateField(object target, string field, object value)
+        {
+            var fi = target.GetType().GetField(
+                field, BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(fi, Is.Not.Null,
+                $"expected private field '{field}' on {target.GetType().Name}");
+            fi.SetValue(target, value);
         }
 
         [Test]
@@ -83,6 +96,65 @@ namespace DeNelle.Tests.EditMode
             finally
             {
                 Object.DestroyImmediate(state);
+            }
+        }
+
+        // WO-775 — the dungeon seed must read the LIVE hero (HeroHealth.MaxHp +
+        // HeroAbilities.MaxMana), not the retired 120/60 placeholder literals. A geared
+        // hero whose MaxHp folds to 155 enters the dungeon; the run-state vitals must
+        // equal the hero's numbers and must NOT be 120/60.
+        [Test]
+        public void enter_dungeon_seeds_hero_vitals_from_live_hero_not_placeholder()
+        {
+            var heroGo = new GameObject("TestHero");
+            var controllerGo = new GameObject("TestDungeonController");
+            var state = ScriptableObject.CreateInstance<DungeonRuntimeState>();
+            try
+            {
+                // A geared hero: MaxHp folds to 155 (base 155, no gear/talents in a bare
+                // test), MaxMana 40 — both DELIBERATELY unequal to the retired 120/60.
+                var heroHealth = heroGo.AddComponent<DeNelle.Village.HeroHealth>();
+                var heroAbilities = heroGo.AddComponent<DeNelle.Village.HeroAbilities>();
+                SetPrivateField(heroHealth, "_maxHp", 155f);
+                SetPrivateField(heroHealth, "_hp", 155f);
+                SetPrivateField(heroAbilities, "_maxMana", 40f);
+                SetPrivateField(heroAbilities, "_mana", 25f);
+
+                // Pre-conditions: the live rig resolves the geared numbers, and they are
+                // NOT the placeholders — so the assertions below actually mean something.
+                Assert.That(heroHealth.MaxHp, Is.EqualTo(155f),
+                    "test hero MaxHp must fold to 155 (base 155, no gear/talents)");
+                Assert.That(heroAbilities.MaxMana, Is.EqualTo(40f));
+                Assert.That(heroHealth.MaxHp, Is.Not.EqualTo(OldPlaceholderHp));
+                Assert.That(heroAbilities.MaxMana, Is.Not.EqualTo(OldPlaceholderMana));
+
+                var controller = controllerGo.AddComponent<DungeonController>();
+                SetPrivateField(controller, "_hero", heroGo.transform);
+                SetPrivateField(controller, "_runtimeState", state);
+
+                // Drive the WO-775 seed — the body EnterDungeon runs at its fresh-run gate.
+                var mi = typeof(DungeonController).GetMethod(
+                    "SeedHeroVitalsFromLiveHero", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.That(mi, Is.Not.Null,
+                    "DungeonController.SeedHeroVitalsFromLiveHero() must exist — the WO-775 live-hero seed");
+                mi.Invoke(controller, null);
+
+                // ACCEPTANCE: the run-state vitals match the LIVE hero, and are NOT 120/60.
+                Assert.That(state.HasHeroVitals, Is.True, "vitals must be seeded");
+                Assert.That(state.HeroMaxHp, Is.EqualTo(heroHealth.MaxHp),
+                    "seeded HeroMaxHp must equal the live hero's MaxHp");
+                Assert.That(state.HeroMaxMana, Is.EqualTo(heroAbilities.MaxMana),
+                    "seeded HeroMaxMana must equal the live hero's MaxMana");
+                Assert.That(state.HeroMaxHp, Is.Not.EqualTo(OldPlaceholderHp),
+                    "seeded HeroMaxHp must NOT be the retired 120 placeholder");
+                Assert.That(state.HeroMaxMana, Is.Not.EqualTo(OldPlaceholderMana),
+                    "seeded HeroMaxMana must NOT be the retired 60 placeholder");
+            }
+            finally
+            {
+                Object.DestroyImmediate(state);
+                Object.DestroyImmediate(controllerGo);
+                Object.DestroyImmediate(heroGo);
             }
         }
     }

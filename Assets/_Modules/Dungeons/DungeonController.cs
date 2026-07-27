@@ -111,15 +111,16 @@ namespace DeNelle.Dungeons
         [Tooltip("Parent for the spawned encounter triggers.")]
         [SerializeField] private Transform _encounterRoot;
 
-        [Header("Hero vitals (placeholder — no dungeon hero-stat type yet)")]
-        [Tooltip("Baseline hero HP seeded onto the run state at run start so the " +
-                 "checkpoint heal + the ATB round-trip have live numbers to work " +
-                 "from. The dungeon module owns no hero-stat type; when a real one " +
-                 "lands it should drive SetHeroVitals each frame instead.")]
-        [SerializeField] private float _heroBaselineHp = 120f;
+        [Header("Hero vitals — LAST-DITCH fallback only (WO-775)")]
+        [Tooltip("Fallback hero HP seeded onto the run state ONLY when neither a live " +
+                 "HeroHealth on the hero rig nor HeroHealth.Instance resolves (guarded by " +
+                 "a FlowTrace.Warn). The real seed reads the LIVE hero's MaxHp (base + gear " +
+                 "+ talents) — see SeedHeroVitalsFromLiveHero.")]
+        [SerializeField] private float _fallbackHp = 120f;
 
-        [Tooltip("Baseline hero mana seeded onto the run state at run start.")]
-        [SerializeField] private float _heroBaselineMana = 60f;
+        [Tooltip("Fallback hero mana seeded onto the run state ONLY when no live " +
+                 "HeroAbilities resolves off the hero rig (guarded by a FlowTrace.Warn).")]
+        [SerializeField] private float _fallbackMana = 60f;
 
         [Header("Camera framing (top-down isometric)")]
         [Tooltip("Camera offset from the hero, world units. Gives the spec's " +
@@ -316,10 +317,10 @@ namespace DeNelle.Dungeons
             // Seed the hero vitals on a fresh run so the checkpoint heal +
             // the ATB round-trip have numbers (Week-6 checklist item 7). On a
             // resume the vitals already rode the round-trip on the run state, so
-            // they are left untouched.
+            // they are left untouched. WO-775: the seed now reads the LIVE hero
+            // rig (base + gear + talents), not the retired 120/60 placeholder literals.
             if (_runtimeState != null && !resuming && !_runtimeState.HasHeroVitals)
-                _runtimeState.SetHeroVitals(
-                    _heroBaselineHp, _heroBaselineHp, _heroBaselineMana, _heroBaselineMana);
+                SeedHeroVitalsFromLiveHero();
 
             PlaceHero(spawnPos);
             ConfigureCamera();
@@ -357,6 +358,70 @@ namespace DeNelle.Dungeons
             // The run is live and the Keeper is framed — hand movement back.
             if (_heroController != null)
                 _heroController.SetInputEnabled(true);
+        }
+
+        /// <summary>
+        /// WO-775: seed the run's hero vitals from the LIVE hero rig — HP from
+        /// <see cref="DeNelle.Village.HeroHealth"/> (base + gear + talents), mana from
+        /// <see cref="DeNelle.Village.HeroAbilities"/> — instead of the retired hardcoded
+        /// 120/60 placeholder. Resolved off <see cref="_hero"/> with <c>TryGetComponent</c>
+        /// (NOT <c>GetComponent&lt;T&gt;() ??</c> — the NoNullCoalesceOnGetComponent lint
+        /// fails the gate on that), with <see cref="DeNelle.Village.HeroHealth.Instance"/>
+        /// as the fallback when the component is not yet on the rig (mid body-swap). The
+        /// <c>_fallbackHp</c> / <c>_fallbackMana</c> literals survive ONLY as a guarded
+        /// last-ditch fallback — each behind a <see cref="FlowTrace.Warn"/> — when neither
+        /// live source resolves. Extracted from the fresh-run seed gate so the EditMode
+        /// test can prove the seed reads real hero stats, not the placeholders.
+        /// </summary>
+        internal void SeedHeroVitalsFromLiveHero()
+        {
+            if (_runtimeState == null) return;
+
+            DeNelle.Village.HeroHealth heroHealth = null;
+            DeNelle.Village.HeroAbilities heroAbilities = null;
+            if (_hero != null)
+            {
+                if (_hero.TryGetComponent<DeNelle.Village.HeroHealth>(out var hh)) heroHealth = hh;
+                if (_hero.TryGetComponent<DeNelle.Village.HeroAbilities>(out var ha)) heroAbilities = ha;
+            }
+            if (heroHealth == null) heroHealth = DeNelle.Village.HeroHealth.Instance;
+
+            float seedHp, seedMaxHp, seedMana, seedMaxMana;
+
+            if (heroHealth != null)
+            {
+                seedHp = heroHealth.Hp;
+                seedMaxHp = heroHealth.MaxHp;
+            }
+            else
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"SeedHeroVitalsFromLiveHero: no live HeroHealth on " +
+                    $"'{(_hero != null ? _hero.name : "null")}' nor HeroHealth.Instance — " +
+                    $"falling back to the {_fallbackHp:F0} HP placeholder.");
+                seedHp = _fallbackHp;
+                seedMaxHp = _fallbackHp;
+            }
+
+            if (heroAbilities != null)
+            {
+                seedMana = heroAbilities.Mana;
+                seedMaxMana = heroAbilities.MaxMana;
+            }
+            else
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"SeedHeroVitalsFromLiveHero: no live HeroAbilities on " +
+                    $"'{(_hero != null ? _hero.name : "null")}' — falling back to the " +
+                    $"{_fallbackMana:F0} mana placeholder.");
+                seedMana = _fallbackMana;
+                seedMaxMana = _fallbackMana;
+            }
+
+            _runtimeState.SetHeroVitals(seedHp, seedMaxHp, seedMana, seedMaxMana);
+            FlowTrace.Step("Dungeon",
+                $"SeedHeroVitalsFromLiveHero: seeded from live rig — HP {seedHp:F0}/{seedMaxHp:F0}, " +
+                $"mana {seedMana:F0}/{seedMaxMana:F0}.");
         }
 
         /// <summary>

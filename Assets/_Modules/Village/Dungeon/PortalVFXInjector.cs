@@ -1,12 +1,13 @@
 // =============================================================================
 // PortalVFXInjector — DEF-100 safety net.
 // -----------------------------------------------------------------------------
-// The portal VFX controller is normally attached by its host (DungeonPortal /
-// DungeonEntranceBootstrap). This injector is a belt-and-braces guarantee: after
-// every scene load it finds every portal (by DungeonPortal or DungeonEntrance
-// component) and ensures a self-sufficient PortalVFXController is present, so the
-// interior glow renders even on portals created by a code path that forgot to
-// add it. Code-only — no scene/prefab edit. Idempotent (GetComponent guard).
+// The portal VFX controller is normally attached by its host (DungeonPortal).
+// This injector is a belt-and-braces guarantee: after every scene load it finds
+// every DungeonPortal and ensures a self-sufficient PortalVFXController is present,
+// so the interior glow renders even on portals created by a code path that forgot
+// to add it. Code-only — no scene/prefab edit. Idempotent (GetComponent guard).
+// WO-777 (2026-07-26): the DungeonEntrance scan was removed — that redundant
+// entry system is retired; DungeonPortal is the sole village→dungeon entry.
 // =============================================================================
 
 using UnityEngine;
@@ -28,15 +29,7 @@ namespace DeNelle.Village
 
         private static void EnsureAll()
         {
-            // DungeonEntrance is the runtime-built portal; DungeonPortal is the
-            // alternate (Buildings) variant. Cover both.
-            foreach (var e in Object.FindObjectsByType<DungeonEntrance>(FindObjectsInactive.Include))
-            {
-                if (e == null) continue;
-                if (e.GetComponent<PortalVFXController>() == null)
-                    e.gameObject.AddComponent<PortalVFXController>();
-            }
-
+            // DungeonPortal is the sole village→dungeon entry component (WO-777).
             foreach (var p in Object.FindObjectsByType<DungeonPortal>(FindObjectsInactive.Include))
             {
                 if (p == null) continue;

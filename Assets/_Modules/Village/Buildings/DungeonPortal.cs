@@ -131,9 +131,9 @@ namespace DeNelle.Village
             // redundant world-space bubble while it is showing.
             if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
 
-            // Mobile-first: entering fires through the shared on-screen Interact button
-            // (requested above) or by walking into the portal trigger (OnTriggerEnter).
-            // The desktop F-key trigger was removed.
+            // Mobile-first: entering fires ONLY through the shared on-screen Interact
+            // button (requested above). WO-777: the walk-into-trigger auto-route was
+            // removed (accidental-delve footgun); OnTriggerEnter now only arms VFX.
         }
 
         private void OnDisable()
@@ -142,22 +142,23 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Owner ask 2026-05-20 ("is trigger firing to go to healer
-        /// cottage?"): make the BoxCollider trigger DO something — walking
-        /// into the portal routes straight to the dungeon. Removes the F
-        /// step entirely for players who prefer movement-only interaction.
+        /// WO-777: the trigger no longer AUTO-ROUTES on walk-in. Walking into the
+        /// portal used to call EnterDungeon() immediately (an accidental-delve
+        /// footgun with no confirm — owner ask 2026-05-20 originally wired it that
+        /// way). Now the trigger only ARMS the portal VFX (interior glow reacts to
+        /// the approaching hero); the SOLE entry path is the shared Interact button
+        /// requested in Update() (MobileInteractButton.Request → EnterDungeon), so
+        /// entering is always an explicit tap/[F], never a walk-by.
         /// </summary>
         private void OnTriggerEnter(Collider other)
         {
-            if (_loading) return;
             if (other == null) return;
-            // Only the hero triggers — pets are kinematic and would otherwise
-            // route the player to the dungeon while orbiting.
+            // Only the hero arms the portal — pets are kinematic and would otherwise
+            // trigger the approach VFX while orbiting.
             var hero = other.GetComponentInParent<HeroLocomotion>();
             if (hero == null) return;
-            Debug.Log("[DungeonPortal] Trigger entered by hero — routing to " + _dungeonId);
+            Debug.Log("[DungeonPortal] Trigger entered by hero — arming portal (entry is via the Interact button, no walk-by).");
             _portalVfx?.OnHeroApproach();
-            EnterDungeon();
         }
 
         public void BindShimmer(Renderer r) => _shimmer = r;

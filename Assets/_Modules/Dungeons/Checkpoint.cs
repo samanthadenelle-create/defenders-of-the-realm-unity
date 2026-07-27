@@ -183,7 +183,25 @@ namespace DeNelle.Dungeons
             //      load-bearing the moment a non-reset combat build ships.
             //   2. SAVE — ReachCheckpoint above already recorded this shrine on
             //      the run state as the run's respawn point.
-            _runtimeState?.HealHeroToFull();
+            // WO-775 heal-loop close: HealHeroToFull only mutates the run-state SO
+            // snapshot — nothing re-read it, so checkpoint heals were COSMETIC. Push
+            // the restored full HP/mana back onto the LIVE hero rig so the shrine's
+            // heal is real. Resolve the live components off the hero rig with
+            // TryGetComponent (NOT `?? ` — the NoNullCoalesceOnGetComponent lint fails
+            // the gate) and restore them to full; null-guarded (mid body-swap the
+            // component may not be on the rig, so HeroHealth.Instance is the HP fallback).
+            bool healed = _runtimeState != null && _runtimeState.HealHeroToFull();
+            if (healed)
+            {
+                DeNelle.Village.HeroHealth heroHealth = null;
+                if (_hero != null && _hero.TryGetComponent<DeNelle.Village.HeroHealth>(out var hh))
+                    heroHealth = hh;
+                if (heroHealth == null) heroHealth = DeNelle.Village.HeroHealth.Instance;
+                if (heroHealth != null) heroHealth.RestoreToFull();
+
+                if (_hero != null && _hero.TryGetComponent<DeNelle.Village.HeroAbilities>(out var ha))
+                    ha.RestoreManaToFull();
+            }
 
             Activated.Invoke(_def.id);
             if (!string.IsNullOrEmpty(_def.toast))
