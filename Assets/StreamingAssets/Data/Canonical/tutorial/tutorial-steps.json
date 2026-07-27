@@ -75,6 +75,7 @@
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_defense" },
       "highlight": ["hud.build_button"],
+      "grant": { "prepaidTower": true },
       "completion": { "signal": "build.tower_placed" },
       "skippable": true,
       "objective": { "text": "Raise a tower on your walls' weak side", "count": 1 }
