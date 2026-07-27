@@ -195,6 +195,10 @@ namespace DeNelle.Village
         /// <param name="amount">Damage to remove. Non-positive values are ignored.</param>
         public void Repair(float amount)
         {
+            // WO-753 ruling (owner 2026-07-19, SUPERSEDES WO-672's repair-back-online): a DESTROYED
+            // (collapsed-to-rubble) section is LOST - it returns ONLY via a full-cost build-mode
+            // placement, never an in-place repair. Mirrors the guard Building.Repair already carries.
+            if (IsDestroyed) return;
             if (amount <= 0f) return;
             _damage = Mathf.Clamp(_damage - amount, 0f, 100f);
             DamageChanged?.Invoke(_damage);

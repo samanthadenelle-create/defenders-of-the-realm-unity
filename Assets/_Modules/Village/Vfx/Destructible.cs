@@ -32,6 +32,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;     // WO-753: drop the destroyed structure's persisted BaseLayout record
+using DeNelle.Core.Catalog;   // WO-753: resolve the destroyed structure's display name for the rebuild prompt
+using DeNelle.Core.UI;        // WO-753: ElarionUiKit.ShowToast — the rebuild prompt (Point 4)
 
 namespace DeNelle.Village
 {
@@ -126,14 +129,106 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Death hook - the entity broke/died. Tear its VFX down WITH it, synchronously, in ONE
-        /// owner (ruling 1: no orphans, no reactive-poll window). The physical shell/removal is the
-        /// caller's concern; this owns only the VFX. Null-safe via the <c>?.</c> call at the site.
+        /// Death hook - the entity was DESTROYED by enemies. In ONE owner, this now performs the
+        /// full owner ruling 2026-07-19 (memory `destroyed-items-no-rebuild-full-cost-and-vfx-cleanup`,
+        /// WO-753): tear the VFX down (ruling 1 - no orphans), despawn the bound vendor NPC (ruling 2),
+        /// REMOVE the object + free its grid cell + drop its persisted record so it is truly GONE
+        /// (ruling: destroyed = LOST, no in-place respawn), and PROMPT the player to rebuild fresh at
+        /// FULL cost (ruling 4).
+        ///
+        /// WO-672 RECONCILIATION (deliberate): this DELIBERATELY SUPERSEDES the WO-672 "persistent
+        /// inoperable shell" design (a broken tower/building used to stay in-world awaiting Repair()).
+        /// The owner ruling wins - a destroyed structure is removed here and returns only via a
+        /// full-cost build-mode placement. The callers still set <c>_broken</c>/fire their Destroyed
+        /// event before this returns; because Unity defers Destroy(gameObject) to end-of-frame, those
+        /// post-call lines still run against a live object.
+        ///
+        /// Called ONLY from the genuine death paths (Building/DefenseTower/ArcaneTower at hp 0). The
+        /// removal is death-specific and lives here, NOT in <see cref="OnDestroy"/> (which also fires
+        /// on controlled rebuild / scene-unload and must never drop a persisted record).
         /// </summary>
         public void NotifyBroken(string reason)
         {
             using var _ = FlowTrace.Enter("Destroy", $"[Flow:Destroy] NotifyBroken '{name}' ({reason})");
+
+            // 1. VFX first - no orphaned effect can outlive the structure (the original WO-753 concern).
             TeardownVfx(reason);
+
+            var placed = GetComponent<PlacedStructure>();
+
+            // 2. Despawn the bound vendor NPC (Point 2). Read the seat marker's Vendor ref and destroy
+            //    it. PROPER Unity-null check (never `?.` on a UnityEngine.Object - fake-null slips past
+            //    the null-conditional). The injector's idempotent poll re-anchors a FRESH vendor only
+            //    when a NEW building of that id is placed, so clearing the ref here is enough.
+            var seat = GetComponent<VendorSeatMarker>();
+            if (seat != null && seat.Vendor != null)
+            {
+                FlowTrace.Step("Destroy",
+                    $"[Flow:Destroy] despawning bound vendor '{seat.Vendor.name}' with destroyed structure '{name}'.");
+                Destroy(seat.Vendor);
+                seat.Vendor = null;
+            }
+
+            // 3. Truly GONE: free the footprint, forget it from the loader's live set, and drop its
+            //    persisted BaseLayout record so it will NOT respawn on the next base-layout replay.
+            //    Mirrors the sell path (BuildModeController.SellSelected) minus the refund. Guarded by
+            //    a PlacedStructure (a scene-seed default carries none - it is still destroyed below).
+            if (placed != null)
+            {
+                PlacementGrid.Instance?.Free(placed.gridCell, placed.footprint);
+                BaseLayoutLoader.Instance?.Forget(placed);
+                RemovePersistedLayoutRecord(placed.itemId, placed.gridCell);
+                OfferRebuild(placed.itemId);   // Point 4 - prompt to rebuild at full cost.
+            }
+
+            // 4. Remove the object itself (Point 1). Deferred to end-of-frame by Unity.
+            FlowTrace.Step("Destroy",
+                $"[Flow:Destroy] destroying structure '{name}' ({reason}) - destroyed = lost; rebuild fresh at full cost.");
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// Drop the persisted <see cref="GameState.BaseLayout"/> record matching
+        /// (<paramref name="itemId"/>, <paramref name="cell"/>) so a destroyed structure does NOT
+        /// respawn on the next base-layout replay (ruling: destroyed = lost). Mirrors
+        /// BuildModeController.RemoveLayoutEntry (which is private); kept local so removal works even
+        /// when Build Mode is not active (e.g. an enemy raid tears the structure down mid-wave).
+        /// </summary>
+        private static void RemovePersistedLayoutRecord(string itemId, Vector2Int cell)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var layout = state != null ? state.BaseLayout : null;
+            if (layout == null || string.IsNullOrEmpty(itemId)) return;
+            for (int i = layout.Count - 1; i >= 0; i--)
+            {
+                if (layout[i].itemId == itemId && layout[i].cellX == cell.x && layout[i].cellZ == cell.y)
+                {
+                    layout.RemoveAt(i);
+                    FlowTrace.Step("Destroy",
+                        $"[Flow:Destroy] dropped persisted BaseLayout record '{itemId}' cell=({cell.x},{cell.y}) - no respawn.");
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Point 4 (basic) - surface a short prompt that the structure is gone and must be rebuilt at
+        /// FULL cost. Fires the shared non-blocking transient toast + a [Flow:Destroy] hook. The
+        /// INTERACTIVE "rebuild now?" confirm (which would EnterBuildMode + BuildModeController.ArmById
+        /// (itemId) to charge the full EffectiveCostFor) is DEFERRED to its own UI pass: the kit toast
+        /// is non-blocking (cannot carry a tap) and auto-entering Build Mode mid-wave is disruptive.
+        /// The arm path is ready for that pass: BuildModeController.EnsureExists().ArmById(itemId).
+        /// </summary>
+        private static void OfferRebuild(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return;
+            var entry = CatalogRegistry.Get(itemId);
+            string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : itemId;
+            FlowTrace.Step("Destroy",
+                $"[Flow:Destroy] rebuild-prompt for destroyed '{label}' (id='{itemId}') - rebuild costs full price (no repair).");
+            ElarionUiKit.ShowToast(
+                $"Your {label} was destroyed - rebuild it at full cost from Build mode.",
+                ElarionUiKit.ToastTone.Danger);
         }
 
         /// <summary>

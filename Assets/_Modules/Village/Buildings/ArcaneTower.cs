@@ -146,7 +146,10 @@ namespace DeNelle.Village
         /// </summary>
         public void Repair()
         {
-            _broken = false;
+            // WO-753 ruling (owner 2026-07-19, SUPERSEDES WO-672's repair-back-online): a DESTROYED
+            // spire is LOST - it returns ONLY via a full-cost build-mode placement, never an in-place
+            // repair. Mirrors the guard Building.Repair already carries.
+            if (_broken) return;
             _hp = _maxHp;
             FlowTrace.Step("Structure", $"'{name}' REPAIRED (hp {_maxHp:0})");
         }

@@ -353,7 +353,13 @@ namespace DeNelle.Village
             {
                 if (c == null) continue;
                 var t = RepairTarget.TryWrap(c);
-                if (t != null && t.IsValid && t.NeedsRepair) into.Add(t);
+                if (t == null || !t.IsValid || !t.NeedsRepair) continue;
+                // WO-753 ruling (owner 2026-07-19, SUPERSEDES WO-672): a DESTROYED structure is LOST
+                // - it is NOT a Repair-All target (rebuild fresh at full cost). Skip anything at/over
+                // the destroyed threshold so the "Repair All" offer never tries to repair-back-online
+                // a destroyed WallSegment/Gate/Building.
+                if (t.DamageFraction >= DestroyedFraction) continue;
+                into.Add(t);
             }
         }
 
@@ -823,35 +829,39 @@ namespace DeNelle.Village
                 });
             }
 
+            // WO-753 ruling (owner 2026-07-19, SUPERSEDES WO-672's repair-back-online): a DESTROYED
+            // (IsBroken) tower / spire / harvest site / collector is LOST - it is NOT a Repair-All
+            // target; it returns ONLY via a full-cost build-mode placement. Skip every broken one so
+            // the offer only lists still-standing DAMAGED structures.
             foreach (var t in UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None))
             {
-                if (t == null) continue;
+                if (t == null || t.IsBroken) continue;
                 AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
                     () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
             {
-                if (t == null) continue;
+                if (t == null || t.IsBroken) continue;
                 AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
                     () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
             {
-                if (t == null) continue;
+                if (t == null || t.IsBroken) continue;
                 AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
                     () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DeNelle.Village.World.HarvestSite>(FindObjectsSortMode.None))
             {
-                if (t == null) continue;
+                if (t == null || t.IsBroken) continue;
                 AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair,
                     () => t.IsBroken ? 1f : 1f - Mathf.Clamp01(t.HpFraction));
             }
 
             foreach (var c in ResourceCollectorRegistry.All)
             {
-                if (c == null) continue;
-                float frac = c.IsBroken ? 1f : 1f - Mathf.Clamp01(c.HpFraction);
+                if (c == null || c.IsBroken) continue;
+                float frac = 1f - Mathf.Clamp01(c.HpFraction);
                 if (frac <= 0.0001f) continue;
                 var cc = c;
                 items.Add(new RepairAllItem
