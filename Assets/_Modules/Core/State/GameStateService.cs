@@ -441,6 +441,8 @@ namespace DeNelle.Core.State
                 Arena = s.Arena,             // ARENA MVP — W/L ledger wins/losses/streak/totalPurse (v34, REDS #4); struct -> nullable wire field
                 PetActiveSlots = s.PetActiveSlots != null ? new List<string>(s.PetActiveSlots) : null,   // flag_17 — pet slot->species deploy map (v34, REDS #3)
                 ObsidianQueue = s.ObsidianQueue,   // WO-773 — common multi-channel work queue (v35); serialized straight to JSON by the save layer
+                BarracksLevel = s.BarracksLevel,   // WO-771.9 — barracks level (additive default-on-read; NO schema bump)
+                TroopLevels = s.TroopLevels != null ? new Dictionary<string, int>(s.TroopLevels) : null,   // WO-771.9 — per-troop upgrade levels (additive default-on-read)
             };
         }
 
@@ -528,6 +530,8 @@ namespace DeNelle.Core.State
             if (p.Arena.HasValue) s.Arena = p.Arena.Value;   // ARENA MVP — W/L ledger (v34); absent → keep the SO's zeroed default (migrator seeds Empty)
             if (p.PetActiveSlots != null) s.PetActiveSlots = p.PetActiveSlots;   // flag_17 — pet slot->species deploy map (v34); absent → PetAcquisitionService falls back to the legacy starter-in-slot-0 rebuild
             s.ObsidianQueue = p.ObsidianQueue ?? ObsidianQueueState.Empty();   // WO-773 — common work queue (v35); never null (older saves are built by the v34→v35 migrator, a truly-absent queue = a fresh empty three-channel queue)
+            if (p.BarracksLevel.HasValue) s.BarracksLevel = p.BarracksLevel.Value < 1 ? 1 : p.BarracksLevel.Value;   // WO-771.9 — barracks level; absent → keep the SO's default (1)
+            if (p.TroopLevels != null) s.TroopLevels = p.TroopLevels;   // WO-771.9 — per-troop upgrade levels; absent → keep the fresh empty dict (all baseline)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -847,6 +851,8 @@ namespace DeNelle.Core.State
             s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
             s.ObsidianQueue = ObsidianQueueState.Empty();   // WO-773 — New Game: an empty three-channel work queue (no jobs on Builder/Train/Research).
+            s.BarracksLevel = 1;                             // WO-771.9 — New Game: day-one barracks (unlocks Footman + Archer).
+            s.TroopLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-771.9 — New Game: every troop at baseline (level 1).
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
             // WO-108/WO-682/WO-707 — New Game starts on the BLANK template (owner ruling

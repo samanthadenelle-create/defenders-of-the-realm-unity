@@ -25,7 +25,9 @@
 // here (that is Step 4). With no foe in range the troop simply idles in place.
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.BattleATB.Engine;   // StatusKind (unlocked special-ability vocabulary)
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -66,6 +68,20 @@ namespace DeNelle.Village
         private float _moveSpeed = 4.0f;
         private float _huntScanRadius = 14f;
         private DamageElement _element = DamageElement.None;
+
+        // WO-771.9 spawn-wiring: the EFFECTIVE baseline the veterancy/perk multipliers re-base
+        // from. Set to the def stats in Configure; overwritten by ApplyUpgradeStats when the
+        // troop is spawned at an upgrade level, so an upgraded troop's reach/strength survive a
+        // subsequent ApplyDamageMultiplier/ApplyHealthMultiplier (which re-base, never compound).
+        private float _baseMaxHp = 100f;
+        private float _baseAttackDamage = 12f;
+
+        // WO-771.9: the upgrade level this troop was resolved at (1 = pure baseline) + the
+        // special abilities unlocked at that level (their StatusKind is the real-unit effect
+        // vocabulary; per-tick status application is the V2 sim's job — here they are attached
+        // as data the combat layer reads).
+        private int _upgradeLevel = 1;
+        private readonly List<AbilityUnlock> _unlockedAbilities = new List<AbilityUnlock>();
 
         private float _attackCdRemaining;
 
@@ -137,6 +153,18 @@ namespace DeNelle.Village
         /// <summary>The static def this troop was configured from (troops.json).</summary>
         public TroopDef Def => _def;
 
+        /// <summary>WO-771.9 — the upgrade level this troop was spawned at (1 = pure baseline).</summary>
+        public int UpgradeLevel => _upgradeLevel;
+
+        /// <summary>WO-771.9 — the special abilities unlocked at this troop's upgrade level (may be empty).</summary>
+        public IReadOnlyList<AbilityUnlock> UnlockedAbilities => _unlockedAbilities;
+
+        /// <summary>WO-771.9 — the StatusKinds this troop's unlocked abilities apply (real-unit effect vocabulary).</summary>
+        public IEnumerable<StatusKind> UnlockedStatuses
+        {
+            get { foreach (var a in _unlockedAbilities) if (a != null) yield return a.StatusKind; }
+        }
+
         /// <summary>
         /// Sets the LayerMask the troop sweeps for hostile targets. The deployer /
         /// factory calls this so the mask need not be authored per-instance.
@@ -153,8 +181,10 @@ namespace DeNelle.Village
         /// </summary>
         public void ApplyDamageMultiplier(float multiplier)
         {
-            float baseDamage = _def != null ? _def.AttackDamage : _attackDamage;
-            _attackDamage = baseDamage * Mathf.Max(1f, multiplier);
+            // Re-base from the EFFECTIVE baseline (def, or the upgraded value ApplyUpgradeStats set)
+            // so veterancy/perk multipliers compound on top of a WO-771.9 upgrade instead of wiping
+            // it. With no upgrade applied, _baseAttackDamage == def.AttackDamage → identical to before.
+            _attackDamage = _baseAttackDamage * Mathf.Max(1f, multiplier);
         }
 
         /// <summary>
@@ -167,9 +197,42 @@ namespace DeNelle.Village
         /// </summary>
         public void ApplyHealthMultiplier(float multiplier)
         {
-            float baseHp = _def != null ? _def.MaxHp : _maxHp;
-            _maxHp = baseHp * Mathf.Max(1f, multiplier);
+            // Re-base from the EFFECTIVE baseline (see ApplyDamageMultiplier) so a WO-771.9 upgrade
+            // survives the perk multiply. With no upgrade applied, _baseMaxHp == def.MaxHp.
+            _maxHp = _baseMaxHp * Mathf.Max(1f, multiplier);
             _hp = _maxHp;
+        }
+
+        /// <summary>
+        /// WO-771.9 SPAWN-WIRING — applies a resolved <see cref="TroopRuntimeStats"/> (baseline
+        /// folded with the troop's upgrade curves at its level, from
+        /// <see cref="TroopStatResolver.Effective"/>) to this live unit ONCE at spawn: sets the
+        /// effective HP / DPS(attack damage) / reach(attackRange) / aggro(huntScanRadius) as the
+        /// new re-base baseline and refills HP, and records the unlocked special abilities
+        /// (their StatusKind is applied to the real unit as effect data). Call AFTER
+        /// <see cref="Configure"/> and BEFORE the veterancy/perk multipliers so those compound on
+        /// the upgraded base. Null stats → no-op (pure baseline stays).
+        /// </summary>
+        public void ApplyUpgradeStats(TroopRuntimeStats stats)
+        {
+            if (stats == null) return;
+
+            _upgradeLevel   = stats.Level < 1 ? 1 : stats.Level;
+            _maxHp          = stats.MaxHp;
+            _attackDamage   = stats.AttackDamage;
+            _attackRange    = stats.AttackRange;
+            _huntScanRadius = stats.AggroRadius;
+
+            // The upgraded values become the new baseline the perk multipliers re-base from.
+            _baseMaxHp        = stats.MaxHp;
+            _baseAttackDamage = stats.AttackDamage;
+
+            _hp = _maxHp;
+
+            _unlockedAbilities.Clear();
+            if (stats.UnlockedAbilities != null)
+                foreach (var a in stats.UnlockedAbilities)
+                    if (a != null) _unlockedAbilities.Add(a);
         }
 
         // ── IDamageableStructure (lets the enemy contact-attack lane hurt us) ──
@@ -202,6 +265,13 @@ namespace DeNelle.Village
                 _huntScanRadius = def.HuntScanRadius;
                 _element        = ParseElement(def.Element);
             }
+
+            // WO-771.9: seed the re-base baseline from the def; ApplyUpgradeStats overwrites it
+            // when the troop spawns at an upgrade level (so it is never null-reffed downstream).
+            _baseMaxHp        = _maxHp;
+            _baseAttackDamage = _attackDamage;
+            _upgradeLevel     = 1;
+            _unlockedAbilities.Clear();
 
             _hp = _maxHp;
             _dead = false;

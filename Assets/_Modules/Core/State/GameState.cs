@@ -477,6 +477,28 @@ namespace DeNelle.Core.State
         /// </summary>
         public ObsidianQueueState ObsidianQueue = ObsidianQueueState.Empty();
 
+        // ── WO-771.9 — Barracks & troop upgrade progression (additive, NO schema bump) ──
+        /// <summary>
+        /// WO-771.9 — the player's current BARRACKS LEVEL (drives which troops are unlocked
+        /// for training/deploy — barracks.json unlocksTroopIds up to this level). Day-one = 1.
+        /// Raised when a <see cref="DeNelle.Core.Jobs.JobKind.BarracksUpgrade"/> job completes on
+        /// the Builder channel (BarracksService / BarracksProgression). ADDITIVE default-on-read:
+        /// nullable on the wire (SaveSchema.barracksLevel), absent → this initializer (1), so no
+        /// schema bump — rides the committed v35. Append-only field at the END.
+        /// </summary>
+        public int BarracksLevel = 1;
+
+        /// <summary>
+        /// WO-771.9 — per-troop UPGRADE LEVEL, keyed by troop id (e.g. {"troop-footman":3}).
+        /// A troop absent from the map (or level &lt;= 1) resolves to its pure baseline via
+        /// <see cref="DeNelle.Village.TroopStatResolver"/>. Raised when a
+        /// <see cref="DeNelle.Core.Jobs.JobKind.TroopUpgrade"/> job completes on the Research
+        /// channel. ADDITIVE default-on-read: nullable on the wire (SaveSchema.troopLevels),
+        /// absent → this empty initializer, so no schema bump. Append-only field at the END.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, int> TroopLevels
+            = new System.Collections.Generic.Dictionary<string, int>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

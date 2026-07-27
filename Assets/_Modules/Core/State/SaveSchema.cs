@@ -583,6 +583,24 @@ namespace DeNelle.Core.State
             /// in-flight work is lost. Append-only field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("obsidianQueue")] public ObsidianQueueState ObsidianQueue;
+
+            // ── WO-771.9 — Barracks & troop upgrade progression (additive, NO schema bump) ──
+            /// <summary>
+            /// The player's current Barracks LEVEL (WO-771.9) — drives troop unlock gating.
+            /// Nullable per the <c>.partial()</c> convention; absent on an older save →
+            /// GameState's initializer (1) applies on read, so NO migrator step + NO schema
+            /// bump is needed (rides the committed v35 — same additive-default-on-read pattern
+            /// as <c>freeBuildsUsed</c>/<c>echoLanes</c>). Append-only field at the END.
+            /// </summary>
+            [JsonProperty("barracksLevel")] public int? BarracksLevel;
+
+            /// <summary>
+            /// Per-troop upgrade LEVEL by troop id (WO-771.9). Nullable per the <c>.partial()</c>
+            /// convention; absent on an older save → GameState's empty-dict initializer applies on
+            /// read (every troop at baseline), so NO migrator step + NO schema bump. Append-only
+            /// field at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("troopLevels")] public Dictionary<string, int> TroopLevels;
         }
 
         // =====================================================================

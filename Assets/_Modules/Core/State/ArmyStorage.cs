@@ -144,6 +144,24 @@ namespace DeNelle.Core.State
             return troop;
         }
 
+        /// <summary>
+        /// WO-771.9 — grants a freshly-TRAINED troop into the roster UNCONDITIONALLY (no
+        /// capacity/afford check). This is the completion effect of a timed
+        /// <see cref="DeNelle.Core.Jobs.JobKind.TrainTroop"/> job: the resource cost was charged
+        /// + the army-cap checked at ENQUEUE time, so on completion the paid troop must land even
+        /// if the cap has since filled (CoC parity — the barracks holds the trained unit). Mints a
+        /// stable id, appends a rank-0 healthy <see cref="PlayerTroop"/>, and returns it. Null id →
+        /// no-op (returns null).
+        /// </summary>
+        public PlayerTroop GrantTrained(string troopDefId)
+        {
+            if (string.IsNullOrEmpty(troopDefId)) return null;
+            if (Owned == null) Owned = new List<PlayerTroop>();
+            var troop = new PlayerTroop(MintId(), troopDefId);
+            Owned.Add(troop);
+            return troop;
+        }
+
         // ── Deployment ───────────────────────────────────────────────────────
 
         /// <summary>The deployable troops — healthy (not wounded) members of the roster.</summary>

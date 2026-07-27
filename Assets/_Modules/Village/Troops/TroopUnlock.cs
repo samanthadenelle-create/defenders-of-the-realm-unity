@@ -33,8 +33,16 @@ namespace DeNelle.Village
         /// </summary>
         public static int EffectiveBarracksTier()
         {
-            int tier = ModifierService.TierOf("barracks");
-            return tier < 1 ? 1 : tier;
+            // WO-771.9 RECONCILE: the WO-771.9 BarracksService.BarracksLevel is now the primary
+            // unlock authority (barracks.json unlocksTroopIds). Take the MAX of it and the legacy
+            // building-tier (ModifierService.TierOf("barracks")) so BOTH ladders grant unlocks and
+            // no pre-771.9 save regresses. Floored to 1 (a usable Barracks always trains day-one
+            // troops). BarracksLevel defaults to 1 with no live state, so EditMode/VM tests are
+            // unchanged (day-one Footman+Archer unlocked, higher tiers locked).
+            int barracksLevel = BarracksService.BarracksLevel;
+            int legacyTier = ModifierService.TierOf("barracks");
+            int effective = barracksLevel > legacyTier ? barracksLevel : legacyTier;
+            return effective < 1 ? 1 : effective;
         }
 
         /// <summary>

@@ -49,6 +49,10 @@ namespace DeNelle.Core.Jobs
         TowerUpgrade = 7,
         /// <summary>Upgrade a wall (Builder channel).</summary>
         WallUpgrade = 8,
+        /// <summary>Upgrade the Barracks BUILDING to the next level — unlocks new troops (Builder channel, WO-771.9).</summary>
+        BarracksUpgrade = 9,
+        /// <summary>Upgrade a single TROOP's progression track — reach/strength/ability (Research channel, WO-771.9).</summary>
+        TroopUpgrade = 10,
     }
 
     /// <summary>
@@ -82,8 +86,9 @@ namespace DeNelle.Core.Jobs
                     return ChannelId.Train;
                 case JobKind.UnlockTier:
                 case JobKind.LearnMagic:
+                case JobKind.TroopUpgrade:      // WO-771.9 — per-troop upgrade track runs on the research/lab queue
                     return ChannelId.Research;
-                default:
+                default:                         // Build/Repair/Upgrade/Tower*/Wall*/BarracksUpgrade → Builder
                     return ChannelId.Builder;
             }
         }

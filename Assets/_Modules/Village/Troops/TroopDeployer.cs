@@ -38,7 +38,18 @@ namespace DeNelle.Village
             }
 
             var troop = TroopFactory.Build(def, pos, Quaternion.identity, null);
-            troop?.SetEnemyMask(VillageEnemyMask());
+            if (troop != null)
+            {
+                // WO-771.9 SPAWN-WIRING: resolve this troop's EFFECTIVE stats at its persisted
+                // upgrade level ONCE (TroopStatResolver folds troops.json baseline with the
+                // troop-upgrades.json reach/strength curves) and apply HP/DPS/reach/aggro +
+                // unlocked abilities to the live unit. Applied BEFORE the veterancy/perk
+                // multipliers (SpawnFromArmy) so those compound on the upgraded base. Level
+                // defaults to 1 (pure baseline) when no BarracksService/state exists (dev spawn).
+                int level = BarracksService.TroopLevel(troopId);
+                troop.ApplyUpgradeStats(TroopStatResolver.Effective(def, level));
+                troop.SetEnemyMask(VillageEnemyMask());
+            }
             return troop;
         }
 
