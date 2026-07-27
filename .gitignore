@@ -354,3 +354,33 @@ firebase-appid.txt
 # Firebase EDM4U-generated Android lib (mirrors gitignored google-services.json)
 Assets/Plugins/Android/FirebaseApp.androidlib/
 Assets/Plugins/Android/FirebaseApp.androidlib.meta
+
+# --- Night-wrap 2026-07-26: pre-existing large SDK / asset-pack / generated content ---
+# Gitignored (kept ON DISK as build inputs + zip-traveled per pack-travel policy /
+# tools/art/REQUIRED_PACKS.md), NOT deleted. Declutters git status to a stable state.
+# NOTE: google-services.json + Assets/Plugins/Android native libs stay TRACKED by design.
+Assets/Firebase/
+Assets/Firebase.meta
+Assets/ExternalDependencyManager/
+Assets/ExternalDependencyManager.meta
+Assets/GoogleSignIn/
+Assets/GoogleSignIn.meta
+Assets/Editor Default Resources/
+Assets/Editor Default Resources.meta
+Assets/MeshBaker/
+Assets/MeshBaker.meta
+Assets/Leohpaz/
+Assets/Leohpaz.meta
+Assets/GeneratedLocalRepo/
+Assets/GeneratedLocalRepo.meta
+Assets/Standard Assets/
+Assets/Standard Assets.meta
+Assets/Plugins/iOS/
+Assets/Plugins/iOS.meta
+Assets/Plugins/tvOS/
+Assets/Plugins/tvOS.meta
+Assets/Plugins/CW/LeanCommon/Examples/
+Assets/Plugins/CW/LeanTouch/Examples/
+Assets/Plugins/CW/Shared/Common/Examples/
+*.tripo-extracted
+*.tripo-extracted.meta
