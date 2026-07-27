@@ -233,8 +233,8 @@ namespace DeNelle.Village
         }
 
         // -- Pet-box entry point (owner 2026-07-17: "add the pet box somewhere") ---
-        // A small persistent "Pets" HUD button under the count pip that opens the Echo
-        // roster grid. Colorblind-safe (a paw glyph + the word "Pets", never hue). Lives
+        // A small persistent "Echoes" HUD button under the count pip that opens the Echo
+        // roster grid. Colorblind-safe (a paw glyph + the word "Echoes", never hue). Lives
         // on the pip's own overlay canvas so it needs no HUD-kit area wiring (the town
         // HUD button row was pruned) -- lightweight + self-contained.
         private void BuildPetBoxButton()
@@ -254,7 +254,7 @@ namespace DeNelle.Village
             // GameObject/Image/Button assembly, no per-caller styling. Style1/Gray = the
             // quiet obsidian face standardized across the HUD (matches ObsidianCloseButton).
             var btn = ElarionUiKit.BuildObsidianButton(
-                _pipCanvas.transform, "Pets",
+                _pipCanvas.transform, "Echoes",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
                 onClick: () =>

@@ -122,6 +122,14 @@ namespace DeNelle.Editor
                 var go = new GameObject("Destroyed_Collector"); created.Add(go);
                 var c = go.AddComponent<ResourceCollector>();
                 c.Configure(ResourceBuildingProgression.FarmId);
+                // Edit-mode determinism: the collector round-trips HP through PlayerPrefs
+                // (SaveState/LoadState), so a prior probe run can leave FarmId broken and the
+                // siege below then no-ops at the `if (!IsAlive) return;` guard. Seed a known
+                // ALIVE state first (mirrors the Tower _hp seed above). The assertion — siege
+                // drives it broken, then Repair() must NOT revive it — is unchanged.
+                SeedPrivateFloat(c, "_maxHp", 120f);
+                SeedPrivateFloat(c, "_hp", 120f);
+                SeedPrivateBool(c, "_broken", false);
                 c.ApplyContactDamage(100000f);   // OnSiegeDestroyed -> _broken = true, hp 0
                 bool brokeOk = c.IsBroken && c.HpFraction <= 0.0001f;
                 c.Repair();
@@ -220,6 +228,13 @@ namespace DeNelle.Editor
 
         // Editor-test seeding: set a private serialized float when Awake/Configure did not run.
         private static void SeedPrivateFloat(object target, string field, float value)
+        {
+            var f = target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f != null) f.SetValue(target, value);
+        }
+
+        // Editor-test seeding: set a private serialized bool when Awake/Configure did not run.
+        private static void SeedPrivateBool(object target, string field, bool value)
         {
             var f = target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null) f.SetValue(target, value);

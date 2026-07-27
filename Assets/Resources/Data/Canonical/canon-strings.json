@@ -36,10 +36,10 @@
   "lantern": "the Lantern of Elarion",
   "lanternShort": "the Lantern",
 
-  "tagline": "Hold the line",
-  "titleTagline": "Hold the line",
+  "tagline": "Echoes of a Forgotten Civilization",
+  "titleTagline": "Echoes of a Forgotten Civilization",
   "bibleTitleTagline": "Tend the Heart. Hold the dark.",
-  "_taglineLegacyNote": "SUPERSEDED 2026-06-28 (WO-570) — the single canonical tagline is now 'Hold the line' tagline AND titleTagline both carry it so whichever the UI reads is correct. The prior taglines ('Hold the Chord. Defend the Spire.', 'Hold the chord. Hold the dark.', and bibleTitleTagline 'Tend the Heart. Hold the dark.') plus the Spire/Chord/Lantern/Stone-Choir motifs are RETIRED; bibleTitleTagline is kept here as a historical reference only.",
+  "_taglineLegacyNote": "SUPERSEDED 2026-07-24 (owner directive, Pets→Echoes rebrand) — the single canonical title tagline is now 'Echoes of a Forgotten Civilization' (the Echoes are the awakened essences of the people the Heart of Elarion once guarded); tagline AND titleTagline both carry it so whichever the UI reads is correct. The prior tagline 'Hold the line' (WO-570) plus the earlier 'Hold the Chord. Defend the Spire.', 'Hold the chord. Hold the dark.', and bibleTitleTagline 'Tend the Heart. Hold the dark.' plus the Spire/Chord/Lantern/Stone-Choir motifs are RETIRED; bibleTitleTagline is kept here as a historical reference only.",
   "publisher": "DeNelle Studios",
   "gameTitle": "Echoes of Elarion",
   "gameSubtitle": "Defenders of the Realm",
