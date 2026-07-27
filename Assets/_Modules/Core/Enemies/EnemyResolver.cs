@@ -137,6 +137,43 @@ namespace DeNelle.Core.Enemies
                     AnimatorRig = "SkeletonHumanoid",
                     Equip = EnemyEquipParts.None,
                 },
+                // ── DUNGEON LAYOUT ALIASES (underscore ids, ratified 2026-07-26) ──
+                // healers-cottage.json (+ the stub dungeons) name their Hollow encounters
+                // with UNDERSCORE ids the village roster never uses. Registered here so
+                // each resolves to its OWN distinct model instead of collapsing to the
+                // size-default Skeleton_Minion in EnemyFactory.ModelForEnemy. Norm() folds
+                // '_' -> '-', so the JSON's hollow_villager_a arrives here as
+                // hollow-villager-a. villager-a -> Walker body, villager-b -> Rogue body
+                // (two distinct Folk silhouettes); apprentice-minor -> the robed Apprentice
+                // mini-boss body; healer -> the Acolyte. Four DISTINCT ResolvedKeys.
+                ["hollow-villager-a"] = new EnemyClass
+                {
+                    Id = "villager-a", RoleKey = "grunt",
+                    ModelKey = "Skeleton_Minion", Variant = null,
+                    AnimatorRig = "HumanoidMedium",
+                    Equip = EnemyEquipParts.None,
+                },
+                ["hollow-villager-b"] = new EnemyClass
+                {
+                    Id = "villager-b", RoleKey = "skirmisher",
+                    ModelKey = "Skeleton_Rogue", Variant = null,
+                    AnimatorRig = "SkeletonHumanoid",
+                    Equip = EnemyEquipParts.None,
+                },
+                ["hollow-apprentice-minor"] = new EnemyClass
+                {
+                    Id = "apprentice-minor", RoleKey = "elite",
+                    ModelKey = "Skeleton_Mage", Variant = "apprentice",  // shares the mini-boss robed body
+                    AnimatorRig = "SkeletonHumanoid",
+                    Equip = EnemyEquipParts.None,
+                },
+                ["hollow-healer"] = new EnemyClass
+                {
+                    Id = "healer", RoleKey = "caster",
+                    ModelKey = "Skeleton_Healer", Variant = null,
+                    AnimatorRig = "SkeletonHumanoid",
+                    Equip = EnemyEquipParts.None,
+                },
                 // Alduin the Mournful — canon-locked, DIALOGUE NPC (codex §4.8: "not a
                 // boss fight"). Registered so the id resolves to a body when he shows one
                 // of his faces, but flagged non-combat so distinctness oracles skip it.
@@ -183,12 +220,61 @@ namespace DeNelle.Core.Enemies
         /// <summary>The declared enemy families (Hollow Ones + the Wildlands stub).</summary>
         public static IReadOnlyList<EnemyFamily> Families => new[] { HollowOnesFamily, WildlandsFamily };
 
+        // Normalizes an id/family token: trim + lowercase, AND fold '_' -> '-'. The
+        // dungeon layouts (healers-cottage.json scriptedEncounters) key Hollow ids with
+        // UNDERSCORES (hollow_villager_a / hollow_apprentice_minor / hollow_healer) while
+        // the HollowTable + village roster use HYPHENS — so without this fold those
+        // dungeon ids miss the table, bypass TryResolveHollowModel, and collapse to the
+        // generic size-default Skeleton_Minion in EnemyFactory.ModelForEnemy (the exact
+        // distinctness the resolver exists to prevent). Folding here makes both spellings
+        // resolve to the same canonical key.
         private static string Norm(string id) =>
-            string.IsNullOrEmpty(id) ? "" : id.Trim().ToLowerInvariant();
+            string.IsNullOrEmpty(id) ? "" : id.Trim().ToLowerInvariant().Replace('_', '-');
 
         /// <summary>True when <paramref name="id"/> is an approved Hollow id this
         /// resolver owns (combat or the Alduin NPC).</summary>
         public static bool IsHollowId(string id) => HollowTable.ContainsKey(Norm(id));
+
+        // ── WILDLANDS DEFERRAL GATE (PAIN_POINTS_2026-07-26 §1.1, BINDING) ──────────
+        // The living Wildlands roster is DEFERRED — it has NO shippable art (the
+        // Orc_Berserker Tripo body retargets to EXPLODED geometry), so these ids must
+        // NOT spawn as themselves. Every spawner funnels through EnemyFactory.Build,
+        // which asks IsCombatApproved and redirects a deferred id to a ratified Hollow
+        // substitute. Keyed to the Wildlands faction (FactionForFamily maps their family
+        // token -> EnemyFaction.Wildlands); listed EXPLICITLY because the region roamer
+        // path (RegionMobSpawner.BuildRoamerDef) leaves def.Family at its default, so the
+        // ID is the only reliable signal at the Build chokepoint. The SHIPPING Orc Warband
+        // (orc-berserker / orc-shaman / …) + bosses are NOT in this set — they stay approved.
+        private static readonly HashSet<string> _deferredWildlandsIds =
+            new HashSet<string>
+            {
+                "orc-raider", "caveman", "feral-wolf", "tiefling-cultist",
+            };
+
+        /// <summary>
+        /// False for a DEFERRED Wildlands id (PAIN_POINTS §1.1: no shippable art) — the
+        /// caller (EnemyFactory.Build) redirects these to a ratified Hollow substitute so
+        /// no exploded/placeholder living body ever spawns. True for every approved id
+        /// (the Hollow Ones + the shipping Orc Warband + bosses).
+        /// </summary>
+        public static bool IsCombatApproved(string id) =>
+            !_deferredWildlandsIds.Contains(Norm(id));
+
+        /// <summary>
+        /// The ratified Hollow stand-in id a DEFERRED Wildlands request is redirected to,
+        /// chosen by the requested archetype so the region still reads varied: a heavy /
+        /// melee body (brute/elite/charger role, or a tall silhouette) becomes the armed
+        /// <c>hollow-warrior</c>; anything basic/light becomes <c>hollow-walker</c>. Both
+        /// targets are ratified, real-art Hollow ids that resolve through this table — so
+        /// the substituted body is always valid.
+        /// </summary>
+        public static string SubstituteHollowId(string deferredId, string roleKey, float height)
+        {
+            string role = Norm(roleKey);
+            bool heavy = role == "brute" || role == "elite" || role == "warrior"
+                      || role == "charger" || role == "tank" || height >= 1.8f;
+            return heavy ? "hollow-warrior" : "hollow-walker";
+        }
 
         /// <summary>Maps an enemies.json <c>family</c> token to the typed faction.
         /// Absent / "hollow" ⇒ HollowOnes; every living token (orc / troll / ogre /

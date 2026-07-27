@@ -72,6 +72,29 @@ namespace DeNelle.Village
             // only if the model is genuinely missing (so an enemy still spawns hittable).
             string model = modelOverride ?? ModelForEnemy(def);
 
+            // FIX 1 (PAIN_POINTS_2026-07-26 §1.1) — WILDLANDS DEFERRAL GATE at the single
+            // enemy-creation chokepoint. The living Wildlands roster (orc-raider / caveman /
+            // feral-wolf / tiefling-cultist) has NO shippable art — the Orc_Berserker Tripo
+            // body retargets to EXPLODED geometry — yet RegionMobSpawner (active while
+            // ff.overworldencounter is OFF) + every camp/tribe/ward/garrison spawner (all
+            // defaulting to "orc-raider") funnel these ids through here. If the id is NOT
+            // combat-approved, REDIRECT it to a ratified Hollow substitute (real committed
+            // art, routes through EnemyResolver) so the region still spawns a VALID enemy —
+            // never the exploded orc. ONE edit at Build covers ALL spawners. The
+            // Orc_Berserker rig/material fix itself is a DEFERRED Phase-2 art task.
+            string reqId = def != null ? def.Id : null;
+            if (!string.IsNullOrEmpty(reqId) && !EnemyResolver.IsCombatApproved(reqId))
+            {
+                string subId = EnemyResolver.SubstituteHollowId(
+                    reqId, def != null ? def.Role : null, height);
+                if (EnemyResolver.TryResolveHollowModel(subId, null, out string subModel))
+                {
+                    FlowTrace.Warn("Enemy",
+                        $"Wildlands id '{reqId}' deferred (PAIN_POINTS 1.1) -> substituted '{subId}'");
+                    model = subModel;
+                }
+            }
+
             // ROOT-CAUSE TRACE: this IS the single enemy-creation path. Print the
             // def id → resolved model (and whether modelOverride forced it) so the log
             // shows what family each body is being built as, on every spawner.

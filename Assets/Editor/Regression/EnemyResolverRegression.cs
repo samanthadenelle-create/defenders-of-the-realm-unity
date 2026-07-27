@@ -141,6 +141,45 @@ namespace DeNelle.Editor
                 EnemyResolver.FactionForFamily("hollow") != EnemyFaction.HollowOnes)
                 failures.Add("EnemyResolver.FactionForFamily mapping wrong (hollow->HollowOnes, orc->Wildlands).");
 
+            // 9) WILDLANDS DEFERRAL GATE (FIX 1, PAIN_POINTS §1.1): every deferred living
+            //    id must be NOT combat-approved, and its substitute must resolve to a real
+            //    committed Hollow model (so EnemyFactory.Build always redirects to a VALID
+            //    body, never the exploded orc). The approved roster must stay approved.
+            foreach (var wid in new[] { "orc-raider", "caveman", "feral-wolf", "tiefling-cultist" })
+            {
+                if (EnemyResolver.IsCombatApproved(wid))
+                    failures.Add($"deferred Wildlands id '{wid}' is IsCombatApproved==true (should be gated OFF per §1.1).");
+                string sub = EnemyResolver.SubstituteHollowId(wid, null, 2.0f);
+                if (!EnemyResolver.TryResolveHollowModel(sub, null, out string subModel) ||
+                    Resources.Load<GameObject>("Enemies/" + subModel) == null)
+                    failures.Add($"Wildlands id '{wid}' substitute '{sub}' did not resolve to a committed model.");
+            }
+            foreach (var aid in new[] { "hollow-walker", "necromancer", "orc-berserker", "orc-warlord" })
+                if (!EnemyResolver.IsCombatApproved(aid))
+                    failures.Add($"approved id '{aid}' is IsCombatApproved==false (gate is over-broad — shipping roster must stay approved).");
+
+            // 10) DUNGEON UNDERSCORE ALIASES (FIX 2): the healers-cottage.json ids must each
+            //     resolve to a DISTINCT, non-generic model (not collapse to Skeleton_Minion).
+            var dungeonIds = new[] { "hollow_villager_a", "hollow_villager_b", "hollow_apprentice_minor", "hollow_healer" };
+            var dungeonKeys = new Dictionary<string, string>();
+            foreach (var did in dungeonIds)
+            {
+                var r = EnemyResolver.Resolve(did);
+                if (r == null || !EnemyResolver.IsHollowId(did))
+                {
+                    failures.Add($"dungeon id '{did}' does NOT resolve through EnemyResolver (collapses to the generic size-default).");
+                    continue;
+                }
+                if (dungeonKeys.TryGetValue(r.ResolvedKey, out var first))
+                    failures.Add($"dungeon id '{did}' shares ResolvedKey '{r.ResolvedKey}' with '{first}' — not distinct.");
+                else
+                    dungeonKeys[r.ResolvedKey] = did;
+                if (Resources.Load<GameObject>("Enemies/" + r.ModelKey) == null)
+                    failures.Add($"dungeon id '{did}' -> model '{r.ModelKey}' but Resources.Load is NULL.");
+            }
+            if (dungeonKeys.Count != dungeonIds.Length && failures.Count == 0)
+                failures.Add($"{dungeonIds.Length} dungeon ids produced only {dungeonKeys.Count} distinct ResolvedKeys.");
+
             if (failures.Count == 0)
             {
                 reason = $"{EnemyResolver.LintMarker} — {combatIds.Count} approved Hollow ids -> " +
