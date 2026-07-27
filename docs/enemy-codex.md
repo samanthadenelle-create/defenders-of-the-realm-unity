@@ -1,5 +1,7 @@
 # Enemy Codex — Defenders of the Realm (Unity v2)
 
+> ⚠ RATIFIED 2026-07-26 — Hollow Ones + mini-boss names APPROVED; Wildlands DEFERRED (see PAIN_POINTS_2026-07-26 §1.1).
+
 **Status:** Definitive enemy + boss design codex. **Design document — review-and-approve before any implementation.** Read-only on code and data; nothing here changes a `.cs` file or a `.json` until the owner ratifies it.
 **Game:** Stylized low-poly magical+medieval crossover — a tower-defense village (defend Elarion against the Hollow Ones) plus a 3D dungeon-crawler (the Healer's Cottage and six future dungeons). Unity 6 LTS, URP.
 **Owner:** DeNelle Studios.

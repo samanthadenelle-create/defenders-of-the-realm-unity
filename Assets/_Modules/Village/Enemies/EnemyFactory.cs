@@ -16,6 +16,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core;             // FeatureFlags (ff.enemyweapons gate on the held-weapon attach)
 using DeNelle.Core.Combat;      // ActorAnimator (attached so Enemy drives work)
+using DeNelle.Core.Enemies;     // WO-772: EnemyResolver — id -> family -> DISTINCT model authority
 using DeNelle.Core.Validation;  // WO-315/WO-363: opt-in OrientationGuard on the enemy root
 using DeNelle.Core.Diagnostics; // root-cause FlowTrace on the single enemy-creation path
 using DeNelle.Core.Geometry;
@@ -337,22 +338,27 @@ namespace DeNelle.Village
         public static string ModelForEnemy(EnemyDef def)
         {
             string id = def != null ? def.Id : null;
+
+            // ── HOLLOW ONES → EnemyResolver (WO-772 Phase 1, ratified 2026-07-26) ─────
+            // THE GENERIC-SKELETON FIX: every APPROVED Hollow id (incl. the ones that
+            // used to fall through to the size DEFAULT — hollow-mage / hollow-reaper /
+            // hollow-brute / cellar-hollow / the canon mini-boss hollow-apprentice) now
+            // resolves through the ONE shared family/class table to its OWN model, so
+            // distinct ids never collapse to one generic Skeleton_Minion / _Golem again.
+            // Data wins (A4): enemies.json's modelKey overrides the table when it names a
+            // committed Hollow mesh. Non-Hollow ids return false and keep the paths below.
+            if (EnemyResolver.TryResolveHollowModel(id, def != null ? def.ModelKey : null, out string hollowModel))
+            {
+                FlowTrace.Once("Enemy", $"resolve-{id}",
+                    $"EnemyResolver: Hollow id '{id}' -> model '{hollowModel}' (distinct — no generic-skeleton fallback)");
+                return hollowModel;
+            }
+
             switch (id)
             {
-                // ── HOLLOW ONES (the skeleton wave faction) ──────────────────────
-                // DEF-250: the HOLLOW wave archetypes get DISTINCT silhouettes so a
-                // mixed wave reads as a varied fight, not clones.
-                //   grunt      → Skeleton_Minion  (lean, basic — the numerous rusher)
-                //   warrior    → Skeleton_Warrior (AccuRig melee — mid-wave backbone)
-                //   skirmisher → Skeleton_Rogue   (AccuRig Ranger mesh — the flanker)
-                //   healer     → Skeleton_Healer  (AccuRig healer silhouette)
-                //   caster     → Skeleton_Mage    (AccuRig mage silhouette)
-                //   brute/tank → Skeleton_Golem   (KayKit large rig — separate id when added)
-                case "hollow-walker":    return "Skeleton_Minion";   // grunt
-                case "hollow-warrior":   return "Skeleton_Warrior"; // melee warrior (AccuRig)
-                case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher (Ranger mesh)
-                case "hollow-acolyte":   return "Skeleton_Healer";   // healer (AccuRig family)
-                case "necromancer":      return "Necromancer";       // dedicated elite (Boss rig)
+                // (Hollow Ones are resolved ABOVE via EnemyResolver — the old hard-cased
+                // hollow-walker/warrior/rogue/acolyte/necromancer cases moved into the
+                // shared table so the mini-boss + mage/reaper/brute/cellar resolve too.)
 
                 // ── WILDLANDS ROSTER (MainCastle_Hall overworld roamers) ─────────
                 // 2026-06-13 owner fix: these ids USED to all resolve to skeletons

@@ -130,6 +130,14 @@ namespace DeNelle.Editor
             // least one real condition — so an owner edit can't silently break the unlock cadence.
             CheckPopulationMilestones(failures, log);
 
+            // --- BARRACKS & TROOP UPGRADE PROGRESSION (WO-771.9) -------------------
+            // Source-lint the committed barracks.json + troop-upgrades.json against
+            // troops.json: the barracks ladder is contiguous (level 1 free, no gaps),
+            // every unlocksTroopId resolves, the unlock encodings RECONCILE (barracks
+            // level N lists exactly the troop whose UnlockBarracksTier == N), and every
+            // upgrade curve starts at the 1.0 baseline. Emits BARRACKS_PROGRESSION_OK.
+            CheckBarracksProgression(failures, log);
+
             // --- GAME GUIDE (guide-content.json -> GuideContentCatalog) ------------
             // WO-588: the opt-in tutorial codex content. Load through the real loader; assert
             // the JSON maps to >0 sections and every section carries a non-empty id/tab/title
@@ -258,6 +266,8 @@ namespace DeNelle.Editor
             if (!CombatAtbRegression.Run(out var combatAtbReason)) failures.Add(combatAtbReason); else log.AppendLine("[combat-atb] " + combatAtbReason);
             if (!DialogueRegression.Run(out var dialogueReason)) failures.Add(dialogueReason); else log.AppendLine("[dialogue] " + dialogueReason);
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
+            // --- WO-772 Phase 1: EnemyResolver id->family->DISTINCT model (generic-skeleton fix, ENEMY_RESOLVER_OK) ---
+            if (!EnemyResolverRegression.Run(out var enemyResolverReason)) failures.Add(enemyResolverReason); else log.AppendLine("[enemy-resolver] " + enemyResolverReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
             if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---
@@ -980,6 +990,106 @@ namespace DeNelle.Editor
             }
             if (bad > 0)
                 failures.Add($"{bad} building(s) have null/empty id or displayName");
+        }
+
+        // =====================================================================
+        //  WO-771.9 — BARRACKS & TROOP UPGRADE PROGRESSION source-lint
+        //  Emits BARRACKS_PROGRESSION_OK when the ladder + curves + reconcile pass.
+        // =====================================================================
+        private static void CheckBarracksProgression(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+
+            BarracksCatalog.Reload();
+            TroopUpgradeCatalog.Reload();
+            TroopCatalog.Reload();
+
+            var levels = new List<BarracksDef>(BarracksCatalog.All);
+            var troops = new List<TroopDef>(TroopCatalog.All);
+            var upgrades = new List<TroopUpgradeDef>(TroopUpgradeCatalog.All);
+
+            log.AppendLine($"barracks.json -> {levels.Count} level(s); troop-upgrades.json -> {upgrades.Count} row(s)");
+
+            if (levels.Count == 0) failures.Add("barracks.json deserialized to 0 levels (mapping break or empty 'levels')");
+            if (troops.Count == 0) failures.Add("troops.json deserialized to 0 troops (barracks progression needs the roster)");
+
+            // Level 1 must be the free day-one baseline; the ladder must be contiguous 1..Max.
+            int max = BarracksCatalog.MaxLevel;
+            for (int lvl = 1; lvl <= max; lvl++)
+            {
+                var def = BarracksCatalog.Find(lvl);
+                if (def == null) { failures.Add($"barracks.json is missing level {lvl} (ladder must be contiguous 1..{max})"); continue; }
+                if (lvl == 1 && !def.Cost.IsZero)
+                    failures.Add("barracks.json level 1 must be FREE (zero cost) — it is the day-one baseline");
+                if (lvl == 1 && def.BuildTimeSeconds != 0f)
+                    failures.Add("barracks.json level 1 must have zero build time (day-one baseline)");
+
+                // Every unlocked troop id must resolve AND its UnlockBarracksTier must == this level (reconcile).
+                if (def.UnlocksTroopIds != null)
+                {
+                    foreach (var id in def.UnlocksTroopIds)
+                    {
+                        var t = TroopCatalog.Find(id);
+                        if (t == null) { failures.Add($"barracks.json level {lvl} unlocks unknown troop id '{id}'"); continue; }
+                        if (t.UnlockBarracksTier != lvl)
+                            failures.Add($"reconcile mismatch: '{id}' listed at barracks level {lvl} but troops.json UnlockBarracksTier={t.UnlockBarracksTier}");
+                    }
+                }
+            }
+
+            // Every troop should be unlocked by exactly the barracks level == its UnlockBarracksTier.
+            foreach (var t in troops)
+            {
+                if (t == null) continue;
+                bool unlockedAtTier = BarracksProgression.IsTroopUnlocked(t.Id, t.UnlockBarracksTier);
+                bool lockedBelow = t.UnlockBarracksTier <= 1 || !BarracksProgression.IsTroopUnlocked(t.Id, t.UnlockBarracksTier - 1);
+                if (!unlockedAtTier) failures.Add($"troop '{t.Id}' is NOT unlocked at its own UnlockBarracksTier {t.UnlockBarracksTier}");
+                if (!lockedBelow) failures.Add($"troop '{t.Id}' is unlocked BELOW its UnlockBarracksTier {t.UnlockBarracksTier} (gate leak)");
+            }
+
+            // Every upgrade row: troop resolves; curves present + start at the 1.0 baseline.
+            int abilitiesUnresolved = 0;
+            foreach (var upg in upgrades)
+            {
+                if (upg == null) continue;
+                if (TroopCatalog.Find(upg.TroopId) == null)
+                    failures.Add($"troop-upgrades.json row '{upg.TroopId}' has no matching troop in troops.json");
+
+                CheckCurveBaseline(failures, upg.TroopId, "reach", upg.Reach);
+                CheckCurveBaseline(failures, upg.TroopId, "strength", upg.Strength);
+
+                if (upg.SpecialAbilities != null)
+                {
+                    foreach (var a in upg.SpecialAbilities)
+                    {
+                        if (a == null) continue;
+                        if (a.LevelThreshold < 1)
+                            failures.Add($"'{upg.TroopId}' ability '{a.AbilityId}' has a non-positive levelThreshold");
+                        // Ability id resolution is INFORMATIONAL only (abilities.json population is WO-771.14) — log, don't fail.
+                        if (string.IsNullOrEmpty(a.AbilityId) || AbilityCatalog.FindById(a.AbilityId) == null)
+                            abilitiesUnresolved++;
+                    }
+                }
+            }
+            if (abilitiesUnresolved > 0)
+                log.AppendLine($"[barracks] note: {abilitiesUnresolved} upgrade ability id(s) not yet in abilities.json (informational; WO-771.14 owns ability wiring)");
+
+            if (failures.Count == before)
+                log.AppendLine("BARRACKS_PROGRESSION_OK");
+            else
+                log.AppendLine($"BARRACKS_PROGRESSION_FAIL: {failures.Count - before} issue(s)");
+        }
+
+        // A StatCurve must be authored and start at the 1.0 baseline (values[0] == 1.0).
+        private static void CheckCurveBaseline(List<string> failures, string troopId, string which, StatCurve curve)
+        {
+            if (curve == null || curve.Values == null || curve.Values.Length == 0)
+            {
+                failures.Add($"'{troopId}' {which} curve is empty (must define per-level multipliers)");
+                return;
+            }
+            if (System.Math.Abs(curve.Values[0] - 1.0f) > 0.001f)
+                failures.Add($"'{troopId}' {which} curve must start at 1.0 baseline (values[0]={curve.Values[0]:0.###})");
         }
 
         // WO-588: validate the Game Guide codex content (guide-content.json).
