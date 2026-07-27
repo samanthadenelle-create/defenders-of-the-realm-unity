@@ -173,30 +173,71 @@ namespace DeNelle.Village
             string.IsNullOrEmpty(s) ? string.Empty : s.Trim().ToLowerInvariant();
 
         // =====================================================================
-        //  ELEMENTAL ON-HIT (data-driven; WeaponDef.element -> a Hovl impact KEY)
+        //  ELEMENTAL ON-HIT (data-driven; WeaponDef.element -> an owner-tagged KEY)
         // -----------------------------------------------------------------------
-        //  A weapon carrying element:"fire" plays a FULL multi-layer fire IMPACT
-        //  burst at the melee hit point, layered on the weaponskill impact. The
+        //  A weapon carrying element:"<elem>" plays a FULL multi-layer elemental
+        //  IMPACT burst at the melee hit point so the element READS in combat. The
         //  returned key resolves in HovlVfxCatalog and spawns the COMPLETE prefab
         //  (all child layers) through the ONE shared VFXManager pool - no stripped
         //  single-layer effect (WO-758: prefab = recipe, don't flatten layers).
-        //  Fireball_Impact is IsLoop:0 (a proper one-shot that auto-returns to the
-        //  pool), so a fire-and-forget on-hit never leaks / hits the loop cap.
-        //  Null/empty (or unknown) element -> null: NO elemental layer, unchanged
-        //  behavior. Add a case here to light up a new element - one reader, no
-        //  per-weapon branching anywhere else.
+        //
+        //  ★ OWNER-TAGGED KEYS ONLY (VfxManualPicks.json, every row manual:true) ★
+        //  Each element below maps to a key the OWNER tagged in the Motion Caster -
+        //  mapped VERBATIM, never a creative substitution. Elements with NO owner-
+        //  tagged on-hit key (holy, water, earth, nature, ...) are HELD -> default
+        //  null = no elemental layer, unchanged behavior. Add a case only when the
+        //  owner tags an on-hit key for that element. One reader, no per-weapon
+        //  branching anywhere else.
+        //
+        //  Tagged one-shots used here (IsLoop:0 -> fire-and-forget auto-returns to
+        //  the pool, never leaks / hits the loop cap):
+        //    fire      -> Fireball_Impact        (VfxManualPicks.json L207)
+        //    ice/frost -> Frost_Impact           (L242) / Freezing_Impact (L228)
+        //    lightning -> Thunderbolt_Impact     (L767)
+        //    arcane    -> Arcane_Impact          (L32)
+        //    poison    -> PosionCloud_Cast       (L697; the only owner-tagged poison on-hit)
         // =====================================================================
 
         /// <summary>The full-prefab HovlVfxCatalog impact key to play at a melee hit for this
-        /// weapon's element, or null when the weapon has no (recognised) element. Data-driven
-        /// off <see cref="WeaponDef.element"/> so ANY future element:"fire" weapon shows the
-        /// effect. Null-safe (null weapon / null element -> null).</summary>
+        /// weapon's element, or null when the weapon has no (recognised, owner-tagged) element.
+        /// Data-driven off <see cref="WeaponDef.element"/> (lowercase-normalized) so ANY future
+        /// element-branded weapon shows the effect. Every returned key is owner-tagged in
+        /// VfxManualPicks.json (mapped verbatim, no substitution). Null-safe (null weapon /
+        /// null element / HELD element -> null).</summary>
         public static string ElementalOnHitKey(WeaponDef w)
         {
             switch (Normalize(w != null ? w.element : null))
             {
-                case "fire": return "Fireball_Impact";   // full multi-layer Hovl fire impact (IsLoop:0, one-shot)
-                default:     return null;                 // no element -> no elemental on-hit layer
+                // fire — full multi-layer Hovl fire impact (IsLoop:0, one-shot). Already wired; keep.
+                case "fire":
+                    return "Fireball_Impact";
+
+                // ice / frost — owner-tagged frost impact (Frost_Impact & Freezing_Impact share one prefab).
+                case "ice":
+                case "frost":
+                    return "Frost_Impact";
+                case "freeze":
+                case "freezing":
+                    return "Freezing_Impact";
+
+                // lightning / electric — owner-tagged electro impact.
+                case "lightning":
+                case "electric":
+                case "electricity":
+                case "thunder":
+                    return "Thunderbolt_Impact";
+
+                // arcane — owner-tagged plasma burst (one-shot).
+                case "arcane":
+                    return "Arcane_Impact";
+
+                // poison — owner-tagged green poison hit (tagged *_Cast; the only owner-tagged poison on-hit).
+                case "poison":
+                    return "PosionCloud_Cast";
+
+                // HELD (no owner-tagged on-hit key yet): holy, water, earth, nature, ... -> no elemental layer.
+                default:
+                    return null;
             }
         }
     }

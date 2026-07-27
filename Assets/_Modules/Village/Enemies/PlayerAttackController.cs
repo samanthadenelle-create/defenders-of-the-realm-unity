@@ -569,18 +569,28 @@ namespace DeNelle.Village
                 // heavier Knight weaponskill burst so a timed connect reads bigger.
                 Guard.Try("Combat", "melee sword impact vfx", () =>
                 {
-                    VFXManager.PlayKey("Weaponskillsword_Impact", hitPos, Quaternion.identity, null, null);
+                    // ELEMENTAL brand on-hit (data-driven via WeaponDef.element; WeaponVfxMap is
+                    // the ONE reader). A weapon carrying element:"<elem>" shows a full multi-layer
+                    // elemental impact burst at the hit point — so an elemental blade is VISUALLY
+                    // read in combat. Reuses the shared VFXManager pool (no raw Instantiate). Every
+                    // resolved key is owner-tagged in VfxManualPicks.json. No element -> null key ->
+                    // unchanged behavior. Not hardcoded to one weapon id: any element-branded weapon lights up.
+                    string elementKey = WeaponVfxMap.ElementalOnHitKey(_gear != null ? _gear.EquippedWeapon : null);
+                    bool hasElement = !string.IsNullOrEmpty(elementKey);
+
+                    // The generic GREEN weaponskill burst plays ONLY for a non-elemental weapon.
+                    // When an element resolves we SUPPRESS it so the element's own color dominates
+                    // the hit read instead of being swamped green (owner: "every elemental weapon
+                    // should read visually"). Non-elemental weapons are unchanged.
+                    if (!hasElement)
+                        VFXManager.PlayKey("Weaponskillsword_Impact", hitPos, Quaternion.identity, null, null);
+
+                    // Perfect-hit emphasis burst (element-neutral energy pop) still fires on a timed
+                    // connect for both paths so a perfect hit always reads bigger.
                     if (isPerfect)
                         VFXManager.PlayKey("KnightWeaponskill_Impact", hitPos, Quaternion.identity, null, null, 1.15f);
 
-                    // ELEMENTAL brand on-hit (data-driven via WeaponDef.element; WeaponVfxMap is
-                    // the ONE reader). A weapon carrying element:"fire" ADDS a full multi-layer
-                    // fire impact burst at the hit point, layered on the weaponskill impact — so an
-                    // elemental blade is VISUALLY read in combat. Reuses the shared VFXManager pool
-                    // (no raw Instantiate). No element -> null key -> unchanged behavior. Not
-                    // hardcoded to one weapon id: any element:"fire" weapon lights up.
-                    string elementKey = WeaponVfxMap.ElementalOnHitKey(_gear != null ? _gear.EquippedWeapon : null);
-                    if (!string.IsNullOrEmpty(elementKey))
+                    if (hasElement)
                         VFXManager.PlayKey(elementKey, hitPos, Quaternion.identity, null, null,
                                            isPerfect ? 1.25f : 0f);
                 });
