@@ -1,12 +1,12 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
-> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-07-03) →
-> this sheet → `docs/MASTER_CATALOG.md` (mandatory, be the SME) → `docs/ARCHITECTURE.md` (the
-> architecture hub) → the relevant `docs/MASTER_CATALOG/<area>.md` for what you're about to touch.
-> **ALSO MANDATORY before any work:** read `OVERNIGHT_AUTOPILOT_LOG.md` (the overnight run's full
-> ledger + open findings) and the auto-memory index `MEMORY.md` (esp.
-> `world-architecture-gated-regions-playable-connectors.md` and
-> `autopilot-chaos-not-one-scripted-path.md`). The code wins on truth — comments lie.
+> **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
+> 2026-07-26) → this sheet → `../CANON_GROUND_TRUTH_2026-07-26.md` (the live reality anchor) →
+> `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
+> `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
+> `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
+> comments lie. (The old `OVERNIGHT_AUTOPILOT_LOG.md` mandate is retired; that log is archived at
+> `_archive/root/OVERNIGHT_AUTOPILOT_LOG.md` for history only.)
 >
 > **Canon maintenance (WO-520, BINDING — CLAUDE.md §15):** the single live anchor is
 > `CANON_GROUND_TRUTH_<date>.md` at repo root. Update the relevant load-bearing doc in the SAME
@@ -19,7 +19,9 @@
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-07-26.md` (NEW — supersedes 07-22, bannered). Branch
 `wip/village2-and-f8-tickets`, HEAD `7dec0e07`, **local==origin — the wave IS pushed** (a change from
-07-22's push-HELD). Prod untouched. Save still v34.
+07-22's push-HELD). Prod untouched. **Save schema = v35** — code-verified (`SaveSchema.CurrentVersion = 35`):
+WO-773's Obsidian multi-channel queue (`obsidianQueue`) HAS shipped with a v34→v35 migrator, so treat it as
+landed, not the backlog item this block's OPEN list (4) shows (that reflected the Sunday doc-pass, pre-landing).
 
 **What this session shipped (felt-test wave, committed AND pushed):**
 - **Dungeons are now a functional end-to-end loop.** WO-770 sub-orders: 770.1 (always-open exit + boss

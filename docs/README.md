@@ -1,6 +1,7 @@
-> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-07-03.md`.
-
-> STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 07-03 anchor named above is superseded) (see CANON_GROUND_TRUTH_2026-07-12.md)
+> **Live reality anchor = `../CANON_GROUND_TRUTH_2026-07-26.md`** (a delta over the deep
+> `../CANON_GROUND_TRUTH_2026-07-22.md` module anchor). Branch = `wip/village2-and-f8-tickets`;
+> board = Notion. If any doc below reads as pre-pivot (branch `feat/tower-core-loop`, Linear board,
+> or a tower-defense + Solana framing), the anchor wins.
 
 # docs/ — Index
 
@@ -30,7 +31,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 ## Architecture
 
 - `ARCHITECTURE.md` — **START HERE: the one authoritative architecture hub** (HP B2B lens, assembly map, world/scene model, data/catalog, save, build mode, instrumentation) — indexes all the deep-dives below
-- `CORE_ARCHITECTURE_PLAN.md` — **root canonical plan** (professional structure, recommended folders, TD + dungeon + native Solana wallets + mobile + URP + cosmetic/seasonal monetization)
+- `../CORE_ARCHITECTURE_PLAN.md` — **historical pre-pivot plan** (root file; TD + dungeon + native Solana wallets + mobile + URP framing). Read for intent, not current state — `ARCHITECTURE.md` above is the live hub.
 - `ARCHITECTURE_NORTH_STAR.md`, `ENGINE_MASTER_PLAN.md`, `WORLD_ENGINE_ARCHITECTURE.md`
 - `ZONE_STREAMING_ARCHITECTURE.md`, `BUILD_MODE_ARCHITECTURE.md` (+ lowercase dup
   `build-mode-architecture.md`), `CHARACTER_ARCHITECTURE.md`, `MONSTER_FAMILY_ARCHITECTURE.md`
@@ -55,11 +56,12 @@ indexed separately in `../PROJECT_INDEX.md`.
   `PLAYER_BASE_DESIGN_CATALOG_ROADMAP.md`, `PROPER_VERTICALITY_PLAN.md`,
   `world-construction-plan.md`, `elemental-codex.md`
 - Dungeons: `DUNGEON_DESIGNS.md`, `dungeon-3d-healers-cottage-design.md`,
-  `dungeons-3d-unity-layout-spec.md`
+  `dungeons-3d-unity-layout-spec.md`. **Current end-to-end state:** `qa/dungeon-raid-validation-2026-07-26.md` + `qa/dungeon-regression-2026-07-26.md` (dungeons are a functional enter → explore → fight-with-real-win/loss → settle → leave loop; code in `Assets/_Modules/Dungeons/`)
+- Raid / troops / work queue (current V1 spine — code in `Assets/_Modules/Village/Troops/` + `Assets/_Modules/Core/Jobs/`): the raid loop is LOCKED to the COC **Teleport/Deploy** model (WO-771); shared enemy classes/families + `EnemyResolver` (WO-772); the common multi-channel "Obsidian" work queue — Builder/Train/Research (WO-773, save v35). Firmed-WO set + status: `qa/SUNDAY_STATUS_2026-07-26.md`; validation: `qa/dungeon-raid-validation-2026-07-26.md`.
 - Other: `CAMERA_INPUT_OVERHAUL.md`, `CHARACTER_CREATOR.md`, `CHARACTER_REFACTOR_PLAN.md`,
   `audio-mix-spec.md`
 - `TUTORIAL_V2_SPEC_2026-07-02.md` — **Tutorial V2** (7 owner-ratified steps, tutorial-steps.json + interpreter; BUILT behind `ff.tutorialv2`, default OFF)
-- `MONETIZATION_REVIEW_2026-07-02.md` — monetization review (Curiosity Shop; loot boxes NO-GO mainnet / GO testnet; dev wallet banked)
+- `_archive/docs/MONETIZATION_REVIEW_2026-07-02.md` — monetization review (Curiosity Shop; loot boxes NO-GO mainnet / GO testnet; dev wallet banked). **Archived.**
 
 ## Narrative
 
@@ -80,8 +82,8 @@ indexed separately in `../PROJECT_INDEX.md`.
 - `QA_player_sanity_pass_2026-05-30.md`, `acceptance_verification_2026-05-30.md`,
   `VISION_GAP_ANALYSIS_2026-05-30.md`, `bug-triage.md`, `diagnosis-report.md`,
   `village-review-suggestions.md`, `recovery-work-orders.md`, `claude-code-work-order.md`
-- `UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md` — screen-by-screen UI audit against the Blink template canon (+ owner addenda; source of the extended UI canon rules)
-- `PUBLISHER_CRITIQUE_2026-07-03.md` — publisher-lens critique (pass-with-revisit; ranks the seam un-stack #1)
+- `_archive/docs/UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md` — screen-by-screen UI audit against the Blink template canon (+ owner addenda; source of the extended UI canon rules). **Archived.**
+- `_archive/docs/PUBLISHER_CRITIQUE_2026-07-03.md` — publisher-lens critique (pass-with-revisit; ranks the seam un-stack #1). **Archived.**
 - Subfolders: `audit/`, `qa/`, `roadmap/`, `port-notes/`
 
 ## Media

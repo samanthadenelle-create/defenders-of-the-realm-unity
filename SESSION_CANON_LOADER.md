@@ -12,7 +12,10 @@
 > APPROVED / Wildlands DEFERRED — `docs/PAIN_POINTS_2026-07-26.md`). Non-dungeon felt fixes shipped: enemies-out-of-castle + battle-lock, towers-no-longer-through-
 > walls, MagentaGuard Android, loading overlay+bar, gate-traversal-teleport off, collector vendor NPCs, Alchemy
 > scroll-fix. **WO next-free = 774** (761–773 consumed). Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
-> Save still **v34** (no new persisted fields this wave). **The 07-22 thread below is SUPERSEDED** (its §5/§6/§7
+> **Save schema = v35** — code-verified (`SaveSchema.CurrentVersion = 35`): **WO-773's Obsidian
+> multi-channel work queue (`obsidianQueue`) HAS shipped** (the v34→v35 migrator folds legacy timed state
+> into the Builder channel). Treat WO-773 as landed, not backlog — the "773 BACKLOG" line above reflects the
+> Sunday doc-pass, before the queue landed. **The 07-22 thread below is SUPERSEDED** (its §5/§6/§7
 > module digests remain the deep reference).
 >
 > ## ▶ LIVE THREAD (2026-07-22) — SUPERSEDED (see 07-26 above; deep module state still valid)
@@ -106,7 +109,13 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (updated 2026-07-18 — anchored to `CANON_GROUND_TRUTH_2026-07-18.md`)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-07-26.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+
+> **Fast reconciliation (07-22/07-26 corrections — trust these over the older bullets):** home hub =
+> `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
+> DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale). Save schema =
+> **v35** (WO-773 Obsidian queue). Dungeon real-time gate is `ff.dungeonrealtime` (there is no
+> `ff.atbdungeon`). Raid loop = COC Teleport/Deploy (WO-771). Dungeons are a functional end-to-end loop.
 - **Strategic placement = ALWAYS ON (2026-07-13, WO-695 ex-682):** `ff.strategicplacement` is REMOVED —
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
@@ -131,8 +140,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-07-18.md` (the single live anchor of current reality — read FIRST; the 07-13/07-12/07-08 anchors and earlier snapshots are SUPERSEDED)
-- `CLI_PREP_2026-07-08_next-session.md` (wave-2 close prep + open F8-37..F8-42 tickets + WO-614 rulings)
+- `CANON_GROUND_TRUTH_2026-07-26.md` (the single live anchor of current reality — read FIRST; a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `docs/qa/SUNDAY_STATUS_2026-07-26.md` (current WO/ticket status table) + `docs/qa/dungeon-raid-validation-2026-07-26.md` (dungeon/raid sign-off)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)
 - `docs/TICKET_PIPELINE.md` (QA→CLI→PO ticket lifecycle, BINDING)
