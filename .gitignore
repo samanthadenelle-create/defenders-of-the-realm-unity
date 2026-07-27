@@ -380,7 +380,10 @@ Assets/Plugins/iOS.meta
 Assets/Plugins/tvOS/
 Assets/Plugins/tvOS.meta
 Assets/Plugins/CW/LeanCommon/Examples/
+Assets/Plugins/CW/LeanCommon/Examples.meta
 Assets/Plugins/CW/LeanTouch/Examples/
+Assets/Plugins/CW/LeanTouch/Examples.meta
 Assets/Plugins/CW/Shared/Common/Examples/
+Assets/Plugins/CW/Shared/Common/Examples.meta
 *.tripo-extracted
 *.tripo-extracted.meta
