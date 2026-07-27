@@ -24,6 +24,8 @@ ANYTHING until the boot sequence below is complete and reported.**
 | 9 | Auto-memory `MEMORY.md` index | Owner preferences + hard-won lessons. Index lines are pointers — read the file before asserting. |
 | 9b | `SUNDAY_HOUSEKEEPING.md` + `docs/reference/*` (known dictionaries) | The weekly full-sweep ritual (BINDING) + the stored registries (hero-animation dictionary, regression-coverage matrix). State stays known via these. |
 
+> **Art on a fresh clone:** the big character/environment packs are gitignored (zip travel). Run `powershell -File tools\art\verify-runtime-art.ps1` and read `tools/art/REQUIRED_PACKS.md` — proves the tracked runtime fallbacks exist so the build doesn't render pills/untextured/magenta (PAIN_POINTS §1.2).
+
 ## 2. WHO DOES WHAT (non-negotiable)
 
 - **Owner (PO):** creative decisions, felt-verify, CLOSES tickets, authorizes push/promotion.
