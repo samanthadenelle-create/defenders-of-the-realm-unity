@@ -13,12 +13,12 @@
 // KEYS (IconRole/IconName on ItemVM + IconId on TroopDetail); the View resolves
 // the actual Sprite from RpgUiCatalog.
 //
-// The train path is BEHAVIOR-IDENTICAL to TroopDialogueCommands.Train: the same
-// TroopUnlock gate, the same per-troop ResourceCost(CostWood, CostFood, CostIron)
-// spend, the same ArmyStorage.TrainNow(slotOf, tryAfford) capacity+afford loop —
-// but over the INJECTED IEconomy + ArmyStorage so it is testable. On a successful
-// train the VM pushes the fresh wallet to the town HUD (the sanctioned
-// CoreServices.Hud PUSH seam) and requests a Save through the injected seam.
+// The train path (WO-778): CreateDefault wires BarracksService.EnqueueTraining so
+// live training is TIMED on the Train channel (CoC parity). Tests inject a
+// Func<string,int,int> trainAction, or pass null to fall back to the legacy
+// ArmyStorage.TrainNow loop (instant grant — kept for capacity-edge unit tests).
+// Outcome.Trained means "accepted" (enqueued OR instant). On success the VM
+// pushes the wallet to the town HUD (CoreServices.Hud) and requests a Save.
 // =============================================================================
 
 using System;
@@ -28,8 +28,12 @@ using DeNelle.Core.UI.Mvvm;    // IPanelViewModel, ItemVM
 
 namespace DeNelle.Village.Hero
 {
-    /// <summary>Outcome of a <see cref="TroopTrainingVM.Train"/> command (the View toasts from it).</summary>
-    public enum TrainOutcome { Locked, Trained, Failed }
+    /// <summary>
+    /// Outcome of a <see cref="TroopTrainingVM.Train"/> command (the View toasts from it).
+    /// WO-778: live CreateDefault path returns <see cref="Queued"/> (timed Train channel);
+    /// null trainAction (tests / legacy) returns <see cref="Trained"/> on instant mint.
+    /// </summary>
+    public enum TrainOutcome { Locked, Trained, Failed, Queued }
 
     /// <summary>What a train attempt did — outcome + count actually trained + the troop's display name.</summary>
     public readonly struct TrainResult
@@ -116,6 +120,12 @@ namespace DeNelle.Village.Hero
         private readonly ArmyStorage _army;
         private readonly Action _onClose;
         private readonly Action _onSaved;   // GameState save seam (wired in CreateDefault)
+        /// <summary>
+        /// Optional train action (id, qty) → count accepted. Null = legacy instant
+        /// <see cref="ArmyStorage.TrainNow"/> loop (tests). CreateDefault wires
+        /// <see cref="BarracksService.EnqueueTraining"/>.
+        /// </summary>
+        private readonly Func<string, int, int> _trainAction;
 
         private readonly Action<ResourceSnapshot> _ecoHandler;
         private bool _disposed;
@@ -128,21 +138,29 @@ namespace DeNelle.Village.Hero
         /// The View-side entry point (audit §3.1): resolves the economy handle + the persisted army
         /// HERE so the View never touches EconomyService / GameStateService itself. The Save seam is
         /// wired to GameStateService too — the sole resolution site. Mirrors ShopVM.CreateDefault.
+        /// WO-778: live train path is timed via BarracksService.EnqueueTraining (Train channel).
         /// </summary>
         public static TroopTrainingVM CreateDefault(Action onClose)
         {
             var svc = GameStateService.Instance;
             var army = svc != null && svc.State != null ? svc.State.Army : null;
             return new TroopTrainingVM(EconomyService.Instance, army, onClose,
-                                       () => GameStateService.Instance?.Save());
+                                       () => GameStateService.Instance?.Save(),
+                                       (id, qty) => BarracksService.EnqueueTraining(id, qty));
         }
 
-        public TroopTrainingVM(IEconomy economy, ArmyStorage army, Action onClose, Action onSaved = null)
+        /// <param name="trainAction">
+        /// Optional. When null, falls back to instant TrainNow (legacy / unit tests).
+        /// CreateDefault passes BarracksService.EnqueueTraining.
+        /// </param>
+        public TroopTrainingVM(IEconomy economy, ArmyStorage army, Action onClose,
+                               Action onSaved = null, Func<string, int, int> trainAction = null)
         {
             _economy = economy;
             _army = army;
             _onClose = onClose;
             _onSaved = onSaved;
+            _trainAction = trainAction;
 
             if (_economy != null)
             {
@@ -189,11 +207,11 @@ namespace DeNelle.Village.Hero
         // ── Commands ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Trains up to <paramref name="qty"/> of <paramref name="troopId"/> into the injected army
-        /// — the exact TroopDialogueCommands.Train path (TroopUnlock gate -> ArmyStorage.TrainNow with
-        /// the slot + afford seams) but over the injected economy so it is testable. On success pushes
-        /// the wallet to the town HUD + requests a Save. Always rebuilds + raises Changed. Returns the
-        /// outcome so the View can toast (presentation).
+        /// Accepts up to <paramref name="qty"/> of <paramref name="troopId"/> for training.
+        /// WO-778: with a trainAction (CreateDefault → EnqueueTraining) this is timed and
+        /// reports <see cref="TrainOutcome.Queued"/>; with null trainAction (unit tests)
+        /// falls back to instant ArmyStorage.TrainNow and reports <see cref="TrainOutcome.Trained"/>.
+        /// On success pushes wallet + Save.
         /// </summary>
         public TrainResult Train(string troopId, int qty)
         {
@@ -214,7 +232,9 @@ namespace DeNelle.Village.Hero
                 {
                     PushHudResources();
                     _onSaved?.Invoke();
-                    result = new TrainResult(TrainOutcome.Trained, trained, name);
+                    // Queued when a trainAction is wired (live / injected queue); Trained = instant mint.
+                    var outcome = _trainAction != null ? TrainOutcome.Queued : TrainOutcome.Trained;
+                    result = new TrainResult(outcome, trained, name);
                 }
                 else
                 {
@@ -227,16 +247,25 @@ namespace DeNelle.Village.Hero
             return result;
         }
 
-        // The TroopDialogueCommands.Train loop, verbatim, but over the injected army + economy.
+        // Queued path (injected) OR legacy instant TrainNow loop when trainAction is null.
         private int TrainInternal(string troopId, int qty)
         {
             if (string.IsNullOrEmpty(troopId) || qty <= 0) return 0;
-            if (_army == null) return 0;
 
             var def = TroopCatalog.Find(troopId);
             if (def == null) return 0;
             if (!TroopUnlock.IsTrainable(def)) return 0;   // NO spend, NO army mutation
 
+            // WO-778: live path uses BarracksService.EnqueueTraining (spend + queue).
+            // Injected fakes may spend via eco themselves; CreateDefault wires the service.
+            if (_trainAction != null)
+            {
+                int n = _trainAction(troopId, qty);
+                return n > 0 ? n : 0;
+            }
+
+            // Legacy instant path (null trainAction — EditMode capacity tests).
+            if (_army == null) return 0;
             int trained = 0;
             for (int i = 0; i < qty; i++)
             {

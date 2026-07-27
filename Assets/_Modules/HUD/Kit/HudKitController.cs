@@ -387,28 +387,37 @@ namespace DeNelle.HUD.Kit
             // resource chips (expanded row) + collapsed gold-only variant (tap-expand).
             BuildResourceChips(pool);
 
-            // ── town action buttons ──
+            // ── town action buttons (WO-778: 5 equal-width — Build / Talk / Bag / Work / Quests) ──
+            // Work = work-queue panel (Builders / Training / Research) via ObsidianQueueGate.
+            const float btnGap = 0.01f;
+            const float btnW = (1f - btnGap * 4f) / 5f;   // five equal faces across 0..1
+            float bx = 0f;
+            Vector2 BtnMin(float x) => new Vector2(x, 0.10f);
+            Vector2 BtnMax(float x) => new Vector2(x + btnW, 0.95f);
+
             var build = ElarionUiKit.BuildObsidianButton(pool, "Build",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.00f, 0.10f), new Vector2(0.24f, 0.95f),
+                BtnMin(bx), BtnMax(bx),
                 () => { if (_owner != null) _owner.BuildRequested?.Invoke(); });
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.build_button", (RectTransform)build.transform);
             Register("buildButton", WrapAsWidget("buildButton", build.gameObject));
+            bx += btnW + btnGap;
 
             _talkButton = ElarionUiKit.BuildObsidianButton(pool, "Talk",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.26f, 0.10f), new Vector2(0.50f, 0.95f), () =>
+                BtnMin(bx), BtnMax(bx), () =>
                 {
                     FlowTrace.Step("HudKit", "Talk tapped -> HudCommands.Talk + TalkRequested");
                     HudCommands.Talk();
                     if (_owner != null) _owner.TalkRequested?.Invoke();   // legacy bridge compat
                 });
             Register("talkButton", WrapAsWidget("talkButton", _talkButton.gameObject));
+            bx += btnW + btnGap;
 
             var bag = ElarionUiKit.BuildObsidianButton(pool, "Bag",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.52f, 0.10f), new Vector2(0.74f, 0.95f), () =>
+                BtnMin(bx), BtnMax(bx), () =>
                 {
                     // Owner 07-06 "Clicking bag doesnt do anything" (RCA log-proven): the two
                     // events below had ZERO live listeners in Main_Castle_Overworld (HeroEquipHud
@@ -421,11 +430,23 @@ namespace DeNelle.HUD.Kit
                     VillageHudController.RaiseInventoryRequested();
                 });
             Register("bagButton", WrapAsWidget("bagButton", bag.gameObject));
+            bx += btnW + btnGap;
+
+            // WO-778 P0-A: work-queue reachability — was dark (RequestToggle had zero callers).
+            var work = ElarionUiKit.BuildObsidianButton(pool, "Work",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                BtnMin(bx), BtnMax(bx), () =>
+                {
+                    FlowTrace.Step("HudKit", "Work tapped -> ObsidianQueueGate.RequestToggle");
+                    ObsidianQueueGate.RequestToggle();
+                });
+            Register("workQueueButton", WrapAsWidget("workQueueButton", work.gameObject));
+            bx += btnW + btnGap;
 
             // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
             var quest = ElarionUiKit.BuildObsidianButton(pool, "Quests",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.76f, 0.10f), new Vector2(1.00f, 0.95f), OnContextAction);
+                BtnMin(bx), BtnMax(bx), OnContextAction);
             Register("questButton", WrapAsWidget("questButton", quest.gameObject));
             _questContextButton = quest;
             _questContextLabel = quest.GetComponentInChildren<TMP_Text>(true);

@@ -1,7 +1,9 @@
 // =============================================================================
 // TroopDialogueCommands — the Yarn ↔ army seam for the Barracks training flow
-// (WO-453 troop-training flow). Holds the actual training logic the Barracks_MainMenu
-// Yarn node drives: open the training panel, and train N of a troop into ArmyStorage.
+// (WO-453 troop-training flow; WO-778 timed queue flip). Holds the training logic the
+// Barracks_MainMenu Yarn node drives: open the training panel, and enqueue N of a
+// troop onto the Train channel (BarracksService.EnqueueTraining — timed CoC path).
+// Instant ArmyStorage.TrainNow remains available for cheats/tests only.
 // -----------------------------------------------------------------------------
 // REGISTRATION (project canon — NOT [YarnCommand] attributes): every custom Yarn
 // command in this project is registered on the ONE shared DialogueRunner via
@@ -13,17 +15,12 @@
 //     Reg("StartTraining",  (Action<string,int>)TroopDialogueCommands.StartTraining);
 // This class is the single home for the logic; the bridge is just the wire.
 //
-// THE ARMY SEAM: ArmyStorage lives in DeNelle.Core and may not reference the Village
-// TroopCatalog / EconomyService (CS0234 circular). So its catalog-dependent methods
-// take seam delegates — a slot resolver + an affordability/spend callback — which this
-// Village-side class supplies: SlotOf → TroopDef.Slots, and the train spend →
-// EconomyService.TrySpend(new ResourceCost(CostWood, CostFood, CostIron)). ResourceCost
-// ctor order is (wood, food, iron, crystals).
+// SlotOf is still the Village-side slot resolver seam for ArmyStorage / BarracksService
+// (TroopDef.Slots). Resource spend for the live path lives in BarracksService.
 // =============================================================================
 
 using System;
 using UnityEngine;
-using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -68,32 +65,25 @@ namespace DeNelle.Village
         public static void StartTraining(string troopId, int qty)
         {
             int trained = Train(troopId, qty);
-            Debug.Log($"[TroopDialogueCommands] StartTraining '{troopId}' x{qty} → trained {trained}.");
+            Debug.Log($"[TroopDialogueCommands] StartTraining '{troopId}' x{qty} → enqueued {trained}.");
         }
 
         /// <summary>
-        /// Trains up to <paramref name="qty"/> of <paramref name="troopId"/> into the
-        /// persisted army, wiring the <see cref="ArmyStorage.TrainNow"/> seams to
-        /// <see cref="TroopCatalog"/> (slot cost) + <see cref="EconomyService"/>
-        /// (affordability/spend). Stops early when the cap fills or a spend fails (a
-        /// failed train mutates nothing). Returns the number actually trained.
+        /// Enqueues up to <paramref name="qty"/> of <paramref name="troopId"/> on the
+        /// Train channel via <see cref="BarracksService.EnqueueTraining"/> (WO-778 —
+        /// CoC timed training). Spends resource cost at enqueue; the unit lands in the
+        /// army when the job completes. Instant <see cref="ArmyStorage.TrainNow"/> is
+        /// kept as a method for cheats/tests only — this live path is timed.
+        /// Returns the number actually accepted (enqueued).
         /// </summary>
         public static int Train(string troopId, int qty)
         {
             if (string.IsNullOrEmpty(troopId) || qty <= 0) return 0;
 
-            var army = Army();
-            if (army == null)
-            {
-                Debug.LogWarning("[TroopDialogueCommands] no GameState army — cannot train.");
-                return 0;
-            }
-
             // WO-733 HARD UNLOCK GATE (before any spend): resolve the def and refuse a
             // troop the Barracks tier has not yet unlocked. TroopUnlock is the ONE tier
             // authority (no magic numbers here). A refused train mutates nothing + spends
-            // nothing — it returns 0 BEFORE the TrainNow loop. Covers every path (panel,
-            // <<StartTraining>> Yarn verb) because they all funnel through this method.
+            // nothing. Covers every path (panel, <<StartTraining>> Yarn verb).
             var gateDef = TroopCatalog.Find(troopId);
             if (gateDef == null)
             {
@@ -110,20 +100,13 @@ namespace DeNelle.Village
                 return 0;   // NO spend, NO army mutation
             }
 
-            int trained = 0;
-            for (int i = 0; i < qty; i++)
-            {
-                // Wire the Core-side army seam to the Village systems:
-                //   slotOf    → TroopDef.Slots (1 for the starter troops)
-                //   tryAfford → EconomyService.TrySpend(cost) — true AND spent, or false + no spend.
-                var t = army.TrainNow(troopId, SlotOf, TryAfford);
-                if (t == null) break;   // cap full OR unaffordable — TrainNow mutated nothing
-                trained++;
-            }
-            if (trained > 0)
+            // WO-778: timed Train channel (spend + enqueue). BarracksService also re-checks
+            // unlock + army room + affordability per unit.
+            int enqueued = BarracksService.EnqueueTraining(troopId, qty);
+            if (enqueued > 0)
                 DeNelle.Core.Diagnostics.FlowTrace.Step("TroopTrain",
-                    "train-ok id=" + troopId + " qty=" + trained);
-            return trained;
+                    "train-queued id=" + troopId + " qty=" + enqueued);
+            return enqueued;
         }
 
         /// <summary>Slot-cost resolver seam: TroopDef.Slots, 1 when the def is unknown.</summary>
@@ -131,25 +114,6 @@ namespace DeNelle.Village
         {
             var d = TroopCatalog.Find(id);
             return d != null && d.Slots > 0 ? d.Slots : 1;
-        }
-
-        // Affordability/spend seam: spend the troop's resource cost through EconomyService.
-        // Returns true AND has deducted the cost, or false + no spend (so TrainNow rolls
-        // back cleanly). A missing economy or unknown def → no spend (false), so a troop
-        // is never minted for free by accident.
-        private static bool TryAfford(string id)
-        {
-            var d = TroopCatalog.Find(id);
-            if (d == null) return false;
-            if (EconomyService.Instance == null) return false;
-            // ResourceCost ctor order: (wood, food, iron, crystals).
-            return EconomyService.Instance.TrySpend(new ResourceCost(d.CostWood, d.CostFood, d.CostIron));
-        }
-
-        private static ArmyStorage Army()
-        {
-            var svc = GameStateService.Instance;
-            return svc != null && svc.State != null ? svc.State.Army : null;
         }
     }
 }

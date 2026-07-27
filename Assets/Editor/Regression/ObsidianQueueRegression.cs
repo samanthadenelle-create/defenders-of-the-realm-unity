@@ -15,15 +15,19 @@
 //   • the migration — a v34 save's in-flight BuildJobs fold into the v35 Builder
 //     channel (Kind backfilled, legacy list cleared) via the REAL SaveMigrator;
 //   • the service seam — BuildTimerService exposes Enqueue/SlotCount/ActiveJobsOf/
-//     PendingJobsOf + the QueueChanged event (reflected, so no MonoBehaviour spin-up).
+//     PendingJobsOf + the QueueChanged event (reflected, so no MonoBehaviour spin-up);
+//   • WO-778 surface: KindLabel/JobTarget for BarracksUpgrade/TroopUpgrade/TrainTroop,
+//     HUD toggle caller (OpenWorkQueue + HudKit source), layout.body list host.
 // =============================================================================
 
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
+using DeNelle.Village;
 
 namespace DeNelle.Editor
 {
@@ -44,6 +48,8 @@ namespace DeNelle.Editor
                 CheckChannelIndependence(failures, log);
                 CheckServiceSeam(failures, log);
                 CheckHudAndGate(failures, log);
+                CheckLabelsAndTargets(failures, log);
+                CheckReachabilityAndLayout(failures, log);
                 CheckMigration(failures, log);
             }
             catch (System.Exception ex)
@@ -164,13 +170,134 @@ namespace DeNelle.Editor
         // ── 7. HUD + gate exist ───────────────────────────────────────────────
         private static void CheckHudAndGate(List<string> failures, StringBuilder log)
         {
-            var hudType = typeof(DeNelle.Village.ObsidianQueueHud);
+            var hudType = typeof(ObsidianQueueHud);
             if (!typeof(MonoBehaviour).IsAssignableFrom(hudType))
                 failures.Add("ObsidianQueueHud is not a MonoBehaviour view (the code-built queue view)");
             var gate = typeof(DeNelle.Core.UI.ObsidianQueueGate);
             if (gate.GetMethod("RequestToggle") == null)
                 failures.Add("ObsidianQueueGate.RequestToggle missing (the HUD open seam)");
-            log.AppendLine("  queue HUD (ObsidianQueueHud) + gate (ObsidianQueueGate) OK");
+            if (hudType.GetMethod("OpenWorkQueue", BindingFlags.Public | BindingFlags.Static) == null)
+                failures.Add("ObsidianQueueHud.OpenWorkQueue missing (public toggle entry for HUD/regression)");
+            if (hudType.GetMethod("FormatKindLabel", BindingFlags.Public | BindingFlags.Static) == null)
+                failures.Add("ObsidianQueueHud.FormatKindLabel missing (WO-778 label seam)");
+            if (hudType.GetMethod("FormatJobLine", BindingFlags.Public | BindingFlags.Static) == null)
+                failures.Add("ObsidianQueueHud.FormatJobLine missing (WO-778 job-line seam)");
+            log.AppendLine("  queue HUD (ObsidianQueueHud) + gate (ObsidianQueueGate) + format helpers OK");
+        }
+
+        // ── 7b. WO-778 kind labels + target identity ──────────────────────────
+        private static void CheckLabelsAndTargets(List<string> failures, StringBuilder log)
+        {
+            // Kind labels must never be raw enum names for known kinds.
+            AssertLabel(JobKind.BarracksUpgrade, "Barracks upgrade", failures);
+            AssertLabel(JobKind.TroopUpgrade, "Troop upgrade", failures);
+            AssertLabel(JobKind.TrainTroop, "Train", failures);
+            AssertLabel(JobKind.Build, "Build", failures);
+            AssertLabel(JobKind.WallUpgrade, "Wall upgrade", failures);
+
+            // Train job target: barracks-train:<troopId>:<uid> → "Footman x1" (or catalog DisplayName).
+            var trainJob = new BuildJobData
+            {
+                StructureId = BarracksService.TrainPrefix + "footman:abc12345",
+                Kind = (int)JobKind.TrainTroop,
+                Channel = (int)ChannelId.Train,
+                StartMs = 1000,
+                DurationMs = 90000,
+            };
+            string trainTarget = ObsidianQueueHud.FormatJobTarget(trainJob);
+            if (string.IsNullOrEmpty(trainTarget) || !trainTarget.Contains("x1"))
+                failures.Add("FormatJobTarget(train) expected troop x1 identity, got '" + trainTarget + "'");
+            if (!string.IsNullOrEmpty(trainTarget) && trainTarget.Equals("Train"))
+                failures.Add("FormatJobTarget(train) is kind-only — needs troop identity");
+
+            // Barracks upgrade target.
+            var barracksJob = new BuildJobData
+            {
+                StructureId = BarracksService.BarracksJobId,
+                Kind = (int)JobKind.BarracksUpgrade,
+                Channel = (int)ChannelId.Builder,
+                TargetTier = 2,
+            };
+            string barracksTarget = ObsidianQueueHud.FormatJobTarget(barracksJob);
+            if (barracksTarget == null || !barracksTarget.Contains("Barracks") || !barracksTarget.Contains("L2"))
+                failures.Add("FormatJobTarget(barracks-upgrade) expected 'Barracks -> L2', got '" + barracksTarget + "'");
+
+            // Troop upgrade target.
+            var troopUp = new BuildJobData
+            {
+                StructureId = BarracksService.TroopUpgradePrefix + "archer",
+                Kind = (int)JobKind.TroopUpgrade,
+                Channel = (int)ChannelId.Research,
+                TargetTier = 3,
+            };
+            string troopUpTarget = ObsidianQueueHud.FormatJobTarget(troopUp);
+            if (troopUpTarget == null || !troopUpTarget.Contains("L3"))
+                failures.Add("FormatJobTarget(troop-upgrade) expected tier L3, got '" + troopUpTarget + "'");
+
+            // Job line (queued) carries target, not kind alone.
+            string queuedLine = ObsidianQueueHud.FormatJobLine(trainJob, 0, queued: true);
+            if (queuedLine == null || !queuedLine.Contains("queued"))
+                failures.Add("FormatJobLine(queued) missing '(queued)': '" + queuedLine + "'");
+            if (queuedLine != null && queuedLine == "Train (queued)")
+                failures.Add("FormatJobLine(queued) is kind-only — needs target identity");
+
+            log.AppendLine("  WO-778 labels (BarracksUpgrade/TroopUpgrade/TrainTroop + job targets) OK");
+        }
+
+        private static void AssertLabel(JobKind kind, string expected, List<string> failures)
+        {
+            string got = ObsidianQueueHud.FormatKindLabel(kind);
+            if (got != expected)
+                failures.Add("FormatKindLabel(" + kind + ") = '" + got + "', expected '" + expected + "'");
+            // Raw-enum leak: only fail when the label equals ToString() AND we expected a
+            // different player-facing word (Build/Upgrade intentionally match their enum names).
+            if (got == kind.ToString() && expected != kind.ToString())
+                failures.Add("FormatKindLabel(" + kind + ") returned raw enum (player-facing leak)");
+        }
+
+        // ── 7c. WO-778 reachability (HUD caller) + layout.body list host ──────
+        private static void CheckReachabilityAndLayout(List<string> failures, StringBuilder log)
+        {
+            // OpenWorkQueue is the public HUD/regression entry that calls RequestToggle.
+            var open = typeof(ObsidianQueueHud).GetMethod("OpenWorkQueue",
+                BindingFlags.Public | BindingFlags.Static);
+            if (open == null)
+                failures.Add("ObsidianQueueHud.OpenWorkQueue missing (reachability seam)");
+
+            // HudKitController (DeNelle.HUD — not referenced by this asmdef) must call
+            // ObsidianQueueGate.RequestToggle from the Work button (source oracle).
+            string kitPath = Path.Combine(Application.dataPath, "_Modules/HUD/Kit/HudKitController.cs");
+            if (!File.Exists(kitPath))
+            {
+                failures.Add("HudKitController.cs missing at " + kitPath);
+            }
+            else
+            {
+                string kitSrc = File.ReadAllText(kitPath);
+                if (kitSrc.IndexOf("ObsidianQueueGate.RequestToggle") < 0)
+                    failures.Add("HudKitController does not call ObsidianQueueGate.RequestToggle (queue still dark)");
+                if (kitSrc.IndexOf("workQueueButton") < 0)
+                    failures.Add("HudKitController missing workQueueButton widget id (WO-778)");
+                else
+                    log.AppendLine("  HudKitController Work button -> ObsidianQueueGate.RequestToggle OK");
+            }
+
+            // List host prefers layout.body (source oracle on ObsidianQueueHud.Build).
+            string hudPath = Path.Combine(Application.dataPath, "_Modules/Village/BuildMode/ObsidianQueueHud.cs");
+            if (!File.Exists(hudPath))
+            {
+                failures.Add("ObsidianQueueHud.cs missing at " + hudPath);
+            }
+            else
+            {
+                string hudSrc = File.ReadAllText(hudPath);
+                if (hudSrc.IndexOf("layout.body") < 0 && hudSrc.IndexOf("layout != null && built.chrome.layout.body") < 0)
+                    failures.Add("ObsidianQueueHud.Build does not parent list to layout.body");
+                if (hudSrc.IndexOf("MakeScrollZone") < 0)
+                    failures.Add("ObsidianQueueHud.Build missing MakeScrollZone (overflow/clip risk)");
+                else
+                    log.AppendLine("  ObsidianQueueHud list host = layout.body + MakeScrollZone OK");
+            }
         }
 
         // ── 8. migration — v34 buildJobs fold into the v35 Builder channel ─────
@@ -220,7 +347,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "OBSIDIAN QUEUE OK — multi-channel model + channel routing + engine slot-cap/FIFO/cascade " +
-                         "+ channel independence + BuildTimerService seam + HUD/gate + v34→v35 migration all hold";
+                         "+ channel independence + BuildTimerService seam + HUD/gate + labels/targets + " +
+                         "reachability/layout + v34→v35 migration all hold";
                 Debug.Log("OBSIDIAN_QUEUE_OK\n" + log);
                 return true;
             }

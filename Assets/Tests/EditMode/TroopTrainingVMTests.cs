@@ -10,8 +10,9 @@
 // Asserts:
 //   * roster projects every troop, sorted by UnlockBarracksTier (non-decreasing).
 //   * Detail.Affordable flips with the fake wallet balance.
-//   * Train on an affordable trainable troop mutates the army + raises Changed +
-//     reports Trained.
+//   * Train with a queued trainAction reports Trained (accepted) WITHOUT growing the
+//     army (WO-778 — units land when the Train job completes).
+//   * Legacy null trainAction + TrainNow still mutates the army (capacity edge).
 //   * Train on a locked troop does NOT mutate + does NOT spend (Locked).
 //   * Train on an unaffordable troop does NOT mutate + does NOT spend (Failed).
 //   * Train respects the army-cap slot edge (stops when the cap fills).
@@ -124,11 +125,25 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void train_affordable_mutates_army_and_raises_changed()
+        public void train_queued_action_accepts_without_growing_army()
         {
+            // WO-778: queued path — trainAction spends + returns count, army unchanged until job completes.
             var eco = Rich();
             var army = new ArmyStorage();
-            using var vm = new TroopTrainingVM(eco, army, null);
+            Func<string, int, int> queueFake = (id, qty) =>
+            {
+                // Spend once per unit like BarracksService.EnqueueTraining would.
+                int n = 0;
+                for (int i = 0; i < qty; i++)
+                {
+                    var def = TroopCatalog.Find(id);
+                    if (def == null) break;
+                    if (!eco.TrySpend(new ResourceCost(def.CostWood, def.CostFood, def.CostIron))) break;
+                    n++;
+                }
+                return n;
+            };
+            using var vm = new TroopTrainingVM(eco, army, null, onSaved: null, trainAction: queueFake);
 
             string id = FirstTrainable(vm);
             Assert.That(id, Is.Not.Null, "test needs at least one trainable troop");
@@ -140,11 +155,32 @@ namespace DeNelle.Tests.EditMode
             int spends = eco.SpendCalls;
             var result = vm.Train(id, 1);
 
-            Assert.That(result.Outcome, Is.EqualTo(TrainOutcome.Trained), "an affordable train must report Trained");
-            Assert.That(result.Count, Is.EqualTo(1), "one train adds one troop");
-            Assert.That(army.Owned.Count, Is.EqualTo(before + 1), "the army must gain a troop");
-            Assert.That(eco.SpendCalls, Is.EqualTo(spends + 1), "an affordable train spends exactly once");
+            Assert.That(result.Outcome, Is.EqualTo(TrainOutcome.Queued),
+                "accepted (enqueued) train must report Queued");
+            Assert.That(result.Count, Is.EqualTo(1), "one accepted unit");
+            Assert.That(army.Owned.Count, Is.EqualTo(before),
+                "queued train must NOT grow the army until the Train job completes");
+            Assert.That(eco.SpendCalls, Is.EqualTo(spends + 1), "queued train spends at enqueue");
             Assert.That(changed, Is.GreaterThan(0), "Train must raise Changed so the View re-renders");
+        }
+
+        [Test]
+        public void train_legacy_null_action_mutates_army_instantly()
+        {
+            // Null trainAction keeps the legacy instant TrainNow path (capacity / cheat tests).
+            var eco = Rich();
+            var army = new ArmyStorage();
+            using var vm = new TroopTrainingVM(eco, army, null);
+
+            string id = FirstTrainable(vm);
+            Assert.That(id, Is.Not.Null, "test needs at least one trainable troop");
+
+            int before = army.Owned.Count;
+            var result = vm.Train(id, 1);
+
+            Assert.That(result.Outcome, Is.EqualTo(TrainOutcome.Trained), "instant train reports Trained");
+            Assert.That(result.Count, Is.EqualTo(1), "one train adds one troop");
+            Assert.That(army.Owned.Count, Is.EqualTo(before + 1), "legacy null action must mint into the army");
         }
 
         [Test]

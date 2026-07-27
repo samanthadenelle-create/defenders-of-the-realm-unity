@@ -49,6 +49,8 @@ namespace DeNelle.Village.Hero
         private Transform _troopHost;      // bodyLeft — dark list well (hosts the scroll zone)
         private RectTransform _listContent; // the scroll content the troop rows parent into
         private Transform _detailHost;     // bodyRight — parchment detail well
+        // WO-778: Train-channel strip (active + pending) under the title / above the ladder.
+        private TextMeshProUGUI _trainStripLabel;
         // WO-714 P2: the footer wallet is a row of kit CurrencyChips — the ONE currency
         // read (chip owns CompactNumber/icon/tag; no hand-formatted wallet string ever).
         private ElarionUiKit.CurrencyChipHandle[] _wallet;
@@ -108,10 +110,37 @@ namespace DeNelle.Village.Hero
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
+            // WO-778: Train-channel strip (text only) so training progress is visible where you train.
+            // Sits at the top of bodyLeft; the scroll zone fills the rest of the well.
+            var stripGo = new GameObject("TrainQueueStrip", typeof(RectTransform));
+            stripGo.transform.SetParent(_troopHost, false);
+            var stripRt = (RectTransform)stripGo.transform;
+            stripRt.anchorMin = new Vector2(0f, 0.90f);
+            stripRt.anchorMax = new Vector2(1f, 1.00f);
+            stripRt.offsetMin = Vector2.zero;
+            stripRt.offsetMax = Vector2.zero;
+            _trainStripLabel = stripGo.AddComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_trainStripLabel);
+            _trainStripLabel.fontSize = 13;
+            _trainStripLabel.color = ElarionUi.ParchmentDim;
+            _trainStripLabel.alignment = TextAlignmentOptions.MidlineLeft;
+            _trainStripLabel.enableWordWrapping = true;
+            _trainStripLabel.raycastTarget = false;
+            _trainStripLabel.text = "Training: idle";
+
+            // Scroll zone sits BELOW the train strip so rows never cover the queue readout.
+            var scrollHost = new GameObject("TroopScrollHost", typeof(RectTransform));
+            scrollHost.transform.SetParent(_troopHost, false);
+            var shRt = (RectTransform)scrollHost.transform;
+            shRt.anchorMin = new Vector2(0f, 0f);
+            shRt.anchorMax = new Vector2(1f, 0.90f);
+            shRt.offsetMin = Vector2.zero;
+            shRt.offsetMax = Vector2.zero;
+
             // WO-737: the dark list well becomes a vertical scroller (kit §1.14 MakeScrollZone) —
             // the 7-troop ladder can exceed the well on a phone. ONE call; the rows parent into
             // the returned content column. Built ONCE here; Rebuild only repaints the rows.
-            var scroll = ElarionUiKit.MakeScrollZone(_troopHost, RowGapPx, 6);
+            var scroll = ElarionUiKit.MakeScrollZone(scrollHost.transform, RowGapPx, 6);
             _listContent = scroll != null ? scroll.content : null;
 
             // WO-714 P2: the footer wallet = the ONE kit wallet strip (CurrencyChip rows —
@@ -174,6 +203,7 @@ namespace DeNelle.Village.Hero
             FlowTrace.Step("Barracks", "TroopTrainingPanel.Rebuild - projecting the roster ladder + detail.");
 
             UpdateWallet();
+            RefreshTrainStrip();
 
             var troops = _vm.Troops;
 
@@ -495,6 +525,34 @@ namespace DeNelle.Village.Hero
             if (_wallet[3] != null) _wallet[3].SetAmount(_vm.Crystals);
         }
 
+        // WO-778: Train-channel active + pending readout (text only). Refresh on Open + VM Changed.
+        private void RefreshTrainStrip()
+        {
+            if (_trainStripLabel == null) return;
+            var svc = BuildTimerService.Instance;
+            if (svc == null)
+            {
+                _trainStripLabel.text = "Training: (queue offline)";
+                return;
+            }
+
+            var active = svc.ActiveJobsOf(DeNelle.Core.Jobs.ChannelId.Train);
+            var pending = svc.PendingJobsOf(DeNelle.Core.Jobs.ChannelId.Train);
+            if (active.Count == 0 && pending.Count == 0)
+            {
+                _trainStripLabel.text = "Training: idle";
+                return;
+            }
+
+            var parts = new List<string>();
+            double now = TimeSource.NowUnixMs();
+            for (int i = 0; i < active.Count; i++)
+                parts.Add(ObsidianQueueHud.FormatJobLine(active[i], now, queued: false));
+            for (int i = 0; i < pending.Count; i++)
+                parts.Add(ObsidianQueueHud.FormatJobLine(pending[i], now, queued: true));
+            _trainStripLabel.text = "Training: " + string.Join(" | ", parts);
+        }
+
         private void TrainAndRefresh(string troopId, int qty)
         {
             if (_vm == null) return;
@@ -512,8 +570,13 @@ namespace DeNelle.Village.Hero
                         ElarionUiKit.ToastTone.Danger);
                     break;
                 }
+                case TrainOutcome.Queued:
+                    // WO-778: timed Train channel — unit lands when the job completes.
+                    ElarionUiKit.ShowToast("Queued " + result.Count + "x " + result.Name + " for training.",
+                        ElarionUiKit.ToastTone.Confirm);
+                    break;
                 case TrainOutcome.Trained:
-                    // WO-714 P5: transient feedback through the ONE kit toast, never a stuck label.
+                    // Legacy/dev instant mint (null trainAction path).
                     ElarionUiKit.ShowToast("Trained " + result.Count + "x " + result.Name + ".",
                         ElarionUiKit.ToastTone.Confirm);
                     break;

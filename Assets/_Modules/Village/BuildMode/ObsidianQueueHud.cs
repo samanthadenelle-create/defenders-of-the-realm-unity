@@ -1,5 +1,5 @@
 // =============================================================================
-// ObsidianQueueHud — the common work-queue panel (WO-773). DUMB SKIN.
+// ObsidianQueueHud — the common work-queue panel (WO-773 + WO-778). DUMB SKIN.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
@@ -10,10 +10,17 @@
 // and what's waiting. Channels are shown SEPARATELY (never one mixed global list),
 // so it reads as CoC parallel workers, not an idle-game feed.
 //
-//   • The HUD button (VillageHudController, DeNelle.HUD) calls
-//     ObsidianQueueGate.RequestToggle() (Core seam — HUD never references Village, §5).
+//   • The HUD button (HudKitController, DeNelle.HUD) calls
+//     ObsidianQueueGate.RequestToggle() (Core seam — HUD never references Village, §5)
+//     via OpenWorkQueue() (public static for regression reachability).
 //   • This view subscribes to ObsidianQueueGate.ToggleRequested + BuildTimerService.
 //     QueueChanged and repaints (plus a 1s tick for the live countdowns).
+//
+// WO-778: kind labels cover BarracksUpgrade/TroopUpgrade; job lines carry target
+// identity (Footman ×1 / Barracks → L2 / Archer → L3); list parents to layout.body
+// (NOT chrome.content) inside a MakeScrollZone so busy queues scroll instead of
+// clipping; sell-time Instant / Ad-skip / Buy-slot buttons call the existing
+// BuildTimerService APIs (no new economy logic).
 //
 // PLAYER-FACING NAMING: "Builders" / "Training" / "Research" — never "Obsidian".
 // COLOURBLIND-SAFE: text + ASCII leading markers (">" running / "..." queued /
@@ -42,10 +49,12 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class ObsidianQueueHud : MonoBehaviour
     {
-        private const int LineCount = 16;   // fixed label pool (enough for 3 channels x slots+queue)
+        private const float LineHeightPx = 30f;
+        private const float ActionRowHeightPx = 56f;
+        private const float HeaderHeightPx = 34f;
 
         private GameObject _modal;
-        private readonly TextMeshProUGUI[] _lines = new TextMeshProUGUI[LineCount];
+        private RectTransform _listContent;   // MakeScrollZone content (layout.body host)
         private bool _open;
         private float _nextTick;
         private PanelHandle _panelHandle;
@@ -103,6 +112,15 @@ namespace DeNelle.Village
             Refresh();
         }
 
+        /// <summary>
+        /// Public static entry the HUD (or tests/regression) can call to open/close the
+        /// work-queue panel. Delegates to the Core seam <see cref="ObsidianQueueGate.RequestToggle"/>.
+        /// </summary>
+        public static void OpenWorkQueue()
+        {
+            ObsidianQueueGate.RequestToggle();
+        }
+
         // ── open / close ──────────────────────────────────────────────────────
         private void Toggle() { if (_open) Hide(); else Show(); }
 
@@ -141,81 +159,288 @@ namespace DeNelle.Village
                 onClose: Hide, sortingOrder: 31000,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
-            var content = built.chrome.content.transform;
 
-            // Fixed label pool, stacked top→bottom; Refresh fills the text (unused = blank).
-            for (int i = 0; i < LineCount; i++)
+            // WO-778: parent the list to layout.body (NOT chrome.content) so title/Close
+            // never clip the job lines — mirrors MusicSelectionPanel / PackStore.
+            Transform body = built.chrome.layout != null && built.chrome.layout.body != null
+                ? built.chrome.layout.body.transform
+                : built.chrome.content.transform;
+
+            // Scrollable job list inside layout.body (busy 3-channel queues exceed fixed lines).
+            var scroll = ElarionUiKit.MakeScrollZone(body, spacing: 4f, padding: 6);
+            _listContent = scroll != null ? scroll.content : null;
+            if (_listContent == null)
             {
-                float yMax = 0.93f - i * 0.058f;
-                float yMin = yMax - 0.052f;
-                _lines[i] = ElarionUiKit.Label(content, "", yMin, yMax,
-                    new Color(0.88f, 0.88f, 0.92f, 1f), ElarionUi.FontBody,
-                    TextAlignmentOptions.Left, 0.06f, 0.94f, bold: false);
+                // Defensive: if MakeScrollZone ever fails, still parent into body.
+                var fallback = new GameObject("QueueList", typeof(RectTransform));
+                fallback.transform.SetParent(body, false);
+                _listContent = (RectTransform)fallback.transform;
             }
         }
 
         // ── view refresh (service → view, one direction) ──────────────────────
         private void Refresh()
         {
-            var svc = BuildTimerService.Instance;
-            var texts = new List<string>(LineCount);
+            if (_listContent == null) return;
 
+            // Clear previous rows (dynamic — no fixed 16-line pool).
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
+
+            var svc = BuildTimerService.Instance;
             if (svc == null)
             {
-                texts.Add("Work queue unavailable.");
+                AddTextRow("Work queue unavailable.", LineHeightPx, new Color(0.88f, 0.88f, 0.92f, 1f), bold: false);
+                return;
             }
-            else
+
+            double now = TimeSource.NowUnixMs();
+            foreach (var (id, label) in Channels)
             {
-                double now = TimeSource.NowUnixMs();
-                foreach (var (id, label) in Channels)
-                {
-                    var active = svc.ActiveJobsOf(id);
-                    var pending = svc.PendingJobsOf(id);
-                    int slots = svc.SlotCount(id);
-                    texts.Add($"{label}   {active.Count}/{slots} busy" +
-                              (pending.Count > 0 ? $"   ({pending.Count} queued)" : ""));
+                var active = svc.ActiveJobsOf(id);
+                var pending = svc.PendingJobsOf(id);
+                int slots = svc.SlotCount(id);
 
-                    // Active slots — running jobs (or an empty free slot). ASCII-only status
-                    // markers (LiberationSans SDF has no ▶/○/… glyphs → they render as tofu):
-                    // ">" = running, "-" = free slot, "..." = queued. Colourblind-safe via text.
-                    for (int i = 0; i < slots; i++)
+                // Channel header + Buy-slot CTA.
+                string header = $"{label}   {active.Count}/{slots} busy" +
+                                (pending.Count > 0 ? $"   ({pending.Count} queued)" : "");
+                AddChannelHeader(header, id);
+
+                // Active slots — running jobs (or an empty free slot). ASCII-only status
+                // markers (LiberationSans SDF has no ▶/○/… glyphs → they render as tofu):
+                // ">" = running, "-" = free slot, "..." = queued. Colourblind-safe via text.
+                for (int i = 0; i < slots; i++)
+                {
+                    if (i < active.Count)
                     {
-                        if (i < active.Count)
-                            texts.Add("   > " + JobLine(active[i], now));   // > running
-                        else
-                            texts.Add("   - free");                          // - free slot
+                        var job = active[i];
+                        AddJobRow("> " + FormatJobLine(job, now, queued: false), job, svc, isActive: true);
                     }
-                    // Pending FIFO strip.
-                    for (int i = 0; i < pending.Count; i++)
-                        texts.Add("   ... " + KindLabel(pending[i].JobKind) + " (queued)"); // ... queued
+                    else
+                        AddTextRow("   - free", LineHeightPx, new Color(0.70f, 0.70f, 0.76f, 1f), bold: false);
                 }
+
+                // Pending FIFO strip.
+                for (int i = 0; i < pending.Count; i++)
+                    AddTextRow("   ... " + FormatJobLine(pending[i], now, queued: true),
+                        LineHeightPx, new Color(0.82f, 0.82f, 0.88f, 1f), bold: false);
+            }
+        }
+
+        // ── row builders (VerticalLayoutGroup children with fixed preferred height) ──
+
+        private void AddChannelHeader(string text, ChannelId channel)
+        {
+            var row = MakeRowHost("ChHeader", HeaderHeightPx);
+            var lbl = AddStretchLabel(row.transform, text, new Color(0.95f, 0.88f, 0.55f, 1f), bold: true,
+                x0: 0.02f, x1: 0.72f);
+            lbl.fontSize = ElarionUi.FontBody;
+
+            // Buy-slot: BuildTimerService.BuySlot does not spend crystals (caller handles
+            // premium). V1 wires the button + warns that economy hook is stub.
+            ElarionUiKit.BuildObsidianButton(row.transform, "+slot",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.74f, 0.10f), new Vector2(0.98f, 0.90f),
+                () => OnBuySlot(channel));
+        }
+
+        private void AddJobRow(string lineText, BuildJobData job, BuildTimerService svc, bool isActive)
+        {
+            bool showSell = isActive && job.StartMs > 0;
+            int price = 0;
+            bool adOk = false;
+            if (showSell && svc != null)
+            {
+                // InstantFinish/AdSkip only resolve Builder jobs via structureId — price>0
+                // gates the Instant button so Train/Research never show a false Instant CTA.
+                price = svc.InstantFinishPrice(job.StructureId);
+                adOk = svc.CanWatchAdToSkip(job.StructureId);
             }
 
-            for (int i = 0; i < LineCount; i++)
-                if (_lines[i] != null)
-                    _lines[i].text = i < texts.Count ? texts[i] : "";
+            bool hasActions = showSell && (price > 0 || adOk);
+            float h = hasActions ? ActionRowHeightPx : LineHeightPx;
+            var row = MakeRowHost("Job", h);
+
+            var col = new Color(0.88f, 0.88f, 0.92f, 1f);
+            float textX1 = hasActions ? 0.52f : 0.98f;
+            AddStretchLabel(row.transform, "   " + lineText, col, bold: false, x0: 0.02f, x1: textX1);
+
+            if (!hasActions) return;
+
+            string sid = job.StructureId;
+            float x = 0.54f;
+            if (price > 0)
+            {
+                float w = 0.22f;
+                ElarionUiKit.BuildObsidianButton(row.transform, price + "c",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(x, 0.12f), new Vector2(x + w, 0.88f),
+                    () => OnInstantFinish(sid));
+                x += w + 0.02f;
+            }
+            if (adOk)
+            {
+                float w = 0.18f;
+                ElarionUiKit.BuildObsidianButton(row.transform, "Ad",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                    new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
+                    () => OnAdSkip(sid));
+            }
         }
 
-        private static string JobLine(BuildJobData job, double now)
+        private void AddTextRow(string text, float height, Color color, bool bold)
         {
-            string kind = KindLabel(job.JobKind);
-            if (job.StartMs <= 0) return kind + " (queued)";
-            double remMs = job.FinishMs - now;
+            var row = MakeRowHost("Line", height);
+            AddStretchLabel(row.transform, text, color, bold, x0: 0.02f, x1: 0.98f);
+        }
+
+        private GameObject MakeRowHost(string name, float height)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(_listContent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = height;
+            le.minHeight = height;
+            le.flexibleWidth = 1f;
+            return go;
+        }
+
+        private static TextMeshProUGUI AddStretchLabel(Transform parent, string text, Color color,
+            bool bold, float x0, float x1)
+        {
+            var go = new GameObject("Txt", typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(x0, 0.05f);
+            rt.anchorMax = new Vector2(x1, 0.95f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            var tmp = go.GetComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(tmp);
+            tmp.text = text ?? "";
+            tmp.fontSize = ElarionUi.FontBody;
+            tmp.color = color;
+            tmp.alignment = TextAlignmentOptions.MidlineLeft;
+            tmp.raycastTarget = false;
+            tmp.enableWordWrapping = false;
+            tmp.overflowMode = TextOverflowModes.Ellipsis;
+            if (bold) tmp.fontStyle = FontStyles.Bold;
+            return tmp;
+        }
+
+        // ── sell-time handlers (existing BuildTimerService APIs only) ─────────
+
+        private static void OnBuySlot(ChannelId channel)
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null) return;
+            // BuySlot does not spend crystals itself — V1 wires the button; premium
+            // spend is a future economy hook (documented for owner felt-verify).
+            svc.BuySlot(channel);
+            FlowTrace.Warn("HUD",
+                "ObsidianQueueHud BuySlot(" + channel + ") — premium crystal spend is STUB (caller-side economy not wired).");
+            ElarionUiKit.ShowToast("Extra " + channel + " slot added.", ElarionUiKit.ToastTone.Confirm);
+        }
+
+        private static void OnInstantFinish(string structureId)
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null || string.IsNullOrEmpty(structureId)) return;
+            bool ok = svc.TryInstantFinish(structureId);
+            if (ok)
+                ElarionUiKit.ShowToast("Finished instantly.", ElarionUiKit.ToastTone.Confirm);
+            else
+                ElarionUiKit.ShowToast("Can't finish now (need crystals or job not active).",
+                    ElarionUiKit.ToastTone.Danger);
+            FlowTrace.Step("HUD", "ObsidianQueueHud TryInstantFinish '" + structureId + "' ok=" + ok);
+        }
+
+        private static void OnAdSkip(string structureId)
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null || string.IsNullOrEmpty(structureId)) return;
+            bool ok = svc.WatchAdToSkip(structureId);
+            if (!ok)
+                ElarionUiKit.ShowToast("Ad skip unavailable right now.", ElarionUiKit.ToastTone.Danger);
+            FlowTrace.Step("HUD", "ObsidianQueueHud WatchAdToSkip '" + structureId + "' ok=" + ok);
+        }
+
+        // ── public format helpers (regression + Refresh) ──────────────────────
+
+        /// <summary>Player-facing kind label — never returns a raw enum for known kinds.</summary>
+        public static string FormatKindLabel(JobKind kind) => KindLabel(kind);
+
+        /// <summary>Target identity for a job (troop name, barracks tier, structure id short form).</summary>
+        public static string FormatJobTarget(BuildJobData job) => JobTargetLabel(job);
+
+        /// <summary>
+        /// Full job line for an active or pending entry: kind+target + timer or "(queued)".
+        /// e.g. "Footman ×1  1m 30s" / "Footman ×1 (queued)".
+        /// </summary>
+        public static string FormatJobLine(BuildJobData job, double nowUnixMs, bool queued)
+        {
+            string target = JobTargetLabel(job);
+            if (string.IsNullOrEmpty(target))
+                target = KindLabel(job.JobKind);
+
+            if (queued || job.StartMs <= 0)
+                return target + " (queued)";
+
+            double remMs = job.FinishMs - nowUnixMs;
             if (remMs < 0) remMs = 0;
-            return kind + "  " + FormatTime(remMs / 1000.0);
+            return target + "  " + FormatTime(remMs / 1000.0);
         }
 
-        private static string FormatTime(double seconds)
+        private static string JobTargetLabel(BuildJobData job)
         {
-            if (seconds < 0) seconds = 0;
-            int s = Mathf.RoundToInt((float)seconds);
-            int h = s / 3600; s %= 3600;
-            int m = s / 60; s %= 60;
-            var sb = new StringBuilder();
-            if (h > 0) sb.Append(h).Append("h ");
-            if (h > 0 || m > 0) sb.Append(m).Append("m ");
-            sb.Append(s).Append("s");
-            return sb.ToString();
+            string id = job.StructureId ?? "";
+            var kind = job.JobKind;
+
+            // Train: barracks-train:<troopId>:<uid> → "Footman ×1"
+            if (kind == JobKind.TrainTroop || id.StartsWith(BarracksService.TrainPrefix))
+            {
+                string troopId = TroopIdFromTrain(id);
+                string name = TroopDisplayName(troopId);
+                return name + " x1";
+            }
+
+            // Troop upgrade: barracks-troop-upgrade:<troopId> → "Archer → L{targetTier}"
+            if (kind == JobKind.TroopUpgrade || id.StartsWith(BarracksService.TroopUpgradePrefix))
+            {
+                string troopId = TroopIdFromUpgrade(id);
+                string name = TroopDisplayName(troopId);
+                int tier = job.TargetTier > 0 ? job.TargetTier : 0;
+                // ASCII "->" only — LiberationSans SDF lacks U+2192 (tofu oracle).
+                return tier > 0 ? (name + " -> L" + tier) : (name + " upgrade");
+            }
+
+            // Barracks building upgrade.
+            if (kind == JobKind.BarracksUpgrade || id == BarracksService.BarracksJobId)
+            {
+                int tier = job.TargetTier > 0 ? job.TargetTier : 0;
+                return tier > 0 ? ("Barracks -> L" + tier) : "Barracks upgrade";
+            }
+
+            // Generic structure / tower / wall — short form of StructureId.
+            string shortId = ShortStructureId(id);
+            switch (kind)
+            {
+                case JobKind.Build:
+                case JobKind.TowerBuild:
+                    return shortId;
+                case JobKind.Upgrade:
+                case JobKind.TowerUpgrade:
+                case JobKind.WallUpgrade:
+                    return job.TargetTier > 0 ? (shortId + " -> L" + job.TargetTier) : shortId;
+                case JobKind.Repair:
+                    return "Repair " + shortId;
+                case JobKind.UnlockTier:
+                    return "Unlock " + shortId;
+                case JobKind.LearnMagic:
+                    return "Learn " + shortId;
+                default:
+                    return shortId;
+            }
         }
 
         private static string KindLabel(JobKind kind)
@@ -231,8 +456,70 @@ namespace DeNelle.Village
                 case JobKind.TowerBuild: return "Tower";
                 case JobKind.TowerUpgrade: return "Tower upgrade";
                 case JobKind.WallUpgrade: return "Wall upgrade";
+                case JobKind.BarracksUpgrade: return "Barracks upgrade";
+                case JobKind.TroopUpgrade: return "Troop upgrade";
                 default: return kind.ToString();
             }
+        }
+
+        private static string TroopIdFromTrain(string jobId)
+        {
+            if (string.IsNullOrEmpty(jobId)) return jobId;
+            // Format: barracks-train:<troopId>:<uid>. Troop ids carry hyphens, never colons.
+            var parts = jobId.Split(':');
+            return parts.Length >= 2 ? parts[1] : jobId;
+        }
+
+        private static string TroopIdFromUpgrade(string jobId)
+        {
+            if (string.IsNullOrEmpty(jobId) || !jobId.StartsWith(BarracksService.TroopUpgradePrefix))
+                return jobId;
+            return jobId.Substring(BarracksService.TroopUpgradePrefix.Length);
+        }
+
+        private static string TroopDisplayName(string troopId)
+        {
+            if (string.IsNullOrEmpty(troopId)) return "Troop";
+            var def = TroopCatalog.Find(troopId);
+            if (def != null && !string.IsNullOrEmpty(def.DisplayName)) return def.DisplayName;
+            return SpacedName(troopId);
+        }
+
+        private static string ShortStructureId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "Job";
+            // Drop cell suffix like "@1_2" for a cleaner player line.
+            int at = id.IndexOf('@');
+            string core = at > 0 ? id.Substring(0, at) : id;
+            return SpacedName(core);
+        }
+
+        private static string SpacedName(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "";
+            var raw = id.Replace('-', ' ').Replace('_', ' ').Trim();
+            if (raw.Length == 0) return "";
+            var parts = raw.Split(' ');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Length == 0) continue;
+                parts[i] = char.ToUpperInvariant(parts[i][0])
+                           + (parts[i].Length > 1 ? parts[i].Substring(1) : "");
+            }
+            return string.Join(" ", parts);
+        }
+
+        private static string FormatTime(double seconds)
+        {
+            if (seconds < 0) seconds = 0;
+            int s = Mathf.RoundToInt((float)seconds);
+            int h = s / 3600; s %= 3600;
+            int m = s / 60; s %= 60;
+            var sb = new StringBuilder();
+            if (h > 0) sb.Append(h).Append("h ");
+            if (h > 0 || m > 0) sb.Append(m).Append("m ");
+            sb.Append(s).Append("s");
+            return sb.ToString();
         }
 
         private static void EnsureEventSystem()
