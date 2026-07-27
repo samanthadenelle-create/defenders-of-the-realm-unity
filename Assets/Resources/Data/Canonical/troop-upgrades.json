@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "_comment": "Per-troop upgrade progression (WO-771.9 foundation). One row per trainable troop in troops.json. reach/strength are MULTIPLIER curves (values[i] = multiplier at level i+1; baseline 1.0). Reach scales AttackRange + AggroRadius; Strength scales MaxHp + DPS. Early levels give the biggest % gains (deltas shrink) and each troop has ONE main growth track. specialAbilities unlock at level thresholds 3/5/7; abilityId maps to a REAL id in abilities.json (resolve via AbilityCatalog.FindById); statusKind is the DeNelle.BattleATB.Engine.StatusKind the ability applies (Burn/Poison/Bleed/Slow/Freeze/Stun/Regen/Haste/Shield/Mark). DUAL-COPY RULE (BINDING): mirrored byte-identical at Assets/StreamingAssets/Data/Canonical/troop-upgrades.json AND Assets/Resources/Data/Canonical/troop-upgrades.json.",
+  "upgrades": [
+    {
+      "troopId": "troop-footman",
+      "flavorText": "The Footman trades finesse for staying power — every level lands heavier and holds the line longer.",
+      "reach": { "values": [1.00, 1.05, 1.09, 1.12, 1.14, 1.16, 1.17] },
+      "strength": { "values": [1.00, 1.16, 1.29, 1.39, 1.47, 1.53, 1.58] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.sweeping-cut", "statusKind": "Bleed", "description": "Sweeping Cut — a wide arc that carves the front rank and leaves it bleeding." },
+        { "levelThreshold": 5, "abilityId": "knight.wardens-roar", "statusKind": "Haste", "description": "Warden's Roar — a battle-cry that quickens nearby allies." },
+        { "levelThreshold": 7, "abilityId": "knight.champions-combo", "statusKind": "Stun", "description": "Champion's Combo — a finishing chain that staggers the target." }
+      ]
+    },
+    {
+      "troopId": "troop-archer",
+      "flavorText": "The Archer's craft is distance — each level reaches farther and looses faster than the last.",
+      "reach": { "values": [1.00, 1.12, 1.21, 1.28, 1.33, 1.37, 1.40] },
+      "strength": { "values": [1.00, 1.10, 1.18, 1.24, 1.28, 1.31, 1.33] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.snare-arrow", "statusKind": "Slow", "description": "Snare Arrow — a barbed shot that roots the target in place." },
+        { "levelThreshold": 5, "abilityId": "knight.suppressing-volley", "statusKind": "Slow", "description": "Suppressing Volley — a rain of arrows that slows everything beneath it." },
+        { "levelThreshold": 7, "abilityId": "knight.thunderbolt", "statusKind": "Stun", "description": "Thunderbolt — a crackling shot that stuns on impact." }
+      ]
+    },
+    {
+      "troopId": "troop-spearman",
+      "flavorText": "The Spearman rules the space in front of the line — reach grows first, power follows.",
+      "reach": { "values": [1.00, 1.10, 1.18, 1.24, 1.28, 1.31, 1.33] },
+      "strength": { "values": [1.00, 1.11, 1.19, 1.25, 1.29, 1.32, 1.34] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.sweeping-cut", "statusKind": "Bleed", "description": "Sweeping Thrust — a long arc that opens wounds across the clustered front." },
+        { "levelThreshold": 5, "abilityId": "knight.shield-bash", "statusKind": "Stun", "description": "Shield Bash — a shoulder-check that staggers the nearest foe." },
+        { "levelThreshold": 7, "abilityId": "knight.wardens-roar", "statusKind": "Haste", "description": "Warden's Roar — a rallying shout that hastens the spear wall." }
+      ]
+    },
+    {
+      "troopId": "troop-shieldguard",
+      "flavorText": "The Shieldguard is built to be immovable — nearly all of its growth pours into raw durability.",
+      "reach": { "values": [1.00, 1.04, 1.07, 1.09, 1.10, 1.11, 1.12] },
+      "strength": { "values": [1.00, 1.18, 1.32, 1.43, 1.51, 1.57, 1.62] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.shield-bash", "statusKind": "Stun", "description": "Shield Bash — slams the choke and stuns whatever it hits." },
+        { "levelThreshold": 5, "abilityId": "knight.eternal-aegis", "statusKind": "Shield", "description": "Eternal Aegis — raises a bulwark that shields the guard and its neighbors." },
+        { "levelThreshold": 7, "abilityId": "knight.wardens-roar", "statusKind": "Haste", "description": "Warden's Roar — steadies the line and quickens the counter-push." }
+      ]
+    },
+    {
+      "troopId": "troop-outrider",
+      "flavorText": "The Outrider is a hunter of stragglers — speed and burst climb together to run down towers.",
+      "reach": { "values": [1.00, 1.06, 1.10, 1.13, 1.15, 1.16, 1.17] },
+      "strength": { "values": [1.00, 1.15, 1.27, 1.36, 1.43, 1.48, 1.52] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "universal.dash", "statusKind": "Haste", "description": "Dash — a burst of speed that closes on a fleeing target." },
+        { "levelThreshold": 5, "abilityId": "knight.sweeping-cut", "statusKind": "Bleed", "description": "Sweeping Cut — a mounted slash that bleeds anything it passes." },
+        { "levelThreshold": 7, "abilityId": "knight.champions-combo", "statusKind": "Stun", "description": "Champion's Combo — a run-down finisher that staggers the kill." }
+      ]
+    },
+    {
+      "troopId": "troop-battlemage",
+      "flavorText": "The Battlemage answers fragility with overwhelming burst — strength curves hard, reach creeps up.",
+      "reach": { "values": [1.00, 1.08, 1.14, 1.18, 1.21, 1.23, 1.24] },
+      "strength": { "values": [1.00, 1.17, 1.30, 1.40, 1.47, 1.53, 1.57] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.emberbrand-throw", "statusKind": "Burn", "description": "Emberbrand Throw — a hurled brand that sets the target alight." },
+        { "levelThreshold": 5, "abilityId": "knight.thunderbolt", "statusKind": "Stun", "description": "Thunderbolt — a bolt of aether that stuns on impact." },
+        { "levelThreshold": 7, "abilityId": "universal.arcane-bolt", "statusKind": "Mark", "description": "Arcane Bolt — a marking cantrip that primes a foe for extra damage." }
+      ]
+    },
+    {
+      "troopId": "troop-echo-legionnaire",
+      "flavorText": "The Echo Legionnaire is the Legion's flex elite — a high, balanced climb toward frontline dominance.",
+      "reach": { "values": [1.00, 1.07, 1.12, 1.16, 1.19, 1.21, 1.22] },
+      "strength": { "values": [1.00, 1.16, 1.28, 1.37, 1.44, 1.49, 1.53] },
+      "specialAbilities": [
+        { "levelThreshold": 3, "abilityId": "knight.champions-combo", "statusKind": "Bleed", "description": "Champion's Combo — a legion drill combo that opens deep wounds." },
+        { "levelThreshold": 5, "abilityId": "knight.eternal-aegis", "statusKind": "Shield", "description": "Eternal Aegis — an Echo-forged ward that shields the squad." },
+        { "levelThreshold": 7, "abilityId": "knight.oathmend", "statusKind": "Regen", "description": "Oathmend — a sworn restoration that regenerates the Legionnaire in the fray." }
+      ]
+    }
+  ]
+}
