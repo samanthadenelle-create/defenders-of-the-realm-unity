@@ -8,8 +8,8 @@
 > DungeonHero sole-mover / taller camera / Bryn pill-hide. **The raid loop is LOCKED to Teleport/Deploy** (COC
 > model, owner 2026-07-26); walk-to retired as the raid loop. **WO-770 (dungeon), 771 (raid v2), 772 (shared
 > enemy system), 773 (Obsidian job queue)** are firmed + validation-signed-off (`docs/qa/`), but only 770 is
-> partly built — 770.5/.6/.8/.10/.11 + all of 771 + 773 are BACKLOG; **772 is BLOCKED on owner enemy-codex
-> ratification.** Non-dungeon felt fixes shipped: enemies-out-of-castle + battle-lock, towers-no-longer-through-
+> partly built — 770.5/.6/.8/.10/.11 + all of 771 + 773 are BACKLOG; **772 Phase 1 UNBLOCKED** (Hollow Ones
+> APPROVED / Wildlands DEFERRED — `docs/PAIN_POINTS_2026-07-26.md`). Non-dungeon felt fixes shipped: enemies-out-of-castle + battle-lock, towers-no-longer-through-
 > walls, MagentaGuard Android, loading overlay+bar, gate-traversal-teleport off, collector vendor NPCs, Alchemy
 > scroll-fix. **WO next-free = 774** (761–773 consumed). Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
 > Save still **v34** (no new persisted fields this wave). **The 07-22 thread below is SUPERSEDED** (its §5/§6/§7

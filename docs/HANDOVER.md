@@ -43,12 +43,12 @@ read-first set (SESSION_CANON_LOADER, this doc, KEY_FACTS, PIPELINE_STATE, START
 MASTER_CATALOG top); produced `docs/qa/SUNDAY_STATUS_2026-07-26.md` (full WO/ticket table); reconciled WO
 numbering to **next-free = 774** in `CLI_LANES_WO_NUMBERS.md`.
 
-**OPEN (owner):** (1) **WO-772 owner-ratification gate** — route `docs/enemy-codex.md` for review-and-approve;
-it blocks dungeon enemy-placement (770.11) AND raid art (771.13). (2) Dungeon backlog 770.5/.6/.8/.10/.11.
-(3) Raid V1 spine (771.0→771.1→771.1b→771.4→reuse combat→771.9+773→771.6→771.10→771.11→771.13+772) — nothing
-built. (4) WO-773 Obsidian queue (or generalize CLI's `BuildTimerService`/WO-762). (5) CS-1 ring/amulet
-non-persist ticket still open. (6) §6/§7 catalog-drift housekeeping WO still queued. (7) Re-run
-`DataRegression.RunAll` before the next build ship (last certified `REGRESSION_OK` = 07-22).
+**OPEN:** (1) **WO-772 Phase 1 UNBLOCKED** (PM 2026-07-26: Hollow Ones approved — see
+`docs/PAIN_POINTS_2026-07-26.md`); Wildlands deferred. (2) Dungeon backlog 770.5/.6/.8/.10/.11.
+(3) Raid V1 spine (771.0→771.1→771.1b→771.4→reuse combat→771.9+773 multi-channel→771.6 stakes→…) — nothing
+built; **no 771.3 first**. (4) WO-773 multi-channel queue (Builder/Train/Research). (5) CS-1 ring/amulet
+non-persist. (6) Art travel policy + verify script (PAIN_POINTS §1.2). (7) Re-run `DataRegression.RunAll`
+before next ship.
 
 ---
 
