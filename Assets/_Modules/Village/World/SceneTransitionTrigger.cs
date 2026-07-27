@@ -551,8 +551,8 @@ namespace DeNelle.Village
             MonoBehaviour coHost = this;
             if (!loadAdditive && player != null)
             {
-                var heroMb = player.GetComponentInParent<HeroLocomotion>()
-                          ?? player.GetComponentInChildren<HeroLocomotion>();
+                var heroMb = player.GetComponentInParent<HeroLocomotion>();
+                if (heroMb == null) heroMb = player.GetComponentInChildren<HeroLocomotion>();
                 if (heroMb != null) coHost = heroMb;
                 else FlowTrace.Warn("Seam", "no HeroLocomotion to host reposition across Single load — using this (may die on unload).");
             }

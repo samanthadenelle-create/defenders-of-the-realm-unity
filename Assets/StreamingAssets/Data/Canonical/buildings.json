@@ -114,8 +114,7 @@
     },
     {
       "id": "armorer",
-      "isShoppable": true,
-      "type": "Forge",
+      "type": "Armorer",
       "displayName": "forge",
       "descriptionKey": "buildingDesc.forge",
       "hp": 190,

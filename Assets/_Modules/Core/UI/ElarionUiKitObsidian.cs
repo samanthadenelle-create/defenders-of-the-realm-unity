@@ -623,7 +623,7 @@ namespace DeNelle.Core.UI
                 "Button" + (int)style + "_" + color, "Button" + (int)style);
             if (pf != null)
             {
-                var pfBtn = pf.GetComponent<Button>() ?? FindDeep<Button>(pf.transform, "button");
+                var pfBtn = pf.TryGetComponent<Button>(out var pfb) ? pfb : FindDeep<Button>(pf.transform, "button");
                 if (pfBtn != null)
                 {
                     var pfLabel = FindDeep<TMP_Text>(pf.transform, "text", "label");
@@ -981,7 +981,7 @@ namespace DeNelle.Core.UI
                 h.root = pf;
                 h.frame = pf.GetComponent<Image>();
                 h.icon = FindDeep<Image>(pf.transform, "icon");
-                h.button = pf.GetComponent<Button>() ?? pf.AddComponent<Button>();
+                h.button = pf.TryGetComponent<Button>(out var pfBtnH) ? pfBtnH : pf.AddComponent<Button>();
                 if (h.button.targetGraphic == null) h.button.targetGraphic = h.frame;
             }
             else
@@ -1155,7 +1155,7 @@ namespace DeNelle.Core.UI
                                        TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                     h.label.raycastTarget = false;
                     FitSingleLine(h.label);                                // §1.14 — "Caster: Ability" never spills
-                    h.group = pf.GetComponent<CanvasGroup>() ?? pf.AddComponent<CanvasGroup>();
+                    h.group = pf.TryGetComponent<CanvasGroup>(out var pfGrp) ? pfGrp : pf.AddComponent<CanvasGroup>();
                     h.SetCast("", 0f);
                     return h;
                 }

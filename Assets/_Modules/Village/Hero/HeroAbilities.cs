@@ -315,7 +315,7 @@ namespace DeNelle.Village
             // VFX) and no-ops when full/dead, so the drip is safe to run every frame.
             if (Time.time < _hpOverTimeUntil && _hpOverTimeRate > 0f)
             {
-                if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
                 _heroHealth?.RegenTick(_hpOverTimeRate * dt);
             }
 
@@ -1101,7 +1101,7 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
                     $"Holy Retribution: taunt-burn applied to {burned} foe(s) — {burnDps:F0} dps for {burnSecs:F0}s ({def.Id}).");
             // Temp shield = a small self-heal (the temp-shield system is separate; this is the cheap stand-in).
-            var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            var heroHp = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
             heroHp?.Heal(20f);
             ReportRumble(20f);
             SpawnVfx(origin, def, def.Range);
@@ -1272,7 +1272,7 @@ namespace DeNelle.Village
         private void ResolveInvuln(AbilityDef def, Vector3 origin)
         {
             float secs = def.Seconds > 0f ? def.Seconds : 8f;
-            if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
             _heroHealth?.ActivateInvuln(secs);
             VFXManager.Play(VFXType.Impact_Heal, origin + Vector3.up * 1.0f);
             SpawnVfx(origin, def, Mathf.Max(1.5f, def.Range));
@@ -1309,7 +1309,7 @@ namespace DeNelle.Village
         /// </summary>
         private void ResolveWardensGrace(AbilityDef def, Vector3 origin)
         {
-            if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
             float maxHp = _heroHealth != null ? _heroHealth.MaxHp : 100f;
 
             // Defense (gear ArmorDefense, 0..0.70) scales a bonus heal on top of the flat % heal.

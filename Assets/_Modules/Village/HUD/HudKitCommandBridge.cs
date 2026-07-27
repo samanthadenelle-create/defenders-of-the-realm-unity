@@ -75,7 +75,8 @@ namespace DeNelle.Village.Hud
                 {
                     var en = enemies[i];
                     if (en == null || en.IsDead || en.GetInstanceID() != wanted) continue;
-                    var dmg = en.GetComponent<IDamageable>() ?? en.GetComponentInParent<IDamageable>();
+                    var dmg = en.GetComponent<IDamageable>();
+                    if (dmg == null) dmg = en.GetComponentInParent<IDamageable>();
                     if (dmg != null)
                     {
                         indicator.EngageLock(dmg);

@@ -1567,7 +1567,7 @@ namespace DeNelle.Village
         private RangedAttackVFX EnsureCastVfx()
         {
             if (_castVfx == null)
-                _castVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+                _castVfx = TryGetComponent<RangedAttackVFX>(out var rv) ? rv : gameObject.AddComponent<RangedAttackVFX>();
             return _castVfx;
         }
 

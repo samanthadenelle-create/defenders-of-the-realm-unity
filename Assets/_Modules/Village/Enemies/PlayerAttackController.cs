@@ -209,8 +209,8 @@ namespace DeNelle.Village
             // so the hero always gets a swing/cast trail (it self-drives off ActorAnimator.
             // AttackStarted). DisallowMultipleComponent makes a double-add a no-op; the trail's own
             // ApplyWeaponTrailVfx re-tints per swing, so no OnGearChanged subscription is needed here.
-            _trailController = GetComponent<WeaponTrailController>()
-                            ?? gameObject.AddComponent<WeaponTrailController>();
+            _trailController = TryGetComponent<WeaponTrailController>(out var tc)
+                            ? tc : gameObject.AddComponent<WeaponTrailController>();
         }
 
         private void Update()
@@ -653,8 +653,8 @@ namespace DeNelle.Village
         public Color ApplyWeaponTrailVfxForTest()
         {
             if (_trailController == null)
-                _trailController = GetComponent<WeaponTrailController>()
-                                ?? gameObject.AddComponent<WeaponTrailController>();
+                _trailController = TryGetComponent<WeaponTrailController>(out var tc)
+                                ? tc : gameObject.AddComponent<WeaponTrailController>();
             return _trailController.ApplyWeaponTrailVfxForTest();
         }
 

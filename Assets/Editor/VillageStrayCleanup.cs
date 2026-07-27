@@ -412,8 +412,8 @@ namespace DeNelle.Editor
             // SerializedObject set (the property setter doesn't persist — known
             // intro-PanelSettings regression).
             const string BattlePanelPath = "Assets/_Modules/BattleATB/Generated/BattlePanelSettings.asset";
-            var doc = bc.GetComponent<UnityEngine.UIElements.UIDocument>()
-                      ?? UnityEngine.Object.FindAnyObjectByType<UnityEngine.UIElements.UIDocument>();
+            var doc = bc.TryGetComponent<UnityEngine.UIElements.UIDocument>(out var bcDoc)
+                      ? bcDoc : UnityEngine.Object.FindAnyObjectByType<UnityEngine.UIElements.UIDocument>();
             if (doc != null)
             {
                 var dso = new SerializedObject(doc);
