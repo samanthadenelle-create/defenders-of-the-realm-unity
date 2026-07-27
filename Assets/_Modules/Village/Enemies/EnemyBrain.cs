@@ -123,6 +123,35 @@ namespace DeNelle.Village
         public void SetHeroOnlyTarget(bool on) { _heroOnlyTarget = on; }
 
         /// <summary>
+        /// DUNGEON LEASH (WO-770.11 hotfix): tether this brain to a home <paramref name="anchor"/>.
+        /// While the hero is farther than <paramref name="radius"/> from the anchor, the brain
+        /// yields NO target (see the leash gate in <see cref="Update"/>) so the mob stays dormant
+        /// at its spawn instead of beelining a global hero across the whole dungeon. Pass
+        /// <paramref name="radius"/> &lt;= 0 to DISABLE (the default state) — village/overworld
+        /// enemies never call this, so their behaviour is unchanged. The damage-provoke override
+        /// runs BEFORE the leash gate, so a leashed mob struck from range still fights back.
+        /// </summary>
+        public void SetLeash(Vector3 anchor, float radius)
+        {
+            _homeAnchor  = anchor;
+            _leashRadius = radius > 0f ? radius : 0f;
+        }
+
+        /// <summary>
+        /// WO-770.11 leash decision (PURE — unit-testable without NavMesh/Enemy scaffolding).
+        /// Returns true when the mob should be leashed OUT (yield no target, idle at anchor):
+        /// a leash is active AND the hero is absent OR outside <paramref name="radius"/> of
+        /// <paramref name="anchor"/>. <paramref name="radius"/> &lt;= 0 == leash disabled ==
+        /// ALWAYS false (existing unleashed enemies are unaffected).
+        /// </summary>
+        public static bool ShouldLeashOut(Vector3 anchor, float radius, bool heroPresent, Vector3 heroPos)
+        {
+            if (radius <= 0f) return false;          // disabled (default) — never leash
+            if (!heroPresent) return true;           // no hero to chase — stay dormant
+            return (heroPos - anchor).sqrMagnitude > radius * radius;
+        }
+
+        /// <summary>
         /// True when this brain is a HERO-ONLY duelist (set by the isolated BattleArena and
         /// the in-place OutpostEnemyGroupSpawner dungeon/outpost groups). Read by
         /// <see cref="Enemy"/> to raise the in-scene <see cref="DeNelle.Core.Combat.HeroCombatEngagement"/>
@@ -329,6 +358,15 @@ namespace DeNelle.Village
         private float     _nextAttackTime;
         private Animator  _animator;
         private Transform _currentTarget;
+
+        // DUNGEON LEASH (WO-770.11 hotfix): opt-in home-anchor tether. When enabled
+        // (_leashRadius > 0), this brain yields NO target while the hero is outside the
+        // leash from _homeAnchor, so a distant room's mobs stay dormant at their spawn
+        // instead of beelining the entry. DEFAULT _leashRadius == 0 => fully DISABLED,
+        // so all existing village/overworld enemies are UNAFFECTED (zero regression).
+        // Set by OutpostEnemyGroupSpawner (dungeon/outpost groups) via SetLeash().
+        private Vector3 _homeAnchor;
+        private float   _leashRadius;   // 0 = disabled (default)
 
         // WO-147: consolidated perception sensor (auto-added in Awake) + IsAlert drive.
         private AwarenessSensor _sensor;
@@ -637,6 +675,26 @@ namespace DeNelle.Village
             if (_tacticalState == EnemyTacticalState.Suppressed)
             {
                 _enemy.SetBrainTargetPosition(null);
+                return;
+            }
+
+            // DUNGEON LEASH GATE (WO-770.11 hotfix): when a home anchor is set
+            // (_leashRadius > 0) and the hero is OUTSIDE the leash from the anchor (or
+            // absent), yield no target and idle at the anchor. This runs AFTER the
+            // taunt/retaliation overrides above (so a struck mob still fights back) and
+            // BEFORE ChooseTarget(), so it neutralises BOTH the HeroOnly return and the
+            // FindClosestTarget fallback that otherwise beeline the global hero. Clearing
+            // both nav overrides drops the (heartless) DriveNav into its stop-and-hold
+            // branch, so the mob stays dormant at its spawn until the hero approaches.
+            // DEFAULT _leashRadius == 0 short-circuits here => zero cost/effect for every
+            // unleashed village/overworld enemy.
+            bool heroPresent = _heroTransform != null;
+            if (ShouldLeashOut(_homeAnchor, _leashRadius, heroPresent,
+                    heroPresent ? _heroTransform.position : Vector3.zero))
+            {
+                _currentTarget = null;
+                _enemy.SetBrainTarget(null);
+                _enemy.SetBrainTargetPosition(null);   // DriveNav idles at anchor
                 return;
             }
 
