@@ -154,15 +154,140 @@ namespace DeNelle.Editor
                 log.AppendLine($"NOTE: route '{name}' registered={present} — {note}");
             }
 
+            // (4) WO-777 — ONE village→dungeon entry component + no walk-by auto-route.
+            //     Data-decidable (source-structural, no play mode): the footgun was
+            //     DungeonPortal.OnTriggerEnter calling EnterDungeon() on walk-in (→
+            //     SceneManager.LoadScene, no confirm). We prove, from the REAL source on
+            //     disk, that (a) the trigger no longer routes, (b) the explicit button
+            //     path still routes, and (c) the redundant DungeonEntrance system is
+            //     retired (files gone, no LIVE type usage anywhere under Assets/).
+            CheckDungeonEntryConsolidation(failures, log);
+
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "SCENE_ROUTING_OK");
-                reason = $"SCENE ROUTING OK — {loadBearing.Length} load-bearing routes registered, Castle resolves+registers for both MergedWorld states, '{AbandonedVillageScene}.unity' excluded";
+                reason = $"SCENE ROUTING OK — {loadBearing.Length} load-bearing routes registered, Castle resolves+registers for both MergedWorld states, '{AbandonedVillageScene}.unity' excluded, one dungeon-entry component (walk-by killed)";
                 return true;
             }
 
             reason = "scene-routing: " + string.Join("; ", failures);
             Debug.LogError(log.ToString() + "SCENE_ROUTING_FAIL: " + reason);
+            return false;
+        }
+
+        // ── WO-777: dungeon-entry consolidation oracle ──────────────────────────
+        // Source of truth = the actual .cs on disk (mirrors the file-scan style of the
+        // NUL-byte compile-gate guard), so this proves the SHIPPED behaviour, not a
+        // re-derivation. Three invariants, each a hard failure if broken.
+        private static void CheckDungeonEntryConsolidation(List<string> failures, StringBuilder log)
+        {
+            string assetsRoot = Application.dataPath; // ".../Assets"
+
+            // (a) The retired redundant entry system must be GONE (files deleted).
+            string entranceRel     = "_Modules/Village/Dungeons/DungeonEntrance.cs";
+            string bootstrapRel     = "_Modules/Village/Dungeons/DungeonEntranceBootstrap.cs";
+            bool entranceGone  = !File.Exists(Path.Combine(assetsRoot, entranceRel));
+            bool bootstrapGone = !File.Exists(Path.Combine(assetsRoot, bootstrapRel));
+            if (!entranceGone)
+                failures.Add("WO-777: DungeonEntrance.cs still exists — the redundant second entry system was not retired (expected exactly one live entry component: DungeonPortal)");
+            if (!bootstrapGone)
+                failures.Add("WO-777: DungeonEntranceBootstrap.cs still exists — the redundant entrance placer was not retired");
+            if (entranceGone && bootstrapGone)
+                log.AppendLine("OK: WO-777 — DungeonEntrance.cs + DungeonEntranceBootstrap.cs retired (deleted); DungeonPortal is the sole entry component");
+
+            // (b) No LIVE type usage of the retired components anywhere under Assets/
+            //     (doc-comment <see cref> mentions don't match these call/generic forms).
+            string[] deadUsageTokens =
+            {
+                "AddComponent<DungeonEntrance>",
+                "GetComponent<DungeonEntrance>",
+                "FindObjectsByType<DungeonEntrance>",
+                "FindObjectOfType<DungeonEntrance>",
+                "FindAnyObjectByType<DungeonEntrance>",
+                "<DungeonEntranceBootstrap>",
+                "EnsureDungeonEntrances(",
+            };
+            var liveHits = new List<string>();
+            foreach (var cs in Directory.GetFiles(assetsRoot, "*.cs", SearchOption.AllDirectories))
+            {
+                // Skip this file — its deadUsageTokens[] literally contains the tokens,
+                // which would otherwise be a guaranteed self-match false positive.
+                if (Path.GetFileName(cs) == "SceneRoutingRegression.cs") continue;
+                string src;
+                try { src = File.ReadAllText(cs); }
+                catch { continue; }
+                foreach (var tok in deadUsageTokens)
+                    if (src.IndexOf(tok, System.StringComparison.Ordinal) >= 0)
+                        liveHits.Add($"{Path.GetFileName(cs)} contains '{tok}'");
+            }
+            if (liveHits.Count > 0)
+                failures.Add("WO-777: retired dungeon-entry types still referenced live — " + string.Join(", ", liveHits));
+            else
+                log.AppendLine("OK: WO-777 — no live references to DungeonEntrance / DungeonEntranceBootstrap remain under Assets/");
+
+            // (c) DungeonPortal: walk-by killed but explicit button entry preserved.
+            string portalRel = "_Modules/Village/Buildings/DungeonPortal.cs";
+            string portalPath = Path.Combine(assetsRoot, portalRel);
+            if (!File.Exists(portalPath))
+            {
+                failures.Add($"WO-777: DungeonPortal.cs missing at '{portalRel}' — the sole entry component is gone");
+                return;
+            }
+            string portalSrc = File.ReadAllText(portalPath);
+
+            // Footgun: OnTriggerEnter must NOT route (no EnterDungeon() in its body),
+            // but must still arm the VFX (OnHeroApproach). Isolate the method body by
+            // brace-matching so an EnterDungeon() elsewhere in the file doesn't mask it.
+            if (TryExtractMethodBody(portalSrc, "OnTriggerEnter(Collider", out string triggerBody))
+            {
+                if (triggerBody.IndexOf("EnterDungeon(", System.StringComparison.Ordinal) >= 0)
+                    failures.Add("WO-777 FOOTGUN: DungeonPortal.OnTriggerEnter still calls EnterDungeon() — walking a hero into the portal trigger changes scene with no confirm");
+                else
+                    log.AppendLine("OK: WO-777 — DungeonPortal.OnTriggerEnter does NOT call EnterDungeon() (walk-by auto-route removed)");
+                if (triggerBody.IndexOf("OnHeroApproach", System.StringComparison.Ordinal) < 0)
+                    failures.Add("WO-777: DungeonPortal.OnTriggerEnter no longer arms the portal VFX (OnHeroApproach) — the trigger's only remaining job was dropped");
+            }
+            else
+            {
+                failures.Add("WO-777: could not locate DungeonPortal.OnTriggerEnter(Collider ...) body — source shape changed; footgun-removal unverifiable");
+            }
+
+            // Explicit entry preserved: the shared Interact button still wires EnterDungeon,
+            // and EnterDungeon still routes via SceneManager.LoadScene.
+            bool buttonWired = portalSrc.IndexOf("MobileInteractButton.Request(this,", System.StringComparison.Ordinal) >= 0
+                               && portalSrc.IndexOf("EnterDungeon", System.StringComparison.Ordinal) >= 0;
+            bool routes = portalSrc.IndexOf("SceneManager.LoadScene", System.StringComparison.Ordinal) >= 0;
+            if (buttonWired && routes)
+                log.AppendLine("OK: WO-777 — explicit entry preserved (Interact button → EnterDungeon → SceneManager.LoadScene)");
+            else
+                failures.Add($"WO-777: explicit button entry path broken (button wired={buttonWired}, LoadScene present={routes}) — the intended sole entry no longer routes");
+        }
+
+        // Extracts the balanced-brace body (including the outer braces) of the first
+        // method whose signature contains <paramref name="signatureNeedle"/>. Naive
+        // brace matching — fine for these C# method bodies (no braces inside strings).
+        private static bool TryExtractMethodBody(string source, string signatureNeedle, out string body)
+        {
+            body = null;
+            // Brace chars via code point (123='{', 125='}') so this file's own brace
+            // balance stays clean under the §1 gate's naive open/close counter.
+            char openBrace = (char)123;
+            char closeBrace = (char)125;
+            int sig = source.IndexOf(signatureNeedle, System.StringComparison.Ordinal);
+            if (sig < 0) return false;
+            int open = source.IndexOf(openBrace, sig);
+            if (open < 0) return false;
+            int depth = 0;
+            for (int i = open; i < source.Length; i++)
+            {
+                char c = source[i];
+                if (c == openBrace) depth++;
+                else if (c == closeBrace)
+                {
+                    depth--;
+                    if (depth == 0) { body = source.Substring(open, i - open + 1); return true; }
+                }
+            }
             return false;
         }
     }

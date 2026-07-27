@@ -36,6 +36,11 @@ namespace DeNelle.Village
         [SerializeField] private int minCount = 3;
         [SerializeField] private int maxCount = 7;
 
+        [Tooltip("WO-770.11 dungeon leash: each skeleton stays dormant at its spawn slot " +
+                 "until the hero comes within this radius (world units). Prevents the whole " +
+                 "room beelining the entry. ~10m = room-sized. <= 0 disables the leash.")]
+        [SerializeField] private float leashRadius = 10f;
+
         private Transform _root;
         private int _counter;
         private bool _autoSpawned;
@@ -103,6 +108,10 @@ namespace DeNelle.Village
                 var brain = enemy.gameObject.AddComponent<EnemyBrain>();
                 brain.Role = role;
                 brain.SetHeroOnlyTarget(true);
+                // WO-770.11 hotfix: tether each skeleton to its own spawn slot so a
+                // distant room's group stays dormant until the hero approaches, instead
+                // of beelining the global hero across the whole dungeon.
+                brain.SetLeash(slot, leashRadius);
 
                 spawned++;
             }

@@ -111,6 +111,12 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // FIX B (WO-771, owner default 2026-07-26): ambient overworld roaming is OFF by
+            // default (regions peaceful until the player picks a fight — WWCD + "no idea how I
+            // got here"). Don't even self-bootstrap the spawner when ff.regionroam is OFF, so no
+            // roaming population is ever maintained. Top-level enable gate only — all internals
+            // are intact, so flipping ff.regionroam ON (+ reload) restores the full roam loop.
+            if (!DeNelle.Core.FeatureFlags.RegionRoam) return;
             if (Instance != null) return;
             new GameObject("RegionMobSpawner").AddComponent<RegionMobSpawner>();
         }
@@ -130,6 +136,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // FIX B (WO-771, owner default 2026-07-26): ambient overworld roaming OFF by default.
+            // Belt-and-suspenders behind the Bootstrap gate — if a stale instance survives a
+            // runtime flip, this still makes the spawner a no-op when ff.regionroam is OFF. Flip
+            // ff.regionroam = 1 to restore the roaming population.
+            if (!DeNelle.Core.FeatureFlags.RegionRoam) return;
+
             // WO-482 LIGHT WORLD: when the overworld-encounter loop is on, the open world
             // holds ONLY the wandering orc "reps" (OverworldEncounterSpawner) — no ambient
             // roamers. Suppress this entire population so the player's attacks land on a rep

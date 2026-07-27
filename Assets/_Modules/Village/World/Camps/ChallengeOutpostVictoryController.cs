@@ -66,6 +66,12 @@ namespace DeNelle.Village.World.Camps
         {
             Guard.Try(Sys, "TryInstall", () =>
             {
+                // FIX A (WO-771, docs/RAID_NORTHSTAR.md §2A/§3): the walk-up-outpost loop is
+                // RETIRED (raid = Teleport/Deploy). When ff.raidwalk is OFF (default) the player
+                // is never dropped into KayKitChallengeOutpost via the cave, so this self-installer
+                // must NOT arm — mirrors the sibling gate on OutpostVictoryController.TryInstall.
+                // Flip ff.raidwalk ON to restore the walk-up outpost victory/return loop.
+                if (!FeatureFlags.RaidContinuousWalk) return;
                 if (SceneManager.GetActiveScene().name != SceneName) return;
                 if (FindAnyObjectByType<ChallengeOutpostVictoryController>() != null) return;
 

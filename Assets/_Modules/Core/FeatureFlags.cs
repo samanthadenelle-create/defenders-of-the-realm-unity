@@ -153,6 +153,14 @@ namespace DeNelle.Core
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
         public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);  // WO-771 LOCKED (2026-07-26): reverted the 2026-06-26 preview default OFF so the leftover wandering-encounter loop no longer shadows the Teleport/Deploy raid loop out of the box (audit: "fix that flag first regardless"). ff.overworldencounter=1 restores the preview.
 
+        /// <summary>Ambient overworld roamers (RegionMobSpawner's live wandering-mob population that
+        /// tops up around the player as they walk regions). Default OFF per owner 2026-07-26 (WWCD +
+        /// "no idea how I got here"): regions stay peaceful until the player picks a fight, so the
+        /// surprise overworld combat can't happen out of the box. When OFF the spawner does nothing
+        /// (top-level enable gate only — all internals intact). Reversible: PlayerPrefs
+        /// "ff.regionroam" = 1 restores the roaming population.</summary>
+        public static bool RegionRoam => Get("regionroam", defaultOn: false);
+
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
         /// pick OR HeroSelect confirm) the player routes STRAIGHT to the castle (MainCastle_Hall). Hero-pick

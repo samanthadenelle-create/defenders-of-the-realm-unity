@@ -79,6 +79,20 @@ namespace DeNelle.Village.World
         /// </summary>
         public static void RepointCavePortals()
         {
+            // FIX A (WO-771, docs/RAID_NORTHSTAR.md §2A/§3): the walk-up-outpost loop is
+            // RETIRED — the raid loop is Teleport/Deploy, so the player must NOT be able to
+            // walk into the baked overworld cave and be dropped into the retired
+            // KayKitChallengeOutpost. When ff.raidwalk is OFF (default), do NOT repoint the
+            // portal; instead NEUTRALIZE the baked outpost trigger so it can't fire. This
+            // mirrors the sibling gates on RaidOutpostSystem / OutpostVictoryController /
+            // ChallengeOutpostVictoryController. Flip ff.raidwalk ON to restore the legacy
+            // walk-to repoint verbatim.
+            if (!DeNelle.Core.FeatureFlags.RaidContinuousWalk)
+            {
+                NeutralizeOutpostTriggers();
+                return;
+            }
+
             var triggers = Object.FindObjectsByType<SceneTransitionTrigger>();
             if (triggers == null || triggers.Length == 0) return;
 
@@ -103,6 +117,58 @@ namespace DeNelle.Village.World
 
             if (repointed > 0)
                 Debug.Log($"[CavePortalRepoint] repointed {repointed} cave portal(s) -> {NewTarget}.");
+        }
+
+        /// <summary>
+        /// FIX A neutralize path (ff.raidwalk OFF): DISABLE every overworld outpost seam so
+        /// the player can't walk into a retired outpost — the baked "CavePortal_Trigger" and
+        /// any SceneTransitionTrigger whose destination is an outpost (Outpost* / Garrison* /
+        /// RaidBase*, incl. the old Outpost1 target and the KayKitChallengeOutpost repoint
+        /// target). We only DISABLE the trigger component + its collider — we NEVER destroy the
+        /// GameObject and NEVER hand-edit the .unity scene (CLAUDE.md §3), so flipping
+        /// ff.raidwalk ON and reloading restores the walk-up entry cleanly. Idempotent + null-safe.
+        /// </summary>
+        private static void NeutralizeOutpostTriggers()
+        {
+            var triggers = Object.FindObjectsByType<SceneTransitionTrigger>();
+            if (triggers == null || triggers.Length == 0) return;
+
+            int disabled = 0;
+            for (int i = 0; i < triggers.Length; i++)
+            {
+                var t = triggers[i];
+                if (t == null) continue;
+                if (!IsRetiredOutpostSeam(t)) continue;
+                if (!t.enabled) continue; // already neutralized — idempotent
+
+                t.enabled = false;                       // stop the proximity crossing behaviour
+                var col = t.GetComponent<Collider>();
+                if (col != null) col.enabled = false;    // stop the OnTriggerEnter fallback
+                disabled++;
+                FlowTrace.Step("Seam",
+                    $"CavePortal '{t.name}' -> '{t.targetSceneName}' NEUTRALIZED (ff.raidwalk OFF; walk-up outpost retired, no scene edit).");
+            }
+
+            if (disabled > 0)
+                Debug.Log($"[CavePortalRepoint] neutralized {disabled} retired outpost seam(s) (ff.raidwalk OFF).");
+        }
+
+        // A trigger the walk-up-outpost retire must shut off: the baked cave-portal by name,
+        // its old Outpost1 target, the KayKitChallengeOutpost repoint target, or any outpost
+        // destination (Outpost* / Garrison* / RaidBase*). Mirrors SceneTransitionTrigger's own
+        // (private) IsOutpostDestination classifier so the neutralize matches exactly what the
+        // gate is meant to cover.
+        private static bool IsRetiredOutpostSeam(SceneTransitionTrigger t)
+        {
+            if (t.name != null && t.name.StartsWith("CavePortal_Trigger", System.StringComparison.OrdinalIgnoreCase))
+                return true;
+            string dest = t.targetSceneName;
+            if (string.IsNullOrEmpty(dest)) return false;
+            return dest == OldTarget
+                || dest == NewTarget
+                || dest.StartsWith("Outpost",  System.StringComparison.OrdinalIgnoreCase)
+                || dest.StartsWith("Garrison", System.StringComparison.OrdinalIgnoreCase)
+                || DeNelle.Core.HubScenes.IsRaid(dest);
         }
     }
 }
