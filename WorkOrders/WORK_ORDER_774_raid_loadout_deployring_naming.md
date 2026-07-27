@@ -66,6 +66,35 @@ Add these regression oracles (wired into `DataRegression.RunAll`) + PlayMode whe
 - Breach-expand deploy zone, structure % destruction, army presets, post-raid shields — **V1.5** (see ladder below).
 - Hero micro through the fortress; UXML raid panels.
 
+## Implementation map (VERIFIED seams, read-only pass 2026-07-26 — build to THIS, not the prose above)
+
+### Edit points (file:line, confirmed against source)
+| WO item | Primary edit sites |
+|---|---|
+| Loadout steppers/bar (View) | `RaidDeployScreen.cs:269-305` (rows), `:307-356` (bars+CTA), `:358-368` (AutoRecommend stub) |
+| Loadout state + handoff (VM) | `RaidDeployVM.cs:56` (state near `_troops`), `:131-134` (`Deploy()` — the single call that must pass the bag) |
+| RaidParams handoff | `SceneRouter.cs`: new `[Serializable] RaidParams` after `:115`, static `PendingRaid` field near `:658`, `GoRaid` overload at `:456` — **mirror `PatriciaLightParams`/`GoPatriciaLight` (`:107-115`,`:651-655`) and `BattleParams`/`GoBattle` (`:49-78`,`:567-578`) verbatim** |
+| Tray arms loadout only | `RaidDeployController.cs:526` (`BuildTrayTiles`), `:304` (`NextDeployableOfType`), `:334` (`RemainingOfType`) — **all three re-derive from `army.Owned`+`IsDeployable`; gate ALL THREE or the player over-deploys past the loadout** |
+| Deploy-ring reject + ghost | `RaidDeployController.cs:267-302` (`HandleDeployTap`; gate AFTER raycast hit `:269`, BEFORE `SpawnFromArmy` `:290` + `RecordDeploy` `:299`); ring marker added in `RaidBaseGenerator.cs:182-225` |
+| "Defenders" label | `RaidHudController.cs:154` (init), `:223` (live `"Razed "+pct+"%"`) |
+| Victory copy | `EndStateVM.cs:245` ("The base is CLAIMED…"), `:247` ("% razed") |
+| Train queue UI | swap `TroopTrainingPanel.cs:498-525` + `TroopTrainingVM.cs:198-249` (instant `ArmyStorage.TrainNow`) to the queued `BarracksService.EnqueueTraining` (`BarracksService.cs:188-222`); read via `BuildTimerService.ActiveJobsOf/PendingJobsOf` (as `ObsidianQueueHud.cs:57` already does for the `Train` channel) |
+| Star math | `RaidScoring.cs:146-155` — logic UNCHANGED for V1; copy only |
+
+### CORRECTIONS to the scope above (source beats the review prose)
+- **Copy is "Razed"/"CLAIMED", NOT "destroyed".** `DestructionPct` (`RaidScoring.cs:92-102`) already = garrison kills. The readout says **"Razed %"** (`RaidHudController.cs:223`) and victory says **"base is CLAIMED … % razed"** (`EndStateVM.cs:245-247`). "DESTROYED" exists only on the unrelated village-defense path (`EndStateVM.cs:339-343`). → **RaidCopyRegression asserts: defender readout shows "Defenders" and contains NO "razed"/"base %"; and no screen labels BOTH the modal and the tray "Deploy."** (Do not hunt for "base destroyed" — it isn't there.)
+- **Only 3 raid bases are baked** (`raider_camp_small`, `fortified_garrison`, `mage_enclave` — `RaidBaseGenerator.cs:121-130`); `IronBastion` is a separate menu-only build. Deploy-ring marker must be added to all baked bases via `BuildAllRaidScenes` (NOT hand-edited scenes, §3).
+- **Selection header is already "RAIDS"** (`RaidSelectionScreen.cs:114`) — no rename needed. Rename targets: pre-raid modal header "RAID: <name>" (`RaidDeployScreen.cs:111`) + its DEPLOY CTA (`:351`) → "Army/War Band"; keep the in-raid tray as "Deploy."
+
+### FOOTGUNS (must-honor)
+1. **Two training paths — REPLACE, don't add.** Instant `ArmyStorage.TrainNow` (`TroopTrainingVM.cs:244`, live in UI) vs queued `BarracksService.EnqueueTraining` (`:188`, unwired). Both spend resources AND add to the army. Wiring the panel to the queue must REPLACE the `TrainNow` call, never run both.
+2. **Two Barracks panels — target `TroopTrainingPanel` ("Barracks - Train"), NOT `BarracksPanel` ("Barracks - Upgrade").**
+3. **Loadout is per-TYPE counts but deploy consumes per-INSTANCE `PlayerTroop`** (`TroopDeployer.cs:78` stamps `OwnedTroopId`; retreat reconciles by id via `ArmyStorage.ReconcileAfterRaid`). Enforce the loadout as a per-type DEPLOY CAP against real owned instances — do NOT invent a new PlayerTroop selection, or wounded/reconcile accounting mismatches.
+4. **Gate all three tray scan sites** (footgun-tray, see table) — `RaidLoadoutRegression` asserts the DEPLOY BUDGET, not just tile presence.
+5. **`PendingRaid` must be set BEFORE `GoRaid`** — `RaidDeployController` self-installs on scene load (`RuntimeInitializeOnLoadMethod` `:114`) and reads `GameState.Army` directly (`:627-631`); the bag must arrive via `PendingRaid` read in `Start()`→`BuildTrayTiles()`.
+6. **Deploy-ring reject returns before `SpawnFromArmy`/`RecordDeploy`** so a rejected drop doesn't inflate the deployed count or decrement the army.
+7. **Leave the walk path unfed** — teleport + walk-to-outpost share the single `ff.raidwalk` flag (default OFF, confirmed `FeatureFlags.cs:88`). Edit only the deploy loop; do not spawn walk outposts (`RaidOutpostSystem`, `RaidEntryBridge.cs:144`).
+
 ## Full ladder recorded (from the review — for sequencing, NOT all this WO)
 - **P0 (this WO):** loadout+naming, deploy ring, victory/star copy, Train-queue UI.
 - **P1 (next raid WOs):** scout stub + Auto Recommend recipes; ghost preview + drop VFX/SFX; 2× speed toggle; one perfect Footman + one Archer silhouette (art lane — depends on Lane B pack tooling + KayKit Phase 2); star thresholds tied to boss/gate not only full clear.
