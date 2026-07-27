@@ -27,6 +27,7 @@
 
 using System;
 using Newtonsoft.Json;
+using DeNelle.Core.Jobs;
 
 namespace DeNelle.Core.State
 {
@@ -57,6 +58,23 @@ namespace DeNelle.Core.State
         /// <summary>Build vs upgrade — drives the duration curve + completion behaviour.</summary>
         [JsonProperty("jobType")] public int JobType;
 
+        /// <summary>
+        /// WO-773 — the richer job kind (Build/Upgrade/Repair/TrainTroop/UnlockTier/LearnMagic/
+        /// Tower*/Wall*). This is the "ObsidianJob" kind axis: the completion router uses it to
+        /// pick the IJobEffect handler. Additive default-on-read: absent on a pre-WO-773 (v34)
+        /// save → 0 = Build; the v34→v35 migration backfills it from <see cref="JobType"/> (an
+        /// Upgrade JobType becomes JobKind.Upgrade). See <see cref="JobKind"/>.
+        /// </summary>
+        [JsonProperty("kind")] public int Kind;
+
+        /// <summary>
+        /// WO-773 — the channel this job runs on (Builder/Train/Research). Channels never share
+        /// slots, so a training job and a build job run in parallel. Additive default-on-read:
+        /// absent → 0 = Builder (the legacy build/upgrade channel); the v34→v35 migration stamps
+        /// folded legacy jobs onto the Builder channel. See <see cref="ChannelId"/>.
+        /// </summary>
+        [JsonProperty("channel")] public int Channel;
+
         /// <summary>Unix-ms the job started (TimeSource.NowUnixMs at enqueue).</summary>
         [JsonProperty("startMs")] public double StartMs;
 
@@ -81,6 +99,22 @@ namespace DeNelle.Core.State
         {
             get => (BuildJobType)JobType;
             set => JobType = (int)value;
+        }
+
+        /// <summary>Strongly-typed view of <see cref="Kind"/> (WO-773 — the ObsidianJob kind axis).</summary>
+        [JsonIgnore]
+        public JobKind JobKind
+        {
+            get => (JobKind)Kind;
+            set => Kind = (int)value;
+        }
+
+        /// <summary>Strongly-typed view of <see cref="Channel"/> (WO-773 — the worker-pool channel).</summary>
+        [JsonIgnore]
+        public ChannelId ChannelId
+        {
+            get => (ChannelId)Channel;
+            set => Channel = (int)value;
         }
     }
 }

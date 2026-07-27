@@ -2115,11 +2115,12 @@ namespace DeNelle.Village
                 return;
             }
 
-            // ── F8-51 TIMER GATES (before any charge, so a rejection costs nothing) ──
+            // ── F8-51 TIMER GATE (before any charge, so a rejection costs nothing) ──
             // "Should not be able to upgrade till build is complete, should not be able to
-            // upgrade instantly twice." Any structure with an ACTIVE build OR upgrade job
-            // (same key) is LOCKED; a full slot set rejects (upgrades check pre-charge so
-            // they can refuse cleanly — placement keeps its post-charge instant fallback).
+            // upgrade instantly twice." Any structure with an in-flight build/upgrade job
+            // (same key) is LOCKED. WO-773: a FULL Builder slot no longer REJECTS — the job
+            // QUEUES on the Obsidian Builder channel (the freed builder auto-pulls it), so
+            // the old "All build slots busy" reject is gone; StartUpgrade enqueues below.
             string jobKey = $"{ps.itemId}@{ps.gridCell.x}_{ps.gridCell.y}";
             var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
             if (timerSvc != null)
@@ -2129,14 +2130,6 @@ namespace DeNelle.Village
                     double rem = timerSvc.RemainingSeconds(jobKey);
                     FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' REJECTED (busy: {rem:0}s)");
                     BuildFeedbackToast.Show($"Under construction ({rem:0}s).");
-                    ShowSelectionPanel(ps);
-                    return;
-                }
-                if (!timerSvc.HasFreeSlot)
-                {
-                    FlowTrace.Warn("BuildUpgrade",
-                        $"upgrade '{jobKey}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
-                    BuildFeedbackToast.Show("All build slots busy.");
                     ShowSelectionPanel(ps);
                     return;
                 }
@@ -2161,10 +2154,13 @@ namespace DeNelle.Village
                     if (job != null)
                     {
                         UnderConstructionVisual.Attach(ps, jobKey);
+                        bool queued = job.Value.StartMs <= 0;   // WO-773 — full Builder slot → queued (not started yet)
                         FlowTrace.Step("BuildUpgrade",
-                            $"'{ps.itemId}' tier {newLevel}/{maxLevel} timer STARTED " +
+                            $"'{ps.itemId}' tier {newLevel}/{maxLevel} timer {(queued ? "QUEUED" : "STARTED")} " +
                             $"({timerSvc.RemainingSeconds(jobKey):0}s), charged {Describe(cost)}.");
-                        BuildFeedbackToast.Show($"Upgrading to tier {newLevel} ({timerSvc.RemainingSeconds(jobKey):0}s)...");
+                        BuildFeedbackToast.Show(queued
+                            ? $"Queued for tier {newLevel} (builders busy)..."
+                            : $"Upgrading to tier {newLevel} ({timerSvc.RemainingSeconds(jobKey):0}s)...");
                         ShowSelectionPanel(ps);
                         return;
                     }

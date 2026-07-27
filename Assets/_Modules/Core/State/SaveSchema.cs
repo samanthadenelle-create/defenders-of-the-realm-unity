@@ -8,8 +8,9 @@
 //   - Validate()             (the C# port of `safeParse` — rejects NaN/Infinity,
 //                             clamps numerics via NonNegInt/FiniteInt rules)
 //
-// CurrentVersion = 34, FileFormat = 1. (v34 appended tribes/wards/arena/
-// petActiveSlots — see the CurrentVersion const changelog.) PlayerPrefs key
+// CurrentVersion = 35, FileFormat = 1. (v35 appended obsidianQueue — the WO-773
+// common multi-channel work queue; v34 appended tribes/wards/arena/petActiveSlots —
+// see the CurrentVersion const changelog.) PlayerPrefs key
 // `dotr-save` replaces the React localStorage key (storage layer mandated by the
 // port spec — improvement #4 NOT adopted).
 // =============================================================================
@@ -20,6 +21,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using DeNelle.Core.Jobs;
 
 namespace DeNelle.Core.State
 {
@@ -30,7 +32,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 34;  // v34 — REDS #3/#4 persistence gaps closed (one coordinated bump): four in-memory-only fields now round-trip to the signed/migrated save. (a) tribes (WO-160 roaming-raider records: members-remaining / cleared / clear-count / last-seen) — List<TribeState>; (b) wards (WO-112 relit ward-stones + earned exploration reach) — List<WardStoneState>; (c) arena (ARENA MVP W/L ledger: wins/losses/streak/totalPurse) — nullable ArenaProgress struct, distinct from the already-persisted arenaDefense placed-defender layout (v19); (d) petActiveSlots (flag_17 — PetAcquisitionService's slotIndex->species deploy map, previously runtime-only and rebuilt from StarterPetId alone in SyncSlotsFromState, so a multi-slot pet roster reset on reload) — List<string> (null entry = an empty slot). All four are additive default-on-read (nullable on the wire; absent -> GameState's initializer, so an old save loads empty tribes/wards/slots + a zeroed arena = exactly the prior in-memory-only behaviour) and the v33->v34 migrator step seeds them for a clean round-trip + to keep the CORE_SAVE version-triple aligned (SaveMigrator top step == CurrentVersion). Append-only fields at the END of PersistedState so older saves stay loadable. v33 — WO-738 echo per-echo agency + specialization: the echoLanes per-echo token grammar is enriched from a bare lane ("wood,iron,idle") to "lane:level" ("harvest:3,idle,crafting:1"). SAME wire field (echoLanes, string) so this is a NO-MIGRATOR bump — additive default-on-read: a bare legacy token reads as its functional lane at level 1 (wood/iron/food -> Harvest; idle -> Idle; any token with no :level -> level 1), so an old save's echoLanes="wood" loads Harvest/Lv1 unchanged. New Game seeds the starter echo "harvest:1". v32 — first-build freebies (owner ruling 2026-07-13 evening): freeBuildsUsed (List<string> of catalog itemIds whose one-time FREE first placement has been consumed; the flag burns at the committed placement and never resets — selling/destroying does not restore it). REPLACES the 650w/385i founding resource seed (StartingBudget zeroed): players earn everything beyond the one-free-each kit from production, which prevents all-defense-no-town. Additive default-on-read, no migrator step (nullable on the wire; absent → GameState's empty-list initializer = an old save gains its FULL freebies, the partyMemberIds precedent). v31 — WO-681/658 echo gather-lane assignments: echoLanes (per-Echo lane CSV, index 0 = the starter Echo; additive default-on-read, migrator seeds "wood" when null = exactly the prior hardwired starter-Echo behaviour). v30 — WO-673 strategic-placement migration marker: strategicPlacementMigrated (bool, default false) records that the ONE-SHOT migration writer has converted the auto-placed functional structures (baked ring storefronts + runtime crafting stations) into BaseLayout records — the marker gates BOTH the injector/bake standdown AND the BaseLayoutLoader replay of those records (mutual exclusion, no double-spawn; docs/WO673_ARCHITECTURE_REVIEW.md §3). Additive default-on-read: an old save loads false = bakes/injectors own everything, exactly the prior behaviour; the flag-gated migration flips it once. v29 — F8-47 hero level/XP persistence: heroLevel + heroXp + heroLifetimeXp survive save/load (root cause: the hero's level lived ONLY on the in-memory HeroProgression MonoBehaviour, so clearing the challenge outpost and porting home re-attached a fresh level-1 component; all additive default-on-read — an old save loads level = 1 / xp = 0, exactly the prior fresh-run behaviour); v28 — WO-587 Population & Echo growth: populationXp + populationQuests + populationOutposts + populationEchoSlots survive save/load (the milestone-driven Echo workforce slot unlocks; all additive nonNegInt default-on-read — an old save loads xp/quests/outposts = 0 and echoSlots = 1 = the starter Wood echo, unchanged); v27 — wall-mounted defense seating: PlacedStructureData gains worldY (seat height) + wallMounted (high-ground perk flag) so a defense placed on a wall-walk persists on the wall TOP, not y=0 (both additive default-on-read; an old baseLayout record loads worldY=0/wallMounted=false = ground placement, unchanged); v26 — WO-543 accessory equip persistence: equippedRingId + equippedAmuletId (rings/amulets) survive save/load (empty = none); v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 35;  // v35 — WO-773 common "Obsidian" multi-channel work queue: obsidianQueue (ObsidianQueueState — per-channel Builder/Train/Research pools, each with active jobs ≤ slots + a FIFO pending queue + purchased-slot count). The single home ALL timed work flows through (build/repair/upgrade/tier-unlock/learn-magic/train-troop/tower/wall). The v34→v35 migrator (MigrateToV35) FOLDS the legacy timed-state into the BUILDER channel — existing buildJobs (Kind backfilled from jobType), any pendingBuilds (→ TowerBuild jobs) and future-dated buildingCooldowns (→ Build jobs) become ObsidianJobs (BuildJobData carries a new kind + channel), then the legacy lists are cleared — so no in-flight build is lost and the queue is the single source of truth going forward (buildJobs is retained on the wire for back-compat but no longer read at runtime). BuildJobData gains kind + channel (both additive default-on-read: absent → Build / Builder). Additive-default-on-read (nullable obsidianQueue on the wire; absent → GameState's Empty() initializer). Append-only field at the END of PersistedState so older saves stay loadable. // v34 — REDS #3/#4 persistence gaps closed (one coordinated bump): four in-memory-only fields now round-trip to the signed/migrated save. (a) tribes (WO-160 roaming-raider records: members-remaining / cleared / clear-count / last-seen) — List<TribeState>; (b) wards (WO-112 relit ward-stones + earned exploration reach) — List<WardStoneState>; (c) arena (ARENA MVP W/L ledger: wins/losses/streak/totalPurse) — nullable ArenaProgress struct, distinct from the already-persisted arenaDefense placed-defender layout (v19); (d) petActiveSlots (flag_17 — PetAcquisitionService's slotIndex->species deploy map, previously runtime-only and rebuilt from StarterPetId alone in SyncSlotsFromState, so a multi-slot pet roster reset on reload) — List<string> (null entry = an empty slot). All four are additive default-on-read (nullable on the wire; absent -> GameState's initializer, so an old save loads empty tribes/wards/slots + a zeroed arena = exactly the prior in-memory-only behaviour) and the v33->v34 migrator step seeds them for a clean round-trip + to keep the CORE_SAVE version-triple aligned (SaveMigrator top step == CurrentVersion). Append-only fields at the END of PersistedState so older saves stay loadable. v33 — WO-738 echo per-echo agency + specialization: the echoLanes per-echo token grammar is enriched from a bare lane ("wood,iron,idle") to "lane:level" ("harvest:3,idle,crafting:1"). SAME wire field (echoLanes, string) so this is a NO-MIGRATOR bump — additive default-on-read: a bare legacy token reads as its functional lane at level 1 (wood/iron/food -> Harvest; idle -> Idle; any token with no :level -> level 1), so an old save's echoLanes="wood" loads Harvest/Lv1 unchanged. New Game seeds the starter echo "harvest:1". v32 — first-build freebies (owner ruling 2026-07-13 evening): freeBuildsUsed (List<string> of catalog itemIds whose one-time FREE first placement has been consumed; the flag burns at the committed placement and never resets — selling/destroying does not restore it). REPLACES the 650w/385i founding resource seed (StartingBudget zeroed): players earn everything beyond the one-free-each kit from production, which prevents all-defense-no-town. Additive default-on-read, no migrator step (nullable on the wire; absent → GameState's empty-list initializer = an old save gains its FULL freebies, the partyMemberIds precedent). v31 — WO-681/658 echo gather-lane assignments: echoLanes (per-Echo lane CSV, index 0 = the starter Echo; additive default-on-read, migrator seeds "wood" when null = exactly the prior hardwired starter-Echo behaviour). v30 — WO-673 strategic-placement migration marker: strategicPlacementMigrated (bool, default false) records that the ONE-SHOT migration writer has converted the auto-placed functional structures (baked ring storefronts + runtime crafting stations) into BaseLayout records — the marker gates BOTH the injector/bake standdown AND the BaseLayoutLoader replay of those records (mutual exclusion, no double-spawn; docs/WO673_ARCHITECTURE_REVIEW.md §3). Additive default-on-read: an old save loads false = bakes/injectors own everything, exactly the prior behaviour; the flag-gated migration flips it once. v29 — F8-47 hero level/XP persistence: heroLevel + heroXp + heroLifetimeXp survive save/load (root cause: the hero's level lived ONLY on the in-memory HeroProgression MonoBehaviour, so clearing the challenge outpost and porting home re-attached a fresh level-1 component; all additive default-on-read — an old save loads level = 1 / xp = 0, exactly the prior fresh-run behaviour); v28 — WO-587 Population & Echo growth: populationXp + populationQuests + populationOutposts + populationEchoSlots survive save/load (the milestone-driven Echo workforce slot unlocks; all additive nonNegInt default-on-read — an old save loads xp/quests/outposts = 0 and echoSlots = 1 = the starter Wood echo, unchanged); v27 — wall-mounted defense seating: PlacedStructureData gains worldY (seat height) + wallMounted (high-ground perk flag) so a defense placed on a wall-walk persists on the wall TOP, not y=0 (both additive default-on-read; an old baseLayout record loads worldY=0/wallMounted=false = ground placement, unchanged); v26 — WO-543 accessory equip persistence: equippedRingId + equippedAmuletId (rings/amulets) survive save/load (empty = none); v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -569,6 +571,18 @@ namespace DeNelle.Core.State
             /// at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("petActiveSlots")] public List<string> PetActiveSlots;
+
+            // ── v35 — WO-773 common "Obsidian" multi-channel work queue ──────────
+            /// <summary>
+            /// The single multi-channel work queue (WO-773) — per-channel Builder/Train/Research
+            /// pools, each with active jobs (≤ slots) + a FIFO pending queue + a purchased-slot
+            /// count. The JOB RECORD is <see cref="BuildJobData"/> (the WO-172 offline-fair timer,
+            /// now with a kind + channel). Nullable per the <c>.partial()</c> convention; absent on
+            /// an older save → the v34→v35 migration builds it from the legacy
+            /// buildJobs/pendingBuilds/buildingCooldowns (folded into the Builder channel), so no
+            /// in-flight work is lost. Append-only field at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("obsidianQueue")] public ObsidianQueueState ObsidianQueue;
         }
 
         // =====================================================================
@@ -758,6 +772,21 @@ namespace DeNelle.Core.State
                 if (raw.AdSkipsUsedToday.HasValue)
                     raw.AdSkipsUsedToday = NonNegInt(raw.AdSkipsUsedToday.Value, "adSkipsUsedToday");
 
+                // ── Obsidian queue (WO-773, v35) → per-channel job times finiteInt;
+                //    boughtSlots nonNeg. Mirrors the buildJobs clamp above for every
+                //    channel's active + pending list. ──────────────────────────────
+                if (raw.ObsidianQueue != null && raw.ObsidianQueue.Channels != null)
+                {
+                    foreach (var kv in raw.ObsidianQueue.Channels)
+                    {
+                        var ch = kv.Value;
+                        if (ch == null) continue;
+                        ch.BoughtSlots = NonNegInt(ch.BoughtSlots, $"obsidianQueue.{kv.Key}.boughtSlots");
+                        ClampJobList(ch.ActiveJobs, $"obsidianQueue.{kv.Key}.active");
+                        ClampJobList(ch.PendingQueue, $"obsidianQueue.{kv.Key}.pending");
+                    }
+                }
+
                 // ── Zones (WO-164) → default empty list (never null on disk) ─
                 if (raw.Zones == null)
                     raw.Zones = new List<DeNelle.Core.World.ZoneState>();
@@ -785,6 +814,20 @@ namespace DeNelle.Core.State
             if (list == null) return;
             for (var i = 0; i < list.Count; i++)
                 list[i] = NonNegInt(list[i], $"{fieldPath}.{i}");
+        }
+
+        /// <summary>WO-773 — clamp a list of <see cref="BuildJobData"/> (startMs/durationMs finiteInt),
+        /// mirroring the buildJobs clamp so the Obsidian queue channels round-trip safely.</summary>
+        private static void ClampJobList(List<BuildJobData> list, string fieldPath)
+        {
+            if (list == null) return;
+            for (var i = 0; i < list.Count; i++)
+            {
+                var j = list[i];
+                j.StartMs = FiniteInt(j.StartMs, $"{fieldPath}.{i}.startMs");
+                j.DurationMs = Math.Max(0, FiniteInt(j.DurationMs, $"{fieldPath}.{i}.durationMs"));
+                list[i] = j;
+            }
         }
     }
 

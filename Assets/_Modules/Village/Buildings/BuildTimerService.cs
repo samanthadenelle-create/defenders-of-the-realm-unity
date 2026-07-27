@@ -1,46 +1,54 @@
 // =============================================================================
-// BuildTimerService — CoC-style build/upgrade timers + rewarded-ad speedup (WO-172).
+// BuildTimerService — the common "Obsidian" multi-channel work queue (WO-172 +
+// WO-773). CoC-style timed jobs + rewarded-ad/instant speedups, now GENERALIZED.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// Placing a building / buying an upgrade is NOT instant: it starts a timed
-// construction job that completes after a real-time duration. The wait is the
-// idle/retention hook; a rewarded ad (opt-in) skips a fixed chunk; a premium
-// crystal spend can instant-finish. The timer ALWAYS completes on its own — the
-// ad is a shortcut, never a wall (NORTH_STAR ad discipline).
+// ONE shared service, MULTIPLE independent CHANNELS (Builder / Train / Research).
+// Every timed action in the game flows through it — build, repair, upgrade,
+// tier-unlock, learn-magic, troop-training, towers, walls — but a channel NEVER
+// shares slots with another channel, so a troop training and a wall upgrade run in
+// PARALLEL (CoC feel: builders and the barracks don't compete). Each channel has:
+//   • N concurrent ACTIVE slots (BuildTimerConfig.freeBuildSlots + purchased slots)
+//   • one FIFO PENDING queue — a job past the slot count QUEUES (it does NOT reject);
+//     on completion the freed slot AUTO-PULLS the next pending job (cascades offline).
 //
-// STANDALONE BY DESIGN. WO-108 (player build mode) is NOT built yet, so this is a
-// self-contained service the build flow attaches to, rather than hard-coupled to an
-// unbuilt system. See the §"WO-108 INTEGRATION POINT" block below for the exact seam.
+// The queue MATH is the pure DeNelle.Core.Jobs.ObsidianQueueEngine (headlessly
+// testable); this MonoBehaviour is the thin wrapper that owns the GameState-backed
+// channels (GameState.ObsidianQueue), feeds the engine TimeSource.NowUnixMs(), and
+// dispatches the completion EFFECT (the existing Build/Upgrade seams + the IJobEffect
+// registry for the extensible kinds).
 //
-// PERSISTENCE: every job lives in GameState.BuildJobs (a List<BuildJobData>) and the
-// clock is TimeSource.NowUnixMs() — wall-clock unix-ms (the WO-115 seam). So a timer
-// keeps counting while the app is closed: on load this service sweeps jobs whose
-// FinishMs already passed and completes them (offline-fair). No frame state, no
-// Update() loop required for correctness — Tick() only drives UI/visuals while open.
+// PERSISTENCE: every job lives in GameState.ObsidianQueue (per-channel active +
+// pending lists of BuildJobData) and the clock is TimeSource.NowUnixMs() — wall-clock
+// unix-ms. So timers keep counting while the app is closed: on load this service
+// sweeps every channel, completes jobs whose FinishMs passed, and cascades pending
+// pulls (offline-fair). Tick() only drives UI/visuals while open.
 //
-// AD SEAM: reuses the existing RewardedAdManager (DEF-69) gate — TryShowAd(onReward)
-// with its cooldown. We do NOT greenfield an ad provider (CLAUDE.md §8 monetization
-// is ~70% built). A per-day cap (BuildTimerConfig.adSkipsPerDay) layers on top of the
-// manager's per-view cooldown.
+// BACK-COMPAT: the WO-172 legacy GameState.BuildJobs was folded into the Builder
+// channel by the v34→v35 migration and is no longer read here. The public Builder-
+// facing API (StartBuild/StartUpgrade/IsBuilding/RemainingSeconds/Progress/HasFreeSlot/
+// ActiveJobs/skips/CompleteJob/CancelJob/RepointJob) is unchanged for its callers
+// (BuildModeController / UnderConstructionVisual) — it now operates on the Builder
+// channel and QUEUES instead of rejecting when full.
 //
-// ASMDEF: DeNelle.Village → DeNelle.Core only. Resource/crystal spend routes through
-// the single GameState wallet via GameStateService (WO-131), never a second balance.
+// AD SEAM / ASMDEF notes are unchanged from WO-172 (see history).
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Owns the set of in-flight construction/upgrade timers (WO-172). Start a job,
-    /// query remaining time, complete it on expiry, and offer rewarded-ad / premium
-    /// speedups. Persisted (GameState.BuildJobs) + offline-counting (TimeSource).
-    /// Self-bootstrapping singleton (mirrors OfflineHarvestService / RewardedAdManager).
+    /// The common Obsidian work queue (WO-773): N concurrent active slots + a FIFO
+    /// pending queue PER CHANNEL (Builder/Train/Research), offline-fair via TimeSource,
+    /// with rewarded-ad / premium speedups on the Builder channel. Persisted in
+    /// GameState.ObsidianQueue. Self-bootstrapping singleton (mirrors OfflineHarvestService).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BuildTimerService : MonoBehaviour
@@ -50,11 +58,14 @@ namespace DeNelle.Village
         /// <summary>Raised when a job finishes (timer elapsed, ad/instant skip, or offline catch-up). Arg = the completed job.</summary>
         public event Action<BuildJobData> JobCompleted;
 
-        /// <summary>Raised when a job is started/enqueued. Arg = the new job.</summary>
+        /// <summary>Raised when a job starts running (immediate start OR auto-pulled from the queue). Arg = the started job.</summary>
         public event Action<BuildJobData> JobStarted;
 
         /// <summary>Raised when a job's remaining time changes via a skip (ad / instant). Arg = the updated job.</summary>
         public event Action<BuildJobData> JobSkipped;
+
+        /// <summary>WO-773 — raised whenever ANY channel's active/pending set changes (for the queue HUD).</summary>
+        public event Action QueueChanged;
 
         private BuildTimerConfig _config;
 
@@ -82,100 +93,154 @@ namespace DeNelle.Village
 
         private void Start()
         {
-            // Offline catch-up: any job that finished while the app was closed
-            // completes now (one frame's slack so structures/registries have awoken).
+            // Offline catch-up: any job that finished while the app was closed completes now
+            // (one frame's slack so structures/registries have awoken).
             StartCoroutine(SweepNextFrame());
         }
 
         private System.Collections.IEnumerator SweepNextFrame()
         {
             yield return null;
-            SweepCompleted();
+            SweepAllChannels();
         }
 
-        // While open, complete jobs the moment they expire so the UI/visual flips
-        // without waiting for the next load. Cheap: a handful of jobs, checked ~1/s.
+        // While open, complete jobs the moment they expire so the UI/visual flips without
+        // waiting for the next load. Cheap: a handful of jobs across channels, checked ~1/s.
         private float _nextTick;
         private void Update()
         {
             if (Time.unscaledTime < _nextTick) return;
             _nextTick = Time.unscaledTime + 1f;
-            SweepCompleted();
+            SweepAllChannels();
         }
 
         // =====================================================================
-        //  Start a job
+        //  Slots / channels
+        // =====================================================================
+
+        /// <summary>The GameState-backed multi-channel queue (never null while a state exists).</summary>
+        private static ObsidianQueueState Queue
+        {
+            get
+            {
+                var s = State;
+                if (s == null) return null;
+                return s.ObsidianQueue ??= ObsidianQueueState.Empty();
+            }
+        }
+
+        /// <summary>The <see cref="ChannelState"/> for <paramref name="id"/> (null only when no state exists).</summary>
+        private static ChannelState GetChannel(ChannelId id)
+        {
+            var q = Queue;
+            return q?.Channel(id);
+        }
+
+        /// <summary>
+        /// Derived slot count for <paramref name="id"/>: the config free slots + this channel's
+        /// purchased slots. (Owner-design milestone unlocks — +1 slot at account L10/L20 — layer
+        /// on top here as a future tuning dial; the queue mechanism already honours any count.)
+        /// </summary>
+        public int SlotCount(ChannelId id)
+        {
+            int free = Mathf.Max(1, Config.freeBuildSlots);
+            var ch = GetChannel(id);
+            int bought = ch != null ? Mathf.Max(0, ch.BoughtSlots) : 0;
+            return free + bought;
+        }
+
+        /// <summary>Purchase an extra slot on <paramref name="id"/> (premium currency handled by caller). Persists.</summary>
+        public void BuySlot(ChannelId id)
+        {
+            var ch = GetChannel(id);
+            if (ch == null) return;
+            ch.BoughtSlots = Mathf.Max(0, ch.BoughtSlots) + 1;
+            Persist();
+            // A newly-freed slot may immediately pull a pending job.
+            ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(id), TimeSource.NowUnixMs());
+            Persist();
+            RaiseQueueChanged();
+        }
+
+        // ── Builder-channel convenience (the WO-172 callers) ──────────────────
+        private static ChannelState Builder => GetChannel(ChannelId.Builder);
+        private int BuilderSlots => SlotCount(ChannelId.Builder);
+
+        /// <summary>A read-only snapshot of the Builder channel's running jobs (WO-172 API).</summary>
+        public IReadOnlyList<BuildJobData> ActiveJobs => Builder != null ? Builder.ActiveJobs : System.Array.Empty<BuildJobData>();
+
+        /// <summary>A read-only snapshot of a channel's running jobs (WO-773).</summary>
+        public IReadOnlyList<BuildJobData> ActiveJobsOf(ChannelId id)
+        {
+            var ch = GetChannel(id);
+            return ch != null ? ch.ActiveJobs : System.Array.Empty<BuildJobData>();
+        }
+
+        /// <summary>A read-only snapshot of a channel's FIFO pending queue (WO-773).</summary>
+        public IReadOnlyList<BuildJobData> PendingJobsOf(ChannelId id)
+        {
+            var ch = GetChannel(id);
+            return ch != null ? ch.PendingQueue : System.Array.Empty<BuildJobData>();
+        }
+
+        // =====================================================================
+        //  Start a job — Builder channel (WO-108/WO-151 build + upgrade)
         // =====================================================================
 
         // ─────────────────────────────────────────────────────────────────────
-        //  ★ WO-108 INTEGRATION POINT ★
-        //  When player build-mode (WO-108) lands, its placement commit
-        //  (BuildModeController.ConfirmPlace, AFTER the WO-131 wallet charge) calls:
-        //
-        //      BuildTimerService.Instance?.StartBuild(structureId, tier);
-        //
-        //  and treats the structure as UNDER CONSTRUCTION (scaffold + countdown bar)
-        //  until JobCompleted fires for that structureId — then reveal/enable it.
-        //  WO-151 upgrades call StartUpgrade(structureId, targetTier) the same way.
-        //  `structureId` = the placed structure's unique id (PlacedStructureData key).
-        //  Nothing here references WO-108 types, so this compiles + ships standalone.
+        //  ★ WO-108 INTEGRATION POINT ★  (unchanged for callers)
+        //  Placement commit calls StartBuild(structureId, tier); upgrades call
+        //  StartUpgrade(structureId, targetTier). A full slot set now QUEUES the job
+        //  (returns the pending job) instead of rejecting — the freed slot auto-pulls it.
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Start a BUILD job for <paramref name="structureId"/> at <paramref name="tier"/>
-        /// (0 = first build). Duration comes from the hybrid curve. Returns the job, or
-        /// null if a slot isn't free or one already runs for this id. Caller charges the
-        /// resource cost BEFORE calling (WO-131 single-spend); this only times the wait.
+        /// Start (or QUEUE) a BUILD job for <paramref name="structureId"/> at
+        /// <paramref name="tier"/> on the Builder channel. Returns the job (running or pending),
+        /// or null if one already runs/queues for this id. Caller charges cost BEFORE calling.
         /// </summary>
         public BuildJobData? StartBuild(string structureId, int tier = 0)
-            => StartJob(structureId, BuildJobType.Build, tier);
+            => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier);
 
         /// <summary>
-        /// Start an UPGRADE job for an existing structure/building to <paramref name="targetLevel"/>
-        /// (F8-51). The caller charges the cost at commit; the LEVEL applies at completion (the
-        /// CompletedUpgradeApplier seam in <see cref="CompleteJob"/>, offline-fair like builds).
-        /// Duration = the WO-172 config curve keyed by the 0-based upgrade STEP (targetLevel-2,
-        /// so the first upgrade of a level-1 structure ≈ baseBuildSeconds × upgradeMultiplier
-        /// ≈ 19s at defaults, ×tierGrowth per further tier). Returns null when a job already
-        /// runs for this id or no build slot is free.
+        /// Start (or QUEUE) an UPGRADE job for <paramref name="structureId"/> to
+        /// <paramref name="targetLevel"/> on the Builder channel (F8-51 — level applies at
+        /// completion via CompletedUpgradeApplier). Returns the job (running or pending), or
+        /// null if one already runs/queues for this id.
         /// </summary>
         public BuildJobData? StartUpgrade(string structureId, int targetLevel)
-            => StartJob(structureId, BuildJobType.Upgrade,
-                        Mathf.Max(0, targetLevel - 2), targetLevel);
+            => StartBuilderJob(structureId, BuildJobType.Upgrade, JobKind.Upgrade,
+                               Mathf.Max(0, targetLevel - 2), targetLevel);
 
         /// <summary>
-        /// True when a new job could start right now (a free CoC build slot exists). F8-51:
-        /// upgrade entry points check this BEFORE charging so a slot-full state rejects
-        /// cleanly instead of degrading to an instant upgrade (placement, which has already
-        /// charged by the time it starts its job, keeps its never-block instant fallback).
+        /// True when a NEW Builder job would start immediately (a free Builder slot exists).
+        /// With the queue a full slot no longer rejects — it queues — so callers may skip this
+        /// check; it remains for UI ("all builders busy → will queue").
         /// </summary>
         public bool HasFreeSlot
         {
             get
             {
-                var jobs = Jobs;
-                return jobs != null && jobs.Count < Mathf.Max(1, Config.freeBuildSlots);
+                var ch = Builder;
+                return ch != null && ch.ActiveJobs.Count < BuilderSlots;
             }
         }
 
-        private BuildJobData? StartJob(string structureId, BuildJobType type, int tier, int targetLevel = 0)
+        private BuildJobData? StartBuilderJob(string structureId, BuildJobType type, JobKind kind, int tier, int targetLevel = 0)
         {
             if (string.IsNullOrEmpty(structureId)) return null;
-            var jobs = Jobs;
-            if (jobs == null) return null;
+            var ch = Builder;
+            if (ch == null) return null;
 
-            // One job per structure id.
-            if (IndexOf(structureId) >= 0) return null;
-            // Build-slot scarcity (CoC-style; extra slots are a future unlock).
-            if (jobs.Count >= Mathf.Max(1, Config.freeBuildSlots)) return null;
+            // One job per structure id (across active AND pending).
+            if (IndexInChannel(ch, structureId) >= 0) return null;
 
-            var kind = type == BuildJobType.Upgrade ? BuildJobKind.Upgrade : BuildJobKind.Build;
-            double durationMs = Config.DurationSecondsForTier(tier, kind) * 1000.0;
+            var curveKind = type == BuildJobType.Upgrade ? BuildJobKind.Upgrade : BuildJobKind.Build;
+            double durationMs = Config.DurationSecondsForTier(tier, curveKind) * 1000.0;
 
-            // WO-676 STEWARD (Foreman's Pace): ONE HeroTalentModifiers read at this existing
-            // duration calc — `buildTime` shortens every build/upgrade timer at job start.
-            // StatSum is internally null-safe (0 with no service/tree/nodes) and the sum is
-            // clamped so a mis-authored node can never make timers negative. Identity at 0.
+            // WO-676 STEWARD (Foreman's Pace): ONE HeroTalentModifiers read shortens every
+            // build/upgrade timer at job start. StatSum is null-safe (0 with no service/tree)
+            // and the sum is clamped so a mis-authored node can never make timers negative.
             float haste = Mathf.Clamp01(DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
                 HeroTalentClassReader.Slug(), "buildTime"));
             if (haste > 0f)
@@ -189,92 +254,136 @@ namespace DeNelle.Village
             {
                 StructureId = structureId,
                 JobType = (int)type,
-                StartMs = TimeSource.NowUnixMs(),
+                Kind = (int)kind,
+                Channel = (int)ChannelId.Builder,
                 DurationMs = durationMs,
                 TargetTier = targetLevel,
             };
-            jobs.Add(job);
+
+            bool started = ObsidianQueueEngine.Enqueue(ch, BuilderSlots, job, TimeSource.NowUnixMs());
             Persist();
 
-            // F8-51 §12 trace — every upgrade timer names itself when it starts.
             if (type == BuildJobType.Upgrade)
                 DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
-                    $"upgrade '{structureId}' started ({durationMs / 1000.0:0}s, " +
+                    $"upgrade '{structureId}' {(started ? "started" : "QUEUED")} ({durationMs / 1000.0:0}s, " +
                     $"tier {Mathf.Max(1, targetLevel - 1)}->{targetLevel})");
 
-            JobStarted?.Invoke(job);
+            if (started) JobStarted?.Invoke(job);
+            RaiseQueueChanged();
 
-            // A zero-duration job (e.g. tier 0 with base 0) completes immediately.
-            if (durationMs <= 0) CompleteJob(structureId);
+            // A zero-duration RUNNING job completes immediately (queued ones start later).
+            if (started && durationMs <= 0) CompleteJob(structureId);
             return job;
         }
 
         // =====================================================================
-        //  Query
+        //  Generic enqueue — the "everything flows through it" seam (WO-773)
         // =====================================================================
 
-        /// <summary>True if a construction/upgrade job is in flight for this structure id.</summary>
-        public bool IsBuilding(string structureId) => IndexOf(structureId) >= 0;
+        /// <summary>
+        /// Enqueue a job of any <paramref name="kind"/> onto its default channel (Build/Repair/
+        /// Upgrade/Tower*/Wall* → Builder; TrainTroop → Train; UnlockTier/LearnMagic → Research).
+        /// Starts immediately if a slot is free on that channel, else queues. The effect on
+        /// completion is the IJobEffect registered for the kind. Returns the job, or null if one
+        /// already runs/queues for <paramref name="targetId"/> on that channel.
+        /// </summary>
+        public BuildJobData? Enqueue(JobKind kind, string targetId, double durationSeconds, int targetTier = 0)
+            => Enqueue(kind, JobChannels.DefaultChannel(kind), targetId, durationSeconds, targetTier);
 
-        /// <summary>Seconds remaining for the job on <paramref name="structureId"/> (0 if none / already done).</summary>
+        /// <summary>Enqueue a job onto an explicit <paramref name="channel"/> (see the default-channel overload).</summary>
+        public BuildJobData? Enqueue(JobKind kind, ChannelId channel, string targetId, double durationSeconds, int targetTier = 0)
+        {
+            if (string.IsNullOrEmpty(targetId)) return null;
+            var ch = GetChannel(channel);
+            if (ch == null) return null;
+            if (IndexInChannel(ch, targetId) >= 0) return null;
+
+            var job = new BuildJobData
+            {
+                StructureId = targetId,
+                JobType = kind == JobKind.Upgrade || kind == JobKind.TowerUpgrade || kind == JobKind.WallUpgrade
+                    ? (int)BuildJobType.Upgrade : (int)BuildJobType.Build,
+                Kind = (int)kind,
+                Channel = (int)channel,
+                DurationMs = Math.Max(0.0, durationSeconds) * 1000.0,
+                TargetTier = targetTier,
+            };
+
+            bool started = ObsidianQueueEngine.Enqueue(ch, SlotCount(channel), job, TimeSource.NowUnixMs());
+            Persist();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                $"job '{kind}' -> '{targetId}' {(started ? "started" : "QUEUED")} on {channel} ({durationSeconds:0}s).");
+            if (started) JobStarted?.Invoke(job);
+            RaiseQueueChanged();
+            if (started && job.DurationMs <= 0) CompleteChannelJob(channel, targetId);
+            return job;
+        }
+
+        // =====================================================================
+        //  Query — Builder channel (WO-172 API, back-compat)
+        // =====================================================================
+
+        /// <summary>True if a job (running OR queued) is in flight for this structure id on the Builder channel.</summary>
+        public bool IsBuilding(string structureId) => Builder != null && IndexInChannel(Builder, structureId) >= 0;
+
+        /// <summary>Seconds remaining for the Builder job on <paramref name="structureId"/> (full duration while queued; 0 if none).</summary>
         public double RemainingSeconds(string structureId)
         {
-            int i = IndexOf(structureId);
-            if (i < 0) return 0;
-            double remMs = Jobs[i].FinishMs - TimeSource.NowUnixMs();
+            var job = FindInChannel(Builder, structureId, out bool _);
+            if (!job.HasValue) return 0;
+            var j = job.Value;
+            if (j.StartMs <= 0) return j.DurationMs / 1000.0;   // queued — not started yet
+            double remMs = j.FinishMs - TimeSource.NowUnixMs();
             return remMs > 0 ? remMs / 1000.0 : 0;
         }
 
-        /// <summary>0..1 progress for the job on <paramref name="structureId"/> (1 if none / done).</summary>
+        /// <summary>0..1 progress for the Builder job on <paramref name="structureId"/> (0 while queued; 1 if none/done).</summary>
         public float Progress(string structureId)
         {
-            int i = IndexOf(structureId);
-            if (i < 0) return 1f;
-            var j = Jobs[i];
+            var job = FindInChannel(Builder, structureId, out bool _);
+            if (!job.HasValue) return 1f;
+            var j = job.Value;
+            if (j.StartMs <= 0) return 0f;      // queued — not started yet
             if (j.DurationMs <= 0) return 1f;
             double elapsed = TimeSource.NowUnixMs() - j.StartMs;
             return Mathf.Clamp01((float)(elapsed / j.DurationMs));
         }
 
-        /// <summary>A read-only snapshot of all in-flight jobs (for a build-queue HUD).</summary>
-        public IReadOnlyList<BuildJobData> ActiveJobs => Jobs;
-
-        /// <summary>Crystal price to instant-finish this job right now (0 = unavailable / paid skip disabled).</summary>
+        /// <summary>Crystal price to instant-finish this Builder job right now (0 = unavailable / queued / paid skip disabled).</summary>
         public int InstantFinishPrice(string structureId)
         {
-            if (IndexOf(structureId) < 0) return 0;
+            var job = FindInChannel(Builder, structureId, out bool isActive);
+            if (!job.HasValue || !isActive || job.Value.StartMs <= 0) return 0;
             return Config.InstantFinishPrice(RemainingSeconds(structureId));
         }
 
         // =====================================================================
-        //  Speedups — rewarded ad (opt-in, capped) + premium instant-finish
+        //  Speedups — rewarded ad (opt-in, capped) + premium instant-finish (Builder)
         // =====================================================================
 
         /// <summary>True when a rewarded-ad skip is allowed right now (cooldown clear AND daily cap not hit).</summary>
         public bool CanWatchAdToSkip(string structureId)
         {
-            if (IndexOf(structureId) < 0) return false;
+            var job = FindInChannel(Builder, structureId, out bool isActive);
+            if (!job.HasValue || !isActive || job.Value.StartMs <= 0) return false;
             if (UnderDailyAdCap() == false) return false;
             var mgr = RewardedAdManager.Instance;
             return mgr != null && mgr.IsAdReady;
         }
 
         /// <summary>
-        /// Watch a rewarded ad to knock a fixed chunk (Config.adSkipSeconds) off the
-        /// remaining timer. Opt-in, store-build only, capped per day. Returns true if
-        /// the ad was dispatched. The skip applies in the reward callback (on genuine
-        /// completion). The timer always finishes on its own — this is a shortcut.
+        /// Watch a rewarded ad to knock a fixed chunk (Config.adSkipSeconds) off the remaining
+        /// timer. Opt-in, store-build only, capped per day. The timer always finishes on its own.
         /// </summary>
         public bool WatchAdToSkip(string structureId)
         {
-            if (IndexOf(structureId) < 0) return false;
+            var job = FindInChannel(Builder, structureId, out bool isActive);
+            if (!job.HasValue || !isActive || job.Value.StartMs <= 0) return false;
             if (!UnderDailyAdCap()) return false;
 
             var mgr = RewardedAdManager.Instance;
             if (mgr == null) return false;
 
-            // RewardedAdManager.TryShowAd handles its own cooldown gate + (stubbed)
-            // ad presentation, invoking onReward only on completion.
             return mgr.TryShowAd(() =>
             {
                 RecordAdSkipUsed();
@@ -283,15 +392,11 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Premium instant-finish: spend crystals (from the single GameState wallet)
-        /// to complete the job now. Returns true on success. Convenience, not power
-        /// (NS "flex not power"). No-op if the price is 0 (disabled) or unaffordable.
+        /// Premium instant-finish: spend crystals (single GameState wallet) to complete the
+        /// Builder job now. No-op if the price is 0 (disabled/queued) or unaffordable.
         /// </summary>
         public bool TryInstantFinish(string structureId)
         {
-            int i = IndexOf(structureId);
-            if (i < 0) return false;
-
             int price = InstantFinishPrice(structureId);
             if (price <= 0) return false;
 
@@ -299,22 +404,23 @@ namespace DeNelle.Village
             var state = svc != null ? svc.State : null;
             if (state == null || state.Resources.Crystals < price) return false;
 
-            svc.AddCrystals(-price);     // single source of truth (WO-131); persisted + HUD-synced
+            svc.AddCrystals(-price);
             CompleteJob(structureId);
             return true;
         }
 
-        // Apply a time skip by pulling StartMs back by `seconds` (so remaining shrinks);
-        // if that finishes the job, complete it.
+        // Apply a time skip by pulling StartMs back by `seconds`; if that finishes it, complete it.
         private void ApplySkipSeconds(string structureId, float seconds)
         {
-            int i = IndexOf(structureId);
-            if (i < 0 || seconds <= 0f) return;
+            var ch = Builder;
+            if (ch == null || seconds <= 0f) return;
+            int i = ActiveIndexInChannel(ch, structureId);
+            if (i < 0) return;
 
-            var jobs = Jobs;
-            var j = jobs[i];
+            var j = ch.ActiveJobs[i];
+            if (j.StartMs <= 0) return;             // queued — nothing to skip yet
             j.StartMs -= seconds * 1000.0;          // earlier start → earlier finish
-            jobs[i] = j;
+            ch.ActiveJobs[i] = j;
 
             if (j.FinishMs <= TimeSource.NowUnixMs())
             {
@@ -324,6 +430,7 @@ namespace DeNelle.Village
             {
                 Persist();
                 JobSkipped?.Invoke(j);
+                RaiseQueueChanged();
             }
         }
 
@@ -331,82 +438,153 @@ namespace DeNelle.Village
         //  Completion / cancel
         // =====================================================================
 
-        /// <summary>Force-complete a job now (used by skips and offline catch-up). Removes + raises JobCompleted.</summary>
-        public void CompleteJob(string structureId)
-        {
-            int i = IndexOf(structureId);
-            if (i < 0) return;
-            var job = Jobs[i];
-            Jobs.RemoveAt(i);
-            Persist();
+        /// <summary>Force-complete a Builder job now (skips/instant/offline). Removes + applies effect + auto-pulls the next queued job.</summary>
+        public void CompleteJob(string structureId) => CompleteChannelJob(ChannelId.Builder, structureId);
 
-            // F8-51 — UPGRADE jobs apply their deferred level HERE, at the one completion
-            // seam (same seam placement reveals through), so live-expiry, ad/instant skips
-            // AND the offline-fair sweep all land the level identically. Called directly
-            // (not via the event) so the apply can never be missed by a late subscriber;
-            // Guard.Try so one bad apply logs + never blocks the JobCompleted reveal.
+        /// <summary>Force-complete a specific job on <paramref name="channel"/> now, then cascade the channel's queue.</summary>
+        public void CompleteChannelJob(ChannelId channel, string structureId)
+        {
+            var ch = GetChannel(channel);
+            if (ch == null) return;
+            int i = ActiveIndexInChannel(ch, structureId);
+            if (i < 0) return;
+
+            var job = ch.ActiveJobs[i];
+            ch.ActiveJobs.RemoveAt(i);
+            OnJobCompleted(job);
+
+            // The freed slot pulls the next queued job; then resolve any newly-due (cascade).
+            ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(channel), TimeSource.NowUnixMs());
+            ObsidianQueueEngine.Resolve(ch, SlotCount(channel), TimeSource.NowUnixMs(), OnJobCompleted);
+            Persist();
+            RaiseQueueChanged();
+        }
+
+        // The ONE completion seam — live expiry, ad/instant skip AND the offline-fair sweep all
+        // route here so the effect lands identically. Order: (1) the F8-51 Upgrade level apply
+        // (proven CompletedUpgradeApplier seam) for Upgrade jobs; (2) the IJobEffect registry for
+        // the extensible kinds (Repair/TrainTroop/UnlockTier/LearnMagic/…) — a no-op for Build/
+        // Upgrade so they never double-apply; (3) the JobCompleted event (UnderConstructionVisual
+        // reveal etc.). Guarded so one bad apply logs + never blocks the cascade.
+        private void OnJobCompleted(BuildJobData job)
+        {
             if (job.Type == BuildJobType.Upgrade && job.TargetTier > 0)
                 DeNelle.Core.Diagnostics.Guard.Try("BuildTimer", "apply completed upgrade",
                     () => Buildings.Progression.CompletedUpgradeApplier.Apply(job));
 
+            JobEffectRegistry.Apply(job);
             JobCompleted?.Invoke(job);
         }
 
         /// <summary>
-        /// Re-key an in-flight job (F8-51): a placed structure MOVED mid-timer changes its
-        /// cell-derived job key; without this the finished job would find no structure to
-        /// apply to. Timer progress is untouched. No-op when no job runs for the old key.
+        /// Re-key an in-flight Builder job (F8-51): a placed structure MOVED mid-timer changes its
+        /// cell-derived key. Timer progress is untouched. Handles both active + queued jobs.
         /// </summary>
         public void RepointJob(string oldStructureId, string newStructureId)
         {
             if (string.IsNullOrEmpty(newStructureId) || oldStructureId == newStructureId) return;
-            int i = IndexOf(oldStructureId);
-            if (i < 0) return;
-            var jobs = Jobs;
-            var j = jobs[i];
-            j.StructureId = newStructureId;
-            jobs[i] = j;
+            var ch = Builder;
+            if (ch == null) return;
+
+            int a = ActiveIndexInChannel(ch, oldStructureId);
+            if (a >= 0)
+            {
+                var j = ch.ActiveJobs[a];
+                j.StructureId = newStructureId;
+                ch.ActiveJobs[a] = j;
+            }
+            else
+            {
+                int p = PendingIndexInChannel(ch, oldStructureId);
+                if (p < 0) return;
+                var j = ch.PendingQueue[p];
+                j.StructureId = newStructureId;
+                ch.PendingQueue[p] = j;
+            }
             Persist();
+            RaiseQueueChanged();
             DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
                 $"job re-keyed '{oldStructureId}' -> '{newStructureId}' (structure moved mid-timer)");
         }
 
         /// <summary>
-        /// Cancel a job WITHOUT completing it (e.g. the player sells the structure
-        /// mid-build). Removes it; the caller owns any refund (WO-108 sell flow).
+        /// Cancel a Builder job WITHOUT completing it (e.g. the player sells the structure
+        /// mid-build). Removes it from active OR the pending queue; caller owns any refund.
+        /// A cancelled active slot auto-pulls the next queued job.
         /// </summary>
-        public bool CancelJob(string structureId)
+        public bool CancelJob(string structureId) => CancelChannelJob(ChannelId.Builder, structureId);
+
+        /// <summary>Cancel a job on <paramref name="channel"/> without completing it. Auto-pulls the queue on success.</summary>
+        public bool CancelChannelJob(ChannelId channel, string structureId)
         {
-            int i = IndexOf(structureId);
-            if (i < 0) return false;
-            Jobs.RemoveAt(i);
+            var ch = GetChannel(channel);
+            if (ch == null) return false;
+
+            int a = ActiveIndexInChannel(ch, structureId);
+            if (a >= 0)
+            {
+                ch.ActiveJobs.RemoveAt(a);
+                ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(channel), TimeSource.NowUnixMs());
+                Persist();
+                RaiseQueueChanged();
+                return true;
+            }
+            int p = PendingIndexInChannel(ch, structureId);
+            if (p >= 0)
+            {
+                ch.PendingQueue.RemoveAt(p);
+                Persist();
+                RaiseQueueChanged();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Reorder a PENDING job to <paramref name="index"/> within its channel's FIFO (drag-reorder).
+        /// No-op for a running job or an out-of-range move. Persists + raises QueueChanged.
+        /// </summary>
+        public bool ReorderPending(ChannelId channel, string targetId, int index)
+        {
+            var ch = GetChannel(channel);
+            if (ch == null) return false;
+            int p = PendingIndexInChannel(ch, targetId);
+            if (p < 0) return false;
+            index = Mathf.Clamp(index, 0, ch.PendingQueue.Count - 1);
+            if (index == p) return true;
+            var job = ch.PendingQueue[p];
+            ch.PendingQueue.RemoveAt(p);
+            ch.PendingQueue.Insert(index, job);
             Persist();
+            RaiseQueueChanged();
             return true;
         }
 
-        // Complete every job whose finish time has passed (open OR offline). Iterate a
-        // copy because CompleteJob mutates the list + fires listeners that may re-enter.
-        private void SweepCompleted()
+        // Sweep EVERY channel: complete due jobs + cascade pending pulls (open OR offline).
+        private void SweepAllChannels()
         {
-            var jobs = Jobs;
-            if (jobs == null || jobs.Count == 0) return;
+            var q = Queue;
+            if (q == null || q.Channels == null) return;
             double now = TimeSource.NowUnixMs();
-
-            List<string> due = null;
-            for (int i = 0; i < jobs.Count; i++)
+            int totalCompleted = 0;
+            // Copy the keys — Resolve mutates the channel lists + fires listeners that may re-enter.
+            var ids = new List<ChannelId>(q.Channels.Keys);
+            for (int i = 0; i < ids.Count; i++)
             {
-                if (jobs[i].FinishMs <= now)
-                    (due ??= new List<string>()).Add(jobs[i].StructureId);
+                var ch = q.Channel(ids[i]);
+                totalCompleted += ObsidianQueueEngine.Resolve(ch, SlotCount(ids[i]), now, OnJobCompleted);
             }
-            if (due == null) return;
-            for (int i = 0; i < due.Count; i++) CompleteJob(due[i]);
+            if (totalCompleted > 0)
+            {
+                Persist();
+                RaiseQueueChanged();
+            }
         }
 
         // =====================================================================
-        //  Daily ad-skip cap
+        //  Daily ad-skip cap (unchanged)
         // =====================================================================
 
-        // 0 in config = unlimited.
         private bool UnderDailyAdCap()
         {
             int cap = Config.adSkipsPerDay;
@@ -425,10 +603,6 @@ namespace DeNelle.Village
             Persist();
         }
 
-        // Reset the per-day counter when the local day changes. Device-local date —
-        // the cap is a soft retention dial, not an anti-cheat boundary, so device clock
-        // is fine here (the persisted job timers are the integrity-sensitive part and
-        // those use the same monotonic-forward TimeSource as offline harvest).
         private void RollDayIfNeeded()
         {
             var state = State;
@@ -447,23 +621,44 @@ namespace DeNelle.Village
 
         private static GameState State => GameStateService.Instance != null ? GameStateService.Instance.State : null;
 
-        private static List<BuildJobData> Jobs
+        private void RaiseQueueChanged()
         {
-            get
-            {
-                var s = State;
-                if (s == null) return null;
-                return s.BuildJobs ??= new List<BuildJobData>();
-            }
+            DeNelle.Core.Diagnostics.Guard.Try("Obsidian", "raise QueueChanged", () => QueueChanged?.Invoke());
         }
 
-        private int IndexOf(string structureId)
+        // Index of a job (active OR pending) in a channel by structure id; -1 if none.
+        private static int IndexInChannel(ChannelState ch, string id)
         {
-            var jobs = Jobs;
-            if (jobs == null || string.IsNullOrEmpty(structureId)) return -1;
-            for (int i = 0; i < jobs.Count; i++)
-                if (jobs[i].StructureId == structureId) return i;
+            if (ActiveIndexInChannel(ch, id) >= 0) return 0;
+            if (PendingIndexInChannel(ch, id) >= 0) return 0;
             return -1;
+        }
+
+        private static int ActiveIndexInChannel(ChannelState ch, string id)
+        {
+            if (ch == null || ch.ActiveJobs == null || string.IsNullOrEmpty(id)) return -1;
+            for (int i = 0; i < ch.ActiveJobs.Count; i++)
+                if (ch.ActiveJobs[i].StructureId == id) return i;
+            return -1;
+        }
+
+        private static int PendingIndexInChannel(ChannelState ch, string id)
+        {
+            if (ch == null || ch.PendingQueue == null || string.IsNullOrEmpty(id)) return -1;
+            for (int i = 0; i < ch.PendingQueue.Count; i++)
+                if (ch.PendingQueue[i].StructureId == id) return i;
+            return -1;
+        }
+
+        // Find a job (active first, then pending) in a channel; isActive reports which list.
+        private static BuildJobData? FindInChannel(ChannelState ch, string id, out bool isActive)
+        {
+            isActive = false;
+            int a = ActiveIndexInChannel(ch, id);
+            if (a >= 0) { isActive = true; return ch.ActiveJobs[a]; }
+            int p = PendingIndexInChannel(ch, id);
+            if (p >= 0) return ch.PendingQueue[p];
+            return null;
         }
 
         private static void Persist() => GameStateService.Instance?.Save();

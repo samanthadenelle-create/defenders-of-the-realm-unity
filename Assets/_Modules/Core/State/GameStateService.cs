@@ -27,6 +27,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Jobs;
 using DeNelle.Core.Web3;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -439,6 +440,7 @@ namespace DeNelle.Core.State
                 Wards = s.Wards != null ? new List<DeNelle.Core.World.WardStoneState>(s.Wards) : null,   // WO-112 — relit wards + earned reach (v34, REDS #4)
                 Arena = s.Arena,             // ARENA MVP — W/L ledger wins/losses/streak/totalPurse (v34, REDS #4); struct -> nullable wire field
                 PetActiveSlots = s.PetActiveSlots != null ? new List<string>(s.PetActiveSlots) : null,   // flag_17 — pet slot->species deploy map (v34, REDS #3)
+                ObsidianQueue = s.ObsidianQueue,   // WO-773 — common multi-channel work queue (v35); serialized straight to JSON by the save layer
             };
         }
 
@@ -525,6 +527,7 @@ namespace DeNelle.Core.State
             if (p.Wards != null) s.Wards = p.Wards;       // WO-112 — relit wards + earned reach (v34); absent → keep the fresh empty list
             if (p.Arena.HasValue) s.Arena = p.Arena.Value;   // ARENA MVP — W/L ledger (v34); absent → keep the SO's zeroed default (migrator seeds Empty)
             if (p.PetActiveSlots != null) s.PetActiveSlots = p.PetActiveSlots;   // flag_17 — pet slot->species deploy map (v34); absent → PetAcquisitionService falls back to the legacy starter-in-slot-0 rebuild
+            s.ObsidianQueue = p.ObsidianQueue ?? ObsidianQueueState.Empty();   // WO-773 — common work queue (v35); never null (older saves are built by the v34→v35 migrator, a truly-absent queue = a fresh empty three-channel queue)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -843,6 +846,7 @@ namespace DeNelle.Core.State
             s.Regions = RegionProgress.Empty();
             s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
+            s.ObsidianQueue = ObsidianQueueState.Empty();   // WO-773 — New Game: an empty three-channel work queue (no jobs on Builder/Train/Research).
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
             // WO-108/WO-682/WO-707 — New Game starts on the BLANK template (owner ruling

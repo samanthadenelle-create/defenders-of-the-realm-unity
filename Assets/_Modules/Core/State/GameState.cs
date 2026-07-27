@@ -18,6 +18,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Jobs;
 
 namespace DeNelle.Core.State
 {
@@ -29,7 +30,7 @@ namespace DeNelle.Core.State
     [CreateAssetMenu(menuName = "Defenders/Core/Game State", fileName = "GameState")]
     public sealed class GameState : ScriptableObject
     {
-        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (34).</summary>
+        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (35).</summary>
         public int SchemaVersion = SaveSchema.CurrentVersion;
 
         // ── Player (playerSlice) ─────────────────────────────────────────────
@@ -460,6 +461,21 @@ namespace DeNelle.Core.State
         /// so an old save gains its full freebies — correct). Append-only at the END.
         /// </summary>
         public List<string> FreeBuildsUsed = new List<string>();
+
+        // ── WO-773 — the common "Obsidian" multi-channel work queue (v35) ─────
+        /// <summary>
+        /// WO-773 — the single job queue every timed action flows through, split into
+        /// independent CHANNELS (Builder / Train / Research) that never share slots (CoC
+        /// feel: builders and the barracks run in parallel). Each channel holds its ACTIVE
+        /// jobs (≤ derived slot count) + a FIFO PENDING queue + a purchased-slot count. The
+        /// JOB RECORD is <see cref="BuildJobData"/> (the WO-172 offline-fair timer, now with a
+        /// Kind + Channel). Managed by BuildTimerService via <see cref="DeNelle.Core.Jobs.ObsidianQueueEngine"/>.
+        /// Round-trips through SaveSchema (v35); the v34→v35 migration folds the legacy
+        /// <see cref="BuildJobs"/>/<see cref="PendingBuilds"/>/<see cref="BuildingCooldowns"/> into
+        /// the Builder channel so no in-flight work is lost (<see cref="BuildJobs"/> is retained
+        /// for wire back-compat but is no longer read at runtime). Never null (fresh = Empty()).
+        /// </summary>
+        public ObsidianQueueState ObsidianQueue = ObsidianQueueState.Empty();
 
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)

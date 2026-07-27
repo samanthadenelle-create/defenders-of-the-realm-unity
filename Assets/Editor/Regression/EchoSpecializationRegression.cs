@@ -342,10 +342,12 @@ namespace DeNelle.Editor
         private static void CheckSaveRoundTrip(Action<string> Fail)
         {
             // Canary on unreviewed schema bumps. WO-738 established the richer echoLanes token at
-            // v33; the v34 bump (persist Tribes/Wards/Arena + pet active-slot, RED #3/#4) is additive
-            // and reviewed. Update this pin in the SAME breath as any future reviewed bump (CLAUDE.md 15).
-            if (SaveSchema.CurrentVersion != 34)
-                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 34; echoLanes token must survive the current schema)");
+            // v33; v34 (persist Tribes/Wards/Arena + pet active-slot, RED #3/#4) and v35 (WO-773 the
+            // common Obsidian multi-channel work queue) are both additive + reviewed, and neither
+            // touches echoLanes (it round-trips unchanged). Update this pin in the SAME breath as any
+            // future reviewed bump (CLAUDE.md §15).
+            if (SaveSchema.CurrentVersion != 35)
+                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 35; echoLanes token must survive the current schema)");
 
             // A rich echoLanes token survives the REAL serialize → deserialize → validate path.
             const string richToken = "harvest:3,idle,crafting:1";

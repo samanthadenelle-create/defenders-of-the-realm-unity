@@ -20,6 +20,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Jobs;
 using UnityEngine;
 
 namespace DeNelle.Core.State
@@ -72,6 +73,7 @@ namespace DeNelle.Core.State
                 { 32, MigrateToV32 },
                 { 33, MigrateToV33 },
                 { 34, MigrateToV34 },
+                { 35, MigrateToV35 },
             };
 
         /// <summary>
@@ -501,6 +503,109 @@ namespace DeNelle.Core.State
             if (!s.Arena.HasValue) s.Arena = ArenaProgress.Empty;
             if (s.PetActiveSlots == null) s.PetActiveSlots = new List<string>();
             return s;
+        }
+
+        // v35 (WO-773) — the common "Obsidian" multi-channel work queue. Build the
+        // ObsidianQueueState (Builder/Train/Research channels) and FOLD the legacy timed-state
+        // into the BUILDER channel so nothing in flight is lost:
+        //   • buildJobs (WO-172 active timers) → Builder.ActiveJobs, with Kind backfilled from
+        //     jobType (an Upgrade jobType becomes JobKind.Upgrade; else Build) + channel = Builder.
+        //   • pendingBuilds (legacy pet-assisted tower builds) → Builder.ActiveJobs as TowerBuild
+        //     jobs, remaining time preserved from FinishAt.
+        //   • buildingCooldowns whose ready-at is still in the FUTURE → Builder.ActiveJobs as Build
+        //     jobs, remaining time preserved (expired cooldowns carry no in-flight work → skipped).
+        // After folding, the legacy lists are CLEARED (buildJobs/pendingBuilds emptied, folded
+        // cooldown keys removed) so the queue is the single source of truth going forward. Guarded
+        // against id collision so a job can never be double-created. In THIS tree the legacy fields
+        // are empty in practice (no runtime writer), so the common case is a clean seed of an empty
+        // three-channel queue; the fold is the defensive no-loss path for any save that carried them.
+        // Additive + idempotent (only builds the queue when absent).
+        private static PersistedState MigrateToV35(PersistedState s)
+        {
+            var q = s.ObsidianQueue ?? new ObsidianQueueState();
+            var builder = q.Channel(ChannelId.Builder);
+            double now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            // 1) buildJobs → Builder.ActiveJobs (Kind backfill + channel stamp).
+            if (s.BuildJobs != null && s.BuildJobs.Count > 0)
+            {
+                foreach (var raw in s.BuildJobs)
+                {
+                    var job = raw;
+                    if (job.Kind == 0)
+                        job.Kind = job.JobType == (int)BuildJobType.Upgrade
+                            ? (int)JobKind.Upgrade : (int)JobKind.Build;
+                    job.Channel = (int)ChannelId.Builder;
+                    if (!FoldGuardHasId(builder, job.StructureId))
+                        builder.ActiveJobs.Add(job);
+                }
+                s.BuildJobs = new List<BuildJobData>();   // folded into the channel — cleared.
+            }
+
+            // 2) pendingBuilds → Builder.ActiveJobs as TowerBuild jobs (remaining time preserved).
+            if (s.PendingBuilds != null && s.PendingBuilds.Count > 0)
+            {
+                foreach (var pb in s.PendingBuilds)
+                {
+                    string id = $"legacy-tower-{pb.Slot}";
+                    if (FoldGuardHasId(builder, id)) continue;
+                    double rem = Math.Max(0.0, pb.FinishAt - now);
+                    builder.ActiveJobs.Add(new BuildJobData
+                    {
+                        StructureId = id,
+                        JobType = (int)BuildJobType.Build,
+                        Kind = (int)JobKind.TowerBuild,
+                        Channel = (int)ChannelId.Builder,
+                        StartMs = now,
+                        DurationMs = rem,
+                        TargetTier = 0,
+                    });
+                }
+                s.PendingBuilds = new List<PendingTowerBuild>();   // folded — cleared.
+            }
+
+            // 3) future-dated buildingCooldowns → Builder.ActiveJobs as Build jobs.
+            if (s.BuildingCooldowns != null && s.BuildingCooldowns.Count > 0)
+            {
+                var keys = new List<string>(s.BuildingCooldowns.Keys);
+                foreach (var k in keys)
+                {
+                    double readyAt = s.BuildingCooldowns[k];
+                    if (readyAt <= now) continue;             // expired — nothing in flight.
+                    if (FoldGuardHasId(builder, k)) continue; // already an active job for this id.
+                    builder.ActiveJobs.Add(new BuildJobData
+                    {
+                        StructureId = k,
+                        JobType = (int)BuildJobType.Build,
+                        Kind = (int)JobKind.Build,
+                        Channel = (int)ChannelId.Builder,
+                        StartMs = now,
+                        DurationMs = readyAt - now,
+                        TargetTier = 0,
+                    });
+                    s.BuildingCooldowns.Remove(k);            // folded — key removed.
+                }
+            }
+
+            // Ensure the other channels exist (empty) so the shape is complete.
+            q.Channel(ChannelId.Train);
+            q.Channel(ChannelId.Research);
+            s.ObsidianQueue = q;
+            return s;
+        }
+
+        /// <summary>True if the Builder channel already holds a job (active or pending) for
+        /// <paramref name="id"/> — the fold guard so a job is never double-created.</summary>
+        private static bool FoldGuardHasId(ChannelState ch, string id)
+        {
+            if (ch == null || string.IsNullOrEmpty(id)) return false;
+            if (ch.ActiveJobs != null)
+                for (int i = 0; i < ch.ActiveJobs.Count; i++)
+                    if (ch.ActiveJobs[i].StructureId == id) return true;
+            if (ch.PendingQueue != null)
+                for (int i = 0; i < ch.PendingQueue.Count; i++)
+                    if (ch.PendingQueue[i].StructureId == id) return true;
+            return false;
         }
 
         /// <summary>
