@@ -261,6 +261,8 @@ namespace DeNelle.Editor
             if (!CoreSaveRegression.Run(out var coreSaveSmeReason)) failures.Add(coreSaveSmeReason); else log.AppendLine("[core-save-sme] " + coreSaveSmeReason);
             if (!BuildEconomyRegression.Run(out var buildEconReason)) failures.Add(buildEconReason); else log.AppendLine("[build-econ] " + buildEconReason);
             if (!ObsidianQueueRegression.Run(out var obsidianQueueReason)) failures.Add(obsidianQueueReason); else log.AppendLine("[obsidian-queue] " + obsidianQueueReason);
+            // --- WO-781: wounded-troop recovery advance (TickRecovery live+offline callers) ---
+            if (!ArmyRecoveryRegression.Run(out var troopRecoveryReason)) failures.Add(troopRecoveryReason); else log.AppendLine("[troop-recovery] " + troopRecoveryReason);
             if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);
             if (!HudUiRegression.Run(out var hudUiSmeReason)) failures.Add(hudUiSmeReason); else log.AppendLine("[hud-ui-sme] " + hudUiSmeReason);
             if (!CombatAtbRegression.Run(out var combatAtbReason)) failures.Add(combatAtbReason); else log.AppendLine("[combat-atb] " + combatAtbReason);
@@ -430,6 +432,10 @@ namespace DeNelle.Editor
                     foreach (var h in s.Highlight)
                         if (!string.IsNullOrEmpty(h) && !knownHighlights.Contains(h))
                             failures.Add($"tutorial step '{s.Id}' highlight '{h}' is not a known TutorialHighlightRegistry id");
+
+                // WO-780: first taught tower must be prepaid so the player can place it.
+                if (s.Id == "founding_defense" && (s.Grant == null || !s.Grant.PrepaidTower))
+                    failures.Add("tutorial step 'founding_defense' must have grant.prepaidTower:true (WO-780 — taught tower must be affordable on ENTER)");
 
                 // Contextual rules: oneShot + never pausePressure (a hint never gates).
                 if (s.IsContextual)

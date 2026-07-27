@@ -79,6 +79,18 @@ namespace DeNelle.Core.State
         /// </summary>
         [JsonProperty("nextId")] public int NextId = 1;
 
+        /// <summary>
+        /// WO-779 — the persisted RECOVERY CLOCK anchor: the unix-ms wall-clock at which
+        /// <see cref="AdvanceRecovery"/> last advanced the wounded countdowns. Mirrors
+        /// <c>GameState.LastHarvestClaimMs</c> (the offline-accrual clock) so wounded troops
+        /// heal FORWARD across app-closes off the SAME clock the Obsidian work queue reads
+        /// (TimeSource.NowUnixMs) — reused, never forked. Additive at the END: an older save
+        /// with no key loads 0, and the first <see cref="AdvanceRecovery"/> SEEDS it to now
+        /// (crediting nothing that launch) so a pre-anchor save never banks a giant
+        /// retroactive heal. Serialized straight to JSON with the rest of GameState.Army.
+        /// </summary>
+        [JsonProperty("lastRecoveryTickMs")] public double LastRecoveryTickMs;
+
         // ── Capacity ─────────────────────────────────────────────────────────
 
         /// <summary>
@@ -227,11 +239,21 @@ namespace DeNelle.Core.State
         /// <summary>
         /// Advances recovery on every wounded troop by <paramref name="dt"/> seconds;
         /// a troop whose countdown reaches 0 recovers (Wounded cleared). Call once per
-        /// tick (real-time or simulated). No-op when nothing is wounded.
+        /// tick (real-time or simulated). No-op when nothing is wounded. Returns the
+        /// number of troops that recovered on THIS call.
+        ///
+        /// PURE STEP (dt-based, no clock) so it is headlessly unit-testable with a
+        /// simulated delta — the wall-clock resolver is <see cref="AdvanceRecovery"/>.
+        /// NEVER adds/removes a troop and NEVER touches <see cref="PlayerTroop.Id"/> or
+        /// <see cref="PlayerTroop.VeterancyRank"/> — a recovered troop is the SAME
+        /// instance with Wounded cleared, so the roster / OwnedTroopId / veterancy
+        /// accounting is untouched (no double-resurrect) and it is idempotent once healed
+        /// (a healed troop is skipped by the <c>!t.Wounded</c> guard).
         /// </summary>
-        public void TickRecovery(float dt)
+        public int TickRecovery(float dt)
         {
-            if (Owned == null || dt <= 0f) return;
+            if (Owned == null || dt <= 0f) return 0;
+            int recovered = 0;
             foreach (var t in Owned)
             {
                 if (t == null || !t.Wounded) continue;
@@ -240,8 +262,48 @@ namespace DeNelle.Core.State
                 {
                     t.RecoveryRemaining = 0f;
                     t.Wounded = false;
+                    recovered++;
                 }
             }
+            return recovered;
+        }
+
+        /// <summary>
+        /// WO-779 — the wall-clock RECOVERY RESOLVER: the live + offline advance hook the
+        /// zero-caller <see cref="TickRecovery"/> was missing. Computes the elapsed seconds
+        /// since the last advance from the persisted <see cref="LastRecoveryTickMs"/> anchor
+        /// (fed <paramref name="nowMs"/> = TimeSource.NowUnixMs by the Village tick — the
+        /// SAME clock the Obsidian work queue uses, reused not forked) and ticks every
+        /// wounded troop by that delta. Call on LOAD (credits the offline gap) AND on a
+        /// lightweight live cadence (~1/sec). Returns the number of troops that recovered.
+        ///
+        /// Null/empty-army safe (<see cref="TickRecovery"/> no-ops). Monotonic + retroactive-
+        /// safe:
+        ///   • fresh anchor (&lt;= 0) → SEED to now, tick NOTHING (a pre-anchor save can't
+        ///     bank a giant first-load heal — mirrors OfflineHarvestService's fresh-clock seed);
+        ///   • a backwards/zero clock delta → advance the anchor but tick nothing (never
+        ///     re-heal on a rewound clock).
+        /// The anchor is part of GameState.Army, so every Save() that persists a wound (e.g.
+        /// RaidDeployController.DoRetreat) persists the fresh anchor ATOMICALLY with it — the
+        /// away-gap on reload is measured from the wound's own save point (no over-heal).
+        /// </summary>
+        public int AdvanceRecovery(double nowMs)
+        {
+            // Fresh anchor → seed to now, credit nothing this call.
+            if (LastRecoveryTickMs <= 0.0)
+            {
+                LastRecoveryTickMs = nowMs;
+                return 0;
+            }
+
+            double elapsedSec = (nowMs - LastRecoveryTickMs) / 1000.0;
+            LastRecoveryTickMs = nowMs;          // always advance the anchor (even on a 0/backwards delta)
+            if (elapsedSec <= 0.0) return 0;      // no time passed / clock ran backwards → no heal
+
+            int recovered = TickRecovery((float)elapsedSec);
+            if (recovered > 0)
+                FlowTrace.Step("Army", $"recovery advanced {elapsedSec:0}s -> {recovered} troop(s) healed.");
+            return recovered;
         }
 
         // ── Veterancy ─────────────────────────────────────────────────────────
