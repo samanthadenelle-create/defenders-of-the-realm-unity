@@ -37,8 +37,10 @@ namespace DeNelle.Tests.EditMode
         {
             // index K (0-based) unlocks at K * wavesPerEcho.
             var vm = Vm(new FakeEchoWorkforce { EchoCount = 1, WavesPerEcho = 5 });
-            Assert.That(vm.Cards[1].StatusText, Is.EqualTo("Locked\nUnlocks at wave 5"));
-            Assert.That(vm.Cards[2].StatusText, Is.EqualTo("Locked\nUnlocks at wave 10"));
+            // LockedStatus dropped the "Locked\n" stack prefix (owner F8 2026-07-24) — it now emits a
+            // single "Unlocks at wave N" line so it no longer stacks under the card's display name.
+            Assert.That(vm.Cards[1].StatusText, Is.EqualTo("Unlocks at wave 5"));
+            Assert.That(vm.Cards[2].StatusText, Is.EqualTo("Unlocks at wave 10"));
         }
 
         [Test]
@@ -55,9 +57,13 @@ namespace DeNelle.Tests.EditMode
             var card = vm.Cards[0];
             var entry = EchoRosterCatalog.ByIndex(0);
             Assert.That(card.DisplayName, Is.EqualTo(entry.DisplayName));
-            // Status = element + "\n" + lane/level/bonus readout (colorblind-safe TEXT).
-            Assert.That(card.StatusText, Does.StartWith(entry.Element + "\n"));
-            Assert.That(card.StatusText, Does.Contain("Lv "));
+            // OwnedStatus now emits the lane/level/bonus readout ONLY (colorblind-safe TEXT). The
+            // Element + "\n" prefix was dropped (owner F8 2026-07-24 pet screen: it stacked over the
+            // display name). Echo index 0 defaults to the Harvest lane at Lv 1 (EchoAssignments starter
+            // default with no GameState), so the readout leads "Harvest - Lv 1 - +N%".
+            Assert.That(card.StatusText, Does.StartWith("Harvest - Lv 1"));
+            Assert.That(card.StatusText, Does.Not.Contain("\n"),
+                "the Element + newline prefix is gone — status is a single readout line.");
         }
 
         [Test]

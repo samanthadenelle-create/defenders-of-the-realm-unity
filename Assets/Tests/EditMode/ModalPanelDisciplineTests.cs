@@ -47,7 +47,11 @@ namespace DeNelle.Tests.EditMode
             bool firstClosed = false;
             bool firstOpen = true;
             var first = PanelManager.Register("First", () => { firstClosed = true; firstOpen = false; }, () => firstOpen);
-            var second = PanelManager.Register("Second", () => { }, () => false);
+            // The second panel's IsOpen probe must report TRUE: NotifyOpened runs the WO-465
+            // visibility-verify against it, and a probe that returns false trips a FlowTrace.Fail
+            // (now Debug.LogError) that would fail this test even though the swap behaviour is correct.
+            bool secondOpen = true;
+            var second = PanelManager.Register("Second", () => { secondOpen = false; }, () => secondOpen);
 
             PanelManager.NotifyOpened(first);
             Assert.IsTrue(PanelManager.AnyOpen, "First panel should register as open.");

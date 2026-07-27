@@ -12,9 +12,11 @@
 //
 // Runs SYNCHRONOUSLY: DebounceSeconds=0 + completed-task fakes make the quote /
 // confirm paths finish on the calling thread, so we drive them via GetResult()
-// (no async-test-runner dependency, no real 0.6s wait). LogAssert.ignoreFailing-
-// Messages is on because the Fail/Warn paths log via FlowTrace (Debug.LogError/
-// LogWarning) by design — those logs ARE the guard proofs.
+// (no async-test-runner dependency, no real 0.6s wait). The two confirm-failure
+// paths log a guard proof via FlowTrace.Fail (Debug.LogError); each such test
+// declares an explicit LogAssert.Expect for that error immediately before the
+// call (a blanket ignoreFailingMessages doesn't reliably span the async
+// continuation, so the errors escaped it). Warn-path guards don't fail the runner.
 // =============================================================================
 using System;
 using System.Threading.Tasks;
@@ -54,17 +56,6 @@ namespace DeNelle.Tests.EditMode
     [TestFixture]
     public class SwapVMTests
     {
-        [SetUp]
-        public void SetUp()
-        {
-            // The guard proofs log via FlowTrace (Debug.LogWarning/LogError). Those are
-            // expected in the money-path tests — don't let them fail the runner.
-            LogAssert.ignoreFailingMessages = true;
-        }
-
-        [TearDown]
-        public void TearDown() => LogAssert.ignoreFailingMessages = false;
-
         private static SwapVM Vm(FakeSwapBackend b) =>
             new SwapVM(b) { DebounceSeconds = 0f };   // zero delay -> synchronous quote path
 
@@ -171,6 +162,9 @@ namespace DeNelle.Tests.EditMode
             var vm = Vm(b);
             PumpQuote(vm, "10");
 
+            // The indeterminate-throw guard logs its proof via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("ExecuteSwapAsync THREW"));
             Confirm(vm);   // must NOT throw (guarded internally)
 
             Assert.That(b.ExecuteCalls, Is.EqualTo(1), "the execute was attempted (outcome indeterminate)");
@@ -186,6 +180,9 @@ namespace DeNelle.Tests.EditMode
             var vm = Vm(b);
             PumpQuote(vm, "10");
 
+            // The execute-returned-FALSE guard logs its proof via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("ExecuteSwapAsync returned FALSE"));
             Confirm(vm);
 
             Assert.That(b.ExecuteCalls, Is.EqualTo(1));

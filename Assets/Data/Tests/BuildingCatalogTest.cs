@@ -31,17 +31,17 @@ namespace DeNelle.Data.Tests
         // =====================================================================
 
         [Test]
-        public void buildings_json_loads_exactly_nine_buildings()
+        public void buildings_json_loads_exactly_ten_buildings()
         {
             Assert.That(BuildingCatalog.Buildings, Is.Not.Null,
                 "BuildingCatalog.Buildings must never be null.");
-            // Canon grew to 9: original 5 + lumbermill + forge + armorer + market.
+            // Canon grew to 10: original 5 + lumbermill + forge + armorer + market + jeweler.
             // WO-413: armorer is its own entry (upgrades gear, NOT shoppable) so it no
             // longer collides with the shoppable forge id; market is the vendor entry so
-            // Jeweler/Marketplace Find("market") resolves (Buy/Sell). Update this count if
-            // the canonical set changes.
-            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(9),
-                "buildings.json must hydrate the nine canonical gameplay buildings.");
+            // Jeweler/Marketplace Find("market") resolves (Buy/Sell); the jeweler vendor
+            // entry is the 10th. Update this count if the canonical set changes.
+            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(10),
+                "buildings.json must hydrate the ten canonical gameplay buildings.");
         }
 
         [Test]
@@ -61,8 +61,14 @@ namespace DeNelle.Data.Tests
         [Test]
         public void find_by_type_resolves_each_building_type()
         {
+            // ApothecaryWorkbench (8) + JewelersBench (9) are bench-INTERACTION enums (they open a
+            // crafting-bench panel DIRECTLY per their BuildingType doc-comments in Building.cs); they
+            // have NO placeable building entry in buildings.json by design. Scope the resolve check to
+            // the PLACEABLE building types only — every one of those must hydrate a def.
             foreach (BuildingType type in System.Enum.GetValues(typeof(BuildingType)))
             {
+                if (type == BuildingType.ApothecaryWorkbench || type == BuildingType.JewelersBench)
+                    continue;
                 Assert.That(BuildingCatalog.Find(type), Is.Not.Null,
                     $"BuildingCatalog.Find({type}) must resolve a def.");
             }

@@ -28,11 +28,14 @@ namespace DeNelle.Data.Tests
         // =====================================================================
 
         [Test]
-        public void packs_json_loads_exactly_five_packs()
+        public void packs_json_loads_the_full_pack_catalog()
         {
+            // The catalogue intentionally grew past the original five-tier ladder: the 5 core tiers
+            // (Hearth Spark -> Founder's Vow) plus the added seasonal/bundle offers = 13 today. The
+            // tier ladder sub-tests below still pin tiers 1-5. Update this count if the set changes.
             Assert.That(PackCatalog.Packs, Is.Not.Null);
-            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(5),
-                "packs.json must hydrate the five-tier pack ladder.");
+            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(13),
+                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers).");
         }
 
         [Test]

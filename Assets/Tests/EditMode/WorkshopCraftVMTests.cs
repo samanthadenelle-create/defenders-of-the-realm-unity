@@ -76,7 +76,8 @@ namespace DeNelle.Tests.EditMode
                 id => counts.TryGetValue(id, out var v) ? v : 0,
                 displayNameFor: id => id == "reed" ? "Reed" : id, glyphFor: _ => null);
 
-            Assert.That(larder, Is.EqualTo("Larder:  Reed x3  ·  torch x1  ·  junk x2"));
+            // Separator changed from " · " to "  -  " to match Echo's new " - " readout style (intended).
+            Assert.That(larder, Is.EqualTo("Larder:  Reed x3  -  torch x1  -  junk x2"));
         }
 
         [Test]

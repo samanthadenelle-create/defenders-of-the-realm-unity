@@ -234,6 +234,9 @@ namespace DeNelle.Wallet.Tests
         {
             var service = new WalletService(new FakeWalletProvider());
             service.Connect().GetAwaiter().GetResult();
+            // The null-pack guard logs its abort proof via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("pack definition is null"));
             var result = service.Pay(null, CurrencyKind.Sol).GetAwaiter().GetResult();
             Assert.That(result.Ok, Is.False);
             Assert.That(result.Error, Does.Contain("null"));
@@ -260,6 +263,9 @@ namespace DeNelle.Wallet.Tests
                 Pricing = new PackPricing { Usd = 1, Usdc = 1, Sol = 0, Skr = 1 },
                 Contents = new PackContents(),
             };
+            // The unpriced-rail guard logs its abort proof via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("no price for"));
             var result = service.Pay(unpriced, CurrencyKind.Sol).GetAwaiter().GetResult();
             Assert.That(result.Ok, Is.False);
             Assert.That(result.Error, Does.Contain("no price"));
@@ -285,6 +291,9 @@ namespace DeNelle.Wallet.Tests
         {
             var service = new WalletService(new FakeWalletProvider { PaymentFails = true });
             service.Connect().GetAwaiter().GetResult();
+            // The provider-failure guard logs its proof via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("FAILED at provider"));
             var result = service.Pay(MakePack(), CurrencyKind.Sol).GetAwaiter().GetResult();
             Assert.That(result.Ok, Is.False,
                 "a provider-level payment failure must bubble up as a failed PaymentResult.");

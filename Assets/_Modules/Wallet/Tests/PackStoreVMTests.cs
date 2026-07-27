@@ -16,6 +16,8 @@
 
 using System;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 using DeNelle.Core.State;
 using DeNelle.Wallet;
 
@@ -40,21 +42,27 @@ namespace DeNelle.Wallet.Tests
         }
 
         [Test]
-        public void apply_pack_grants_economy_and_records_owned()
+        public void apply_pack_records_owned_and_cosmetics()
         {
-            var state = new GameState();
-            int crystals0 = state.Resources.Crystals;
-            int food0 = state.Resources.Food;
-            int coins0 = state.Resources.Coins;
+            // Economy grants now route through the EconomyService / GlimmerCurrencyService seams
+            // (resolved by type-name reflection). Those singletons are ABSENT in EditMode (no scene),
+            // so each grant self-reports a loud FlowTrace.Fail (Debug.LogError) and state.Resources is
+            // left untouched — correct behaviour, so we no longer assert the resource top-up here (it
+            // is covered where the services are live). We DO assert the ownership record, which is
+            // written straight onto GameState (no seam) and must always land.
+            var state = ScriptableObject.CreateInstance<GameState>();
 
             var vm = new PackStoreVM(() => state);
             var pack = MakePack("pack-x", crystals: 100, food: 50, coins: 25, "cos-a", "cos-b");
 
-            vm.ApplyPackContents(pack);
+            // The four service-missing grant failures, in emission order (resources, coins, then each
+            // cosmetic) — self-reported via FlowTrace.Fail (Debug.LogError).
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant resources.*EconomyService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant coins.*EconomyService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-a'.*GlimmerCurrencyService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-b'.*GlimmerCurrencyService missing"));
 
-            Assert.That(state.Resources.Crystals, Is.EqualTo(crystals0 + 100), "crystals topped up");
-            Assert.That(state.Resources.Food, Is.EqualTo(food0 + 50), "food topped up");
-            Assert.That(state.Resources.Coins, Is.EqualTo(coins0 + 25), "coins topped up");
+            vm.ApplyPackContents(pack);
 
             Assert.That(state.OwnedItemIds, Does.Contain("pack-x"), "pack SKU recorded owned");
             Assert.That(state.OwnedItemIds, Does.Contain("cos-a"), "cosmetic SKU recorded owned");
@@ -65,7 +73,7 @@ namespace DeNelle.Wallet.Tests
         [Test]
         public void is_owned_is_false_for_unknown_sku()
         {
-            var state = new GameState();
+            var state = ScriptableObject.CreateInstance<GameState>();
             var vm = new PackStoreVM(() => state);
             Assert.That(vm.IsOwned("never-bought"), Is.False);
         }
@@ -73,9 +81,14 @@ namespace DeNelle.Wallet.Tests
         [Test]
         public void ownership_grant_is_idempotent()
         {
-            var state = new GameState();
+            var state = ScriptableObject.CreateInstance<GameState>();
             var vm = new PackStoreVM(() => state);
             var pack = MakePack("pack-x", crystals: 10, food: 0, coins: 0);
+
+            // Each apply routes the crystal grant through the (EditMode-absent) EconomyService seam,
+            // self-reporting one FlowTrace.Fail (Debug.LogError) per call — two applies, two errors.
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant resources.*EconomyService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant resources.*EconomyService missing"));
 
             vm.ApplyPackContents(pack);
             vm.ApplyPackContents(pack);   // re-grant
@@ -90,6 +103,9 @@ namespace DeNelle.Wallet.Tests
         {
             var vm = new PackStoreVM(() => null);
             var pack = MakePack("pack-x", crystals: 10, food: 0, coins: 0);
+            // The null-state path escalated to a loud FlowTrace.Fail (Debug.LogError): the payment
+            // already settled, so a lost entitlement must self-report rather than silently swallow.
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("no GameStateService/State"));
             Assert.DoesNotThrow(() => vm.ApplyPackContents(pack),
                 "no GameState must self-report, never throw (the payment already settled)");
         }
