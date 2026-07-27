@@ -25,6 +25,40 @@ here and in the section files is STALE metadata only.
 
 ---
 
+## 1b. NEW SYSTEMS SHIPPED SINCE THE 06-12 CATALOG (added 2026-07-26 — not yet folded into the area files)
+
+> These systems postdate the 2026-06-12 section-file compile. Catalogued here (from code, at HEAD) so the
+> index stays green (§15); the area-file bodies below are still 06-12 and do not mention them. State legend:
+> **SHIPPED** = present + wired · **IN FLIGHT** = present but not asserted done.
+
+**Raid V1 spine — SHIPPED, reachable end-to-end** (CoC deploy-and-watch; `ff.raidwalk` OFF, `ff.barracks` +
+`ff.buildtimers` ON). Full beat→class map + P0/P1/P1.5/P2 ladder = `docs/RAID_NORTHSTAR.md` §2A. Classes:
+- `TroopTrainingVM` (`Assets/_Modules/Village/Hero/TroopTrainingVM.cs`) + `TroopTrainingPanel` — train UI/queue.
+- `ArmyStorage` (`Assets/_Modules/Core/State/ArmyStorage.cs`) — housing cap + perk + veterancy.
+- `RaidSelectionScreen` + `RaidSelectionVM`, `RaidDeployScreen` + `RaidDeployVM` (`Assets/_Modules/Village/Hero/`) — pick target + pre-raid.
+- `SceneRouter.GoRaid(sceneName)` (`Assets/_Modules/Core/SceneRouter.cs`) → scenes `RaidBase_IronBastion`, `RaidBase_fortified_garrison`, `RaidBase_mage_enclave`, `RaidBase_raider_camp_small` (`Assets/Scenes/`). **No `RaidParams`/loadout bag yet** — the WO-774 P0 seam.
+- `RaidDeployController` + `TroopDeployer.SpawnFromArmy(...)` + `TroopController` (`Assets/_Modules/Village/Troops/`) — tap-deploy tray + spawn + auto-fight.
+- `RaidScoring` + `RaidHudController` (`Assets/_Modules/Village/Troops/`; oracle `Assets/Editor/Regression/RaidScoringRegression.cs`) — 180s clock, stars, loot.
+
+**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, save schema v35).** `Assets/_Modules/Core/Jobs/`:
+- `JobKind.cs` (Build/Upgrade/TowerBuild/TrainTroop/Research/…), `IJobEffect.cs` (per-job apply hook),
+  `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`), `ObsidianQueueEngine.cs` (offline-fair resolve).
+- Persistence: `SaveSchema.CurrentVersion = 35`; `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds
+  legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` into the Builder channel (idempotent, no-loss).
+- Surfaced by `Village/BuildMode/ObsidianQueueHud.cs` + `Village/Buildings/BuildTimerService.cs` (now the
+  common multi-channel queue front). Player copy = "Builders"/"Training"/"Research", never "Obsidian queue".
+
+**Troops foundation — SHIPPED.** `BarracksData` (`Assets/_Modules/Village/Troops/Data/BarracksData.cs`),
+`TroopStatResolver` (`Assets/_Modules/Village/Troops/TroopStatResolver.cs`); data `Assets/Resources/Data/Canonical/barracks.json`,
+`troop-upgrades.json`, `troops.json` (dual-copied to `StreamingAssets/Data/Canonical/`).
+
+**IN FLIGHT (present, do NOT assert done):** `EnemyResolver` (`Assets/_Modules/Core/Enemies/EnemyResolver.cs`,
++ `Editor/Regression/EnemyResolverRegression.cs`, `Tests/PlayMode/EnemyResolverSpawnTests.cs`); the
+barracks-catalog-structure (Barracks as an upgradable placeable building, PAIN_POINTS §3.3); the WO-774
+raid-UX polish (loadout handoff / naming split / deploy ring / "Defenders %" copy / Train-queue UI).
+
+---
+
 ## 1. INDEX TABLE — areas → section file → role
 
 > STALE: 2026-07-12 — the docs-wo-state row's "next free WO = 412" is ~270 stale: WO specs on disk run through 683, next free = 684, with number collisions on 677/678 (see CANON_GROUND_TRUTH_2026-07-12.md)

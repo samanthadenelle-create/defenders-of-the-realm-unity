@@ -29,9 +29,11 @@
 - **Branch `wip/village2-and-f8-tickets`. HEAD = `7dec0e07`** (2026-07-26 18:01), **local == origin (0/0) —
   the felt-test wave IS pushed.** This is a change from 07-22's "push HELD": the dungeon+raid felt-test wave
   was committed AND pushed to `origin/wip`. **Prod still UNTOUCHED** (owner promotes separately).
-- Save schema **v34** (unchanged this session — no new persisted fields landed; WO-771.1b's v10→v11 raid
-  migration is SPEC, not built. Note: the raid WO's "v10/v11" numbering is the read-only-tree's schema; on
-  `wip` the live schema is **v34** — CLI reconciles the migration onto v34 when 771.1b is implemented).
+- Save schema **v35** (updated — WO-773 landed after this doc's initial HEAD: `SaveSchema.CurrentVersion=35`,
+  `SaveMigrator.MigrateToV35` appends the `ObsidianQueue` multi-channel job state and folds the legacy
+  `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` timers into the Builder channel. Earlier this doc said
+  **v34/no-new-fields** — STALE, corrected here. WO-771.1b's raid-schema migration remains SPEC; CLI
+  reconciles it onto v35 when 771.1b is implemented, not the read-only-tree's "v10/v11" numbering).
 - **Gates:** compile-green across the wave (each felt-test commit built). Full `DataRegression.RunAll`
   re-baseline was **not re-run as part of this housekeeping doc pass** — the 07-22 baseline (`REGRESSION_OK`,
   16 P1 suites, 0 reds) is the last certified full sweep; re-run before the next build ship.
@@ -68,6 +70,12 @@ The dungeon subsystem — long "always overlooked" — is now a real loop:
 - **Dungeon movement + camera + Bryn** (`82e1f3a4`, `f42e6f7e`): `DungeonHero` is the **sole mover** (no
   competing controller); dungeon camera raised to a taller framing; exit interaction restored; **Bryn's
   pill-hide** now covers a skinned baked body (the green capsule no longer shows through).
+- **Dungeon camera = FIRST-PERSON by default** (`ff.dungeonfpv` **default-ON**, owner 2026-07-26):
+  `DeNelle.Dungeons.DungeonCameraRig` is a full FPV (independent yaw+pitch look layer, pitch-clamped ±70;
+  temporary over-the-shoulder via `SetCombatFraming`). An architect chose FPV traversal over raising the
+  ~4u ceiling. Set PlayerPrefs `ff.dungeonfpv=0` to revert to the fixed over-the-shoulder rig. **Open
+  follow-up (PAIN_POINTS §4):** keep FPV only if felt-tested — else default third-person until motion-sick
+  risk is closed; placeholder hero vitals (`_heroBaselineHp=120`/`mana=60`) still to be wired (WO-770.10).
 
 **Dungeon backlog (NOT built — remain in WO-770):**
 - **770.5** — consolidate the two Village→Dungeon entry systems (retire `DungeonPortal`, keep the
@@ -106,10 +114,21 @@ The owner picked the **teleport/deploy** raid loop (the COC model). **Walk-to is
   combat, "replay" = re-watch from the recorded deploy log; **skip the deterministic sim.** V2 = rewarded PvP
   adds the deterministic fixed-point sim (771.3), async player-base snapshots + matchmaking (771.2/771.7),
   server byte-exact anti-cheat.
-- **V1 spine (nothing built yet — all SPEC):** 771.0 (move `IDamageableStructure`) → 771.1 (troops.json) →
-  771.1b (save migration) → 771.4 (deploy screen) + reuse combat → 771.9 + WO-773 (barracks/economy) →
-  771.6 (scoring/stars/loot) → 771.10 (towers, if the generated base's towers don't already fire) →
-  771.11 (HUD) → 771.13 + WO-772 (art).
+- **V1 spine — CORRECTED 2026-07-26: the spine ALREADY EXISTS end-to-end and is REACHABLE** (flags flipped:
+  `ff.raidwalk` OFF, `ff.barracks` ON, `ff.buildtimers` ON). The earlier "nothing built yet — all SPEC"
+  line was STALE — code is ahead of the docs. Verified in-tree (paths confirmed at implement time):
+  train (`TroopTrainingVM`/`TroopTrainingPanel`, `Village/Hero/`) → `ArmyStorage` (`Core/State/`) →
+  `RaidSelectionScreen`/`RaidSelectionVM` → `RaidDeployScreen`/`RaidDeployVM` (`Village/Hero/`) →
+  `SceneRouter.GoRaid(scene)` → the four `RaidBase_*` scenes (IronBastion / fortified_garrison /
+  mage_enclave / raider_camp_small) → `RaidDeployController` tray + `TroopDeployer.SpawnFromArmy`
+  (`Village/Troops/`) → `TroopController` auto-fight → `RaidScoring` (180s/stars/loot) + `RaidHudController`
+  → claim. **Full beat→class map + the P0/P1/P1.5/P2 ladder = `docs/RAID_NORTHSTAR.md` §2A.**
+- **Raid V1 UX polish is IN FLIGHT (WO-774, P0):** loadout handoff (`SceneRouter.GoRaid` still takes only a
+  scene name — no `RaidParams`/pending loadout bag, so the field tray arms the FULL roster), Army/Deploy
+  naming split, deploy ring, victory/star copy = "Defenders %" not "base destroyed", Train-channel queue UI.
+  This is polish + clarity, **not a rebuild.** Sub-orders that remain SPEC on top of the shipped spine:
+  771.1b (raid-schema migration onto v35), 771.10 (towers, if the generated base's don't already fire),
+  771.13 + WO-772 (shared troop/enemy art). 771.9 (barracks/train-channel integration) is in flight.
 
 ---
 
@@ -120,13 +139,20 @@ The owner picked the **teleport/deploy** raid loop (the COC model). **Walk-to is
   spawn bug** (enemy ids don't resolve to distinct defs+models). **BLOCKED on owner ratification** — the WO
   operationalizes `docs/enemy-codex.md`, which is a "review-and-approve before implementation" gate; the owner
   ratifies the roster (or a subset) first. Families: **The Hollow Ones** (undead/skeletons, KayKit Skeletons
-  1.1) + **The Wildlands** (living) + 8 set-piece bosses (2 canon-locked). Not built.
-- **WO-773 — common "Obsidian" job queue** (concurrent-worker + shared FIFO, COC builder-huts analog).
-  EVERY timed job — build/repair/upgrade/unlock-tier/learn-magic/train-troop/tower — flows through
-  `ObsidianQueueService.Enqueue`; offline-fair `Resolve(now)` cascades auto-pulls. Supersedes the ad-hoc
-  `GameState.BuildingCooldowns`/`PendingBuilds`. **Cross-tree note:** if CLI's `BuildTimerService`/WO-762
-  lands first, WO-773 becomes "generalize `BuildTimerService` into the slotted Obsidian queue + handlers +
-  HUD" rather than a from-scratch build. Not built.
+  1.1) + **The Wildlands** (living) + 8 set-piece bosses (2 canon-locked). **UPDATE 2026-07-26: UNBLOCKED —
+  Hollow Ones + mini-boss names RATIFIED, Wildlands DEFERRED (`docs/PAIN_POINTS_2026-07-26.md` §1.1).
+  `EnemyResolver` (`Core/Enemies/EnemyResolver.cs`, + `Editor/Regression/EnemyResolverRegression.cs` +
+  `Tests/PlayMode/EnemyResolverSpawnTests.cs`) is present and IN FLIGHT** — do NOT assert it done; the
+  barracks-catalog-structure (Barracks as an upgradable placeable building, PAIN_POINTS §3.3) is also
+  in flight, not shipped.
+- **WO-773 — common "Obsidian" job queue — SHIPPED (2026-07-26, schema v35).** Landed as a **multi-channel**
+  queue (Builder / Train / Research channels — per the PAIN_POINTS ruling, NOT the old single-FIFO), so
+  training a troop no longer competes with a wall upgrade. Files: `Core/Jobs/ObsidianQueueState.cs`,
+  `ObsidianQueueEngine.cs`, `JobKind.cs`, `IJobEffect.cs`; `SaveMigrator.MigrateToV35` appends
+  `ObsidianQueue` and folds the legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` timers into the
+  Builder channel (idempotent, no-loss); the on-screen `ObsidianQueueHud` + `BuildTimerService` (now
+  "the common Obsidian multi-channel work queue" per its own header) surface it. Player copy = "Builders" /
+  "Training" / "Research" — never "Obsidian queue".
 - **Validation sign-off:** `docs/qa/dungeon-raid-validation-2026-07-26.md` certifies the WO-770/771/772/773
   set as handoff-ready — all D1–D16 findings owned, COC loop coverage complete, determinism model sound,
   every code citation re-verified. The only waits are owner-side asset staging + balancing constants.
@@ -187,6 +213,8 @@ The owner picked the **teleport/deploy** raid loop (the COC model). **Walk-to is
   remain Phase 2 content; do not block dungeon placement or Hollow art on deferred packs.
 
 ---
-*Live anchor 2026-07-26. Dungeon loop functional; raid loop locked to Teleport/Deploy; WO-770/771/772/773
-firmed + validation-signed-off. Deep module state = the 07-22 anchor. 07-22 SUPERSEDED (bannered).
+*Live anchor 2026-07-26. Dungeon loop functional (FPV default-on); raid V1 spine EXISTS end-to-end and is
+REACHABLE (flags flipped) — polish/UX in flight (WO-774), not a rebuild; WO-773 multi-channel job queue
+SHIPPED (schema v35); EnemyResolver + barracks-catalog-structure IN FLIGHT. Raid product-truth =
+`docs/RAID_NORTHSTAR.md` §2A. Deep module state = the 07-22 anchor. 07-22 SUPERSEDED (bannered).
 Load-bearing set refreshed same-breath (§15). See `docs/qa/SUNDAY_STATUS_2026-07-26.md` for the ticket table.*

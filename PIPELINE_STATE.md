@@ -19,10 +19,18 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   Dungeons are now a real end-to-end loop (enter → explore → read lore → fight with a REAL win/loss → settle →
   leave → Village) — WO-770.1/.2/.3/.3b/.4/.7/.9 **DONE** (real-time `BattleArena.OnBattleEnded` now settles the
   encounter; a lost fight ends the run; lore stones readable; toasts + live Bryn). Dungeon backlog:
-  770.5/.6/.8/.10/.11. **Raid loop LOCKED to Teleport/Deploy** (COC model, owner ruling; walk-to retired as the
-  raid loop) — WO-771 v2 is the build plan, **nothing built yet** (reuse `RaidBaseGenerator` + real-time combat;
-  V1 skips the deterministic sim). WO-772 (shared enemy system) **BLOCKED** on owner ratifying `docs/enemy-codex.md`;
-  WO-773 (common Obsidian job queue) **BACKLOG**. Non-dungeon fixes: enemies-out-of-castle + battle-lock,
+  770.5/.6/.8/.10/.11 (dungeon camera = FPV default-on, `ff.dungeonfpv`). **Raid loop LOCKED to Teleport/Deploy**
+  (COC model, owner ruling; walk-to retired, `ff.raidwalk` OFF) — **CORRECTED 2026-07-26: the V1 spine ALREADY
+  EXISTS end-to-end and is REACHABLE** (train `TroopTrainingVM` → `ArmyStorage` → `RaidSelectionScreen` →
+  `RaidDeployScreen` → `SceneRouter.GoRaid` → four `RaidBase_*` scenes → `RaidDeployController` +
+  `TroopDeployer.SpawnFromArmy` → `TroopController` auto-fight → `RaidScoring` 180s/stars/loot +
+  `RaidHudController`); `ff.barracks` + `ff.buildtimers` ON so the roster/timers are reachable. The old
+  "nothing built yet" was STALE. **Raid V1 UX polish IN FLIGHT = WO-774** (loadout handoff — `GoRaid` still
+  takes only a scene name, no `RaidParams` bag; Army/Deploy naming split; deploy ring; "Defenders %" copy;
+  Train-queue UI). Spine map + ladder = `docs/RAID_NORTHSTAR.md` §2A. **WO-773 (multi-channel Obsidian job
+  queue: Builder/Train/Research) = SHIPPED** (`Core/Jobs/*`, schema **v35** via `SaveMigrator.MigrateToV35`).
+  **WO-772 (shared enemy system) = UNBLOCKED** — Hollow Ones ratified, Wildlands deferred (PAIN_POINTS §1.1);
+  `EnemyResolver` + barracks-catalog-structure **IN FLIGHT** (not done). Non-dungeon fixes: enemies-out-of-castle + battle-lock,
   towers-no-longer-through-walls, MagentaGuard Android, loading overlay+bar, gate-teleport off, collector vendor
   NPCs, Alchemy scroll-fix. WO next-free = **774**. Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
 

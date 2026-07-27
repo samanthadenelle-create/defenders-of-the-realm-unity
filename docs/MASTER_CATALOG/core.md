@@ -2,6 +2,19 @@
 
 > ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** save schema is **v34** (not v33), and Tribes/Wards/Arena + the pet active-slot ARE persisted (v34); `CoreServices` now has **7 slots** — Hud / HudModel / Population / Audio / Jupiter / WalletSigner / SceneLinkResolver — not 4; `SceneRouter.Castle` is now a PROPERTY = `MergedWorld ? "Main_Castle_Overworld" : "MainCastle_Hall"` (MergedWorld default ON). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
 
+> ➕ **ADDENDUM 2026-07-26 (postdates the 06-12 body below):**
+> - **Save schema is now v35** (not v33/v34 above). `SaveSchema.CurrentVersion = 35`; `SaveMigrator` runs
+>   `MigrateToV30…MigrateToV35`. **`MigrateToV35` (WO-773)** appends the `ObsidianQueue` job state and folds
+>   legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` timers into the Builder channel (idempotent, no-loss).
+> - **NEW subsystem `Core/Jobs/` — the multi-channel "Obsidian" work queue (WO-773):** `JobKind.cs`,
+>   `IJobEffect.cs`, `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`),
+>   `ObsidianQueueEngine.cs` (offline-fair resolve). One queue, three channels — train no longer competes with
+>   build. Player copy = "Builders"/"Training"/"Research"; the code name "Obsidian" never shows in UI.
+> - **NEW `Core/Enemies/EnemyResolver.cs` — IN FLIGHT** (present, not asserted done; feeds dungeon placement +
+>   raid rosters/art, fixes the generic-skeleton spawn bug). Regression `Editor/Regression/EnemyResolverRegression.cs`.
+> - **`SceneRouter.GoRaid(sceneName)`** added for the raid V1 spine (loads a `RaidBase_*` scene with fade);
+>   it takes ONLY a scene name — no `RaidParams`/loadout hand-off yet (the WO-774 P0 seam).
+
 Foundation layer. Two asmdefs live here: **`DeNelle.Core`** (root namespace `DeNelle.Core`, refs UniTask/TextMeshPro/Addressables/ResourceManager only — first-party nothing) and **`DeNelle.AI`** (`DeNelle.AI`, refs DeNelle.Core). Plus **`DeNelle.Core.Tests`** (Editor-only, refs DeNelle.Core + DeNelle.Data). Every other module references Core; Core references nothing first-party. Verified by reading every `.cs` (~120 files).
 
 **Cross-module pattern:** Core defines interfaces; implementing modules register concrete services via `CoreServices` / per-feature static hooks, so Village↔HUD↔Wallet etc. never reference each other (CLAUDE.md §5). Reflection bridge used only in `PersistenceBridge` (Core→Village WaveManager).

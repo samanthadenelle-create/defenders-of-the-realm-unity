@@ -7,6 +7,16 @@
 >
 > ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** live hero = a single Knight **Grom** (KnightV3 rig + `KnightMocap.controller`), no party / no body-swap; the "Blaise / class-bodies / party-of-4" body is retired. Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
 
+> ➕ **ADDENDUM 2026-07-26 (postdates the 06-12 body below) — the raid V1 spine (Hero + Troops):**
+> `Village/Hero/` now also hosts the raid front-end: **`RaidSelectionScreen`/`RaidSelectionVM`** (pick a
+> difficulty card), **`RaidDeployScreen`/`RaidDeployVM`** (pre-raid loadout), **`TroopTrainingVM`** (train
+> queue UI). The deploy/combat half lives in the **NEW `Assets/_Modules/Village/Troops/` folder**:
+> `RaidDeployController` (tap-deploy tray), `TroopDeployer.SpawnFromArmy(...)`, `TroopController`
+> (auto-fight), `RaidScoring` (180s/stars/loot), `RaidHudController`, plus `TroopStatResolver` +
+> `Data/BarracksData`. Army roster lives in `Core/State/ArmyStorage.cs`. Flags: `ff.raidwalk` OFF,
+> `ff.barracks` + `ff.buildtimers` ON. **Product-truth + beat→class map = `docs/RAID_NORTHSTAR.md` §2A;
+> raid-UX polish (loadout hand-off, naming split, deploy ring, "Defenders %" copy) is IN FLIGHT (WO-774).**
+
 **Scope:** `Assets/_Modules/Village/Hero/` — the player-hero (Blaise + class bodies) feature
 area: locomotion, abilities, body swap, gear/equip, combat-feel, cameras, input, HUD bridges,
 inventory/shop UI. **Assembly:** `DeNelle.Village` (`DeNelle.Village.asmdef`); refs include
