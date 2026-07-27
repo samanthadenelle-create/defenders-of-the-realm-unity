@@ -12,6 +12,19 @@
 > line below changes them. Read order: this → `CANON_GROUND_TRUTH_2026-07-22.md` (deep module state) → `KEY_FACTS.md`
 > → `SESSION_CANON_LOADER.md` → `docs/HANDOVER.md` → `docs/MASTER_CATALOG.md`.
 
+> ### Δ 2026-07-26 LATE (on-device felt-test wave → build 2) — see `docs/qa/NIGHT_WRAP_2026-07-26.md`
+> **HEAD = `15fc4a1d`, local == origin.** A full on-device felt-test drove a 12-fix wave, all gated
+> (`COMPILE_GATE_OK` + `REGRESSION_OK` + EditMode **742/742**), committed, pushed, and **built to the Seeker
+> (build 2) + Firebase App Distribution**. Fixes: dungeon materials(rainbow→stone)/doors/vitals/room-leash/
+> hollow-distinctness, town-VFX(heal-swirl removed, fireflies re-tethered to tree crown), destroyed=lost
+> (WO-753 complete), elemental on-hit VFX, **exploded-Orc-Raider gated** (Wildlands deferred→Hollow substitute),
+> **vanished-buildings fixed** (LEVER-1 stores pre-stand visible; NO save wipe), **retired-outpost seam gated**.
+> **New flags:** `ff.regionroam` (ambient overworld roamers, **default OFF**), `ff.raidwalk` now also gates the
+> walk-up-outpost cave-portal seam. **Tagline changed:** "Hold the last light" → **"Echoes of a Forgotten
+> Civilization"**; HUD "Pets" button → **"Echoes"** (player-facing rebrand; code identifiers unchanged — the
+> line 20 "Hold the last light" below is SUPERSEDED). A concurrent session co-committed the wave (reconciled,
+> in-sync; §11 flagged). Deferred follow-ups listed in NIGHT_WRAP.
+
 ---
 
 ## 0. STAR NORTH (unchanged from 07-22)
