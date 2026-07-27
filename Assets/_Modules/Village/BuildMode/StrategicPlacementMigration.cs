@@ -173,18 +173,29 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Baked-storefront standdown (HubStructureVisualInjector): true when standdown
-        /// is active and the bake named <paramref name="bakedName"/> is PLAYER-OWNABLE —
-        /// it has a BaseLayout record (migrated/placed; the record replays instead) OR a
-        /// structures-catalog row (WO-682 blank-template new game: no record yet, the
-        /// player builds it). Hide it (Barracks SetActive(false) pattern). False → the
-        /// bake keeps owning the structure (an id with no row and no record can never be
-        /// player-placed, so it is never taken away).
+        /// Baked-storefront standdown (HubStructureVisualInjector): true ONLY when standdown
+        /// is active AND a BaseLayout RECORD will actually replace the bake named
+        /// <paramref name="bakedName"/> (migrated save, or a player-built replacement; the
+        /// record replays via BaseLayoutLoader). Hide it (Barracks SetActive(false) pattern)
+        /// so the record's live Building takes over — no double. False → the bake KEEPS
+        /// owning + rendering the structure.
+        ///
+        /// LEVER 1 RECONCILIATION (owner 2026-07-24, WWCD — supersedes the WO-682 blank-template
+        /// carve-out for baked STOREFRONTS): the gate was `HasRecord || HasCatalogRow`, which stood
+        /// a baked store DOWN the moment it had a catalog row EVEN WITH NO RECORD. On a fresh/blank
+        /// save (marker set by ResetToNewGame, BaseLayout empty) every storefront has a catalog row
+        /// but NO record, so all 8 hid with nothing to replay → empty grass under floating vendor
+        /// NPCs (the captured on-device screenshot). The owner ruling is the opposite: on a fresh
+        /// hub the baked stores PRE-STAND, VISIBLE + STAFFED (CoC). So standdown now keys on
+        /// HasRecord ALONE — stand down a bake ONLY when a record genuinely replaces it. Un-built
+        /// baked stores stay as the pre-stand staffed store; a player-built replacement (its record)
+        /// still hides its baked original exactly as before. (Runtime STATIONS keep the WO-703
+        /// unconditional standdown via StanddownActiveForStation — this change is baked-only.)
         /// </summary>
         public static bool StanddownActiveForBaked(string bakedName, out string itemId)
         {
             itemId = ItemIdForBaked(bakedName);
-            return itemId != null && StanddownActive && (HasRecord(itemId) || HasCatalogRow(itemId));
+            return itemId != null && StanddownActive && HasRecord(itemId);
         }
 
         /// <summary>

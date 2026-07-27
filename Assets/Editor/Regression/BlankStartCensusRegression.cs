@@ -14,8 +14,18 @@
 // grace-default "forge" record — GameStateService.ResetToNewGame:839-847/864),
 // then walks the full WO-703 spawner census and asserts every non-allowlisted
 // structure visual / NPC source STANDS DOWN on that state:
-//   - the 8 baked storefronts (StrategicPlacementMigration.BakedRows) hide via
-//     StanddownActiveForBaked (HubStructureVisualInjector.TrySwap);
+//   - LEVER 1 RECONCILIATION (owner 2026-07-24, WWCD — SUPERSEDES the WO-703
+//     "nothing else" for baked STOREFRONTS only): on a fresh hub the baked stores
+//     must PRE-STAND, VISIBLE + STAFFED (CoC), NOT be hidden. The old gate hid all
+//     8 stores on a blank save (catalog-row present, no record) → empty grass under
+//     floating vendor NPCs (the captured on-device screenshot). So section 2 now
+//     asserts the INVERSE: each baked storefront with NO replacement record STAYS
+//     VISIBLE (StanddownActiveForBaked == false), and a storefront that DOES gain a
+//     record STANDS DOWN (its live Building replaces it — no double). The tree/well/
+//     walls/gates + runtime-station standdown + Colosseum flag-gate are unchanged.
+//   - the 8 baked storefronts (StrategicPlacementMigration.BakedRows): each STAYS
+//     VISIBLE with no record (Lever-1), and stands down only once a record replaces
+//     it — StanddownActiveForBaked (HubStructureVisualInjector.TrySwap);
 //   - the baked CastleBarracks hides via ff.barracks OFF;
 //   - the runtime stations (apothecary / jewelers-bench) skip spawn via
 //     StanddownActiveForStation (WO-703 supersedes the "never lost" carve-out);
@@ -107,21 +117,43 @@ namespace DeNelle.Editor
                 }
                 log.AppendLine($"[fixture] catalog bootstrapped: {catalogCount} registry entrie(s)");
 
-                // ── 2. Baked storefronts: each present bake must stand down ──
+                // ── 2. Baked storefronts (LEVER 1, owner 2026-07-24): each present bake must
+                //       PRE-STAND VISIBLE on a fresh (recordless) save, and must STAND DOWN once
+                //       a record replaces it. Two directions, both asserted below. ──
                 foreach (var (bakedName, itemId) in ReadBakedRows(failures))
                 {
                     var t = FindInScene(bakedName);
                     if (t == null)
                     {
-                        log.AppendLine($"[baked] {bakedName} -> not in scene (nothing to hide)");
+                        log.AppendLine($"[baked] {bakedName} -> not in scene (nothing to census)");
                         continue;
                     }
-                    bool down = StrategicPlacementMigration.StanddownActiveForBaked(bakedName, out string id);
-                    if (down)
-                        log.AppendLine($"[baked] {bakedName} -> STANDS DOWN (HubStructureVisualInjector.TrySwap hides it; itemId '{id}')");
+
+                    // 2a. NO record on the fresh save => the store MUST stay visible (pre-stand).
+                    bool downNoRecord = StrategicPlacementMigration.StanddownActiveForBaked(bakedName, out string id);
+                    if (downNoRecord)
+                        failures.Add($"LEVER-1 VIOLATION: baked '{bakedName}' (itemId '{itemId}') STANDS DOWN on a fresh " +
+                                     "save with NO replacement record — it must PRE-STAND VISIBLE + STAFFED " +
+                                     "(HubStructureVisualInjector.TrySwap hides it → empty grass under a floating vendor).");
                     else
-                        failures.Add($"EXTRA structure: baked '{bakedName}' (itemId '{itemId}') stays VISIBLE on a fresh save " +
-                                     "— spawner: scene bake + HubStructureVisualInjector.TrySwap (StanddownActiveForBaked said no)");
+                        log.AppendLine($"[baked] {bakedName} -> STAYS VISIBLE on fresh save (no record; Lever-1 pre-stand; itemId '{id}')");
+
+                    // 2b. Add a record for this itemId => the store MUST now stand down (the live
+                    //     Building/replayed record replaces it — player-built replacement hides the
+                    //     baked original, no double). Restore the empty layout after the probe.
+                    if (!string.IsNullOrEmpty(itemId))
+                    {
+                        state.BaseLayout.Add(new PlacedStructureData(itemId, 0, 0, 0, level: 1,
+                            yawOffset: 0f, worldY: 0f, wallMounted: false));
+                        bool downWithRecord = StrategicPlacementMigration.StanddownActiveForBaked(bakedName, out _);
+                        state.BaseLayout.Clear();
+                        if (!downWithRecord)
+                            failures.Add($"DOUBLE-SPAWN RISK: baked '{bakedName}' (itemId '{itemId}') does NOT stand down " +
+                                         "even with a BaseLayout record present — its player-built replacement would " +
+                                         "render on TOP of the baked original (StanddownActiveForBaked must hide it).");
+                        else
+                            log.AppendLine($"[baked] {bakedName} -> STANDS DOWN when itemId '{itemId}' has a record (replacement replaces bake — no double)");
+                    }
                 }
 
                 // ── 3. Baked CastleBarracks: hidden while ff.barracks is OFF ──
@@ -154,27 +186,33 @@ namespace DeNelle.Editor
                     failures.Add("EXTRA structure: 'Colosseum_ArenaEntrance' is BAKED into the scene — it must be " +
                                  "runtime-placed (flag-gated) only");
 
-                // ── 6. Vendor NPCs: each role withheld unless its home building record exists ──
+                // ── 6. Vendor NPCs: RECORD-eligibility census (a lower bound). ──
+                // LEVER 1 (owner 2026-07-24): a fresh hub is NOT vendorless — the baked storefronts
+                // now pre-stand VISIBLE (section 2) and CastleVendorNpcInjector's Lever-1 FALLBACK
+                // (ResolveBakedOrStationAnchor) seats each trade's speaker at its baked store WITHOUT
+                // a record. This section still asserts the RECORD-BACKED count is ZERO on the recordless
+                // fixture — that isolates the record path from the fallback path; any vendor visible on
+                // a fresh hub is the intended Lever-1 fallback staffing, not a stray record. (The
+                // fallback itself is exercised at runtime by the AutoPilot vendor-coverage oracle.)
                 int vendorsEligible = 0;
                 foreach (var (role, buildingId) in ReadAnchorRoles(failures))
                 {
                     bool hasRecord = HasRecord(state, buildingId);
-                    // Stations can also satisfy a role via their injected Building — but on a
-                    // fresh save the WO-703 standdown keeps them dark, so records are the only source.
                     if (hasRecord)
                     {
                         vendorsEligible++;
-                        log.AppendLine($"[vendor] {role} -> SPAWNS at record-backed '{buildingId}' (record present)");
+                        log.AppendLine($"[vendor] {role} -> record-backed at '{buildingId}' (record present)");
                         if (buildingId != "forge")
                             failures.Add($"EXTRA NPC: vendor '{role}' eligible via unexpected record '{buildingId}' on the " +
                                          "fresh-save fixture — spawner: CastleVendorNpcInjector.AnchorVendorsToPlacedBuildings");
                     }
                     else
-                        log.AppendLine($"[vendor] {role} -> WITHHELD (no '{buildingId}' building; anchor poll keeps waiting)");
+                        log.AppendLine($"[vendor] {role} -> no '{buildingId}' record (fresh hub: seated by the Lever-1 baked-store fallback, not a record)");
                 }
                 if (vendorsEligible != 0)
-                    failures.Add($"vendor census: {vendorsEligible} role(s) eligible on a fresh save — expected ZERO " +
-                                 "(WO-707: no grace forge; vendors come online only as the player places buildings)");
+                    failures.Add($"vendor census: {vendorsEligible} record-backed role(s) on a fresh save — expected ZERO " +
+                                 "(WO-707: no grace forge; record-backed vendors come online only as the player places buildings — " +
+                                 "the pre-stand vendors are seated by the Lever-1 fallback instead).");
 
                 // ── 7. Townsfolk: one villager per distinct building (fresh save: <=1) ──
                 int villagerCap = ReadConstInt(typeof(CastleTownsfolkInjector), "VillagerCount", failures);

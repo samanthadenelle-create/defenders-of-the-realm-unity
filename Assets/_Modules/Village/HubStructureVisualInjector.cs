@@ -261,13 +261,14 @@ namespace DeNelle.Village
             Transform target = FindByName(s.bakedName);
             if (target == null) return;                              // not in this scene
             // WO-673 L3 STANDDOWN (docs/WO673_ARCHITECTURE_REVIEW.md §3, the Barracks pattern
-            // below; always-on since WO-682): once the persisted marker is set and this
-            // storefront is player-ownable (BaseLayout record OR a structures-catalog row —
-            // the WO-682 blank-template rule), the BAKE stands down — deactivate the whole
-            // baked structure (building, NPC interact markers, tap-dialogue anchors all
-            // disappear) and let BaseLayoutLoader replay the record (if any) instead.
-            // Per-structure: a storefront with NO record and NO catalog row keeps its bake —
-            // a structure the player cannot place is never lost.
+            // below; always-on since WO-682) — RECONCILED WITH LEVER 1 (owner 2026-07-24, WWCD):
+            // the BAKE stands down ONLY when a BaseLayout RECORD will actually replace it (a
+            // migrated save, or a player-built replacement); then it deactivates the whole baked
+            // structure and BaseLayoutLoader replays the record instead (no double). A baked
+            // storefront with NO replacing record STAYS — it PRE-STANDS visible + staffed on a
+            // fresh hub (the gate no longer stands a store down merely for having a catalog row;
+            // that hid all 8 on a blank save → empty grass under floating vendors). See
+            // StanddownActiveForBaked's Lever-1 note.
             if (StrategicPlacementMigration.StanddownActiveForBaked(s.bakedName, out string migratedId))
             {
                 target.gameObject.SetActive(false);
@@ -306,10 +307,28 @@ namespace DeNelle.Village
                 if (t != null && t.name == bakedName) { target = t; break; }
             if (target == null) return;   // not in this scene bake
             if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+
+            // LightSkin_ marker present => SkinStorefront already ran (it early-returns on the
+            // marker). Do NOT let that early-return leave the store hidden under a seated vendor:
+            // a prior standdown pass or a re-load may have left the object inactive with the
+            // lightweight visual's renderers disabled. SetActive(true) above re-activates it; here
+            // we explicitly re-enable the skinned visual's renderers so the store is guaranteed
+            // VISIBLE (Lever-1: baked stores pre-stand visible + staffed, owner 2026-07-24).
+            var existingSkin = target.Find(MarkerPrefix + bakedName);
+            if (existingSkin != null)
+            {
+                foreach (var r in existingSkin.GetComponentsInChildren<Renderer>(true))
+                    if (r != null) r.enabled = true;
+                return;
+            }
+
             for (int i = 0; i < Swaps.Length; i++)
                 if (Swaps[i].bakedName == bakedName) { SkinStorefront(Swaps[i], target); return; }
             // No Swap row (a storefront with no lightweight model): the re-activated baked
-            // prefab renderers already make it visible — nothing more to do.
+            // prefab renderers already make it visible — but a prior standdown may have left the
+            // baked renderers disabled by a stale skin attempt; re-enable them to be safe.
+            foreach (var r in target.GetComponentsInChildren<Renderer>(true))
+                if (r != null) r.enabled = true;
         }
 
         // The lightweight-skin body of a swap (extracted from TrySwap so ResurfaceStorefront
