@@ -1,3 +1,11 @@
+> ⚠ **PARALLEL FANTASY / V2+ — NOT the shipping raid loop.** The canonical raid loop is
+> **Teleport/Deploy** (train → open Raids → pick a card → deploy troops → watch → stars/loot).
+> See `docs/RAID_NORTHSTAR.md` (the single source of truth) + `CANON_GROUND_TRUTH_2026-07-26.md` §3.
+> **Reframe the concentric / gauntlet / enclave "fortresses" below as `RaidBaseGenerator` LAYOUT
+> PRESETS for deploy targets — NOT player micro-combat / hero infiltration.** You deploy troops and
+> watch; you never walk a hero through the fortress. The complex-map/generator ideas here are useful
+> as base-layout content; the SKR-wager / async-PvP hooks are V2.
+
 # Raid Pillar — Vision (owner brainstorm 2026-06-14)
 
 The Warcraft half of the North Star: attack heavily-defended enemy strongholds. Owner riffed the

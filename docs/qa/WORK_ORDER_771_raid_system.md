@@ -109,11 +109,30 @@ surface. Therefore, non-negotiable for all sim code:
 new `GameState` fields (`TroopRoster`, `TrophyRating`, `BarracksLevel`, `TroopLevels`)
 land in **one** v10→v11 migration owned by **WO-771.1b**.
 
-**Critical path:** 771.0 → 771.1 → 771.1b → 771.2 → 771.3 → 771.10 → 771.4/771.5 →
-771.6 → 771.7 → 771.8 → 771.9 → 771.11/771.12 → 771.13 → 771.14. 771.4 (deploy) and
-771.5 (playback) parallelize once 771.3's tick-log contract is frozen. **When
-implementing, fan out one agent per sub-order via a pipeline after 771.0/771.1b (the
-shared contracts) land.**
+**Critical path — V1 ONLY (the CoC PvE ship). Build this ordered checklist and nothing else:**
+
+1. [ ] **771.0** — move `IDamageableStructure` into Core (module-isolation prereq).
+2. [ ] **771.1** — troop data schema + `troops.json`.
+3. [ ] **771.1b** — consolidated save-schema migration (owns all new `GameState` fields).
+4. [ ] **771.4** — deploy screen + `RaidDeployLog` **+ reuse the existing real-time combat
+   (`EnemyFactory → Enemy → TargetManager`) as the "watch"** (no bespoke combat, no sim).
+5. [ ] **771.9 + WO-773** — Barracks / troop upgrades / timed training (Train channel via the
+   common Obsidian queue).
+6. [ ] **771.6** — scoring / stars / loot payout.
+7. [ ] **771.10** — defensive towers (only if the generated base's towers don't already fire).
+8. [ ] **771.11** — live raid HUD.
+9. [ ] **771.13 + WO-772** — shared troop/enemy art + Animator Controller.
+
+**V2 — DO NOT START for the CoC PvE ship** (rewarded-PvP era only, per the LOCKED section above):
+- **771.2** — base-snapshot capture (needed only for async player-base PvP).
+- **771.3** — deterministic fixed-point `RaidSim` + flow-field pathing (V1 reuses real-time combat).
+- **771.7** — deterministic replay + async matchmaking + server byte-exact anti-cheat.
+- **771.5 / 771.8 / 771.12 / 771.14** ride on the sim/PvP layer — defer their sim-coupled parts to V2;
+  only the V1-relevant pieces (e.g. the War-Table entry point, scene registration) fold into 771.4.
+
+The shared **determinism discipline** and the full sub-order specs below apply to those V2 items
+**when V2 lands** — they are documented, not scheduled. **When implementing V1, fan out one agent
+per V1 sub-order via a pipeline after 771.0/771.1b (the shared contracts) land.**
 
 ---
 

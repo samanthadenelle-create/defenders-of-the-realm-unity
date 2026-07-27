@@ -7,6 +7,13 @@ upgrades, tier-unlocks, magic-learning, troop training, towers, everything.**
 **Owner ask (2026-07-26):** "design a common obsidian so buildings, upgrades, troops,
 towers, everything can flow through it as needed."
 
+> **Naming note (flag for the owner — do NOT rename in code).** "Obsidian" is overloaded across the
+> project: (1) the **Blink UI pack**, (2) a **wall tier** (Stone/Obsidian in raid base configs), and
+> (3) **this job queue** (`ObsidianQueueService`). Recommendation: keep `ObsidianQueueService` as the
+> **internal** name, but use a **player-facing "Builders" / "Training queue"** label in any HUD/UI so
+> players never see the overloaded term. This is an owner call — no code rename without the owner's
+> ruling. (Same note carried in `docs/RAID_NORTHSTAR.md` §4.)
+
 ## Context — what exists here vs the target
 This branch has only an **ad-hoc** timed-build substrate: `GameState.BuildingCooldowns`
 (`SerializableDict<string,double>`, `GameState.cs:78`) and `GameState.PendingBuilds`

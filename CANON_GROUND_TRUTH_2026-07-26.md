@@ -92,6 +92,9 @@ ATB remains built-but-dormant.
 The owner picked the **teleport/deploy** raid loop (the COC model). **Walk-to is RETIRED as the raid loop**
 (its `EnemyOutpost`s may return later as a light overworld "patrol" side-activity — not the raid loop).
 
+> **raid canon = `docs/RAID_NORTHSTAR.md`** (the single source of truth for the raid loop + the V1/V2 split;
+> supersedes the parallel fantasies in `RAID_PILLAR_VISION.md` / `ARENA_SOLUTION.md`).
+
 - **Do first, unconditionally (when raid work starts):** set `ff.overworldencounter=0` (a leftover preview
   default) and `ff.raidwalk` OFF — otherwise neither loop spawns and raids look broken out of the box.
 - **WO-771 (v2) is the build plan** — rebuilt after an adversarial implementability review. Verified reuse
@@ -176,8 +179,12 @@ The owner picked the **teleport/deploy** raid loop (the COC model). **Walk-to is
   `CHAIN_DONE`-on-failure). None were addressed this session.
 - **Full DataRegression re-baseline** not re-run this housekeeping pass — re-run `DataRegression.RunAll`
   before the next build ship to confirm the felt-test wave held `REGRESSION_OK`.
-- **WO-772 owner-ratification gate** blocks the enemy system + everything that depends on it (770.11,
-  771.13 art). Route the `enemy-codex.md` roster to the owner for review-and-approve.
+- **PM pain-points + Tier-0 rulings (2026-07-26):** `docs/PAIN_POINTS_2026-07-26.md` — enemy-codex
+  **Hollow Ones APPROVED / Wildlands DEFERRED**; KayKit pack-travel policy; raid V1 stakes (casualties +
+  stars, no sim-first); multi-channel job queue (Builder/Train/Research); player copy never says
+  “Obsidian queue.” Unblocks WO-772 Phase 1 without full Mystery Monthly packs.
+- **WO-772 Phase 1 UNBLOCKED** (Hollow Ones only — see PAIN_POINTS §1.1). Wildlands / Mystery Monthly
+  remain Phase 2 content; do not block dungeon placement or Hollow art on deferred packs.
 
 ---
 *Live anchor 2026-07-26. Dungeon loop functional; raid loop locked to Teleport/Deploy; WO-770/771/772/773

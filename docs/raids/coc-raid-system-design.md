@@ -67,6 +67,8 @@ Two systems: `NavMeshAgent` on the baked village NavMesh (real pathing, WO-27
 corridors), and kinematic `MoveToward` drift for pets. **Caveat:** live `NavMeshAgent`
 stepping is frame-rate dependent, **not deterministic** across machines — so the
 authoritative sim uses **baked waypoint polylines**, not live agents (see B4/B6).
+**(V2-only.** This determinism concern applies to the V2 authority sim; V1 uses the existing
+real-time combat's live pathing and does not need baked-waypoint determinism — see `docs/RAID_NORTHSTAR.md`.)
 
 ### A6. No raid/PvP exists yet — but the social/async substrate does
 Grep confirms **no raid/attack/PvP/matchmaking** code. But: `Core/Services/ClanService.cs`
@@ -88,16 +90,25 @@ range 14/17/21, dmg 12/22/40), `walls.json` (4 tiers, heartDmgMult 1.0→0.70),
 snapshot is ~90% already in the save schema.**
 
 ### A8. Canon (from `canon-strings.json`)
-Village **Avalon** ("the Lantern of Avalon"); Heart = **Elarion** / "the Heart-Grove";
+Village **Elarion** ("the Lantern of Elarion"); Heart = **the Heart of Elarion** / "the Heart-Grove";
+`[STALE: canon-strings.json may still carry the retired name "Avalon" — Elarion is canon per CLAUDE.md §7; flag for a data pass, do not hand-edit here.]`
 enemies **the Hollow Ones**, led by **Alduin the Mournful**; apex **Syndrath the
 Devourer** (Black Dragon); hero **Blaise**, mentor **Warden Aelwyn**; the **Wardens**
 are the protector order; afflictions **the Withering / the Wound**. Troops below are
-themed as the **Warden muster** — Avalon's defenders marching out.
+themed as the **Warden muster** — Elarion's defenders marching out.
 `[OPEN: confirm full roster vs docs/narrative-bible.md + docs/enemy-codex.md.]`
 
 ---
 
 ## Part B — The raid system design
+
+> ⚠ **V1 vs V2 (owner ruling 2026-07-26 — see `docs/RAID_NORTHSTAR.md`).**
+> **V1 presentation = real-time combat (`EnemyFactory` / `TargetManager`) on `RaidBaseGenerator`
+> bases** — that is the "watch." **The authority / deterministic fixed-point sim (B4b, B6) is V2**
+> and must NOT be built for the CoC PvE ship. All "authoritative sim / baked waypoints / flow-field /
+> byte-exact replay / server anti-cheat" text in B4b, B6 (and A5's determinism caveat) is **V2-only**
+> — it applies when a rewarded/SKR PvP ladder lands, not before. For V1, "replay" = a re-watch from
+> the recorded deploy log + the stored result.
 
 ### B0. Art direction — KayKit (owner decision, 2026-07-26)
 Battle/raid **troops and defenders use KayKit** — specifically the **KayKit

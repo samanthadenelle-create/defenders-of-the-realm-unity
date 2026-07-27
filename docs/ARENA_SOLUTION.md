@@ -85,6 +85,12 @@ Three primitives already do the heavy lifting; the arena is mostly *wiring them 
   sheet (greyscale only); no per-state enemy poses.**
 
 ### D. Raid loop + economy (WO-390 / #40) — ~70% built, 3 disconnected slices
+
+> ⚠ **RETIRED as the raid loop (`ff.raidwalk` OFF, walk-to outposts).** The "~70% raid loop"
+> figure below describes the **walk-to connective tissue** (overworld markers → `EnemyOutpost`),
+> **not** the locked raid loop. The canonical raid loop is **Teleport/Deploy** — see
+> `docs/RAID_NORTHSTAR.md` + `CANON_GROUND_TRUTH_2026-07-26.md` §3. Treat the raid slice here as
+> superseded; the reusable economy/loot/ledger primitives may still inform WO-771.
 - DONE: the resolver (`EnemyOutpost`), loot, the dual-rail economy (soft: wood/iron/crystals/
   XP/gear, already wired; SKR: `ArenaWalletService` stub → `WalletService` real, swap-behind-
   interface), the W/L ledger, the recipe catalog (runtime, WebGL-safe).

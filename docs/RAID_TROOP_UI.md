@@ -1,15 +1,21 @@
 # Raid & Troop UI — Spec (owner design 2026-06-14)
 
 Consolidates raid-UI.txt + raid-UI-layout.txt + the "top-right intel area" call + the RAIDS banner.
-**Mobile-first portrait. Code-built uGUI ONLY** (UXML does not render in player builds — project hard rule).
+**Mobile-first portrait. PROJECT LAW — Code-built uGUI ONLY, via `ElarionUiKit`.** UXML / UI Toolkit
+does **NOT** ship in player builds — every Barracks / Raid-select / Raid-deploy screen here MUST be
+code-built uGUI through `ElarionUiKit` (the exact same fix pattern as the pet-roster repair). Do NOT
+author any `.uxml`/`.uss` for these screens; ignore any older "UI Toolkit" guidance in the WO specs.
 **Visual style = dark wood panel + gold trim**, matching the Population/HUD icon set (metallic-gold card
 highlights, gold serif titles, ember/glow on primary CTAs). Banner asset: `Assets/Art/UI/Raids/Raids_banner.jpg`.
 
 ## Three screens (deliberate separation — avoid HUD sprawl)
 
 ### 1. Barracks screen — the army-management HUB (from town/castle map)
-The strategic base activity. Tabs: **Train** (queue new troops — type → quantity → resource cost → timer,
-reuses `BuildTimerService`) · **Army** (view all troops, sort by type/role, level them) · **Veterans** (light
+The strategic base activity. Tabs: **Train** (queue new troops — type → quantity → resource cost → timer;
+training spends resources and **enqueues a `TrainTroop` job on the common Obsidian queue — the Train
+channel of WO-773**, offline-fair + slot-gated; the troop lands in the roster on completion, not
+instantly — do NOT reinvent a private timer) · **Army** (view all troops, sort by type/role, level them)
+· **Veterans** (light
 veterancy overview). This is "home" for the army; NOT where you deploy mid-raid.
 
 ### 2. Raid Selection screen (Town → Raids tab)
