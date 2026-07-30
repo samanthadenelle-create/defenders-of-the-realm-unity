@@ -217,6 +217,14 @@ namespace DeNelle.Dungeons
 
         private void OnDestroy()
         {
+            // patch 6 (F8 2026-07-30): a teardown reached WITHOUT ExitToVillage — hero death-EVAC
+            // (HeroHealth.HandleDeath -> SceneRouter.GoCastle, which never notifies the arena),
+            // quit-to-menu, or any other scene route. Abandon a still-live real-time fight FIRST, before
+            // this scene's stage/combatants/hero are destroyed under it. Idempotent with the
+            // ExitToVillage call (the arena's own _resolved latch + the _arenaOwnsHero gate make the
+            // second call a no-op).
+            AbandonRealtimeBattle("DungeonController.OnDestroy (scene teardown / EVAC route)");
+
             // Restore the injected HeroLocomotion's movement + the shared statics FIRST, before ANY of the
             // early-returns below — otherwise the ATB round-trip teardown (HasPendingEncounter) would leave
             // GroundSnapEnabled=false + a zeroed scripted-move on the hero, freezing it in the battle scene.
@@ -441,6 +449,11 @@ namespace DeNelle.Dungeons
         /// </summary>
         public UniTask ExitToVillage()
         {
+            // patch 6 (F8 2026-07-30): if a real-time arena fight is still live, abandon it BEFORE the
+            // scene load destroys its stage + combatants out from under it — otherwise it resolves as a
+            // phantom WIN (unearned loot + a return warp into the scene we are loading). No-op otherwise.
+            AbandonRealtimeBattle("ExitToVillage");
+
             // Hand the hero's movement back before we leave — re-enable the injected HeroLocomotion's agent
             // and restore the shared GroundSnap/scripted-move statics so the village hero is never left frozen.
             RestoreInjectedHeroMover();
@@ -1238,6 +1251,49 @@ namespace DeNelle.Dungeons
             bool wasBoss = _runtimeState.PendingEncounterIsBoss;
             FlowTrace.Step("Dungeon", $"WO-770.3b: real-time BattleArena ended (won={won}, boss={wasBoss}) — settling.");
             SettleEncounter(won, wasBoss);
+        }
+
+        /// <summary>
+        /// ABANDONMENT UNWIND (patch 6, F8 2026-07-30): this dungeon is going away WHILE a real-time
+        /// arena fight is live — portal / back-door exit, quit-to-menu, or a hero death-EVAC scene
+        /// route. BattleArena is DontDestroyOnLoad but its stage and every spawned enemy are
+        /// active-scene objects, so it would keep ticking an encounter whose stage, combatants and
+        /// hero are all being destroyed and resolve it as a PHANTOM WIN (unearned loot + a return
+        /// warp). Tear it down with NO outcome and hand the Keeper back.
+        ///
+        /// Gated strictly on <c>_arenaOwnsHero</c> — that flag is set ONLY by
+        /// <see cref="OnRealtimeBattleStaged"/> for an encounter WE staged and cleared on end, so the
+        /// ATB round-trip path (ff.dungeonrealtime OFF) never reaches here and its pending-encounter
+        /// handoff is never touched.
+        /// </summary>
+        private void AbandonRealtimeBattle(string reason)
+        {
+            if (!_arenaOwnsHero) return;
+
+            FlowTrace.Warn("Dungeon",
+                $"patch 6: ABANDONING the live real-time BattleArena encounter — {reason} " +
+                "(no loot, no boss credit, no settle).");
+
+            var arena = DeNelle.Village.Arena.BattleArena.Existing;   // never CREATE a host just to abandon
+            if (arena != null)
+                Guard.Try("Dungeon", "abandon real-time arena encounter",
+                    () => arena.ResolveAbandoned($"dungeon abandoned the encounter ({reason})"));
+
+            // Hand the Keeper's movers back (Update resumes EnsureSingleDungeonMover) and drop the
+            // combat framing. Guard-wrapped: this also runs from OnDestroy, where the rig may already
+            // be torn down.
+            _arenaOwnsHero = false;
+            if (_cameraRig != null)
+                Guard.Try("Dungeon", "restore framing on abandon", () => _cameraRig.SetCombatFraming(false));
+
+            // Drop the handoff WITHOUT settling it — the same unwind EncounterTrigger.RollbackHandoff
+            // uses for a stage that never started, so a re-entry can never resume a fight that no
+            // longer exists and OnDestroy's HasPendingEncounter early-return does not strand the run.
+            if (_runtimeState != null)
+            {
+                _runtimeState.ClearPendingEncounter();
+                _runtimeState.ResolveEncounter();
+            }
         }
 
         // ── Traversal ports (WO-711 items 3-4 — owner rulings, live walk) ────

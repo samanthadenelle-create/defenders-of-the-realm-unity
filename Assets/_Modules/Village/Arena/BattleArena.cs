@@ -122,6 +122,14 @@ namespace DeNelle.Village.Arena
         private const float EngageContactRadius     = 18f;
         private const float DisengageResolveSeconds = 7f;
 
+        // ABANDONMENT WATCHDOG grace (patch 6, F8 2026-07-30): how long the 'Player'-tagged hero may
+        // read as MISSING during a live fight before we tear the encounter down as ABANDONED. Long
+        // enough that a body-swap / re-tag frame (HeroBodySwapper, HeroControlEnsurer) never trips it,
+        // short enough that a dungeon exit / death-EVAC scene route is caught in ~1s — well before the
+        // win gate can read an emptied _liveEnemies as a victory. Deliberately SHORTER than
+        // HeroOutOfArenaGraceSeconds: a MISSING hero is unambiguous, an out-of-arena one is not.
+        private const float HeroMissingGraceSeconds = 1.0f;
+
         // ── SQUAD FORMATION spacing (owner-adjustable — 2026-07-03 "spawn in a proper formation") ──
         // Three ranks laid out on the NORTH side facing the SOUTH-standing hero: TANKS front (nearest
         // the hero), DPS/ranged mid, HEALERS rear. Tune these by eye — they are the whole formation
@@ -256,6 +264,10 @@ namespace DeNelle.Village.Arena
         private float _heroOutOfArenaSince = -1f;
         private bool  _marchPosLogged;
         private float _lastCloseContactTime;
+
+        // _heroMissingSince: Time.time the 'Player'-tagged hero FIRST read as absent during a live
+        // fight; -1 = hero present / not tracking. Drives the ABANDONMENT grace timer (patch 6).
+        private float _heroMissingSince = -1f;
 
         private string _activeBiome;          // WO-499 resolved biome (backdrop + particles)
         private ArenaDeathCam _deathCam;      // WO-493 #4 climactic death-camera hold
@@ -1555,6 +1567,7 @@ namespace DeNelle.Village.Arena
             _heroOutOfArenaSince = -1f;
             _marchPosLogged      = false;
             _lastCloseContactTime = Time.time;
+            _heroMissingSince    = -1f;
             while (!_resolved)
             {
                 // Pack approaches in formation, then breaks to fight when it reaches the hero.
@@ -1575,6 +1588,33 @@ namespace DeNelle.Village.Arena
                 var watchHeroGo = GameObject.FindWithTag("Player");
                 Vector3 heroPos = watchHeroGo != null ? watchHeroGo.transform.position : Vector3.zero;
                 bool heroInArena = watchHeroGo != null && IsArenaPosition(heroPos);
+
+                // ── (C) ABANDONMENT (patch 6, F8 2026-07-30 — same phantom-fight family) ──────────
+                // A scene change / dungeon exit / hero death-EVAC mid-encounter ORPHANS this fight.
+                // The host survives (DontDestroyOnLoad) but [BattleArena_Stage] is a plain ROOT object
+                // in the ACTIVE scene and every enemy is parented under it — the load DESTROYS them.
+                // _liveEnemies then empties on the RemoveAll below and HeroHealth.Instance is gone
+                // (heroAlive defaults TRUE on a null), so the win gate fires Resolve(true): an unearned
+                // 3-star payout plus a WarpHero that teleports the owner out of the scene he just
+                // entered. Caught HERE, ABOVE the outcome arbitration, so it can never be read as a win.
+                //   • stage gone = definitive: only Resolve() nulls _arenaRoot and _resolved gates this loop.
+                //   • hero gone  = grace-timered so a body-swap/re-tag frame never trips it.
+                if (_arenaRoot == null)
+                {
+                    ResolveAbandoned("the staged arena was destroyed under a live fight (scene unloaded)");
+                    yield break;
+                }
+                if (watchHeroGo == null)
+                {
+                    if (_heroMissingSince < 0f) _heroMissingSince = Time.time;
+                    float goneFor = Time.time - _heroMissingSince;
+                    if (goneFor >= HeroMissingGraceSeconds)
+                    {
+                        ResolveAbandoned($"no 'Player'-tagged hero for {goneFor:0.0}s (dungeon exit / death-EVAC / scene change)");
+                        yield break;
+                    }
+                }
+                else _heroMissingSince = -1f;
 
                 if (watchHeroGo != null && !heroInArena)
                 {
@@ -1727,6 +1767,88 @@ namespace DeNelle.Village.Arena
             if (!BattleInProgress || _resolved) return;
             FlowTrace.Step("BattleArena", "Flee -> retreat (return to the open world, no reward).");
             Resolve(false);
+        }
+
+        /// <summary>
+        /// ABANDONMENT TEARDOWN (patch 6, F8 2026-07-30 — the phantom-fight family). The encounter was
+        /// ORPHANED mid-fight: the scene unloaded under the stage, the dungeon was exited, or the hero
+        /// left / EVAC'd. There is NO OUTCOME, so this is deliberately NOT <see cref="Resolve"/> — no
+        /// duration, no stars, no <c>GrantWinReward</c>, no victory burst, no result HUD, and above all
+        /// NO <c>WarpHero</c> (the owner is wherever he went; the arena must never yank him back into a
+        /// fight that stopped existing). It ONLY releases what staging took: the frozen home reps, the
+        /// BattleLock/HUD posture gate, the render/camera overrides, the spawned combatants and the
+        /// stage itself. Idempotent (_resolved-latched) and safe to call from a scene teardown.
+        /// </summary>
+        /// <param name="reason">Human-readable abandonment cause — lands in the [Flow:BattleArena] trace.</param>
+        public void ResolveAbandoned(string reason)
+        {
+            if (!BattleInProgress || _resolved) return;
+            _resolved = true;
+
+            FlowTrace.Fail("BattleArena",
+                $"ABANDONED: {reason} — tearing the encounter down with NO reward, NO victory UI, NO return warp.");
+
+            // Stop the in-flight coroutines FIRST (StageRoutine's fade, WatchToResolution, PlayDeathCam)
+            // so nothing on this persistent host keeps driving a fight whose scene is gone.
+            StopAllCoroutines();
+
+            // Give back every override staging took (mirrors Resolve's restore block exactly).
+            RestoreCavernMood();
+            RestoreSkyOverride();
+            RestoreCombatBloomCamera();
+
+            // Despawn the combatants, then the stage. Survivors ARE parented under _arenaRoot, but they
+            // are destroyed explicitly so a re-parented/leaked one can never outlive the encounter.
+            foreach (var e in _liveEnemies)
+                if (e != null) Guard.Try("BattleArena", "despawn abandoned enemy", () => Destroy(e.gameObject));
+            _liveEnemies.Clear();
+            if (_arenaRoot != null) Guard.Try("BattleArena", "destroy abandoned stage", () => Destroy(_arenaRoot));
+            _arenaRoot     = null;
+            _familyLeader  = null;
+            _familyEngaged = false;
+            _climaxBody    = null;
+
+            // Release the PRESENTATION gates. BattleArenaHud is DontDestroyOnLoad, so without this
+            // Close() the overlay canvas survives the scene load as an orphan AND leaves the HUD kit's
+            // Flee command bound to a dead fight. No ShowResult — there is no result to show.
+            var hud = _hud;
+            _hud = null;
+            if (hud != null) Guard.Try("BattleArena", "close abandoned battle hud", () => hud.Close());
+            _pendingLossBanner = null;   // never present a defeat panel for a fight nobody lost
+
+            // Un-freeze the home reps (BeginEncounter's RepEngageWatcher.PauseAll). The single most
+            // damaging leak if this teardown is skipped: every rep stays frozen mid-aggro for the rest
+            // of the session. No post-loss grace / QuietNonPursuers — neither outcome happened.
+            RepEngageWatcher.ResumeAll();
+
+            // Hand the camera back (a death-cam hold may have disabled the follow rig) and drop the
+            // stale reticle/lock framing. Both are Guard-wrapped + hero-null-safe. Still NO WarpHero.
+            ReacquireFollowCamera();
+            ClearHeroTargetLock();
+
+            // Arena BGM must not outlive the arena; and a StageRoutine stopped mid-fade would leave the
+            // screen BLACK in the scene the player actually landed in, so reveal explicitly.
+            Guard.Try("BattleArena", "restore ambient after abandon",
+                () => CoreServices.Audio?.PlayMusic(MusicTrack.Overworld));
+            Guard.Try("BattleArena", "clear fade after abandon", () =>
+            {
+                var fader = ScreenFader.EnsureInstalled();
+                if (fader != null) StartCoroutine(fader.FadeInCo(HomeFadeInSeconds));
+            });
+
+            // Release the LOGIC gates last: BattleInProgress=false drops the BattleLock probe (hero
+            // input + HudPosture hostile(activebattle)) and lets a fresh encounter stage cleanly.
+            _current = null;
+            BattleInProgress = false;
+
+            // DELIBERATELY NOT raising OnBattleEnded: its dungeon listener settles the run
+            // (SettleEncounter -> loot grant / boss credit / a SECOND ExitToVillage scene load). An
+            // abandoned fight has no settlement — whoever abandoned it owns its own unwind
+            // (DungeonController.AbandonRealtimeBattle), and a teardown-triggered abandon has no
+            // listener left to hear it anyway.
+            FlowTrace.Step("BattleArena",
+                "ABANDONED: combatants despawned, stage destroyed, HUD released, reps resumed, " +
+                "battle lock cleared — no reward granted, no return warp.");
         }
 
         // ---------------------------------------------------------------------
