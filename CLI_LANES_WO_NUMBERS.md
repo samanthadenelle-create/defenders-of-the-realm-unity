@@ -34,7 +34,31 @@
 >   Depends on the star rules, which SHIPPED the same day (WO-783 D3) — note 3 stars is now genuinely
 >   rare, so **FLAWLESS** actually means something (under the old formula every victory scored 3).
 >   File `WorkOrders/WORK_ORDER_786_raid_star_reveal.md`, READY.
-> Mint the next new WO from THIS line's next-free = **787**; bump it in the same edit.
+> - **787** = Web-build Sign In surface correctness (owner felt-report 2026-07-30, screenshot). THREE bundled
+>   fixes on the one reported symptom: (a) LoginPanelController lays a full-height 0.04–0.97 fraction layout
+>   inside `chrome.layout.body`, which WO-714 P6's close-band reservation compresses (body.y raised up to 0.45)
+>   → the intro + 2 fields + 4 buttons overlap ("stacked"); the panel HIDES its Close so it should lay on the
+>   full-rect `chrome.content` instead. (b) "Sign in with Google" is APK-only — hide `_google` off Android.
+>   (c) "Sign in with Pi" must never show in a non-Pi build; when not Pi-facing the skin must resolve to
+>   SKR/Solana (CurrencySkinResolver currently defaults to Pi with no Pi-Browser-environment auto-detect).
+>   File `WorkOrders/WORK_ORDER_787_web_signin_surface_correctness.md`, READY. Lane 4 UI/HUD + Platform.
+> - **788** = Cathedral of Magic aura swap (owner felt-report 2026-07-30, screenshot + owner choice).
+>   Replace the `Aegis_Shield` holy-shield-DOME default with the flat **electro magic-circle** ground
+>   loop (`Assets/Hovl Studio/Magic circles/Prefabs/Loop version/Magic circle electro loop.prefab`,
+>   currently un-keyed in VfxCasterLibraryIndex.json). Tag a new key (e.g. `Cathedral_Aura`) via
+>   VfxManualPicks.json overlay + regen the catalog; retag BOTH cathedral surfaces
+>   (`StructureFactory.cs:804` + `HubStructureVisualInjector.cs:425`) and update
+>   `VfxAuraDifferentiationRegression` expected key. Must stay DISTINCT from node + spire auras
+>   (gate enforces 3 distinct keys). File `WorkOrders/WORK_ORDER_788_cathedral_electro_aura.md`, READY.
+>   Lane 9 VFX/Audio.
+> - **789** = Wave 5 boss swap — replace the TEST-ONLY apex dragon Syndrath (HP 4200) with a lower
+>   ground boss **Cave Troll (`troll`)** pinned to **1050 HP** (1/4 of the dragon). Owner felt-report
+>   2026-07-30 + owner boss choice. waves.json `waveId:5` carries a self-labelled "TEST ONLY … REVERT
+>   before ship" `apexBoss` block; delete it, add `boss` + a wave-level HP override to 1050 (ground
+>   `boss` field has no hp override today — add one mirroring `apexBoss.hp`, OR a `troll`@1050 boss
+>   variant). Wave 20 keeps the real Syndrath — DO NOT TOUCH. Edit BOTH Resources + StreamingAssets
+>   copies. File `WorkOrders/WORK_ORDER_789_wave5_boss_swap.md`, READY. Lane 2 Combat/AI (data).
+> Mint the next new WO from THIS line's next-free = **790**; bump it in the same edit.
 
 > ## ⚠ RECONCILED 2026-07-26 (Sunday housekeeping, on `wip`): next free WO = **782**. **761–781 CONSUMED.** (**779** = UI spacing/layout conformance sweep (OWNER-requested) — kill the overlap/clip/truncation class (Echo-flavor-flood, pet-roster-stack, queue clip): layout.body discipline + touch/contrast + ratchet oracle; run AFTER 778; **780** = FTUE first-tower affordability — prepaidTower/crystal grant so the taught build doesn't stall; **781** = wire ArmyStorage.TickRecovery — wounded troops never heal, borderline P0 (renumbered from 779). Files `WorkOrders/WORK_ORDER_779/780/781_*.md`, READY.) (**778** = Queue UX completion — kind-labels+target identity, HUD reachability (P0-A), layout.body/scroll, Barracks Train strip, Train→EnqueueTraining flip, sell-time buttons (P0-B); file `WorkOrders/WORK_ORDER_778_queue_ux_completion.md`, READY.) (**775/776/777** = dungeon-debt program — 775 hero-vitals-from-HeroHealth/HeroAbilities (770.10a), 776 Folk's-Granary gate-off-reachable (770.6), 777 door-consolidation + kill walk-by auto-teleport (770.5); one file `WorkOrders/WORK_ORDER_775_777_dungeon_debt_program.md`, READY.) 761 (structure fire) + 762 (builder queue) + 763 (Wisdom earned) + 764 (hub Y-height) + 765 (capture Default Town) + 766 (Seeker wallet) + 767 (texture caps) + 768 (thin-client migration) + 769 (Firebase auth) all have `WorkOrders/WORK_ORDER_76*.md` files. **770 (dungeon functional loop), 771 (COC Teleport/Deploy raid system, v2), 772 (shared enemy system — classes/families/armor/weapons), 773 (common Obsidian job queue)** are firmed specs in `docs/qa/WORK_ORDER_77*.md` (validation-signed-off, `docs/qa/dungeon-raid-validation-2026-07-26.md`). These four use **decimal sub-orders** (770.1–770.11, 771.0–771.14) — sub-tasks, not new WO numbers. **Status (refreshed 2026-07-26):** 770.1/.2/.3/.3b/.4/.7/.9 DONE; **773 SHIPPED** (multi-channel queue, save v35); **771.9 DONE** (barracks progression, in bank); **772 Phase 1 UNBLOCKED** (Hollow Ones APPROVED per PAIN_POINTS §1.1; Wildlands DEFERRED) — EnemyResolver DONE/wired; 770.5/.6/.8/.10/.11 (=775/776/777 + others) BACKLOG; 774 raid felt-slice SPEC. See `docs/qa/SUNDAY_STATUS_2026-07-26.md`. **774** (raid V1 felt-slice: loadout handoff + deploy ring + Army/Deploy naming) minted 2026-07-26 from the Grok CoC systems review — SPEC READY, sequenced AFTER WO-771.9 integration + barracks-catalog-structure; file `WorkOrders/WORK_ORDER_774_raid_loadout_deployring_naming.md`. Mint the next new WO from THIS line's next-free = **775**; bump it in the same edit.
 > ## ⚠ RECONCILED 2026-07-24 (CLI, on `wip`): next free WO = **761** (SUPERSEDED — 761–773 consumed, see 07-26 banner above). **755–759 CONSUMED** (the 07-19 banner's "755" was STALE — 755/756 + 757 dragon-breath + 758 particle-VFX-mental-model + 759 wire-manual-picks were all minted since without a banner bump). New this session: **760** = Syndrath dragon — complete the licensed-asset swap (Assets/Dragon 71047; delete RedDragon 1.2; git-rm old CC-BY-NC) + fly-in→land→burn-towers→retarget-Tree behavior; file `WorkOrders/WORK_ORDER_760_dragon_syndrath_fly_land_burn_tree.md`, READY (owner-requested 2026-07-24). Mint from THIS line's next-free = **761**.
