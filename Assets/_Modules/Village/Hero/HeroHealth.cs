@@ -721,6 +721,32 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
                     "HandleDeath: down-beat elapsed -> EVAC branch (enemy-owned scene, GoCastle).");
                 Debug.Log("[HeroHealth] Hero down in enemy territory — raid ends, retreating to home hub.");
+
+                // SETTLE THE ARMY (owner ruling 2026-07-30). Hero death is the THIRD raid exit,
+                // and it used to be the only FREE one: Win and Retreat both cost troops, dying
+                // cost nothing. That is a perverse incentive - with a raid going badly you were
+                // better off dying than pressing Retreat. All three exits are honest now.
+                //
+                // Death settles EXACTLY like a retreat: 0 stars, so troops still standing when
+                // you fall come home intact, troops that already fell become WOUNDED on the
+                // recovery timer, nobody is deleted, and no veterancy is granted. The surviving
+                // troops "break and flee back to the castle" is pure flavor over that same
+                // model - it needs no new troop logic.
+                //
+                // Null-safe by construction: RaidDeployController only self-installs in
+                // RaidBase* scenes, so a non-raid enemy-owned scene finds none and this no-ops.
+                // ReconcileRaidEnd is LATCHED, so if a victory or retreat already settled this
+                // raid the call is a logged no-op and cannot double-wound.
+                var raidDeploy = FindAnyObjectByType<DeNelle.Village.RaidDeployController>();
+                if (raidDeploy != null)
+                {
+                    DeNelle.Core.Diagnostics.Guard.Try("Raid", "settle army on hero death",
+                        () => raidDeploy.ReconcileRaidEnd(0));
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                        "hero DOWN in an enemy-owned scene - army settled as a failure (0 stars); " +
+                        "the troops still standing break and flee home, the fallen are wounded.");
+                    DeNelle.Core.State.GameStateService.Instance?.Save();
+                }
                 // F8-15: a scene route is a HERO MOVE (the hub load relocates the hero) — name it.
                 DeNelle.Core.Diagnostics.DeathTrace.Note(
                     $"HERO MOVED (pending scene route): SceneRouter.GoCastle() by HeroHealth.HandleDeath from {transform.position} — hub load will relocate the hero");
