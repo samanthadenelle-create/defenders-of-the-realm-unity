@@ -276,7 +276,16 @@ namespace DeNelle.Village
                 rt.anchorMin = new Vector2(1f, 0.5f);
                 rt.anchorMax = new Vector2(1f, 0.5f);
                 rt.pivot = new Vector2(1f, 0.5f);
-                rt.anchoredPosition = new Vector2(-16f, 0f);   // small inset from the right edge
+                // SAFE-AREA INSET (measured off the headless capture 2026-07-30): the old raw
+                // -16f resolved to only ~18 device px at 2340x1080 (~7 dp, ~1.15mm on the Seeker)
+                // -- reads as flush, and sits inside the rounded-corner / landscape-cutout /
+                // gesture band. 3 x PadPanel = 54 ref px ~= 24 dp (~60 device px), 1.5x the
+                // Material 16 dp screen margin, using the dp scale in
+                // docs/SME/VISUAL_TOUCH_CONTRAST_AUDIT_2026-07-14.md (1 dp ~= 2.21 ref px on
+                // this 1080x1920 / match-0.5 canvas). Authored as a deliberate multiple of
+                // PadPanel, never a raw literal (WO-779 spacing rule).
+                // TODO(WO-779 s5.6): replace with the shared Screen.safeArea helper once it exists.
+                rt.anchoredPosition = new Vector2(-(ElarionUi.PadPanel * 3f), 0f);  // 54 ref px right-edge inset
                 rt.sizeDelta = new Vector2(120f, 120f);        // >= MinTouchPx (112) -- comfortable tap target
             }
             ElarionUiKit.ClampMinTouch(btn);                   // kit touch floor guard (never shrinks)
