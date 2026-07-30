@@ -387,3 +387,33 @@ Assets/Plugins/CW/Shared/Common/Examples/
 Assets/Plugins/CW/Shared/Common/Examples.meta
 *.tripo-extracted
 *.tripo-extracted.meta
+
+# --- 2026-07-30 check-in sweep -------------------------------------------------
+# Unity Technologies Particle Pack (191 MB / 886 files). Same policy as KayKit /
+# polyperfect / Quaternius: git never holds the big source packs; it travels by
+# zip / local copy. KEPT ON DISK as a build input -- NOT deleted.
+# !! LOAD-BEARING AT RUNTIME: 54 owner-tagged keys in Assets/Editor/VfxManualPicks.json
+# point into this tree, and Enemy.cs / PoiCalloutSystem.cs consume ParticlePack
+# effects. A machine without the pack loses those VFX. Travel row added to
+# tools/art/REQUIRED_PACKS.md; run tools/art/verify-runtime-art.ps1 on a fresh clone.
+Assets/UnityTechnologies/
+Assets/UnityTechnologies.meta
+
+# Firebase desktop config (same class as the deliberately-ignored google-services.json)
+Assets/StreamingAssets/google-services-desktop.json
+Assets/StreamingAssets/google-services-desktop.json.meta
+
+# IDE / editor scratch (machine-local)
+.vsconfig
+EoA.slnx
+
+# Build + trace scratch written by the headless tooling
+Logs/*.pid
+Logs/*.json
+Logs/apk-install-status.txt
+
+# YarnSpinner-generated per-addon language-server schemas (regenerated on import)
+ProjectSettings/Packages/dev.yarnspinner/*-generated.ysls.json
+
+# google-services.json is deliberately gitignored (line 245) -- its .meta follows it
+Assets/google-services.json.meta
