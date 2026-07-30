@@ -46,6 +46,8 @@ namespace DeNelle.HUD.Kit
         Dock,
         /// <summary>FRIENDLY — Heart of Elarion / tree-of-life status (left, just below vitals).</summary>
         HeartStatus,
+        /// <summary>FRIENDLY — persistent Builders/Training status chip (right, under System; WO-778).</summary>
+        QueueStatus,
     }
 
     /// <summary>One canvas, nine mounts. Pure scaffolding (see header).</summary>
@@ -100,6 +102,9 @@ namespace DeNelle.HUD.Kit
             Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.430f));
             // Heart of Elarion status: left column, directly BELOW the Vitals cluster (WO-432).
             Add(HudArea.HeartStatus, new Vector2(0.010f, 0.700f), new Vector2(0.330f, 0.792f));
+            // WO-778: Builders/Training chip — right column, below System (.88), above the
+            // ActionRail top (.42); the only occupant of this free band (no collision).
+            Add(HudArea.QueueStatus, new Vector2(0.780f, 0.755f), new Vector2(0.995f, 0.865f));
             Add(HudArea.Feedback,    Vector2.zero,                Vector2.one);
 
             // Feedback overlay never eats taps (stamps/toasts are decorative).

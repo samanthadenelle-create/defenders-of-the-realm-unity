@@ -280,7 +280,30 @@ namespace DeNelle.Editor
                     failures.Add("HudKitController missing workQueueButton widget id (WO-778)");
                 else
                     log.AppendLine("  HudKitController Work button -> ObsidianQueueGate.RequestToggle OK");
+                if (kitSrc.IndexOf("queueStatusChip") < 0)
+                    failures.Add("HudKitController missing queueStatusChip (persistent Builders status, WO-778)");
             }
+
+            // OCCUPANCY ORACLE (the Work-button-dark lesson, 2026-07-30): a widget that is
+            // Register()'d in code but absent from hud-areas.json's posture rows NEVER
+            // renders — code-present, behavior-absent. Assert both queue widgets have rows,
+            // in BOTH dual copies, and that the copies have not diverged. Also assert the
+            // parser knows the chip's area — an unknown area string is warn-skipped.
+            string resJson = Path.Combine(Application.dataPath, "Resources/Data/Canonical/hud-areas.json");
+            string samJson = Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/hud-areas.json");
+            foreach (var p in new[] { resJson, samJson })
+            {
+                if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
+                string j = File.ReadAllText(p);
+                if (j.IndexOf("workQueueButton") < 0) failures.Add("hud-areas.json missing workQueueButton row: " + p);
+                if (j.IndexOf("queueStatusChip") < 0) failures.Add("hud-areas.json missing queueStatusChip row: " + p);
+            }
+            if (File.Exists(resJson) && File.Exists(samJson) &&
+                File.ReadAllText(resJson) != File.ReadAllText(samJson))
+                failures.Add("hud-areas.json dual copies diverged (Resources vs StreamingAssets — CanonicalJson law)");
+            string cfgPath = Path.Combine(Application.dataPath, "_Modules/HUD/Kit/HudAreasConfig.cs");
+            if (File.Exists(cfgPath) && File.ReadAllText(cfgPath).IndexOf("queuestatus") < 0)
+                failures.Add("HudAreasConfig.TryParseArea missing 'queuestatus' case — chip row would be warn-skipped");
 
             // List host prefers layout.body (source oracle on ObsidianQueueHud.Build).
             string hudPath = Path.Combine(Application.dataPath, "_Modules/Village/BuildMode/ObsidianQueueHud.cs");

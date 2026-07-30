@@ -525,7 +525,18 @@ namespace DeNelle.Village.Hero
             if (_wallet[3] != null) _wallet[3].SetAmount(_vm.Crystals);
         }
 
-        // WO-778: Train-channel active + pending readout (text only). Refresh on Open + VM Changed.
+        // WO-778: live countdown — the strip repaints ~1/s while the panel is open, so
+        // "Footman x1 0:42" ticks instead of freezing at its open-time value.
+        private float _stripNextTick;
+        private void Update()
+        {
+            if (_ui == null) return;                       // panel closed — nothing to tick
+            if (Time.unscaledTime < _stripNextTick) return;
+            _stripNextTick = Time.unscaledTime + 1f;
+            RefreshTrainStrip();
+        }
+
+        // WO-778: Train-channel active + pending readout (text only). Refresh on Open + VM Changed + 1s tick.
         private void RefreshTrainStrip()
         {
             if (_trainStripLabel == null) return;

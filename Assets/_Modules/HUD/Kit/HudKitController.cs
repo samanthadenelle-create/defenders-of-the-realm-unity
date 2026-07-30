@@ -102,6 +102,9 @@ namespace DeNelle.HUD.Kit
         private string[] _cycleIds;
         private ElarionUiKit.SlideDockHandle _slideDock;   // WO-439: left slide-out (Chat/Ranks/Music/Settings)
         private HudCompassWidget _compass;
+        // WO-778: persistent Builders/Training status chip (CoC-feel; polls ObsidianQueueGate.Status).
+        private TMP_Text _queueChipLabel;
+        private int _queueStatusVersion = -1;
 
         // model subscriptions (for teardown)
         private readonly List<Action> _unsubscribe = new List<Action>();
@@ -387,6 +390,9 @@ namespace DeNelle.HUD.Kit
             // resource chips (expanded row) + collapsed gold-only variant (tap-expand).
             BuildResourceChips(pool);
 
+            // WO-778: persistent Builders/Training status chip (CoC-feel, own area under System).
+            BuildQueueStatusChip(pool);
+
             // ── town action buttons (WO-778: 5 equal-width — Build / Talk / Bag / Work / Quests) ──
             // Work = work-queue panel (Builders / Training / Research) via ObsidianQueueGate.
             const float btnGap = 0.01f;
@@ -590,6 +596,46 @@ namespace DeNelle.HUD.Kit
             TutorialHighlightRegistry.Register("hud.wave_button", (RectTransform)_startWaveButton.transform);
             _startWaveButton.gameObject.SetActive(false);
             Register("waveBlock", WrapAsWidget("waveBlock", _waveBlockRoot));
+        }
+
+        // WO-778: the always-visible CoC-style Builders chip — busy count + shortest
+        // remaining timer, tap opens the WORK QUEUE panel (same gate as the Work button).
+        // Player copy: "Builders"/"Training" — never "Obsidian". ASCII-only, text-encoded
+        // state (never colour-only). BuildObsidianButton carries the MinTouchPx floor.
+        private void BuildQueueStatusChip(Transform pool)
+        {
+            var chip = ElarionUiKit.BuildObsidianButton(pool, "Builders",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.95f), () =>
+                {
+                    FlowTrace.Step("HudKit", "queue chip tapped -> ObsidianQueueGate.RequestToggle");
+                    ObsidianQueueGate.RequestToggle();
+                });
+            _queueChipLabel = chip.GetComponentInChildren<TMP_Text>(true);
+            if (_queueChipLabel != null)
+            {
+                _queueChipLabel.enableWordWrapping = false;
+                _queueChipLabel.overflowMode = TextOverflowModes.Ellipsis;
+            }
+            Register("queueStatusChip", WrapAsWidget("queueStatusChip", chip.gameObject));
+        }
+
+        // "Builders 1/2" + newline + shortest remaining ("9m 30s" / "idle"), plus a
+        // Training count when troops are cooking. All ASCII (no middot — glyph law).
+        private static string FormatQueueChip(ObsidianQueueGate.WorkQueueStatus s)
+        {
+            if (!s.Available) return "Builders";
+            string line1 = "Builders " + s.BuilderBusy + "/" + s.BuilderSlots;
+            string line2;
+            if (s.SoonestRemainingSec < 0) line2 = "idle";
+            else
+            {
+                int sec = s.SoonestRemainingSec;
+                int h = sec / 3600, m = (sec % 3600) / 60, r = sec % 60;
+                line2 = h > 0 ? (h + "h " + m + "m") : (m > 0 ? (m + "m " + r + "s") : (r + "s"));
+            }
+            if (s.TrainBusy > 0) line2 += " | Training " + s.TrainBusy;
+            return line1 + "\n" + line2;
         }
 
         // WO-432: Heart of Elarion status cluster — a tree-of-life glyph + "Elarion" caption
@@ -1519,6 +1565,19 @@ namespace DeNelle.HUD.Kit
                     row.SetActive(expand);
                     // WO-440: the explore tap-window shows the full chips panel (not just the tab).
                     SetResourcePanelOpen(expand);
+                }
+            }
+
+            // WO-778: Builders chip repaint — poll the Core static (the HudBuildingFocus
+            // precedent, no model event); repaint only when the published Version moves
+            // (BuildTimerService publishes on QueueChanged + its own 1s tick).
+            if (_queueChipLabel != null)
+            {
+                var qs = ObsidianQueueGate.Status;
+                if (qs.Version != _queueStatusVersion)
+                {
+                    _queueStatusVersion = qs.Version;
+                    _queueChipLabel.text = FormatQueueChip(qs);
                 }
             }
         }

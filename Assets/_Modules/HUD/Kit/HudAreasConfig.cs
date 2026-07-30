@@ -113,6 +113,10 @@ namespace DeNelle.HUD.Kit
                 case "feedback":    area = HudArea.Feedback;    return true;
                 case "dock":        area = HudArea.Dock;        return true;
                 case "heartstatus": area = HudArea.HeartStatus; return true;
+                // WO-778: MANDATORY — an unknown area string is row-skipped with a Warn,
+                // which is exactly how the Work button went dark. Never add a json area
+                // without its parser case.
+                case "queuestatus": area = HudArea.QueueStatus; return true;
                 default:            area = HudArea.Vitals;      return false;
             }
         }

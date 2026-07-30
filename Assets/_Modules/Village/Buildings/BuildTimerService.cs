@@ -112,6 +112,7 @@ namespace DeNelle.Village
             if (Time.unscaledTime < _nextTick) return;
             _nextTick = Time.unscaledTime + 1f;
             SweepAllChannels();
+            PublishStatus();   // WO-778: 1s heartbeat keeps the HUD chip countdown live
         }
 
         // =====================================================================
@@ -624,6 +625,41 @@ namespace DeNelle.Village
         private void RaiseQueueChanged()
         {
             DeNelle.Core.Diagnostics.Guard.Try("Obsidian", "raise QueueChanged", () => QueueChanged?.Invoke());
+            PublishStatus();   // WO-778: chip snapshot tracks every queue mutation
+        }
+
+        // WO-778: presentation-ready summary for the persistent HUD chip (Core seam).
+        // Remaining time is computed HERE (TimeSource is Village-side) so the HUD never
+        // clocks; the HUD polls DeNelle.Core.UI.ObsidianQueueGate.Status only.
+        private void PublishStatus()
+        {
+            var s = new DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus();
+            if (State != null)
+            {
+                s.Available = true;
+                double now = TimeSource.NowUnixMs();
+                double soonest = double.MaxValue;
+
+                void Fill(ChannelId id, out int busy, out int slots, out int queued)
+                {
+                    var act = ActiveJobsOf(id);
+                    busy = act.Count;
+                    slots = SlotCount(id);
+                    queued = PendingJobsOf(id).Count;
+                    for (int i = 0; i < act.Count; i++)
+                        if (act[i].StartMs > 0 && act[i].FinishMs < soonest)
+                            soonest = act[i].FinishMs;
+                }
+
+                Fill(ChannelId.Builder,  out s.BuilderBusy,  out s.BuilderSlots,  out s.BuilderQueued);
+                Fill(ChannelId.Train,    out s.TrainBusy,    out s.TrainSlots,    out s.TrainQueued);
+                Fill(ChannelId.Research, out s.ResearchBusy, out s.ResearchSlots, out s.ResearchQueued);
+
+                s.SoonestRemainingSec = soonest == double.MaxValue
+                    ? -1
+                    : (int)System.Math.Max(0.0, (soonest - now) / 1000.0);
+            }
+            DeNelle.Core.UI.ObsidianQueueGate.PublishStatus(s);
         }
 
         // Index of a job (active OR pending) in a channel by structure id; -1 if none.

@@ -34,5 +34,33 @@ namespace DeNelle.Core.UI
             FlowTrace.Step("HUD", "ObsidianQueueGate.RequestToggle — work-queue panel toggle requested");
             ToggleRequested?.Invoke();
         }
+
+        // ── WO-778: persistent status snapshot (Village publishes, HUD polls) ──
+        // BuildTimerService (DeNelle.Village) owns queue + clock; it pushes a
+        // presentation-ready snapshot here on QueueChanged + its 1s tick. The HUD
+        // chip polls Status (the HudBuildingFocus precedent) — no cross-assembly read.
+
+        /// <summary>Presentation-ready queue summary for the persistent HUD chip.</summary>
+        public struct WorkQueueStatus
+        {
+            public bool Available;                       // false until the service publishes
+            public int BuilderBusy, BuilderSlots, BuilderQueued;
+            public int TrainBusy, TrainSlots, TrainQueued;
+            public int ResearchBusy, ResearchSlots, ResearchQueued;
+            public int SoonestRemainingSec;              // min across all channels; -1 = idle
+            public int Version;                          // bumps per publish (change-detect)
+        }
+
+        private static int _statusVersion;
+
+        /// <summary>Latest published snapshot (default/Available=false before first publish).</summary>
+        public static WorkQueueStatus Status { get; private set; }
+
+        /// <summary>Village-side publisher (BuildTimerService). Bumps Version.</summary>
+        public static void PublishStatus(WorkQueueStatus s)
+        {
+            s.Version = ++_statusVersion;
+            Status = s;
+        }
     }
 }

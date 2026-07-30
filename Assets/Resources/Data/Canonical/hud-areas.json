@@ -33,6 +33,12 @@
           ]
         },
         {
+          "area": "queueStatus",
+          "widgets": [
+            "queueStatusChip"
+          ]
+        },
+        {
           "area": "actionRail",
           "widgets": [
             "resourceChips"
@@ -44,6 +50,7 @@
             "buildButton",
             "talkButton",
             "bagButton",
+            "workQueueButton",
             "questButton"
           ]
         },
