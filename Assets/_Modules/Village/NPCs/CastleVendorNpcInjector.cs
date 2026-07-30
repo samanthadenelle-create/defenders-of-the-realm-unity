@@ -319,6 +319,22 @@ namespace DeNelle.Village
                         foreach (var c in liveCollectors)
                             if (c != null && c.IsAlive && c.BuildingId == bareId)
                             {
+                                // ORIGIN GUARD (F8 2026-07-30 "vendors stacked at the Heart"):
+                                // ResourceCollectorBootstrap.EnsureFallbackCollector creates LOGICAL
+                                // economy collectors 'Collector_<id>' under the DDOL
+                                // 'ResourceCollectorHost' GameObject, which is never positioned —
+                                // world (0,0,0). Those are accounting hosts, not buildings: anchoring
+                                // to one seated the Lumbermill/Windmill vendors at the Heart
+                                // (captured: "anchored to 'Collector_lumbermill' ... @ (0.00, 0.00,
+                                // 0.00)"). A real placed/replayed collector root carries
+                                // PlacedStructure (BaseLayoutLoader.Spawn); the logical host does not.
+                                if (c.GetComponentInParent<PlacedStructure>() == null)
+                                {
+                                    FlowTrace.Once("Vendor", $"skip-logical-{buildingId}",
+                                        $"{role}: ignoring LOGICAL collector '{c.name}' @ {c.transform.position} " +
+                                        "(no PlacedStructure — economy fallback host at world origin); awaiting the placed collector.");
+                                    continue;
+                                }
                                 anchorTf = c.transform;
                                 FlowTrace.Once("Vendor", $"collector-match-{buildingId}",
                                     $"{role}: matched live ResourceCollector (bare id '{bareId}') for anchor " +
