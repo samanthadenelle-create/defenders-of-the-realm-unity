@@ -171,7 +171,7 @@
 |---|---|
 | Folk’s Granary dead stub | **Hide or gate** until layout+controller exist — never leave a walkable broken door |
 | Dual door systems (Portal + Entrance) | **One player-facing pattern**; collapse or clearly role-split (overworld portal vs hub entrance) |
-| FPV default-on | Keep only if felt-tested; else default third-person until motion-sick risk closed |
+| FPV default-on | ~~Keep only if felt-tested; else default third-person until motion-sick risk closed~~ → **CLOSED 2026-07-30: owner RE-AFFIRMED FPV stays default-ON.** `ff.dungeonfpv` remains `defaultOn:true`; over-the-shoulder is the A/B at `ff.dungeonfpv=0`. The two stale `DungeonCameraRig` headers that called FPV a "STUB, no independent look" and named over-the-shoulder the default were corrected in the same change. No longer an open gate. |
 | Placeholder hero vitals | Wire selected-hero stats before marketing FPV combat |
 
 ---
@@ -227,7 +227,7 @@ T0 done (this doc)
 1. **Art pipeline** — gitignored packs; untextured people; no shared armed-rig discipline.  
 2. **Raids** — three fantasies; no stakes; sim-first risk.  
 3. **Save/queue** — dual timers; single-FIFO un-CoC; Obsidian name overload; hollow Barracks.  
-4. **Dungeon** — dead Granary; dual doors; FPV unproven; fake vitals.  
+4. **Dungeon** — dead Granary; dual doors; ~~FPV unproven~~ (owner-closed 2026-07-30, FPV default-ON stands); fake vitals *(also since corrected — `SeedHeroVitalsFromLiveHero` reads the real hero; the 120/60 literals are a Warn-guarded last-resort fallback)*.  
 5. **Process** — canon drift; stale WO trees; lint ≠ runtime; Unity lock.  
 6. **Combat** — ATB/RT duality; Structure layer fragility.  
 7. **Monetization** — builder vs train IAP unmapped; store wiring off.

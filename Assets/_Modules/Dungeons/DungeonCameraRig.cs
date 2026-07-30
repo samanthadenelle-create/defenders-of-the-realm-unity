@@ -4,10 +4,17 @@
 // OWNER RE-FRAME (2026-07-17): the ORIGINAL rig was a fixed top-down isometric
 // chase (pitch ~52 deg, seated ~9u up). In a room with a ~4u ceiling that camera
 // floats near/above the roofline and reads as "looking over the top" - the owner
-// stood in a room and could not see it. The DEFAULT is now an OVER-THE-SHOULDER
-// third-person camera: seated just behind + slightly above the Keeper's shoulder
-// at eyeline height, looking FORWARD down the corridor. FIRST-PERSON is an easy
-// A/B (ff.dungeonfpv). The legacy top-down iso is one PlayerPref away (ff.dungeoniso).
+// stood in a room and could not see it. That re-frame made OVER-THE-SHOULDER the
+// default: seated just behind + slightly above the Keeper's shoulder at eyeline
+// height, looking FORWARD down the corridor.
+//
+// OWNER RULING 2026-07-26, RE-AFFIRMED 2026-07-30: **FIRST-PERSON is the shipped
+// DEFAULT** - ff.dungeonfpv is defaultOn:TRUE (Core/FeatureFlags.cs:650), chosen
+// over raising the ~4u ceiling. ResolveMode() therefore returns FirstPerson unless
+// a PlayerPref says otherwise. Over-the-shoulder is the A/B (ff.dungeonfpv=0);
+// the legacy top-down iso is one further PlayerPref away (ff.dungeoniso), and it
+// LOSES to FPV when both are set. The "OverShoulder (DEFAULT)" label below is the
+// mode-list's historical framing - the live default is FirstPerson.
 //
 // -- Three modes (chosen once at Bind, off FeatureFlags - NOT a serialized field,
 //    so the choice applies to the already-baked dungeon scenes with no re-bake) --
@@ -119,12 +126,13 @@ namespace DeNelle.Dungeons
                  "geometry (dungeon walls). KayKit walls sit on the Default layer.")]
         [SerializeField] private LayerMask _otsObstacleMask = 1 << 0; // Default
 
-        // -- Tuning - first-person (ff.dungeonfpv, STUB) ----------------------
+        // -- Tuning - first-person (ff.dungeonfpv, the SHIPPED DEFAULT) -------
 
-        [Header("First-person (ff.dungeonfpv)")]
+        [Header("First-person (ff.dungeonfpv - DEFAULT ON)")]
         [Tooltip("Eyeline pivot offset for FPV, target-local. Y ~1.62 is head " +
                  "height; a small +Z pushes the camera to the face plane so it is " +
-                 "not buried in the chest mesh. STUB: no independent look yet.")]
+                 "not buried in the chest mesh. The independent yaw+pitch look " +
+                 "layer IS implemented (see the FPV block in LateUpdate).")]
         [SerializeField] private Vector3 _fpvShoulderOffset = new Vector3(0f, 1.62f, 0.28f);
 
         [Tooltip("Camera distance behind the eyeline for FPV - ~0 seats it AT the " +

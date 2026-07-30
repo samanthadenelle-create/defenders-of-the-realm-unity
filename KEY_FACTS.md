@@ -28,6 +28,42 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-07-30) — 12-agent SME fan-out + check-in sweep + WO-783 fix wave
+- **Operating model (owner directive):** CLI = **GATEKEEPER**. Dedicated agents write requirements, write
+  the tests, and produce **read-only implementation proposals**; the CLI verifies every proposal **against the
+  tree**, runs the tests, gates, commits by explicit path, and **screenshot-verifies before anything reaches
+  the owner**. Agent output is a proposal, never truth — two claims were REFUTED on verification this session.
+  Memory: `cli-gatekeeper-agent-role-model`. *(2026-07-30)*
+- **Check-in sweep:** 9 commits, tree clean. Found + fixed **5 folders with tracked contents but an UNTRACKED
+  folder `.meta`** (Core/Enemies, Core/Jobs, Village/Troops/Data, both dungeon-graphs) — a GUID-regeneration
+  hazard on the second machine. `Assets/UnityTechnologies/` (191 MB Particle Pack) gitignored per big-pack
+  policy + logged in `tools/art/REQUIRED_PACKS.md`. *(2026-07-30)*
+- **WO-783 fix wave — IMPLEMENTED, all three gates green** (`COMPILE_GATE_OK` + `REGRESSION_OK` +
+  `UI_CAPTURE_OK`, pixels opened not just markers):
+  - **Raid VICTORY now settles the army.** `ReconcileAfterRaid` had ONE caller (retreat) and `AddVeterancy`
+    had **ZERO repo-wide** — *winning a raid was free*. One latched `RaidDeployController.ReconcileRaidEnd(stars)`
+    now serves both exits; 3-star clears pay veterancy.
+  - **Healer's Cottage is REACHABLE again.** It lost its `AuthoredPortal` row when the east portal was
+    rerouted to `dg_starter_loop`, so the richest dungeon in the game (lore/mini-boss/chests/crafting) was
+    dev-overlay-only. Third row added, SOUTH `(20,0,-140)` yaw 352 — the only one of the three seats whose
+    ground is provably flat (the WO-468 cave corridor pins Y=0). ⚠ navmesh seating still needs a runtime line.
+  - **`[ui-obsidian]` ratchet ARMED** (`HardFailOnNew=true`, 0 NEW) + a **namespace-qualified regex blind spot**
+    closed that had been hiding `OutpostHub.cs` as a false "resolved".
+  - **waves.json authored schedule is DEAD and now says so** — see the standing-truth line below.
+  - Echoes-button safe-area inset 16 -> 54 ref px (~7 dp -> ~24 dp on the Seeker).
+- **FPV camera: owner RE-AFFIRMED default-ON** (2026-07-30). `ff.dungeonfpv` stays `defaultOn:true`; the
+  `PAIN_POINTS` §4 "keep only if felt-tested" gate is CLOSED. Two `DungeonCameraRig` headers that called FPV
+  "a STUB with no independent look" and named over-the-shoulder the default were corrected.
+- **STANDING TRUTH — `waves.json` `enemies[]` batches are INERT.** `_smartComposition:1` in both live hubs
+  means `WaveManager` GENERATES every wave's roster; only `countdownSeconds`, `boss`, `apexBoss` survive.
+  **19 waves / 55 batches / 148 authored enemies are discarded every session.** Not a code regression (WO-362
+  supersession was deliberate) — the *data* was authored 2026-07-11, ~4 weeks AFTER the batches went inert.
+  A once-per-session `FlowTrace.Warn` now names it. **OPEN owner ruling (WO-783 D1):** which authority wins.
+- **New WOs:** **783** (this wave) · **784** Echo lanes — canon's "3 of 4 stub" is wrong, **all four** are
+  write-only, even Harvest bypasses the Core contract · **785** VFX survivability — **117 of 121** owner-tagged
+  VFX rows point into gitignored packs with **no runtime fallback**. **782 RESERVED** (night-wrap capsule
+  standee). **WO next-free = 786.** *(2026-07-30)*
+
 ## Latest (2026-07-26) — dungeon+raid felt-test wave + Sunday housekeeping
 - **Live anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (delta over 07-22, which stays the deep module
   reference). Branch `wip/village2-and-f8-tickets`, HEAD `7dec0e07`, **local==origin — this wave IS pushed**
