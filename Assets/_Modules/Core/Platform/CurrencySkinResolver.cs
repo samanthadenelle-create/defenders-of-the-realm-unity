@@ -116,6 +116,23 @@ namespace DeNelle.Core.Platform
             string requested = ReadUrlSkinOverride();          // step 1 — URL param
             JObject table = LoadSkinTable();                   // skin.json (may be null)
 
+            // WO-787 Part C (owner 2026-07-30): "if not Pi-facing should always be SKR."
+            // A WebGL runtime OUTSIDE the real Pi Browser must never present the Pi surface,
+            // so it resolves the SKR/Solana skin BEFORE skin.json's 'active' is consulted;
+            // only an explicit ?skin= URL override outranks it. Inside Pi Browser (jslib UA
+            // check; the extern stubs to false off-WebGL) resolution is unchanged, and
+            // non-WebGL players (APK, editor) keep today's behaviour byte-identical.
+            // NOTE: the original WO's fix ("flip the hardcoded default") would have been a
+            // NO-OP -- skin.json ships an explicit active:'wallet' that wins at step 2, and
+            // the wallet skin's authMode is PiSdk; this gate must sit ABOVE step 2.
+            if (string.IsNullOrEmpty(requested)
+                && Application.platform == RuntimePlatform.WebGLPlayer
+                && !WebGLPiPlatform.IsPiBrowserEnvironment)
+            {
+                requested = "skr";
+                FlowTrace.Step("Skin", "WebGL host is not Pi Browser — resolving the SKR skin (WO-787).");
+            }
+
             if (string.IsNullOrEmpty(requested))               // step 2 — skin.json "active"
                 requested = table?["active"]?.ToString();
 

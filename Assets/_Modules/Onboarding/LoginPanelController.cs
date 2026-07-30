@@ -103,49 +103,78 @@ namespace DeNelle.Onboarding
             var scrimImg = scrim.GetComponent<Image>();
             if (scrimImg != null) scrimImg.raycastTarget = true;
 
-            // Forced surface (no dismiss X — guest is the escape). withBackdrop:false; scrim dims.
+            // Forced surface (no dismiss X -- guest is the escape). withBackdrop:false; scrim dims.
+            // WO-787: taller rect (y 0.06-0.94, was 0.14-0.86) -- the stack is 7-8 rows of
+            // MinTouchPx-floored controls; on the shortest live canvas (post-scale height ~970,
+            // landscape web / Seeker) the old rect cannot hold them without the touch floor
+            // forcing overlap ("stacked", owner screenshot 2026-07-30).
             var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "SIGN IN",
-                new Vector2(0.10f, 0.14f), new Vector2(0.90f, 0.86f), onClose: null,
+                new Vector2(0.10f, 0.06f), new Vector2(0.90f, 0.94f), onClose: null,
                 withBackdrop: false);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
-            Transform body = chrome.layout != null && chrome.layout.body != null
-                ? chrome.layout.body.transform
-                : chrome.content.transform;
+            // WO-787 Part A: lay out on the FULL-rect chrome.content, NOT chrome.layout.body.
+            // BuildObsidianPanel (WO-714 P6) raises Zone_Body's floor by the close-band +
+            // footer reservation (body.y up to ~0.45) to clear the shared Close -- but this
+            // panel HIDES its Close, so the reservation only compressed the stack until every
+            // fraction slot fell below the MinTouchPx floor and the rows overlapped.
+            // Fractions below are clamp-aware: adjacent button centers sit >= 112 reference px
+            // apart on the shortest live canvas, so ClampMinTouch can grow rows collision-free.
+            Transform body = chrome.content.transform;
+
+            // WO-787 Part B: Google sign-in is APK-only (owner ruling + owner F8 on the exe).
+            // The GoogleSignIn native plugin's asmdef is scoped [Android, Editor] and
+            // LoginViewModel.SignInWithGoogleAsync already fails cleanly elsewhere -- the
+            // BUTTON is simply never built off the Android target, and the remaining rows
+            // reflow over the freed space.
+#if UNITY_ANDROID
+            const bool googleRow = true;
+#else
+            const bool googleRow = false;
+#endif
 
             var intro = ElarionUiKit.Label(body,
                 "Sign in to keep your progress across devices, or play as a guest and bind an account later.",
-                0.87f, 0.97f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                googleRow ? 0.845f : 0.83f, googleRow ? 0.915f : 0.91f,
+                ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             intro.textWrappingMode = TextWrappingModes.Normal;
             intro.raycastTarget = false;
             ElarionUiKit.FitBlock(intro);
 
             _email = MakeInputField(body, "Email address", TMP_InputField.ContentType.EmailAddress,
-                new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.82f));
+                new Vector2(0.08f, googleRow ? 0.745f : 0.72f),
+                new Vector2(0.92f, googleRow ? 0.825f : 0.80f));
             _password = MakeInputField(body, "Password", TMP_InputField.ContentType.Password,
-                new Vector2(0.08f, 0.59f), new Vector2(0.92f, 0.69f));
+                new Vector2(0.08f, googleRow ? 0.645f : 0.61f),
+                new Vector2(0.92f, googleRow ? 0.725f : 0.69f));
 
             _status = ElarionUiKit.Label(body, "",
-                0.505f, 0.565f, ElarionUi.Parchment, ElarionUi.FontMicro,
+                googleRow ? 0.585f : 0.545f, googleRow ? 0.63f : 0.595f,
+                ElarionUi.Parchment, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             _status.raycastTarget = false;
 
             _signIn = ElarionUiKit.BuildObsidianButton(body, "Sign In",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.08f, 0.40f), new Vector2(0.92f, 0.49f), OnSignIn);
+                new Vector2(0.08f, googleRow ? 0.475f : 0.42f),
+                new Vector2(0.92f, googleRow ? 0.555f : 0.51f), OnSignIn);
 
             _createAccount = ElarionUiKit.BuildObsidianButton(body, "Create Account",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.295f), new Vector2(0.92f, 0.385f), OnCreateAccount);
+                new Vector2(0.08f, googleRow ? 0.34f : 0.27f),
+                new Vector2(0.92f, googleRow ? 0.42f : 0.36f), OnCreateAccount);
 
+#if UNITY_ANDROID
             _google = ElarionUiKit.BuildObsidianButton(body, "Sign in with Google",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.19f), new Vector2(0.92f, 0.28f), OnGoogleSignIn);
+                new Vector2(0.08f, 0.205f), new Vector2(0.92f, 0.285f), OnGoogleSignIn);
+#endif
 
             _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.13f), OnPlayAsGuest);
+                new Vector2(0.08f, googleRow ? 0.07f : 0.12f),
+                new Vector2(0.92f, googleRow ? 0.15f : 0.21f), OnPlayAsGuest);
 
             if (_panelHandle == null)
                 _panelHandle = PanelManager.Register("Login", Continue, () => !_routed && _canvas != null);
