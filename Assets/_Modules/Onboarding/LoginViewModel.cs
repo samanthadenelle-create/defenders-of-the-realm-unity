@@ -15,8 +15,11 @@ using System.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
-#if !UNITY_WEBGL || UNITY_EDITOR
-using Google;   // GoogleSignIn is an ANDROID NATIVE plugin - absent on WebGL (see SignInWithGoogleAsync)
+#if UNITY_ANDROID || UNITY_EDITOR
+// GoogleSignIn is an ANDROID NATIVE plugin. Its asmdef is scoped includePlatforms:
+// [Android, Editor], so this guard must match THAT scope exactly - "everything except
+// WebGL" broke the WINDOWS player build (the assembly doesn't exist there either).
+using Google;
 #endif
 
 namespace DeNelle.Onboarding
@@ -53,15 +56,17 @@ namespace DeNelle.Onboarding
         /// </summary>
         public async Task<AuthOutcome> SignInWithGoogleAsync()
         {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            // The GoogleSignIn plugin is an ANDROID NATIVE plugin and the Firebase Unity SDK
-            // has no WebGL support, so neither half of this flow exists on web. Fail clearly
-            // and let the caller fall through to Guest (see FirebaseAuthService's WebGL stub).
-            // Web accounts, if ever wanted, are Google Identity Services in JS + Firebase REST
-            // behind this same method -- not the native plugin.
-            FlowTrace.Step("Auth", "WebGL build - Google sign-in is unavailable; guest identity only.");
+#if !UNITY_ANDROID && !UNITY_EDITOR
+            // The GoogleSignIn plugin exists ONLY on Android (+ Editor for iteration) - its
+            // asmdef is scoped to those platforms, so on WebGL AND desktop players this
+            // assembly does not exist and the native half never did. Fail clearly and let the
+            // caller fall through to Guest (see FirebaseAuthService's WebGL stub). On desktop
+            // this is strictly BETTER than before: the old unscoped assembly compiled here and
+            // then threw DllNotFound at runtime on tap. Web accounts, if ever wanted, are
+            // Google Identity Services in JS + Firebase REST behind this same method.
+            FlowTrace.Step("Auth", "Google sign-in is Android-only on this build; guest/email identity instead.");
             await Task.CompletedTask;
-            return AuthOutcome.Fail("Google sign-in isn't available in the web build - continuing as a guest.");
+            return AuthOutcome.Fail("Google sign-in isn't available on this platform.");
 #else
             string idToken;
             try
