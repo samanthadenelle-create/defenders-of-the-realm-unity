@@ -1253,7 +1253,10 @@ namespace DeNelle.Village
             // legacy paths if it spawns nothing (e.g. no spawn points / catalog).
             bool composed = false;
             if (_smartComposition)
+            {
                 composed = SpawnSmartComposedWave(waveId);
+                if (composed) WarnAuthoredBatchesDiscarded(wave, waveId);
+            }
 
             // WO-316: compose the wave's batches into runtime role-mix FAMILY squads
             // (tank + healer + a few DPS that hold then charge together) routed through
@@ -1335,6 +1338,43 @@ namespace DeNelle.Village
             // the dragon is aloft the moment the apex wave begins.
             if (wave.IsApexBossWave)
                 SpawnApexBoss(wave.ApexBoss);
+        }
+
+        /// <summary>Fire-once-per-session guard for the authored-batch discard warning
+        /// (see <see cref="WarnAuthoredBatchesDiscarded"/>).</summary>
+        private bool _warnedAuthoredBatchesDiscarded;
+
+        /// <summary>
+        /// DATA-ROT GUARD (2026-07-30). The WO-362 smart path just GENERATED this wave's
+        /// roster, so the authored waves.json enemies[] batches were DISCARDED -- type,
+        /// count, spawnPoint, delay and interval all had ZERO effect. That supersession is
+        /// BY DESIGN (see the _smartComposition tooltip and WO-362), but it is INVISIBLE to
+        /// whoever authored the schedule: a designer edits waves.json and gets silence.
+        ///
+        /// It already bit us. WO-362 landed mid-June; the 20-wave schedule in waves.json was
+        /// authored 2026-07-11 -- about four weeks AFTER the batches went inert -- against a
+        /// port that no longer runs. waves.json's own comments still describe the dead
+        /// consumption path. Today 19 waves / 55 batch entries / 148 authored enemies are
+        /// thrown away every session, and nothing said so.
+        ///
+        /// Say it ONCE per session, loud, with the numbers, so any capture self-reports the
+        /// dead authoring instead of a designer discovering it by absence.
+        /// OPEN OWNER RULING (WO-783): which authority wins -- set _smartComposition=0 so the
+        /// authored schedule is live again, or strip enemies[] from waves.json and keep
+        /// generation. Until then this warning is the only witness.
+        /// </summary>
+        private void WarnAuthoredBatchesDiscarded(WaveDef wave, int waveId)
+        {
+            if (_warnedAuthoredBatchesDiscarded) return;
+            if (wave == null || wave.Enemies == null || wave.Enemies.Count == 0) return;
+            _warnedAuthoredBatchesDiscarded = true;
+
+            FlowTrace.Warn("Wave",
+                $"authored waves.json batches IGNORED: wave {waveId} declares {wave.Enemies.Count} batch(es) " +
+                $"totalling {wave.TotalEnemyCount} enemies (types / counts / spawnPoints / delays), but " +
+                "_smartComposition=ON generated the roster instead (WaveCompositionBuilder pools + rotating gate). " +
+                "Only countdownSeconds, boss and apexBoss still take effect. EVERY later wave is the same -- " +
+                "warned once per session. Reconcile waves.json or set _smartComposition=0 (WO-783).");
         }
 
         /// <summary>
