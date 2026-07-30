@@ -178,6 +178,7 @@ namespace DeNelle.Village
                 PlacementGrid.Instance?.Free(placed.gridCell, placed.footprint);
                 BaseLayoutLoader.Instance?.Forget(placed);
                 RemovePersistedLayoutRecord(placed.itemId, placed.gridCell);
+                BurnFreeBuild(placed.itemId);  // WO-753 (owner F8 2026-07-30): rebuild is NEVER free.
                 OfferRebuild(placed.itemId);   // Point 4 - prompt to rebuild at full cost.
             }
 
@@ -194,6 +195,41 @@ namespace DeNelle.Village
         /// BuildModeController.RemoveLayoutEntry (which is private); kept local so removal works even
         /// when Build Mode is not active (e.g. an enemy raid tears the structure down mid-wave).
         /// </summary>
+        /// <summary>
+        /// WO-753 enforcement (owner F8 2026-07-30: "after being destroyed the cathedral of
+        /// magic was free to build - should of had a cost"). The free-build policy
+        /// (BuildModeController.FreeBuildAvailable) grants the FIRST placement of each
+        /// distinct id free - but a BAKED structure (the hub Cathedral, Default-Town rows,
+        /// FoundingKit grants) was never player-placed, so its id was never burned in
+        /// GameState.FreeBuildsUsed, and destroying it made the rebuild read as a fresh
+        /// first placement -> FREE. That defeats the owner's ruling: destroyed = build
+        /// fresh at FULL COST, no exceptions. So destruction itself burns the id into the
+        /// ledger; idempotent, null-safe, persisted with the next Save (the same commit
+        /// cadence as the removed layout record above).
+        /// </summary>
+        private static void BurnFreeBuild(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return;
+            var gs = DeNelle.Core.State.GameStateService.Instance;
+            var state = gs != null ? gs.State : null;
+            if (state == null)
+            {
+                FlowTrace.Warn("Destroy",
+                    $"[Flow:Destroy] cannot burn free-build for '{itemId}' - no GameState; a rebuild may read as free.");
+                return;
+            }
+            if (state.FreeBuildsUsed == null)
+                state.FreeBuildsUsed = new System.Collections.Generic.List<string>();
+            bool already = state.FreeBuildsUsed.Exists(
+                x => string.Equals(x, itemId, System.StringComparison.OrdinalIgnoreCase));
+            if (!already)
+            {
+                state.FreeBuildsUsed.Add(itemId);
+                FlowTrace.Step("Destroy",
+                    $"[Flow:Destroy] free-build BURNED for destroyed '{itemId}' - any rebuild now charges full cost (WO-753).");
+            }
+        }
+
         private static void RemovePersistedLayoutRecord(string itemId, Vector2Int cell)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;

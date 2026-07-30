@@ -111,9 +111,13 @@ namespace DeNelle.Village.World
             // DungeonPortal routes by this id; LoadDefs injects a matching def when the scene is
             // in the build. Overworld is origin-centered, so (140,0,20) stays reachable.
             new AuthoredPortal("dg_starter_loop", new Vector3(140f, 0f, 20f), 262f),
-            // WEST of the walls, mirrored — the opposite compass pull. Yaw 82
-            // faces the castle.
-            new AuthoredPortal("FolksGranary",   new Vector3(-140f, 0f, -20f), 82f),
+            // WEST row REMOVED (WO-776, 2026-07-30): Folk's Granary is a contentless stub
+            // (no DungeonController, no layout JSON, zero lore, one canned encounter) — a
+            // real door into a hollow room, and the owner's felt-test walked straight into
+            // it. GATED until the content WO lands (layout + Inn-Keeper boss per
+            // docs/DUNGEON_DESIGNS.md); the scene + FolksGranaryBuilder stay in-repo,
+            // buildable dev-only. Re-add the row here to promote:
+            //   new AuthoredPortal("FolksGranary", new Vector3(-140f, 0f, -20f), 82f),
             // SOUTH of the walls -- the third compass pull, and the row that puts the
             // fully-authored Dungeon_HealersCottage back in normal play. When the EAST row
             // was rerouted to 'dg_starter_loop' the HealersCottage def (Resources/Dungeons/
@@ -586,6 +590,16 @@ namespace DeNelle.Village.World
             foreach (var d in all)
             {
                 if (d == null || string.IsNullOrEmpty(d.SceneName)) continue;
+                // WO-776 (2026-07-30): Folk's Granary is DELIBERATELY GATED — a contentless
+                // stub the owner walked into. Skipping the def here (Step, not Warn: this is
+                // by-design, not an anomaly) also prevents the per-boot "NO authored world
+                // position" warning its now-removed portal row would otherwise cause.
+                if (string.Equals(d.DungeonId, "FolksGranary", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    FlowTrace.Step("DungeonPortal",
+                        "def 'FolksGranary' skipped — stub dungeon gated until its content WO lands (WO-776).");
+                    continue;
+                }
                 // Only place portals to scenes that are actually loadable (in Build Settings).
                 if (d.SceneExists && UnityEngine.Application.CanStreamedLevelBeLoaded(d.SceneName))
                     built.Add(d);
@@ -608,8 +622,7 @@ namespace DeNelle.Village.World
             var fb = new List<DungeonDef>(2);
             if (UnityEngine.Application.CanStreamedLevelBeLoaded("Dungeon_HealersCottage"))
                 fb.Add(MakeDef("HealersCottage", "Dungeon_HealersCottage", "Healer's Cottage", new Color(1f, 0.82f, 0.48f)));
-            if (UnityEngine.Application.CanStreamedLevelBeLoaded("Dungeon_FolksGranary"))
-                fb.Add(MakeDef("FolksGranary", "Dungeon_FolksGranary", "Folk's Granary", new Color(0.60f, 0.90f, 0.70f)));
+            // FolksGranary fallback REMOVED (WO-776) — stub dungeon gated; see the def skip above.
             return fb;
         }
 
