@@ -99,6 +99,13 @@
             "manual": true
         },
         {
+            "key": "Cathedral_Aura",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Loop version/Magic circle electro loop.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Cleave_Impact",
             "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Energy explosion.prefab",
             "isLoop": false,

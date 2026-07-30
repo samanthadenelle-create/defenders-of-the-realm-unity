@@ -202,6 +202,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: Cathedral_Aura
+    Prefab: {fileID: 1850189845468026, guid: 2c3450fe2e031fc43bf4b1a39bda19b2, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Cleave_Impact
     Prefab: {fileID: 1535640691960112, guid: d79f03dd3c9b07c41a430faecdcdf500, type: 3}
     PoolSize: 6

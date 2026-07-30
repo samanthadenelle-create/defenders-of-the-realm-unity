@@ -416,13 +416,13 @@ namespace DeNelle.Village
             // (ArcaneTower_MagicUpgrades) holds a persistent magic-circle aura. Idempotent;
             // colorblind-safe (reads by motion/luminance, not hue). Seated on the baked root so
             // it tracks the structure regardless of the swapped visual child.
-            // Owner 2026-07-26: the baked Cathedral of Magic hub landmark gets a subtle, DISTINCT,
-            // NON-HEAL aura ("Aegis_Shield" magic dome) — the earlier "Fountain_Heal_Aura" read as a
-            // healing shimmer floating in town (Druid-aura prefab) and was the felt-test "floating heal"
-            // bug. Distinct from the combat Arcane Spire (Aura_HeartPulse) + harvest nodes
-            // (TreeofLifeAura_Aura). SWAPPABLE default — retag in the Caster during the visual pass.
+            // Owner 2026-07-30 (WO-788, owner's explicit pick): the baked Cathedral of Magic hub
+            // landmark shows the flat blue electro rune-circle ground loop ("Cathedral_Aura" ->
+            // Magic circle electro loop) — NOT a shield dome; the prior "Aegis_Shield" holy dome was
+            // the felt-test reject. Distinct from the combat Arcane Spire (Aura_HeartPulse) +
+            // harvest nodes (TreeofLifeAura_Aura). Must match StructureFactory (diff gate).
             if (s.bakedName == "ArcaneTower_MagicUpgrades")
-                ArcaneAura.Ensure(target.gameObject, "Aegis_Shield");
+                ArcaneAura.Ensure(target.gameObject, "Cathedral_Aura");
 
             Debug.Log("[HubStructureVisualInjector] " + s.bakedName + " re-skinned to " + s.modelPath + ".");
         }
