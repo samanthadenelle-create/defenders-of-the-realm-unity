@@ -325,6 +325,15 @@ namespace DeNelle.Village
         private float _retargetElapsed;                 // takeoff-climb timer
         private int _attackVariant;                     // cycles Attack1/2/3
 
+        // F8 2026-07-30 "dragon stuck going vertical" — air-pass fly-through + loop guard.
+        // _passDirXZ: the pass line's planar direction, locked at EnterAirAttack so the
+        //   sweep waypoint crosses OVER the tower (approach side -> exit side) instead of
+        //   clamping onto its XZ and bobbing vertically in place (the captured stick).
+        // _airPassStreak: consecutive air passes with no landing — fail-loud counter.
+        private Vector3 _passDirXZ = Vector3.forward;
+        private int _airPassStreak;
+        private const float PassSweepLength = 36f;      // waypoint sweeps ±18m through the tower
+
         private float _orbitAngleDeg;                   // current position on the orbit ring
         private float _attackCooldown;
         private float _swoopElapsed;                    // >0 while a swoop is mid-flight
@@ -598,6 +607,9 @@ namespace DeNelle.Village
                 // 4) Calm Circling + close target: land and burn (WO-760 default).
                 mode = DragonAttackMode.Land;
             });
+            FlowTrace.Throttle("DragonBoss", $"decide:{GetInstanceID()}", 1f,
+                $"'{_bossId}' DecideAttackMode -> {mode} (phase={_phase} state={_state} " +
+                $"_attackVariant={_attackVariant} airStreak={_airPassStreak}).");
             return mode;
         }
 
@@ -609,11 +621,31 @@ namespace DeNelle.Village
         private void EnterAirAttack(Vector3 towerPos)
         {
             SetGroundedFlags(false);
-            AnimTrigger(HTakeoff);   // lifts off if grounded; a no-op trigger if already flying
+            // Sticky-trigger hygiene (F8 2026-07-30): an unconsumed Takeoff LATCHES (it is
+            // NOT a no-op while flying — Unity keeps it armed and it fires the instant the
+            // dragon next reaches GroundIdle, yanking a fresh landing straight back to Fly).
+            // Only fire it when this entry is actually a ground -> air transition.
+            if (_state != DragonState.AirAttack && _state != DragonState.Approaching)
+                AnimTrigger(HTakeoff);
             AnimTrigger(HAttack);
             PlayTelegraph();
             _swoopElapsed = Mathf.Epsilon;
             _swoopStruck = false;
+
+            // Lock the pass line: planar approach direction toward the tower (fallback:
+            // current planar facing) — TickAirAttack sweeps its waypoint along this line.
+            Vector3 dir = towerPos - transform.position;
+            dir.y = 0f;
+            _passDirXZ = dir.sqrMagnitude > 1e-4f
+                ? dir.normalized
+                : new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
+
+            _airPassStreak++;
+            if (_airPassStreak >= 3 && _phase != DragonPhase.LastWing)
+                FlowTrace.Warn("DragonBoss",
+                    $"'{_bossId}' AIR-PASS LOOP: pass #{_airPassStreak} with no landing " +
+                    $"(phase={_phase}, _attackVariant={_attackVariant}) — the air/land alternation should have landed by now.");
+
             _state = DragonState.AirAttack;
             FlowTrace.Step("DragonBoss", $"'{_bossId}' -> AirAttack (aerial fire pass) on tower at {towerPos}.");
         }
@@ -662,10 +694,22 @@ namespace DeNelle.Village
             Vector3 prev = transform.position;
             Vector3 hereXZ = new Vector3(prev.x, 0f, prev.z);
             Vector3 tpXZ = new Vector3(tp.x, 0f, tp.z);
-            Vector3 nextXZ = Vector3.MoveTowards(hereXZ, tpXZ, _cruiseSpeed * 1.8f * dt);
+            // FLY-THROUGH GEOMETRY (F8 2026-07-30 "dragon stuck going vertical"): the old
+            // pass MoveTowards'd the XZ straight ONTO the tower and clamped there ~0.3s in,
+            // so the remaining ~3s of every pass moved ONLY vertically (captured: 7-8
+            // consecutive passes per tower, dXZ=0 with dY bobbing 11..22, LookRotation on a
+            // vertical delta pitching the body nose-up). Sweep the waypoint along the locked
+            // pass line instead — approach side at t=0, over the tower at mid-pass, exit
+            // side at t=1 — so the dragon always CROSSES with real planar velocity.
+            Vector3 sweepXZ = tpXZ + _passDirXZ * ((t - 0.5f) * PassSweepLength);
+            Vector3 nextXZ = Vector3.MoveTowards(hereXZ, sweepXZ, _cruiseSpeed * 1.8f * dt);
             float nextY = Mathf.MoveTowards(prev.y, wantY, _descendSpeed * 2f * dt);
             transform.position = new Vector3(nextXZ.x, nextY, nextXZ.z);
             FaceTravel(transform.position - prev);
+            FlowTrace.Throttle("DragonBoss", $"airgeo:{GetInstanceID()}", 0.5f,
+                $"'{_bossId}' AirAttack t={t:0.00} pos={transform.position} " +
+                $"dXZ={Vector2.Distance(new Vector2(prev.x, prev.z), new Vector2(transform.position.x, transform.position.z)):0.0000} " +
+                $"dY={transform.position.y - prev.y:+0.000;-0.000} wantY={wantY:0.0} pitch={transform.eulerAngles.x:0.0}");
 
             // Strike at the low point of the pass - reuse the ONE fire payload.
             if (!_swoopStruck && arc > 0.85f)
@@ -684,6 +728,13 @@ namespace DeNelle.Village
             {
                 _swoopElapsed = 0f;
                 _swoopStruck = false;
+                // AIR-LOCK FIX (F8 2026-07-30, the PROVEN root): _attackVariant only advanced
+                // in the GROUNDED FireAtTower, so a Stooping decision that landed on an even
+                // variant returned Air forever (captured: "variant 1" frozen for 55 straight
+                // passes, only 2 landings the whole fight). Advance the cycle on every
+                // COMPLETED air pass too, so the Stooping air/land alternation actually
+                // alternates and the dragon lands again.
+                _attackVariant = (_attackVariant + 1) % 3;
                 BeginTowerAttack(tp);
             }
             return _cruiseSpeed * 1.8f;
@@ -692,10 +743,12 @@ namespace DeNelle.Village
         /// <summary>Begins the landing descent onto a ground spot beside <paramref name="aimPos"/>.</summary>
         private void EnterLanding(Vector3 aimPos)
         {
+            _airPassStreak = 0;   // landed — the air-pass loop guard resets
+            var from = _state;
             _landSpot = LandSpotNear(aimPos);
             AnimTrigger(HLanding);
             _state = DragonState.Landing;
-            FlowTrace.Step("DragonBoss", $"'{_bossId}' Approaching -> Landing at {_landSpot}.");
+            FlowTrace.Step("DragonBoss", $"'{_bossId}' {from} -> Landing at {_landSpot}.");
         }
 
         // -------------------------------------------------------------------------
@@ -1425,6 +1478,11 @@ namespace DeNelle.Village
         /// <summary>Rotates the dragon to face its direction of travel (yaw-biased).</summary>
         private void FaceTravel(Vector3 delta)
         {
+            // Vertical-travel guard (F8 2026-07-30): a (near-)vertical delta makes
+            // LookRotation degenerate (forward ∥ up) — Unity snaps to identity, or a ~90°
+            // nose-up/nose-down pitch on the almost-vertical frames: the owner's "going
+            // vertical" pose. Hold the current facing whenever there is no real planar travel.
+            if (new Vector3(delta.x, 0f, delta.z).sqrMagnitude < 1e-6f) return;
             delta.y *= 0.5f;
             if (delta.sqrMagnitude < 1e-5f) return;
             Quaternion want = Quaternion.LookRotation(delta.normalized, Vector3.up);
