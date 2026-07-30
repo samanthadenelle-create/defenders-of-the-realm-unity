@@ -38,9 +38,16 @@
 //   HardFailOnNew = false (default) → PASS, but the reason LOUDLY names every NEW
 //                                     offender (owner/CLI decide + convert).
 //   HardFailOnNew = true            → a NEW hand-rolled widget FAILS the gate.
-// Default is OFF so a slightly-stale baseline can never false-fail the whole
-// DataRegression run; the CLI should do ONE real run to confirm/refresh the
-// baseline, then flip it on to make hand-rolled UI a hard build failure.
+// ARMED 2026-07-30: the confirming run was done (5 NEW reported), each offender was
+// triaged, the 2 dev-only tools moved to the allow-list, the 3 genuine shipping-UI
+// offenders frozen into the baseline, and the ONE truly-resolved entry (ArenaPanel)
+// dropped. NEW count is now ZERO, so HardFailOnNew is TRUE -- a freshly hand-rolled
+// uGUI widget in a shipping module is a HARD DataRegression failure.
+// Same pass closed a REGEX BLIND SPOT: StrongSmells required the bare type name right
+// after typeof(/AddComponent<, so the NAMESPACE-QUALIFIED form slipped through and
+// OutpostHub.cs read as "resolved" while still hand-rolling raw uGUI. The patterns now
+// tolerate an optional namespace prefix, and OutpostHub STAYS in the baseline as the
+// real debt it is. Do not drop a baseline row on a "resolved" note alone -- verify.
 //
 // LIMITATION (documented, deliberate): the routing check is FILE-LEVEL — a file
 // that calls the kit for its chrome but then hand-rolls raw rows inside is not
@@ -63,8 +70,8 @@ namespace DeNelle.Editor
         // --- enforcement policy (owner/CLI decides; see header) ------------------
         // false = PASS-with-warning-list (default, safe): NEW offenders are named in
         //         the reason but do not fail the gate.
-        // true  = a NEW hand-rolled widget is a HARD build failure.
-        private const bool HardFailOnNew = false;
+        // true  = a NEW hand-rolled widget is a HARD build failure.  <-- ARMED 2026-07-30
+        private const bool HardFailOnNew = true;
 
         // --- the routing token: a file that references THE KIT BUILDER is presumed
         //     to drop content into it (file-level heuristic).
@@ -74,8 +81,12 @@ namespace DeNelle.Editor
         // STRONG smells QUALIFY a file as an offender (a bespoke Image/Text widget).
         private static readonly Regex[] StrongSmells =
         {
-            new Regex(@"new\s+GameObject\s*\([^;]*typeof\s*\(\s*(Image|RawImage|Text|TextMeshProUGUI|TMP_Text)\s*\)", RegexOptions.Compiled),
-            new Regex(@"AddComponent\s*<\s*(Image|RawImage|Text|TextMeshProUGUI|TMP_Text)\s*>", RegexOptions.Compiled),
+            // NOTE the optional (Namespace.)* prefix: without it the NAMESPACE-QUALIFIED
+            // form (typeof(UnityEngine.UI.Image), AddComponent<TMPro.TextMeshProUGUI>)
+            // slipped through and a file could read as "resolved" while still hand-rolling.
+            // That blind spot hid OutpostHub.cs until 2026-07-30.
+            new Regex(@"new\s+GameObject\s*\([^;]*typeof\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(Image|RawImage|Text|TextMeshProUGUI|TMP_Text)\s*\)", RegexOptions.Compiled),
+            new Regex(@"AddComponent\s*<\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(Image|RawImage|Text|TextMeshProUGUI|TMP_Text)\s*>", RegexOptions.Compiled),
         };
         // WEAK smells are REPORTED as corroborating evidence but do NOT by themselves
         // qualify a file (a bare root Canvas is legitimate; a fill Color is only a
@@ -113,6 +124,11 @@ namespace DeNelle.Editor
             { "SceneTransitionTrigger.cs","full-screen scene-transition fade primitive, not a content widget" },
             { "OwnerDevToolsOverlay.cs",  "owner/dev debug overlay — not shipped player UI" },
             { "DebuggingController.cs",   "dev debug overlay — not shipped player UI" },
+            // Compiled into the release player but RUNTIME-GATED OFF by default (both
+            // flags resolve defaultOn:IsDevBuild = isEditor || isDebugBuild), so neither
+            // ever spawns in a store build. Same category as the two overlays above.
+            { "FlagCaptureButton.cs",     "dev/tester on-screen flag chip - runtime-gated OFF in release (FeatureFlags.FlagButton)" },
+            { "ResourceDevTool.cs",       "dev/tester resource-grant overlay - runtime-gated OFF in release (FeatureFlags.DevResourceTool)" },
         };
 
         // --- KNOWN BASELINE — the EXISTING hand-rolled offenders (tracked debt) ---
@@ -124,7 +140,8 @@ namespace DeNelle.Editor
         {
             "Assets/_Modules/HUD/AttentionGlowUi.cs",
             "Assets/_Modules/Village/Arena/ArenaAttackPaletteUI.cs",
-            "Assets/_Modules/Village/Arena/ArenaPanel.cs",
+            // ArenaPanel.cs REMOVED 2026-07-30 - genuinely resolved, it now routes through
+            // the kit (ElarionUiKit.PinCanonicalCtaSize at ArenaPanel.cs:212 and :395).
             "Assets/_Modules/Village/Combat/ThreatSkullPlate.cs",
             "Assets/_Modules/Village/BuildMode/BuildPreviewModal.cs",
             "Assets/_Modules/Village/Buildings/NPCUpgradeStation.cs",
@@ -134,7 +151,28 @@ namespace DeNelle.Editor
             "Assets/_Modules/Village/World/Camps/CampPromptUI.cs",
             "Assets/_Modules/Village/World/Camps/EchoTutorialUI.cs",
             "Assets/_Modules/Village/World/NodeDiscoverySystem.cs",
+            // KEPT 2026-07-30: a run reported this as "resolved", but that was the
+            // namespace-qualified regex blind spot (see the header) - the file still
+            // hand-rolls raw uGUI at OutpostHub.cs:161/183/195/208/222 with zero kit
+            // routing. Real debt; the tightened patterns now see it again.
             "Assets/_Modules/Village/World/OutpostHub.cs",
+
+            // --- frozen 2026-07-30 (arming pass): SHIPPING player-facing UI, real debt.
+            //     These are NOT dev tools - none is compile-stripped or flag-gated.
+            //     Do NOT add to this list to silence new work; convert to the kit instead.
+            // Build Mode placement ghost's world-space "why it's red" reason label
+            // (GhostPreview.cs:283-316), owner-requested 2026-07-24; instantiated
+            // unconditionally by BuildModeController.cs:517/1889/2362.
+            "Assets/_Modules/Village/BuildMode/GhostPreview.cs",
+            // Diegetic collector fill bar + "N/20" readout + FULL "!" bang
+            // (CollectorStackView.cs:211-289). NOTE: Attach() currently has NO caller
+            // anywhere, so it renders nothing at runtime - separate ticket, not a
+            // reclassification (it is still gameplay presentation, not tooling).
+            "Assets/_Modules/Village/Buildings/Progression/CollectorStackView.cs",
+            // Dead-but-shipping PauseHudButton chip (PauseHudBootstrap.cs:112-225),
+            // culled 2026-07-24 into HudKitController's dock and never re-instantiated.
+            // Resolve by DELETING the class, not by allow-listing it.
+            "Assets/_Modules/Settings/PauseHudBootstrap.cs",
         };
 
         /// <summary>
