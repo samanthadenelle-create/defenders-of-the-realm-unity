@@ -114,6 +114,32 @@ namespace DeNelle.Village.World
             // WEST of the walls, mirrored — the opposite compass pull. Yaw 82
             // faces the castle.
             new AuthoredPortal("FolksGranary",   new Vector3(-140f, 0f, -20f), 82f),
+            // SOUTH of the walls -- the third compass pull, and the row that puts the
+            // fully-authored Dungeon_HealersCottage back in normal play. When the EAST row
+            // was rerouted to 'dg_starter_loop' the HealersCottage def (Resources/Dungeons/
+            // HealersCottage.asset, DungeonId "HealersCottage") lost its only table row, so
+            // TryGetAuthored returned false every session and the loop logged
+            // "has NO authored world position ... portal not placed" -- the richest dungeon
+            // in the game (lore stones, mini-boss, chests, crafting, checkpoints) was
+            // UNREACHABLE outside the dev overlay. Id is the bare "HealersCottage": it must
+            // equal def.DungeonId for TryGetAuthored, and DungeonPortal.EnterDungeon then
+            // resolves the scene via its "Dungeon_" + id fallback (no scene is named
+            // "HealersCottage").
+            //
+            // Seat = the EAST row rigidly yaw-rotated +90 deg about the origin,
+            // (x,z) -> (z,-x): (140,20) -> (20,-140). Same 141.4m radius, same ~96m walk
+            // past the r~44 plinth face. Yaw = Atan2(-x,-z) = Atan2(-20,140) = -8.13 deg
+            // -> 352 (the east row's 262 + 90), so the arch fronts the castle like its
+            // siblings. GROUND: this lands in the WO-468 cave-road corridor, which
+            // ExteriorTerrainBuilder holds at EXACTLY Y=0 for |x| <= 20 over z in
+            // [-700,-76] (CorridorWeight / CavePathFlattenHalf=20) -- the only one of the
+            // three seats whose height is pinned inside the [-0.35..0.75] ground band
+            // rather than relying on the SeatOnGround search (the other two sit past
+            // ReliefBlendRadius=140, where +-1.8m of relief applies). Tree/rock scatter is
+            // rejected within 37m of that road line, so the seat is flat and prop-free,
+            // 10m clear of the painted road and ~78m outside the r=44..62 moat band.
+            // If a headless run reports navmesh-seated=False, retune to (16f, 0f, -140f).
+            new AuthoredPortal("HealersCottage", new Vector3(20f, 0f, -140f), 352f),
         };
 
         // Townsfolk-injector ground band (CastleTownsfolkInjector.GroundMinY/MaxY):
