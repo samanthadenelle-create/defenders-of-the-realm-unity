@@ -26,6 +26,7 @@ using UnityEngine;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using Ledger = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -69,6 +70,46 @@ namespace DeNelle.Village
         public static bool IsUpgradingTroop(string troopId) =>
             IsInFlight(ChannelId.Research, TroopUpgradePrefix + troopId);
 
+        // ── Wallet (F8 2026-07-30 "barracks upgrade fails WITH resources") ────
+        // Afford/spend against ResourceLedger — the GameState-backed single-source
+        // wallet the HUD shows — NEVER EconomyService's divergent in-session
+        // Wood/Iron pool (defaults 200/80, reset on every scene load; nothing
+        // mirrors GameState back into it). Same migration BuildingUpgradeService
+        // already did for city tiers (see its spend comment); this facade had been
+        // left on the old pool, so from Barracks L3 (320 wood > the 200-wood pool)
+        // every upgrade was ARITHMETICALLY unaffordable no matter what the player
+        // owned — and the refusal mis-blamed "Not enough resources".
+
+        /// <summary>The economy cost as GameState-ledger lines (Wood/Food/Iron/Crystals; barracks data never charges Coins).</summary>
+        private static System.Collections.Generic.List<Ledger.ResourceCost> LedgerCost(ResourceCost cost)
+        {
+            var list = new System.Collections.Generic.List<Ledger.ResourceCost>(4);
+            if (cost.Wood > 0)     list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Wood, cost.Wood));
+            if (cost.Food > 0)     list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Food, cost.Food));
+            if (cost.Iron > 0)     list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Iron, cost.Iron));
+            if (cost.Crystals > 0) list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Crystals, cost.Crystals));
+            if (cost.Coins > 0)    FlowTrace.Warn("Barracks", "cost carries Coins — not ledger-charged (barracks data should never price in Coins).");
+            return list;
+        }
+
+        /// <summary>Ledger affordability of the next barracks level — the panel's cost-row tint (same wallet the spend charges).</summary>
+        public static bool CanAffordBarracksUpgrade(int currentLevel) =>
+            Ledger.ResourceLedger.CanAfford(LedgerCost(BarracksProgression.BarracksUpgradeCost(currentLevel)));
+
+        /// <summary>Ledger affordability of a troop's next level — the panel's cost-row tint (same wallet the spend charges).</summary>
+        public static bool CanAffordTroopUpgrade(string troopId, int nextLevel) =>
+            Ledger.ResourceLedger.CanAfford(LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, nextLevel)));
+
+        /// <summary>Names the short resources so the block reason tells the player WHAT is missing.</summary>
+        private static string MissingOf(System.Collections.Generic.List<Ledger.ResourceCost> lines)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var line in lines)
+                if (Ledger.ResourceLedger.Balance(line.Resource) < line.Amount)
+                    sb.Append(sb.Length > 0 ? ", " : "").Append(line.Resource);
+            return sb.Length > 0 ? "Need more " + sb + "." : "Not enough resources.";
+        }
+
         // ── Barracks upgrade ──────────────────────────────────────────────────
 
         /// <summary>
@@ -85,9 +126,8 @@ namespace DeNelle.Village
             if (!BarracksProgression.HasNextBarracksLevel(level)) { reason = "Barracks is at max level."; return false; }
             if (IsUpgradingBarracks) { reason = "Barracks upgrade already in progress."; return false; }
 
-            var cost = BarracksProgression.BarracksUpgradeCost(level);
-            var eco = EconomyService.Instance;
-            if (eco == null || !eco.CanAfford(cost)) { reason = "Not enough resources."; return false; }
+            var cost = LedgerCost(BarracksProgression.BarracksUpgradeCost(level));
+            if (!Ledger.ResourceLedger.CanAfford(cost)) { reason = MissingOf(cost); return false; }
             return true;
         }
 
@@ -105,14 +145,15 @@ namespace DeNelle.Village
             }
 
             int level = BarracksLevel;
-            var cost = BarracksProgression.BarracksUpgradeCost(level);
+            var cost = LedgerCost(BarracksProgression.BarracksUpgradeCost(level));
             float seconds = BarracksProgression.BarracksUpgradeSeconds(level);
 
-            var eco = EconomyService.Instance;
-            if (eco == null || !eco.TrySpend(cost)) { FlowTrace.Warn("Barracks", "UpgradeBarracks spend failed."); return false; }
-
+            // Queue check BEFORE the spend — the old order committed the charge and THEN
+            // returned on a null queue, losing the player's resources (charge-loss window).
             var queue = BuildTimerService.Instance;
-            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeBarracks: no BuildTimerService."); return false; }
+            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeBarracks: no BuildTimerService (nothing charged)."); return false; }
+
+            if (!Ledger.ResourceLedger.TrySpend(cost)) { FlowTrace.Warn("Barracks", "UpgradeBarracks spend failed."); return false; }
             queue.Enqueue(JobKind.BarracksUpgrade, BarracksJobId, seconds, level + 1);
 
             FlowTrace.Step("Barracks", $"barracks upgrade L{level}->L{level + 1} enqueued (Builder, {seconds:0}s).");
@@ -138,9 +179,8 @@ namespace DeNelle.Village
             if (!BarracksProgression.HasNextTroopLevel(troopId, level)) { reason = "Troop is at max level."; return false; }
             if (IsUpgradingTroop(troopId)) { reason = "Upgrade already in progress."; return false; }
 
-            var cost = BarracksProgression.TroopUpgradeCost(troopId, level + 1);
-            var eco = EconomyService.Instance;
-            if (eco == null || !eco.CanAfford(cost)) { reason = "Not enough resources."; return false; }
+            var cost = LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, level + 1));
+            if (!Ledger.ResourceLedger.CanAfford(cost)) { reason = MissingOf(cost); return false; }
             return true;
         }
 
@@ -158,14 +198,14 @@ namespace DeNelle.Village
             }
 
             int level = TroopLevel(troopId);
-            var cost = BarracksProgression.TroopUpgradeCost(troopId, level + 1);
+            var cost = LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, level + 1));
             float seconds = BarracksProgression.TroopUpgradeSeconds(troopId, level + 1);
 
-            var eco = EconomyService.Instance;
-            if (eco == null || !eco.TrySpend(cost)) { FlowTrace.Warn("Barracks", "UpgradeTroop spend failed."); return false; }
-
+            // Queue check BEFORE the spend (charge-loss window — see UpgradeBarracks).
             var queue = BuildTimerService.Instance;
-            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeTroop: no BuildTimerService."); return false; }
+            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeTroop: no BuildTimerService (nothing charged)."); return false; }
+
+            if (!Ledger.ResourceLedger.TrySpend(cost)) { FlowTrace.Warn("Barracks", "UpgradeTroop spend failed."); return false; }
             // JobKind.TroopUpgrade's default channel is Research (JobChannels) — the single-arg overload routes it there.
             queue.Enqueue(JobKind.TroopUpgrade, TroopUpgradePrefix + troopId, seconds, level + 1);
 
@@ -195,19 +235,19 @@ namespace DeNelle.Village
             var def = TroopCatalog.Find(troopId);
             if (def == null) return 0;
 
-            var eco = EconomyService.Instance;
             var queue = BuildTimerService.Instance;
-            if (eco == null || queue == null) return 0;
+            if (queue == null) return 0;
 
-            // ResourceCost ctor order: (wood, food, iron, crystals, coins).
-            var cost = new ResourceCost(def.CostWood, def.CostFood, def.CostIron);
+            // ResourceCost ctor order: (wood, food, iron, crystals, coins). Charged via the
+            // GameState ledger (see the wallet comment above), never the in-session pool.
+            var cost = LedgerCost(new ResourceCost(def.CostWood, def.CostFood, def.CostIron));
             var army = state.Army;
 
             int enqueued = 0;
             for (int i = 0; i < qty; i++)
             {
                 if (!army.CanTrain(troopId, TroopDialogueCommands.SlotOf)) break;   // cap full
-                if (!eco.TrySpend(cost)) break;                                     // unaffordable
+                if (!Ledger.ResourceLedger.TrySpend(cost)) break;                   // unaffordable
                 string jobId = TrainPrefix + troopId + ":" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 queue.Enqueue(JobKind.TrainTroop, jobId, def.BuildSeconds);
                 enqueued++;

@@ -208,10 +208,13 @@ namespace DeNelle.Village.Hero
         // ── Read-only data the View renders ───────────────────────────────────────
 
         /// <summary>Live wallet readout (the View's footer chips rebuild from these).</summary>
-        public int Wood     => _economy?.Wood ?? 0;
-        public int Iron     => _economy?.Iron ?? 0;
-        public int Food     => _economy?.Food ?? 0;
-        public int Crystals => _economy?.Crystals ?? 0;
+        // Wallet strip — GameState ledger, the SAME wallet the upgrade/training spends
+        // charge (the old _economy Wood/Iron read the divergent in-session pool: the
+        // panel showed 200 wood against a full HUD wallet). _economy stays for OnChanged.
+        public int Wood     => DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(DeNelle.Village.Buildings.Progression.HarvestResource.Wood);
+        public int Iron     => DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(DeNelle.Village.Buildings.Progression.HarvestResource.Iron);
+        public int Food     => DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(DeNelle.Village.Buildings.Progression.HarvestResource.Food);
+        public int Crystals => DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(DeNelle.Village.Buildings.Progression.HarvestResource.Crystals);
 
         /// <summary>The barracks-level card projection.</summary>
         public BarracksRowVM BarracksRow => _barracksRow;
@@ -319,7 +322,9 @@ namespace DeNelle.Village.Hero
                 string unlocks = NextUnlockNames(nextDef);
                 var cost = BarracksProgression.BarracksUpgradeCost(lvl);
                 float seconds = BarracksProgression.BarracksUpgradeSeconds(lvl);
-                bool afford = _economy != null && _economy.CanAfford(cost);
+                // Ledger wallet — the SAME source the spend charges (the old _economy read
+                // was the divergent in-session pool; see BarracksService's wallet comment).
+                bool afford = BarracksService.CanAffordBarracksUpgrade(lvl);
                 bool can = BarracksService.CanUpgradeBarracks(out string reason);
                 return new BarracksDetailVM(lvl, max, true, nextName, unlocks,
                     CostStr(cost), TimeStr(seconds), afford, can, reason);
@@ -366,7 +371,7 @@ namespace DeNelle.Village.Hero
                 float seconds = BarracksProgression.TroopUpgradeSeconds(troopId, lvl + 1);
                 costText = CostStr(cost);
                 timeText = TimeStr(seconds);
-                afford = _economy != null && _economy.CanAfford(cost);
+                afford = BarracksService.CanAffordTroopUpgrade(troopId, lvl + 1);   // ledger wallet (see above)
             }
 
             return new BarracksTroopDetailVM(true, name, unlocked, lvl, maxLvl,
