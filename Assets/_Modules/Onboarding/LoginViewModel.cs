@@ -15,7 +15,9 @@ using System.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
-using Google;
+#if !UNITY_WEBGL || UNITY_EDITOR
+using Google;   // GoogleSignIn is an ANDROID NATIVE plugin - absent on WebGL (see SignInWithGoogleAsync)
+#endif
 
 namespace DeNelle.Onboarding
 {
@@ -51,6 +53,16 @@ namespace DeNelle.Onboarding
         /// </summary>
         public async Task<AuthOutcome> SignInWithGoogleAsync()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // The GoogleSignIn plugin is an ANDROID NATIVE plugin and the Firebase Unity SDK
+            // has no WebGL support, so neither half of this flow exists on web. Fail clearly
+            // and let the caller fall through to Guest (see FirebaseAuthService's WebGL stub).
+            // Web accounts, if ever wanted, are Google Identity Services in JS + Firebase REST
+            // behind this same method -- not the native plugin.
+            FlowTrace.Step("Auth", "WebGL build - Google sign-in is unavailable; guest identity only.");
+            await Task.CompletedTask;
+            return AuthOutcome.Fail("Google sign-in isn't available in the web build - continuing as a guest.");
+#else
             string idToken;
             try
             {
@@ -73,6 +85,7 @@ namespace DeNelle.Onboarding
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignInWithGoogleCredentialAsync(idToken);
             if (outcome.Success) BindPlayer(outcome.UserId);
             return outcome;
+#endif
         }
 
         /// <summary>

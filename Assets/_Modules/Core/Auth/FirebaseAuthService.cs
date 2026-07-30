@@ -11,11 +11,22 @@
 // Firebase console (Auth -> Sign-in providers). Until then SignIn/SignUp fail at
 // runtime with "operation not allowed" — the code is correct; the toggle is owner's.
 // =============================================================================
+// PLATFORM GATE (2026-07-30): the Firebase Unity SDK does NOT support WebGL. Its
+// plugins are enabled for Editor/Android only (Firebase.Auth.dll.meta: Any=0,
+// Android=1, Editor=1), so a WebGL player build cannot resolve the Firebase types
+// and the WHOLE PROJECT fails to compile. That silently broke every WebGL build
+// from the moment WO-769 landed until 2026-07-30 -- nobody noticed because no
+// WebGL build was attempted in between (prod is still the 07-16 pre-Firebase build).
+// Below, the real implementation compiles everywhere Firebase exists; WebGL gets a
+// stub with a BYTE-IDENTICAL public API so no caller needs a platform guard, and
+// web players fall through to the existing guest / device-hash identity.
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
+#if !UNITY_WEBGL || UNITY_EDITOR
 using Firebase;
 using Firebase.Auth;
+#endif
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.Auth
@@ -28,12 +39,62 @@ namespace DeNelle.Core.Auth
         public string Email;
         public string Error;   // human-readable failure reason (empty on success)
 
+#if !UNITY_WEBGL || UNITY_EDITOR
         public static AuthOutcome Ok(FirebaseUser u) =>
             new AuthOutcome { Success = true, UserId = u?.UserId, Email = u?.Email, Error = string.Empty };
+#endif
         public static AuthOutcome Fail(string err) =>
             new AuthOutcome { Success = false, Error = string.IsNullOrEmpty(err) ? "unknown auth error" : err };
     }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+    /// <summary>
+    /// WEBGL STUB. The Firebase Unity SDK has no WebGL support, so on web this type
+    /// keeps the exact public surface of the real service and reports "unavailable"
+    /// instead of failing the build. Callers need no platform guard: every Sign* path
+    /// returns a clear AuthOutcome.Fail, IsSignedIn stays false, and the login screen
+    /// falls through to the existing GUEST / device-hash identity that
+    /// GameStateService already mints when no wallet or UID is bound.
+    /// If web accounts are ever wanted, the route is Firebase's REST auth API over
+    /// UnityWebRequest (or the JS SDK via a jslib) behind this same surface -- NOT the
+    /// Unity SDK, which will never load here.
+    /// </summary>
+    public sealed class FirebaseAuthService
+    {
+        private const string Unsupported =
+            "Accounts aren't available in the web build - continuing as a guest.";
+
+        private static FirebaseAuthService _instance;
+        public static FirebaseAuthService Instance => _instance ??= new FirebaseAuthService();
+
+        public event Action<bool> AuthStateChanged;
+
+        public bool IsReady => false;
+        public bool IsSignedIn => false;
+        public string UserId => null;
+        public string Email => null;
+
+        public Task<bool> EnsureInitializedAsync()
+        {
+            FlowTrace.Step("Auth", "WebGL build - Firebase Unity SDK is unsupported here; guest identity only.");
+            AuthStateChanged?.Invoke(false);
+            return Task.FromResult(false);
+        }
+
+        public Task<AuthOutcome> SignUpAsync(string email, string password)
+            => Task.FromResult(AuthOutcome.Fail(Unsupported));
+
+        public Task<AuthOutcome> SignInAsync(string email, string password)
+            => Task.FromResult(AuthOutcome.Fail(Unsupported));
+
+        public Task<AuthOutcome> SignInWithGoogleCredentialAsync(string googleIdToken)
+            => Task.FromResult(AuthOutcome.Fail(Unsupported));
+
+        public void SignOut() { }
+
+        public Task<string> GetIdTokenAsync(bool forceRefresh = false) => Task.FromResult<string>(null);
+    }
+#else
     /// <summary>
     /// App-facing Firebase email/password auth. Single instance; call
     /// <see cref="EnsureInitializedAsync"/> once at boot before Sign* calls.
@@ -191,4 +252,5 @@ namespace DeNelle.Core.Auth
             return at <= 1 ? "*" + (at >= 0 ? email.Substring(at) : "") : email[0] + "***" + email.Substring(at);
         }
     }
+#endif
 }
