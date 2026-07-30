@@ -1090,6 +1090,7 @@ namespace DeNelle.Village
                 Name             = src.Name,
                 CountdownSeconds = src.CountdownSeconds,
                 Boss             = src.Boss,
+                BossHp           = src.BossHp,   // WO-789: keep the ground-boss HP pin in endless replays
                 ApexBoss         = src.ApexBoss,
                 Enemies          = new List<WaveBatch>(src.Enemies != null ? src.Enemies.Count : 0),
             };
@@ -1324,12 +1325,14 @@ namespace DeNelle.Village
             }
 
             // A boss, if the wave names one, releases immediately at the north spawn.
+            // WO-789: wave.BossHp > 0 pins the boss's HP to exactly that value
+            // (applied in SpawnOne AFTER the WaveScalingCurve pass — see the pin there).
             if (!string.IsNullOrEmpty(wave.Boss))
             {
                 SpawnBatch(new WaveBatch
                 {
                     Type = wave.Boss, Count = 1, SpawnPoint = "spawn-0", Delay = 0f, Interval = 0f,
-                }).Forget();
+                }, wave.BossHp).Forget();
             }
 
             // An APEX wave fields the kinematic flying boss (the dragon). Unlike
@@ -1668,7 +1671,7 @@ namespace DeNelle.Village
         /// <see cref="WaveBatch.Count"/> enemies at the named spawn point,
         /// <see cref="WaveBatch.Interval"/> seconds apart.
         /// </summary>
-        private async UniTask SpawnBatch(WaveBatch batch)
+        private async UniTask SpawnBatch(WaveBatch batch, float pinnedBossHp = 0f)
         {
             EnemyDef def = _enemyCatalog.Find(batch.Type);
             if (def == null)
@@ -1717,7 +1720,7 @@ namespace DeNelle.Village
                     if (_phase != WavePhase.Active) return;
                 }
 
-                SpawnOne(def, point);
+                SpawnOne(def, point, pinnedBossHp);
 
                 if (batch.Interval > 0f && i < batch.Count - 1)
                     await UniTask.Delay(System.TimeSpan.FromSeconds(batch.Interval));
@@ -1725,8 +1728,19 @@ namespace DeNelle.Village
         }
 
         /// <summary>Instantiates + configures one enemy at <paramref name="point"/>.</summary>
-        private void SpawnOne(EnemyDef def, WaveSpawnPoint point)
+        private void SpawnOne(EnemyDef def, WaveSpawnPoint point, float pinnedBossHp = 0f)
         {
+            // F8 2026-07-30 (captured NRE): SpawnBatch is a fire-and-forget UniTask, so a
+            // queued batch can outlive a scene change — its WaveSpawnPoint is then DESTROYED
+            // and point.HeadingToGate throws (WaveSpawnPoint.cs:61 via get_transform). Unity's
+            // fake-null == covers destroyed components; skip loudly instead of throwing.
+            if (point == null)
+            {
+                FlowTrace.Warn("Wave",
+                    $"SpawnOne: WaveSpawnPoint is gone (scene changed under a queued batch?) — " +
+                    $"skipping spawn of '{(def != null ? def.Id : "enemy")}'.");
+                return;
+            }
             Vector3 heading = point.HeadingToGate.sqrMagnitude > 0.0001f
                 ? point.HeadingToGate.normalized : Vector3.forward;
             Quaternion rot = Quaternion.LookRotation(heading);
@@ -1843,6 +1857,17 @@ namespace DeNelle.Village
                     flatCurve.HpMultiplier(_currentWaveId),
                     flatCurve.SpeedMultiplier(_currentWaveId),
                     flatCurve.DamageMultiplier(_currentWaveId));
+            }
+
+            // WO-789: wave-level ground-boss HP pin (waves.json bossHp — mirrors apexBoss.hp).
+            // Applied AFTER ApplyWaveScaling so the pin REPLACES the scaled value and the boss
+            // lands at exactly the authored HP (wave 5 troll = 1050, not 320 x curve).
+            if (pinnedBossHp > 0f)
+            {
+                enemy.OverrideMaxHp(pinnedBossHp);
+                FlowTrace.Step("Waves",
+                    $"SpawnOne: bossHp pin — '{def.Id}' wave {_currentWaveId} maxHp pinned to " +
+                    $"{pinnedBossHp:0} (post-scaling override; WaveScalingCurve bypassed for this boss).");
             }
 
             enemy.Died += HandleEnemyDied;

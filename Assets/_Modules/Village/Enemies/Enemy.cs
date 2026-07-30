@@ -652,6 +652,21 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-789: pins max/current HP to an exact authored value (waves.json bossHp),
+        /// REPLACING whatever <see cref="Configure"/> + wave scaling produced — a
+        /// deliberate, visible wave-level exception to the enemies.json stat SSOT
+        /// (mirrors apexBoss.hp). Called AFTER ApplyWaveScaling so the pin wins.
+        /// No-op for values &lt;= 0. Pool-safe: Configure re-seeds _maxHp from the def on
+        /// every reuse, so a pin never leaks into a later normal spawn.
+        /// </summary>
+        public void OverrideMaxHp(float maxHp)
+        {
+            if (maxHp <= 0f) return;
+            _maxHp = Mathf.Max(1f, maxHp);
+            _hp    = _maxHp;
+        }
+
         private void Awake()
         {
             EnsureAgent();

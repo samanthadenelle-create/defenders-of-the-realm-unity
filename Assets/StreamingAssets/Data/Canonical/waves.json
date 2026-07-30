@@ -44,15 +44,12 @@
       "countdownSeconds": 300
     },
     {
-      "_comment": "TEST ONLY (2026-07-24) — apex dragon 'Syndrath' bolted onto wave 5 so the owner reaches the flying boss fast for testing. REVERT before ship: delete the 'apexBoss' block below (the real apex wave is 20). Enemies left intact so the wave still plays; the dragon spawns alongside them via WaveManager.SpawnApexBoss.",
+      "_comment": "BOSS WAVE (WO-789, owner ruling 2026-07-30): the Cave Troll walks with wave 5 as a mid-tier GROUND boss, pinned to exactly 1050 HP (1/4 of Syndrath's 4200) via bossHp. bossHp mirrors apexBoss.hp: a deliberate, visible wave-level exception to the enemies.json stat SSOT — it REPLACES the scaled value AFTER WaveScalingCurve, so the troll lands 1050 flat, not 320*curve. Replaces the TEST-ONLY apex-dragon block bolted on 2026-07-24; the real apex wave is 20 (untouched). Ground bosses use the normal floating enemy bar, not the apex BossHealthBar.",
       "waveId": 5,
       "name": "Stonebreakers",
       "countdownSeconds": 300,
-      "apexBoss": {
-        "id": "boss-dragon-syndrath",
-        "hp": 4200,
-        "nameKey": "bossSyndrath"
-      }
+      "boss": "troll",
+      "bossHp": 1050
     },
     {
       "_comment": "BOSS WAVE (cadence 6): the Necromancer of the Wound walks with the Hollowed.",

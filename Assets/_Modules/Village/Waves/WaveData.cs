@@ -313,6 +313,15 @@ namespace DeNelle.Village
         /// <summary>Optional boss enemy id released alongside the wave (null = no boss).</summary>
         [JsonProperty("boss")] public string Boss;
         /// <summary>
+        /// WO-789: optional pinned max-HP for the ground <see cref="Boss"/>. When &gt; 0 the
+        /// spawned boss's max/current HP is set to EXACTLY this value AFTER the
+        /// WaveScalingCurve pass (the pin REPLACES the scaled value, so it bypasses per-wave
+        /// HP escalation). &lt;= 0 / absent keeps the normal path: enemies.json stat SSOT
+        /// multiplied by the curve. Mirrors <see cref="ApexBossDef.Hp"/> — a deliberate,
+        /// visible wave-level exception to the enemies.json stat SSOT.
+        /// </summary>
+        [JsonProperty("bossHp")] public float BossHp;
+        /// <summary>
         /// Optional apex flying-boss declaration (null = not an apex wave). When
         /// present this wave spawns the kinematic <c>DragonBoss</c> prefab instead
         /// of — or alongside — the normal enemy batches. See <see cref="ApexBossDef"/>.
