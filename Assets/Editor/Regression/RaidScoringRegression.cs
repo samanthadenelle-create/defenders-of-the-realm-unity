@@ -47,11 +47,23 @@ namespace DeNelle.Editor
             // =================================================================
 
             // Stars 0-3 across the design B5 thresholds (cleared / boss / % / clock).
-            AssertStars(failures, "retreat, <50% razed", false, false, 0.20f, 10f, 180f, 0);
-            AssertStars(failures, "retreat, >=50% razed", false, false, 0.50f, 10f, 180f, 1);
-            AssertStars(failures, "boss down (partial)", false, true, 0.60f, 10f, 180f, 2);
-            AssertStars(failures, "full clear, over the clock", true, true, 1.00f, 240f, 180f, 2);
-            AssertStars(failures, "full clear, under the clock", true, true, 1.00f, 120f, 180f, 3);
+            // OWNER LADDER 2026-07-30: 1 = just cleared, 2 = cleared with high survival OR under
+            // the clock, 3 = cleared with BOTH. Sub-clear credit (>=50% razed = 1) is unchanged.
+            // The two-axis cases below are the point: a clear no longer implies 3 stars.
+            AssertStars(failures, "retreat, <50% razed",              false, false, 0.20f,  10f, 180f, 1.00f, 0);
+            AssertStars(failures, "retreat, >=50% razed",             false, false, 0.50f,  10f, 180f, 1.00f, 1);
+            AssertStars(failures, "boss down (partial), floor is 1",  false, true,  0.60f,  10f, 180f, 1.00f, 1);
+            AssertStars(failures, "clear, slow AND costly -> 1",      true,  true,  1.00f, 240f, 180f, 0.20f, 1);
+            AssertStars(failures, "clear, under clock but costly",    true,  true,  1.00f, 120f, 180f, 0.20f, 2);
+            AssertStars(failures, "clear, slow but high survival",    true,  true,  1.00f, 240f, 180f, 1.00f, 2);
+            AssertStars(failures, "clear, fast AND high survival",    true,  true,  1.00f, 120f, 180f, 1.00f, 3);
+            // Threshold boundary is inclusive at HighSurvivalPct, exclusive just under it.
+            AssertStars(failures, "clear, fast, survival exactly at threshold",
+                        true, true, 1.00f, 120f, 180f, RaidScoring.HighSurvivalPct, 3);
+            AssertStars(failures, "clear, fast, survival a hair under threshold",
+                        true, true, 1.00f, 120f, 180f, RaidScoring.HighSurvivalPct - 0.01f, 2);
+            // A scout clear (no troops deployed) reads survival 1f and must not be punished.
+            AssertStars(failures, "clear, fast, no troops deployed",   true,  true,  1.00f, 120f, 180f, 1.00f, 3);
 
             // The result is ALWAYS in 0..3 across a wide sweep (no out-of-range star).
             for (int di = 0; di <= 10; di++)
@@ -60,10 +72,14 @@ namespace DeNelle.Editor
                 foreach (var cleared in new[] { false, true })
                 foreach (var boss in new[] { false, true })
                 foreach (var t in new[] { 30f, 180f, 400f })
+                foreach (var sv in new[] { 0f, 0.5f, RaidScoring.HighSurvivalPct, 1f })
                 {
-                    int s = RaidScoring.ComputeStars(cleared, boss, d, t, 180f);
+                    int s = RaidScoring.ComputeStars(cleared, boss, d, t, 180f, sv);
                     if (s < 0 || s > 3)
-                        failures.Add($"ComputeStars out of range: {s} (cleared={cleared}, boss={boss}, d={d:0.0}, t={t})");
+                        failures.Add($"ComputeStars out of range: {s} (cleared={cleared}, boss={boss}, d={d:0.0}, t={t}, surv={sv:0.00})");
+                    // A 3-star tier must NEVER be reachable without clearing the base.
+                    if (s == 3 && !cleared)
+                        failures.Add($"ComputeStars awarded 3 stars WITHOUT a clear (d={d:0.0}, t={t}, surv={sv:0.00})");
                 }
             }
 
@@ -151,9 +167,10 @@ namespace DeNelle.Editor
         }
 
         private static void AssertStars(List<string> failures, string label,
-            bool cleared, bool boss, float destruction, float elapsed, float clock, int expected)
+            bool cleared, bool boss, float destruction, float elapsed, float clock,
+            float survivalPct, int expected)
         {
-            int got = RaidScoring.ComputeStars(cleared, boss, destruction, elapsed, clock);
+            int got = RaidScoring.ComputeStars(cleared, boss, destruction, elapsed, clock, survivalPct);
             if (got != expected)
                 failures.Add($"ComputeStars [{label}] expected {expected} star(s), got {got}");
         }

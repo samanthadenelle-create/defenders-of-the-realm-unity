@@ -14,36 +14,77 @@ namespace DeNelle.Tests.EditMode
     {
         private const float Clock = 180f;
 
-        // ── Stars from inputs (design B5: cleared / boss / % / clock) ──────────
+        // ── Stars from inputs — OWNER LADDER 2026-07-30 (the "premium" two-axis model)
+        //    1 = just cleared · 2 = cleared with high survival OR under the clock
+        //    3 = cleared with high survival AND under the clock.
+        //    Sub-clear credit (>=50% razed = 1 star) is unchanged so a damaging retreat
+        //    keeps its loot. `bossDestroyed` floors at 1, not 2: in V1 the boss is part of
+        //    the garrison (bossDown == cleared), so its old 2-floor could only fire on a
+        //    clear, where it short-circuited the ladder and made EVERY victory 3 stars.
+
+        private const float HiSurv  = 1.00f;   // everyone walked off the field
+        private const float LowSurv = 0.20f;   // it cost you
 
         [Test]
         public void Stars_Retreat_UnderHalf_Razed_IsZero()
         {
-            Assert.AreEqual(0, RaidScoring.ComputeStars(false, false, 0.20f, 10f, Clock));
+            Assert.AreEqual(0, RaidScoring.ComputeStars(false, false, 0.20f, 10f, Clock, HiSurv));
         }
 
         [Test]
         public void Stars_Retreat_HalfRazed_IsOne()
         {
-            Assert.AreEqual(1, RaidScoring.ComputeStars(false, false, 0.50f, 10f, Clock));
+            Assert.AreEqual(1, RaidScoring.ComputeStars(false, false, 0.50f, 10f, Clock, HiSurv));
         }
 
         [Test]
-        public void Stars_BossDown_IsTwo()
+        public void Stars_BossDown_Partial_FloorsAtOne()
         {
-            Assert.AreEqual(2, RaidScoring.ComputeStars(false, true, 0.60f, 10f, Clock));
+            Assert.AreEqual(1, RaidScoring.ComputeStars(false, true, 0.60f, 10f, Clock, HiSurv));
         }
 
         [Test]
-        public void Stars_FullClear_OverTheClock_IsTwo()
+        public void Stars_Clear_SlowAndCostly_IsOne()
         {
-            Assert.AreEqual(2, RaidScoring.ComputeStars(true, true, 1f, 240f, Clock));
+            Assert.AreEqual(1, RaidScoring.ComputeStars(true, true, 1f, 240f, Clock, LowSurv));
         }
 
         [Test]
-        public void Stars_FullClear_UnderTheClock_IsThree()
+        public void Stars_Clear_UnderClockButCostly_IsTwo()
         {
-            Assert.AreEqual(3, RaidScoring.ComputeStars(true, true, 1f, 120f, Clock));
+            Assert.AreEqual(2, RaidScoring.ComputeStars(true, true, 1f, 120f, Clock, LowSurv));
+        }
+
+        [Test]
+        public void Stars_Clear_SlowButHighSurvival_IsTwo()
+        {
+            Assert.AreEqual(2, RaidScoring.ComputeStars(true, true, 1f, 240f, Clock, HiSurv));
+        }
+
+        [Test]
+        public void Stars_Clear_FastAndHighSurvival_IsThree()
+        {
+            Assert.AreEqual(3, RaidScoring.ComputeStars(true, true, 1f, 120f, Clock, HiSurv));
+        }
+
+        [Test]
+        public void Stars_SurvivalThreshold_IsInclusive()
+        {
+            Assert.AreEqual(3, RaidScoring.ComputeStars(true, true, 1f, 120f, Clock,
+                                                        RaidScoring.HighSurvivalPct));
+            Assert.AreEqual(2, RaidScoring.ComputeStars(true, true, 1f, 120f, Clock,
+                                                        RaidScoring.HighSurvivalPct - 0.01f));
+        }
+
+        [Test]
+        public void Stars_ThreeIsUnreachableWithoutAClear()
+        {
+            for (int di = 0; di <= 10; di++)
+            foreach (var boss in new[] { false, true })
+            foreach (var t in new[] { 30f, 180f, 400f })
+            foreach (var sv in new[] { 0f, 0.5f, RaidScoring.HighSurvivalPct, 1f })
+                Assert.AreNotEqual(3, RaidScoring.ComputeStars(false, boss, di / 10f, t, Clock, sv),
+                                   "3 stars must require clearing the base");
         }
 
         [Test]
@@ -55,8 +96,9 @@ namespace DeNelle.Tests.EditMode
                 foreach (var cleared in new[] { false, true })
                 foreach (var boss in new[] { false, true })
                 foreach (var t in new[] { 30f, 180f, 400f })
+                foreach (var sv in new[] { 0f, 0.5f, RaidScoring.HighSurvivalPct, 1f })
                 {
-                    int s = RaidScoring.ComputeStars(cleared, boss, d, t, Clock);
+                    int s = RaidScoring.ComputeStars(cleared, boss, d, t, Clock, sv);
                     Assert.GreaterOrEqual(s, 0);
                     Assert.LessOrEqual(s, 3);
                 }

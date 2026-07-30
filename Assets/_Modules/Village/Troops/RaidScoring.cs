@@ -121,7 +121,7 @@ namespace DeNelle.Village
         public int ProjectedStars =>
             ComputeStars(_spawner != null && _spawner.Cleared,
                          _spawner != null && _spawner.Cleared,   // boss dies on full clear (V1)
-                         DestructionPct, _elapsed, _clockSeconds);
+                         DestructionPct, _elapsed, _clockSeconds, SurvivalPct);
 
         /// <summary>The simple re-watch record (order/time/place of every deploy).</summary>
         public RaidDeployLog DeployLog => _deployLog;
@@ -134,24 +134,69 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// The V1 star formula (design B5, LOCKED teleport/deploy loop). 0..3 from:
+        /// Fraction of DEPLOYED troops that must still be standing for a raid to count as
+        /// "high survival" on the star ladder. Public so HUD copy and oracles read the same
+        /// number instead of re-deriving it. Balance knob - tune here, one place.
+        /// </summary>
+        public const float HighSurvivalPct = 0.70f;
+
+        /// <summary>
+        /// The V1 star ladder (OWNER RULING 2026-07-30 - the "premium" model). Two axes,
+        /// both earned, on top of clearing the base:
         /// <list type="bullet">
-        /// <item>>= 50% of the garrison razed -> at least 1 star.</item>
-        /// <item>boss/heart destroyed OR a full clear -> at least 2 stars.</item>
-        /// <item>a full clear WITHIN the clock -> 3 stars.</item>
+        /// <item><b>1 star</b> - you just cleared it.</item>
+        /// <item><b>2 stars</b> - cleared with high survival <b>OR</b> under the clock.</item>
+        /// <item><b>3 stars</b> - cleared with high survival <b>AND</b> under the clock.</item>
         /// </list>
-        /// A partial retreat maxes at 1 star (half razed); finishing the base is 2;
-        /// finishing it fast is 3. Deterministic-enough for V1 (no fixed-point sim).
+        /// Sub-clear credit is unchanged: >= 50% of the garrison razed still pays 1 star, so a
+        /// retreat that did real damage keeps its loot.
+        ///
+        /// WHY THIS REPLACED THE OLD FORMULA: the old ladder floored a clear at 2 and gave 3 for
+        /// any clear inside the clock - and a raid that OVERRAN the clock never reached the
+        /// victory path at all (the clock ends it via OnTimeExpired -> retreat). So EVERY
+        /// victory scored 3 stars, which made the 3-star gate meaningless and, once victory
+        /// started paying veterancy, promoted every survivor of every win.
+        ///
+        /// NOTE on <paramref name="bossDestroyed"/>: its old floor of 2 is now a floor of 1. In
+        /// V1 the boss is part of the garrison, so <c>bossDown == cleared</c> (see Finalize) -
+        /// the old floor could only ever fire on a clear, where it short-circuited the ladder
+        /// above. Non-clear behaviour is therefore unchanged by the demotion.
+        ///
+        /// <paramref name="survivalPct"/> is survivors/deployed at settle time. Deploying NO
+        /// troops (a scout run) is 1f - "nothing was lost" - so it is never punished for it.
+        /// Pure + static: unit-testable with no scene.
         /// </summary>
         public static int ComputeStars(bool garrisonCleared, bool bossDestroyed,
-                                       float destructionPct, float elapsedSeconds, float clockSeconds)
+                                       float destructionPct, float elapsedSeconds, float clockSeconds,
+                                       float survivalPct)
         {
             int s = 0;
             if (destructionPct >= 0.5f) s = 1;
-            if (bossDestroyed) s = Mathf.Max(s, 2);
-            if (garrisonCleared) s = Mathf.Max(s, 2);
-            if (garrisonCleared && elapsedSeconds <= Mathf.Max(1f, clockSeconds)) s = 3;
+            if (bossDestroyed) s = Mathf.Max(s, 1);
+
+            if (garrisonCleared)
+            {
+                s = Mathf.Max(s, 1);                                              // cleared it
+                bool underTime    = elapsedSeconds <= Mathf.Max(1f, clockSeconds);
+                bool highSurvival = Mathf.Clamp01(survivalPct) >= HighSurvivalPct;
+                if (underTime || highSurvival) s = Mathf.Max(s, 2);               // one axis
+                if (underTime && highSurvival) s = 3;                             // both axes
+            }
             return Mathf.Clamp(s, 0, 3);
+        }
+
+        /// <summary>
+        /// Survivors / deployed at this instant, clamped 0..1. Deploying nothing reads as 1f
+        /// (nothing lost) so a no-troop scout clear is not punished on the survival axis.
+        /// </summary>
+        public float SurvivalPct
+        {
+            get
+            {
+                int deployed = _deployedCount;
+                if (deployed <= 0) return 1f;
+                return Mathf.Clamp01(TroopsAlive / (float)deployed);
+            }
         }
 
         /// <summary>
@@ -288,7 +333,15 @@ namespace DeNelle.Village
 
             float destruction = cleared ? 1f : DestructionPct;
             bool bossDown = cleared;   // V1: the boss is part of the garrison, so a full clear kills it
-            int stars = ComputeStars(cleared, bossDown, destruction, _elapsed, _clockSeconds);
+            // Survival is sampled BEFORE any teardown - the surviving bodies are still on the
+            // field at Finalize (nothing on the victory path destroys troops; the scene only
+            // unloads at ReturnHome), so this is the real number, not an estimate.
+            float survival = SurvivalPct;
+            int stars = ComputeStars(cleared, bossDown, destruction, _elapsed, _clockSeconds, survival);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"stars settled: {stars} (cleared={cleared} destruction={destruction:P0} " +
+                $"elapsed={_elapsed:F0}s/{_clockSeconds:F0}s underTime={_elapsed <= Mathf.Max(1f, _clockSeconds)} " +
+                $"survival={survival:P0} high={survival >= HighSurvivalPct} @{HighSurvivalPct:P0}).");
 
             _result = new RaidResult
             {
