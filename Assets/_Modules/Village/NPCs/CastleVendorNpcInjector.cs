@@ -276,6 +276,7 @@ namespace DeNelle.Village
             const float PollSeconds = 2f;   // slow tick — placement happens on player time
             var pending = new System.Collections.Generic.HashSet<string>();
             foreach (var a in AnchorRoles) pending.Add(a.Role);
+            int pass = 0;   // F8 2026-07-30: pass 0 runs BEFORE BaseLayoutLoader's replay — see below
 
             while (pending.Count > 0)
             {
@@ -335,7 +336,20 @@ namespace DeNelle.Village
                     // building — vendor not spawned" for every role). Safe: this only fires when
                     // NO live building carries the id, so it can never double-seat a placed one.
                     bool anchorIsTemp = false;
-                    if (anchorTf == null)
+                    // F8 2026-07-30 "duplicated NPCs": this coroutine's FIRST pass runs
+                    // synchronously inside OnSceneLoaded — BEFORE BaseLayoutLoader.Start
+                    // replays the placed storefronts. On the first hub reload after the
+                    // WO-673 migration, pass 0 found no live Building for ANY role, took
+                    // this baked fallback for all of them, and the replay then seated a
+                    // SECOND per-role vendor via NotifyBuildingPlaced (captured: 10 poll
+                    // spawns at sceneLoaded + 8 "vendor NPC spawned for placed" right after;
+                    // 'CastleVendor_Forge' Talk-registered count=1->2 — the two identical
+                    // smiths + doubled weapon signs in the owner's screenshot). The old
+                    // "can never double-seat a placed one" claim was FALSE on pass 0: the
+                    // placed building did not EXIST yet. Defer the fallback to pass 1 (one
+                    // 2s tick): replayed buildings now win the seat, and the settle check
+                    // above retires those roles; fallback-only roles appear 2s later.
+                    if (anchorTf == null && pass > 0)
                     {
                         var fb = ResolveBakedOrStationAnchor(role, buildingId);
                         anchorTf = fb.tf;
@@ -382,6 +396,7 @@ namespace DeNelle.Village
                 }
 
                 if (pending.Count == 0) break;
+                pass++;
                 yield return new WaitForSecondsRealtime(PollSeconds);
             }
             FlowTrace.Step("Vendor", "vendor anchor poll complete — every role has its NPC.");

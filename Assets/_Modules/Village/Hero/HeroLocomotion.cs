@@ -317,7 +317,11 @@ namespace DeNelle.Village
                 transform.position = worldPos;
                 _agent.Warp(worldPos);             // re-acquires the destination NavMesh
                 _agent.enabled = true;
-                _agent.ResetPath();
+                // F8 2026-07-30 (captured error x2): ResetPath throws when the re-enabled
+                // agent did not land ON a navmesh (a warp to unbaked ground — e.g. the
+                // orphaned-arena return warp). Guard it; the off-mesh self-heal in Update
+                // re-seats the agent on the next tick.
+                if (_agent.isOnNavMesh) _agent.ResetPath();
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Seam",
                     $"WarpTo post-warp: agent.isOnNavMesh={_agent.isOnNavMesh} @ {transform.position}");
             }

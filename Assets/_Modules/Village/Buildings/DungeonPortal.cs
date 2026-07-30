@@ -216,19 +216,22 @@ namespace DeNelle.Village
             _loading = true;
             HidePrompt();
             Debug.Log("[DungeonPortal] Entering dungeon scene: " + sceneName);
-            // Owner 2026-05-20 ("freezes on load dungeon"): the fade-based
-            // GoDungeon path nulls its Fader reference when the village scene
-            // unloads, then awaits a FadeIn on a destroyed object — appears
-            // as a frozen black screen. Use the plain synchronous LoadScene
-            // path to side-step the fader entirely.
+            // F8 2026-07-30 (portal round-trip): route through the SAME SceneRouter fade path
+            // the rest of the game uses. The 2026-05-20 "fader nulls on unload" freeze is
+            // obsolete — the fader is the DDOL ScreenFader (SceneRouter.Fader), proven
+            // in-session (dev-overlay GoDungeon + ExitToVillage both fade-load). This adds the
+            // save flush (SaveBeforeSceneChange) + fade + [Flow:SceneRouter] trace the raw
+            // sync LoadScene silently skipped. sceneName is passed VERBATIM (already resolved
+            // above incl. the 'Dungeon_' prefix fallback) — NOT via GoDungeon, which would
+            // re-prefix and break the composed 'dg_starter_loop' id.
             try
             {
                 _portalVfx?.OnHeroEnter();
-                UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
+                SceneRouter.LoadSceneWithFade(sceneName).Forget();
             }
             catch (System.Exception ex)
             {
-                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal", "LoadScene threw: " + ex);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal", "LoadSceneWithFade threw: " + ex);
                 _loading = false;
             }
         }

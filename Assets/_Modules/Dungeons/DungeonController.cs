@@ -63,6 +63,9 @@ namespace DeNelle.Dungeons
                  "the spawn teleport, then enabled once the run is live. Optional: " +
                  "auto-found on the hero rig when left unset.")]
         [SerializeField] private DungeonHero _heroController;
+        // F8 2026-07-30: true while a real-time arena fight owns the Keeper's movers —
+        // gates the per-frame EnsureSingleDungeonMover so the arena's WarpHero/WarpTo works.
+        private bool _arenaOwnsHero;
 
         [Tooltip("Cinemachine camera that follows the Keeper (top-down isometric tilt).")]
         [SerializeField] private CinemachineCamera _followCamera;
@@ -258,6 +261,14 @@ namespace DeNelle.Dungeons
                 _heroController = _hero.GetComponent<DungeonHero>();
             if (_heroController != null)
                 _heroController.SetInputEnabled(false);
+
+            // F8 2026-07-30: WO-450 canon — the 'Player' tag rides whatever rig embodies the
+            // player. Nothing tagged the dungeon Keeper (HeroControlEnsurer skips non-village
+            // scenes), so every FindWithTag consumer — BattleArena's warp + out-of-arena
+            // self-heal, return-point restore — was blind here (captured "<no Player>", which
+            // staged a PHANTOM fight that latched combat). Tag it.
+            if (_hero != null && !_hero.gameObject.CompareTag("Player"))
+                Guard.Try("Dungeon", "tag Keeper as Player", () => _hero.gameObject.tag = "Player");
 
             Layout = await DungeonLayoutLoader.LoadAsync(_dungeonId);
             if (Layout == null)
@@ -460,7 +471,7 @@ namespace DeNelle.Dungeons
 
             // Felt-fix: keep DungeonHero the sole mover (kill the injected village NavMeshAgent locomotion
             // that slides the hero on the un-navmeshed cottage floor). Polled — the body swap is async.
-            EnsureSingleDungeonMover();
+            if (!_arenaOwnsHero) EnsureSingleDungeonMover();   // F8 2026-07-30: arena owns the hero mid-fight
 
             // Push the hero's live position into the run state — drives the
             // encounter engine and the proximity checks on every interactable.
@@ -1201,6 +1212,14 @@ namespace DeNelle.Dungeons
             if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
             FlowTrace.Step("Dungeon", "dungeon-fpv: BattleArena staged — SetCombatFraming(true) (OTS for the fight).");
             _cameraRig?.SetCombatFraming(true);
+
+            // F8 2026-07-30: the arena drives the Keeper's injected HeroLocomotion for the
+            // fight (WarpHero -> WarpTo). Suspend the sole-mover neutralize + stand
+            // DungeonHero down so the two movers never double-drive. OnBattleStaged fires
+            // BEFORE StageRoutine's WarpHero, so the un-neutralize lands before the warp.
+            _arenaOwnsHero = true;
+            _heroController?.SetInputEnabled(false);
+            RestoreInjectedHeroMover();
         }
 
         private void OnRealtimeBattleEnded(DeNelle.Village.Arena.EncounterParams _, bool won)
@@ -1208,6 +1227,11 @@ namespace DeNelle.Dungeons
             // Restore FPV/iso traversal framing regardless of who launched the fight (a no-op
             // when combat framing was never forced) BEFORE the pending-encounter guard below.
             _cameraRig?.SetCombatFraming(false);
+
+            // F8 2026-07-30: hand the hero back to the dungeon movers.
+            // EnsureSingleDungeonMover re-neutralizes HeroLocomotion next Update.
+            _arenaOwnsHero = false;
+            _heroController?.SetInputEnabled(true);
 
             // Only settle a dungeon encounter WE launched — guards a stray arena event + double-settle.
             if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;

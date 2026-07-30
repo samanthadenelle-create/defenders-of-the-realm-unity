@@ -337,6 +337,21 @@ namespace DeNelle.Village.Arena
                 Guard.Try("BattleArena", "force-exit build mode", () => BuildModeController.Instance.Exit());
             }
 
+            // F8 2026-07-30 (dungeon phantom fight): with NO 'Player'-tagged hero a staged
+            // fight can NEVER resolve — WarpHero skips, the family can't close on anyone,
+            // and the out-of-arena self-heal has no hero to measure, so BattleLock latches
+            // and the HUD flips to combat posture over an invisible fight (captured:
+            // "BeginEncounter HERO-POS: pos=<no Player>" + "WarpHero: no 'Player' hero
+            // found"). REFUSE to stage instead; callers handle false
+            // (EncounterTrigger.RollbackHandoff clears the dungeon combat lock + re-arms).
+            if (GameObject.FindWithTag("Player") == null)
+            {
+                FlowTrace.Fail("BattleArena",
+                    "BeginEncounter REFUSED: no 'Player'-tagged hero in scene — a hero-less stage is a " +
+                    "phantom fight that can never resolve. Caller rolls back its combat lock.");
+                return false;
+            }
+
             _current = p;
             _resolved = false;
             _climaxBody = null;

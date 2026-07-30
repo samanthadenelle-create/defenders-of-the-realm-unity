@@ -247,6 +247,20 @@ namespace DeNelle.Dungeons
                 return stick;
             }
 
+            // F8 2026-07-30 ("dungeon doesnt seem to allow movement"): the kit HUD D-pad
+            // publishes DeNelle.HUD.Kit.HudMoveInput, which only HeroLocomotion reads — and
+            // the dungeon deliberately zeroes HeroLocomotion input every frame
+            // (EnsureSingleDungeonMover's scripted-move stomp). So the owner's on-screen
+            // D-pad moved NOTHING here; only WASD worked. Read the same seam (loose
+            // reflection — Dungeons must not reference DeNelle.HUD), camera-relative
+            // like the stick.
+            Vector3 dpad = SampleKitDpadMove();
+            if (dpad.sqrMagnitude > 0.0001f)
+            {
+                _hasMoveTarget = false;
+                return dpad;
+            }
+
             // TAP-TO-MOVE FPV GATE: in first-person a screen tap is a LOOK, not a walk
             // (DungeonCameraRig consumes right-half drags for the free-look), so do not
             // arm a tap-to-move destination while FPV is active. The over-the-shoulder /
@@ -254,6 +268,46 @@ namespace DeNelle.Dungeons
             if (!FeatureFlags.DungeonFpv)
                 TrySampleTap();
             return ResolveTapDirection();
+        }
+
+        // ── Kit D-pad seam (loose reflection; cached) — F8 2026-07-30 ─────────
+        private static System.Reflection.PropertyInfo s_hudMoveProp;
+        private static bool s_hudMoveResolved;
+
+        private Vector3 SampleKitDpadMove()
+        {
+            if (!s_hudMoveResolved)
+            {
+                s_hudMoveResolved = true;
+                try
+                {
+                    var t = System.Type.GetType("DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD");
+                    s_hudMoveProp = t != null ? t.GetProperty("Move") : null;
+                }
+                catch { s_hudMoveProp = null; }
+                if (s_hudMoveProp == null)
+                    FlowTrace.Warn("Dungeon",
+                        "SampleKitDpadMove: HudMoveInput.Move not resolvable — kit D-pad cannot move the Keeper.");
+            }
+            if (s_hudMoveProp == null) return Vector3.zero;
+
+            Vector2 raw = default;
+            try { raw = (Vector2)s_hudMoveProp.GetValue(null); } catch { return Vector3.zero; }
+            if (raw.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;
+
+            // Same camera-relative projection as SampleJoystickMove.
+            Vector3 fwd = Vector3.forward, right = Vector3.right;
+            if (_moveCamera != null)
+            {
+                fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
+                right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
+                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+                if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
+                fwd.Normalize(); right.Normalize();
+            }
+            Vector3 dir = right * raw.x + fwd * raw.y;
+            if (dir.sqrMagnitude > 1f) dir.Normalize();
+            return dir;
         }
 
         /// <summary>
