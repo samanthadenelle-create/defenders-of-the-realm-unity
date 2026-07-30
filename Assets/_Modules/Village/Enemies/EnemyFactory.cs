@@ -34,24 +34,15 @@ namespace DeNelle.Village
             float height = def != null ? Mathf.Max(0.8f, def.Height) : 1.9f;
             float sizeScale = Mathf.Clamp(height / 1.9f, 0.55f, 1.6f);
 
-            // DEF-268: a NavMeshAgent AddComponent'd off the baked NavMesh logs
-            // "Failed to create agent because there is no valid NavMesh" and the agent
-            // never paths. Spawners (camp-defense raiders / roaming mobs / late-loaded
-            // waves) sometimes hand us a point just off the surface. Snap the spawn to
-            // the nearest navmesh point BEFORE we add the agent so it always lands on a
-            // valid surface. Only snaps when a navmesh is genuinely within reach; a far
-            // miss is logged once and the enemy still spawns (agent simply holds, exactly
-            // as Enemy.cs already degrades) rather than being silently dropped.
-            if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
-            {
-                pos = navHit.position;
-            }
-            else
-            {
-                Debug.LogWarning($"[EnemyFactory] No baked NavMesh within 6m of spawn {pos} " +
-                                 $"for '{(def != null ? def.Id : "enemy")}' — agent will hold position. " +
-                                 "Check the spawn point / bake.");
-            }
+            // DEF-268 + WO-791: seat the spawn ON the baked NavMesh BEFORE the agent is
+            // added. The old single 6m sample kept the RAW (possibly airborne) position on
+            // a miss and only console-logged — the owner-felt "frozen + floating" garrison
+            // enemies (2026-07-30), which ALSO zeroed their damage: a body hovering above
+            // its slot sits outside HeroHealth's 1.5m engage sphere, so it swings and lands
+            // nothing (WO-792, same root). Now: progressively wider snap; on a total miss
+            // the body is at least raycast-grounded (never floats), and the defect WARNS
+            // through FlowTrace so the F8 harness captures it.
+            pos = SeatSpawnOnNavMesh(pos, def);
 
             var go = new GameObject(def != null ? $"Enemy ({def.Id})" : "Enemy");
             go.transform.SetParent(parent, false);
@@ -226,6 +217,26 @@ namespace DeNelle.Village
                     var warbandFixer = vis.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>();
                     if (warbandFixer != null)
                     {
+                        // WO-790: ALBEDO-RESTORE SEAM. The Warband/Troll family's authored Tripo
+                        // basecolors never travelled from the old C:\EoA export (Orc_Berserker.json
+                        // records that export dir; the .fbx.meta texture remaps dangle to guids that
+                        // exist nowhere; a binary scan of the FBXs finds zero embedded images). So
+                        // the tint below is what the owner saw as "flat green/orange enemies".
+                        // When the owner stages the restored art as Enemies/OrcTex/<model>_basecolor
+                        // (the exact convention the OrcHumanoid branch uses), bind the REAL skin and
+                        // SKIP the tint entirely -- TripoMaterialFixer multiplies tint OVER textures
+                        // (TripoMaterialFixer.cs:331), so texture-or-tint must be EXCLUSIVE or the
+                        // restored skin renders green-multiplied. Absent (today) => optional load
+                        // misses quietly and the tint carries the look exactly as before.
+                        string warbandTex = "Enemies/OrcTex/" + model + "_basecolor";
+                        if (DeNelle.Core.HeroTextureLoader.Load(warbandTex, optional: true) != null)
+                        {
+                            warbandFixer.SetFallbackTexture(warbandTex, optional: true);
+                            FlowTrace.Step("Enemy",
+                                $"garrison albedo '{warbandTex}' bound to '{model}' — restored Warband basecolor wins over the solid tint (WO-790)");
+                        }
+                        else
+                        {
                         // STAND-IN TINT (no Troll.fbx / OgreMage.fbx yet): troll & ogre reuse an
                         // OrcWarband orc model (see ModelForEnemy) but are DISTINGUISHED by tint so a
                         // player reads them as a different foe, not just another orc. Keyed by def.Id/
@@ -250,6 +261,7 @@ namespace DeNelle.Village
                         FlowTrace.Step("Enemy",
                             $"garrison fallback TINT {fallbackTint} bound to '{model}' (id '{tId}', rig {rigForModel}) — " +
                             "no OrcTex basecolor for Warband/Troll family, paints solid colour not white");
+                        }
                     }
                 }
 
@@ -308,19 +320,26 @@ namespace DeNelle.Village
             agent.radius = 0.4f;
             agent.height = 1.8f;
 
-            // AGENT ON-MESH VERIFY (TGVRU, owner 2026-06-19): a NavMeshAgent that AddComponent's
-            // onto a point just off the baked surface lands with isOnNavMesh==false and then NEVER
-            // paths — the "idle, never chases" class of bug. We already SamplePosition-snapped the
-            // spawn at the top, but a snap can still miss (no mesh within 6m) or the agent can wake
-            // a hair off-mesh. Self-report it here so a capture splits "spawned but won't chase"
-            // from "AI logic broke" with zero guessing. Warn (not Fail): Enemy.cs already degrades
-            // to holding position, so the enemy still spawns — this is the diagnosable signal.
+            // AGENT ON-MESH VERIFY + REPAIR (WO-791; was TGVRU report-only): a NavMeshAgent
+            // that wakes with isOnNavMesh==false NEVER paths — the "idle, never chases"
+            // class of bug. The spawn was already seated above, but an agent can still wake
+            // a hair off-surface. Instead of only reporting, REPAIR it: Warp onto the
+            // nearest sampled point (Warp is the canonical off-mesh re-seat — see Enemy.cs's
+            // own teleport note). Only if even that fails is the loud Warn kept — that line
+            // now genuinely means "the bake is missing here", with zero ambiguity.
             if (!agent.isOnNavMesh)
             {
+                bool repaired = NavMesh.SamplePosition(go.transform.position, out NavMeshHit wakeHit, 12f, NavMesh.AllAreas)
+                                && agent.Warp(wakeHit.position);
+                if (repaired)
+                    FlowTrace.Step("Enemy",
+                        $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') woke OFF-mesh " +
+                        $"at {pos} — REPAIRED via Warp to {go.transform.position} (isOnNavMesh={agent.isOnNavMesh}).");
+                else
                 FlowTrace.Warn("Enemy",
                     $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') spawned " +
-                    $"OFF the navmesh at {go.transform.position} (isOnNavMesh=false) — it will idle and " +
-                    "never chase. Check the spawn point / bake (snap missed or agent woke off-surface).");
+                    $"OFF the navmesh at {go.transform.position} (isOnNavMesh=false) and Warp found no mesh " +
+                    "within 12m — it will idle and never chase. Check the spawn point / bake.");
             }
 
             var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
@@ -351,6 +370,40 @@ namespace DeNelle.Village
                 go.AddComponent<OrientationGuard>();
 
             return enemy;
+        }
+
+        // WO-791: seat a spawn position on the baked NavMesh — REPAIR, not just report.
+        // Progressive radii so a stale bake / prop-carved footprint still seats nearby;
+        // on total failure the position is raycast-grounded so the body can never hover,
+        // and the miss self-reports via FlowTrace (captured by the F8 break harness).
+        private static Vector3 SeatSpawnOnNavMesh(Vector3 want, EnemyDef def)
+        {
+            string id = def != null ? def.Id : "enemy";
+            float[] radii = { 6f, 12f, 24f };
+            for (int i = 0; i < radii.Length; i++)
+            {
+                if (NavMesh.SamplePosition(want, out NavMeshHit hit, radii[i], NavMesh.AllAreas))
+                {
+                    if (i > 0)
+                        FlowTrace.Warn("Enemy",
+                            $"spawn for '{id}' at {want} missed the 6m NavMesh snap — wide snap ({radii[i]}m) " +
+                            $"seated it at {hit.position} (moved {(hit.position - want).magnitude:F1}m). " +
+                            "Check the spawn point / bake.");
+                    return hit.position;
+                }
+            }
+
+            // No NavMesh anywhere near: the agent WILL be off-mesh and hold (Enemy.cs
+            // degrades to idle). At minimum kill the FLOAT: seat the body on the first
+            // solid surface under the spawn so it stands on the ground while broken.
+            Vector3 grounded = want;
+            if (Physics.Raycast(want + Vector3.up * 30f, Vector3.down, out RaycastHit groundHit, 120f,
+                                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                grounded = groundHit.point;
+            FlowTrace.Warn("Enemy",
+                $"NO baked NavMesh within 24m of spawn {want} for '{id}' — agent will hold position (frozen). " +
+                $"Body grounded at {grounded} so it does not float. FIX THE BAKE / spawn point.");
+            return grounded;
         }
 
         /// <summary>Enemy id/role → skeleton model. Grouped by family (Hollow/Skeleton Legion,

@@ -54,6 +54,7 @@ namespace DeNelle.Village
         private Vector3? _lastDamageSourceWorld;
         private float _cooldown;
         private int   _enemyMask;
+        private float _nearMissProbeTimer;   // WO-792: throttles the adjacent-but-out-of-sphere probe
         private bool  _isDead;
         private readonly Collider[] _buf = new Collider[24];
 
@@ -338,6 +339,33 @@ namespace DeNelle.Village
                 // bounce a fraction of the damage ACTUALLY taken (post block/DR) back onto the
                 // contact attackers. Identity (0) until a reflect node is learned.
                 ApplyReflect(hpBeforeTick - _hp, Mathf.Min(attackers, _attackerBuf.Length));
+            }
+            else
+            {
+                // WO-792 probe (leave in until the outpost fight is felt-proven, s12): an enemy
+                // that is visually adjacent but OUTSIDE the 1.5m engage sphere - e.g. a
+                // floating/mis-seated body whose collider hovers above its ground slot - is
+                // exactly the felt "enemy attacks do zero damage". Name it in the trace instead
+                // of silence. Throttled to one wide probe per 2s; no gameplay effect.
+                _nearMissProbeTimer -= Time.deltaTime;
+                if (_nearMissProbeTimer <= 0f)
+                {
+                    _nearMissProbeTimer = 2f;
+                    int wide = Physics.OverlapSphereNonAlloc(centre, 3.5f, _buf, _enemyMask,
+                                                             QueryTriggerInteraction.Collide);
+                    for (int i = 0; i < wide; i++)
+                    {
+                        var en = _buf[i] != null ? _buf[i].GetComponentInParent<Enemy>() : null;
+                        if (en == null || en.IsDead) continue;
+                        Vector3 d = en.transform.position - transform.position;
+                        float dy = d.y; d.y = 0f;
+                        if (d.magnitude <= 2.2f && Mathf.Abs(dy) > 1.0f)
+                            DeNelle.Core.Diagnostics.FlowTrace.Warn("EnemyAggro",
+                                $"NEAR-MISS: '{en.name}' is {d.magnitude:F2}m away planar but OUT of the 1.5m " +
+                                $"engage sphere (dy={dy:F2}m) - a mis-seated/floating body lands ZERO damage.");
+                        break;   // first live near enemy is enough for the probe
+                    }
+                }
             }
         }
 
