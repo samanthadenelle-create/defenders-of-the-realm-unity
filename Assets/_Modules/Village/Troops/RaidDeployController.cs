@@ -457,29 +457,118 @@ namespace DeNelle.Village
 
         private void DoRetreat()
         {
-            var army = Army();
-            if (army != null)
-            {
-                // Survivors = the living deployed bodies' owning ids; everyone else we
-                // deployed fell → wounded (recovery countdown). NEVER deleted.
-                var deployedIds = new List<string>();
-                var survivorIds = new List<string>();
-                foreach (var d in _deployed)
-                {
-                    if (string.IsNullOrEmpty(d.OwnedId)) continue;
-                    deployedIds.Add(d.OwnedId);
-                    if (d.Controller != null && d.Controller.IsAlive)
-                        survivorIds.Add(d.OwnedId);
-                }
-                army.ReconcileAfterRaid(deployedIds, survivorIds, _recoverySeconds);
-                Debug.Log($"[RaidDeployController] retreat — deployed {deployedIds.Count}, " +
-                          $"survivors {survivorIds.Count}, wounded {deployedIds.Count - survivorIds.Count}.");
-            }
+            // A retreat / clock-expiry exit is never a 3-star clear -> 0 stars, no veterancy.
+            ReconcileRaidEnd(0);
 
             TroopRally.Clear();
             GameStateService.Instance?.Save();
             SetStatus("Retreating to the castle...");
             SceneRouter.GoCastle();
+        }
+
+        // =====================================================================
+        //  RAID-END ARMY RECONCILE - the ONE settlement, shared by BOTH exits
+        // =====================================================================
+        // Set once the army has been reconciled for THIS raid. A raid has more than one
+        // reachable exit (victory screen, Retreat button, clock expiry), so the settlement
+        // is LATCHED: a raid can never wound or promote the same roster twice.
+        private bool _reconciled;
+
+        /// <summary>
+        /// The single raid-exit army reconcile, called by BOTH ends of a raid: the retreat /
+        /// timeout exit (<see cref="DoRetreat"/>, starsEarned 0) and the VICTORY exit
+        /// (RaidVictoryController, starsEarned = the settled RaidResult.Stars).
+        ///
+        /// BUG THIS CLOSES (2026-07-30): ReconcileAfterRaid had exactly ONE caller - DoRetreat -
+        /// so only LOSING an assault ever cost a troop. A won raid was free: nobody was wounded
+        /// and no veterancy was paid.
+        ///
+        /// Computes deployed vs. surviving ids from THIS controller's deploy ledger, the only
+        /// place the deployed set exists: a fallen troop's body is destroyed a few seconds after
+        /// death (TroopController DeathHoldSeconds), so a scene scan finds survivors only and
+        /// could never reconstruct deployedIds. Deployed-but-not-survivor troops are marked
+        /// wounded (never deleted); on a 3-star clear each survivor gains one veterancy rank.
+        /// LATCHED - the second call is a logged no-op.
+        /// </summary>
+        public void ReconcileRaidEnd(int starsEarned)
+        {
+            if (_reconciled)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "raid-end reconcile already ran for this raid - ignoring the duplicate call.");
+                return;
+            }
+            _reconciled = true;
+
+            var army = Army();
+            if (army == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "raid-end reconcile: no ArmyStorage (no GameState) - nothing to reconcile.");
+                return;
+            }
+
+            // Survivors = the living deployed bodies' owning ids; everyone else we
+            // deployed fell -> wounded (recovery countdown). NEVER deleted.
+            var deployedIds = new List<string>();
+            var survivorIds = new List<string>();
+            foreach (var d in _deployed)
+            {
+                if (string.IsNullOrEmpty(d.OwnedId)) continue;
+                deployedIds.Add(d.OwnedId);
+                if (d.Controller != null && d.Controller.IsAlive)
+                    survivorIds.Add(d.OwnedId);
+            }
+
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", "reconcile army after raid",
+                () => army.ReconcileAfterRaid(deployedIds, survivorIds, _recoverySeconds));
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"raid-end reconcile - deployed {deployedIds.Count}, survivors {survivorIds.Count}, " +
+                $"wounded {deployedIds.Count - survivorIds.Count} (stars {starsEarned}).");
+
+            GrantVeterancy(army, survivorIds, starsEarned);
+        }
+
+        /// <summary>
+        /// The survivor reward: on a 3-STAR clear every troop that walked off the field gains
+        /// one veterancy rank (<see cref="ArmyStorage.AddVeterancy"/>, capped at
+        /// PlayerTroop.MaxVeterancyRank) - the "+5% damage per survived 3-star raid" ladder
+        /// PlayerTroop already documents and TroopDeployer.SpawnFromArmy already consumes via
+        /// PlayerTroop.DamageMultiplier. Before this, AddVeterancy had ZERO callers repo-wide.
+        /// Below 3 stars nothing is granted.
+        /// </summary>
+        private static void GrantVeterancy(ArmyStorage army, List<string> survivorIds, int starsEarned)
+        {
+            if (starsEarned < 3)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"veterancy: {starsEarned} star(s) - no ranks granted (3 stars required).");
+                return;
+            }
+            if (army.Owned == null || survivorIds == null || survivorIds.Count == 0)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "veterancy: 3-star clear but NO surviving deployed troops - no ranks granted.");
+                return;
+            }
+
+            var survivors = new HashSet<string>(survivorIds, System.StringComparer.Ordinal);
+            int promoted = 0;
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", "grant survivor veterancy", () =>
+            {
+                foreach (var t in army.Owned)
+                {
+                    if (t == null || string.IsNullOrEmpty(t.Id)) continue;
+                    if (!survivors.Contains(t.Id)) continue;
+                    int before = t.VeterancyRank;
+                    army.AddVeterancy(t);
+                    if (t.VeterancyRank != before) promoted++;
+                }
+            });
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"veterancy: 3-star clear - {promoted} of {survivors.Count} survivor(s) gained a rank.");
         }
 
         // =====================================================================

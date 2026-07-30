@@ -181,6 +181,16 @@ namespace DeNelle.Village.World.Camps
             ResourceCost loot = scoring != null ? scoring.LootFor(result) : default(ResourceCost);
             GrantLoot(loot);
 
+            // STEP 3.6 - SETTLE THE ARMY. A WON raid must cost troops and pay veterancy
+            // exactly as the retreat exit does. Before this, ReconcileAfterRaid had a single
+            // caller (RaidDeployController.DoRetreat), so only LOSING an assault ever cost a
+            // troop and AddVeterancy had ZERO callers repo-wide - winning was free. The deploy
+            // HUD owns the deployed ledger (a fallen body is destroyed seconds after death, so
+            // nothing here could reconstruct it), so the win routes through ITS one latched
+            // reconcile. Runs BEFORE the screen so a presentation throw - which ShowVictoryScreen
+            // catches - can never skip the settlement.
+            ReconcileArmy(result);
+
             // STEP 4 — show the victory screen + route home (anti-soft-lock). The shared
             // Obsidian EndState template owns the presentation, the ONE primary action
             // (Return to Castle -> ReturnHome), the EventSystem, and the auto-dismiss
@@ -222,6 +232,38 @@ namespace DeNelle.Village.World.Camps
             {
                 FlowTrace.Warn("Raid", "LOOT NOT granted — no EconomyService and no GameStateService present.");
             }
+        }
+
+        // =====================================================================
+        //  ARMY RECONCILE (the WIN half of the wounded / veterancy model)
+        // =====================================================================
+
+        /// <summary>
+        /// Settles the army for a WON raid through the deploy HUD's single latched reconcile
+        /// (RaidDeployController.ReconcileRaidEnd): every troop that was deployed but did not
+        /// survive is marked wounded, and on a 3-star clear each survivor gains a veterancy
+        /// rank. Called while the surviving bodies are still on the field - the victory path
+        /// tears down no troops and the scene only unloads at ReturnHome - so the survivor set
+        /// is real. Persists immediately so the cost and the reward cannot be lost if the
+        /// player closes the app on the victory screen.
+        /// </summary>
+        private void ReconcileArmy(RaidResult result)
+        {
+            var deploy = FindAnyObjectByType<RaidDeployController>();
+            if (deploy == null)
+            {
+                FlowTrace.Warn("Raid", "victory: no RaidDeployController in this raid scene - " +
+                                       "there is no troop ledger to reconcile (nothing was deployed through the HUD).");
+                return;
+            }
+
+            int stars = result != null ? result.Stars : 0;
+            if (result == null)
+                FlowTrace.Warn("Raid", "victory: no RaidResult (no scorer) - reconciling at 0 stars, no veterancy granted.");
+
+            Guard.Try("Raid", "victory army reconcile", () => deploy.ReconcileRaidEnd(stars));
+            GameStateService.Instance?.Save();
+            FlowTrace.Step("Raid", $"army settled for the WIN (stars {stars}) and saved.");
         }
 
         // The raid's scene-config id: prefer the spawner's stored id (via the public
