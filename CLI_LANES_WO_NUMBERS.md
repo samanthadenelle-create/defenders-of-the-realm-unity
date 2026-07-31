@@ -1,6 +1,6 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **815**. **782–814 CONSUMED** (813–814 Claude-minted).
+> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **816**. **782–815 CONSUMED** (813–815 Claude/CLI).
 > - **813** = **Barracks discovery/teach** (owner B+C): post-onboard dialogue + marker + Train-N task;
 >   Raids with 0 troops redirect to Barracks; light first-raid coach optional. **Depends on 812 presence.**
 >   File `WorkOrders/WORK_ORDER_813_barracks_discovery_offer.md`, READY (CLI guidance embedded).
