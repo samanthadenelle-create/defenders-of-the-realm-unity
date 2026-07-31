@@ -204,10 +204,15 @@ Claude's pack must **recommend defaults** for each:
 ## 9. Suggested Claude first actions (read-only)
 
 1. Read `START_HERE.md` → `CANON_GROUND_TRUTH_*` → this WO → `ObsidianQueueHud.cs` header (skin only).  
-2. Capture 2–3 WC3 production references (fair use screenshots for internal design pack only).  
-3. Produce layout A vs B mockups on 1080×1920 with Obsidian black/gold kit feel.  
-4. Post image pairs for owner sign-off.  
-5. Freeze acceptance checklist for CLI; do not implement code.
+2. **Start from the CLI wireframe pack (already authored):**  
+   `docs/ui/WO-798_wc3_queue/README.md`  
+   - `WIREFRAMES.md` — A/B/C layouts + chip anatomy + state matrix  
+   - `wireframe_A_production_dock.html` — open in browser (S0 / S3 / S5)  
+   - `layout_A.svg` — vector of recommended dock  
+3. Capture 2–3 WC3 production references (fair use, internal only) and map to Layout A.  
+4. Polish Layout A (and B if challenging) to full Obsidian kit mockup PNGs.  
+5. Post image pairs for owner sign-off.  
+6. Freeze acceptance checklist for CLI; do not implement code.
 
 ---
 
