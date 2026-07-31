@@ -1,15 +1,13 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3/CoC experience program): next free WO = **806**. **782–805 CONSUMED.**
-> - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — living analysis + WO index for Claude/CLI pull.
-> - **800** = building focus card unify (Level | Enhancements | active job) — Claude design → CLI.
->   File `WorkOrders/WORK_ORDER_800_building_focus_card_unify.md`.
-> - **801** = queue glance implement icons+rings+multichannel (build on live chip) — **blocked on 798 sign-off**.
->   File `WorkOrders/WORK_ORDER_801_queue_glance_icons_multichannel.md`.
-> - **802** = raid CoC stakes F1 casualties + loot readability. File `WORK_ORDER_802_raid_coc_stakes_casualties_loot.md`.
-> - **803** = raid session comfort (2×, ghost, Auto Recommend, scout) — after **774**. File `WORK_ORDER_803_*`.
-> - **804** = raid structure-destruction % stars (later; owner R3). File `WORK_ORDER_804_*`.
-> - **805** = upgrade/construction feedback parity (world+HUD+complete). File `WORK_ORDER_805_*`.
+> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3/CoC + army ladder): next free WO = **810**. **782–809 CONSUMED.**
+> - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — includes §2A army ladder (unlock→train→troop L→gear→readiness).
+> - **806** = Barracks progression spine UX (unlock→train→troop L→barracks L). Claude design → CLI. File `WORK_ORDER_806_*`.
+> - **807** = Troop upgrade power readability (deltas, Lv badges, deploy fidelity). File `WORK_ORDER_807_*`.
+> - **808** = Hero weapon/armor power levels (Forge/Armorer ladder). Claude design → CLI. File `WORK_ORDER_808_*`.
+> - **809** = War Readiness power score on Raids/Army screens. File `WORK_ORDER_809_*`.
+> - **800** = building focus card unify. **801** = queue glance implement (blocked on 798). **802–805** raid/build as prior banner.
+> - **798/799/774** still in program hub (queue design, cancel engine, raid P0).
 > - **799** = queue CANCEL verb + REFUND plumbing (engine). Panel-row cancel UI waits on 798/801 chips.
 >   File `WorkOrders/WORK_ORDER_799_queue_cancel_refund_engine.md`, READY.
 > - **798** = WC3 queue VISUAL design (Claude read-only; build on live Builders chip + 5-deep rows).

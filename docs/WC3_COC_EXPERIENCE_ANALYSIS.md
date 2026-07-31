@@ -72,8 +72,64 @@ Waves / home defense
 | **803** | `WorkOrders/WORK_ORDER_803_raid_session_comfort.md` | CoC session feel | **774** | CLI | READY (after 774) |
 | **804** | `WorkOrders/WORK_ORDER_804_raid_structure_destruction_stars.md` | CoC stars language | 802 + copy stable | CLI | READY (later) |
 | **805** | `WorkOrders/WORK_ORDER_805_upgrade_construction_feedback_parity.md` | WC3/CoC trust | 800 optional | CLI | READY |
+| **806** | `WorkOrders/WORK_ORDER_806_barracks_progression_spine_ux.md` | Army ladder UX | — | Claude design → CLI | READY |
+| **807** | `WorkOrders/WORK_ORDER_807_troop_upgrade_power_readability.md` | Troop L power feel | 806 lean | CLI | READY |
+| **808** | `WorkOrders/WORK_ORDER_808_hero_gear_power_levels.md` | Hero weapon/armor levels | — | Claude design → CLI | READY |
+| **809** | `WorkOrders/WORK_ORDER_809_war_readiness_power_score.md` | Raid readiness score | 806–808 partial OK | CLI | READY |
 
-**Next free after this mint:** **806** (see `CLI_LANES_WO_NUMBERS.md`).
+**Next free after this mint:** **810** (see `CLI_LANES_WO_NUMBERS.md`).
+
+---
+
+## 2A. Army progression ladder (unlock → train → troop L → gear power)
+
+Player journey CoC/WC3 players expect when building an invasion force:
+
+```
+Barracks L↑ ──unlocks──► Troop type visible
+       │
+       ├── Train (cost + timer, Train channel) ──► ArmyStorage instance
+       │
+       ├── Research: Troop L2..L7 (curves + abilities) ──► ALL future deploys of that type stronger
+       │
+       └── (Hero parallel) Forge/Armorer: weapon/armor power levels ──► Grom stronger in hub/dungeon
+                │
+                └── War Readiness score on Raids screen (housing + troop L + hero gear)
+```
+
+### What exists in code (verified)
+
+| Step | System | Status |
+|------|--------|--------|
+| Unlock by Barracks L | `BarracksProgression.IsTroopUnlocked` + `TroopUnlock.IsTrainable` (MAX of BarracksLevel + legacy tier) | **Live** — dual authority (reconciled by MAX) |
+| 7-type roster | `troops.json` unlockBarracksTier 1..N | **Live** |
+| Timed train | `BarracksService.EnqueueTraining` / TroopTrainingVM queue path | **Live** (WO-778 flip) |
+| Army instances | `ArmyStorage` + housing slots | **Live** |
+| Troop L upgrades | `BarracksService.UpgradeTroop` → Research channel `TroopUpgrade`; `GameState.TroopLevels` | **Live** |
+| Stat curves + ability unlocks L3/5/7 | `troop-upgrades.json` + `TroopStatResolver.Effective` | **Live data** |
+| Apply on deploy | `TroopDeployer` → `ApplyUpgradeStats(Effective(def, level))` | **Live** |
+| Barracks panel UX | `BarracksPanel` / `BarracksPanelVM` train + upgrade CTAs | **Live but dense** |
+| Hero gear buy/equip | Shop / Inventory rarity gear | **Live** |
+| Hero **weapon/armor power levels** (reforge L1→Ln) | No first-class item-level upgrade ladder | **Missing / design docs only** |
+| Army “power” number for raids | No unified readiness score | **Missing** |
+
+### Feel gaps (why new WOs)
+
+1. **Ladder not taught as one story** — unlock vs train vs troop L vs barracks L are separate feelings; CoC Barracks is one building mindspace.  
+2. **Power deltas invisible** — upgrading Footman L3 should scream “+HP / +DPS / new ability”; UI often shows cost only.  
+3. **Dual unlock sources** (`TroopUnlock` vs barracks.json) are safe via MAX but confusing for content authors.  
+4. **Hero gear has rarity, not levels** — CoC-style “level this sword” is a second fantasy not wired.  
+5. **Raid screen doesn’t answer** “is my army ready?” with a single power/readiness cue.
+
+### CoC vs WC3 mapping (this ladder)
+
+| Expectation | CoC | WC3 | Us |
+|-------------|-----|-----|-----|
+| Unlock unit | Barracks level | Build unit building | Barracks L + troops.json |
+| Train unit | Barracks queue | Building production queue | Train channel |
+| Unit power | Lab troop upgrades | Blacksmith / unit upgrades | Research channel troop L |
+| Hero gear power | Heroes equipment levels | Item drops / shops | **Need WO-808** |
+| Pre-fight power | Army camp strength feel | Army count | **Need WO-809** |
 
 ---
 
@@ -86,14 +142,18 @@ Waves / home defense
                                               │
 800 design (Claude) ──► owner ──► 800 CLI unify building card
                                               │
+806 design (Claude) barracks ladder UX ──► 807 troop power readability (CLI)
+808 design (Claude) gear power levels ──► 808 CLI
+809 war readiness (after 806/807; gear optional)
+                                              │
 774 raid P0 (CLI) ──► 803 session comfort ──► 802 stakes
                                               │
 805 construction feedback (anytime after timers known)
 804 structure-% stars (only if owner wants CoC building stars)
 ```
 
-**Parallel safe:** 798 design ∥ 774 implement ∥ 799 engine ∥ 800 design (file-disjoint).  
-**Not parallel:** 801 vs 798 (same chip); 803 vs 774 (same raid deploy path).
+**Parallel safe:** 798 design ∥ 774 implement ∥ 799 engine ∥ 800 design ∥ 806 design ∥ 808 design (file-disjoint).  
+**Not parallel:** 801 vs 798 (same chip); 803 vs 774 (same raid deploy path); 807 vs heavy BarracksPanel rewrite in 806 (coordinate).
 
 ---
 
