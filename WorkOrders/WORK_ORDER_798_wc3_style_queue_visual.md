@@ -6,7 +6,9 @@
 **Claude:** design pack only — **no `.cs`**.  
 **CLI later:** sole implementer on the files listed in §3.  
 **Anchor pack:** `docs/UI/WO-798_wc3_queue/` (`CODE_AS_IS.md` first, then wireframes).  
-**Related:** WO-773 engine · WO-778 reachability/labels · WO-799 cancel/refund **engine** (UI cancel waits on this sign-off).
+**Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — pull order + sibling WOs.  
+**Implement follow-on:** **WO-801** (CLI icons/rings/multichannel after this design is signed).  
+**Related:** WO-773 engine · WO-778 reachability/labels · WO-799 cancel/refund **engine** (UI cancel after 801 chips).
 
 ---
 

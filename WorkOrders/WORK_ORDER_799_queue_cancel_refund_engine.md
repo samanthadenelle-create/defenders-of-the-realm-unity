@@ -1,5 +1,6 @@
 # WORK ORDER 799 — Queue cancel verb + refund plumbing (engine side of the WC3 queue)
 
+**Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md`  
 **Status: READY TO IMPLEMENT** (engine lane; independent of the WO-798 VISUAL design pack —
 the portrait production dock renders whatever this exposes. Panel-row UI work in §4 lands
 only after the owner signs the WO-798 mockups; the cancel verb + refund plumbing can ship first.)
