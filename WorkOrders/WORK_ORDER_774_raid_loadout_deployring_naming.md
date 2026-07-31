@@ -3,6 +3,7 @@
 **Status:** READY TO IMPLEMENT
 **Minted:** 2026-07-26 (CLI, from Grok read-only CoC systems review, relayed by owner)
 **Lane:** Raid V1 UX (single lane, no sim). Sequenced AFTER WO-771.9 integration + barracks-catalog-structure land (this lane touches the troop spawn/deploy path — do not run concurrently with 771.9 spawn-wiring).
+**Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` (CoC invasion P0).
 **Anchor:** `docs/RAID_NORTHSTAR.md` · `PAIN_POINTS_2026-07-26.md` (F1 stakes ladder, pipeline line 217)
 
 ## Why (review verdict, absorbed)

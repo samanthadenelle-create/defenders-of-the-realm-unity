@@ -1,14 +1,20 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3 queue visual): next free WO = **800**. **782–799 CONSUMED.**
-> - **799** = queue CANCEL verb + REFUND plumbing (engine side; owner ruling "on cancel refund the
->   values paid"). Job cost stored at enqueue; ResourceLedger refund; slot-free + cascade on active
->   cancel. File `WorkOrders/WORK_ORDER_799_queue_cancel_refund_engine.md`, READY. Panel-row cancel
->   UI waits on the WO-798 sign-off; the v1 glance rows (QueueEntry seam) shipped 2026-07-30.
-> - **798** = **Warcraft 3–style work queue VISUAL** — **Claude UI-seat READ-ONLY design pack** (mockups +
->   interaction + image-pair sign-off). Engine stays WO-773 multi-channel; presentation becomes portrait
->   production dock (icon chips, progress rings, pending icon strips). No `.cs` from Claude; CLI implements
->   after owner signs. File `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md`, READY FOR UI SEAT.
+> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3/CoC experience program): next free WO = **806**. **782–805 CONSUMED.**
+> - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — living analysis + WO index for Claude/CLI pull.
+> - **800** = building focus card unify (Level | Enhancements | active job) — Claude design → CLI.
+>   File `WorkOrders/WORK_ORDER_800_building_focus_card_unify.md`.
+> - **801** = queue glance implement icons+rings+multichannel (build on live chip) — **blocked on 798 sign-off**.
+>   File `WorkOrders/WORK_ORDER_801_queue_glance_icons_multichannel.md`.
+> - **802** = raid CoC stakes F1 casualties + loot readability. File `WORK_ORDER_802_raid_coc_stakes_casualties_loot.md`.
+> - **803** = raid session comfort (2×, ghost, Auto Recommend, scout) — after **774**. File `WORK_ORDER_803_*`.
+> - **804** = raid structure-destruction % stars (later; owner R3). File `WORK_ORDER_804_*`.
+> - **805** = upgrade/construction feedback parity (world+HUD+complete). File `WORK_ORDER_805_*`.
+> - **799** = queue CANCEL verb + REFUND plumbing (engine). Panel-row cancel UI waits on 798/801 chips.
+>   File `WorkOrders/WORK_ORDER_799_queue_cancel_refund_engine.md`, READY.
+> - **798** = WC3 queue VISUAL design (Claude read-only; build on live Builders chip + 5-deep rows).
+>   File `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md`, READY FOR UI SEAT. Pack: `docs/UI/WO-798_wc3_queue/`.
+> - **774** = raid loadout + deploy ring + Army/Deploy naming (CoC P0) — referenced by program hub, already READY.
 > - **786–794** = specs on disk (star reveal, WOs 787–792 ticket batch, 793 tree-quest NPC, 794 upgrade verb).
 > - **795** = no-stacked-screens scroll standard (owner F8 seq 466 + full 16-panel headed audit).
 > - **796** = Room-Forge dungeons bake a REAL hero body (capsule/pill F8; NOT the 782 standee item).
