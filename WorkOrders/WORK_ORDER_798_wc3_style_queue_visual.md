@@ -205,7 +205,7 @@ Claude's pack must **recommend defaults** for each:
 
 1. Read `START_HERE.md` → `CANON_GROUND_TRUTH_*` → this WO → `ObsidianQueueHud.cs` header (skin only).  
 2. **Start from the CLI wireframe pack (already authored):**  
-   `docs/ui/WO-798_wc3_queue/README.md`  
+   `docs/UI/WO-798_wc3_queue/README.md`  
    - `WIREFRAMES.md` — A/B/C layouts + chip anatomy + state matrix  
    - `wireframe_A_production_dock.html` — open in browser (S0 / S3 / S5)  
    - `layout_A.svg` — vector of recommended dock  
