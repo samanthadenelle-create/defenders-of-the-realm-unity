@@ -451,6 +451,20 @@ namespace DeNelle.HUD.Kit
             Register("workQueueButton", WrapAsWidget("workQueueButton", work.gameObject));
             bx += btnW + btnGap;
 
+            // RAIDS (owner F8 2026-07-30 "there is no raid option"): the raid loop's only HUD
+            // door was the OLD VillageHudController crossed-swords icon — the kit rendered no
+            // raid widget at all. Kit button -> Core RaidEntryGate -> Village RaidEntryBridge
+            // -> RaidSelectionScreen (whose Open carries the WO-813 zero-troops safety net).
+            var raids = ElarionUiKit.BuildObsidianButton(pool, "Raids",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                BtnMin(bx), BtnMax(bx), () =>
+                {
+                    FlowTrace.Step("HudKit", "Raids tapped -> RaidEntryGate.RequestOpen");
+                    RaidEntryGate.RequestOpen();
+                });
+            Register("raidsButton", WrapAsWidget("raidsButton", raids.gameObject));
+            bx += btnW + btnGap;
+
             // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
             var quest = ElarionUiKit.BuildObsidianButton(pool, "Quests",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,

@@ -81,8 +81,18 @@ namespace DeNelle.Village.Hero
         }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
+        private void OnEnable()
+        {
+            // F8 2026-07-30 "no raid option": the live HudKit HUD renders a Raids button that
+            // fires the Core RaidEntryGate (the old reflected HUD.RaidRequested icon is not
+            // rendered by the kit). Same handler — flag gates + walk-mode redirect all apply.
+            DeNelle.Core.UI.RaidEntryGate.OpenRequested += OnRaidRequested;
+            FlowTrace.Step("Raid", "RaidEntryBridge subscribed to RaidEntryGate (HudKit Raids button).");
+        }
+
         private void OnDisable()
         {
+            DeNelle.Core.UI.RaidEntryGate.OpenRequested -= OnRaidRequested;
             Unbind();
         }
 

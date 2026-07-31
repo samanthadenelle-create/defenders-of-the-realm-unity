@@ -51,6 +51,7 @@
             "talkButton",
             "bagButton",
             "workQueueButton",
+            "raidsButton",
             "questButton"
           ]
         },
