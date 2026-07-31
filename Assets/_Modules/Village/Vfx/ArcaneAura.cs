@@ -175,34 +175,43 @@ namespace DeNelle.Village
         private void StartAura()
         {
             if (_handle != null) return;   // already holding the loop
+
+            // BODY-DERIVED FOOT POINT (owner F8 2026-07-30 "under the cathedral not beside
+            // it - I've seen it every time"; PROVEN by the seating trace: the Cathedral's
+            // visible body centre sits 4.61m in XZ from its root pivot - the model is
+            // off-centre in its own file, so a root-anchored ring lands BESIDE the building.
+            // Every spire measured deltaXZ=0.00). Anchor at the NON-particle renderer
+            // bounds: XZ = body centre, Y = body base + _height - the same body-first
+            // pattern VisualFactory.SeatOnGround applies to the meshes themselves. A
+            // body-less host (art not loaded yet) keeps the root anchor unchanged.
+            Bounds body = default; bool hasBody = false;
+            var rends = GetComponentsInChildren<Renderer>(false);
+            for (int i = 0; i < rends.Length; i++)
+            {
+                var r = rends[i];
+                if (r == null || r is ParticleSystemRenderer) continue;
+                if (!hasBody) { body = r.bounds; hasBody = true; } else body.Encapsulate(r.bounds);
+            }
+            Vector3 anchor = hasBody
+                ? new Vector3(body.center.x, body.min.y + _height, body.center.z)
+                : transform.position + Vector3.up * _height;
+
             _handle = VFXManager.PlayKey(
                 _auraKey,
-                transform.position + Vector3.up * _height,
+                anchor,
                 Quaternion.identity,
                 transform,     // parent so the aura tracks the tower
                 _tint,         // HDR violet tint (a hint; motion carries the read)
                 _scale);
-            // SEATING PROOF (F8 2026-07-30 "vfx is not under it"): print where the aura
-            // actually landed vs the visible BODY's bounds, so a misseated ring is one
-            // log read (deltaXZ~0 => the sighting was the orbiting construction orb /
-            // world-space particle drift, not this anchor).
+
+            // SEATING PROOF: the anchor now IS the body foot point, so deltaXZ must read
+            // 0.00 for every structure - a non-zero here means new off-pivot art regressed.
             if (_handle != null)
             {
-                Bounds body = default; bool hasBody = false;
-                var rends = GetComponentsInChildren<Renderer>(false);
-                for (int i = 0; i < rends.Length; i++)
-                {
-                    var r = rends[i];
-                    if (r == null || r is ParticleSystemRenderer) continue;
-                    if (!hasBody) { body = r.bounds; hasBody = true; } else body.Encapsulate(r.bounds);
-                }
-                // The seat = the anchor PlayKey was given (the instance is parented with
-                // worldPositionStays at exactly this point; VFXHandle keeps its GO private).
-                Vector3 ap = transform.position + Vector3.up * _height;
                 float dxz = hasBody
-                    ? Vector2.Distance(new Vector2(ap.x, ap.z), new Vector2(body.center.x, body.center.z)) : -1f;
+                    ? Vector2.Distance(new Vector2(anchor.x, anchor.z), new Vector2(body.center.x, body.center.z)) : -1f;
                 FlowTrace.Step("ArcaneTower",
-                    $"'{name}' aura '{_auraKey}' seated: root={transform.position} aura={ap} " +
+                    $"'{name}' aura '{_auraKey}' seated: root={transform.position} aura={anchor} " +
                     $"body={(hasBody ? body.center.ToString() : "<none>")} bodyBaseY={(hasBody ? body.min.y : 0f):0.00} deltaXZ={dxz:0.00}");
             }
             else
