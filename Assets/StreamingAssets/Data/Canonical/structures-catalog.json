@@ -920,6 +920,7 @@
    "repo": {
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "farm",
+    "heightMul": 1.4,
     "capacity": 1000,
     "buildCost": 90,
     "cost": {
