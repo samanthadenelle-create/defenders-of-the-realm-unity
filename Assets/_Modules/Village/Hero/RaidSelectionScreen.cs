@@ -79,6 +79,26 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open()
         {
+            // WO-813 SAFETY NET (owner 2026-07-30 "some dialogue and raid tutorial"): NEVER
+            // present an empty deploy. With ZERO deployable troops, EVERY raid entry (HUD
+            // icon bridge, the Herald, dev) redirects to the Barracks instead of opening the
+            // camp list. Stateless/headless (no GameState) opens normally — never a false block.
+            var st = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            if (st != null && st.Army != null)
+            {
+                bool any = false;
+                foreach (var t in st.Army.GetDeployable()) { any = true; break; }
+                if (!any)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                        "WO-813 redirect: raids opened with ZERO deployable troops -> Barracks teach (no empty deploy screen).");
+                    ElarionUiKit.ShowToast("You need soldiers. Visit the Barracks - the drillmaster trains them.",
+                        ElarionUiKit.ToastTone.Info);
+                    return;
+                }
+            }
+
             var existing = _instance;
             if (existing == null)
             {

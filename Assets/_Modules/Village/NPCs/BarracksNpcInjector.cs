@@ -138,13 +138,34 @@ namespace DeNelle.Village
             if (prior != null) Destroy(prior);
 
             var barracks = GameObject.Find(BarracksRootName);
+
+            // WO-812: the Barracks is now a PLACEABLE catalog structure — a placed/replayed
+            // instance (Building id "barracks") anchors the drillmaster exactly like the
+            // legacy baked CastleBarracks. Baked wins when both exist; either way exactly ONE
+            // holder spawns (idempotent nuke above), so no double drillmasters. The existing
+            // 1 Hz unlock poll doubles as the placed-mid-session watcher: place a Barracks in
+            // build mode and the drillmaster reports within a second, no reload.
             if (barracks == null)
             {
-                // Expected when the polyperfect pack isn't imported — Warn (not Fail), still self-reports.
+                foreach (var b in Object.FindObjectsByType<Building>(FindObjectsSortMode.None))
+                    if (b != null && b.IsAlive &&
+                        string.Equals(b.BuildingId, StructureId, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        barracks = b.gameObject;
+                        FlowTrace.Step("Barracks",
+                            "BarracksNpcInjector: anchoring the drillmaster to the PLACED catalog barracks (WO-812).");
+                        break;
+                    }
+            }
+
+            if (barracks == null)
+            {
+                // Expected pre-placement — Warn (not Fail), still self-reports. WO-812: the fix
+                // for this state is now in the player's hands (Build menu -> Barracks).
                 FlowTrace.Warn("Village",
-                    "BarracksNpcInjector: no 'CastleBarracks' in scene — drillmaster not placed (barracks prefab missing / pack not imported).");
-                Debug.Log("[BarracksNpcInjector] no 'CastleBarracks' in scene — drillmaster not placed " +
-                          "(barracks prefab may be missing; polyperfect pack not imported).");
+                    "BarracksNpcInjector: no baked 'CastleBarracks' AND no placed catalog barracks — drillmaster not placed (build one from the Town palette).");
+                Debug.Log("[BarracksNpcInjector] no baked or placed barracks in scene — drillmaster not placed " +
+                          "(Build menu -> Barracks places one; first is free).");
                 return;
             }
 
@@ -155,6 +176,23 @@ namespace DeNelle.Village
             {
                 FlowTrace.Step("Village", "BarracksNpcInjector: placed the drillmaster NPC at the Barracks.");
                 Debug.Log("[BarracksNpcInjector] placed the drillmaster NPC at the Barracks.");
+
+                // WO-813 ONCE-TEACH (owner: "some dialogue and raid tutorial"): the first time
+                // the Barracks surfaces with its drillmaster after founding, tell the player
+                // where the army comes from. One-shot via the SeenTutorials ledger; the full
+                // Sylas Yarn beat + the Train-3 task ride the UI seat's copy pass (WO-813 §1).
+                var st = DeNelle.Core.State.GameStateService.Instance != null
+                    ? DeNelle.Core.State.GameStateService.Instance.State : null;
+                if (st != null && st.SeenTutorials != null &&
+                    !(st.SeenTutorials.TryGetValue("barracks_intro", out bool seen) && seen))
+                {
+                    st.SeenTutorials["barracks_intro"] = true;
+                    DeNelle.Core.State.GameStateService.Instance.Save();
+                    DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                        "Elarion needs soldiers. The drillmaster at the Barracks trains them.",
+                        DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+                    FlowTrace.Step("Barracks", "WO-813 once-teach fired (barracks_intro marked seen).");
+                }
             }
             else
             {
