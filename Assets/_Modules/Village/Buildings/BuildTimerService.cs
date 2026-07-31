@@ -658,8 +658,56 @@ namespace DeNelle.Village
                 s.SoonestRemainingSec = soonest == double.MaxValue
                     ? -1
                     : (int)System.Math.Max(0.0, (soonest - now) / 1000.0);
+
+                // WC3 QUEUE VIEW (owner 2026-07-30 "show like 5 deep Queued"): the Builder
+                // channel's jobs by name — active first (with countdown), then the waiting
+                // line in order. Capped at 7 (2 crews + 5 visible queued); the chip renders 5.
+                var bAct = ActiveJobsOf(ChannelId.Builder);
+                var bPend = PendingJobsOf(ChannelId.Builder);
+                int n = System.Math.Min(7, bAct.Count + bPend.Count);
+                if (n > 0)
+                {
+                    s.Entries = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[n];
+                    int w = 0;
+                    for (int i = 0; i < bAct.Count && w < n; i++, w++)
+                        s.Entries[w] = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+                        {
+                            Label = PrettyJobLabel(bAct[i].StructureId),
+                            RemainingSec = (int)System.Math.Max(0.0, (bAct[i].FinishMs - now) / 1000.0),
+                            Queued = false
+                        };
+                    for (int i = 0; i < bPend.Count && w < n; i++, w++)
+                        s.Entries[w] = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+                        {
+                            Label = PrettyJobLabel(bPend[i].StructureId),
+                            RemainingSec = -1,
+                            Queued = true
+                        };
+                }
             }
             DeNelle.Core.UI.ObsidianQueueGate.PublishStatus(s);
+        }
+
+        // Player-facing label for a queue row: strip the placement suffix ("@15_7"), then
+        // title-case the id's tokens ("tower_arcane_spire" -> "Tower Arcane Spire",
+        // "barracks-upgrade" -> "Barracks Upgrade"). Pure string work — no catalog lookup,
+        // so the chip stays Core-safe and never blocks on data readiness.
+        private static string PrettyJobLabel(string structureId)
+        {
+            if (string.IsNullOrEmpty(structureId)) return "Job";
+            string id = structureId;
+            int at = id.IndexOf('@');
+            if (at > 0) id = id.Substring(0, at);
+            var parts = id.Split('-', '_', ':');
+            var sb = new System.Text.StringBuilder();
+            foreach (var p in parts)
+            {
+                if (p.Length == 0) continue;
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(char.ToUpperInvariant(p[0]));
+                if (p.Length > 1) sb.Append(p.Substring(1));
+            }
+            return sb.Length > 0 ? sb.ToString() : "Job";
         }
 
         // Index of a job (active OR pending) in a channel by structure id; -1 if none.

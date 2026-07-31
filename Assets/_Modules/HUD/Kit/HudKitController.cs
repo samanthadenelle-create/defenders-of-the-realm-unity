@@ -104,6 +104,8 @@ namespace DeNelle.HUD.Kit
         private HudCompassWidget _compass;
         // WO-778: persistent Builders/Training status chip (CoC-feel; polls ObsidianQueueGate.Status).
         private TMP_Text _queueChipLabel;
+        private TMP_Text _queueRowsLabel;     // WC3 queue rows under the chip (owner 2026-07-30)
+        private GameObject _queueRowsPlate;   // hidden while the Builder line is empty
         private int _queueStatusVersion = -1;
 
         // model subscriptions (for teardown)
@@ -604,9 +606,18 @@ namespace DeNelle.HUD.Kit
         // state (never colour-only). BuildObsidianButton carries the MinTouchPx floor.
         private void BuildQueueStatusChip(Transform pool)
         {
-            var chip = ElarionUiKit.BuildObsidianButton(pool, "Builders",
+            // Root fills the (now taller) QueueStatus area: summary BUTTON pinned to the
+            // TOP band, the WC3-style queue rows hanging below it (owner 2026-07-30
+            // "show whats in the queue ... like 5 deep Queued, like in war craft 3").
+            var root = new GameObject("QueueStatusChip", typeof(RectTransform));
+            root.transform.SetParent(pool, false);
+            var rrt = (RectTransform)root.transform;
+            rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
+            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+
+            var chip = ElarionUiKit.BuildObsidianButton(root.transform, "Builders",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.95f), () =>
+                new Vector2(0.02f, 0.68f), new Vector2(0.98f, 0.98f), () =>
                 {
                     FlowTrace.Step("HudKit", "queue chip tapped -> ObsidianQueueGate.RequestToggle");
                     ObsidianQueueGate.RequestToggle();
@@ -617,7 +628,52 @@ namespace DeNelle.HUD.Kit
                 _queueChipLabel.enableWordWrapping = false;
                 _queueChipLabel.overflowMode = TextOverflowModes.Ellipsis;
             }
-            Register("queueStatusChip", WrapAsWidget("queueStatusChip", chip.gameObject));
+
+            // The queue rows: one left-aligned text block on a dim obsidian plate, hidden
+            // while the queue is empty. Text-encoded state (">" working / "-" queued),
+            // never colour-only; raycast off so it never eats taps.
+            var plate = new GameObject("QueueRows", typeof(Image));
+            plate.transform.SetParent(root.transform, false);
+            var prt = (RectTransform)plate.transform;
+            prt.anchorMin = new Vector2(0.02f, 0.02f); prt.anchorMax = new Vector2(0.98f, 0.64f);
+            prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+            var pimg = plate.GetComponent<Image>();
+            pimg.color = new Color(0.07f, 0.065f, 0.06f, 0.82f);
+            pimg.raycastTarget = false;
+            ElarionUiKit.ApplyRounded(pimg);
+
+            _queueRowsLabel = ElarionUiKit.Label(plate.transform, "", 0.04f, 0.96f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.96f);
+            _queueRowsLabel.raycastTarget = false;
+            _queueRowsPlate = plate;
+            plate.SetActive(false);
+
+            Register("queueStatusChip", WrapAsWidget("queueStatusChip", root));
+        }
+
+        // Up to 5 WC3-style rows: "> Barracks 9m30s" (working) / "- Arcane Spire" (queued),
+        // plus a "+N more" tail when the line is deeper than the view. Empty string = hide.
+        private static string FormatQueueRows(ObsidianQueueGate.WorkQueueStatus s)
+        {
+            if (!s.Available || s.Entries == null || s.Entries.Length == 0) return "";
+            var sb = new System.Text.StringBuilder();
+            int shown = 0;
+            for (int i = 0; i < s.Entries.Length && shown < 5; i++, shown++)
+            {
+                var e = s.Entries[i];
+                if (sb.Length > 0) sb.Append('\n');
+                if (e.Queued) sb.Append("- ").Append(e.Label);
+                else
+                {
+                    int sec = System.Math.Max(0, e.RemainingSec);
+                    int h = sec / 3600, m = (sec % 3600) / 60, r = sec % 60;
+                    string t = h > 0 ? (h + "h " + m + "m") : (m > 0 ? (m + "m " + r + "s") : (r + "s"));
+                    sb.Append("> ").Append(e.Label).Append("  ").Append(t);
+                }
+            }
+            int extra = s.Entries.Length - shown;
+            if (extra > 0) sb.Append("\n+").Append(extra).Append(" more");
+            return sb.ToString();
         }
 
         // "Builders 1/2" + newline + shortest remaining ("9m 30s" / "idle"), plus a
@@ -1578,6 +1634,13 @@ namespace DeNelle.HUD.Kit
                 {
                     _queueStatusVersion = qs.Version;
                     _queueChipLabel.text = FormatQueueChip(qs);
+                    // WC3 queue rows under the chip — plate hidden when the line is empty.
+                    if (_queueRowsLabel != null)
+                    {
+                        string rows = FormatQueueRows(qs);
+                        _queueRowsLabel.text = rows;
+                        if (_queueRowsPlate != null) _queueRowsPlate.SetActive(rows.Length > 0);
+                    }
                 }
             }
         }

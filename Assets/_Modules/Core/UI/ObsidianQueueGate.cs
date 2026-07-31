@@ -40,6 +40,14 @@ namespace DeNelle.Core.UI
         // presentation-ready snapshot here on QueueChanged + its 1s tick. The HUD
         // chip polls Status (the HudBuildingFocus precedent) — no cross-assembly read.
 
+        /// <summary>One visible queue row (owner 2026-07-30: WC3-style "show like 5 deep").</summary>
+        public struct QueueEntry
+        {
+            public string Label;         // player-facing job name ("Barracks", "Arcane Spire")
+            public int RemainingSec;     // active job countdown; -1 for a queued (waiting) job
+            public bool Queued;          // true = waiting for a free crew, false = in progress
+        }
+
         /// <summary>Presentation-ready queue summary for the persistent HUD chip.</summary>
         public struct WorkQueueStatus
         {
@@ -48,6 +56,7 @@ namespace DeNelle.Core.UI
             public int TrainBusy, TrainSlots, TrainQueued;
             public int ResearchBusy, ResearchSlots, ResearchQueued;
             public int SoonestRemainingSec;              // min across all channels; -1 = idle
+            public QueueEntry[] Entries;                 // Builder channel, active first, up to ~7 (WC3 5-deep view)
             public int Version;                          // bumps per publish (change-detect)
         }
 
