@@ -1226,7 +1226,7 @@
       },
       {
        "speaker": "Sylas",
-       "text": "You'll find it under the Pets button by the tree - it works for you now."
+       "text": "You'll find it under the Echoes button by the tree - it works for you now."
       }
      ]
     }
@@ -1287,7 +1287,7 @@
       },
       {
        "speaker": "Sylas",
-       "text": "Open the Pets button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
+       "text": "Open the Echoes button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
       }
      ],
      "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
