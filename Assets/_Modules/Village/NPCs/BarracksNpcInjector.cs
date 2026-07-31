@@ -67,6 +67,11 @@ namespace DeNelle.Village
         private const float UnlockPollInterval = 1f;
         private float _nextPollAt;
 
+        // F8 seq528: true when the current drillmaster is anchored to a PLACED catalog
+        // barracks (placed wins); false = baked-anchored, so the poll keeps watching for a
+        // placed one to reseat onto.
+        private bool _anchoredToPlaced;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -107,7 +112,26 @@ namespace DeNelle.Village
 
             if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) return;
             if (!DeNelle.Village.BarracksUnlock.IsUnlocked) return;
-            if (GameObject.Find(HolderName) != null) return;   // already surfaced this scene
+            if (GameObject.Find(HolderName) != null)
+            {
+                // RESEAT WATCH (owner F8 seq528): the drillmaster stands at the legacy BAKED
+                // CastleBarracks but the player has now PLACED a catalog barracks — placed
+                // wins, so re-Inject (idempotent: nukes the holder, reseats at the placed
+                // instance). One-way: once anchored to a placed barracks it never bounces back.
+                if (!_anchoredToPlaced)
+                {
+                    foreach (var b in Object.FindObjectsByType<Building>(FindObjectsSortMode.None))
+                        if (b != null && b.IsAlive &&
+                            string.Equals(b.BuildingId, StructureId, System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            FlowTrace.Step("Barracks",
+                                "poll: PLACED barracks detected while the drillmaster is baked-anchored — reseating (placed wins).");
+                            Inject();
+                            return;
+                        }
+                }
+                return;   // already surfaced this scene (and correctly anchored)
+            }
 
             FlowTrace.Step("Barracks",
                 "unlock flipped true in-hub (ff.barracks + founding-complete) - surfacing the Barracks live (1 Hz poll).");
@@ -137,26 +161,25 @@ namespace DeNelle.Village
             var prior = GameObject.Find(HolderName);
             if (prior != null) Destroy(prior);
 
-            var barracks = GameObject.Find(BarracksRootName);
-
-            // WO-812: the Barracks is now a PLACEABLE catalog structure — a placed/replayed
-            // instance (Building id "barracks") anchors the drillmaster exactly like the
-            // legacy baked CastleBarracks. Baked wins when both exist; either way exactly ONE
-            // holder spawns (idempotent nuke above), so no double drillmasters. The existing
-            // 1 Hz unlock poll doubles as the placed-mid-session watcher: place a Barracks in
-            // build mode and the drillmaster reports within a second, no reload.
-            if (barracks == null)
-            {
-                foreach (var b in Object.FindObjectsByType<Building>(FindObjectsSortMode.None))
-                    if (b != null && b.IsAlive &&
-                        string.Equals(b.BuildingId, StructureId, System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        barracks = b.gameObject;
-                        FlowTrace.Step("Barracks",
-                            "BarracksNpcInjector: anchoring the drillmaster to the PLACED catalog barracks (WO-812).");
-                        break;
-                    }
-            }
+            // WO-812 + owner F8 seq528 ("Barracks has no NPC" — at the barracks SHE placed):
+            // a PLACED/replayed catalog barracks (Building id "barracks") anchors the
+            // drillmaster FIRST — placed wins, same rule as the vendor eviction; the legacy
+            // baked CastleBarracks is the fallback when nothing is placed. Exactly ONE holder
+            // spawns (idempotent nuke above), so never two drillmasters. The 1 Hz unlock poll
+            // doubles as the reseat watcher: place a Barracks in build mode and the
+            // drillmaster moves from the baked anchor within a second.
+            GameObject barracks = null;
+            foreach (var b in Object.FindObjectsByType<Building>(FindObjectsSortMode.None))
+                if (b != null && b.IsAlive &&
+                    string.Equals(b.BuildingId, StructureId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    barracks = b.gameObject;
+                    FlowTrace.Step("Barracks",
+                        "BarracksNpcInjector: anchoring the drillmaster to the PLACED catalog barracks (placed wins, WO-812).");
+                    break;
+                }
+            _anchoredToPlaced = barracks != null;
+            if (barracks == null) barracks = GameObject.Find(BarracksRootName);
 
             if (barracks == null)
             {
