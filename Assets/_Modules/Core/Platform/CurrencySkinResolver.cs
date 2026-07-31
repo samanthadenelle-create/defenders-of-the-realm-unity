@@ -133,6 +133,21 @@ namespace DeNelle.Core.Platform
                 FlowTrace.Step("Skin", "WebGL host is not Pi Browser — resolving the SKR skin (WO-787).");
             }
 
+            // OWNER 2026-07-30 ("flag off the Pi ... for SDK and EXE ... only live for vercel"):
+            // NON-WEB PLAYERS (Android APK / Windows exe) always resolve the SKR skin — the Pi
+            // surface (corner sign-in button, Pi auto-polling, Pi symbol) exists only on the
+            // Vercel WebGL build, and there only inside the real Pi Browser per the WO-787 gate
+            // above. PiSignInController follows Active.AuthMode, so this one gate flips the
+            // corner button to wallet-connect and stops Pi polling on those platforms. The
+            // EDITOR keeps skin.json routing so either skin stays testable without a build.
+            if (string.IsNullOrEmpty(requested)
+                && Application.platform != RuntimePlatform.WebGLPlayer
+                && !Application.isEditor)
+            {
+                requested = "skr";
+                FlowTrace.Step("Skin", "Non-web player (SDK/EXE) — Pi is Vercel-only; resolving the SKR skin (owner 2026-07-30).");
+            }
+
             if (string.IsNullOrEmpty(requested))               // step 2 — skin.json "active"
                 requested = table?["active"]?.ToString();
 
