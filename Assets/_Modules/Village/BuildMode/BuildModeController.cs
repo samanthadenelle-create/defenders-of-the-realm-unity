@@ -1660,13 +1660,25 @@ namespace DeNelle.Village
         {
             bounds = default;
             if (go == null) return false;
+            // PARTICLE EXCLUSION (F8 2026-07-30 Occupied storm): structures host looping
+            // aura/construction VFX PARENTED under their root, and those world-simulated
+            // ParticleSystemRenderers carry enormous bounds — captured VIS dump: 12.5-31.2m
+            // renderer bounds on a 5m tower. Encapsulating them made ONE aura-bearing
+            // structure block a ~15m radius of the build grid ("the layout seems to have
+            // shifted" — it truly shrank). Footprint = the SOLID body only; the mesh-renderer
+            // reasoning (scaled-pivot displacement trap) never applied to particles.
             var rends = go.GetComponentsInChildren<Renderer>(true);
-            if (rends != null && rends.Length > 0)
+            bool any = false;
+            if (rends != null)
             {
-                bounds = rends[0].bounds;
-                for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
-                return true;
+                for (int i = 0; i < rends.Length; i++)
+                {
+                    var r = rends[i];
+                    if (r == null || r is ParticleSystemRenderer) continue;
+                    if (!any) { bounds = r.bounds; any = true; } else bounds.Encapsulate(r.bounds);
+                }
             }
+            if (any) return true;
             var col = go.GetComponentInChildren<Collider>(true);
             if (col != null) { bounds = col.bounds; return true; }
             return false;

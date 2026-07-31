@@ -182,10 +182,32 @@ namespace DeNelle.Village
                 transform,     // parent so the aura tracks the tower
                 _tint,         // HDR violet tint (a hint; motion carries the read)
                 _scale);
-            FlowTrace.Step("ArcaneTower",
-                $"'{name}' arcane aura '{_auraKey}' " +
-                (_handle != null ? "spawned (loop held)."
-                                 : "no-op (VFXManager/catalog not ready or key unauthored) - aura will appear once the row exists."));
+            // SEATING PROOF (F8 2026-07-30 "vfx is not under it"): print where the aura
+            // actually landed vs the visible BODY's bounds, so a misseated ring is one
+            // log read (deltaXZ~0 => the sighting was the orbiting construction orb /
+            // world-space particle drift, not this anchor).
+            if (_handle != null)
+            {
+                Bounds body = default; bool hasBody = false;
+                var rends = GetComponentsInChildren<Renderer>(false);
+                for (int i = 0; i < rends.Length; i++)
+                {
+                    var r = rends[i];
+                    if (r == null || r is ParticleSystemRenderer) continue;
+                    if (!hasBody) { body = r.bounds; hasBody = true; } else body.Encapsulate(r.bounds);
+                }
+                // The seat = the anchor PlayKey was given (the instance is parented with
+                // worldPositionStays at exactly this point; VFXHandle keeps its GO private).
+                Vector3 ap = transform.position + Vector3.up * _height;
+                float dxz = hasBody
+                    ? Vector2.Distance(new Vector2(ap.x, ap.z), new Vector2(body.center.x, body.center.z)) : -1f;
+                FlowTrace.Step("ArcaneTower",
+                    $"'{name}' aura '{_auraKey}' seated: root={transform.position} aura={ap} " +
+                    $"body={(hasBody ? body.center.ToString() : "<none>")} bodyBaseY={(hasBody ? body.min.y : 0f):0.00} deltaXZ={dxz:0.00}");
+            }
+            else
+                FlowTrace.Step("ArcaneTower",
+                    $"'{name}' arcane aura '{_auraKey}' no-op (VFXManager/catalog not ready or key unauthored) - aura will appear once the row exists.");
         }
 
         private void StopAura(bool immediate = false)
