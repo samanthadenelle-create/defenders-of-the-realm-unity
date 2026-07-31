@@ -1,13 +1,15 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **813**. **782–812 CONSUMED.**
-> - **812** = **ADD Barracks as placeable** — design shifted to bake/unlock but placeable was never
->   shipped; catalog has no `barracks` row; Find("CastleBarracks") often missing. Free first place +
->   train entry. File `WorkOrders/WORK_ORDER_812_introduce_barracks.md`, READY. (Before WO-806 UX.)
-> - **811** = **Echo tasks: gather wood/iron/food OR repair structures**. File `WORK_ORDER_811_*`.
-> - **810** = **Brom's Rumor Board layout rework** — owner screenshot crowded/truncated filters + ACC… CTAs +
->   empty detail waste. Claude wireframes → CLI restyle `RumorBoardPanel`. File
->   `WorkOrders/WORK_ORDER_810_rumor_board_layout_rework.md`, READY.
+> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **815**. **782–814 CONSUMED** (813–814 Claude-minted).
+> - **813** = **Barracks discovery/teach** (owner B+C): post-onboard dialogue + marker + Train-N task;
+>   Raids with 0 troops redirect to Barracks; light first-raid coach optional. **Depends on 812 presence.**
+>   File `WorkOrders/WORK_ORDER_813_barracks_discovery_offer.md`, READY (CLI guidance embedded).
+> - **812** = **ADD Barracks placeable** (catalog + free first place + train entry). Authority for presence.
+>   File `WORK_ORDER_812_introduce_barracks.md`. ⚠ **NUMBER COLLISION:** Claude also wrote
+>   `WORK_ORDER_812_echo_harvest_choice_and_affinity.md` — **renumber that to 815** before implement;
+>   barracks introduce keeps 812.
+> - **814** = gear max-level ability (Claude). File `WORK_ORDER_814_gear_max_level_ability.md` — triage later.
+> - **811** = Echo gather wood/iron/food OR repair. **810** = Rumor Board layout.
 > - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — includes §2A army ladder (unlock→train→troop L→gear→readiness).
 > - **806** = Barracks progression spine UX. **807** = troop power readability. **808** = hero gear levels
 >   (**Option A LOCKED**). **809** = war readiness score. Files `WORK_ORDER_806`–`809_*`.
