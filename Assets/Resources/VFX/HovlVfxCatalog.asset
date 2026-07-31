@@ -917,7 +917,7 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 1
   - Key: Weaponskillsword_Impact
-    Prefab: {fileID: 1311559214229084, guid: 5c90cac47c6d2574babbb1fb4621a467, type: 3}
+    Prefab: {fileID: 1120835270511274, guid: 33cfc2755a55b7e4c86c9d7018efbaaa, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0

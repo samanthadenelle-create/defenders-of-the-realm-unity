@@ -814,7 +814,7 @@
         },
         {
             "key": "Weaponskillsword_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 24 green explosion.prefab",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 5 red.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
