@@ -1,6 +1,10 @@
 # WORK ORDER 790 — Outpost/garrison enemy presentation: flat green/orange + weapon not seated
 
-**Status:** READY TO IMPLEMENT
+**Status:** CODE LANDED · TEXTURES PARKED (owner 2026-07-30: "i dont have the texture for now")
+> Part A (code seam) SHIPPED — EnemyFactory albedo-restore via
+> `Resources/Enemies/OrcTex/<model>_basecolor`, texture-XOR-tint. Enemies render tinted
+> until the owner stages the basecolor files; they auto-bind on next run, no code change.
+> Part D (weapon pose ruling) still open with the owner.
 **Lane:** Lane 9 (VFX/Art) — enemy visual/material path
 **Type:** EXISTING (the spawn path is built; presentation degrades to fallbacks)
 **Minted:** 2026-07-30 (owner felt-reports + screenshots from an EnemyOutpost garrison fight)
