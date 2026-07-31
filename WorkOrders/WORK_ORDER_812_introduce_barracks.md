@@ -1,120 +1,138 @@
-# WO-812 — Introduce the Barracks (it is never “built” today)
+# WO-812 — ADD the Barracks (design changed; placeable path was never shipped)
 
 **Status:** READY TO IMPLEMENT  
-**Minted:** 2026-07-30  
-**Lane:** Village / Barracks + FTUE intro (single product lane)  
-**Origin:** owner — *“we need a way to introduce barracks. Its never built”*  
-**Program hub (adjacent):** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A (unlock → train → troop L)  
-**Roles:** Claude = intro copy + UX flow (optional); CLI = unlock path + placement/surface + teach beat  
+**Minted:** 2026-07-30 · **Clarified:** 2026-07-30 (owner: *“since we changed it, we never added it”*)  
+**Lane:** Village build catalog + Barracks entry (single lane)  
+**Origin:** owner — Barracks is never built / never present after hub redesign  
+**Roles:** CLI implements; Claude optional copy for founding teach  
 
 ---
 
-## Why (code-verified)
+## Why (the real gap)
 
-### Product expectation
-CoC / army fantasy: you **get a Barracks**, then **train troops**, then **raid**. Without a visible Barracks, train UI and army feel unrooted (“where do I recruit?”).
+### What changed historically
+1. **Older path:** editor/tool dropped a baked `CastleBarracks` into the hub; injectors found it by name.  
+2. **Charter WO-724 OPTION A:** “not a buildable; surface bake on founding + `ff.barracks`.”  
+3. **Hub / default-town / strategic-placement rework:** many storefronts became **placeable catalog** rows (`structures-catalog.json`).  
+4. **What never happened:** Barracks was **never added** as a catalog placeable **and** the bake/`CastleBarracksPlacer` path is unreliable on the current hub — so players get **neither** “I built a Barracks” **nor** a guaranteed prebuilt.
 
-### What the game actually does (not “place from Build menu”)
+### Proof (code / data)
+| Expected place | Reality |
+|----------------|---------|
+| `structures-catalog.json` placeable id | **No `barracks` row** (Forge, Lumberyard, Echo Hollow, etc. exist) |
+| Build menu military / defense | No Barracks card |
+| Runtime | Looks for `GameObject.Find("CastleBarracks")` — **if missing, drillmaster no-ops** |
+| Unlock | `BarracksUnlock` = `ff.barracks` (default **ON**) + `Onboarded` — unlock alone does **not** create a building |
+| Progression | `barracks.json` + train panels exist **orphaned** from placement |
 
-| Layer | Behavior |
-|-------|----------|
-| **Design charter (WO-724 OPTION A)** | Barracks is the **baked** hub mesh `CastleBarracks`, **not** a buildable catalog structure. `ff.basebuilding` path explicitly out of scope for barracks. |
-| **Unlock** | `BarracksUnlock.IsUnlocked` = `FeatureFlags.Barracks` **AND** `GameState.Onboarded` |
-| **Flag** | `ff.barracks` → `FeatureFlags.Barracks` **default ON** (code 2026-07-26). *Header comments still say “default OFF” — STALE.* |
-| **Visual** | `HubStructureVisualInjector` **hides** `CastleBarracks` when locked; `EnsureBarracksSurfaced()` reactivates when unlocked |
-| **NPC** | `BarracksNpcInjector` places drillmaster only if unlock true **and** `CastleBarracks` exists in scene |
-| **Train UI** | Drillmaster / dialogue / `TroopTrainingPanel` — gated on unlock |
-| **Progression data** | `barracks.json` L1–L6 + `building-tiers.json` id `barracks` exist |
-| **Build catalog** | **No** placeable `barracks` row in `structures-catalog` / build menu — so the player **cannot** “build” one |
-
-So “never built” is **literally true**: there is no Build → Barracks path. The building must **appear** (baked) after founding, or the player never meets it.
-
-### Why players still never see it (failure modes)
-
-1. **Founding incomplete** — `Onboarded == false` keeps unlock false forever if FTUE never finishes.  
-2. **Missing bake** — scene has no `CastleBarracks` → injector logs and no-ops (pack / hub inject order).  
-3. **Standdown / placement migration** — other systems hide “prebuilt” hosts; barracks may stay inactive if unlock poll fails.  
-4. **No teach beat** — even if mesh is live, no FTUE / quest / Sylas line says “go train at the Barracks.”  
-5. **Comment/flag confusion** — docs say hide for V1; code default ON; operators may force `ff.barracks=0`.  
-6. **Stale PlayerPrefs** — local `ff.barracks=0` from older builds.
+So the army/raid ladder (train → army → deploy) is **UI-complete** but **world-incomplete**.
 
 ---
 
 ## Goal
 
-A new or mid-game player always gets a **reachable Barracks** and a **one-beat introduction**, so troop training is discoverable without DevPanel.
+**Ship a real Barracks the player can obtain** after founding:
 
-**Success bar:** After founding (or after the intro beat), player can walk up, talk to drillmaster (or open train UI), and train a Footman without grepping the project.
+1. **Placeable** structure in the build catalog (primary — matches “we never added it”).  
+2. **First Barracks free or prepaid** so founding does not softlock behind 900 wood.  
+3. Placed Barracks opens **train / Barracks panel** (same `structureId` `"barracks"` dialogue / train path).  
+4. Optional: if a legacy `CastleBarracks` bake still exists, do not double-spawn; prefer **one** live Barracks.
 
----
-
-## Owner product choice (implement A unless you flip)
-
-| Option | Description | Pros | Cons |
-|--------|-------------|------|------|
-| **A — Surface + teach (recommended)** | Keep baked `CastleBarracks`; guarantee unlock after founding; FTUE/quest intro | Matches existing code; fast | Not “built” by player |
-| **B — Placeable Barracks** | Add catalog structure + free/cheap first place after founding | CoC “I built it” | New catalog/art; charter OPTION A change |
-| **C — Hybrid** | A first; if bake missing, grant free placeable fallback | Robust | Two paths |
-
-**CLI lean: A + bake-missing fallback (C light).** Mark B only if owner insists on Build menu.
+**Success bar:** New game → finish founding → Build menu shows **Barracks** → place it → talk/train Footman. No DevPanel, no name-find.
 
 ---
 
-## Scope
+## Scope (CLI)
 
-### 1. RCA proof (instrument, then fix)
-- Log once per hub load: `ff.barracks`, `Onboarded`, `IsUnlocked`, whether `CastleBarracks` found, activeSelf, drillmaster present.  
-- Capture on a fresh save after `FinishOnboarding` — name the dead step.
+### 1. Catalog — ADD the building (dual-copy)
+Add to **both**:
+- `Assets/Resources/Data/Canonical/structures-catalog.json`
+- `Assets/StreamingAssets/Data/Canonical/structures-catalog.json`
 
-### 2. Unlock reliability
-- Keep `BarracksUnlock` as single predicate.  
-- Fix **stale comments** in `FeatureFlags.Barracks` / `BarracksUnlock` to match **default ON**.  
-- Ensure `EnsureBarracksSurfaced` runs after onboard flip without requiring 1 Hz luck (event or immediate call from `FinishOnboarding` / `StateReplaced`).  
-- If `CastleBarracks` missing: FlowTrace.Fail loud + fallback (Option C): spawn a known barracks prefab at a hub anchor OR free build catalog grant.
+Suggested row (tune costs to house style; singleton):
 
-### 3. Introduction beat (player-facing)
-Pick one primary teach (can combine):
-- **FTUE step** after founding: “Visit the Barracks” / open train UI (signal: barracks opened or first train enqueued).  
-- **OR** Rumor / Sylas line: “Muster at the Barracks.”  
-- **OR** free “founding” highlight marker on `CastleBarracks` (compass / world ping once).
+```json
+{
+  "id": "barracks",
+  "displayName": "Barracks",
+  "type": "Resource",
+  "kind": "Cell",
+  "visualPrefabPath": "Structures/barracks",
+  "repo": {
+    "behaviorId": "GameplayBuilding",
+    "singleton": true,
+    "buildCost": 0,
+    "cost": { "wood": 0, "food": 0, "iron": 0, "crystals": 0 },
+    "navSurface": "Blocker",
+    "placement": {
+      "mustSitOn": "Ground",
+      "footprint": 5.0,
+      "noOverlap": true,
+      "checkAffordable": true
+    },
+    "notes": "WO-812: army train hub. First place free/prepaid; progression is BarracksService level not structure tier alone."
+  },
+  "orientation": {
+    "corrected": false,
+    "manual": true,
+    "euler": [-90.0, 0.0, 180.0],
+    "offset": [0.0, 0.0, 0.0],
+    "scale": 1.0,
+    "note": "match HubStructureVisualInjector barracks swap if needed"
+  }
+}
+```
 
-Copy: never “Obsidian.” Use **Barracks**, **Train**, **Drillmaster**.
+- Confirm `Resources/Structures/barracks` (or prefab path used by injector) loads; if only polyperfect path works, document and use that Resources path.  
+- Wire **build category** so it appears under Defense / Military / Structures (match existing `build-categories.json` mapping).  
+- `building-tiers.json` already has `"id": "barracks"` — keep aligned.
 
-### 4. Interaction path
-- Drillmaster Talk → train UI (existing).  
-- If NPC fails: secondary door — Barracks building interact opens `TroopTrainingPanel` / `BarracksPanel` when unlock true.  
-- Confirm `TroopDialogueCommands` / interact hooks respect unlock only (no silent no-op).
+### 2. Founding / free first place
+- After `Onboarded` (or on first Build open post-founding): ensure player can place **one free Barracks** (prepaid / free-build list / zero cost + freebie grant — reuse existing free-build patterns e.g. FTUE prepaid or free structure grants).  
+- Optional FTUE/objective: “Raise the Barracks” completion on `build.structure_placed:barracks` (or project’s structure placed signal).  
+- **Default Town / StrategicPlacement:** if prebuilt town is chosen, either include a Barracks in baked layout rows **or** still grant free place — pick one, no doubles.
 
-### 5. Optional placeable (only if owner picks B or bake-missing C)
-- Add structure id `barracks` to build catalog + free first place after onboard.  
-- On place complete: set any needed layout record + open train CTA.  
-- Do **not** require both a baked hidden mesh and a second barracks double.
+### 3. Runtime identity (stop depending only on name find)
+- Placed instance must resolve **structureId / building id `barracks`** for:
+  - `BuildingInteractable` / Talk → train or Barracks panel  
+  - `BarracksNpcInjector` drillmaster: prefer **find by structure id / Building component**, fallback `CastleBarracks` name for legacy  
+- `BarracksUnlock`: still gates train UI if flag OFF; when flag ON + onboarded + **Barracks placed or baked present** → train allowed.  
+  - Clarify predicate: unlock feature **and** (has barracks structure in world OR unlock alone if you auto-grant place). Document in code.
+
+### 4. Deprecate half-states
+- If placeable path is live: **do not** permanently hide a second bake under `!IsUnlocked` without checking placeable ownership.  
+- Prefer: unlock controls **feature** (train); **catalog** controls **presence**.  
+- Fix stale “default OFF” comments on `FeatureFlags.Barracks`.
+
+### 5. Intro beat (light)
+- One teach: highlight Build card or world ping after grant (“Place the Barracks to train troops”).  
+- Sylas / rumor optional one-liner.
 
 ### 6. Proof
-- Headless or EditMode: with Onboarded + flag ON, unlock true.  
-- Play: post-founding hub shows Barracks mesh; train Footman works.  
-- Fresh save: intro beat fires once (SeenTutorials or equivalent).  
+- Catalog regression: id `barracks` present dual-copy.  
+- Place in EditMode/headless or BuildMode path if available.  
+- Felt: place → train Footman → army has troop.  
+- `ff.barracks=0` still blocks train (feature off) even if mesh placed (or hide card — pick one consistent with flag docs).
 
 ---
 
 ## Acceptance
 
-- [ ] Post-founding, Barracks is **visible and interactable** without DevPanel / prefs hacks  
-- [ ] Player is **taught** once where to train  
-- [ ] Train Footman path works end-to-end  
-- [ ] Missing `CastleBarracks` does not fail silent (Fail log + fallback or placeable)  
-- [ ] Flag comments match default ON; `ff.barracks=0` still hides cleanly  
-- [ ] No second ghost barracks when bake + placeable both active  
+- [ ] `barracks` in both structure catalogs, appears in Build UI  
+- [ ] Player can place first Barracks without grinding a huge cost wall  
+- [ ] Placed Barracks is the train entry (drillmaster and/or interact)  
+- [ ] No silent “no CastleBarracks in scene” as the only path  
+- [ ] No double Barracks in default town without design  
+- [ ] Raid/army ladder can start without DevPanel  
 
 ---
 
 ## Do NOT
 
-- Delete progression / troop catalogs  
-- Require walk-to raid for barracks  
-- Gate barracks on `ff.basebuilding`  
-- UXML  
-- Hand-edit `.unity` without batch rebuild path if bake changes  
+- Leave only `GameObject.Find("CastleBarracks")` as the sole presence path  
+- Require `ff.basebuilding` for barracks  
+- Delete troop/barracks progression data  
+- UXML / hand-edit hub `.unity` without a rebuild tool if bake changes  
 
 ---
 
@@ -122,27 +140,30 @@ Copy: never “Obsidian.” Use **Barracks**, **Train**, **Drillmaster**.
 
 | Area | Paths |
 |------|--------|
-| Unlock | `BarracksUnlock.cs`, `FeatureFlags.cs` (comment fix) |
-| Visual | `HubStructureVisualInjector.cs` (`CastleBarracks`, `EnsureBarracksSurfaced`) |
-| NPC | `BarracksNpcInjector.cs` |
-| Train entry | `TroopDialogueCommands`, `BuildingInteractable`, Barracks panels |
-| Intro | FTUE `tutorial-steps.json` and/or dialogue / quest row |
-| Fallback | optional structures-catalog + free build grant |
+| Catalog | `structures-catalog.json` ×2, `build-categories.json` if needed |
+| Place / free | free-build grant / FTUE / `BuildModeController` prepaid patterns |
+| Interact | `BuildingInteractable`, Barracks NPC injector |
+| Unlock | `BarracksUnlock.cs`, `FeatureFlags` comments |
+| Visual | `HubStructureVisualInjector` coexistence rules |
 
 ---
 
-## Claude paste (intro UX)
+## Relationship to other WOs
+
+| WO | Link |
+|----|------|
+| **806** | Barracks UX spine — needs a building that exists first (**this WO first**) |
+| **807** | Troop power UI — after train works |
+| **774** | Raid loadout — needs trained army |
+
+**Dispatch:** implement **812 before** polishing Barracks UI (806).
+
+---
+
+## Claude paste (optional)
 
 ```text
 Read WorkOrders/WORK_ORDER_812_introduce_barracks.md.
-Barracks is baked CastleBarracks unlock, not Build-menu. Design one founding
-intro beat + how the building reads when it appears. No .cs unless assigned CLI.
-```
-
-## Dev quick check (today)
-
-```
-PlayerPrefs: ff.barracks should be 1 or absent (default ON)
-Save: Onboarded true
-Scene: GameObject named CastleBarracks active
+Barracks was never added to structures-catalog after hub redesign.
+Copy for Build card + founding "place the Barracks" beat only. No .cs.
 ```

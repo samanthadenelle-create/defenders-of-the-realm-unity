@@ -1,9 +1,9 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
 > ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **813**. **782–812 CONSUMED.**
-> - **812** = **Introduce Barracks** — not a Build-menu placeable; baked `CastleBarracks` + unlock
->   (ff.barracks AND Onboarded) + teach beat; bake-missing fallback. Owner: "never built." File
->   `WorkOrders/WORK_ORDER_812_introduce_barracks.md`, READY.
+> - **812** = **ADD Barracks as placeable** — design shifted to bake/unlock but placeable was never
+>   shipped; catalog has no `barracks` row; Find("CastleBarracks") often missing. Free first place +
+>   train entry. File `WorkOrders/WORK_ORDER_812_introduce_barracks.md`, READY. (Before WO-806 UX.)
 > - **811** = **Echo tasks: gather wood/iron/food OR repair structures**. File `WORK_ORDER_811_*`.
 > - **810** = **Brom's Rumor Board layout rework** — owner screenshot crowded/truncated filters + ACC… CTAs +
 >   empty detail waste. Claude wireframes → CLI restyle `RumorBoardPanel`. File
