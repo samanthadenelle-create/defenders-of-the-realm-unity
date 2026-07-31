@@ -259,8 +259,18 @@ namespace DeNelle.Village
         /// </summary>
         private void ApplyStats(string job)
         {
-            float weapon = EquippedWeapon != null ? Mathf.Max(0.1f, EquippedWeapon.damageMult) : 1f;
-            float armor  = EquippedArmor  != null ? Mathf.Clamp(EquippedArmor.defense, 0f, 0.9f) : 0f;
+            // WO-808 Option A: the published scalars carry the owned instance's LEVEL via the
+            // pure resolver (level 1 / unauthored band == the authored values exactly, so
+            // pre-808 behaviour is byte-identical). This is the single choke point every
+            // combat consumer reads — no other apply site exists.
+            var gs = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            float weapon = EquippedWeapon != null
+                ? GearStatResolver.EffectiveDamageMult(EquippedWeapon, GearProgression.GearLevelOf(gs, EquippedWeapon.id))
+                : 1f;
+            float armor  = EquippedArmor != null
+                ? GearStatResolver.EffectiveDefense(EquippedArmor, GearProgression.GearLevelOf(gs, EquippedArmor.id))
+                : 0f;
 
             if (AegisSetActive)
             {
@@ -306,6 +316,13 @@ namespace DeNelle.Village
             var companion = GetComponent<StoryCompanion>();
             if (companion != null) companion.SetGearWeaponMult(WeaponMult);
         }
+
+        /// <summary>
+        /// Re-publish the combat scalars from the CURRENT equipment without changing it —
+        /// WO-808: called after a gear-level Improve so the new level is felt immediately
+        /// (WeaponMult/ArmorDefense re-resolve through GearStatResolver at the new level).
+        /// </summary>
+        public void RefreshStats() => ApplyStats(CurrentJob());
 
         private EquipmentController _equipment;
 
