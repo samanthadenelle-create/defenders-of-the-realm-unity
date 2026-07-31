@@ -98,6 +98,9 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _buySellLabel;
         private Button _equipBtn;
         private TMPro.TextMeshProUGUI _equipLabel;
+        private Button _improveBtn;                          // WO-808 reforge CTA (owned gear only)
+        private TMPro.TextMeshProUGUI _improveLabel;
+        private Color _improveLabelBase = Color.white;
         // The kit-assigned label ink (contrast law) — the disabled cue dims THIS color.
         private Color _equipLabelBase = Color.white;
 
@@ -498,6 +501,17 @@ namespace DeNelle.Village.Hero
             // disabled cue dims the SAME ink (luminance cue) instead of forcing a hue.
             _equipLabelBase = _equipLabel != null ? _equipLabel.color : ElarionUi.Parchment;
 
+            // WO-808 IMPROVE (Option A reforge): the free x 0.04-0.28 band of the raised action
+            // row. Visible only when the selected row is OWNED gear (RenderActionBar drives
+            // label/enable/visibility); the VM re-verifies on tap, so a stale tap no-ops with
+            // an honest status line.
+            _improveBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Improve",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.04f, 0.10f), new Vector2(0.28f, 0.175f),
+                () => _vm?.ImproveSelected());
+            _improveLabel = _improveBtn != null ? _improveBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            _improveLabelBase = _improveLabel != null ? _improveLabel.color : ElarionUi.Parchment;
+
             // WO-714 W1 (P5): no stuck status strip — vm.Status changes surface as a kit toast
             // (MaybeToastStatus in Render). Baseline the open-time idle hint so it never toasts.
             _statusBaselined = false;
@@ -505,6 +519,7 @@ namespace DeNelle.Village.Hero
             // Raise the action buttons above the scroll content so a row never eats the tap (ShopPanel trap).
             if (_buySellBtn != null) _buySellBtn.transform.SetAsLastSibling();
             if (_equipBtn != null) _equipBtn.transform.SetAsLastSibling();
+            if (_improveBtn != null) _improveBtn.transform.SetAsLastSibling();
             if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
         }
 
@@ -842,12 +857,24 @@ namespace DeNelle.Village.Hero
             // name column (0.04-0.66; the hint is short-form now), a lower font cap (FontLabel)
             // so auto-size has range, and an explicit 22px min (still legible at desktop scale)
             // before the ellipsis kicks in — full names fit at the captured window size.
-            float nameX1 = hasReason ? 0.66f : 0.96f;
+            // WO-808: an owned, improved piece carries a right-aligned "Lv N" chip (same
+            // ASCII-bracket, dim-parchment recipe as the lock hint — shape + luminance,
+            // never hue). Owned rows are never Locked, so the two chips never collide.
+            bool hasLevelChip = !locked && item.Level > 1;
+            float nameX1 = (hasReason || hasLevelChip) ? 0.66f : 0.96f;
             var nameLbl = ElarionUiKit.Label(row.transform, item.Name,
                 0.0f, 1f, nameColor,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, nameX1,
                 bold: item.Equipped && !locked);
             ElarionUiKit.FitSingleLine(nameLbl, 22f, ElarionUi.FontLabel);
+
+            if (hasLevelChip)
+            {
+                var lvLbl = ElarionUiKit.Label(row.transform, "[Lv " + item.Level + "]",
+                    0.0f, 1f, ElarionUi.Gilt,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.68f, 0.96f, bold: true);
+                ElarionUiKit.FitSingleLine(lvLbl, 20f, ElarionUi.FontMicro);
+            }
 
             // Lock reason hint, right-aligned on locked rows. Short-form for the slim column:
             // "Requires Lv 10" -> "Lv 10" (composed in ShopCatalog.LockReason; the action bar
@@ -1407,6 +1434,26 @@ namespace DeNelle.Village.Hero
                     _equipLabel.color = canAct ? _equipLabelBase
                         : new Color(_equipLabelBase.r, _equipLabelBase.g, _equipLabelBase.b,
                                     _equipLabelBase.a * 0.55f);
+                }
+            }
+
+            // WO-808 IMPROVE state: hidden unless the selection is owned gear; enabled only
+            // when a next level exists AND the ledger affords it. Same luminance-dim law.
+            if (_improveBtn != null)
+            {
+                bool visible = _vm.ImproveVisible && !sell;
+                _improveBtn.gameObject.SetActive(visible);
+                if (visible)
+                {
+                    bool canImprove = _vm.ImproveEnabled;
+                    _improveBtn.interactable = canImprove;
+                    if (_improveLabel != null)
+                    {
+                        _improveLabel.text = _vm.ImproveLabel;
+                        _improveLabel.color = canImprove ? _improveLabelBase
+                            : new Color(_improveLabelBase.r, _improveLabelBase.g, _improveLabelBase.b,
+                                        _improveLabelBase.a * 0.55f);
+                    }
                 }
             }
         }

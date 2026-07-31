@@ -207,18 +207,29 @@ namespace DeNelle.Village.Hero
             {
                 var w = GearCatalog.FindWeapon(id);
                 if (w == null) return "";
-                int dmgPct = RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f);
-                return "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + Fmt1(w.reach) + "m" : "");
+                // WO-808: the grant line reads the LIVE leveled power (level 1 == authored).
+                int lvl = GearLevel(id);
+                int dmgPct = RoundToInt((Max(0.1f, GearStatResolver.EffectiveDamageMult(w, lvl)) - 1f) * 100f);
+                return (lvl > 1 ? "Lv " + lvl + "  " : "")
+                    + "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + Fmt1(w.reach) + "m" : "");
             }
             if (slotKey == SlotChest || slotKey == SlotOffHand)
             {
                 var a = GearCatalog.FindArmor(id);
                 if (a == null) return "";
-                int defPct = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
-                return "+" + defPct + "% def" + (a.hpBonus > 0f ? "  +" + Fmt1(a.hpBonus) + " hp" : "");
+                int lvl = GearLevel(id);
+                int defPct = RoundToInt(GearStatResolver.EffectiveDefense(a, lvl) * 100f);
+                return (lvl > 1 ? "Lv " + lvl + "  " : "")
+                    + "+" + defPct + "% def" + (a.hpBonus > 0f ? "  +" + Fmt1(a.hpBonus) + " hp" : "");
             }
             return "";
         }
+
+        /// <summary>WO-808: the owned instance's gear level (1 baseline) — VM-side state read.</summary>
+        private static int GearLevel(string id) =>
+            GearProgression.GearLevelOf(
+                DeNelle.Core.State.GameStateService.Instance != null
+                    ? DeNelle.Core.State.GameStateService.Instance.State : null, id);
 
         // ── Commands ────────────────────────────────────────────────────────────
 

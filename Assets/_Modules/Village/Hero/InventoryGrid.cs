@@ -137,7 +137,7 @@ namespace DeNelle.Village
                     bool selected = selId != null &&
                                     string.Equals(selId, it.Id, System.StringComparison.OrdinalIgnoreCase);
                     BuildGearCell(content, glyph, iconSp, it.Name, it.Rarity, it.Equipped, locked: false,
-                                  selected: selected, lockText: "",
+                                  selected: selected, lockText: "", level: it.Level,
                                   onTap: () =>
                                   {
                                       if (_vm == null) return;
@@ -269,7 +269,8 @@ namespace DeNelle.Village
         // old hand-rolled frame/glow/Tech-socket construction dies (kit over hand-rolled).
         // The parent GridLayoutGroup drives the cell rect, so full-rect anchors are fine.
         private void BuildGearCell(Transform content, string icon, Sprite iconSprite, string name, string rarity,
-                                   bool equipped, bool locked, bool selected, string lockText, System.Action onTap)
+                                   bool equipped, bool locked, bool selected, string lockText, System.Action onTap,
+                                   int level = 1)
         {
             var slot = ElarionUiKit.BuildRaritySlot(content, RarityIndex(rarity),
                 Vector2.zero, Vector2.one, empty: false, onTap: onTap);
@@ -324,6 +325,22 @@ namespace DeNelle.Village
                          TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
                 chipLbl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(chipLbl, 0f, ElarionUi.FontMicro);
+            }
+
+            // WO-808: gear power level chip, TOP-RIGHT (the only free band — bottom edge is
+            // consumed by the rarity letter + EQ chip; inset x>=0.60 keeps it on the rim's
+            // flat top edge, clear of the ornate corner). Text carries the state; NOT a
+            // Button (a badge must never inflate to the 112px touch floor). Level 1 = no chip.
+            if (level > 1)
+            {
+                var lvChip = AddImage(slot.root.transform, "GearLevel",
+                                      new Vector2(0.60f, 0.72f), new Vector2(0.98f, 0.96f),
+                                      new Color(0.10f, 0.095f, 0.09f, 0.92f));
+                NoRaycast(lvChip);
+                var lvLbl = AddLabel(lvChip.transform, "Lv " + level, 0f, 1f, ElarionUi.Gilt,
+                         ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                lvLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(lvLbl, 0f, ElarionUi.FontMicro);
             }
             if (locked)
             {

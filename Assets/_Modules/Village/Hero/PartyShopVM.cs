@@ -582,6 +582,87 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
+        // ── WO-808 Option A: the Improve verb (Forge/Armorer reforge) ─────────────
+
+        /// <summary>True when the SELECTED row is owned gear (the Improve button shows at all).</summary>
+        public bool ImproveVisible
+        {
+            get
+            {
+                string id = SelectedId;
+                if (string.IsNullOrEmpty(id) || _store == null || _store.OwnedQuantity(id) <= 0) return false;
+                return GearCatalog.FindWeapon(id) != null || GearCatalog.FindArmor(id) != null;
+            }
+        }
+
+        /// <summary>True when the selected owned gear can be improved RIGHT NOW (not maxed + affordable).</summary>
+        public bool ImproveEnabled
+        {
+            get
+            {
+                string id = SelectedId;
+                string rarity = RarityOf(id);
+                return ImproveVisible && rarity != null && GearProgression.CanImprove(id, rarity, out _);
+            }
+        }
+
+        /// <summary>Button label — "Improve Lv N" while a next level exists, "Max Level" at cap.</summary>
+        public string ImproveLabel
+        {
+            get
+            {
+                string id = SelectedId;
+                string rarity = RarityOf(id);
+                if (string.IsNullOrEmpty(id) || rarity == null) return "Improve";
+                int lvl = GearLevel(id);
+                return GearProgression.HasNextLevel(rarity, lvl) ? "Improve Lv " + (lvl + 1) : "Max Level";
+            }
+        }
+
+        /// <summary>
+        /// WO-808 Improve: reforge the SELECTED owned piece one level in place (instant,
+        /// ResourceLedger-charged; the instance and its equip state are untouched — only
+        /// its power climbs). Status carries the result or the honest block reason.
+        /// </summary>
+        public void ImproveSelected()
+        {
+            string id = SelectedId;
+            if (string.IsNullOrEmpty(id)) { Status = "Select an item to improve."; Raise(); return; }
+            if (_store == null || _store.OwnedQuantity(id) <= 0)
+            {
+                Status = "You must own it before you can improve it.";
+                Raise(); return;
+            }
+            string rarity = RarityOf(id);
+            if (rarity == null) { Status = "That item can't be improved."; Raise(); return; }
+
+            if (!GearProgression.CanImprove(id, rarity, out string reason))
+            {
+                Status = reason;
+                Raise(); return;
+            }
+
+            var w = GearCatalog.FindWeapon(id);
+            var a = GearCatalog.FindArmor(id);
+            string name = w != null ? Display(w.name, w.id) : a != null ? Display(a.name, a.id) : id;
+
+            int newLevel = GearProgression.Improve(id, rarity);
+            Status = newLevel > 0
+                ? name + " improved to Lv " + newLevel + "."
+                : "Improve failed.";
+            Rebuild();
+            Raise();
+        }
+
+        private static string RarityOf(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var w = GearCatalog.FindWeapon(id);
+            if (w != null) return w.rarity;
+            var a = GearCatalog.FindArmor(id);
+            return a != null ? a.rarity : null;
+        }
+
         /// <summary>Owner ruling 07-06 (3-state shop Equip button): UNEQUIP the selected,
         /// currently-worn item from the selected member through the SAME IEquipTarget seam
         /// <see cref="EquipSelected"/> uses. Routes by the slot that actually wears the id —
@@ -809,8 +890,10 @@ namespace DeNelle.Village.Hero
             else _rowActions[id] = () => BuyWeapon(w);
 
             // Price column shows the buy cost, or 0 (Owned) when held. Equipped/Owned flags drive the chip.
+            // WO-808: owned rows carry the instance's gear level (View shows a "Lv N" chip when > 1).
             _items.Add(new ItemVM(id, name, IconRoleWeapon, id, owned ? 0 : cost.Coins, "gold",
-                affordable, w.rarity, equipped: equipped, locked: false));
+                affordable, w.rarity, equipped: equipped, locked: false,
+                level: owned ? GearLevel(id) : 1));
         }
 
         private void AddBuyArmorRow(ArmorDef a, ResourceCost cost, bool owned, bool equipped, bool affordable,
@@ -837,7 +920,8 @@ namespace DeNelle.Village.Hero
             else _rowActions[id] = () => BuyArmor(a);
 
             _items.Add(new ItemVM(id, name, IconRoleArmor, id, owned ? 0 : cost.Coins, "gold",
-                affordable, a.rarity, equipped: equipped, locked: false));
+                affordable, a.rarity, equipped: equipped, locked: false,
+                level: owned ? GearLevel(id) : 1));
         }
 
         // -- BUY - a CRAFTABLE recipe row (crafting-as-shoppable). Surfaced when the vendor's
@@ -1373,17 +1457,32 @@ namespace DeNelle.Village.Hero
             var w = GearCatalog.FindWeapon(id);
             if (w != null)
             {
-                // Damage: a derived whole number from the multiplier (the "damage" the player reads).
-                float dmg = DerivedDamage(w.damageMult);
+                // Damage: a derived whole number from the multiplier (the "damage" the player
+                // reads). WO-808: BOTH sides resolve through the gear-level ladder so an owned
+                // improved piece (and the equipped comparison) show their LIVE power.
+                float dmg = DerivedDamage(GearStatResolver.EffectiveDamageMult(w, GearLevel(w.id)));
                 bool cmp = compare && m != null && m.EquippedWeapon != null
                            && !string.Equals(m.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
-                float curDmg = cmp ? DerivedDamage(m.EquippedWeapon.damageMult) : 0f;
+                float curDmg = cmp
+                    ? DerivedDamage(GearStatResolver.EffectiveDamageMult(m.EquippedWeapon, GearLevel(m.EquippedWeapon.id)))
+                    : 0f;
                 list.Add(MakeSpec("Damage", Fmt0(dmg), cmp, dmg - curDmg, 0f));
 
                 if (w.reach > 0f || (cmp && m.EquippedWeapon.reach > 0f))
                 {
                     float curReach = cmp ? m.EquippedWeapon.reach : 0f;
                     list.Add(MakeSpec("Reach", Fmt1(w.reach) + "m", cmp, w.reach - curReach, 0.05f, "m"));
+                }
+
+                // WO-808: owned + improvable -> the before->after preview the owner specced
+                // ("Lcurrent -> Lnext, damage before -> after"). Green (+1) — an Improve is
+                // always an upgrade; the ladder never authors a downgrade.
+                int lvl = GearLevel(w.id);
+                if (_store != null && _store.OwnedQuantity(w.id) > 0 && GearProgression.HasNextLevel(w.rarity, lvl))
+                {
+                    float nextDmg = DerivedDamage(GearStatResolver.EffectiveDamageMult(w, lvl + 1));
+                    list.Add(new PartyShopSpec("Improve", "Lv " + lvl + " -> " + (lvl + 1),
+                        FmtDelta(nextDmg - dmg, " dmg"), 1));
                 }
                 return list;
             }
@@ -1393,8 +1492,10 @@ namespace DeNelle.Village.Hero
             {
                 bool cmp = compare && m != null && m.EquippedArmor != null
                            && !string.Equals(m.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
-                float curDef = cmp ? Clamp(m.EquippedArmor.defense, 0f, 0.9f) : 0f;
-                float def = Clamp(a.defense, 0f, 0.9f);
+                float curDef = cmp
+                    ? GearStatResolver.EffectiveDefense(m.EquippedArmor, GearLevel(m.EquippedArmor.id))
+                    : 0f;
+                float def = GearStatResolver.EffectiveDefense(a, GearLevel(a.id));
                 list.Add(MakeSpec("Defense", Fmt2(def), cmp, def - curDef, 0.005f));
 
                 if (a.hpBonus > 0f || (cmp && m.EquippedArmor.hpBonus > 0f))
@@ -1402,11 +1503,26 @@ namespace DeNelle.Village.Hero
                     float curHp = cmp ? m.EquippedArmor.hpBonus : 0f;
                     list.Add(MakeSpec("HP", Fmt0(a.hpBonus), cmp, a.hpBonus - curHp, 0.5f));
                 }
+
+                int lvl = GearLevel(a.id);
+                if (_store != null && _store.OwnedQuantity(a.id) > 0 && GearProgression.HasNextLevel(a.rarity, lvl))
+                {
+                    float nextDef = GearStatResolver.EffectiveDefense(a, lvl + 1);
+                    list.Add(new PartyShopSpec("Improve", "Lv " + lvl + " -> " + (lvl + 1),
+                        FmtDelta(nextDef - def, " def"), 1));
+                }
                 return list;
             }
 
             return list;   // craftable / non-gear row - no stat block
         }
+
+        /// <summary>WO-808: the owned instance's gear level (1 baseline). VM-side state read —
+        /// the MVVM law keeps GameStateService out of Views; this is the sanctioned seam.</summary>
+        private static int GearLevel(string id) =>
+            GearProgression.GearLevelOf(
+                DeNelle.Core.State.GameStateService.Instance != null
+                    ? DeNelle.Core.State.GameStateService.Instance.State : null, id);
 
         // Build one spec line: format the signed delta + classify the sign (with a small epsilon so a
         // float wobble doesn't read as a change). suffix is appended to the delta number (e.g. "m").

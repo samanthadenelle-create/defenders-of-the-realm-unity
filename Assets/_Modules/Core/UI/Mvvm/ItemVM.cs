@@ -33,11 +33,15 @@ namespace DeNelle.Core.UI.Mvvm
         /// <summary>Why the item is locked (e.g. "Requires Lv 5" / "Class: Ranger"), or null when unlocked.
         /// The View shows this hint on a greyed, non-purchasable row so the player sees progression.</summary>
         public readonly string LockReason;
+        /// <summary>WO-808: the owned instance's gear power level (1 = authored baseline; the
+        /// View shows a "Lv N" chip only when &gt; 1). 0/1 for non-gear items. Plain int — the
+        /// contract stays Unity-UI-free.</summary>
+        public readonly int Level;
 
         public ItemVM(string id, string name, string iconRole, string iconName, int price,
                       string currencyId, bool affordable, string rarity = null,
                       bool equipped = false, bool locked = false, string lockReason = null,
-                      string iconPath = null)
+                      string iconPath = null, int level = 1)
         {
             Id = id;
             Name = name;
@@ -51,6 +55,7 @@ namespace DeNelle.Core.UI.Mvvm
             Locked = locked;
             LockReason = lockReason;
             IconPath = iconPath;
+            Level = level;
         }
     }
 }

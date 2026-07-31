@@ -345,14 +345,17 @@ namespace DeNelle.Village.Hero
                 if (w == null) continue;
                 bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                 string.Equals(equippedId, w.id, StringComparison.OrdinalIgnoreCase);
-                int dmgPct = RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f);
-                string stats = "+" + dmgPct + "% dmg" + (w.reach > 0f ? "   reach " + Fmt1(w.reach) + "m" : "");
+                // WO-808: stats read the LIVE leveled power (level 1 == authored, unchanged).
+                int lvl = GearLevel(w.id);
+                int dmgPct = RoundToInt((Max(0.1f, GearStatResolver.EffectiveDamageMult(w, lvl)) - 1f) * 100f);
+                string stats = (lvl > 1 ? "Lv " + lvl + "   " : "")
+                    + "+" + dmgPct + "% dmg" + (w.reach > 0f ? "   reach " + Fmt1(w.reach) + "m" : "");
                 string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
                 _details[w.id] = new InventoryDetail(name, DescribeGear(w.job, w.rarity), stats, qty,
                     IconRoleWeapon, w.id, w.rarity, canUse: false, canEquip: true);
                 _slotKind[w.id] = InventoryTabKind.Weapons;
                 _slots.Add(new ItemVM(w.id, name + (qty > 1 ? " x" + qty : ""), IconRoleWeapon, w.id,
-                    0, "gold", true, w.rarity, equipped: equipped));
+                    0, "gold", true, w.rarity, equipped: equipped, level: lvl));
             }
         }
 
@@ -364,16 +367,25 @@ namespace DeNelle.Village.Hero
                 if (a == null) continue;
                 bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                 string.Equals(equippedId, a.id, StringComparison.OrdinalIgnoreCase);
-                int defPct = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
-                string stats = "+" + defPct + "% def" + (a.hpBonus > 0f ? "   +" + Fmt1(a.hpBonus) + " hp" : "");
+                // WO-808: stats read the LIVE leveled power (level 1 == authored, unchanged).
+                int lvl = GearLevel(a.id);
+                int defPct = RoundToInt(GearStatResolver.EffectiveDefense(a, lvl) * 100f);
+                string stats = (lvl > 1 ? "Lv " + lvl + "   " : "")
+                    + "+" + defPct + "% def" + (a.hpBonus > 0f ? "   +" + Fmt1(a.hpBonus) + " hp" : "");
                 string name = string.IsNullOrEmpty(a.name) ? a.id : a.name;
                 _details[a.id] = new InventoryDetail(name, DescribeGear(a.job, a.rarity), stats, qty,
                     IconRoleArmor, a.id, a.rarity, canUse: false, canEquip: true);
                 _slotKind[a.id] = InventoryTabKind.Armor;
                 _slots.Add(new ItemVM(a.id, name + (qty > 1 ? " x" + qty : ""), IconRoleArmor, a.id,
-                    0, "gold", true, a.rarity, equipped: equipped));
+                    0, "gold", true, a.rarity, equipped: equipped, level: lvl));
             }
         }
+
+        /// <summary>WO-808: the owned instance's gear level (1 baseline) — VM-side state read.</summary>
+        private static int GearLevel(string id) =>
+            GearProgression.GearLevelOf(
+                DeNelle.Core.State.GameStateService.Instance != null
+                    ? DeNelle.Core.State.GameStateService.Instance.State : null, id);
 
         // No per-player OUTFIT/cosmetic ownership model exists yet (the panels showed none).
         // The tab is kept (label + zero count) so the surface matches; it lists nothing until
