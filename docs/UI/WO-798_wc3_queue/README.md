@@ -6,10 +6,15 @@
 
 | File | Purpose |
 |------|---------|
-| `WIREFRAMES.md` | Annotated portrait wireframes (A / B / C), chip anatomy, states, CLI notes |
-| `wireframe_A_production_dock.html` | Open in browser — **recommended** layout (always-on dock when busy) |
-| `wireframe_chip_anatomy.html` | Single-chip + pending-strip detail |
-| `layout_A.svg` | Vector of the dock for slides / image-pair baseline |
+| **`CODE_AS_IS.md`** | **Read first** — live stack, APIs, what already shipped (5-deep text rows) |
+| `WIREFRAMES.md` | Target visual A / B / C (evolve FROM code, not greenfield) |
+| `wireframe_A_production_dock.html` | Browser mock of target Layout A (icons/rings) |
+| `layout_A.svg` | Vector of target dock |
 
-**Claude next:** polish mockups to Obsidian black/gold kit feel, produce PNG image pairs, freeze owner decision on A vs B vs C.  
-**CLI later:** implement only after owner signs.
+**Claude next:**  
+1. Read `CODE_AS_IS.md`  
+2. Compare target wireframes to the live right-column text queue  
+3. Polish mockups that **upgrade** the existing chip (icons/rings/multi-channel), don’t invent a second system  
+4. Owner image-pair sign-off → CLI implements  
+
+**CLI later:** only after owner signs.
