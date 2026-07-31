@@ -179,6 +179,19 @@ namespace DeNelle.Village.Buildings.Progression
             if (_vm != null) _vm.Changed -= Render;
         }
 
+        // Queue-state repaint (F8 2026-07-30): the CTA now reads the live builder gates, so
+        // when a job starts/finishes WHILE this panel is open the button must re-resolve
+        // (busy countdown -> Upgrade, or vice versa). Poll the published queue snapshot's
+        // Version — the same change-detect seam the HUD chip uses; a repaint only fires on
+        // an actual publish, never per-frame.
+        private int _queueVersionSeen;
+        private void Update()
+        {
+            if (_vm == null) return;
+            var st = DeNelle.Core.UI.ObsidianQueueGate.Status;
+            if (st.Version != _queueVersionSeen) { _queueVersionSeen = st.Version; Render(); }
+        }
+
         // ── Render: repaint from vm.* ONLY ────────────────────────────────────────
 
         private void Render()
@@ -846,7 +859,31 @@ namespace DeNelle.Village.Buildings.Progression
                         () => { FlowTrace.Step("UpgradeUI", "raise-village from " + selId); _vm?.Select(BuildingUpgradeVM.VillageTierRowId); });
                     return;
                 }
-                BuildGoldButton(host, "Upgrade", sel.Affordable, x0, x1, yb, yt,
+
+                // PRE-TAP REASON (owner 2026-07-30 "some way to tell user why they cannot click
+                // yet"): the old CTA enabled purely on affordability, so a busy-builders state
+                // read as an unexplained dead button (or, on tap, a wrong "can't afford"). Read
+                // the SAME timer gates the VM's tap-path mirrors and grey the button with the
+                // live reason instead — CoC behaviour: the button always says why.
+                var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                string vmId = _vm != null ? _vm.BuildingId : null;
+                if (timerSvc != null && vmId != null && timerSvc.IsBuilding(vmId))
+                {
+                    BuildLockButton(host, "Under construction — " + (int)timerSvc.RemainingSeconds(vmId) + "s",
+                        x0, x1, yb, yt, null);
+                    return;
+                }
+                if (timerSvc != null && !timerSvc.HasFreeSlot)
+                {
+                    BuildLockButton(host, "All build crews are busy", x0, x1, yb, yt, null);
+                    return;
+                }
+                if (!sel.Affordable)
+                {
+                    BuildLockButton(host, "Not enough resources yet", x0, x1, yb, yt, null);
+                    return;
+                }
+                BuildGoldButton(host, "Upgrade", true, x0, x1, yb, yt,
                     () => { FlowTrace.Step("UpgradeUI", "upgrade " + selId); _vm?.Select(selId); });
                 return;
             }

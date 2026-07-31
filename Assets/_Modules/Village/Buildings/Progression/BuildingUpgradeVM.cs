@@ -149,6 +149,10 @@ namespace DeNelle.Village.Buildings.Progression
 
         public string Title { get; private set; }
 
+        /// <summary>The catalog building id this VM drives — lets the panel's CTA read the
+        /// live timer gates (busy / no free crew) for a pre-tap reason (F8 2026-07-30).</summary>
+        public string BuildingId => _buildingId;
+
         public void Close() => _onClose?.Invoke();
 
         public void Dispose()
@@ -241,12 +245,17 @@ namespace DeNelle.Village.Buildings.Progression
                 {
                     Status = "Under construction — " + (int)timerSvc.RemainingSeconds(_buildingId)
                              + "s until work here finishes.";
+                    // F8 2026-07-30: these mirror gates emitted NO trace, so a busy refusal was
+                    // invisible in the log while the resources-shaped Fail below got the blame.
+                    FlowTrace.Step("Upgrade", _buildingId + " tier-" + next + " refused: under construction ("
+                        + (int)timerSvc.RemainingSeconds(_buildingId) + "s left).");
                     Raise();
                     return;
                 }
                 if (timerSvc != null && !timerSvc.HasFreeSlot)
                 {
                     Status = "All build crews are busy — finish a construction first.";
+                    FlowTrace.Step("Upgrade", _buildingId + " tier-" + next + " refused: no free build crew.");
                     Raise();
                     return;
                 }
