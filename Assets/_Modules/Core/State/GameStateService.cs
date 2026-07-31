@@ -443,6 +443,7 @@ namespace DeNelle.Core.State
                 ObsidianQueue = s.ObsidianQueue,   // WO-773 — common multi-channel work queue (v35); serialized straight to JSON by the save layer
                 BarracksLevel = s.BarracksLevel,   // WO-771.9 — barracks level (additive default-on-read; NO schema bump)
                 TroopLevels = s.TroopLevels != null ? new Dictionary<string, int>(s.TroopLevels) : null,   // WO-771.9 — per-troop upgrade levels (additive default-on-read)
+                GearLevels = s.GearLevels != null ? new Dictionary<string, int>(s.GearLevels) : null,   // WO-808 — per-instance gear power levels (additive default-on-read)
             };
         }
 
@@ -532,6 +533,7 @@ namespace DeNelle.Core.State
             s.ObsidianQueue = p.ObsidianQueue ?? ObsidianQueueState.Empty();   // WO-773 — common work queue (v35); never null (older saves are built by the v34→v35 migrator, a truly-absent queue = a fresh empty three-channel queue)
             if (p.BarracksLevel.HasValue) s.BarracksLevel = p.BarracksLevel.Value < 1 ? 1 : p.BarracksLevel.Value;   // WO-771.9 — barracks level; absent → keep the SO's default (1)
             if (p.TroopLevels != null) s.TroopLevels = p.TroopLevels;   // WO-771.9 — per-troop upgrade levels; absent → keep the fresh empty dict (all baseline)
+            if (p.GearLevels != null) s.GearLevels = p.GearLevels;   // WO-808 — per-instance gear levels; absent → keep the fresh empty dict (all baseline)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -853,6 +855,7 @@ namespace DeNelle.Core.State
             s.ObsidianQueue = ObsidianQueueState.Empty();   // WO-773 — New Game: an empty three-channel work queue (no jobs on Builder/Train/Research).
             s.BarracksLevel = 1;                             // WO-771.9 — New Game: day-one barracks (unlocks Footman + Archer).
             s.TroopLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-771.9 — New Game: every troop at baseline (level 1).
+            s.GearLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-808 — New Game: all gear at authored baseline (level 1).
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
             // WO-108/WO-682/WO-707 — New Game starts on the BLANK template (owner ruling

@@ -499,6 +499,19 @@ namespace DeNelle.Core.State
         public System.Collections.Generic.Dictionary<string, int> TroopLevels
             = new System.Collections.Generic.Dictionary<string, int>();
 
+        /// <summary>
+        /// WO-808 Option A — per-instance GEAR power level, keyed by gear id (e.g.
+        /// {"weapon_iron_longsword":3}). The SAME owned weapon/armor levels up in place
+        /// (owner-locked 2026-07-30: instance reforge — not tier-swap, not rarity).
+        /// Absent id (or level &lt;= 1) resolves to the authored baseline via
+        /// <c>DeNelle.Village.GearStatResolver</c>. Raised by GearProgression.Improve
+        /// (instant, ResourceLedger-charged). ADDITIVE default-on-read: nullable on the
+        /// wire (SaveSchema.gearLevels), absent → this empty initializer, so no schema
+        /// bump — the troopLevels precedent. Append-only field at the END.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, int> GearLevels
+            = new System.Collections.Generic.Dictionary<string, int>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

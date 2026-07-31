@@ -601,6 +601,14 @@ namespace DeNelle.Core.State
             /// field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("troopLevels")] public Dictionary<string, int> TroopLevels;
+
+            /// <summary>
+            /// Per-instance gear power LEVEL by gear id (WO-808 Option A). Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → GameState's empty-dict
+            /// initializer applies on read (all gear at authored baseline), so NO migrator
+            /// step + NO schema bump. Append-only field at the END.
+            /// </summary>
+            [JsonProperty("gearLevels")] public Dictionary<string, int> GearLevels;
         }
 
         // =====================================================================
