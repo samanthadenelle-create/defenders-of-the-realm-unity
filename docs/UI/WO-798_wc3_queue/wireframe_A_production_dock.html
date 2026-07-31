@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WO-798 Layout A — Production dock (wireframe)</title>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --panel: #12161c;
+      --panel2: #1a2028;
+      --gold: #d4af5a;
+      --gilt: #c9a84c;
+      --ink: #e8e6e0;
+      --dim: #8a8680;
+      --ring: #6eb5ff;
+      --free: #3a424c;
+      --safe: #1a1a1a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #1c1c1c;
+      color: var(--ink);
+      font-family: system-ui, Segoe UI, sans-serif;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: center;
+      padding: 24px;
+    }
+    h1 {
+      width: 100%;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--dim);
+      letter-spacing: 0.04em;
+      margin: 0 0 8px;
+    }
+    .note {
+      width: min(360px, 100%);
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.45;
+    }
+    .note code { color: var(--gold); }
+    /* Phone frame 1080:1920 ≈ 9:16 */
+    .phone {
+      width: 360px;
+      height: 640px;
+      background: linear-gradient(180deg, #1a2838 0%, #2a3a2a 40%, #1a2220 100%);
+      border: 3px solid #333;
+      border-radius: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      flex-shrink: 0;
+    }
+    .phone.idle { /* S0 */ }
+    .label-tag {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.65);
+      color: var(--gold);
+      font-size: 10px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      z-index: 20;
+      letter-spacing: 0.06em;
+    }
+    /* Fake world HUD */
+    .hud-top {
+      position: absolute;
+      top: 28px;
+      left: 12px;
+      right: 12px;
+      height: 48px;
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+    }
+    .plate {
+      flex: 1;
+      background: rgba(10,12,16,0.75);
+      border: 1px solid rgba(212,175,90,0.35);
+      border-radius: 8px;
+      font-size: 10px;
+      padding: 6px 8px;
+      color: var(--dim);
+    }
+    .world-hint {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255,255,255,0.25);
+      font-size: 13px;
+      text-align: center;
+      pointer-events: none;
+    }
+    /* Production dock */
+    .dock {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 72px;
+      background: rgba(10, 12, 16, 0.94);
+      border-top: 2px solid rgba(212,175,90,0.55);
+      padding: 8px 10px 10px;
+      max-height: 48%;
+      overflow-y: auto;
+    }
+    .dock-title {
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .channel {
+      background: var(--panel2);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+    }
+    .channel-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--dim);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .channel-head strong { color: var(--ink); font-weight: 600; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chip {
+      width: 64px;
+      height: 72px;
+      background: var(--panel);
+      border: 1px solid rgba(212,175,90,0.4);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .chip .ring {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 3px solid var(--free);
+      border-top-color: var(--ring);
+      border-right-color: var(--ring);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .chip .t { font-size: 9px; color: var(--gold); margin-top: 3px; }
+    .chip .n { font-size: 8px; color: var(--dim); max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip.free {
+      border-style: dashed;
+      border-color: var(--free);
+      opacity: 0.7;
+    }
+    .chip.free .ring {
+      border: 2px dashed var(--free);
+      color: var(--dim);
+      font-size: 16px;
+    }
+    .pending {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-height: 36px;
+    }
+    .pending .dot-sep {
+      color: var(--dim);
+      font-size: 14px;
+      margin: 0 2px;
+    }
+    .picon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #252b34;
+      border: 1px solid #3a424c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .picon.more {
+      font-size: 9px;
+      color: var(--gold);
+      border-color: rgba(212,175,90,0.4);
+    }
+    .work-link {
+      margin-top: 4px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--gilt);
+      border: 1px solid rgba(212,175,90,0.35);
+      border-radius: 8px;
+      padding: 6px;
+      min-height: 36px;
+    }
+    /* Town bar */
+    .town {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      bottom: 10px;
+      height: 52px;
+      display: flex;
+      gap: 4px;
+    }
+    .town button {
+      flex: 1;
+      background: #1e242c;
+      border: 1px solid #3a424c;
+      border-radius: 8px;
+      color: var(--ink);
+      font-size: 9px;
+      min-height: 44px;
+    }
+    .town button.work {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    /* Expand sheet overlay */
+    .sheet {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 140px;
+      background: var(--panel);
+      border: 1px solid var(--gold);
+      border-radius: 12px;
+      padding: 12px;
+      z-index: 15;
+      display: none;
+    }
+    .sheet.show { display: block; }
+    .sheet h3 { margin: 0 0 4px; font-size: 14px; color: var(--gold); }
+    .sheet p { margin: 0 0 10px; font-size: 11px; color: var(--dim); }
+    .sheet .btns { display: flex; gap: 8px; }
+    .sheet .btns button {
+      flex: 1;
+      min-height: 40px;
+      border-radius: 8px;
+      border: 1px solid var(--gold);
+      background: #2a2418;
+      color: var(--gold);
+      font-size: 11px;
+    }
+    .callout {
+      position: absolute;
+      font-size: 9px;
+      color: #7ec8ff;
+      background: rgba(0,40,80,0.75);
+      padding: 2px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 12;
+    }
+  </style>
+</head>
+<body>
+  <h1>WO-798 · LAYOUT A — Production dock (wireframe) · 360×640 ≈ 9:16 portrait</h1>
+
+  <!-- STATE S3: multi-channel busy -->
+  <div class="phone" id="phone-s3">
+    <div class="label-tag">S3 · multi-channel busy (primary mock)</div>
+    <div class="hud-top">
+      <div class="plate">Hero · HP</div>
+      <div class="plate">Wood · Iron · Food</div>
+    </div>
+    <div class="world-hint">3D world<br/>(unchanged)</div>
+
+    <div class="callout" style="bottom: 52%; left: 12px;">progress RING<br/>not color alone</div>
+    <div class="callout" style="bottom: 38%; right: 8px;">pending<br/>FIFO icons</div>
+
+    <div class="dock">
+      <div class="dock-title">PRODUCTION</div>
+
+      <div class="channel">
+        <div class="channel-head">
+          <strong>Builders</strong>
+          <span>2/2 busy</span>
+        </div>
+        <div class="row">
+          <div class="chip" title="active builder slot">
+            <div class="ring">W</div>
+            <div class="t">0:42</div>
+            <div class="n">Wall L2</div>
+          </div>
+          <div class="chip">
+            <div class="ring" style="border-top-color: var(--ring); border-right-color: var(--free);">T</div>
+            <div class="t">3:10</div>
+            <div class="n">Tower</div>
+          </div>
+          <span class="dot-sep">·</span>
+          <div class="pending">
+            <div class="picon" title="queued">G</div>
+            <div class="picon">R</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="channel">
+        <div class="channel-head">
+          <strong>Training</strong>
+          <span>1/1 · 3 queued</span>
+        </div>
+        <div class="row">
+          <div class="chip" style="outline: 1px dashed var(--ring);" title="tap → expand detail">
+            <div class="ring">F</div>
+            <div class="t">1:05</div>
+            <div class="n">Footman</div>
+          </div>
+          <span class="dot-sep">·</span>
+          <div class="pending">
+            <div class="picon">F</div>
+            <div class="picon">F</div>
+            <div class="picon">A</div>
+            <div class="picon more">+0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="channel">
+        <div class="channel-head">
+          <strong>Research</strong>
+          <span>idle</span>
+        </div>
+        <div class="row">
+          <div class="chip free">
+            <div class="ring">+</div>
+            <div class="t">free</div>
+            <div class="n">slot</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="work-link">Work · full panel (sell-time · +slot)</div>
+    </div>
+
+    <div class="town">
+      <button type="button">Build</button>
+      <button type="button">Talk</button>
+      <button type="button">Bag</button>
+      <button type="button" class="work">Work</button>
+      <button type="button">Quests</button>
+    </div>
+  </div>
+
+  <!-- STATE S0 idle -->
+  <div class="phone" id="phone-s0">
+    <div class="label-tag">S0 · all idle (dock hidden)</div>
+    <div class="hud-top">
+      <div class="plate">Hero · HP</div>
+      <div class="plate">Resources</div>
+    </div>
+    <div class="world-hint">3D world<br/>no production chrome</div>
+    <div class="town">
+      <button type="button">Build</button>
+      <button type="button">Talk</button>
+      <button type="button">Bag</button>
+      <button type="button" class="work">Work</button>
+      <button type="button">Quests</button>
+    </div>
+  </div>
+
+  <!-- Chip expand -->
+  <div class="phone" id="phone-s5">
+    <div class="label-tag">S5 · chip expand (sell-time)</div>
+    <div class="hud-top">
+      <div class="plate">Hero</div>
+      <div class="plate">Wallet</div>
+    </div>
+    <div class="world-hint">world</div>
+    <div class="sheet show">
+      <h3>Footman x1</h3>
+      <p>Training · 1m 05s left</p>
+      <div class="btns">
+        <button type="button">Instant 40</button>
+        <button type="button">Ad skip</button>
+      </div>
+    </div>
+    <div class="dock" style="max-height: 28%; opacity: 0.55;">
+      <div class="dock-title">PRODUCTION (dim under sheet)</div>
+      <div class="channel">
+        <div class="channel-head"><strong>Training</strong><span>busy</span></div>
+        <div class="row">
+          <div class="chip"><div class="ring">F</div><div class="t">1:05</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="town">
+      <button type="button">Build</button>
+      <button type="button">Talk</button>
+      <button type="button">Bag</button>
+      <button type="button" class="work">Work</button>
+      <button type="button">Quests</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <p><strong>WO-798 Layout A</strong> — recommended for Claude.</p>
+    <ul>
+      <li>WC3 feel = <em>icon + ring + pending strip</em>, not a text log.</li>
+      <li>Channels stay Builders / Training / Research (engine frozen).</li>
+      <li>Idle = dock hidden; Work button always available.</li>
+      <li>Obsidian black + gold; progress uses ring fill + time (colorblind-safe).</li>
+      <li>Full wireframe notes: <code>WIREFRAMES.md</code></li>
+      <li>Spec: <code>WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md</code></li>
+    </ul>
+    <p>Claude: restyle to kit art, export PNGs for owner image-pair sign-off. No .cs.</p>
+  </div>
+</body>
+</html>

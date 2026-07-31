@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="640" viewBox="0 0 360 640" role="img" aria-labelledby="title desc">
+  <title id="title">WO-798 Layout A production dock wireframe</title>
+  <desc id="desc">Portrait phone wireframe: world HUD, production dock with Builders Training Research chips, town buttons</desc>
+  <!-- Device -->
+  <rect width="360" height="640" rx="24" fill="#1a2830"/>
+  <text x="180" y="22" text-anchor="middle" fill="#d4af5a" font-family="Segoe UI,sans-serif" font-size="10" letter-spacing="1">S3 MULTI-CHANNEL BUSY</text>
+  <!-- World -->
+  <rect x="12" y="36" width="160" height="40" rx="6" fill="#0a0c10" stroke="#d4af5a" stroke-opacity="0.35"/>
+  <rect x="184" y="36" width="164" height="40" rx="6" fill="#0a0c10" stroke="#d4af5a" stroke-opacity="0.35"/>
+  <text x="180" y="200" text-anchor="middle" fill="#ffffff" fill-opacity="0.2" font-family="Segoe UI,sans-serif" font-size="14">3D WORLD</text>
+  <!-- Dock -->
+  <rect x="0" y="300" width="360" height="268" fill="#0a0c10" fill-opacity="0.94"/>
+  <line x1="0" y1="300" x2="360" y2="300" stroke="#d4af5a" stroke-width="2"/>
+  <text x="12" y="318" fill="#d4af5a" font-family="Segoe UI,sans-serif" font-size="11" font-weight="700" letter-spacing="2">PRODUCTION</text>
+  <!-- Builders -->
+  <rect x="10" y="328" width="340" height="72" rx="8" fill="#1a2028"/>
+  <text x="20" y="346" fill="#e8e6e0" font-family="Segoe UI,sans-serif" font-size="10">BUILDERS</text>
+  <text x="330" y="346" text-anchor="end" fill="#8a8680" font-family="Segoe UI,sans-serif" font-size="9">2/2 busy</text>
+  <!-- chips -->
+  <rect x="20" y="354" width="52" height="40" rx="6" fill="#12161c" stroke="#d4af5a" stroke-opacity="0.5"/>
+  <circle cx="46" cy="370" r="12" fill="none" stroke="#3a424c" stroke-width="3"/>
+  <path d="M46 358 A12 12 0 0 1 56 374" fill="none" stroke="#6eb5ff" stroke-width="3"/>
+  <text x="46" y="374" text-anchor="middle" fill="#e8e6e0" font-size="8" font-family="Segoe UI,sans-serif">W</text>
+  <text x="46" y="390" text-anchor="middle" fill="#d4af5a" font-size="7" font-family="Segoe UI,sans-serif">0:42</text>
+  <rect x="80" y="354" width="52" height="40" rx="6" fill="#12161c" stroke="#d4af5a" stroke-opacity="0.5"/>
+  <circle cx="106" cy="370" r="12" fill="none" stroke="#3a424c" stroke-width="3"/>
+  <path d="M106 358 A12 12 0 0 1 112 365" fill="none" stroke="#6eb5ff" stroke-width="3"/>
+  <text x="106" y="374" text-anchor="middle" fill="#e8e6e0" font-size="8" font-family="Segoe UI,sans-serif">T</text>
+  <text x="106" y="390" text-anchor="middle" fill="#d4af5a" font-size="7" font-family="Segoe UI,sans-serif">3:10</text>
+  <text x="145" y="375" fill="#8a8680" font-size="14">·</text>
+  <rect x="158" y="360" width="28" height="28" rx="5" fill="#252b34" stroke="#3a424c"/>
+  <text x="172" y="378" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">G</text>
+  <rect x="192" y="360" width="28" height="28" rx="5" fill="#252b34" stroke="#3a424c"/>
+  <text x="206" y="378" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">R</text>
+  <!-- Training -->
+  <rect x="10" y="408" width="340" height="72" rx="8" fill="#1a2028"/>
+  <text x="20" y="426" fill="#e8e6e0" font-family="Segoe UI,sans-serif" font-size="10">TRAINING</text>
+  <text x="330" y="426" text-anchor="end" fill="#8a8680" font-family="Segoe UI,sans-serif" font-size="9">1/1 · 3 queued</text>
+  <rect x="20" y="434" width="52" height="40" rx="6" fill="#12161c" stroke="#6eb5ff" stroke-dasharray="3 2"/>
+  <circle cx="46" cy="450" r="12" fill="none" stroke="#3a424c" stroke-width="3"/>
+  <path d="M46 438 A12 12 0 1 1 40 460" fill="none" stroke="#6eb5ff" stroke-width="3"/>
+  <text x="46" y="454" text-anchor="middle" fill="#e8e6e0" font-size="8" font-family="Segoe UI,sans-serif">F</text>
+  <text x="46" y="470" text-anchor="middle" fill="#d4af5a" font-size="7" font-family="Segoe UI,sans-serif">1:05</text>
+  <text x="85" y="455" fill="#8a8680" font-size="14">·</text>
+  <rect x="98" y="440" width="28" height="28" rx="5" fill="#252b34" stroke="#3a424c"/>
+  <text x="112" y="458" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">F</text>
+  <rect x="132" y="440" width="28" height="28" rx="5" fill="#252b34" stroke="#3a424c"/>
+  <text x="146" y="458" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">F</text>
+  <rect x="166" y="440" width="28" height="28" rx="5" fill="#252b34" stroke="#3a424c"/>
+  <text x="180" y="458" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">A</text>
+  <!-- Research free -->
+  <rect x="10" y="488" width="340" height="48" rx="8" fill="#1a2028"/>
+  <text x="20" y="506" fill="#e8e6e0" font-family="Segoe UI,sans-serif" font-size="10">RESEARCH</text>
+  <text x="330" y="506" text-anchor="end" fill="#8a8680" font-family="Segoe UI,sans-serif" font-size="9">idle</text>
+  <rect x="20" y="512" width="44" height="18" rx="4" fill="none" stroke="#3a424c" stroke-dasharray="3 2"/>
+  <text x="42" y="525" text-anchor="middle" fill="#8a8680" font-size="8" font-family="Segoe UI,sans-serif">free</text>
+  <!-- Work link -->
+  <rect x="10" y="542" width="340" height="20" rx="6" fill="none" stroke="#d4af5a" stroke-opacity="0.4"/>
+  <text x="180" y="556" text-anchor="middle" fill="#c9a84c" font-size="9" font-family="Segoe UI,sans-serif">Work · full panel (sell-time)</text>
+  <!-- Town bar -->
+  <rect x="8" y="580" width="66" height="44" rx="6" fill="#1e242c" stroke="#3a424c"/>
+  <text x="41" y="606" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">Build</text>
+  <rect x="78" y="580" width="66" height="44" rx="6" fill="#1e242c" stroke="#3a424c"/>
+  <text x="111" y="606" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">Talk</text>
+  <rect x="148" y="580" width="66" height="44" rx="6" fill="#1e242c" stroke="#3a424c"/>
+  <text x="181" y="606" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">Bag</text>
+  <rect x="218" y="580" width="66" height="44" rx="6" fill="#1e242c" stroke="#d4af5a"/>
+  <text x="251" y="606" text-anchor="middle" fill="#d4af5a" font-size="9" font-family="Segoe UI,sans-serif">Work</text>
+  <rect x="288" y="580" width="64" height="44" rx="6" fill="#1e242c" stroke="#3a424c"/>
+  <text x="320" y="606" text-anchor="middle" fill="#e8e6e0" font-size="9" font-family="Segoe UI,sans-serif">Quests</text>
+</svg>
