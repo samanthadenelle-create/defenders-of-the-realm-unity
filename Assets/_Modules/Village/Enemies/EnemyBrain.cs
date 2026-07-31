@@ -694,7 +694,19 @@ namespace DeNelle.Village
             {
                 _currentTarget = null;
                 _enemy.SetBrainTarget(null);
-                _enemy.SetBrainTargetPosition(null);   // DriveNav idles at anchor
+                // RETURN-HOME (F8 2026-07-30 "all enemies are at the entrance"): the old
+                // null override dropped DriveNav into stop-and-hold WHEREVER the mob stood —
+                // after a chase that is the entry hall, so leashed-out skeletons piled up
+                // there forever (the leash gated targeting but never re-pinned position).
+                // Walk back to the home anchor instead (DriveNav's heartless branch paths to
+                // a set override); once within ~2m of home, idle there as before. Leash-only
+                // path: _leashRadius==0 short-circuits above, so village/overworld enemies
+                // are untouched.
+                bool atHome = (transform.position - _homeAnchor).sqrMagnitude <= 4f;
+                if (!atHome)
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("EnemyAggro", $"leash-home-{GetInstanceID()}",
+                        $"{name}: leash out of range -> returning home to {_homeAnchor}.");
+                _enemy.SetBrainTargetPosition(atHome ? (Vector3?)null : _homeAnchor);
                 return;
             }
 
