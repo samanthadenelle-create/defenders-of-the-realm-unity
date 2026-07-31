@@ -1,6 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI, on `wip`): next free WO = **786**. **782–785 CONSUMED.**
+> ## ⚠ RECONCILED 2026-07-30 evening (CLI, on `wip`): next free WO = **798**. **782–797 CONSUMED.**
+> - **786–794** = specs on disk (star reveal, WOs 787–792 ticket batch, 793 tree-quest NPC, 794 upgrade verb).
+> - **795** = no-stacked-screens scroll standard (owner F8 seq 466 + full 16-panel headed audit).
+> - **796** = Room-Forge dungeons bake a REAL hero body (capsule/pill F8; NOT the 782 standee item).
+> - **797** = dungeon rooms own their enemies (per-area seating + confinement; entrance-cluster F8).
 > - **782** = RESERVED, no file yet — the night-wrap of 2026-07-26 (`docs/qa/NIGHT_WRAP_2026-07-26.md`) already
 >   claimed 782 for the **capsule NPC/boss standee** item (re-source `DungeonSceneBuilder` from tracked
 >   `Resources/Enemies` + `Resources/NPCs`, re-bake `Dungeon_HealersCottage.unity` editor-closed). Held rather
