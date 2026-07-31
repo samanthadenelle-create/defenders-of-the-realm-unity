@@ -323,6 +323,8 @@ namespace DeNelle.Editor
             // --- audit P1 closers (owner 2026-07-20): EW-3 waves.json schema guard + ECON-1 pack->cosmetic grantability integrity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "waves-schema suite", () => { if (!WavesSchemaRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[waves-schema] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wave-authoring suite", () => { if (!WaveAuthoringLiveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wave-authoring] " + r); });
+            // --- WO-808 Option A: gear power-level ladder data integrity ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-levels suite", () => { if (!GearLevelsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-levels] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-aura-diff suite", () => { if (!VfxAuraDifferentiationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-aura-diff] " + r); });
