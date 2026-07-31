@@ -1,12 +1,12 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3/CoC + army ladder): next free WO = **810**. **782–809 CONSUMED.**
+> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **811**. **782–810 CONSUMED.**
+> - **810** = **Brom's Rumor Board layout rework** — owner screenshot crowded/truncated filters + ACC… CTAs +
+>   empty detail waste. Claude wireframes → CLI restyle `RumorBoardPanel`. File
+>   `WorkOrders/WORK_ORDER_810_rumor_board_layout_rework.md`, READY.
 > - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — includes §2A army ladder (unlock→train→troop L→gear→readiness).
-> - **806** = Barracks progression spine UX (unlock→train→troop L→barracks L). Claude design → CLI. File `WORK_ORDER_806_*`.
-> - **807** = Troop upgrade power readability (deltas, Lv badges, deploy fidelity). File `WORK_ORDER_807_*`.
-> - **808** = Hero weapon/armor power levels (Forge/Armorer). **Owner 2026-07-30: Option A LOCKED**
->   (instance reforge same item, not tier-swap/rarity-only). Claude UI → CLI. File `WORK_ORDER_808_*`.
-> - **809** = War Readiness power score on Raids/Army screens. File `WORK_ORDER_809_*`.
+> - **806** = Barracks progression spine UX. **807** = troop power readability. **808** = hero gear levels
+>   (**Option A LOCKED**). **809** = war readiness score. Files `WORK_ORDER_806`–`809_*`.
 > - **800** = building focus card unify. **801** = queue glance implement (blocked on 798). **802–805** raid/build as prior banner.
 > - **798/799/774** still in program hub (queue design, cancel engine, raid P0).
 > - **799** = queue CANCEL verb + REFUND plumbing (engine). Panel-row cancel UI waits on 798/801 chips.
