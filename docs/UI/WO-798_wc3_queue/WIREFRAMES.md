@@ -1,209 +1,141 @@
-# WO-798 Wireframes — Warcraft 3–style production glance (portrait)
+# WO-798 Wireframes — build on the live QueueStatus chip
 
-**Canvas:** 1080 × 1920 reference (phone portrait)  
-**Theme:** Obsidian black panels + gold gilt (kit), not WC3 blue UI clone  
-**Data:** Builders / Training / Research channels (unchanged engine)
+**Canvas:** 1080 × 1920 portrait  
+**Primary layout:** **right-column** `HudArea.QueueStatus` (already shipped)  
+**Read first:** `CODE_AS_IS.md`  
+**WO:** `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md`
 
----
-
-## 0. What we're stealing from WC3 (feel, not chrome)
-
-```
-WC3 (landscape, per building)          Our game (portrait, per CHANNEL)
----------------------------------      ------------------------------------
-[Building portrait]                    [Channel row header: BUILDERS 1/2]
-  [progress pie]                         [active slot chip + ring]
-  [unit][unit][unit] pending ----->      [icon][icon][icon] pending strip
-```
-
-**Keep:** icon-first queue, progress on the *current* job, pending as small icons in a line.  
-**Drop:** landscape command-card under a selected unit; full RPG inventory aesthetics.  
-**Add:** three parallel channel rows (CoC workers), sell-time Instant/Ad on expand.
+Greenfield bottom “production dock” is **alternate only** (owner must reject right column first).
 
 ---
 
-## 1. Layout A — Persistent production dock (RECOMMENDED)
+## 0. Live before (shipped — design from this)
 
-**When:** any channel has an active or pending job → dock visible.  
-**When idle:** dock hidden; only existing **Work** town button remains.
+Area: `(0.78, 0.53)–(0.995, 0.865)` right side, above ActionRail.
 
 ```
-┌─────────────────────────────────────────┐  y = 0
-│  HUD (existing nameplate / resources)   │
-│                                         │
-│              3D world                   │
-│                                         │
-│                                         │
-│                                         │
-├─────────────────────────────────────────┤  ~ y = 0.62  (dock top)
-│  PRODUCTION                             │  gold title, 1 line
-│ ┌─────────────────────────────────────┐ │
-│ │ BUILDERS          2/2 busy          │ │  channel header
-│ │ ┌────┐ ┌────┐  ·  [w][w][+]         │ │  2 active chips + pending strip
-│ │ │WALL│ │TOWR│                       │ │
-│ │ │ ◔  │ │ ◔  │                       │ │  ring = progress; time under
-│ │ │0:42│ │3:10│                       │ │
-│ │ └────┘ └────┘                       │ │
-│ ├─────────────────────────────────────┤ │
-│ │ TRAINING          1/1 · 3 queued    │ │
-│ │ ┌────┐  ·  [F][F][A][+1]            │ │  Footman active; pending icons
-│ │ │ FT │                              │ │
-│ │ │ ◔  │                              │ │
-│ │ │1:05│                              │ │
-│ │ └────┘                              │ │
-│ ├─────────────────────────────────────┤ │
-│ │ RESEARCH          idle              │ │  optional: collapse when idle
-│ │  ( - free - )                       │ │  or omit row entirely when idle
-│ └─────────────────────────────────────┘ │
-│  [ Work ]  full panel / sell-time       │  opens existing WORK QUEUE modal
-├─────────────────────────────────────────┤
-│  town buttons: Build Talk Bag Work Qst  │  existing HudKit row (unchanged)
-└─────────────────────────────────────────┘  y = 1
+┌─────────────────────────┐
+│  Builders 2/2           │  ← Obsidian button; tap = RequestToggle
+│  0:42 | Training 1      │  ← FormatQueueChip
+├─────────────────────────┤
+│ > Wall Upgrade  0:42    │  ← FormatQueueRows (TMP, max 5)
+│ > Tower Build   3:10    │     ">" working  "-" queued
+│ - Gate                  │
+│ - Barracks Upgrade      │
+│ - Lumberyard            │
+│ +2 more                 │
+└─────────────────────────┘
+  plate hidden when Entries empty
+  Data: Status.Entries = Builder only
 ```
 
-### Touch / size (ref-px)
+---
 
-| Element | Min size | Notes |
-|---------|----------|--------|
-| Active chip | 112 × 112 | MinTouchPx |
-| Pending icon | 72 × 72 | still tappable; larger if only 2–3 |
-| Channel header | full width × 40 | non-tappable label OK |
-| Work (detail) | 88+ height | opens full panel |
+## 1. Layout A′ — PRIMARY (upgrade same host)
 
-### Behavior
+Same anchors. Replace text plate body with icon production line.
+
+```
+┌─────────────────────────┐
+│  Builders 2/2           │  summary (keep)
+│  0:42 | T1              │
+├─────────────────────────┤
+│ ┌────┐ ┌────┐  · [G][R] │  active rings + pending strip
+│ │ W  │ │ T  │           │
+│ │◔0:42│ │◔3:10│         │
+│ └────┘ └────┘           │
+│ TRAINING (when busy)    │  M2 multi-channel lean
+│ ┌────┐ · [F][A]         │
+│ │ F  │                  │
+│ │◔1:05│                 │
+│ └────┘                  │
+└─────────────────────────┘
+```
+
+### Chip anatomy (active)
+
+```
+   ┌────────┐
+   │  /--\  │  ring = Progress01 (geometry + digits)
+   │ | IC | │  icon or 1–2 letter glyph fallback
+   │  \--/  │
+   │ 0:42   │  RemainingSec formatted
+   └────────┘
+   min ~56–72px wide in column; touch ≥88 if tappable
+```
+
+### Pending strip
+
+```
+ [G] [R] [+2]     left→right = FIFO; Queued=true; RemainingSec=-1
+```
+
+### Behavior (match code)
 
 | Action | Result |
 |--------|--------|
-| Tap active chip | Expand **detail sheet** (name, full timer, Instant / Ad if available) |
-| Tap pending icon | Tooltip / toast: "Queued · #2" (optional reorder later — out of scope) |
-| Tap **Work** | Existing full WORK QUEUE modal (sell-time +slot, long lists) |
-| Job completes | Chip flash → next pending slides into active |
-| All channels idle | Dock animates out |
-
-**HTML preview:** open `wireframe_A_production_dock.html` in a browser.
+| Tap summary button | `ObsidianQueueGate.RequestToggle` (unchanged) |
+| Empty Entries | Hide plate only (unchanged) |
+| Job complete | Next pending becomes active chip (engine already cascades) |
+| Tap active chip (optional) | Detail sheet Instant/Ad — needs StructureId on entry |
 
 ---
 
-## 2. Layout B — Compact cluster by Work button
+## 2. Layout B — Compact (reject if owner wants less chrome)
 
-Less WC3, more "badge on the Work button."
-
-```
-                                    ┌──────────────┐
-                                    │ Work  1:05   │  timer of longest job
-                                    │ ●●○  B T R   │  dots = busy channels
-                                    └──────────────┘
-  [Build] [Talk] [Bag] [Work▲] [Quests]
-
-Tap Work → bottom sheet (not full-screen log):
-┌──────────────────────────────────┐
-│ TRAINING                         │
-│ [chip + ring]  [F][F][A]         │
-│ BUILDERS …                       │
-└──────────────────────────────────┘
-```
-
-**Pros:** minimal chrome. **Cons:** weaker "I see production like WC3" glance.
+Keep summary button only; 5-deep plate gone; badge `•3` on Work/Builders.  
+**Worse WC3 feel** — only if space crisis.
 
 ---
 
-## 3. Layout C — Hybrid (dock + modal)
+## 3. Layout C — Bottom dock (alternate)
 
-- **Dock** = Layout A (glance).
-- **Modal** = today's WORK QUEUE restyled to same chip language (no text dump).
-- Sell-time lives **only** on modal or expanded chip sheet.
+Full-width dock above town buttons (old wireframe HTML).  
+**Only if** owner rejects right column (conflicts with ActionRail / move cluster — re-layout risk).
 
-Use if owner wants both always-on and a "management" screen.
-
----
-
-## 4. Chip anatomy (active job)
-
-```
-        ┌──────────────┐
-        │   ┌──────┐   │
-        │  /  62%   \  │   progress RING (not color alone)
-        │ │  ICON   │  │   troop / structure / research glyph
-        │  \        /  │
-        │   └──────┘   │
-        │   1m 05s     │   ASCII time
-        │   Footman    │   optional 1-line name (ellipsize)
-        └──────────────┘
-         ↑ tap → detail sheet:
-           Footman x1
-           Training · 1m 05s left
-           [ Instant 40 ] [ Ad skip ]
-```
-
-Pending strip:
-
-```
-  [F] [F] [A] [+2]
-   ^    queued icons left→right = FIFO
-```
-
-Empty free slot:
-
-```
-  ┌ ─ ─ ─ ─ ┐
-  │    +    │   dashed border = free capacity
-  │  free   │
-  └ ─ ─ ─ ─ ┘
-```
+Open `wireframe_A_production_dock.html` as **feel reference**, not default placement.
 
 ---
 
-## 5. State matrix (Claude must mock each)
+## 4. Multi-channel options (owner picks)
 
-| ID | State | Dock shows |
-|----|--------|------------|
-| S0 | All idle | Hidden |
-| S1 | 1× Train Footman | Training row only |
-| S2 | Train + 3 pending | Chip + strip `+N` |
-| S3 | 2 builders + 1 train | Two channel rows |
-| S4 | All three busy | Three rows; scroll dock body if needed (WO-795) |
-| S5 | Chip expanded | Instant / Ad visible |
-| S6 | Full Work modal open | Dock may dim or stay (recommend stay under scrim rules — one modal) |
+| ID | Glance shows | Contract change |
+|----|--------------|-----------------|
+| **M1** | Builder icons only; Training stays on chip line 2 | Minimal — only iconize Entries |
+| **M2** | Builder row + Training/Research mini-rows when busy | Publish more rows or second arrays |
+| **M3** | One mixed Entries list with channel tags | `QueueEntry.Channel` required |
+
+**CLI lean: M2.**
 
 ---
 
-## 6. Channel visual mapping
+## 5. States to mock
 
-| Channel | Header | Icon source |
-|---------|--------|-------------|
-| Builders | BUILDERS n/m | Structure / wall / tower catalog or kit glyph |
-| Training | TRAINING | Troop catalog icon / role glyph |
-| Research | RESEARCH | Perk / magic / troop-upgrade glyph |
-
-Never show enum strings (`TrainTroop`, `BarracksUpgrade`). Use `FormatJobTarget`-class labels.
-
----
-
-## 7. What NOT to draw
-
-- Green vs red only for progress (add ring fill + time + marker)
-- Unicode pie characters / stars that tofu
-- Landscape WC3 command card full width
-- Fourth "misc" queue channel
-- Job list as multi-line prose (defeats the WO)
+| ID | Data | Paint |
+|----|------|--------|
+| S0 | Entries empty | Button only, plate off |
+| S1 | 1 active builder | One ring chip |
+| S2 | 2 active + 5 pending | 2 chips + strip + +N |
+| S3 | Builder + Train busy | M2 second row |
+| S5 | Expand Instant/Ad | Optional overlay |
 
 ---
 
-## 8. CLI implementation notes (after sign-off)
+## 6. CLI checklist (after sign-off)
 
-1. Prefer new **presentation host** (e.g. `ProductionDockHud`) observing `BuildTimerService` — keep `ObsidianQueueHud` as detail modal or restyle in place.
-2. Open seam stays `ObsidianQueueGate` for modal; dock can be always-on without gate.
-3. HUD assembly must not reference Village: if dock lives in HUD, expose a Core model or keep dock in Village DDOL (like current `ObsidianQueueHud`) — **Village DDOL is the existing precedent; keep it.**
-4. Screenshot-verify S1 + S3 + S0 before APK.
+1. Extend `QueueEntry` if needed (`StructureId` / `IconKey` / `Progress01` / channel).  
+2. `PublishStatus` fills new fields (Village).  
+3. Replace `FormatQueueRows` text block with chip UI under `_queueRowsPlate` (or rebuild plate children).  
+4. Keep Version poll in HudKit Update.  
+5. Icon resolve in HUD via Core-safe keys only (or pre-resolved sprite name string).  
+6. Regression: Entries still publish; glance non-empty when Builder busy.  
+7. Screenshot-verify S2 + S0.
 
 ---
 
-## 9. Owner decision checklist
+## 7. What NOT to draw as “required”
 
-- [ ] Primary layout: **A** / B / C  
-- [ ] Idle: **hide dock** / show empty free slots  
-- [ ] Progress: **ring** / bar  
-- [ ] Pending max visible before +N: **4** / 5 / 6  
-- [ ] Sell-time: on chip expand / only in Work modal  
-
-**CLI product lean (challenge if wrong):** A + hide when idle + ring + 4 + chip expand for Instant/Ad, Work modal for +slot & long queue.
+- Second floating queue elsewhere without owner OK  
+- Landscape WC3 command card  
+- Color-only progress  
+- Unicode pie characters that tofu  
