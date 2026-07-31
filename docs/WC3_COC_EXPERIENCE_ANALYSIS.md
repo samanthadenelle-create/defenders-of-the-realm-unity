@@ -76,8 +76,10 @@ Waves / home defense
 | **807** | `WorkOrders/WORK_ORDER_807_troop_upgrade_power_readability.md` | Troop L power feel | 806 lean | CLI | READY |
 | **808** | `WorkOrders/WORK_ORDER_808_hero_gear_power_levels.md` | Hero weapon/armor levels | — | Claude design → CLI | READY |
 | **809** | `WorkOrders/WORK_ORDER_809_war_readiness_power_score.md` | Raid readiness score | 806–808 partial OK | CLI | READY |
+| **812** | `WorkOrders/WORK_ORDER_812_introduce_barracks.md` | Barracks appears + teach | before 806 UX | CLI | READY |
 
-**Next free after this mint:** **810** (see `CLI_LANES_WO_NUMBERS.md`).
+**Also:** WO-810 Rumor Board layout · WO-811 Echo gather/repair (city autonomy).  
+**Next free:** see `CLI_LANES_WO_NUMBERS.md` (813+).
 
 ---
 
