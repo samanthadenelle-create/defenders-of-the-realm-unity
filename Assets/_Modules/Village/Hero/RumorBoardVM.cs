@@ -127,6 +127,42 @@ namespace DeNelle.Village.Hero
             return "A new thread waits to be picked up.";
         }
 
+        /// <summary>WO-810 detail tag: the quest's display type ("Story" / "Gear" / "Endgame").
+        /// Same normalization as the tab filter, capitalized for the tag row.</summary>
+        public string TypeFor(string id)
+        {
+            var def = FindDef(id);
+            string ty = NormalizedType(def);
+            if (ty == "gear") return "Gear";
+            if (ty == "endgame") return "Endgame";
+            return "Story";
+        }
+
+        /// <summary>WO-810 detail rewards row: the quest's TOTAL authored rewards across all
+        /// stages, formatted ASCII ("Crystals 20 | Food 10 | Item: xyz"). "" when unrewarded —
+        /// the View hides the row rather than rendering an empty line.</summary>
+        public string RewardFor(string id)
+        {
+            var def = FindDef(id);
+            if (def == null || def.Stages == null) return "";
+            int crystals = 0, food = 0, magic = 0;
+            var items = new List<string>();
+            foreach (var st in def.Stages)
+            {
+                if (st == null || st.Reward == null) continue;
+                crystals += st.Reward.Crystals;
+                food += st.Reward.Food;
+                magic += st.Reward.Magic;
+                if (!string.IsNullOrEmpty(st.Reward.GrantItemId)) items.Add(st.Reward.GrantItemId);
+            }
+            var parts = new List<string>();
+            if (crystals > 0) parts.Add("Crystals " + crystals);
+            if (food > 0) parts.Add("Food " + food);
+            if (magic > 0) parts.Add("Magic " + magic);
+            foreach (var it in items) parts.Add("Item: " + it);
+            return string.Join(" | ", parts);
+        }
+
         // ── Commands ────────────────────────────────────────────────────────────
 
         public void SetTab(string tab)
