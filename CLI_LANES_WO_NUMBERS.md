@@ -1,6 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 evening (CLI, on `wip`): next free WO = **798**. **782–797 CONSUMED.**
+> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3 queue visual): next free WO = **799**. **782–798 CONSUMED.**
+> - **798** = **Warcraft 3–style work queue VISUAL** — **Claude UI-seat READ-ONLY design pack** (mockups +
+>   interaction + image-pair sign-off). Engine stays WO-773 multi-channel; presentation becomes portrait
+>   production dock (icon chips, progress rings, pending icon strips). No `.cs` from Claude; CLI implements
+>   after owner signs. File `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md`, READY FOR UI SEAT.
 > - **786–794** = specs on disk (star reveal, WOs 787–792 ticket batch, 793 tree-quest NPC, 794 upgrade verb).
 > - **795** = no-stacked-screens scroll standard (owner F8 seq 466 + full 16-panel headed audit).
 > - **796** = Room-Forge dungeons bake a REAL hero body (capsule/pill F8; NOT the 782 standee item).
