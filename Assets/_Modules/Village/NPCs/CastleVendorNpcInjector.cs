@@ -608,6 +608,35 @@ namespace DeNelle.Village
                 seated.Vendor = _lastSpawnedVendor;
                 FlowTrace.Step("NpcSeat",
                     $"vendor NPC spawned for placed '{buildingId}' (role '{role}') at {buildingTransform.position}.");
+
+                // BAKED-STRAY EVICTION (owner F8 seq524 "Doubles still" / "armorer (Twice)"):
+                // the per-ROLE poll can seat this trade from a BAKED storefront BEFORE the
+                // replay places the real building — then this per-BUILDING seat adds a second
+                // body (captured: Talk-registered count=2 for Blacksmith/Forge/JewelersBench;
+                // the pass-0 defer only closed the pass-0 ordering). A vendor owned by a real
+                // building carries a VendorSeatMarker; a poll/baked-seated one does NOT. When
+                // a PLACED building takes the trade, evict every marker-less same-role body —
+                // placed wins (it is also the correctly ground-seated one; the baked
+                // Blacksmith anchor sits sunk at y=-0.03, the owner's wrong-height sighting).
+                // Deliberately keeps OTHER placed buildings' vendors (the owner's
+                // every-building-has-a-speaker ruling) — only ownerless strays go.
+                Guard.Try("NpcSeat", "evict baked-stray same-role vendors", () =>
+                {
+                    var markers = Object.FindObjectsByType<VendorSeatMarker>(FindObjectsSortMode.None);
+                    foreach (var go in GameObject.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                    {
+                        if (go == null || go.gameObject == _lastSpawnedVendor) continue;
+                        string n = go.name;
+                        if (n != "CastleVendor_" + role && n != "CastleVendor_" + role + "_Placeholder") continue;
+                        bool owned = false;
+                        foreach (var m in markers)
+                            if (m != null && m.Vendor == go.gameObject) { owned = true; break; }
+                        if (owned) continue;
+                        FlowTrace.Step("NpcSeat",
+                            $"evicted baked-stray vendor '{n}' @ {go.position} — the placed '{buildingId}' owns the {role} trade now.");
+                        Destroy(go.gameObject);
+                    }
+                });
             }
             else
                 FlowTrace.Fail("NpcSeat",
