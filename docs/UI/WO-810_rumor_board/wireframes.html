@@ -1,0 +1,431 @@
+<title>WO-810 — Brom's Rumor Board Wireframes</title>
+<style>
+  :root{
+    --bg:#08080a; --ink:#0b0b0e; --ink2:#14141a; --ink3:#1d1d25;
+    --stone:#2a2a32; --stone-line:#3a3a44;
+    --gilt:#e3b23c; --gilt-bright:#f2d283; --gilt-line:#8a6d2a;
+    --parch:#e9dcc0; --parch-dim:#9a917d;
+    --bad:#d0563f; --good:#74b06c;
+    --tan:#d9c79a;
+    --display:Georgia,"Times New Roman",serif;
+    --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0}
+  .page{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #15131a 0%, var(--bg) 60%),
+      var(--bg);
+    color:var(--parch); font-family:var(--ui);
+    padding:48px 24px 96px; min-height:100vh; line-height:1.5;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto}
+
+  /* ---- masthead ---- */
+  .eyebrow{
+    font-size:12px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--gilt); font-weight:700; margin:0 0 10px;
+  }
+  h1{
+    font-family:var(--display); font-weight:700; color:var(--gilt-bright);
+    font-size:clamp(30px,5vw,48px); margin:0 0 8px; letter-spacing:.01em;
+    text-wrap:balance; text-shadow:0 2px 0 #000;
+  }
+  .lede{max-width:64ch; color:#cfc6ae; font-size:16px; margin:0}
+  .meta{margin-top:14px; display:flex; gap:8px; flex-wrap:wrap}
+  .chip{
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    padding:5px 10px; border:1px solid var(--stone-line); border-radius:999px;
+    color:var(--parch-dim); background:var(--ink2);
+  }
+  .chip b{color:var(--gilt); font-weight:700}
+
+  h2{
+    font-family:var(--display); color:var(--gilt-bright); font-weight:700;
+    font-size:24px; margin:56px 0 6px; letter-spacing:.01em;
+    padding-bottom:8px; border-bottom:1px solid var(--gilt-line);
+  }
+  h2 .sub{font-family:var(--ui); font-size:13px; color:var(--parch-dim); font-weight:400; letter-spacing:0; text-transform:none; margin-left:8px}
+
+  /* ---- defect table ---- */
+  .map{width:100%; border-collapse:collapse; margin-top:20px; font-size:14px}
+  .map th{
+    text-align:left; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--parch-dim); font-weight:700; padding:8px 12px; border-bottom:1px solid var(--stone-line);
+  }
+  .map td{padding:11px 12px; border-bottom:1px solid #1a1a20; vertical-align:top}
+  .map tr td:first-child{color:#e6b9ac; width:44%}
+  .map tr td:last-child{color:#bfe0ba}
+  .map .n{color:var(--bad); font-weight:700; font-family:var(--display)}
+  .map .a{color:var(--good); font-weight:700}
+
+  /* ---- wireframe stage ---- */
+  .stage{display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:24px}
+  @media(max-width:900px){.stage{grid-template-columns:1fr}}
+  .frame-wrap{}
+  .frame-label{
+    display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:12px;
+    letter-spacing:.16em; text-transform:uppercase; font-weight:700;
+  }
+  .frame-label.before{color:var(--bad)}
+  .frame-label.after{color:var(--good)}
+  .frame-label .dot{width:9px; height:9px; border-radius:50%}
+  .before .dot{background:var(--bad)} .after .dot{background:var(--good)}
+
+  /* the game panel look */
+  .panel{
+    position:relative; aspect-ratio:16/12; border-radius:14px;
+    background:linear-gradient(180deg,#17171d,#0d0d11);
+    border:2px solid var(--gilt-line);
+    box-shadow:0 0 0 1px #000 inset, 0 18px 40px rgba(0,0,0,.6);
+    padding:12px; overflow:hidden;
+  }
+  .panel.mobile{aspect-ratio:1080/1920; max-width:300px}
+  .phead{display:flex; align-items:center; gap:10px; padding:2px 4px 10px}
+  .medallion{
+    width:34px; height:34px; border-radius:50%; flex:0 0 auto;
+    background:radial-gradient(circle at 40% 35%,#3a3a44,#111);
+    border:2px solid var(--gilt-line); color:var(--gilt); font-weight:800;
+    display:grid; place-items:center; font-size:18px; font-family:var(--display);
+  }
+  .ptitle{font-family:var(--display); color:var(--gilt-bright); font-weight:700; font-size:19px; letter-spacing:.02em; text-shadow:0 1px 0 #000}
+  .pclose{margin-left:auto; width:22px; height:22px; border:1px solid var(--stone-line); border-radius:5px; color:var(--parch-dim); display:grid; place-items:center; font-size:13px; background:var(--ink2)}
+
+  /* filter rows */
+  .tabs-bad{display:flex; gap:5px; padding:2px 2px 8px}
+  .tab-sq{
+    flex:1 1 0; min-width:0; height:44px; border-radius:7px; border:1px solid var(--stone-line);
+    background:linear-gradient(180deg,#26262e,#191920); color:var(--parch);
+    font-family:var(--display); font-weight:700; display:grid; place-items:center;
+    font-size:15px; overflow:hidden; white-space:nowrap;
+  }
+  .tab-sq.sel{background:linear-gradient(180deg,#6a531d,#4a3a14); color:var(--gilt-bright); border-color:var(--gilt)}
+  .tab-sq.clip{font-size:11px; color:var(--parch-dim)}
+
+  .chips{display:flex; gap:7px; padding:2px 2px 10px; overflow-x:auto}
+  .fchip{
+    flex:0 0 auto; padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:600;
+    background:var(--ink2); border:1px solid var(--stone-line); color:var(--parch-dim);
+    white-space:nowrap; position:relative;
+  }
+  .fchip.sel{color:var(--gilt-bright); background:linear-gradient(180deg,#2b2412,#1a160b); border-color:var(--gilt)}
+  .fchip.sel::after{content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2px; background:var(--gilt); border-radius:2px}
+  .fchip .mk{color:var(--gilt); margin-right:4px}
+
+  /* two-pane body */
+  .pbody{display:grid; grid-template-columns:1fr 1fr; gap:10px; height:calc(100% - 96px)}
+  .pbody.after{grid-template-columns:.92fr 1.28fr}
+  .pane{background:rgba(0,0,0,.28); border:1px solid #23232b; border-radius:8px; padding:8px; overflow:hidden; position:relative}
+
+  .sect{font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--gilt); font-weight:700; margin:4px 2px 6px; font-family:var(--ui)}
+  .empty-bad{font-size:11px; font-style:italic; color:var(--parch-dim); margin:2px 2px 14px}
+  .empty-quiet{font-size:10.5px; color:#6d6659; margin:2px 2px; display:flex; align-items:center; gap:6px}
+  .empty-quiet .tick{color:var(--good)}
+
+  /* list rows */
+  .row-bad{background:linear-gradient(180deg,#20202a,#171720); border:1px solid #2a2a34; border-radius:6px; padding:8px 9px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center}
+  .row-bad .rt{font-size:12px; font-weight:700; color:var(--parch)}
+  .row-bad .rh{font-size:10px; color:var(--parch-dim); margin-top:3px}
+  .acc-clip{background:linear-gradient(180deg,#2f2f38,#20202a); border:1px solid var(--stone-line); border-radius:6px; padding:12px 6px; font-family:var(--display); font-weight:700; color:var(--parch); font-size:15px; white-space:nowrap; overflow:hidden; width:52px; text-align:center}
+
+  .card{background:linear-gradient(180deg,#1a1a22,#131319); border:1px solid #26262f; border-left:2px solid transparent; border-radius:7px; padding:9px 10px; margin-bottom:8px}
+  .card.sel{border-left:3px solid var(--gilt); background:linear-gradient(180deg,#22201a,#17150f)}
+  .card .ct{font-size:12.5px; font-weight:700; color:var(--parch); display:flex; align-items:center; gap:6px}
+  .pip{font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; padding:2px 6px; border-radius:4px; font-weight:700}
+  .pip.new{background:rgba(227,178,60,.16); color:var(--gilt); border:1px solid var(--gilt-line)}
+  .pip.trk{background:rgba(116,176,108,.16); color:var(--good); border:1px solid #3f5a3c}
+  .card .ch{font-size:10.5px; color:var(--parch-dim); margin-top:4px; line-height:1.4}
+
+  /* empty tan detail (before) */
+  .tan-empty{background:var(--tan); border-radius:6px; height:100%; box-shadow:inset 0 0 0 1px #b8a677}
+  .tan-empty .orphan{padding:10px; color:#6a5c33; font-size:11px}
+  .tan-empty .orphan b{color:#8a5a1a; font-family:var(--display); font-size:14px; display:block; margin-bottom:4px}
+
+  /* detail pane (after) */
+  .detail{display:flex; flex-direction:column; height:100%}
+  .dtag{display:flex; gap:6px; margin:0 0 8px}
+  .dtag span{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--parch-dim); border:1px solid #33333c; border-radius:4px; padding:2px 7px}
+  .dtitle{font-family:var(--display); color:var(--gilt-bright); font-weight:700; font-size:16px; margin:0 0 6px; line-height:1.2}
+  .dbody{font-size:10.8px; color:#d8ccb0; line-height:1.55; margin:0 0 10px}
+  .dobj{font-size:10px; color:var(--parch-dim); margin:0 0 10px; padding-left:2px}
+  .dobj .o{display:flex; gap:6px; margin-bottom:4px}
+  .dobj .o::before{content:"◇"; color:var(--gilt)}
+  .drew{display:flex; gap:8px; margin:auto 0 12px; flex-wrap:wrap}
+  .drew .rw{font-size:10px; color:var(--parch); background:var(--ink2); border:1px solid var(--stone-line); border-radius:6px; padding:5px 9px}
+  .drew .rw b{color:var(--gilt)}
+  .dcta{display:flex; gap:8px}
+  .btn-accept{flex:1; text-align:center; padding:13px; border-radius:8px; font-family:var(--display); font-weight:700; font-size:16px; color:#14100a;
+    background:linear-gradient(180deg,var(--gilt-bright),var(--gilt)); border:1px solid var(--gilt-line); box-shadow:0 2px 0 #6b531f}
+  .btn-track{padding:13px 16px; border-radius:8px; font-family:var(--display); font-weight:700; font-size:15px; color:var(--parch); background:var(--ink3); border:1px solid var(--stone-line)}
+
+  /* close bar before */
+  .closebar{position:absolute; left:50%; transform:translateX(-50%); bottom:10px; width:180px; height:44px; background:linear-gradient(180deg,#26262e,#191920); border:1px solid var(--stone-line); border-radius:8px; color:var(--parch); font-family:var(--display); font-weight:700; font-size:17px; display:grid; place-items:center}
+
+  /* defect / fix markers pinned on panels */
+  .mk-pin{position:absolute; width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:11px; font-weight:800; font-family:var(--display); color:#fff; z-index:5; box-shadow:0 1px 4px rgba(0,0,0,.6)}
+  .mk-pin.bad{background:var(--bad)}
+  .mk-pin.good{background:var(--good)}
+
+  /* legend list */
+  .legend{margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:8px 28px; font-size:13px}
+  @media(max-width:700px){.legend{grid-template-columns:1fr}}
+  .legend .li{display:flex; gap:10px; align-items:flex-start}
+  .legend .b{flex:0 0 auto; width:20px; height:20px; border-radius:50%; color:#fff; font-weight:800; font-size:11px; display:grid; place-items:center; font-family:var(--display)}
+  .legend .b.bad{background:var(--bad)} .legend .b.good{background:var(--good)}
+  .legend .t{color:#cfc6ae}
+  .legend .t b{color:var(--parch)}
+
+  /* spec cards */
+  .specs{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:22px}
+  @media(max-width:760px){.specs{grid-template-columns:1fr}}
+  .spec{background:linear-gradient(180deg,#131319,#0d0d12); border:1px solid #23232b; border-radius:12px; padding:18px}
+  .spec h3{margin:0 0 6px; font-family:var(--display); color:var(--gilt-bright); font-size:16px}
+  .spec p{margin:0 0 10px; font-size:13px; color:#c3baa2}
+  .spec ul{margin:0; padding-left:18px; font-size:12.5px; color:var(--parch-dim); line-height:1.6}
+  .spec ul b{color:var(--parch)}
+
+  .keybox{margin-top:22px; background:linear-gradient(180deg,#1c1810,#120f09); border:1px solid var(--gilt-line); border-radius:12px; padding:20px 22px}
+  .keybox .k{font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--gilt); font-weight:700; margin:0 0 8px}
+  .keybox p{margin:0; font-size:15px; color:#e6dcc2; max-width:74ch}
+  .keybox b{color:var(--gilt-bright)}
+
+  .foot{margin-top:56px; padding-top:18px; border-top:1px solid #1c1c22; font-size:12px; color:#6d6659}
+  .foot b{color:var(--parch-dim)}
+</style>
+
+<div class="page">
+<div class="wrap">
+
+  <p class="eyebrow">WO-810 · UI / Quests · Layout Rework</p>
+  <h1>Brom's Rumor Board — before &amp; after</h1>
+  <p class="lede">The board is a glance surface that isn't glanceable: filters clip, the Accept button reads <b>ACC…</b>, the list is crushed left, and a huge empty parchment sits right. The fix is structural — a true master–detail board where the list stays scannable and the tale (plus the CTA) fills the detail pane. No fonts shrunk.</p>
+  <div class="meta">
+    <span class="chip">Commit <b>4f3d0025</b></span>
+    <span class="chip">Code target <b>RumorBoardPanel.cs</b></span>
+    <span class="chip">Owner sign-off <b>required before CLI</b></span>
+    <span class="chip">MVVM <b>View-only restyle</b></span>
+  </div>
+
+  <h2>What's wrong → what changes <span class="sub">every defect maps to a structural fix, not a smaller font</span></h2>
+  <table class="map">
+    <thead><tr><th>Defect in the shot</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><span class="n">1</span> Five square tabs packed edge-to-edge; <b>“Endgame” clips / shrinks</b></td><td><span class="a">→</span> Pill <b>filter chips</b>, full words, selected marked by underline + gilt (not colour alone); row scrolls if tight</td></tr>
+      <tr><td><span class="n">2</span> Accept sits in the narrow list column → <b>“ACC…”</b></td><td><span class="a">→</span> Row loses its button; <b>Accept moves to the detail pane</b> with room for the full word (≥112px)</td></tr>
+      <tr><td><span class="n">3</span> Right pane is a <b>huge empty tan slab</b> with orphan teaser text</td><td><span class="a">→</span> Detail is <b>always bound to a selection</b> (first rumor auto-selected); obsidian-dark, full tale + rewards</td></tr>
+      <tr><td><span class="n">4</span> Empty <b>In Progress</b> still eats a section + flavour row</td><td><span class="a">→</span> Collapses to <b>one quiet line</b> when empty; only grows when you have live jobs</td></tr>
+      <tr><td><span class="n">5</span> Giant <b>Close</b> bar competes with content for height</td><td><span class="a">→</span> Single kit <b>Close (×)</b> in the frame corner; content reclaims the height</td></tr>
+      <tr><td><span class="n">6</span> Title + one-line objective collide with the action column</td><td><span class="a">→</span> Card = <b>title · one-line hook · state pip</b>; the whole card is the select target</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Desktop <span class="sub">the aspect in your screenshot (~16:9 windowed)</span></h2>
+  <div class="stage">
+
+    <!-- BEFORE -->
+    <div class="frame-wrap">
+      <p class="frame-label before"><span class="dot"></span>Before — as it ships now</p>
+      <div class="panel">
+        <span class="mk-pin bad" style="top:52px; left:8px">1</span>
+        <span class="mk-pin bad" style="top:150px; left:44%">2</span>
+        <span class="mk-pin bad" style="top:44px; left:70%">3</span>
+        <span class="mk-pin bad" style="top:96px; left:8px">4</span>
+        <span class="mk-pin bad" style="bottom:14px; left:52%">5</span>
+        <div class="phead">
+          <div class="medallion">!</div>
+          <div class="ptitle">Brom's Rumor Board</div>
+          <div class="pclose">▧</div>
+        </div>
+        <div class="tabs-bad">
+          <div class="tab-sq sel">All</div>
+          <div class="tab-sq">Story</div>
+          <div class="tab-sq">Daily</div>
+          <div class="tab-sq">Gear</div>
+          <div class="tab-sq clip">Endgame</div>
+        </div>
+        <div class="pbody">
+          <div class="pane">
+            <div class="sect">— In Progress —</div>
+            <div class="empty-bad">Nothing underway. Pick up a thread below.</div>
+            <div class="sect">— Rumors &amp; Requests —</div>
+            <div class="row-bad">
+              <div><div class="rt">A New Defender</div><div class="rh">Speak with the Village Elder at the Heart of Elarion.</div></div>
+              <div class="acc-clip">ACC…</div>
+            </div>
+            <div class="row-bad">
+              <div><div class="rt">The Forgemaster's Request</div><div class="rh">&nbsp;</div></div>
+              <div class="acc-clip">&nbsp;</div>
+            </div>
+          </div>
+          <div class="pane" style="padding:0; border:none; background:transparent">
+            <div class="tan-empty"><div class="orphan"><b>The Board A…</b>Select a rumor to read the full tale. Whispers gather here from every corner of Elarion…</div></div>
+          </div>
+        </div>
+        <div class="closebar">Close</div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="frame-wrap">
+      <p class="frame-label after"><span class="dot"></span>After — master–detail</p>
+      <div class="panel">
+        <span class="mk-pin good" style="top:50px; left:6px">1</span>
+        <span class="mk-pin good" style="bottom:14px; left:60%">2</span>
+        <span class="mk-pin good" style="top:96px; left:58%">3</span>
+        <span class="mk-pin good" style="top:92px; left:6px">4</span>
+        <span class="mk-pin good" style="top:6px; right:8px">5</span>
+        <div class="phead">
+          <div class="medallion">!</div>
+          <div class="ptitle">Brom's Rumor Board</div>
+          <div class="pclose">×</div>
+        </div>
+        <div class="chips">
+          <div class="fchip sel"><span class="mk">◆</span>All</div>
+          <div class="fchip">Story</div>
+          <div class="fchip">Daily</div>
+          <div class="fchip">Gear</div>
+          <div class="fchip">Endgame</div>
+        </div>
+        <div class="pbody after">
+          <div class="pane">
+            <div class="empty-quiet"><span class="tick">✓</span> In Progress — nothing underway</div>
+            <div class="sect" style="margin-top:10px">Rumors &amp; Requests</div>
+            <div class="card sel">
+              <div class="ct">A New Defender <span class="pip new">New</span></div>
+              <div class="ch">Speak with the Village Elder.</div>
+            </div>
+            <div class="card">
+              <div class="ct">The Forgemaster's Request</div>
+              <div class="ch">Bring 3 iron to the forge.</div>
+            </div>
+            <div class="card">
+              <div class="ct">Whispers in the Wildwood</div>
+              <div class="ch">Scout the tree line at dusk.</div>
+            </div>
+          </div>
+          <div class="pane">
+            <div class="detail">
+              <div class="dtag"><span>Story</span><span>Lv 1</span><span>Elarion</span></div>
+              <div class="dtitle">A New Defender</div>
+              <div class="dbody">The Heart dims, and Elarion needs hands it can trust. Seek the Village Elder where the old tree still holds its light — he has been waiting for one who would answer.</div>
+              <div class="dobj">
+                <div class="o">Speak with the Village Elder at the Heart of Elarion.</div>
+              </div>
+              <div class="drew">
+                <div class="rw"><b>+120</b> XP</div>
+                <div class="rw"><b>+50</b> Crystals</div>
+              </div>
+              <div class="dcta">
+                <div class="btn-accept">Accept</div>
+                <div class="btn-track">Track</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <div class="li"><span class="b bad">1</span><span class="t"><b>Filters</b> — square tab block → scrollable gilt chips, full labels, underline marker.</span></div>
+    <div class="li"><span class="b good">1</span><span class="t"><b>Selected filter</b> reads by shape + gilt fill + underline (colour-blind safe).</span></div>
+    <div class="li"><span class="b bad">2</span><span class="t"><b>ACC…</b> lived in a 52px column. </span></div>
+    <div class="li"><span class="b good">2</span><span class="t"><b>Accept</b> is a full-width detail CTA, ≥112px, plus a Track secondary.</span></div>
+    <div class="li"><span class="b bad">3</span><span class="t"><b>Empty tan slab</b> with orphan “The Board A…”.</span></div>
+    <div class="li"><span class="b good">3</span><span class="t"><b>Detail auto-binds</b> the first rumor: tale + objectives + rewards.</span></div>
+    <div class="li"><span class="b bad">4</span><span class="t"><b>Empty In Progress</b> ate a full section.</span></div>
+    <div class="li"><span class="b good">4</span><span class="t"><b>Collapses</b> to one quiet line until you have live jobs.</span></div>
+    <div class="li"><span class="b bad">5</span><span class="t"><b>Giant Close bar</b> stole height.</span></div>
+    <div class="li"><span class="b good">5</span><span class="t"><b>Kit corner ×</b>; content reclaims the space.</span></div>
+  </div>
+
+  <h2>Portrait mobile <span class="sub">1080×1920 — detail stacks under the list; same rules</span></h2>
+  <div class="stage" style="grid-template-columns:1fr; justify-items:center">
+    <div class="frame-wrap" style="max-width:320px">
+      <p class="frame-label after"><span class="dot"></span>After — stacked master–detail</p>
+      <div class="panel mobile">
+        <div class="phead">
+          <div class="medallion" style="width:28px;height:28px;font-size:15px">!</div>
+          <div class="ptitle" style="font-size:15px">Brom's Rumor Board</div>
+          <div class="pclose" style="width:19px;height:19px;font-size:11px">×</div>
+        </div>
+        <div class="chips" style="padding-bottom:8px">
+          <div class="fchip sel" style="padding:6px 11px"><span class="mk">◆</span>All</div>
+          <div class="fchip" style="padding:6px 11px">Story</div>
+          <div class="fchip" style="padding:6px 11px">Daily</div>
+          <div class="fchip" style="padding:6px 11px">Gear</div>
+          <div class="fchip" style="padding:6px 11px">Endgame</div>
+        </div>
+        <div style="height:calc(100% - 84px); display:flex; flex-direction:column; gap:8px">
+          <div class="pane" style="flex:0 0 38%">
+            <div class="empty-quiet"><span class="tick">✓</span> In Progress — none</div>
+            <div class="sect" style="margin-top:8px">Rumors &amp; Requests</div>
+            <div class="card sel" style="padding:7px 9px"><div class="ct" style="font-size:11.5px">A New Defender <span class="pip new">New</span></div><div class="ch" style="font-size:9.5px">Speak with the Village Elder.</div></div>
+            <div class="card" style="padding:7px 9px"><div class="ct" style="font-size:11.5px">The Forgemaster's Request</div></div>
+          </div>
+          <div class="pane" style="flex:1 1 auto">
+            <div class="detail">
+              <div class="dtag" style="margin-bottom:6px"><span>Story</span><span>Lv 1</span></div>
+              <div class="dtitle" style="font-size:14px">A New Defender</div>
+              <div class="dbody" style="font-size:10px">The Heart dims, and Elarion needs hands it can trust. Seek the Village Elder where the old tree still holds its light.</div>
+              <div class="drew" style="margin:auto 0 10px"><div class="rw" style="font-size:9px"><b>+120</b> XP</div><div class="rw" style="font-size:9px"><b>+50</b> Crystals</div></div>
+              <div class="dcta"><div class="btn-accept" style="padding:11px; font-size:14px">Accept</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Component anatomy <span class="sub">specs for CLI to build against</span></h2>
+  <div class="specs">
+    <div class="spec">
+      <h3>Filter chips</h3>
+      <p>One horizontally-scrollable row of pill chips under the medallion — never five square plates dividing the body width.</p>
+      <ul>
+        <li>Full labels: <b>All · Story · Daily · Gear · Endgame</b> — no mid-word clip.</li>
+        <li>Selected = gilt fill + <b>underline marker</b> + leading ◆ glyph (shape, not colour alone).</li>
+        <li>Row scrolls horizontally if a 6th filter is ever added; each chip ≥112 ref-px tap.</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>List card (the row)</h3>
+      <p>A card is a select-target only — the button leaves the row entirely.</p>
+      <ul>
+        <li>Line 1: <b>quest title</b> (bold parchment) + a state pip — <b>New</b> / <b>Tracked</b>.</li>
+        <li>Line 2: <b>one-line objective hook</b>, dim, ellipsised at one line.</li>
+        <li>Selected card = <b>3px gilt left-border</b> + warmer fill. Whole card is tappable.</li>
+        <li>List lives in a scroll well (MakeScrollZone) — rows never stack/overlap.</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>Detail pane</h3>
+      <p>Obsidian-dark (not the tan slab), always bound to a selection — first available rumor auto-selected on open and on tab change.</p>
+      <ul>
+        <li><b>Tag row</b> (type · level · region) · <b>gilt title</b> · <b>full tale</b>.</li>
+        <li><b>Objectives</b> list + <b>Rewards</b> row (XP / crystals / items).</li>
+        <li><b>Primary CTA</b> full word: <b>Accept</b> (→ <b>Track</b> when active → <b>Turn in</b> when done), ≥112px, plus a secondary action.</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>Empty states</h3>
+      <p>Quiet, not structural — an empty section must never dominate the board.</p>
+      <ul>
+        <li><b>In Progress empty</b> → a single dim line (“nothing underway”), no section slab.</li>
+        <li><b>No rumors under a filter</b> → one dim line inside the list, not a half panel.</li>
+        <li><b>Nothing selected</b> → detail shows a short prompt (only when the list is truly empty); otherwise a rumor is always auto-selected, so the pane is never blank.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="keybox">
+    <p class="k">The one load-bearing decision</p>
+    <p><b>Accept leaves the list row and lives in the detail pane.</b> That single move fixes the <b>ACC…</b> truncation (the CTA finally has width), un-crushes the list (rows become clean title + hook), and gives the empty right pane a permanent job (it always shows the selected rumor's tale + the button you press). Everything else — chips, collapsing empty states, corner Close — follows from making the board a real master–detail.</p>
+  </div>
+
+  <p class="foot">Wireframe for owner sign-off · <b>WO-810</b> · quest grant / daily-spawn / catalog logic unchanged · View-only restyle (VM extended only if the detail needs a projection field not already available) · no UXML, no fonts shrunk below <b>FontFloorMobile</b>.</p>
+
+</div>
+</div>
