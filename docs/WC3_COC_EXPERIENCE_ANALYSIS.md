@@ -110,7 +110,7 @@ Barracks L↑ ──unlocks──► Troop type visible
 | Apply on deploy | `TroopDeployer` → `ApplyUpgradeStats(Effective(def, level))` | **Live** |
 | Barracks panel UX | `BarracksPanel` / `BarracksPanelVM` train + upgrade CTAs | **Live but dense** |
 | Hero gear buy/equip | Shop / Inventory rarity gear | **Live** |
-| Hero **weapon/armor power levels** (reforge L1→Ln) | No first-class item-level upgrade ladder | **Missing / design docs only** |
+| Hero **weapon/armor power levels** (reforge L1→Ln) | No first-class item-level upgrade ladder | **Missing — WO-808, owner chose A (instance reforge)** |
 | Army “power” number for raids | No unified readiness score | **Missing** |
 
 ### Feel gaps (why new WOs)
@@ -196,6 +196,7 @@ Barracks L↑ ──unlocks──► Troop type visible
 | R4 | Casualty % formula sketch? | 802 numbers |
 | R5 | Raid clock 180s keep / shorter mobile? | 803 feel |
 | R6 | Extra builder slot vs train bay as primary IAP? | monetization later |
+| **R7** | Hero gear power: A instance levels / B tier swap / C rarity-only? | **A LOCKED 2026-07-30** — WO-808 |
 
 ---
 

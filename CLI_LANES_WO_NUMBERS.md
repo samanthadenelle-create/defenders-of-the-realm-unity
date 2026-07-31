@@ -4,7 +4,8 @@
 > - **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — includes §2A army ladder (unlock→train→troop L→gear→readiness).
 > - **806** = Barracks progression spine UX (unlock→train→troop L→barracks L). Claude design → CLI. File `WORK_ORDER_806_*`.
 > - **807** = Troop upgrade power readability (deltas, Lv badges, deploy fidelity). File `WORK_ORDER_807_*`.
-> - **808** = Hero weapon/armor power levels (Forge/Armorer ladder). Claude design → CLI. File `WORK_ORDER_808_*`.
+> - **808** = Hero weapon/armor power levels (Forge/Armorer). **Owner 2026-07-30: Option A LOCKED**
+>   (instance reforge same item, not tier-swap/rarity-only). Claude UI → CLI. File `WORK_ORDER_808_*`.
 > - **809** = War Readiness power score on Raids/Army screens. File `WORK_ORDER_809_*`.
 > - **800** = building focus card unify. **801** = queue glance implement (blocked on 798). **802–805** raid/build as prior banner.
 > - **798/799/774** still in program hub (queue design, cancel engine, raid P0).
