@@ -1464,7 +1464,12 @@ namespace DeNelle.Village
                 // GROUND path — require a flat, upward-facing top, reject tower/building tops.
                 if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }
                 if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
-                { reason = BuildRejectReason.Occupied; return false; }
+                {
+                    FlowTrace.Warn("Build",
+                        $"REJECT Occupied cell=({cell.x},{cell.y}) gate=SurfaceTag — the placement ray hit " +
+                        $"'{hit.collider.name}' tag='{hit.collider.tag}' (a structure top, not ground).");
+                    reason = BuildRejectReason.Occupied; return false;
+                }
 
                 // #76: GROUND is the area DIRECTLY BELOW placement, NOT whatever the camera ray grazed.
                 // The camera ray only AIMS; near a corner it can strike a wall TOP the cursor merely
@@ -1483,7 +1488,13 @@ namespace DeNelle.Village
             //    bypassing occupancy lets two wall-towers target the same cell; the world-overlap
             //    test below still rejects tower-on-tower (the prior tower is not excluded).
             if (!_grid.InBounds(cell, footprint)) { reason = BuildRejectReason.OutOfBounds; return false; }
-            if (!wallMounted && !_grid.CanPlace(cell, footprint)) { reason = BuildRejectReason.Occupied; return false; }
+            if (!wallMounted && !_grid.CanPlace(cell, footprint))
+            {
+                FlowTrace.Warn("Build",
+                    $"REJECT Occupied cell=({cell.x},{cell.y}) fp=({footprint.x}x{footprint.y}) gate=CellGrid " +
+                    $"occupant='{_grid.OccupantAt(cell) ?? "<adjacent footprint cell>"}'.");
+                reason = BuildRejectReason.Occupied; return false;
+            }
 
             // The footprint's world-space AABB on the XZ plane (cellSize × footprint
             // cells, centred on the snapped cell-block). Used by the world-overlap +
@@ -1498,7 +1509,19 @@ namespace DeNelle.Village
             //    any OTHER overlapping structure still rejects.
             GameObject ignore = supportingWall != null
                 ? supportingWall.GetComponentInParent<PlacedStructure>()?.gameObject : null;
-            if (OverlapsExistingStructure(footprintAabb, ignore)) { reason = BuildRejectReason.Occupied; return false; }
+            if (OverlapsExistingStructure(footprintAabb, ignore, out var blocker, out var blockerBounds))
+            {
+                // The proving line (F8 2026-07-30): separates the three Occupied gates and
+                // names the occupant + its bounds — an inflated renderer-bounds blocker
+                // (stray particle/effect child) shows up here as bounds far larger than
+                // the visible body.
+                FlowTrace.Warn("Build",
+                    $"REJECT Occupied cell=({cell.x},{cell.y}) fp=({footprint.x}x{footprint.y}) " +
+                    $"aabb c={footprintAabb.center} s={footprintAabb.size} gate=WorldOverlap " +
+                    $"blocker='{blocker.name}' id='{blocker.itemId}' bounds c={blockerBounds.center} s={blockerBounds.size} " +
+                    $"| gridOccupant='{_grid.OccupantAt(cell) ?? "<none>"}'.");
+                reason = BuildRejectReason.Occupied; return false;
+            }
 
             // 4. Gate-lane clearance — never wall off the spawn→Heart corridor. Tests
             //    the whole footprint AABB against each gate's real bounds (expanded by
@@ -1557,7 +1580,16 @@ namespace DeNelle.Village
         /// selected structure is excluded so it never blocks its own re-placement.
         /// </summary>
         private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore = null)
+            => OverlapsExistingStructure(footprintAabb, ignore, out _, out _);
+
+        // F8 2026-07-30 (anonymous Occupied storm): out-param variant NAMES the blocker +
+        // its bounds so the reject trace/toast can say WHAT occupies the spot — the owner
+        // hit reject=Occupied on cell after cell with nothing in the log naming the cause.
+        private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore,
+            out PlacedStructure blocker, out Bounds blockerBounds)
         {
+            blocker = null;
+            blockerBounds = default;
             var all = FindObjectsByType<PlacedStructure>();
             foreach (var ps in all)
             {
@@ -1567,7 +1599,7 @@ namespace DeNelle.Village
 
                 Bounds wb;
                 if (!TryWorldBounds(ps.gameObject, out wb)) continue;
-                if (OverlapsXZ(footprintAabb, wb)) return true;
+                if (OverlapsXZ(footprintAabb, wb)) { blocker = ps; blockerBounds = wb; return true; }
             }
             return false;
         }

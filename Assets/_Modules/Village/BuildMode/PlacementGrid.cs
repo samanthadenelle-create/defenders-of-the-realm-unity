@@ -157,6 +157,19 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// The structure id occupying <paramref name="cell"/>, or null when free /
+        /// out of bounds. F8 2026-07-30 (anonymous Occupied storm): lets the placement
+        /// gate NAME the blocker in its reject trace instead of a bare "Occupied".
+        /// </summary>
+        public string OccupantAt(Vector2Int cell)
+        {
+            EnsureGrid();
+            if (cell.x < 0 || cell.y < 0 || cell.x >= gridWidth || cell.y >= gridHeight) return null;
+            string id = _occupied[cell.x, cell.y];
+            return string.IsNullOrEmpty(id) ? null : id;
+        }
+
+        /// <summary>
         /// True when every cell of <paramref name="footprint"/> at <paramref name="cell"/>
         /// is within the buildable bounds (ignores occupancy). WO-394 — lets the placement
         /// gate tell "outside the build area" apart from "no space here" (cells taken).
