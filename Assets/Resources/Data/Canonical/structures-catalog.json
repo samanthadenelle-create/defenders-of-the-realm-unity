@@ -1172,6 +1172,47 @@
    }
   },
   {
+   "id": "barracks",
+   "displayName": "Barracks",
+   "type": "Resource",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/barracks",
+   "repo": {
+    "behaviorId": "GameplayBuilding",
+    "buildCost": 120,
+    "cost": {
+     "wood": 150,
+     "food": 0,
+     "iron": 80,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 5.0,
+     "noOverlap": true,
+     "checkAffordable": true
+    },
+    "singleton": true
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": true,
+    "euler": [
+     -90.0,
+     0.0,
+     180.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "WO-812: the army train hub, placeable at last (the hub redesign never re-added it). Pitch -90 matches the Tripo fbx family (workshop/forge); Orient-tool trim if felt. FIRST place is FREE via the 2026-07-24 first-of-each-type freebie lane (non-tower building); singleton so no doubles vs a legacy baked CastleBarracks. Train entry = the drillmaster (BarracksNpcInjector anchors to baked OR placed instance) + BuildingInteractable panel; progression stays BarracksService level, not structure tier."
+   }
+  },
+  {
    "id": "repair_default",
    "displayName": "Repair Default",
    "type": "Decoration",

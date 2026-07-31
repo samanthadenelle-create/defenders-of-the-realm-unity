@@ -851,6 +851,12 @@ namespace DeNelle.Village
                 case "lumberyard":
                 case "foundry":
                 case "silo":         return BuildingType.CrystalMine;
+                // WO-812: the placeable Barracks. No Barracks-ish BuildingType exists, so it
+                // takes the generic CrystalMine ordinal (default Upgrade panel on building tap);
+                // the TRAIN door is the drillmaster NPC (BarracksNpcInjector anchors to this
+                // placed instance) -> DialogueService.PlayStructure("barracks"). Explicit case
+                // so the mapping is a decision, not a fallthrough.
+                case "barracks":     return BuildingType.CrystalMine;
                 default:             return BuildingType.CrystalMine;
             }
         }

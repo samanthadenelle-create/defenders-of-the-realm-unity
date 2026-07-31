@@ -83,6 +83,18 @@ namespace DeNelle.Editor
                     if (e != null && !string.IsNullOrEmpty(e.id) && CatalogRegistry.Get(e.id) == null)
                         CatalogRegistry.Register(e);
 
+                // ── 2b. REQUIRED IDS (WO-812): the Barracks must exist as a placeable row —
+                // the army/raid ladder (train -> deploy) depends on it; the hub redesign
+                // silently dropped it once, never again. Type Resource => the Town palette.
+                bool hasBarracks = false;
+                foreach (var e in entries)
+                    if (e != null && string.Equals(e.id, "barracks", System.StringComparison.OrdinalIgnoreCase))
+                    { hasBarracks = true; break; }
+                if (!hasBarracks)
+                    failures.Add("required id 'barracks' MISSING from structures-catalog (WO-812 — the train/raid ladder has no world entry)");
+                else
+                    log.AppendLine("  required id 'barracks' present (WO-812) OK");
+
                 // ── 3. COST SANITY through the REAL resolver ────────────────────────────
                 CheckCosts(entries, failures, log);
 
