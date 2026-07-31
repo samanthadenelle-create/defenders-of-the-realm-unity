@@ -367,6 +367,7 @@ namespace DeNelle.Village.Arena
             _current = p;
             _resolved = false;
             _climaxBody = null;
+            _returnWarpCancelled = false;   // F8 seq512: fresh fight, the return warp is live again
             _battleStartTime = Time.time;   // WO-505: start the star-rating clock.
             BattleInProgress = true;
 
@@ -1481,7 +1482,14 @@ namespace DeNelle.Village.Arena
             Vector3 fwd = Quaternion.Euler(0f, engageYaw, 0f) * Vector3.forward;
             Vector3 retreat = engagePos - fwd.normalized * LossSafeRetreatMeters;
 
-            Vector3 result = retreat;
+            // F8 2026-07-30 seq512 (dungeon defeat freeze): the comment above always promised an
+            // engage-spot fallback, but the code shipped the RAW 18m offset when no mesh answered.
+            // In an UNBAKED scene (every dungeon) the sample always misses, so the overworld-sized
+            // retreat manufactured a void coordinate 10m outside the cottage's west wall and the
+            // hero warped into nothing. Default = the ENGAGEMENT SPOT (known-good ground the hero
+            // was literally standing on); only a successful navmesh sample upgrades it to the
+            // retreat point. Baked scenes (village/overworld) sample fine - byte-identical there.
+            Vector3 result = engagePos;
             Guard.Try("BattleArena", "snap loss-safe return to navmesh", () =>
             {
                 if (NavMesh.SamplePosition(retreat, out var hit, 12f, NavMesh.AllAreas))
@@ -1759,6 +1767,24 @@ namespace DeNelle.Village.Arena
             float guardDeadline = Time.unscaledTime + 7f;
             while (_deathCam.IsHolding && Time.unscaledTime < guardDeadline)
                 yield return null;
+        }
+
+        // F8 2026-07-30 seq512: set when a scene-routing settle (dungeon defeat -> ExitToVillage)
+        // owns the hero's next position — the pending ReturnHomeWithFade warp must not fire into
+        // the scene that is leaving. Reset per BeginEncounter.
+        private bool _returnWarpCancelled;
+
+        /// <summary>
+        /// Suppress the pending post-battle return warp (teardown/revive/camera/fade still run).
+        /// Called by a settle path that is routing its OWN scene exit (e.g. the dungeon DEFEAT
+        /// settle) so the hero is never warped into a scene that is unloading. Distinct from
+        /// <see cref="ResolveAbandoned"/> — this battle HAS an outcome; only the warp is ceded.
+        /// </summary>
+        public void CancelPendingReturnWarp(string reason)
+        {
+            if (_returnWarpCancelled) return;
+            _returnWarpCancelled = true;
+            FlowTrace.Warn("BattleArena", $"CancelPendingReturnWarp: {reason}");
         }
 
         /// <summary>Retreat from the battle (Flee button): ends it as a loss + returns. No reward.</summary>
@@ -2123,7 +2149,16 @@ namespace DeNelle.Village.Arena
                 foreach (var e in survivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
             if (stage != null) Destroy(stage);
 
-            WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
+            // F8 2026-07-30 seq512: when a dungeon DEFEAT settle is already routing a scene exit
+            // (ExitToVillage -> LoadSceneWithFade), warping the hero to the pre-fight spot fires
+            // into a scene that is leaving — off-mesh landing + frozen Keeper. The settle cancels
+            // the pending warp (CancelPendingReturnWarp) BEFORE this coroutine resumes from its
+            // fade (OnBattleEnded runs while we are parked at the fade-out yield), so the flag is
+            // always observed here. Teardown/revive/camera/fade still run either way.
+            if (!_returnWarpCancelled)
+                WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
+            else
+                FlowTrace.Warn("BattleArena", "return warp SUPPRESSED — a scene exit owns the hero.");
 
             // DEATH-CYCLE OWNERSHIP (F8 "Regroup breaks the death cycle", RCA 2026-07-12): on a
             // LOSS the hero arrives home still dead — ff.noautoheal skips RestoreToFull, the only

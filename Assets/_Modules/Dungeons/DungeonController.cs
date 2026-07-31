@@ -1167,6 +1167,13 @@ namespace DeNelle.Dungeons
                 FlowTrace.Warn("Dungeon",
                     $"SettleEncounter: DEFEAT (boss={wasBoss}) — ending the run + returning to Village " +
                     "(no loot, boss NOT credited, no back-door unlock).");
+                // F8 2026-07-30 seq512 (defeat freeze): this settle routes its OWN scene exit, so
+                // the arena's pending ReturnHomeWithFade warp must not fire into the leaving scene
+                // (it manufactured an off-mesh void coordinate and froze the Keeper). OnBattleEnded
+                // runs while that coroutine is parked at its fade-out yield, so this cancel is
+                // always observed before the warp line executes.
+                DeNelle.Village.Arena.BattleArena.Existing?.CancelPendingReturnWarp(
+                    "dungeon DEFEAT is routing ExitToVillage");
                 _runtimeState.ResumeAfterEncounter(false); // clears _inCombat + handoff; victory=false => no boss credit
                 ExitToVillage().Forget();
                 return;
