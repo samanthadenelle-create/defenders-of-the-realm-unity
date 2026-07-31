@@ -1,6 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **811**. **782–810 CONSUMED.**
+> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **812**. **782–811 CONSUMED.**
+> - **811** = **Echo tasks: gather resource node (wood/iron/food) OR repair structures** — owner Echo
+>   card shot (Idle + blank bar + only Crafting). V1 picker honesty; repair consumer new. File
+>   `WorkOrders/WORK_ORDER_811_echo_gather_or_repair_tasks.md`, READY. Relates to WO-784 (consumers)
+>   but does not wait on Defense/Exploration unlock.
 > - **810** = **Brom's Rumor Board layout rework** — owner screenshot crowded/truncated filters + ACC… CTAs +
 >   empty detail waste. Claude wireframes → CLI restyle `RumorBoardPanel`. File
 >   `WorkOrders/WORK_ORDER_810_rumor_board_layout_rework.md`, READY.
