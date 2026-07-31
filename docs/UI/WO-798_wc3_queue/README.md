@@ -1,20 +1,15 @@
-# WO-798 — WC3-style queue visual design pack (starter)
+# WO-798 — WC3-style queue visual (build on live chip)
 
-**WO:** `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md`  
-**Audience:** Claude (UI seat, read-only) + owner sign-off  
-**Engine:** frozen (WO-773 multi-channel). This pack is **presentation only**.
+**WO:** `WorkOrders/WORK_ORDER_798_wc3_style_queue_visual.md` (**rewritten on code**)  
+**Audience:** Claude (read-only design) → owner sign-off → CLI implement  
+**Premise:** Upgrade shipped **right-column Builders chip + 5-deep text rows** — not a greenfield dock.
 
 | File | Purpose |
 |------|---------|
-| **`CODE_AS_IS.md`** | **Read first** — live stack, APIs, what already shipped (5-deep text rows) |
-| `WIREFRAMES.md` | Target visual A / B / C (evolve FROM code, not greenfield) |
-| `wireframe_A_production_dock.html` | Browser mock of target Layout A (icons/rings) |
-| `layout_A.svg` | Vector of target dock |
+| **`CODE_AS_IS.md`** | **Read first** — live PublishStatus / FormatQueueRows / QueueStatus anchors |
+| **`WIREFRAMES.md`** | **Layout A′** = same host, icons+rings; bottom dock = alternate only |
+| `wireframe_A_production_dock.html` | Feel reference (icons/rings); placement default is **right column** |
+| `layout_A.svg` | Vector feel reference |
 
-**Claude next:**  
-1. Read `CODE_AS_IS.md`  
-2. Compare target wireframes to the live right-column text queue  
-3. Polish mockups that **upgrade** the existing chip (icons/rings/multi-channel), don’t invent a second system  
-4. Owner image-pair sign-off → CLI implements  
-
-**CLI later:** only after owner signs.
+**Claude next:** before/after of **QueueStatus** band → M1/M2/M3 multi-channel pick → image pairs.  
+**CLI later:** extend `QueueEntry` + restyle `_queueRowsPlate` after sign-off.
