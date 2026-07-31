@@ -68,6 +68,22 @@ namespace DeNelle.Settings
         private bool _open;
         private bool _suppressCallbacks;
 
+        // AUDIT FIX (2026-07-30): px layout ladder. Sum of every rung + gap below:
+        //   top pad 14 + 5 captions x 54 + 3 slider rows x 68 + 3 toggle rows x 76
+        //   + seam 60 + difficulty row 132 + blurb 54 + quality row 132
+        //   + help/reset row 120 + bottom pad 24 = 1238.
+        // Keep this constant in sync with the EnsureBuilt ladder if rungs change.
+        private const float RequiredLadderPx = 1238f;
+
+        /// <summary>Resolved height (canvas-local px) of the scroll content every band is a
+        /// fraction of: max(body px, <see cref="RequiredLadderPx"/>). Set in EnsureBuilt.</summary>
+        private float _ladderPx = RequiredLadderPx;
+
+        /// <summary>Convert a canvas-local px extent to a fraction of the scroll content, so
+        /// every band resolves to a KNOWN px size (button rungs stay >= the 112 px kit touch
+        /// floor and ClampMinTouch never inflates them over neighbouring label bands).</summary>
+        private float Frac(float px) => px / Mathf.Max(1f, _ladderPx);
+
         // Single-modal arbiter handle. Settings is a SYSTEM modal reachable from the pause
         // menu during an active battle, so it registers battle-allowed (never rejected by the
         // battle-lock). Close delegate = Close (raises SettingsClosed); isOpen = _open.
@@ -163,11 +179,28 @@ namespace DeNelle.Settings
                 backing.transform.SetAsFirstSibling();
             }
 
-            var body = layout != null && layout.body != null
+            var bodyZone = layout != null && layout.body != null
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
-            float y = 0.985f;
+            // AUDIT FIX (2026-07-30, 16-panel headed audit): the old layout banded rows as
+            // fractions of the body, so a 0.055 button band resolved to ~74 px (portrait) /
+            // ~40 px (landscape) and the kit touch floor (ClampMinTouch, MinTouchPx=112)
+            // grew every selector/help button symmetrically PAST its band - over the section
+            // header above (headers read as "Ga"/"Gr"/"H" slivers behind the button grid)
+            // and the difficulty caption below (it rendered across the Easy/Normal/Hard
+            // chips). Re-banded on a PX LADDER: every band is a fixed canvas-local px rung
+            // (button rows 120 px >= the 112 floor, so the floor can never inflate them),
+            // stacked inside a vertical scroller (RumorBoard WO-795 pattern) whose content
+            // height = max(body px, ladder px). Portrait bodies fit with no scroll; short
+            // (landscape) bodies scroll instead of overlapping. Fonts untouched (owner law:
+            // fix layout, never shrink fonts). Zero behavior change - same controls, same
+            // wiring, same persistence.
+            float bodyPx = BodyLocalHeight(_modal.canvas, bodyZone);
+            _ladderPx = Mathf.Max(bodyPx, RequiredLadderPx);
+            var body = BuildScrollHost(bodyZone, _ladderPx);
+
+            float y = 1f - Frac(14f);
             // ── Audio ────────────────────────────────────────────────────────
             y = Caption(body, "Audio", y);
             (_masterSlider, _masterValue) = SliderRow(body, "Master", ref y, OnMasterChanged);
@@ -182,22 +215,26 @@ namespace DeNelle.Settings
             // WO-714 W8 (P7): 11 -> 30 (FontFloor) + FitBlock; row height grew to seat it.
             _audioSeam = MakeText(body, "Audio mixer not wired yet - volumes persist and apply when it lands.",
                 30, ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
-                new Vector2(0.06f, y - 0.048f), new Vector2(0.94f, y), multiline: true);
-            y -= 0.056f;
+                new Vector2(0.06f, y - Frac(52f)), new Vector2(0.94f, y), multiline: true);
+            y -= Frac(60f);
 
             // ── Gameplay ─────────────────────────────────────────────────────
             y = Caption(body, "Gameplay", y);
-            _difficultyRow = ZoneRect(body, "DifficultyRow", new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y));
-            y -= 0.062f;
-            // WO-714 W8 (P7): 11 -> 30 (FontFloor) + FitBlock; taller zone seats two lines.
+            // 120 px rung: >= the 112 px kit touch floor, so ClampMinTouch never grows
+            // these chips out of their band (the audit's header/caption overlap).
+            _difficultyRow = ZoneRect(body, "DifficultyRow", new Vector2(0.06f, y - Frac(120f)), new Vector2(0.94f, y));
+            y -= Frac(132f);
+            // AUDIT FIX (2026-07-30): the difficulty caption gets its own clear band BELOW
+            // the Easy/Normal/Hard chips - single line, no wrap, TMP Ellipsis (FitSingleLine
+            // via multiline:false), so it can never render across the buttons again.
             _difficultyBlurb = MakeText(body, "", 30, ElarionUi.ParchmentDim, FontStyles.Italic,
-                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y), multiline: true);
-            y -= 0.062f;
+                TextAlignmentOptions.Left, new Vector2(0.06f, y - Frac(46f)), new Vector2(0.94f, y));
+            y -= Frac(54f);
 
             // ── Graphics ─────────────────────────────────────────────────────
             y = Caption(body, "Graphics", y);
-            _qualityRow = ZoneRect(body, "QualityRow", new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y));
-            y -= 0.068f;
+            _qualityRow = ZoneRect(body, "QualityRow", new Vector2(0.06f, y - Frac(120f)), new Vector2(0.94f, y));
+            y -= Frac(132f);
 
             // ── Comfort ──────────────────────────────────────────────────────
             y = Caption(body, "Comfort", y);
@@ -207,10 +244,10 @@ namespace DeNelle.Settings
             y = Caption(body, "Help", y);
             ElarionUiKit.BuildObsidianButton(body, "Game Guide",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.06f, y - 0.055f), new Vector2(0.48f, y), OnGameGuideClicked);
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnGameGuideClicked);
             ElarionUiKit.BuildObsidianButton(body, "Reset Defaults",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
-                new Vector2(0.52f, y - 0.055f), new Vector2(0.94f, y), OnResetClicked);
+                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnResetClicked);
 
             BuildSelectorButtons();
             _modal.canvas.SetActive(false);   // built hidden; Open shows it
@@ -435,26 +472,97 @@ namespace DeNelle.Settings
         //  Composed uGUI controls (Blink-skinned)
         // =====================================================================
 
+        /// <summary>
+        /// Post-scale canvas-local px height of the body zone. Replicates the kit's
+        /// CanvasScaler math (the F8-5 lesson: a canvas's LIVE rect on its creation frame
+        /// reads raw screen px - the scaler has not applied yet), then multiplies the
+        /// y-anchor spans from the body zone up to the canvas root (kit chrome is
+        /// fraction-anchored with zero offsets, so anchor spans ARE the geometry).
+        /// </summary>
+        private static float BodyLocalHeight(GameObject canvasRoot, Transform body)
+        {
+            const float fallbackH = 1920f;   // kit portrait reference height
+            float canvasH = fallbackH;
+            var scaler = canvasRoot != null ? canvasRoot.GetComponent<CanvasScaler>() : null;
+            float sw = Screen.width, sh = Screen.height;
+            if (scaler != null && sw > 1f && sh > 1f
+                && scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize
+                && scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.MatchWidthOrHeight)
+            {
+                float refW = Mathf.Max(1f, scaler.referenceResolution.x);
+                float refH = Mathf.Max(1f, scaler.referenceResolution.y);
+                float scale = Mathf.Pow(2f, Mathf.Lerp(
+                    Mathf.Log(sw / refW, 2f), Mathf.Log(sh / refH, 2f),
+                    scaler.matchWidthOrHeight));
+                if (scale > 0.01f) canvasH = sh / scale;
+            }
+            float frac = 1f;
+            var rt = body as RectTransform;
+            while (rt != null && canvasRoot != null && rt.gameObject != canvasRoot)
+            {
+                frac *= Mathf.Clamp(rt.anchorMax.y - rt.anchorMin.y, 0.0001f, 1f);
+                rt = rt.parent as RectTransform;
+            }
+            return canvasH * frac;
+        }
+
+        /// <summary>
+        /// Vertical scroller over the body zone (RumorBoard WO-795 pattern): masked viewport
+        /// with a transparent drag-catcher, top-anchored fixed-px content the px-ladder rows
+        /// band against. Content taller than the viewport scrolls (short landscape bodies);
+        /// content equal to the viewport (portrait - the ladder fits) cannot move (Clamped).
+        /// </summary>
+        private static Transform BuildScrollHost(Transform bodyZone, float contentPx)
+        {
+            var viewportGo = new GameObject("SettingsScroll",
+                typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(bodyZone, false);
+            var vpr = (RectTransform)viewportGo.transform;
+            vpr.anchorMin = Vector2.zero; vpr.anchorMax = Vector2.one;
+            vpr.offsetMin = Vector2.zero; vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("Content", typeof(RectTransform));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = (RectTransform)contentGo.transform;
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot = new Vector2(0.5f, 1f);
+            cr.anchoredPosition = Vector2.zero;
+            cr.sizeDelta = new Vector2(0f, contentPx);
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content = cr;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+            return cr;
+        }
+
         /// <summary>Section caption; returns the next row's top y.</summary>
         private float Caption(Transform body, string text, float y)
         {
             // WO-714 W8 (P7 font floor): 15 -> 34 (above FontFloor 30; section headers
             // lead the ladder). MakeText auto-fits, so long captions ellipsize, never clip.
+            // AUDIT FIX (2026-07-30): 46 px rung - the header owns its own full-width slim
+            // band; button rows are floor-proof px rungs, so nothing inflates over it.
             MakeText(body, text, 34, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.Left, new Vector2(0.05f, y - 0.035f), new Vector2(0.95f, y));
-            return y - 0.042f;
+                TextAlignmentOptions.Left, new Vector2(0.05f, y - Frac(46f)), new Vector2(0.95f, y));
+            return y - Frac(54f);
         }
 
         /// <summary>Label + Blink-skinned slider + % value, one row. Advances y.</summary>
         private (Slider, TextMeshProUGUI) SliderRow(Transform body, string label, ref float y,
             Action<float> onChanged)
         {
-            float top = y, bottom = y - 0.048f;
+            float top = y, bottom = y - Frac(58f);   // AUDIT FIX 2026-07-30: px rung
             // WO-714 W8 (P7): 13 -> 30 (FontFloor).
             MakeText(body, label, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.24f, top));
 
-            var host = ZoneRect(body, "Slider_" + label, new Vector2(0.26f, bottom + 0.012f), new Vector2(0.82f, top - 0.012f));
+            var host = ZoneRect(body, "Slider_" + label, new Vector2(0.26f, bottom + Frac(12f)), new Vector2(0.82f, top - Frac(12f)));
             var sliderGo = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
             sliderGo.transform.SetParent(host, false);
             var srt = sliderGo.GetComponent<RectTransform>();
@@ -520,7 +628,7 @@ namespace DeNelle.Settings
             var valueLabel = MakeText(body, "100%", 30, ElarionUi.ParchmentDim, FontStyles.Normal,
                 TextAlignmentOptions.Right, new Vector2(0.84f, bottom), new Vector2(0.94f, top));
 
-            y = bottom - 0.010f;
+            y = bottom - Frac(10f);
             return (slider, valueLabel);
         }
 
@@ -530,7 +638,7 @@ namespace DeNelle.Settings
             // SWEEP 9413 R2 (#2): row raised 0.045 → 0.055 and the toggle box is now a FIXED
             // pixel square (below) — the fraction-stretched box collapsed to a sliver on the
             // capture aspect once the plate/outline landed.
-            float top = y, bottom = y - 0.055f;
+            float top = y, bottom = y - Frac(64f);   // AUDIT FIX 2026-07-30: px rung
             // WO-714 W8 (P7): 13 -> 30 (FontFloor).
             MakeText(body, label, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.70f, top));
@@ -542,7 +650,7 @@ namespace DeNelle.Settings
             var stateLbl = MakeText(body, "Off", 30, ElarionUi.Parchment, FontStyles.Bold,   // P7: 12 -> 30
                 TextAlignmentOptions.Right, new Vector2(0.71f, bottom), new Vector2(0.84f, top));
 
-            var host = ZoneRect(body, "Toggle_" + label, new Vector2(0.86f, bottom + 0.004f), new Vector2(0.94f, top - 0.004f));
+            var host = ZoneRect(body, "Toggle_" + label, new Vector2(0.86f, bottom + Frac(5f)), new Vector2(0.94f, top - Frac(5f)));
             var toggleGo = new GameObject("Toggle", typeof(RectTransform), typeof(Toggle));
             toggleGo.transform.SetParent(host, false);
             var trt = toggleGo.GetComponent<RectTransform>();
@@ -588,7 +696,7 @@ namespace DeNelle.Settings
                 onChanged(v);
             });
 
-            y = bottom - 0.012f;
+            y = bottom - Frac(12f);
             return toggle;
         }
 

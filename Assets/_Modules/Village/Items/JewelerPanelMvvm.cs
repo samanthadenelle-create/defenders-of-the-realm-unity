@@ -12,6 +12,10 @@
 // CraftingPanelMvvm):
 //   * bodyLeft  (dark well)      = recipe rows (Obsidian buttons, selected=Yellow,
 //                                  right-aligned readable state "+ Ready" / "2 of 3")
+//                                  in a WO-795 vertical SCROLL WELL (Viewport+RectMask2D
+//                                  + VerticalLayoutGroup Content, fixed-height rows) —
+//                                  every recipe lists; overflow scrolls, never overlaps
+//                                  or truncates
 //   * bodyRight (parchment well) = the WO-693 shared COMPACT DETAIL CARD
 //                                  (ElarionUiKit.BuildParchmentDetailCard: icon plate +
 //                                  name + rarity + flavor -> BESTOWS -> REQUIRES ->
@@ -44,6 +48,7 @@ namespace DeNelle.Village.Items
 
         private GameObject _ui;
         private Transform _recipeHost;   // bodyLeft — dark list well
+        private Transform _listContent;  // scroll Content inside the recipe well (WO-795)
         private Transform _detailHost;   // bodyRight — parchment detail well
         private TextMeshProUGUI _headerLabel;
 
@@ -117,7 +122,7 @@ namespace DeNelle.Village.Items
 
         private void RebuildMasterDetail()
         {
-            if (_recipeHost == null || _detailHost == null || _vm == null) return;
+            if (_recipeHost == null || _detailHost == null || _listContent == null || _vm == null) return;
 
             var recipes = _vm.Recipes;
             int n = recipes != null ? recipes.Count : 0;
@@ -125,39 +130,47 @@ namespace DeNelle.Village.Items
             if (n > 0 && (string.IsNullOrEmpty(_selectedRecipeId) || FindIndex(recipes) < 0))
                 _selectedRecipeId = recipes[0].RecipeId;
 
-            // Recipe rows (dark well, left).
-            for (int i = _recipeHost.childCount - 1; i >= 0; i--)
-                Destroy(_recipeHost.GetChild(i).gameObject);
+            // Recipe rows (dark well, left) — fixed-height LayoutElement children of the
+            // WO-795 scroll Content: EVERY recipe lists; overflow scrolls, never stacks.
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
 
             if (n == 0)
             {
-                var none = MakeText(_recipeHost, "No jewelry recipes available.", ElarionUi.FontLabel,
+                var host = new GameObject("EmptyState", typeof(RectTransform), typeof(LayoutElement));
+                host.transform.SetParent(_listContent, false);
+                host.GetComponent<LayoutElement>().preferredHeight = 120f;
+                var none = MakeText(host.transform, "No jewelry recipes available.", ElarionUi.FontLabel,
                     ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
-                    new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.62f));
+                    new Vector2(0.05f, 0f), new Vector2(0.95f, 1f));
                 ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
             }
             else
             {
-                const float rowH = 0.105f, gap = 0.015f;
-                float top = 0.98f;
                 for (int i = 0; i < n; i++)
                 {
                     var r = recipes[i];
                     string id = r.RecipeId;
                     bool selected = id == _selectedRecipeId;
                     string name = string.IsNullOrEmpty(r.OutputName) ? r.DisplayName : r.OutputName;
+
+                    // Fixed-height row host; the kit button fills it (anchors 0..1).
+                    var host = new GameObject("Row_" + id, typeof(RectTransform), typeof(LayoutElement));
+                    host.transform.SetParent(_listContent, false);
+                    var le = host.GetComponent<LayoutElement>();
+                    le.preferredHeight = RowPixelH;
+                    le.minHeight = RowPixelH;
+
                     // WO-693: no dangling "+/-" suffix — the row carries a readable right-
                     // aligned state ("+ Ready" / "2 of 3"); selection keeps the gold rim (Yellow).
-                    var rowBtn = ElarionUiKit.BuildObsidianButton(_recipeHost, name,
+                    var rowBtn = ElarionUiKit.BuildObsidianButton(host.transform, name,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                                  : ElarionUiKit.ObsidianButtonColor.Gray,
-                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        Vector2.zero, Vector2.one,
                         () => { _selectedRecipeId = id; RebuildMasterDetail(); });
                     ElarionUiKit.AddRowStateSuffix(rowBtn, RowState(r),
                         r.CanCraft ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
-                    top -= rowH + gap;
-                    if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
             }
 
@@ -287,10 +300,63 @@ namespace DeNelle.Village.Items
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
+            BuildRecipeScrollWell();
+
             // WO-693: the tiny footer instruction strip is DELETED — its content lives on
             // the CTA blocker text and the empty-state explanation (one-action law).
 
             // Close is the SHARED kit Close (top-right) — no per-panel close.
+        }
+
+        // ── Recipe scroll well (WO-795: rows never stack/overlap; overflow scrolls) ──
+
+        private const float RowPixelH = 96f;   // fixed row height (touch-comfortable, matches RumorBoardPanel)
+
+        /// <summary>Build the vertical scroll well inside the recipe list host, ONCE per
+        /// Open (RumorBoardPanel WO-795 pattern): Viewport (near-invisible Image drag
+        /// catcher + RectMask2D) + top-anchored Content (VerticalLayoutGroup +
+        /// ContentSizeFitter). Rebuilds only clear/refill the Content, so scroll position
+        /// survives row selection.</summary>
+        private void BuildRecipeScrollWell()
+        {
+            if (_recipeHost == null) return;
+
+            var viewportGo = new GameObject("RecipeViewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(_recipeHost, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = new Vector2(0.02f, 0.02f);
+            vpr.anchorMax = new Vector2(0.98f, 0.98f);
+            vpr.offsetMin = Vector2.zero;
+            vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("RecipeContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero;
+            cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 8f;
+            // Bottom pad = one row so the last recipe scrolls fully clear of the mask.
+            vlg.padding = new RectOffset(6, 6, 6, (int)RowPixelH + 8);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content  = cr;
+            scroll.horizontal = false;
+            scroll.vertical   = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+
+            _listContent = contentGo.transform;
         }
 
         // ── uGUI helper (mirrors VillageCraftingPanel.MakeText) ───────────────────
@@ -323,6 +389,7 @@ namespace DeNelle.Village.Items
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
             _recipeHost = null;
+            _listContent = null;
             _detailHost = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;

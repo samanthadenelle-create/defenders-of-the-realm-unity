@@ -22,6 +22,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;   // ScrollRect/RectMask2D/layout: the WO-795 scroll-list pattern
 using DeNelle.Core.UI;   // shared Elarion kit — jukebox matches the one game UI
 
 namespace DeNelle.Audio
@@ -44,8 +45,13 @@ namespace DeNelle.Audio
         public void Open()   => SetOpen(true);
 
         private ElarionUiKit.ObsidianModal _modal;
-        private Transform _rowHost;   // the frame's body zone — rows rebuilt into it each open
+        private Transform _rowHost;   // ScrollRect Content; rows rebuilt into it each open
+        private ScrollRect _scroll;   // the track-list scroller (snap to top on each rebuild)
         private bool _open;
+
+        // One track row in reference px (1080x1920 canvas). MinTouchPx keeps the tap
+        // target legal; it is within a hair of the old 0.115-fraction row height.
+        private const float RowPx = ElarionUiKit.MinTouchPx;
 
         // Strict MVVM (Silo E): ALL selection state/logic lives in the VM; this View
         // reads vm.* only and never touches AudioService.
@@ -94,28 +100,53 @@ namespace DeNelle.Audio
                 ? _modal.chrome.layout.body.transform
                 : _modal.chrome.content.transform;
 
-            // EYES-SWEEP 2026-07-06 (#3): the subtitle band was 0.90–1.00 — its first line tucked
-            // under the header trim and its wrapped 3rd line spilled into the first track row
-            // (rows started at 0.88). Give it a proper band BELOW the header trim, FitBlock so the
-            // whole message always fits its band, and start the track list underneath it.
+            // 16-PANEL AUDIT (WO-795 pattern): the caption gets its OWN single-line band
+            // (NoWrap + Ellipsis via FitSingleLine) below the header trim, and the track
+            // list band starts strictly BELOW it, so the two can never collide again.
             var subtitle = ElarionUiKit.Label(body,
                 "Pick the music for where you are. Battle music still takes over during fights.",
-                0.84f, 0.965f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                0.885f, 0.965f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
-            // SWEEP 9413 R2 (#4): default FitBlock clamps min to FontFloor(30) — at FontLabel(40)
-            // the band couldn't fit the wrap and Truncate hard-cut "…Battle music s". Taller band
-            // (0.84–0.965) + an explicit smaller min so the hint SHRINKS to fit instead of cutting.
-            ElarionUiKit.FitBlock(subtitle, 24f, ElarionUi.FontLabel);
+            ElarionUiKit.FitSingleLine(subtitle, 24f, ElarionUi.FontLabel);
 
-            // Rows live in a dedicated host under the body so RebuildRows can clear
-            // them without touching the subtitle.
-            var hostGo = new GameObject("TrackRows", typeof(RectTransform));
-            hostGo.transform.SetParent(body, false);
-            var hrt = hostGo.GetComponent<RectTransform>();
-            hrt.anchorMin = new Vector2(0f, 0f);
-            hrt.anchorMax = new Vector2(1f, 0.82f);
-            hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
-            _rowHost = hostGo.transform;
+            // WO-795 scroll list (RumorBoardPanel recipe): Viewport (near-invisible Image
+            // drag-catcher + RectMask2D) on the list band; Content = top-anchored
+            // VerticalLayoutGroup + ContentSizeFitter. Rows are LayoutElement children,
+            // so EVERY track lists and scrolls: no fraction math, no overlap, no cut.
+            var viewportGo = new GameObject("TrackViewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(body, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = new Vector2(0.04f, 0.02f);
+            vpr.anchorMax = new Vector2(0.96f, 0.87f);
+            vpr.offsetMin = Vector2.zero; vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("TrackRows", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 8f;
+            // Bottom pad = one row so the last track scrolls fully clear of the mask.
+            vlg.padding = new RectOffset(6, 6, 6, (int)RowPx + 8);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            _scroll = viewportGo.GetComponent<ScrollRect>();
+            _scroll.viewport = vpr;
+            _scroll.content  = cr;
+            _scroll.horizontal = false;
+            _scroll.vertical   = true;
+            _scroll.movementType = ScrollRect.MovementType.Clamped;
+            _scroll.scrollSensitivity = 25f;
+
+            _rowHost = contentGo.transform;
 
             // VM FIRST — it resolves AudioService itself, so this View never touches a service.
             _vm = JukeboxVM.CreateDefault(() => SetOpen(false));
@@ -136,30 +167,38 @@ namespace DeNelle.Audio
 
             if (_vm == null || !_vm.AudioReady)
             {
-                ElarionUiKit.Label(_rowHost, "Audio not ready.", 0.85f, 0.97f,
+                var notReady = ElarionUiKit.Label(_rowHost, "Audio not ready.", 0f, 1f,
                     ElarionUi.Danger, ElarionUi.FontBody,
                     TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                // _rowHost is layout-driven now; give the notice a row-sized slot.
+                notReady.gameObject.AddComponent<LayoutElement>().preferredHeight = RowPx;
                 return;
             }
 
-            const float rowH = 0.115f, gap = 0.02f;
-            float top = 0.97f;
             foreach (var row in _vm.Tracks)
             {
                 MusicTrack track = row.Track;
                 bool isSelected = row.IsSelected;
+                // Fixed-height layout slot per track; the VerticalLayoutGroup stacks them
+                // and the ScrollRect scrolls them; every track lists, none ever overlaps.
+                var host = new GameObject("Row_" + track, typeof(RectTransform), typeof(LayoutElement));
+                host.transform.SetParent(_rowHost, false);
+                var le = host.GetComponent<LayoutElement>();
+                le.preferredHeight = RowPx;
+                le.minHeight = RowPx;
                 // Selected row = Green family (the pack's own affirmative), rest Gray.
                 // ASCII '>' marker (eyes-on 2026-07-03: the checkmark glyph is missing from the TMP font).
-                ElarionUiKit.BuildObsidianButton(_rowHost,
+                ElarionUiKit.BuildObsidianButton(host.transform,
                     (isSelected ? ">  " : "") + row.DisplayName,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     isSelected ? ElarionUiKit.ObsidianButtonColor.Green
                                : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.06f, top - rowH), new Vector2(0.94f, top),
+                    Vector2.zero, Vector2.one,
                     () => OnPick(track));
-                top -= rowH + gap;
-                if (top - rowH < 0f) break;   // bounded: never overflow the well
             }
+
+            // Fresh render starts at the top of the list.
+            if (_scroll != null) _scroll.verticalNormalizedPosition = 1f;
         }
 
         // Selecting a track routes to the VM command (persists + previews); the VM
