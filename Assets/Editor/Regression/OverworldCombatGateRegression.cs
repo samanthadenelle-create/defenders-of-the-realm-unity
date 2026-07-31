@@ -46,15 +46,18 @@ namespace DeNelle.Editor
 
             string assetsRoot = Application.dataPath; // ".../Assets"
 
-            // ── FIX B (behavioural half): ff.regionroam defaults OFF and honours prefs. ──
+            // ── FIX B (behavioural half): ff.regionroam defaults ON (owner reversal 2026-07-30) and honours prefs. ──
             int priorRoam = PlayerPrefs.GetInt("ff.regionroam", -1);
             try
             {
                 PlayerPrefs.DeleteKey("ff.regionroam");
-                if (FeatureFlags.RegionRoam)
-                    failures.Add("FIX B: FeatureFlags.RegionRoam is ON with no PlayerPrefs override — ambient overworld roaming must DEFAULT OFF (owner 2026-07-26)");
+                // OWNER REVERSAL 2026-07-30 (F8 seq511 "missing enemies in the world"): the
+                // 2026-07-26 peaceful-regions ruling is superseded — ambient roamers now
+                // DEFAULT ON. The oracle pins the CURRENT ruling + the reversibility both ways.
+                if (!FeatureFlags.RegionRoam)
+                    failures.Add("FIX B: FeatureFlags.RegionRoam is OFF with no PlayerPrefs override — ambient overworld roaming must DEFAULT ON (owner reversal 2026-07-30, supersedes 2026-07-26)");
                 else
-                    log.AppendLine("OK: FIX B — RegionRoam defaults OFF (no pref)");
+                    log.AppendLine("OK: FIX B — RegionRoam defaults ON (owner reversal 2026-07-30)");
 
                 PlayerPrefs.SetInt("ff.regionroam", 1);
                 if (!FeatureFlags.RegionRoam)
@@ -188,7 +191,7 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "OVERWORLD_COMBAT_GATE_OK");
-                reason = "OVERWORLD COMBAT GATE OK — FIX A (raidwalk OFF: cave repoint no-ops + neutralizes seam, challenge-victory installer no-ops) + FIX B (regionroam defaults OFF: RegionMobSpawner bootstrap+update gated)";
+                reason = "OVERWORLD COMBAT GATE OK — FIX A (raidwalk OFF: cave repoint no-ops + neutralizes seam, challenge-victory installer no-ops) + FIX B (regionroam defaults ON per owner reversal 2026-07-30, reversible both ways: RegionMobSpawner bootstrap+update gated)";
                 return true;
             }
 

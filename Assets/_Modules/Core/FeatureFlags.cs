@@ -151,7 +151,7 @@ namespace DeNelle.Core
         /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
         /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
-        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);  // WO-771 LOCKED (2026-07-26): reverted the 2026-06-26 preview default OFF so the leftover wandering-encounter loop no longer shadows the Teleport/Deploy raid loop out of the box (audit: "fix that flag first regardless"). ff.overworldencounter=1 restores the preview.
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: true);  // owner REVERSAL 2026-07-30 (F8 seq511 "missing enemies in the world") of the WO-771 2026-07-26 lock-OFF — wandering reps + engage->BattleArena are live again alongside the Teleport/Deploy raid loop; ff.overworldencounter=0 restores the quiet world.
 
         /// <summary>Ambient overworld roamers (RegionMobSpawner's live wandering-mob population that
         /// tops up around the player as they walk regions). Default OFF per owner 2026-07-26 (WWCD +
@@ -159,7 +159,7 @@ namespace DeNelle.Core
         /// surprise overworld combat can't happen out of the box. When OFF the spawner does nothing
         /// (top-level enable gate only — all internals intact). Reversible: PlayerPrefs
         /// "ff.regionroam" = 1 restores the roaming population.</summary>
-        public static bool RegionRoam => Get("regionroam", defaultOn: false);
+        public static bool RegionRoam => Get("regionroam", defaultOn: true);   // owner REVERSAL 2026-07-30 F8 seq511 ("missing enemies in the world") — regions live again; ff.regionroam=0 restores the peaceful preview
 
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
