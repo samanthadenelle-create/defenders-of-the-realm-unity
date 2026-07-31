@@ -1,6 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3 queue visual): next free WO = **799**. **782–798 CONSUMED.**
+> ## ⚠ RECONCILED 2026-07-30 (CLI, WC3 queue visual): next free WO = **800**. **782–799 CONSUMED.**
+> - **799** = queue CANCEL verb + REFUND plumbing (engine side; owner ruling "on cancel refund the
+>   values paid"). Job cost stored at enqueue; ResourceLedger refund; slot-free + cascade on active
+>   cancel. File `WorkOrders/WORK_ORDER_799_queue_cancel_refund_engine.md`, READY. Panel-row cancel
+>   UI waits on the WO-798 sign-off; the v1 glance rows (QueueEntry seam) shipped 2026-07-30.
 > - **798** = **Warcraft 3–style work queue VISUAL** — **Claude UI-seat READ-ONLY design pack** (mockups +
 >   interaction + image-pair sign-off). Engine stays WO-773 multi-channel; presentation becomes portrait
 >   production dock (icon chips, progress rings, pending icon strips). No `.cs` from Claude; CLI implements
