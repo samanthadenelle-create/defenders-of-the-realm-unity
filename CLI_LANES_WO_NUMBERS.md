@@ -1,6 +1,17 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-01 (CLI): next free WO = **818**. **782–817 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-01 (CLI, evening mint): next free WO = **822**. **782–821 CONSUMED.**
+> - **821** = Building perk research TIMED + QUEUED on the Research channel + skills-tab timers
+>   (owner F8 seq 545; naming half "Swift Recruitment -> Conditioning Drills" shipped same session).
+>   File `WORK_ORDER_821_timed_perk_research.md`, READY.
+> - **820** = Raids gated on FULL army (grey + drillmaster redirect) + over-queue exploit fix.
+>   **IMPLEMENTED 2026-08-01**, awaiting gate + PO felt-verify. File `WORK_ORDER_820_raid_full_army_gate.md`.
+> - **819** = StructureSingleton common v2 (catalog-driven `repo.bakedTwins`, zero-code enforcement,
+>   sell-resurfaces-bake, CheckSingletons oracle). **IMPLEMENTED 2026-08-01**, awaiting gate + PO
+>   felt-verify. File `WORK_ORDER_819_structure_singleton_common_v2.md`.
+> - **818** = KayKit NPC body per structure (owner-approved 12-row mapping stored in
+>   structures-catalog `repo.npcModel`; stager built, catalog+injector phases queued behind 819).
+>   File `WORK_ORDER_818_kaykit_structure_npc_models.md`, IN PROGRESS.
 > - **817** = **MASTER queue visual: CoC channels + WC3 production glance** (icon+bar+pending strip;
 >   phases 0–6). Folds 798/801/816. Engine frozen. File
 >   `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`, READY.
