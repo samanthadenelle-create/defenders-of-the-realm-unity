@@ -1,14 +1,12 @@
 # WO-798 — WC3-style work queue VISUAL (build on the live chip + 5-deep rows)
 
-**Status:** READY FOR UI SEAT (read-only design) → then CLI implement after owner image-pair sign-off  
-**Minted:** 2026-07-30 · **Rewritten:** 2026-07-30 (CLI — grounded in live code, not greenfield)  
+**Status:** DESIGN INPUT — **superseded for implementation by WO-817** (full CoC+WC3 queue visual system)  
+**Minted:** 2026-07-30 · **Rewritten:** 2026-07-30 · **Programmed under 817:** 2026-08-01  
+**Master implement WO:** `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`  
 **Lane:** UI presentation only (HudKit queue chip + optional modal restyle).  
-**Claude:** design pack only — **no `.cs`**.  
-**CLI later:** sole implementer on the files listed in §3.  
+**Claude:** design pack feeds **817 Phase 0**; no `.cs`.  
 **Anchor pack:** `docs/UI/WO-798_wc3_queue/` (`CODE_AS_IS.md` first, then wireframes).  
-**Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` — pull order + sibling WOs.  
-**Implement follow-on:** **WO-801** (CLI icons/rings/multichannel after this design is signed).  
-**Related:** WO-773 engine · WO-778 reachability/labels · WO-799 cancel/refund **engine** (UI cancel after 801 chips).
+**Related:** WO-773 · WO-778 · WO-799 · WO-816 (Phase 2 bars under 817)
 
 ---
 

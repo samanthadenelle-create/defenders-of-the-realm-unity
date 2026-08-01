@@ -1,10 +1,11 @@
 # WO-816 — Queue timer UI: progress bars that feel in-game (not text-only countdowns)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** READY TO IMPLEMENT — **absorbed as Phase 2 of WO-817** (CoC/WC3 queue visual system)  
 **Minted:** 2026-08-01 (CLI, code review of queue countdown display)  
+**Master:** `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`  
 **Lane:** Queue presentation (HUD glance + WORK QUEUE modal + shared format)  
 **Roles:** CLI implements; Claude optional mock of bar row anatomy  
-**Related:** WO-778 (queue surface) · WO-798/801 (icon glance — **compose with**, do not fight) · WO-799 (cancel) · `UnderConstructionVisual` (world M:SS)  
+**Related:** WO-778 · WO-798/801 · WO-799 · `UnderConstructionVisual`  
 
 ---
 

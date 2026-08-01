@@ -1,10 +1,11 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-01 (CLI): next free WO = **817**. **782–816 CONSUMED.**
-> - **816** = **Queue timer progress bars** — replace text-only countdowns with shared name+bar+digits
->   (modal + HUD glance + train strip); Progress01 on QueueEntry; kit BuildObsidianBar. File
->   `WorkOrders/WORK_ORDER_816_queue_timer_progress_bars.md`, READY.
-> - **813** = Barracks discovery/teach (B+C). **Depends on 812 presence.** File `WORK_ORDER_813_*`.
+> ## ⚠ RECONCILED 2026-08-01 (CLI): next free WO = **818**. **782–817 CONSUMED.**
+> - **817** = **MASTER queue visual: CoC channels + WC3 production glance** (icon+bar+pending strip;
+>   phases 0–6). Folds 798/801/816. Engine frozen. File
+>   `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`, READY.
+> - **816** = Queue timer bars (= 817 Phase 2). File `WORK_ORDER_816_*`.
+> - **813** = Barracks discovery/teach (B+C). **Depends on 812.** File `WORK_ORDER_813_*`.
 > - **812** = **ADD Barracks placeable** (catalog + free first place + train entry). Authority for presence.
 >   File `WORK_ORDER_812_introduce_barracks.md`. ⚠ **NUMBER COLLISION:** Claude also wrote
 >   `WORK_ORDER_812_echo_harvest_choice_and_affinity.md` — **renumber that to 815** before implement;

@@ -44,7 +44,7 @@ Waves / home defense
 
 | Pillar | Code truth | Feel gap |
 |--------|------------|----------|
-| Production queue | Engine multi-channel + right-column chip + 5-deep **text** | WC3 glance needs icons/rings |
+| Production queue | Engine multi-channel + right-column chip + 5-deep **text** | **WO-817** full CoC+WC3 visual overhaul |
 | Upgrades | Level timers + perk grid + VillageTier | Too many doors / words |
 | Train / army | Timed train + housing + recovery | Loadout handoff soft |
 | You invade | Full Teleport/Deploy spine | Ring, naming, loadout, stakes |
