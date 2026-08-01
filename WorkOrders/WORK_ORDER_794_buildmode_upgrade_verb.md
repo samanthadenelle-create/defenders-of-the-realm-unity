@@ -1,6 +1,6 @@
 # WO-794 — Build-mode UPGRADE verb: pick Upgrade, carousel minimizes, tap a building to upgrade
 
-**Status:** SPEC STUB — needs full spec pass (owner-requested feature, NOT a bug)
+**Status:** SPEC STUB — needs full spec pass; NOTE a slice already landed out-of-band (cd661967 upgrade CTA explains itself pre-tap).
 **Minted:** 2026-07-30 from an owner F8 (verbatim below), classified NEW-FEATURE per docs/TICKET_PIPELINE.md
 **Owner F8 (22:48 UTC, Main_Castle_Overworld):** "Can we add an upgrade button, so after selecting the
 button upgrade (if they can) will minimize the bulding selection to select what to upgrade?"

@@ -1,6 +1,7 @@
 # WORK ORDER 795 — UI standard: screens never stack; scroll when content exceeds
 
-**Status: READY TO IMPLEMENT**
+**Status: PARTIALLY SHIPPED — wave 1 (4461f9ee), wave 2 (583bc0ac), modal truce (8ba7154a), capture coverage (749914b1). Remaining panels of the 16-panel audit READY.**
+> ⚠ Cross-reference 2026-08-01: overlaps WO-779 (55-screen UI spacing/layout conformance sweep, not yet run) — reconcile 779's rubric with these shipped waves + `docs/qa/UI_REVIEW_2026-08-01.md` findings before further panel work.
 **Origin:** owner F8 seq 466, 2026-07-30 19:02 (Main_Castle_Overworld): "all screens should
 never stack. Need to all be seen, scrollable if needed"
 **Silo:** UI / HudKit + Obsidian panels

@@ -1,6 +1,6 @@
 # WORK ORDER 773 — Common "Obsidian" Job Queue (unified timed-work system)
 
-**Status:** SPEC. The single queue every timed job flows through — **buildings, repairs,
+**Status:** SHIPPED (save schema v35, ObsidianQueueState + MigrateToV35 live). Surface work continued under WO-778/816/817. The single queue every timed job flows through — **buildings, repairs,
 upgrades, tier-unlocks, magic-learning, troop training, towers, everything.**
 **Date:** 2026-07-26
 **Author:** systems design pass.

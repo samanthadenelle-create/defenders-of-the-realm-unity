@@ -1,6 +1,6 @@
 # WORK ORDER 818 — KayKit NPC body per structure (data-driven, unique)
 
-**Status: IN PROGRESS (Phase 1 built this session; Phases 2-3 queued)**
+**Status: SHIPPED 2026-08-01 — all phases (e8bd17b0 phase 1 KAYKIT_STAGE_OK 12/12; 777dd9ff phases 2-3 repo.npcModel); NPC_MODELS oracle green.**
 **Owner directive (2026-08-01, verbatim):** "have a team go through the kaykat characters and match a
 unique kaykat model for each structure that can be stored in json with the structure ... so they load neatly"
 **Silo:** World/NPCs (art-adjacent; model mapping is owner-retaggable data)

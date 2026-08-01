@@ -10,10 +10,15 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-26.md`)
+## CURRENT STATE — 2026-08-01 (supersedes ALL blocks below; anchor = `CANON_GROUND_TRUTH_2026-08-01.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
-> Live anchor of current reality = `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor).
+> Live anchor of current reality = `CANON_GROUND_TRUTH_2026-08-01.md` (delta over the deep `2026-07-22` module anchor).
+
+- **2026-08-01 delta:** WO-818 KayKit NPC bodies (all phases) + WO-826 Realm Map SHIPPED; owner ruling —
+  bar Queues button RETIRED (Builders chip = the one entry, 6-face bar); ProjectSettings batching RCA
+  closed; gates 3-green (COMPILE+REGRESSION 103 checks+UI_CAPTURE 23); HEAD `ac0a52e3`+ pushed; Seeker
+  APK + Firebase + WebGL preview shipped. WO next-free = 832 (banner authority).
 
 - **2026-07-26 delta — DUNGEONS FUNCTIONAL + RAID LOOP LOCKED (felt-test wave, pushed to `wip`, HEAD `7dec0e07`):**
   Dungeons are now a real end-to-end loop (enter → explore → read lore → fight with a REAL win/loss → settle →
@@ -32,7 +37,8 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   **WO-772 (shared enemy system) = UNBLOCKED** — Hollow Ones ratified, Wildlands deferred (PAIN_POINTS §1.1);
   `EnemyResolver` + barracks-catalog-structure **IN FLIGHT** (not done). Non-dungeon fixes: enemies-out-of-castle + battle-lock,
   towers-no-longer-through-walls, MagentaGuard Android, loading overlay+bar, gate-teleport off, collector vendor
-  NPCs, Alchemy scroll-fix. WO next-free = **774**. Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
+  NPCs, Alchemy scroll-fix. WO next-free: see the `CLI_LANES_WO_NUMBERS.md` banner (**832** as of
+  2026-08-01). Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
 
 - **2026-07-16 delta — BARRACKS 7-TROOP TIER-UNLOCKED ROSTER (program WO-732→737, VERIFIED):** the army is a
   **7-type roster trained at the Barracks**, gated by Barracks building tier — Footman + Archer day-one (tier 1),
@@ -55,7 +61,7 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   load; `SFX_WEBGL_OK` oracle) + **WO-683** (build-screen kit — d-pad moves the asset, text rotate labels)
   all committed **LOCAL, push HELD**. Save schema **v29**; gates green (3 known pre-existers only). The
   **WebTrace web-debug loop is PROVEN** (`?trace=1` → `api/trace` → Neon; CLI reads the runtime-log `[sig]`
-  echo); `api/` lives in-repo (gitignored). A new **ship (non-dev) WebGL preview** was deploying at handoff;
+  echo); `api/` lives in-repo and is git-TRACKED (25 files). A new **ship (non-dev) WebGL preview** was deploying at handoff;
   prod untouched. **WO numbering: next free = 684** (677/678 collisions flagged).
 
 - **2026-07-08 delta (⚠ superseded by the 07-12 delta above — see `CANON_GROUND_TRUTH_2026-07-08.md` for full detail):** focus = THE FEEL
@@ -79,32 +85,30 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   (`docs/WEBGL_DELIVERY_PLAN_2026-07-03.md`).
 
 - **Branch:** `wip/village2-and-f8-tickets` (the `feat/tower-core-loop` name everywhere below is STALE).
-  HEAD `7c05cd1b` (2026-06-28); nothing pushed this arc.
+  HEAD `ac0a52e3`+ (2026-08-01), local==origin, PUSHED.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline
-  **"Hold the last light."** (WO-570).
+  **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
 - **V1 = single controllable Knight ("Grom")** in an overworld with an isolated real-time **BattleArena**
   (lock-on WO-512, 9-zone HUD). **ATB is separate/flat.** Base-defense + tower-defense = **V2-gated**
   behind `ff.basebuilding`. **Defend-the-Tower/PatriciaLight = REMOVED (2026-06-09)** — not a pillar.
 - **Combat space (WO-584, READY 06-28):** one warp-in space primitive, 3 skins (dungeon/outpost/arena),
-  resolver + ownership flip; replaces the flat ATB dungeon fight (`ff.atbdungeon` OFF). UI canon =
+  resolver + ownership flip; replaces the flat ATB dungeon fight (real gate `ff.dungeonrealtime`, default ON). UI canon =
   `docs/UI_BLINK_TEMPLATE_CANON.md` (BINDING master-frame formula).
 - **Hero = single Tripo self-rigged model**, static armor, no mesh-swap. **Blink hero rig JUNKED (06-22)**
   (Blink = UI re-skin only). Roster = Tripo only; V1 = Knight + ORCS.
-- **World:** home = `MainCastle_Hall`; `OuterWorld` additive; `Village2` = raid target; `Village.unity`
-  ABANDONED. Castle↔OuterWorld = **four-side warp gates** (RuntimeRegionGate); moat + 4 drawbridges
-  (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, **save v27**); village-tier upgrade
+- **World:** home hub **`Main_Castle_Overworld`** (merged world, one navmesh); `Village2` = raid target;
+  `Village.unity` + `OuterWorld.unity` DELETED from the tree.
+- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, save **v35**); village-tier upgrade
   unlocks the WO-432 building-upgrade tree; store redesign (WO-501) + gear balance (WO-500).
 - **Dialogue:** Yarn being DROPPED for custom MVVM dialogue (WO-455).
-- **Distribution (updated 2026-07-03):** itch web build LIVE; **game IS live on Vercel** (the stale
-  "Vercel parked/blocked" claim is WRONG — preview `defenders-of-the-realm-v2-69mafg5pj` = the full
-  convergence build at 79.7MB Brotli data; production stays on the 07-01 verified Pi sign-in build
-  until owner promotes). Pi backend = Cloudflare Worker.
-- **WO numbering (updated 2026-07-03):** WO specs now run through **602** (596–602 = the 07-02→03 arc,
+- **Distribution (updated 2026-07-03):** itch web build LIVE; **game IS live on Vercel** — production = the 07-16
+  six-fix build `q2v5vj86g` (promoted 2026-07-16); WebGL preview refreshed 2026-08-01; promotion
+  stays the owner's. Pi backend = Cloudflare Worker.
+- **WO numbering (updated 2026-07-03):** WO specs now run through **602** (superseded — banner says 832) (596–602 = the 07-02→03 arc,
   e.g. WO-596 bug report, WO-602 return crossings); previously through **584** (authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md`
   + `CLI_LANES_WO_NUMBERS.md`, not filesystem max; the WO-560→584 arc = UI Blink template, title rebrand,
   dungeon/outpost/arena consolidation, wave-loop-in-hub).
-- **In-flight (do NOT push):** HEAD targeting sweep `ff.enemystructureaware` is UNVERIFIED (0 sweep acquires).
+- **In-flight (do NOT push):** HEAD targeting sweep `ff.enemystructureaware` is UNVERIFIED (0 sweep acquires). *(retired 2026-08-01 — tree is pushed)*
 
 ---
 
@@ -200,7 +204,7 @@ ladder, Pi utility-sink, 3-build distribution, rewarded-ads pillar), `docs/PI_PI
 | KayKit Skeletons 1.1 | Assets/Models/KayKit (gitignored) → chars copied to **Resources/Enemies** (committed) | mixed | Enemy horde meshes + URP atlas |
 | KayKit Character Animations 1.1 | Assets/Models/KayKit (gitignored) | ignored | Shared Rig_Medium/Large clip library |
 | KayKit Medieval Hexagon | Assets/Models/KayKit (gitignored) | ignored | Village dressing + walls/gates/ground |
-| Black Dragon | → **Resources/Enemies/Dragon.fbx** (committed) | tracked | DTT air flyer + boss model |
+| Black Dragon | → **Resources/Enemies/Dragon.fbx** (committed) | tracked | DTT air flyer + boss model (⚠ 2026-08-01: Dragon.fbx git-rm'd — replaced by the licensed Asset-Store dragon `Assets/Dragon/` + `Resources/Enemies/Boss_Dragon.prefab`, WO-760) |
 | Lean Touch (CW) | Assets/Plugins/CW (committed, examples trimmed) | tracked | Mobile gestures |
 | Low Poly Ultimate Pack (polyperfect) | Assets/polyperfect (**gitignored**, 246MB) | ignored | Arena props (siege engines) + future village rebuild |
 
@@ -223,14 +227,12 @@ Scene: `Assets/Scenes/PatriciaLightMode.unity` (baked by `Assets/Editor/Patricia
 - `EnemyAnimatorFactory.Apply(mesh, modelName)` → picks the shared controller by rig family.
 - `VisualFactory.Skin(host, key, SkinOptions)` → load→fit→seat→fix-materials→strip-colliders (Enemy/Structure/Prop presets).
 - `Enemy.cs` already drives Speed/Attack/Hit/Dead → any rigged mesh walks/attacks/dies for free.
-- **Apex DragonBoss** (`Assets/_Modules/Village/Enemies/DragonBoss.cs`): own kinematic-flight class (NOT Enemy/NavMesh), 3-phase encounter, baked Fly take + code-driven dives. Prefab: `Assets/Prefabs/Village/Generated/Boss_Dragon.prefab`. **BUILT.**
+- **Apex DragonBoss** (`Assets/_Modules/Village/Enemies/DragonBoss.cs`): own kinematic-flight class (NOT Enemy/NavMesh), 3-phase encounter, baked Fly take + code-driven dives. Prefab: `Assets/Prefabs/Village/Generated/Boss_Dragon.prefab`. **BUILT.** (⚠ 2026-08-01: that prefab was git-rm'd in the WO-760 licensed-dragon swap — the live prefab is `Assets/Resources/Enemies/Boss_Dragon.prefab`)
 
 ## 4. Village / town — **SUPERSEDED (see 2026-06-09 block above)**
-> ⚠ **Out of date.** The home/start hub is now **`MainCastle_Hall`** (the Castle, built by
-> `Assets/Editor/CastleHubBuilder.cs`); the town role moved to **`Village2`**, repurposed as a
-> raid-target stronghold. **`Village.unity` is ABANDONED** (never canonical, corruption-cursed —
-> do not use). `OuterWorld` streams in additively over the castle hub via `WorldSceneLoader`.
-> The detail below describes the old `Village.unity` flow and is frozen history.
+> ⚠ **Corrected 2026-08-01.** Home hub = **`Main_Castle_Overworld`** (merged world, one navmesh).
+> `OuterWorld.unity` + `Village.unity` are DELETED. `MainCastle_Hall.unity` exists on disk but is
+> NOT the hub. The detail below describes the old `Village.unity` flow and is frozen history.
 
 Scene: `Assets/Scenes/Village.unity` (⚠ corruption-on-resave history — regenerate ONLY via the builder, never hand-save). Builder: `Assets/Editor/VillageSceneBuilder.cs` (`BuildVillage`).
 - Wave loop `Assets/_Modules/Village/Waves/WaveManager.cs`: countdown→spawn→breach/clear→next. **BUILT.** Spawn-spread + stuck-enemy failsafe added (77984d9).
@@ -239,6 +241,9 @@ Scene: `Assets/Scenes/Village.unity` (⚠ corruption-on-resave history — regen
 - ✅ **wave-4 apex dragon FIXED** (4cf0037): rebake re-wires `_apexBossPrefab` + WaveManager has a Resources/Enemies/Boss_Dragon fallback for the stale scene. (Pending in-game confirm that Syndrath flies.)
 
 ## 5. Store / monetization — **~70% BUILT** (do NOT greenfield)
+> ⚠ SUPERSEDED — the live store model = the WO-673/695 player-built town (strategic placement ALWAYS ON,
+> movable storefronts + vendor NPCs). This section describes the dead Village.unity path; kept for history.
+
 Specs: `docs/monetization-v2-spec.md` (locked), `WORK_ORDER_73/75`, `CC_MONETIZATION_RECONCILIATION.md`.
 - `PackStore.cs` + `PackCatalog.cs` + `packs.json` (5 packs) — **BUILT** (devnet-stubbed payments).
 - `MarketplaceInteractor.cs` — village [F] store-open trigger — **BUILT, not placed in scene**.

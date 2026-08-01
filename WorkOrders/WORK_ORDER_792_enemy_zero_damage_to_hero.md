@@ -1,6 +1,6 @@
 # WORK ORDER 792 — Enemy attacks deal ZERO damage to the hero
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-30 (f4f31180 — enemy-to-hero damage probe).
 **Lane:** Lane 2 (Combat/AI)
 **Type:** EXISTING (combat is built; damage-to-hero is landing at 0)
 **Minted:** 2026-07-30 (owner felt-report)

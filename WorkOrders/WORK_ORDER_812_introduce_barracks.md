@@ -1,6 +1,6 @@
 # WO-812 — ADD the Barracks (design changed; placeable path was never shipped)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** SHIPPED 2026-07-31 (c2665a9c — Barracks placeable, train/raid ladder gets a world entry).  
 **Minted:** 2026-07-30 · **Clarified:** 2026-07-30 (owner: *“since we changed it, we never added it”*)  
 **Lane:** Village build catalog + Barracks entry (single lane)  
 **Origin:** owner — Barracks is never built / never present after hub redesign  

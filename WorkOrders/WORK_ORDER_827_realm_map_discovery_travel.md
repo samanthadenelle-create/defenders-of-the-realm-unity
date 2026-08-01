@@ -1,6 +1,6 @@
 # WORK ORDER 827 — Realm Map discovery, zone identity, and travel
 
-**Status: READY TO IMPLEMENT**  
+**Status: READY TO IMPLEMENT — UNBLOCKED (826 shell shipped eb5d0710).**  
 **Minted:** 2026-08-01  
 **Program:** WO-825  
 **Silo:** Core state + Village world + map panel wiring  

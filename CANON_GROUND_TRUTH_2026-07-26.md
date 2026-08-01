@@ -1,5 +1,11 @@
 # CANON GROUND TRUTH — 2026-07-26 (Sunday housekeeping: dungeon+raid felt-test wave)
 
+> ## ⚠ SUPERSEDED 2026-08-01 — the live anchor is `CANON_GROUND_TRUTH_2026-08-01.md`.
+> This file remains the deep reference for the dungeon/raid felt-test wave (WO-770.x detail,
+> raid V1 spine map, WO-772/773 state); its §, module and landmine content stays valid except
+> where the 08-01 anchor changes it (HEAD, WO numbering → 832, Queues entry ruling, WO-818/826
+> shipped, Echo affinity program 830/831, batching RCA closed).
+
 > **LIVE ANCHOR (2026-07-26).** Records the reality after a large felt-test fix wave landed on
 > `wip/village2-and-f8-tickets` (dungeon functional-loop fixes, dungeon movement/camera, enemies-in-castle
 > lockdown, towers-through-walls, MagentaGuard Android, loading overlay, vendor NPCs, gate-traversal) **plus**

@@ -6,8 +6,9 @@
 > (`CANON_GROUND_TRUTH_*`) remain the session snapshots; THIS file is the always-current card.
 
 ## ⭐ NORTH STAR — the state we are building toward
-- **The product:** "Echoes of Elarion" (chapter) in the "Defenders of the Realm" series — "Hold
-  the last light." **V1 = ONE controllable Knight ("Grom")** in an overworld with isolated
+- **The product:** "Echoes of Elarion" (chapter) in the "Defenders of the Realm" series — "Echoes of
+  a Forgotten Civilization" (retired tagline "Hold the last light" noted in canon-strings.json).
+  **V1 = ONE controllable Knight ("Grom")** in an overworld with isolated
   real-time BattleArena combat; **the player builds their own city** (player-defined map pivot
   07-11: Build → place/move/rotate functional structures). *(The "build mode IS the demo" framing is
   RETIRED — see the platform line.)*
@@ -27,6 +28,38 @@
   `docs/ARCHITECTURE_NORTH_STAR.md` (does the foundation grow into the dream).
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
+
+## Latest (2026-08-01) — post-reboot ship wave: Realm Map + KayKit NPCs + Queues ruling + release train
+- **Anchor = `CANON_GROUND_TRUTH_2026-08-01.md`** (supersedes 07-26, bannered). **HEAD `ac0a52e3`, pushed,
+  local==origin.** Gates: `COMPILE_GATE_OK` + `REGRESSION_OK` + `UI_CAPTURE_OK 23` (pixels eyeballed).
+- **WO-818 ALL PHASES SHIPPED:** 12 KayKit NPC bodies tracked at `Assets/Resources/NPCs/KayKit/`
+  (`KAYKIT_STAGE_OK 12/12`, Humanoid); `structures-catalog.json` **v6** dual-copy carries `repo.npcModel`
+  on exactly 12 owner rows; `KayKitNpcBody` resolver = KayKit-first → People chain → capsule (one Warn,
+  never blank); `NPC_MODELS` oracle pins the 12 verbatim. Body swap = one-word owner JSON retag.
+- **WO-826 Realm Map SHIPPED:** parchment panel (Elarion gilt home + 5 fog regions from dual-copy
+  `realm-map.json`), strict MVVM, HUD **Map** button (hidden until Onboarded, WO-825 R4), DevPanel entry,
+  `REALM_MAP` oracle + 8 EditMode tests. Travel stubbed → WO-827. 825 program IN FLIGHT (827/828/829 next).
+- **OWNER RULING: bar Queues button RETIRED** — the right-column **Builders chip** (QueueStatus band,
+  above the resources dock) is the ONE Queues entry; calm(town) bar = **6 faces**
+  (Build/Talk/Bag/Raids/Map/Quests⇄Upgrade). `ObsidianQueueRegression` 7c enforces the retirement.
+- **ProjectSettings dynamic-batching RCA CLOSED** (`ac0a52e3`): reverter proven (twice-captured) to run
+  INSIDE `BuildPlayer` after the pre-build set; `DesktopBuild` now re-asserts static=0/dynamic=1
+  post-build (the WebGL exceptionSupport-restore pattern). Owner keeps dynamic=1.
+- **Dungeon verified from a captured run** (owner-ordered log test): all 7 proving lines + the R-A1
+  arena CharacterController guard green. Open: vitals 120/60 placeholder (770.10), placeholder props
+  (770.8), `EnvTreeFix VERIFY FAILED 'Skeleton_Mage_Hat'` (minor, unticketed).
+- **Release train:** fresh desktop exe (15:17) · Seeker APK built + Firebase App Distribution (testers
+  group) + adb install · WebGL→Vercel PREVIEW queued (promotion = owner). Screenshot archive:
+  `Builds\ui-capture-archive\2026-08-01\` (23 PNGs).
+- **UI seat reconciled:** WO-830 (Echo harvest affinity+synergy: 6 unique affinities
+  Wood/Iron/Food/Gold/Crystals/Repairs, 3 disclosed pairs, 1 HIDDEN tri-synergy) + WO-831 (2D emergence
+  sprite beat) minted; `docs/qa/UI_REVIEW_2026-08-01.md` (20-panel real-pixel review) banked.
+  **WO next-free = 832** (banner is sole authority — never copy the number into docs, point at it).
+- **Verified inventories (cite these):** regression gate = **103 checks (26 inline + 77 suites)**;
+  FeatureFlags = 62 (⚠ XML summaries LIE on 12 defaults — trailing `//` comment is truth); save **v35**;
+  EditMode reds live in `Assets/Data/Tests/WaveDataTest.cs` (wave-1 ruling open), not Tests/EditMode.
+- **Queue ahead:** 822 → 817 ph1-2 → 821 → 827/828/829 (+830/831 owner-sequenced). Felt-verify list:
+  Realm Map, 6-face bar + Builders chip, KayKit NPCs, 819/820/810/808/812/813, WO-825 R1-R4.
 
 ## Latest (2026-07-30) — 12-agent SME fan-out + check-in sweep + WO-783 fix wave
 - **Operating model (owner directive):** CLI = **GATEKEEPER**. Dedicated agents write requirements, write
@@ -62,7 +95,7 @@
 - **New WOs:** **783** (this wave) · **784** Echo lanes — canon's "3 of 4 stub" is wrong, **all four** are
   write-only, even Harvest bypasses the Core contract · **785** VFX survivability — **117 of 121** owner-tagged
   VFX rows point into gitignored packs with **no runtime fallback**. **782 RESERVED** (night-wrap capsule
-  standee). **WO next-free = 786.** *(2026-07-30)*
+  standee). **WO next-free = 786** *(superseded → banner, 832)*. *(2026-07-30)*
 
 ## Latest (2026-07-26) — dungeon+raid felt-test wave + Sunday housekeeping
 - **Live anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (delta over 07-22, which stays the deep module
@@ -88,7 +121,7 @@
   shaders (`386a932f`), loading overlay + standard bar (`4edf8dcc`/`7dec0e07`), gate-traversal teleport off —
   walk through the arch (`8c35332f`), collector buildings get vendor NPCs (`804a02a2`, Lever 1 in progress),
   Alchemy recipe scroll-fix (`8ca95735`). *(2026-07-26)*
-- **WO next-free = 774** (761–773 consumed; 770–773 are decimal-sub-order specs in `docs/qa/`). Ticket table:
+- **WO next-free = 774** *(superseded → banner, 832)* (761–773 consumed; 770–773 are decimal-sub-order specs in `docs/qa/`). Ticket table:
   `docs/qa/SUNDAY_STATUS_2026-07-26.md`. §6/§7 catalog-drift housekeeping WO + CS-1 ring/amulet non-persist
   ticket still open. *(2026-07-26)*
 
@@ -132,7 +165,7 @@
 - **Builds:** Seeker APK -> Windows -> WebGL launched detached ~06:28; WebGL DEPLOY pending owner `vercel` CLI.
 
 ## Persistence / save
-- Save schema **v34** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738; **v34** persists Tribes/Wards/Arena + pet active-slot, RED-3/4 2026-07-19). Every bump 21→33 carries a `SaveMigrator` step (additive ones are pass-throughs) so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs/SaveMigrator.cs 2026-07-17)*
+- Save schema **v35** (v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738 — deliberate pass-through; v34 persists Tribes/Wards/Arena + pet active-slot; **v35** `obsidianQueue` — WO-773 multi-channel Builder/Train/Research queue, `MigrateToV35` folds legacy buildJobs/pendingBuilds/buildingCooldowns into the Builder channel, idempotent). Every bump carries a `SaveMigrator` step so the CORE_SAVE version-triple oracle stays green. *(verified from SaveSchema.cs:35/SaveMigrator.cs 2026-08-01)*
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
 - Local save = PlayerPrefs `dotr-save`, signed (LB-3 HMAC, tamper-rejected); server save/load nonce-auth is built but `BackendAuthConfig.Enforced` = **OFF**. *(2026-07-12)*
 
@@ -210,6 +243,9 @@
 - **PROD (current) = the 07-16 six-fix build** — `q2v5vj86g`, promoted 2026-07-16, public, on
   `defenders-of-the-realm-v2.vercel.app`. Rollback target recorded in `Builds/PROD_ROLLBACK.txt`
   (prior prod `44dellx2j`). Commit `77e927be` (pushed to origin). *(2026-07-16)*
+- **2026-08-01 release train:** fresh desktop exe · Seeker APK v-wave installed on-device + Firebase App
+  Distribution (testers) · WebGL→Vercel preview refreshed. Screenshot archive
+  `Builds\ui-capture-archive\2026-08-01\`.
 - **Web-build self-test = `tools/webbot/`** (Playwright): `webbot.js` drives the DEPLOYED build for
   screenshots + live browser-console `[Flow:*]` capture + a drag-pan engage check; `introtest.js`
   clicks Play Intro. CAVEAT: synthetic clicks do NOT reliably fire Unity uGUI buttons in WebGL — the
@@ -221,7 +257,7 @@
   **URL source** (not VideoClip) with the WebGL `audioOutputMode=Direct` fix. *(2026-07-16)*
 - **Ship WebGL = `BuildOptions.None`** (Development is opt-in `-DevBuild` — NEVER deploy a DevBuild: Development players paint the full-screen error overlay). Desktop release still ships Development (open item). *(verified WebGLBuild.cs:124 / DesktopBuild.cs:178, 2026-07-12)*
 - Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
-- Fleet baseline: DataRegression = **REGRESSION_OK, 0 reds** — all 5 long-standing reds fixed 2026-07-19 (R1 arena ground texture, R2 dual-wallet Grant->GameState, R3 pet active-slot persist, R4 core-save Tribes/Wards/Arena persist, R5 orc-raider SSOT enemies.json Hp 130). *(2026-07-19)*
+- Fleet baseline: DataRegression = **REGRESSION_OK, 0 reds** — all 5 long-standing reds fixed 2026-07-19 (R1 arena ground texture, R2 dual-wallet Grant->GameState, R3 pet active-slot persist, R4 core-save Tribes/Wards/Arena persist, R5 orc-raider SSOT enemies.json Hp 130). *(2026-07-19)*; re-certified 2026-08-01 with UI_CAPTURE_OK 23 (103 checks).
 
 ## UI / MVVM (WO-744 — DONE 2026-07-18)
 - **Strict MVVM across the whole game:** every panel View binds an `IPanelViewModel` and reads NO
@@ -257,6 +293,6 @@
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
 - Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**next free = 774** as of 2026-07-26; 761–773 consumed — 762 builder-queue, 763 Wisdom, 764 hub-Y-height, 765 capture-Default-Town, 766 Seeker wallet, 767 texture caps, 768 thin-client, 769 Firebase auth, 770 dungeon, 771 raid, 772 enemy, 773 Obsidian queue; earlier: 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**832** as of 2026-08-01; NEVER copy the number — the banner is the only authority; historical: 761–773 consumed — 762 builder-queue, 763 Wisdom, 764 hub-Y-height, 765 capture-Default-Town, 766 Seeker wallet, 767 texture caps, 768 thin-client, 769 Firebase auth, 770 dungeon, 771 raid, 772 enemy, 773 Obsidian queue; earlier: 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ✅ Apex dragon model = **SWAP LANDED 2026-07-24 (WO-760)** — the licensed Asset-Store dragon (product 71047 "Dragon Animated", WDallgraphics; source `Assets/Dragon/`, now git-tracked, not gitignored) ships as `Resources/Enemies/Boss_Dragon.prefab`, built by `DragonAnimatorSetup` + force-tracked `Assets/Generated/Animators/SyndrathDragon.controller`. Old CC-BY-NC 3DHaupt `Dragon.fbx`/2 controllers/materials + the orphan `Prefabs/Village/Generated/Boss_Dragon.prefab` git-rm'd; unlicensed `RedDragon 1.2` stray deleted; `EnemyFactory` dragon keys repointed to `Boss_Dragon`. ⚠ **The earlier "RESOLVED 2026-07-23" claim was PREMATURE** — that commit only repointed comments; the CC-BY-NC model still SHIPPED (Resources includes unused assets) until the 07-24 builder-run + git-rm. Commercial-ship blocker now ACTUALLY cleared; boss "Syndrath the Devourer" retained; fly-in->land->burn-towers->retarget-Tree behavior built (WO-760, felt-verify pending).

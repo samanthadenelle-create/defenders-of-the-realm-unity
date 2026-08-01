@@ -1,6 +1,6 @@
 # WO-817 — Queue system visual overhaul: **CoC channels + WC3 production glance**
 
-**Status:** READY TO IMPLEMENT (master program — phases below)  
+**Status:** READY TO IMPLEMENT (master program — phases below) · ⚠ RE-SCOPE 2026-08-01: the bar Work/Queues button was RETIRED (eb5d0710); the Keep-table row naming "RequestToggle / Work button | Keep" is stale — the right-column Builders chip is the sole Queues entry; do NOT re-add a bar button (ObsidianQueueRegression 7c fails it).  
 **Minted:** 2026-08-01  
 **Lane:** Queue presentation only (engine frozen)  
 **Roles:** Claude = visual pack / image pairs for phases; CLI = implement after sign-off per phase  

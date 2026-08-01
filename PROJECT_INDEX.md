@@ -5,10 +5,10 @@ Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
 > **Branch = `wip/village2-and-f8-tickets`.** The single live anchor of current reality is
-> `CANON_GROUND_TRUTH_2026-07-26.md` (a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md`
+> `CANON_GROUND_TRUTH_2026-08-01.md` (a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md`
 > module anchor) — **read it first; if any file below contradicts it, the anchor wins.** Every
-> earlier dated anchor (07-22/07-19/07-18/07-13/07-12/07-08 and older) is superseded/frozen.
-> WO next-free = **774**. Dungeons are a functional end-to-end loop; the raid loop is locked to the
+> earlier dated anchor (07-26/07-22/07-19/07-18/07-13/07-12/07-08 and older) is superseded/frozen.
+> WO next-free: `CLI_LANES_WO_NUMBERS.md` banner (**832** as of 2026-08-01). Dungeons are a functional end-to-end loop; the raid loop is locked to the
 > COC Teleport/Deploy model; save schema **v35** (WO-773 Obsidian multi-channel queue). Files this
 > index historically called "living" that read as pre-pivot (tower-defense + Solana + party-of-4 +
 > Blink hero rig) are STALE — corrected per `CANON_READINESS_LEDGER_2026-06-26.md`.
@@ -17,15 +17,17 @@ Docs index: `docs/README.md`.
 
 | File | Purpose |
 |---|---|
-| `CANON_GROUND_TRUTH_2026-07-26.md` | **The single live anchor of current reality — read FIRST** (delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
+| `CANON_GROUND_TRUTH_2026-08-01.md` | **The single live anchor of current reality — read FIRST** (delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
 | `KEY_FACTS.md` | The living fact sheet + ⭐ NORTH STAR state — always current, updated in place |
 | `START_HERE.md` | The single entry point / boot sequence a fresh CLI session follows |
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
 | `SESSION_CANON_LOADER.md` | At-a-glance SME primer (live thread + current state + key files) |
-| `docs/HANDOVER.md` | Operator's manual + newest ★★ session block (2026-07-26) |
-| `PIPELINE_STATE.md` | Pipeline/build state (current block at top) |
+| `docs/HANDOVER.md` | Operator's manual + newest ★★ session block (2026-08-01) |
+| `PIPELINE_STATE.md` | Pipeline/build state (current block re-dated 2026-08-01; deep history below it) |
 | `docs/COMBAT_PIVOT_NORTHSTAR.md` | Single-Knight pivot — supersedes Blink/party-of-4 canon |
 | `docs/MASTER_CATALOG.md` | Verified-from-code SME catalog (code mechanics current) |
+| `docs/GROK_MEMORY.md` | Grok (AI PM) fast path |
+| `docs/qa/UI_REVIEW_2026-08-01.md` | Frozen 20-panel real-pixel readability review |
 | `SUNDAY_HOUSEKEEPING.md` | The weekly full-sweep + housekeeping ritual (BINDING) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
 | `PUNCHLIST.md` | Outstanding punch-list items |
@@ -40,9 +42,10 @@ Docs index: `docs/README.md`.
 
 ## Work orders — `WorkOrders/WORK_ORDER_NNN_name.md`
 
-> **WO next-free = 774** (mint from the banner in `CLI_LANES_WO_NUMBERS.md`, never from the filesystem
-> max). Recent arc: WO-770 (dungeon functional), 771 (COC Teleport/Deploy raid), 772 (shared enemy
-> system), 773 (Obsidian multi-channel queue, save v35). Some historical numbers were reused/collided
+> **WO next-free: the `CLI_LANES_WO_NUMBERS.md` banner** (**832** as of 2026-08-01; mint from the banner,
+> never from the filesystem max). Recent arc: WO-818 (KayKit NPC bodies, SHIPPED), 819/820/823 (singleton /
+> army-gate / hardening, SHIPPED, PO felt-verify open), 825-829 immersive Realm Map program (826 SHIPPED;
+> 827-829 READY), 830/831 (Echo affinity + emergence beat, READY). Some historical numbers were reused/collided
 > (e.g. 677/678); a `.RESULT.md` beside a spec means it is done.
 
 The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutter

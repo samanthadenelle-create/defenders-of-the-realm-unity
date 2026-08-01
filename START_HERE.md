@@ -12,8 +12,8 @@ ANYTHING until the boot sequence below is complete and reported.**
 | # | Read | Why |
 |---|------|-----|
 | 0 | `KEY_FACTS.md` (repo root) | The LIVING fact sheet + ⭐ NORTH STAR state. Always current; update in place. |
-| 0b | `docs/GROK_MEMORY.md` (if present) | Grok session fast path — program WOs, overnight orders, distance snapshot. |
-| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — take the newest; today: `CANON_GROUND_TRUTH_2026-07-26.md`, a delta over the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. |
+| 0b | `docs/GROK_MEMORY.md` | Grok session fast path — program WOs, overnight orders, distance snapshot. |
+| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — take the newest; today: `CANON_GROUND_TRUTH_2026-08-01.md`, a delta over 07-26 → the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. |
 | 2 | `SESSION_CANON_LOADER.md` | The SME primer: live thread, core rules, current state, key files. |
 | 3 | `SAMANTHA.md` | The boot-confirmation gate: verify state with evidence → report → WAIT for the owner's go. |
 | 4 | `PREFLIGHT_GATE.md` | Gate A before ANY code, Gate B before ANY debugging, Gate C before "done". Answer YES + proof, out loud. |
@@ -42,22 +42,27 @@ ANYTHING until the boot sequence below is complete and reported.**
 - **Desktop:** F8 flight recorder → `break-log.jsonl` + screenshots; the F8 watcher daemon
   (`.claude/skills/run-defenders/f8-watch-start.ps1`) auto-harvests to `logs/f8-inbox/` — read
   `LATEST_CAPTURE.md` FIRST, before any code-read or theory.
-- **Headless:** gate → build → fleet → observe. `run-unity-method.ps1` (CompileGate →
-  `COMPILE_GATE_OK`; DataRegression.RunAll → `REGRESSION_OK` — baseline = 0 reds as of 2026-07-19, all 5 fixed) →
+- **Headless:** gate → capture → build → fleet → observe. `run-unity-method.ps1` (CompileGate →
+  `COMPILE_GATE_OK`; DataRegression.RunAll → `REGRESSION_OK` — 103 checks, 0 reds, re-certified 2026-08-01;
+  `UICaptureLaunch.RunCaptureHeadless` → `UI_CAPTURE_OK` + PNGs you must OPEN — standing pre-ship rule) →
   `build-windows.ps1` → `run-autopilot-fleet.ps1` → `harvest.sh`. Full SOP: the `run-defenders`
   skill + `docs/INSTRUMENTATION_STANDARD.md` (FlowTrace/Guard authoring law).
-- **WEB (proven 2026-07-12):** the game streams its whole log pump when active — `?trace=1` on the
-  URL (or `ff.webtrace`, or the account flag) → `POST /api/trace` → Neon `analytics_events`
-  (`event_name='web_trace'`). **Your read path = the `[sig]` echo in Vercel runtime logs**
-  (`vercel logs` / the Vercel MCP `get_runtime_logs`) — `DATABASE_URL` is a sensitive env var and
-  cannot be pulled. The backend functions live IN THIS REPO at `api/` (gitignored). Errors must be
-  caught QUIETLY for the player (owner law: "not a giant json failure screen") — loud only in the db.
+- **WEB (read path CORRECTED 2026-07-15 — do NOT use vercel logs):** the game streams its whole log
+  pump when active — `?trace=1` on the URL (or `ff.webtrace`, default ON) → `POST /api/trace` → Neon
+  `analytics_events` (`event_name='web_trace'`). ⚠ `vercel logs` returns ONE summary line per request —
+  the per-line `[sig]` echoes NEVER surface there (proven 2026-07-15). **The real read path = the admin
+  endpoint:** `api/admin/db.js?view=traces` → `&session=<id>&order=asc&limit=50`, header
+  `x-admin-key` = `ADMIN_DASH_KEY`; base URL rotates per deploy → `Builds\admin-preview-url.txt`.
+  `DATABASE_URL` is sensitive/unpullable. The backend functions live IN THIS REPO at `api/`
+  (**git-TRACKED**, 25 files). Errors must be caught QUIETLY for the player (owner law: "not a giant
+  json failure screen") — loud only in the db.
 - **Two failed fix attempts on one issue → STOP, escalate to Grok** (`logs/debug/`).
 
 ## 4. STANDING RULES THAT BITE
 
-- Push is **HELD** until the owner says so; preview deploys only (`vercel deploy --yes`), NEVER
-  `--prod` — promotion is the owner's.
+- Push only on the owner's word — **currently AUTHORIZED for `wip` (pushed waves 07-26 → 08-01;
+  local==origin)**. Web deploys stay preview-only (`vercel deploy --yes`), NEVER `--prod` —
+  promotion is the owner's.
 - Ship WebGL builds NEVER use `-DevBuild` (Development players paint full-screen error overlays).
 - `.unity` scenes are never hand-edited; bakes/batchmode only with the editor closed.
 - UI is code-built uGUI via ElarionUiKit — no UXML/UIDocument in gameplay; **ASCII-only TMP

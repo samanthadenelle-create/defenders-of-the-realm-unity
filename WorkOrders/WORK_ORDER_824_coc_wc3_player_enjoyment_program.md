@@ -1,5 +1,7 @@
 # WORK ORDER 824 — CoC + Warcraft **player enjoyment** program (master sequence + PO fun bar)
 
+> ⚠ 2026-08-01: "Work" panel/button references = the QUEUES panel, reached via the right-column Builders chip (bar button retired eb5d0710; rename 85ed4c98).
+
 **Status: READY — PROGRAM / DISPATCH AUTHORITY (not a single code dump)**  
 **Minted:** 2026-08-01 (CLI / Grok — owner asked after CoC/WC3 enjoyment review)  
 **Silo:** Program (PM + Claude design lanes + CLI implement in linked WOs only)  

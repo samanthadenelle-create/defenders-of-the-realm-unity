@@ -175,17 +175,25 @@ Use `CoreServices.Hud` and `CoreServices.Audio` for cross-module calls.
 - Hero tag: **`Player`** (one tag per GameObject — locomotion, camera, HUD, triggers all `FindWithTag("Player")`; set in `HeroControlEnsurer.Ensure`, WO-450)
 - Enemy AI finds the hero by **component** (`FindFirstObjectByType<HeroLocomotion>()`), NOT a `HeroTarget` tag — that tag was never declared; a GameObject has only one tag
 - Enemy spawn tags: `SpawnPoint` — placed 12m outside each gate
+- **Home hub scene = `Main_Castle_Overworld`** (MergedWorld ON, one navmesh). ⚠ `MainCastle_Hall.unity`
+  still exists on disk as a LEGACY file — it is NOT the hub; that ambiguity keeps re-seeding stale docs.
+  `Village.unity` + `OuterWorld.unity` are DELETED from the tree.
+- Player-facing renames (canon-strings.json): tagline = **"Echoes of a Forgotten Civilization"**
+  (retired "Hold the last light", 2026-07-24); HUD "Pets" → **"Echoes"**; HUD "Work" → **"Queues"** —
+  and (owner 2026-08-01) the bar Queues BUTTON is RETIRED: the right-column Builders chip
+  (QueueStatus band) is the one Queues entry; calm(town) bar = 6 faces.
 
 ---
 
 ## 8. Pipeline State Quick Reference
 
-See `PIPELINE_STATE.md` for full detail. Key facts:
+See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (PIPELINE_STATE.md lags). Key facts *(refreshed 2026-08-01)*:
 - Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only `Resources/PatriciaLight/tower2` kept
-- Home hub: **MainCastle_Hall** (start), **OuterWorld** streams in additively; **Village2** = raid target; **Village.unity** abandoned
-- Village wave loop: **WIRED, gaps remain**
-- Store / monetization: **~70% BUILT** — do NOT greenfield (PackStore exists)
-- Store scene-wiring: DISABLED — needs own PanelSettings before re-enabling
+- Home hub: **`Main_Castle_Overworld`** (merged world, one navmesh); **Village2** = raid target; `Village.unity`/`OuterWorld.unity` DELETED
+- Village wave loop: WIRED — but **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters; owner ruling WO-783 D1 open)
+- Save schema **v35**; the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work; Realm Map (WO-826) shipped
+- Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
+- Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks) + `UI_CAPTURE_OK` (open the PNGs)
 - UXML in builds: does NOT work — always use code-built UI (learned the hard way)
 
 ---

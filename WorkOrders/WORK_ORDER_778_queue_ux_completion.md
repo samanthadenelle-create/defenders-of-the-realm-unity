@@ -1,6 +1,6 @@
 # WO-778 — Queue UX completion (labels · reachability · layout · Train-strip · flip · sell-time)
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-27 (0684f351 + f709a389). ⚠ P0-A SUPERSEDED: the bar Work/Queues button was RETIRED by owner ruling 2026-08-01 (eb5d0710) — the right-column Builders chip is now the only Queues entry.
 **Minted:** 2026-07-26 (CLI, from relayed CoC-review of the WO-773 queue surface + gameplay-gap P0-A/P0-B)
 **Lane:** Queue/HUD UX (single lane — owns the queue surface). Dispatch after the WO-771.9 code batch is banked.
 **Anchor:** WO-773 (multi-channel queue), `PAIN_POINTS_2026-07-26.md` (F2 naming, §7 monetization), `docs/qa/GAMEPLAY_GAPS_2026-07-26.md` (P0-A/P0-B).

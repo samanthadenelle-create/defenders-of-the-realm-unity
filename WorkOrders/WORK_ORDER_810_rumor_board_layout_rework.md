@@ -1,6 +1,6 @@
 # WO-810 — Brom's Rumor Board layout rework (crowded → scannable)
 
-**Status:** READY TO IMPLEMENT · **WIREFRAME SIGNED by owner 2026-07-30** — CLI implements to the spec below  
+**Status:** SHIPPED 2026-07-31 (74612a25 — Rumor Board master-detail rebuild to the owner-signed wireframe).  
 **Minted:** 2026-07-30  
 **Lane:** UI / Quests (single lane — owns RumorBoard panel)  
 **Origin:** owner screenshot 2026-07-30 — *"too crowded and needs better organized"* → owner review: *"I love it!"*  

@@ -2,7 +2,7 @@
 
 > ⚠ Renumbered 779→781 on 2026-07-26: WO-779 was reassigned by the owner to the UI spacing/layout conformance sweep. The implementation agent may reference the old "779" label — the WORK is unchanged.
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-27 (cd5a059c — TroopRecoveryService wires TickRecovery live + offline).
 **Minted:** 2026-07-26 (CLI, from gameplay-gap ledger — borderline P0)
 **Lane:** Core/State army recovery (single lane). Dispatch on the clean committed base.
 

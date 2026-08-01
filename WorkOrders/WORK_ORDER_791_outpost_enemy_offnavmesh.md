@@ -1,6 +1,6 @@
 # WORK ORDER 791 — Outpost/garrison enemies spawn OFF the NavMesh → frozen + floating
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-30 (f4f31180 — off-navmesh seat fix).
 **Lane:** Lane 2 (Combat/AI) + Lane 5 (World/NavMesh)
 **Type:** EXISTING (spawn + AI built; NavMesh coverage/placement is the defect)
 **Minted:** 2026-07-30 (owner felt-reports + screenshots)

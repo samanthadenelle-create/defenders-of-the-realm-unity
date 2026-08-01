@@ -1,6 +1,6 @@
 # WORK ORDER 771 — COC-Style Raid / Attack System (build plan, v2)
 
-**Status:** SPEC (v2 — rebuilt after an adversarial implementability review of v1).
+**Status:** SPEC (v2) — PARTIALLY SHIPPED (771.9 barracks progression landed 4b5d2353; deploy/scoring seams exist; felt-slice open as WO-774).
 New `DeNelle.Raid` module; sub-orders sequenced by dependency.
 **Date:** 2026-07-26
 **Author:** raid-systems design pass.

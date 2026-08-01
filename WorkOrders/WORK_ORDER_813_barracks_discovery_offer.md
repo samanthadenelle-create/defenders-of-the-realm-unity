@@ -1,6 +1,6 @@
 # WORK ORDER 813 — Barracks discovery / teach (dialogue + raid safety net)
 
-**Status:** READY TO IMPLEMENT (owner direction ruled B+C 2026-07-30)  
+**Status:** SHIPPED 2026-07-31 (fb2939f7 — barracks teach + raids empty-army safety net). Teach quality re-opened as WO-822 (813b).  
 **Minted:** 2026-07-30 (Claude UI seat) · **CLI guidance pass:** 2026-07-30  
 **Lane:** Onboarding / Progression (dialogue + raid entry UX)  
 **Origin:** owner — *“there is a gap. We never show the barracks… some dialogue and raid tutorial?”*  

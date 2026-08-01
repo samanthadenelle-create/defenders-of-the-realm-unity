@@ -1,6 +1,6 @@
 # WORK ORDER 788 — Cathedral of Magic: swap the shield aura for an electro rune circle
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-30 (fe87a943; follow-ups f83d4c9f foot-point anchor + fcf5a249 particle bounds).
 **Lane:** Lane 9 (VFX/Audio)
 **Type:** EXISTING (the aura is wired; only the tagged key changes — a SWAPPABLE default)
 **Minted:** 2026-07-30 (owner felt-report from build-mode screenshot + owner aura choice this session)

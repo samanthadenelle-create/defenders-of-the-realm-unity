@@ -1,6 +1,6 @@
 # WORK ORDER 796 — Room-Forge composed dungeons bake a REAL hero body (not a pill)
 
-**Status: READY TO IMPLEMENT**
+**Status: SHIPPED 2026-08-01 (fb358585 — Room-Forge hero real body, in the audit ship-now trio).**
 **Origin:** owner F8 seq 461 (dg_starter_loop): "I am a pill". Classification: NEW FEATURE —
 no body-swap was ever wired on this scene path (QA triage 2026-07-30, read-only).
 **Proof from capture:** `[Flow:HeroDrift] baseNt=NaN clips=[<none>]` — NaN is only possible

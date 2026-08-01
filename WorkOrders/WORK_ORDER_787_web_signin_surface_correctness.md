@@ -1,6 +1,6 @@
 # WORK ORDER 787 — Web-build Sign In surface correctness
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-30 (c18ff812 — sign-in layout unstack + non-Pi web forces SKR skin).
 **Lane:** Lane 4 (UI/HUD) + Platform (Pi/SKR skin)
 **Type:** EXISTING (all three surfaces were built; each is now presenting wrong on the web build)
 **Minted:** 2026-07-30 (owner felt-report from the deployed web build, with screenshot)

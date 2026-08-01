@@ -1,6 +1,6 @@
 # WORK ORDER 770 — Make the Dungeons Fully Functional (read-only regression fixes)
 
-**Status:** SPEC. Sub-orders tagged **[CODE — safe to apply]** (pure C#, no scene
+**Status:** SPEC — PARTIALLY SHIPPED (770.1/.2/.3/.3b/.4/.7/.9 DONE; .5/.6/.8/.10/.11 open as WO-775/776/777). Sub-orders tagged **[CODE — safe to apply]** (pure C#, no scene
 rebake) or **[OWNER-GATED]** (requires re-running an editor scene builder — the
 curated-scene rule forbids autonomous scene edits; see WO-27/SESSION_HANDOFF).
 **Date:** 2026-07-26

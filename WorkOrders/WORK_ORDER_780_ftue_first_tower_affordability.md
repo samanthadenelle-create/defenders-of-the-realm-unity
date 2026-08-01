@@ -1,6 +1,6 @@
 # WO-780 — FTUE first-tower affordability (tutorial stall risk)
 
-**Status:** READY TO IMPLEMENT
+**Status:** SHIPPED 2026-07-27 (5dbe9574 — founding_defense grant.prepaidTower).
 **Minted:** 2026-07-26 (CLI, from gameplay-gap ledger — P1 onboarding)
 **Lane:** FTUE/tutorial (single lane). Dispatch on the clean committed base.
 

@@ -1,6 +1,6 @@
 # WORK ORDER 825 — Immersive world / realm map **program** (master)
 
-**Status: READY — PROGRAM / DISPATCH AUTHORITY**  
+**Status: IN FLIGHT — PROGRAM / DISPATCH AUTHORITY** (826 SHIPPED 2026-08-01 eb5d0710; 827/828/829 READY).  
 **Minted:** 2026-08-01 (CLI / Grok — owner: immersive map beyond today)  
 **Silo:** World / HUD / Narrative  
 **Children:** **826** parchment Realm Map UI · **827** discovery + travel + zone identity · **828** live minimap · **829** atmosphere + content pins  

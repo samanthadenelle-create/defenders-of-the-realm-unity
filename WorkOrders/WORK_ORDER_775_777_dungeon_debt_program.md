@@ -1,6 +1,6 @@
 # WO-775–777 — Dungeon-debt program (vitals · Granary-gate · door-consolidation)
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIALLY SHIPPED — 776 DONE (70e0f85a Granary gate-off + destroyed-structure rebuild fix); 775 + 777 READY TO IMPLEMENT.
 **Minted:** 2026-07-26 (CLI, from read-only §12 RCA agent — evidence cited from HEAD)
 **Source:** the three parked dungeon-debt items (770.10a / 770.6 / 770.5) from PAIN_POINTS_2026-07-26.md §4.
 

@@ -1,6 +1,6 @@
 # WORK ORDER 821 — Building perk research: timed + queued (WC3 style) + skills-tab timers
 
-**Status: READY TO IMPLEMENT**
+**Status: READY TO IMPLEMENT** — note the Work/Queues panel is now reached via the right-column Builders chip, not a bar button (owner ruling 2026-08-01).
 **Source: owner F8 seq 545 (2026-08-01, verbatim):** "Researching Skills should have queued timers as
 well. Swift recuitment makes it sound like faster build times not troop health, troop health should be
 something about advanced workouts or something"

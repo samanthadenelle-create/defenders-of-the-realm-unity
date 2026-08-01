@@ -1,7 +1,7 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
 > **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
-> 2026-07-26) → this sheet → `../CANON_GROUND_TRUTH_2026-07-26.md` (the live reality anchor) →
+> 2026-08-01) → this sheet → `../CANON_GROUND_TRUTH_2026-08-01.md` (the live reality anchor) →
 > `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
 > `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
 > `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
@@ -12,6 +12,46 @@
 > `CANON_GROUND_TRUTH_<date>.md` at repo root. Update the relevant load-bearing doc in the SAME
 > change as any architecture/state/canon shift (or add a top-of-file `STALE:` flag). Weekly 5-minute
 > skim of the read-first set against the anchor. Dated ledgers are frozen — banner, never rewrite.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-08-01 (post-reboot ship wave + release train + canon refresh) ★★
+
+**Anchor:** `CANON_GROUND_TRUTH_2026-08-01.md` (NEW — supersedes 07-26, bannered). Branch
+`wip/village2-and-f8-tickets`, **HEAD `ac0a52e3` + the canon-refresh commit after it, local==origin,
+pushed.** Prod untouched. Save **v35** (no new fields today). **WO next-free = 832** (banner is the sole
+authority — point at it, never copy the number). Gates: `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks:
+26 inline + 77 suites) + `UI_CAPTURE_OK 23` (pixels eyeballed; archive `Builds\ui-capture-archive\2026-08-01\`).
+
+**Shipped this session (each gated before commit):**
+- **WO-818 ALL PHASES** (`e8bd17b0` + `777dd9ff`): 12 KayKit NPC bodies tracked (`KAYKIT_STAGE_OK 12/12`,
+  Humanoid) + `repo.npcModel` on 12 owner rows (structures-catalog v6, dual-copy) + `KayKitNpcBody`
+  KayKit-first resolver in both injectors + `NPC_MODELS` oracle. Body swap = one-word owner retag.
+- **WO-826 Realm Map** (`eb5d0710`): parchment panel, Elarion home + 5 fog regions, strict MVVM over
+  `realm-map.json`, HUD **Map** button (post-Onboarded), `REALM_MAP` oracle + 8 EditMode tests, capture
+  verified. Travel stubbed → 827. WO-825 program IN FLIGHT.
+- **OWNER RULING: bar Queues button RETIRED** (same commit) — right-column **Builders chip** (QueueStatus
+  band, above resources) is the ONE Queues entry; 6-face bar; `ObsidianQueueRegression` 7c enforces.
+- **ProjectSettings batching RCA CLOSED** (`ac0a52e3`): reverter runs INSIDE BuildPlayer (twice-captured);
+  DesktopBuild now re-asserts static=0/dynamic=1 post-build.
+- **Dungeon verified from a captured run**: owner-ordered log test — all 7 proving lines + R-A1 arena
+  guard green (open: 770.10 vitals placeholder, 770.8 props, `EnvTreeFix 'Skeleton_Mage_Hat'` minor).
+- **Release train:** fresh desktop exe · Seeker APK built + **installed on-device (adb Success)** +
+  **Firebase App Distribution to testers** · WebGL→Vercel PREVIEW in flight (promotion = owner).
+- **UI seat reconciled** (sole-committer flow): WO-830 Echo harvest-affinity program + WO-831 emergence
+  sprite beat minted (banner → 832); frozen `docs/qa/UI_REVIEW_2026-08-01.md` banked.
+- **Canon refresh (this doc-pass):** 08-01 anchor minted; KEY_FACTS/START_HERE/CLAUDE.md §7-8 corrected
+  (incl. the two boot-router lies: the disproven `vercel logs [sig]` read path and "api/ gitignored" —
+  it is TRACKED, 25 files); WO 774-831 status headers reconciled (18 stale headers flipped, RESULT files
+  added for 818/826); flag XML-summary lies documented (12 flags — trailing `//` comment is truth).
+
+**OPEN:** (1) owner felt-verify: Realm Map, 6-face bar + Builders chip, KayKit NPCs, 819/820/810/808/
+812/813, WO-825 R1-R4 rulings, wave-1 zero-enemy data ruling (2 reds in `Assets/Data/Tests/WaveDataTest.cs`).
+(2) Queue: 822 → 817 ph1-2 (phase 0 needs owner image-pair sign-off) → 821 → 827/828/829; 830/831
+owner-sequenced. (3) 823 Phase E soft gate — owner ruling. (4) MASTER_CATALOG `<area>` files remain
+2026-06-12-stale (07-22 §6/§7 ledgers = fix list; housekeeping WO still unminted). (5) CS-1 ring/amulet
+non-persist. (6) PIPELINE_STATE deep-history sections still carry dragon-license trap rows (L203/L226 —
+assets git-rm'd in WO-760; do not act on them).
 
 ---
 

@@ -1,6 +1,18 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-26) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-01) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-01.md`** (supersedes 07-26, bannered). HEAD `ac0a52e3`+,
+> local==origin, PUSHED. Gates `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks) + `UI_CAPTURE_OK 23`.
+> Save **v35**. Shipped today: **WO-818 all phases** (12 KayKit NPC bodies + `repo.npcModel` catalog v6 +
+> KayKit-first injectors + NPC_MODELS oracle), **WO-826 Realm Map** (parchment panel + HUD Map button +
+> REALM_MAP oracle; travel stubbed to 827), **owner ruling: bar Queues button RETIRED** (right-column
+> Builders chip = the one Queues entry, 6-face bar, oracle-enforced), **ProjectSettings batching RCA
+> CLOSED** (DesktopBuild post-build re-assert), dungeon log test all-7-proving-lines green. Release
+> train: desktop exe + Seeker APK (installed + Firebase testers) + WebGL→Vercel preview. **WO next-free
+> = 832** (banner is authority). Queue: 822 → 817 ph1-2 → 821 → 827/828/829 (+830/831 Echo affinity
+> program, owner-sequenced). **The 07-26 thread below is SUPERSEDED.**
+>
+> ## ▶ LIVE THREAD (2026-07-26) — READ BEFORE WORKING — SUPERSEDED (see 08-01 above)
 > **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (supersedes 07-22). A large **dungeon+raid
 > felt-test wave** landed on `wip/village2-and-f8-tickets` and **is PUSHED** (HEAD `7dec0e07`, local==origin —
 > a change from 07-22's push-HELD). **Dungeons are now a functional end-to-end loop** (enter → explore → read
@@ -8,10 +20,11 @@
 > DungeonHero sole-mover / taller camera / Bryn pill-hide. **The raid loop is LOCKED to Teleport/Deploy** (COC
 > model, owner 2026-07-26); walk-to retired as the raid loop. **WO-770 (dungeon), 771 (raid v2), 772 (shared
 > enemy system), 773 (Obsidian job queue)** are firmed + validation-signed-off (`docs/qa/`), but only 770 is
-> partly built — 770.5/.6/.8/.10/.11 + all of 771 + 773 are BACKLOG; **772 Phase 1 UNBLOCKED** (Hollow Ones
+> partly built — 770.5/.6/.8/.10/.11 + all of 771 + 773 are BACKLOG *(superseded: 773 SHIPPED v35; raid
+> V1 spine EXISTS end-to-end — WO-774 is UX polish)*; **772 Phase 1 UNBLOCKED** (Hollow Ones
 > APPROVED / Wildlands DEFERRED — `docs/PAIN_POINTS_2026-07-26.md`). Non-dungeon felt fixes shipped: enemies-out-of-castle + battle-lock, towers-no-longer-through-
 > walls, MagentaGuard Android, loading overlay+bar, gate-traversal-teleport off, collector vendor NPCs, Alchemy
-> scroll-fix. **WO next-free = 774** (761–773 consumed). Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
+> scroll-fix. WO next-free = **832** — mint ONLY from the `CLI_LANES_WO_NUMBERS.md` banner. Ticket table: `docs/qa/SUNDAY_STATUS_2026-07-26.md`.
 > **Save schema = v35** — code-verified (`SaveSchema.CurrentVersion = 35`): **WO-773's Obsidian
 > multi-channel work queue (`obsidianQueue`) HAS shipped** (the v34→v35 migrator folds legacy timed state
 > into the Builder channel). Treat WO-773 as landed, not backlog — the "773 BACKLOG" line above reflects the
@@ -109,7 +122,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-07-26.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-01.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
 
 > **Fast reconciliation (07-22/07-26 corrections — trust these over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
@@ -120,27 +133,27 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 07-18 arc: WO-744 strict-MVVM whole-game migration + WO-740–745 Room Forge into mainline + WO-746 Build-Mode felt-fixes, pushed to origin (local == origin after each push).** Save schema **v34** (persist Tribes/Wards/Arena + pet active-slot; every 21→34 bump has a SaveMigrator step). Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 2026-08-01 arc (`ac0a52e3`: WO-818 KayKit NPC bodies + WO-826 Realm Map + Queues retirement + batching guard), pushed, local==origin.** Save schema **v35**. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
-- **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
-- **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
+- **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
+- **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon.
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
   (Knight "Grom") in an overworld with isolated real-time BattleArena combat.** Base-defense/tower-defense
-  is V2-gated behind `ff.basebuilding`. (itch web build LIVE; Solana→Pi/Cloudflare backend; Vercel LIVE — prod = 07-01 Pi build, preview = 07-03 convergence build.)
+  is V2-gated behind `ff.basebuilding`. (itch web build LIVE; Solana→Pi/Cloudflare backend; Vercel LIVE — prod = the 07-16 six-fix build `q2v5vj86g`; fresh WebGL preview 2026-08-01.)
 - **Hero Rig:** a **single Tripo self-rigged model**, static armor, **NO mesh-swap**. *Blink full-body rig
   is JUNKED (06-22)* — Blink survives only as a **UI re-skin kit** (`BlinkChrome` flag), not the hero body.
 - **Combat:** animated real-time battle = the **OVERWORLD BattleArena** (lock-on WO-512, 9-zone HUD).
   **ATB is separate** (flat/static, single hero vs static enemies). Arena trio = OFF/gated.
 - **Tech Tree:** BuildingUpgradeVM + PanelMvvm (Warcraft 3-style perks, tier gate at the Heart of Elarion);
   unlocked this arc by the wired village-tier upgrade (WO-432).
-- **World:** home hub `MainCastle_Hall`; `OuterWorld` streams additively; `Village2` = raid target
-  (`Village.unity` ABANDONED). Castle↔OuterWorld = four-side warp gates (RuntimeRegionGate); moat +
-  4 drawbridges (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save now **v29**); gold on kills; research costs.
-- **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
-
+- **World:** home hub **`Main_Castle_Overworld`** (MergedWorld ON, one navmesh; `Village.unity` +
+  `OuterWorld.unity` DELETED — `MainCastle_Hall.unity` exists on disk but is NOT the hub); `Village2` =
+  raid target. Castle↔outer world is one merged scene; moat + drawbridges (`ff.castlemoat`); tree aura +
+  tower glow (`ff.hubambientvfx`).
+- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v35**); gold on kills; research costs.
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-07-26.md` (the single live anchor of current reality — read FIRST; a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `CANON_GROUND_TRUTH_2026-08-01.md` (the single live anchor of current reality — read FIRST; a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `docs/qa/UI_REVIEW_2026-08-01.md` (frozen 20-panel real-pixel readability review) · `docs/GROK_MEMORY.md` (Grok fast path)
 - `docs/qa/SUNDAY_STATUS_2026-07-26.md` (current WO/ticket status table) + `docs/qa/dungeon-raid-validation-2026-07-26.md` (dungeon/raid sign-off)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)

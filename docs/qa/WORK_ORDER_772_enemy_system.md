@@ -1,6 +1,6 @@
 # WORK ORDER 772 — Shared Enemy System: classes, families, equippable armor & weapons
 
-**Status:** SPEC (firmed). New shared data layer consumed by **both** dungeons (WO-770.11
+**Status:** SPEC (firmed) — PHASE 1 SHIPPED (EnemyResolver + EnemyTaxonomy live, EnemyResolverRegression green); Wildlands deferred. New shared data layer consumed by **both** dungeons (WO-770.11
 enemy placement, encounters) **and** raids (WO-771 defenders + wave enemies). Prerequisite
 for WO-770.11; referenced by WO-771.13.
 **Date:** 2026-07-26

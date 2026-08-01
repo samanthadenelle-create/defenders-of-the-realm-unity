@@ -1,6 +1,6 @@
 # WO-783 — SME-fan-out fix wave: raid settlement, dungeon reachability, gate ratchet, wave-authoring rot
 
-**Status:** IMPLEMENTED (this session) — with 3 items DEFERRED to the owner, listed at the bottom
+**Status:** IMPLEMENTED 2026-07-29 (7f1f1e6a / 10731c6c / 997f063e) — 3 items still DEFERRED to owner, listed at the bottom
 **Minted:** 2026-07-30 (CLI, from the 12-agent read-only SME fan-out + the check-in sweep)
 **Lanes:** Village/Troops+Camps · Village/World · Village/Waves · Village/Harvest · Editor/Regression · Dungeons (comments)
 **Verification:** `COMPILE_GATE_OK` + `DataRegression.RunAll` + `UICaptureLaunch.RunCaptureHeadless` (pixels opened, not just the marker)

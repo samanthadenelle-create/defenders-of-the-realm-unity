@@ -1,5 +1,7 @@
 # WO-809 — War Readiness / army power score (Raids screen)
 
+> ⚠ 2026-08-01: build ATOP `Assets/_Modules/Village/Troops/ArmyReadiness.cs` (WO-823 phase A) — the single readiness truth. This WO is a presentation layer over ArmyReadiness.Compute, NEVER a second readiness engine.
+
 **Status:** READY TO IMPLEMENT  
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A  

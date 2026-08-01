@@ -1,5 +1,7 @@
 # WORK ORDER 738 — Echo per-echo agency + specialization (Path B)
 
+> ⚠ SUPERSEDED 2026-08-01 by WO-830 (echo harvest affinity + synergy — all 6 echoes get unique harvest affinities; hidden tri-synergy).
+
 **Status: SPEC — needs owner pins (see "Owner pins"), then READY TO IMPLEMENT.**
 **Lane:** Economy/Harvest + HUD (Village/Harvest silo; picker/roster UI). **Type:** design
 evolution of BUILT systems (EchoService, EchoAssignments, EchoRosterCatalog/View, EchoCard

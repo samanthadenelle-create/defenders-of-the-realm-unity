@@ -1,6 +1,6 @@
 # WORK ORDER 822 — Barracks teach v2 (813b): discovery beats, not toasts
 
-**Status: READY TO IMPLEMENT**
+**Status: READY TO IMPLEMENT — UNBLOCKED (WO-823 phase A ArmyReadiness landed 8560fced).**
 **Source:** WO-813 shipped only the safety half (intro toast + empty-army redirect); PM review
 2026-08-01 verdict: "Toasts are not teach. Players will still miss the drillmaster if they never
 walk the right pad." This WO is the full discovery loop 813 specced but did not land.
