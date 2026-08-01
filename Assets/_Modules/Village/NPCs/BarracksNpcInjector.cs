@@ -179,6 +179,24 @@ namespace DeNelle.Village
                     break;
                 }
             _anchoredToPlaced = barracks != null;
+
+            // NO-DOUBLES STANDDOWN (owner F8 2026-08-01 "Where is the drillmaster?" — she was
+            // at the BAKED twin): with a placed barracks live, the legacy baked CastleBarracks
+            // still stood re-skinned across town — two identical barracks, drillmaster at one,
+            // owner at the other. WO-812's rule ("prefer ONE live Barracks") finishes here:
+            // the baked building deactivates while a placed one exists (idempotent; the
+            // storefront-standdown pattern — never a scene edit).
+            if (_anchoredToPlaced)
+            {
+                var baked = GameObject.Find(BarracksRootName);
+                if (baked != null)
+                {
+                    baked.SetActive(false);
+                    FlowTrace.Step("Barracks",
+                        "baked 'CastleBarracks' stood down — the PLACED barracks owns the trade (no doubles).");
+                }
+            }
+
             if (barracks == null) barracks = GameObject.Find(BarracksRootName);
 
             if (barracks == null)

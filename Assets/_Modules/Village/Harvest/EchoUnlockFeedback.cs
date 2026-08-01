@@ -101,7 +101,18 @@ namespace DeNelle.Village
             bool buildActive = DeNelle.Core.BuildModeState.IsActive;
             if (_foundingPending && _buildWasActive && !buildActive) EvaluateFoundingTeach();
             _buildWasActive = buildActive;
+
+            // OWNER RCA 2026-08-01: the new holds (Onboarded / no-other-modal) have no edge
+            // event to ride, so while the teach is pending re-evaluate at 1 Hz — the card
+            // fires on the first quiet second after the tutorial closes.
+            if (_foundingPending && Time.unscaledTime >= _nextFoundingPollAt)
+            {
+                _nextFoundingPollAt = Time.unscaledTime + 1f;
+                EvaluateFoundingTeach();
+            }
         }
+
+        private float _nextFoundingPollAt;
 
         // -- HUD-leak scene gate (visibility only; service stays global) -----------
         private void OnActiveSceneChanged(Scene from, Scene to)
@@ -128,7 +139,20 @@ namespace DeNelle.Village
             if (svc.EchoCount < 1) { _foundingPending = false; return; }
 
             // Hold until we can show cleanly: not over a menu scene, not behind the builder.
-            if (!IsGameplayScene(SceneManager.GetActiveScene().name) || DeNelle.Core.BuildModeState.IsActive)
+            // OWNER RCA 2026-08-01 (Start New "flashes to the pet screen ... a second later
+            // moves along"): the card fired on the FIRST FRAME of castle entry — mid-fade,
+            // under the boot storm and the tutorial coach — visible ~1s, buried, and the
+            // one-shot burned. Two more holds: (a) the TUTORIAL must be complete (Onboarded —
+            // canon: onboarding teaches the claim-loop first, the founding tale lands on a
+            // quiet screen after); (b) no OTHER modal may be open (the card would force-close
+            // it or vice versa). The pending retry loop below re-evaluates until clear.
+            bool onboarded = DeNelle.Core.State.GameStateService.Instance != null
+                && DeNelle.Core.State.GameStateService.Instance.State != null
+                && DeNelle.Core.State.GameStateService.Instance.State.Onboarded;
+            if (!IsGameplayScene(SceneManager.GetActiveScene().name)
+                || DeNelle.Core.BuildModeState.IsActive
+                || !onboarded
+                || DeNelle.Core.UI.PanelManager.AnyOpen)
             {
                 _foundingPending = true;   // Update() + OnActiveSceneChanged re-evaluate until clear
                 return;
