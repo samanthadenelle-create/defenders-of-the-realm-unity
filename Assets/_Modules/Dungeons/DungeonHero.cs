@@ -199,6 +199,25 @@ namespace DeNelle.Dungeons
 
         private void Update()
         {
+            // Audit R-A1 (2026-08-01): while DungeonController disables this
+            // CharacterController for a real-time arena fight (the arena's
+            // HeroLocomotion is then the SOLE mover on this transform), skip the
+            // whole movement step — Move() on a disabled controller is ignored,
+            // and accumulating gravity/velocity here would slam the hero on
+            // re-enable. State is held neutral; Teleport's same-frame CC toggle
+            // never observes this guard (it re-enables before Update runs).
+            if (_controller == null || !_controller.enabled)
+            {
+                FlowTrace.Once("Dungeon", "hero-cc-disabled",
+                    "DungeonHero.Update: CharacterController disabled -- movement step skipped (arena owns the hero).");
+                _planarVelocity = Vector3.zero;
+                _verticalVelocity = 0f;
+                _hasMoveTarget = false;
+                if (_animator != null && _hasSpeedParam)
+                    _animator.SetFloat(AnimSpeed, 0f);
+                return;
+            }
+
             Vector3 desired = _inputEnabled ? ResolveDesiredDirection() : Vector3.zero;
 
             // Ease the planar velocity toward the desired heading × top speed.

@@ -404,26 +404,56 @@ namespace DeNelle.Editor.RoomForge
                 ? eGo.transform.position : Vector3.zero;
             Vector3 heroPos = SampleNav(entryPos, 8f) + Vector3.up * 0.9f;
 
-            // Visible capsule body (mirrors HeroControlEnsurer.SpawnEmergencyHero so the hero
-            // renders even before HeroBodySwapper runs). TOP-LEVEL (no parent) so its
-            // transform.root is itself — HeroControlEnsurer.DedupeHeroes destroys a hero's
-            // whole root, and parenting under the dungeon root would risk nuking the geometry.
-            var hero = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            hero.name = "Hero (Blaise)";
+            // Hero root + "HeroBody" child (WO-796 kill-shot, audit 2026-08-01): the canonical
+            // hero shape — DungeonSceneBuilder.BuildHero and HeroControlEnsurer.SpawnEmergencyHero
+            // both build an EMPTY root with a child named "HeroBody". HeroBodySwapper (added
+            // below) finds + REPLACES that child with the player's real animated class FBX at
+            // runtime, and HeroLocomotion also looks for a "HeroBody" child. The old bare-capsule
+            // ROOT could never be swapped, so the composed dungeon stayed a white pill forever.
+            // TOP-LEVEL (no parent) so its transform.root is itself — HeroControlEnsurer.
+            // DedupeHeroes destroys a hero's whole root, and parenting under the dungeon root
+            // would risk nuking the geometry. NOTE: already-baked DungeonCompose scenes carry the
+            // OLD bare-capsule hero — a RE-BAKE is required for this shape to take effect.
+            var hero = new GameObject("Hero (Blaise)");
             Guard.Try(Sys, "tag hero Player", () => { hero.tag = "Player"; });
             hero.transform.position = heroPos;
-            var hcol = hero.GetComponent<Collider>();
+
+            // Visible fallback body — child named "HeroBody" so the swapper destroys + replaces
+            // it. Collider stripped so HeroLocomotion's CapsuleCast can't self-block (it sweeps
+            // against OTHER colliders for walls — audit note; do not restore it). Tinted emissive
+            // warm amber (c98a3a, matching DungeonSceneBuilder's pill fix) so a swap-miss reads
+            // as an intentional stand-in, never a blank white pill.
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.name = "HeroBody";
+            body.transform.SetParent(hero.transform, false);
+            var hcol = body.GetComponent<Collider>();
             if (hcol != null) Object.DestroyImmediate(hcol); // HeroLocomotion CapsuleCast must not self-block
+            TintFallbackHeroBody(body);
+
             var heroType = FindType("DeNelle.Village.HeroLocomotion");
             if (heroType != null)
             {
                 hero.AddComponent(heroType);
-                FlowTrace.Step(Sys, $"HERO 'Hero (Blaise)' seated at {heroPos} (+HeroLocomotion; HeroControlEnsurer adds combat+camera at runtime)");
+                FlowTrace.Step(Sys, $"HERO 'Hero (Blaise)' seated at {heroPos} (root + 'HeroBody' child, +HeroLocomotion; HeroControlEnsurer adds combat+camera at runtime)");
             }
             else
             {
                 FlowTrace.Warn(Sys, "HeroLocomotion type unresolved at bake — hero placed WITHOUT locomotion " +
                                     "(runtime HeroControlEnsurer emergency hero would still cover; re-run after compile if this persists)");
+            }
+            // HeroBodySwapper on the ROOT alongside HeroLocomotion — swaps the "HeroBody"
+            // capsule for the persisted class FBX at runtime. Same reflection idiom as above
+            // (DeNelle.Editor cannot reference DeNelle.Village); mirrors DungeonSceneBuilder's
+            // AddComponentByName(heroGo, "DeNelle.Village.HeroBodySwapper").
+            var swapperType = FindType("DeNelle.Village.HeroBodySwapper");
+            if (swapperType != null)
+            {
+                hero.AddComponent(swapperType);
+                FlowTrace.Step(Sys, "HeroBodySwapper attached to hero root -- 'HeroBody' swaps to the real class body at runtime");
+            }
+            else
+            {
+                FlowTrace.Warn(Sys, "HeroBodySwapper type unresolved at bake -- amber stand-in body will persist (re-run after compile).");
             }
 
             // Enemy spawners: OutpostEnemyGroupSpawner self-spawns 3-7 hero-aggro hollows on
@@ -469,6 +499,25 @@ namespace DeNelle.Editor.RoomForge
                 if (t != null) return t;
             }
             return null;
+        }
+
+        // WO-796 (audit 2026-08-01): emissive warm-amber fallback tint for the composed-dungeon
+        // hero stand-in — mirrors DungeonSceneBuilder's ApplyEmissive(body, HexColor("c98a3a"),
+        // 0.6f) so BOTH bake paths' swap-miss capsules read identically as intentional stand-ins,
+        // never a blank white pill under the oil-lantern lights.
+        private static void TintFallbackHeroBody(GameObject body)
+        {
+            var renderer = body != null ? body.GetComponent<Renderer>() : null;
+            if (renderer == null) return;
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (shader == null) return;
+            Color amber = ColorUtility.TryParseHtmlString("#c98a3a", out var c)
+                ? c : new Color(0.788f, 0.541f, 0.227f);
+            var mat = new Material(shader) { color = amber };
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            mat.SetColor("_EmissionColor", amber * 0.6f);
+            renderer.sharedMaterial = mat;
         }
 
         private static void EnsureInBuildSettings(string scenePath)

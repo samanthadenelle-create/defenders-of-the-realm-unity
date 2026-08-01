@@ -284,6 +284,23 @@ namespace DeNelle.Village
             // reach hint is wanted later, but it must NOT render during normal play.
             // (Intentionally not adding HeroReachRing here.)
 
+            // DUNGEON GUARD (audit 2026-08-01, latent race): a scene carrying a DungeonCameraRig
+            // owns its own camera (the Cinemachine iso/FPV rig driven by DungeonController).
+            // Everything below this point is CAMERA TAKEOVER — SmartMobileCamera attach,
+            // CinemachineBrain disable, EnforceSoleCamera, and a hard camera-transform write —
+            // and would stomp that rig; today it only misses in dungeons by load-order timing.
+            // Make the skip deterministic: all hero combat/gear ensures above still ran, ONLY
+            // the camera mutation is skipped. The rig type is resolved by reflection because
+            // DeNelle.Village cannot reference DeNelle.Dungeons (Dungeons already references
+            // Village; a direct type ref would be a circular asmdef dependency).
+            if (DungeonCameraRigPresent())
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroEnsure",
+                    "dungeon camera rig present -- camera takeover skipped");
+                Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled} (dungeon rig owns the camera).");
+                return;
+            }
+
             // Find the primary gameplay camera (prefer tagged MainCamera or "main"/"game" in name, enabled, no render texture).
             // This is more reliable than Camera.main alone in editor or complex Village2 setups.
             Camera cam = Camera.main;
@@ -486,6 +503,29 @@ namespace DeNelle.Village
             foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (t != null && t.name.StartsWith("Hero (")) return t.gameObject;
             return null;
+        }
+
+        // ── Dungeon camera-rig detection (audit 2026-08-01) ──────────────────
+        // Cached reflection lookup for DeNelle.Dungeons.DungeonCameraRig — same idiom as
+        // the CinemachineBrain string-typed GetComponent above: this assembly must not
+        // reference DeNelle.Dungeons. The type search runs once per domain (a null result
+        // is cached too, so non-dungeon builds pay one scan, then a bool check).
+        private static System.Type _dungeonCameraRigType;
+        private static bool _dungeonCameraRigTypeResolved;
+
+        private static bool DungeonCameraRigPresent()
+        {
+            if (!_dungeonCameraRigTypeResolved)
+            {
+                _dungeonCameraRigTypeResolved = true;
+                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    _dungeonCameraRigType = asm.GetType("DeNelle.Dungeons.DungeonCameraRig");
+                    if (_dungeonCameraRigType != null) break;
+                }
+            }
+            if (_dungeonCameraRigType == null) return false;
+            return FindAnyObjectByType(_dungeonCameraRigType, FindObjectsInactive.Exclude) != null;
         }
     }
 

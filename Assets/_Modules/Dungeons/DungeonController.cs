@@ -1221,6 +1221,24 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
+        /// Audit R-A1 (2026-08-01): toggles the Keeper's CharacterController while a
+        /// real-time arena fight owns the hero. SetInputEnabled(false) leaves
+        /// DungeonHero.Update calling _controller.Move(gravity) every frame — two live
+        /// collision bodies (the CC + the arena-driven HeroLocomotion/NavMeshAgent)
+        /// driving the SAME transform. Null-safe; no-op when already in the wanted state.
+        /// </summary>
+        private void SetHeroCharacterController(bool enabled, string reason)
+        {
+            var cc = _heroController != null
+                ? _heroController.GetComponent<CharacterController>()
+                : (_hero != null ? _hero.GetComponent<CharacterController>() : null);
+            if (cc == null || cc.enabled == enabled) return;
+            cc.enabled = enabled;
+            FlowTrace.Step("Dungeon",
+                $"R-A1: hero CharacterController {(enabled ? "RE-ENABLED" : "DISABLED")} ({reason}) -- sole collision body enforced.");
+        }
+
+        /// <summary>
         /// A real-time BattleArena encounter just staged — force the dungeon camera to
         /// over-the-shoulder for the fight (only meaningful while WE have a pending
         /// dungeon encounter; DungeonController lives only in the dungeon scene, so any
@@ -1239,6 +1257,12 @@ namespace DeNelle.Dungeons
             // BEFORE StageRoutine's WarpHero, so the un-neutralize lands before the warp.
             _arenaOwnsHero = true;
             _heroController?.SetInputEnabled(false);
+            // Audit R-A1 (2026-08-01): input-off alone is NOT enough — DungeonHero.Update
+            // still calls _controller.Move(gravity) every frame, so TWO collision bodies
+            // (this CharacterController + the arena-driven HeroLocomotion/NavMeshAgent)
+            // keep fighting over ONE transform for the whole fight. Disable the CC so the
+            // arena's mover is the sole collision body; restored on end AND on abandon.
+            SetHeroCharacterController(false, "arena staged");
             RestoreInjectedHeroMover();
         }
 
@@ -1251,6 +1275,9 @@ namespace DeNelle.Dungeons
             // F8 2026-07-30: hand the hero back to the dungeon movers.
             // EnsureSingleDungeonMover re-neutralizes HeroLocomotion next Update.
             _arenaOwnsHero = false;
+            // Audit R-A1 (2026-08-01): re-enable the CharacterController disabled on stage
+            // BEFORE input returns, so DungeonHero's first Move lands on a live body.
+            SetHeroCharacterController(true, "arena ended");
             _heroController?.SetInputEnabled(true);
 
             // Only settle a dungeon encounter WE launched — guards a stray arena event + double-settle.
@@ -1290,6 +1317,11 @@ namespace DeNelle.Dungeons
             // combat framing. Guard-wrapped: this also runs from OnDestroy, where the rig may already
             // be torn down.
             _arenaOwnsHero = false;
+            // Audit R-A1 (2026-08-01): restore the CharacterController disabled on stage —
+            // guard-wrapped because this path also runs from OnDestroy, where the hero rig
+            // may already be destroyed under us.
+            Guard.Try("Dungeon", "restore hero CharacterController on abandon",
+                () => SetHeroCharacterController(true, "arena abandoned"));
             if (_cameraRig != null)
                 Guard.Try("Dungeon", "restore framing on abandon", () => _cameraRig.SetCombatFraming(false));
 
