@@ -1,9 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-07-30 (CLI): next free WO = **816**. **782–815 CONSUMED** (813–815 Claude/CLI).
-> - **813** = **Barracks discovery/teach** (owner B+C): post-onboard dialogue + marker + Train-N task;
->   Raids with 0 troops redirect to Barracks; light first-raid coach optional. **Depends on 812 presence.**
->   File `WorkOrders/WORK_ORDER_813_barracks_discovery_offer.md`, READY (CLI guidance embedded).
+> ## ⚠ RECONCILED 2026-08-01 (CLI): next free WO = **817**. **782–816 CONSUMED.**
+> - **816** = **Queue timer progress bars** — replace text-only countdowns with shared name+bar+digits
+>   (modal + HUD glance + train strip); Progress01 on QueueEntry; kit BuildObsidianBar. File
+>   `WorkOrders/WORK_ORDER_816_queue_timer_progress_bars.md`, READY.
+> - **813** = Barracks discovery/teach (B+C). **Depends on 812 presence.** File `WORK_ORDER_813_*`.
 > - **812** = **ADD Barracks placeable** (catalog + free first place + train entry). Authority for presence.
 >   File `WORK_ORDER_812_introduce_barracks.md`. ⚠ **NUMBER COLLISION:** Claude also wrote
 >   `WORK_ORDER_812_echo_harvest_choice_and_affinity.md` — **renumber that to 815** before implement;
