@@ -55,6 +55,11 @@ namespace DeNelle.Editor
             // stripping minimal so WebGL doesn't strip them. Gzip = Vercel-friendly.
             try { PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.WebGL, ManagedStrippingLevel.Minimal); } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] stripping-level set failed: " + e.Message); }
             try { PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip; } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] WebGL compression set failed: " + e.Message); }
+            // RCA 2026-08-01: this write PERSISTS into ProjectSettings.asset and kept showing up
+            // as an uncommitted 1->0 flip after every WebGL build (owner keeps the committed
+            // value). Capture the prior value and restore it after the build — the setting only
+            // matters AT build time.
+            var priorExceptionSupport = PlayerSettings.WebGL.exceptionSupport;
             try { PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None; } catch { }
 
             var options = new BuildPlayerOptions
@@ -69,6 +74,11 @@ namespace DeNelle.Editor
             Debug.Log($"[DesktopBuild] WebGL build -> {dir} ({scenes.Length} scenes). This can take many minutes.");
             BuildReport webReport = BuildPipeline.BuildPlayer(options);
             BuildSummary webSummary = webReport.summary;
+
+            // Restore the committed exception-support value (see RCA note above) BEFORE exiting,
+            // so a WebGL build never leaves ProjectSettings.asset dirty.
+            try { PlayerSettings.WebGL.exceptionSupport = priorExceptionSupport; } catch { }
+
             if (webSummary.result == BuildResult.Succeeded)
                 Debug.Log($"[DesktopBuild] WebGL SUCCEEDED — {webSummary.totalSize / (1024 * 1024)} MB in {webSummary.totalTime}. Deploy Builds/WebGL/ to Vercel.");
             else
@@ -120,6 +130,21 @@ namespace DeNelle.Editor
                     // Overload takes BuildTarget (not BuildTargetGroup): (BuildTarget, staticBatching, dynamicBatching)
                     setBatching.Invoke(null, new object[] { BuildTarget.StandaloneWindows64, 0, 1 }); // static OFF, dynamic ON
                     Debug.Log("[DesktopBuild] Static Batching DISABLED for StandaloneWindows64 (level3-corruption mitigation).");
+                    // RCA instrumentation (owner recurrence 2026-08-01: dynamic batching keeps
+                    // reverting to 0 in ProjectSettings despite the 1 above — this readback
+                    // captures what the internal setter ACTUALLY wrote, so the next diff is proven
+                    // not guessed). GetBatchingForPlatform: (BuildTarget, out int, out int).
+                    var getBatching = typeof(PlayerSettings).GetMethod("GetBatchingForPlatform",
+                        System.Reflection.BindingFlags.Static
+                        | System.Reflection.BindingFlags.Public
+                        | System.Reflection.BindingFlags.NonPublic);
+                    if (getBatching != null)
+                    {
+                        var args = new object[] { BuildTarget.StandaloneWindows64, 0, 0 };
+                        getBatching.Invoke(null, args);
+                        Debug.Log("[DesktopBuild] batching readback: static=" + args[1] + " dynamic=" + args[2]
+                                  + " (expected 0/1 — if dynamic reads 0 the internal setter is the reverter).");
+                    }
                 }
                 else
                 {
