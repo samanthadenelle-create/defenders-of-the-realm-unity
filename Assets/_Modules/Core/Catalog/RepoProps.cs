@@ -123,6 +123,16 @@ namespace DeNelle.Core.Catalog
         public bool singleton = false;
 
         /// <summary>
+        /// StructureSingleton v2 (owner only-ever-one ruling) - legacy baked scene-root
+        /// GameObject names that REPRESENT this catalog row (singleton twin standdown /
+        /// resurface + IsBuilt). A row with repo.singleton=true plus this list is FULLY
+        /// enforced with zero code: an active baked twin counts as "built", a placed /
+        /// recorded instance stands the twins down, and a post-sell empty state resurfaces
+        /// them. Null/empty = none. JSON deserializes "bakedTwins" straight in.
+        /// </summary>
+        public string[] bakedTwins = null;
+
+        /// <summary>
         /// WO-707 (owner taxonomy 2026-07-13) — STORAGE CONTAINER capacity. The three
         /// dedicated container buildings (Lumberyard wood / Foundry iron / Silo grain)
         /// hold the village's stock; trade buildings are pure vendor/upgrade shops and

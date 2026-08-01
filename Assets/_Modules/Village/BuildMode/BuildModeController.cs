@@ -1904,33 +1904,13 @@ namespace DeNelle.Village
         /// </summary>
         internal static bool IsSingletonBuilt(CatalogEntry entry)
         {
+            // StructureSingleton v2: the ONE authority answers "built?" (records ->
+            // active baked twin from repo.bakedTwins -> live PlacedStructure -> live
+            // Building), memoized per-frame for this per-card per-render poll. The
+            // bespoke records/PlacedStructure/BakedStorefronts body this wrapper used
+            // to carry is DELETED - no second copy of the truth query.
             if (entry?.repo == null || !entry.repo.singleton) return false;
-
-            // 1. The persisted ledger (every commit appends here) — the original WO-707 source.
-            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-            if (st?.BaseLayout != null)
-                for (int i = 0; i < st.BaseLayout.Count; i++)
-                    if (st.BaseLayout[i].itemId == entry.id)   // struct rows — no null element possible
-                        return true;
-
-            // 2. LIVE WORLD instances (owner F8 2026-07-30 "still able to add second farm.
-            //    If its there in the base I shouldnt be able to add"): a save with an EMPTY
-            //    BaseLayout (captured: persisted BaseLayout=0) still SHOWS the baked default
-            //    town — the ledger alone cannot see it. Count what actually stands:
-            //    a) any live PlacedStructure carrying this id (a commit the ledger has not
-            //       recorded yet / a replay mid-flight);
-            //    b) an ACTIVE baked stand-in mapped to this id (the WO-673 migration's own
-            //       baked-name <-> catalog-id table — the base farm the owner saw).
-            foreach (var ps in Object.FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None))
-                if (ps != null && string.Equals(ps.itemId, entry.id, System.StringComparison.OrdinalIgnoreCase))
-                    return true;
-            foreach (var (bakedName, itemId) in StrategicPlacementMigration.BakedStorefronts())
-            {
-                if (!string.Equals(itemId, entry.id, System.StringComparison.OrdinalIgnoreCase)) continue;
-                var baked = GameObject.Find(bakedName);   // Find skips inactive (stood-down) — exactly right
-                if (baked != null) return true;
-            }
-            return false;
+            return StructureSingleton.IsBuilt(entry);
         }
 
         private static bool SingletonAlreadyBuilt(CatalogEntry entry)
@@ -2778,6 +2758,11 @@ namespace DeNelle.Village
                 if (layout[i].itemId == itemId && layout[i].cellX == cell.x && layout[i].cellZ == cell.y)
                 {
                     layout.RemoveAt(i);
+                    // StructureSingleton v2: a sell may have removed the LAST representation
+                    // of a singleton id - notify the authority so it can resurface the baked
+                    // twin (post-sell) and raise SingletonReleased. No-op for non-singletons.
+                    Guard.Try("Singleton", $"NotifyRemoved('{itemId}') after layout remove",
+                        () => StructureSingleton.NotifyRemoved(itemId));
                     return;
                 }
             }

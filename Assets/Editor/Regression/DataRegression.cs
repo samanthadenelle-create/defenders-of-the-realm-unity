@@ -116,6 +116,17 @@ namespace DeNelle.Editor
             // real CatalogBootstrap.LoadFromJson (StringEnumConverter + ignore-null/miss).
             CheckStructures(failures, log);
 
+            // --- SINGLETON + BAKED-TWIN INTEGRITY (StructureSingleton v2) ----------
+            // Owner only-ever-one ruling: a catalog row with repo.singleton=true (plus
+            // repo.bakedTwins when a legacy baked twin exists) must be FULLY enforced
+            // with ZERO code. Gates: (a) bakedTwins shape (non-empty, unique across the
+            // catalog, only on singleton rows); (b) singleton+bakedTwins field parity
+            // between the StreamingAssets source and the Resources copy; (c) every
+            // migration-census (bakedName,itemId) pair on a singleton row is listed in
+            // that row's bakedTwins (+ the barracks pin); (d) CatalogRegistry.All()
+            // exists and BarracksNpcInjector carries no bespoke standdown seam.
+            CheckSingletons(failures, log);
+
             // --- BUILDINGS (buildings.json -> BuildingCatalog) ---------------------
             // Load through the real loader; assert non-zero + non-empty id/displayName.
             // NOTE (conservative): BuildingDef.Model is a KayKit mesh KEY, NOT a
@@ -977,6 +988,159 @@ namespace DeNelle.Editor
             }
             if (badField > 0)
                 failures.Add($"{badField} structure entry(ies) have null/empty id or displayName");
+        }
+
+        // =====================================================================
+        //  SINGLETON + BAKED-TWIN INTEGRITY - StructureSingleton v2 (owner
+        //  only-ever-one ruling): a repo.singleton row + repo.bakedTwins must be
+        //  fully enforced with ZERO code, so the DATA must hold these invariants.
+        // =====================================================================
+        private static void CheckSingletons(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+            log.AppendLine("[singletons] repo.singleton + bakedTwins integrity (StructureSingleton v2):");
+
+            var settings = new JsonSerializerSettings
+            {
+                Converters = { new StringEnumConverter() },
+                NullValueHandling = NullValueHandling.Ignore,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+            };
+
+            StructuresCatalogFile Load(string path, string label)
+            {
+                if (!System.IO.File.Exists(path))
+                {
+                    failures.Add($"[singletons] {label} catalog copy MISSING at '{path}'");
+                    return null;
+                }
+                try
+                {
+                    return JsonConvert.DeserializeObject<StructuresCatalogFile>(
+                        System.IO.File.ReadAllText(path), settings);
+                }
+                catch (System.Exception ex)
+                {
+                    failures.Add($"[singletons] {label} catalog copy failed to parse: {ex.Message}");
+                    return null;
+                }
+            }
+
+            // Raw file reads on purpose: the dual-copy contract is between the two
+            // COMMITTED files, not whatever CanonicalJson happens to resolve first.
+            string srcPath = System.IO.Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/structures-catalog.json");
+            string resPath = System.IO.Path.Combine(Application.dataPath, "Resources/Data/Canonical/structures-catalog.json");
+            var src = Load(srcPath, "StreamingAssets");
+            var res = Load(resPath, "Resources");
+            if (src == null || res == null || src.Entries == null || res.Entries == null) return;
+
+            // (a) shape: every bakedTwins entry non-empty; twin names UNIQUE across the
+            //     catalog (a twin represents exactly one row); bakedTwins only on
+            //     singleton-flagged rows (the enforcement sweep only walks those).
+            var twinOwner = new Dictionary<string, string>();
+            var srcById = new Dictionary<string, CatalogEntry>();
+            int singletonRows = 0, twinRows = 0;
+            foreach (var e in src.Entries)
+            {
+                if (e == null || string.IsNullOrEmpty(e.id) || e.repo == null) continue;
+                srcById[e.id] = e;
+                if (e.repo.singleton) singletonRows++;
+                var twins = e.repo.bakedTwins;
+                if (twins == null || twins.Length == 0) continue;
+                twinRows++;
+                if (!e.repo.singleton)
+                    failures.Add($"[singletons] '{e.id}' authors bakedTwins but is NOT flagged repo.singleton - " +
+                                 "twin standdown/resurface only runs for singleton rows (StructureSingleton.EnforceAll)");
+                foreach (var name in twins)
+                {
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        failures.Add($"[singletons] '{e.id}' has a null/empty bakedTwins entry");
+                        continue;
+                    }
+                    if (twinOwner.TryGetValue(name, out var owner))
+                        failures.Add($"[singletons] baked twin '{name}' is claimed by BOTH '{owner}' and '{e.id}' - " +
+                                     "a baked twin must represent exactly ONE catalog row");
+                    else
+                        twinOwner[name] = e.id;
+                }
+            }
+            log.AppendLine($"  {singletonRows} singleton row(s); {twinRows} row(s) author bakedTwins " +
+                           $"({twinOwner.Count} unique twin name(s))");
+
+            // (b) dual-copy parity on the singleton + bakedTwins fields (the two files
+            //     must stay byte-identical in these fields; compare the parsed values).
+            var resById = new Dictionary<string, CatalogEntry>();
+            foreach (var e in res.Entries)
+                if (e != null && !string.IsNullOrEmpty(e.id)) resById[e.id] = e;
+            foreach (var e in src.Entries)
+            {
+                if (e == null || string.IsNullOrEmpty(e.id) || e.repo == null) continue;
+                if (!resById.TryGetValue(e.id, out var r) || r.repo == null)
+                {
+                    failures.Add($"[singletons] row '{e.id}' present in the StreamingAssets copy but missing " +
+                                 "(or repo-less) in the Resources copy");
+                    continue;
+                }
+                if (e.repo.singleton != r.repo.singleton)
+                    failures.Add($"[singletons] '{e.id}' repo.singleton differs between copies " +
+                                 $"(StreamingAssets={e.repo.singleton}, Resources={r.repo.singleton})");
+                string a = e.repo.bakedTwins == null ? "" : string.Join("|", e.repo.bakedTwins);
+                string b = r.repo.bakedTwins == null ? "" : string.Join("|", r.repo.bakedTwins);
+                if (a != b)
+                    failures.Add($"[singletons] '{e.id}' repo.bakedTwins differs between copies " +
+                                 $"(StreamingAssets='{a}', Resources='{b}')");
+            }
+
+            // (c) migration-census coverage: every (bakedName,itemId) the WO-673 census
+            //     maps onto a SINGLETON row must appear in that row's bakedTwins - else
+            //     StructureSingleton (catalog-only in v2) cannot see the twin the
+            //     migration/injector lane manages. Plus the explicit barracks pin.
+            foreach (var (bakedName, itemId) in StrategicPlacementMigration.BakedStorefronts())
+            {
+                if (!srcById.TryGetValue(itemId, out var row) || row.repo == null) continue;   // row not authored yet
+                if (!row.repo.singleton) continue;                                             // census row not singleton - out of scope
+                bool listed = row.repo.bakedTwins != null &&
+                              System.Array.IndexOf(row.repo.bakedTwins, bakedName) >= 0;
+                if (!listed)
+                    failures.Add($"[singletons] migration census maps baked '{bakedName}' -> singleton row '{itemId}' " +
+                                 "but that row's repo.bakedTwins does not list it (StructureSingleton v2 reads ONLY the catalog)");
+            }
+            {
+                bool barracksPinned = srcById.TryGetValue("barracks", out var barracksRow) &&
+                                      barracksRow.repo != null && barracksRow.repo.bakedTwins != null &&
+                                      System.Array.IndexOf(barracksRow.repo.bakedTwins, "CastleBarracks") >= 0;
+                if (!barracksPinned)
+                    failures.Add("[singletons] 'barracks'.repo.bakedTwins must contain 'CastleBarracks' " +
+                                 "(the v1 SupplementalBaked row moved to data - losing it revives the two-barracks leak)");
+            }
+
+            // (d) seam asserts: CatalogRegistry.All() exists (EnforceAll depends on it),
+            //     and BarracksNpcInjector no longer carries its bespoke baked-twin
+            //     standdown (source-lint - reflection cannot see method bodies) but DOES
+            //     subscribe the SingletonResolved reseat seam.
+            var allMethod = typeof(CatalogRegistry).GetMethod("All", BindingFlags.Public | BindingFlags.Static);
+            if (allMethod == null)
+                failures.Add("[singletons] CatalogRegistry.All() is MISSING - StructureSingleton.EnforceAll sweeps it");
+            string injPath = System.IO.Path.Combine(Application.dataPath, "_Modules/Village/NPCs/BarracksNpcInjector.cs");
+            if (!System.IO.File.Exists(injPath))
+            {
+                failures.Add($"[singletons] BarracksNpcInjector.cs not found at '{injPath}' (seam lint skipped = FAIL)");
+            }
+            else
+            {
+                string injSrc = System.IO.File.ReadAllText(injPath);
+                if (injSrc.Contains("SetActive(false)"))
+                    failures.Add("[singletons] BarracksNpcInjector still contains a 'SetActive(false)' bespoke " +
+                                 "baked-twin standdown - StructureSingleton.Enforce owns twin standdown in v2");
+                if (!injSrc.Contains("SingletonResolved"))
+                    failures.Add("[singletons] BarracksNpcInjector does not subscribe StructureSingleton.SingletonResolved - " +
+                                 "the placed-barracks reseat seam is missing");
+            }
+
+            log.AppendLine(failures.Count == before
+                ? "  SINGLETON_TWINS_OK"
+                : $"  SINGLETON_TWINS_FAIL ({failures.Count - before} failure(s))");
         }
 
         // =====================================================================
