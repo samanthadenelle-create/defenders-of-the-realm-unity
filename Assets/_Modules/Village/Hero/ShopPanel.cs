@@ -723,6 +723,7 @@ namespace DeNelle.Village.Hero
         }
 
         // ── Row factory (presentation; data comes from the bound ItemVM) ──────────
+        // WO-808: Improve deliberately absent here - PartyShop is the live gear path; do not add without an owner ruling (review 2026-08-01)
 
         private void CreateRow(Transform parent, ItemVM item)
         {

@@ -1,6 +1,20 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-01 (CLI, evening mint): next free WO = **822**. **782–821 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-01 (CLI / Grok map immersion): next free WO = **830**. **782–829 CONSUMED.**
+> - **825–829** = **IMMERSIVE WORLD / REALM MAP** program. Master **825**; children:
+>   **826** parchment Realm Map UI (`realm-map.json`), **827** discovery+travel+ZoneManager identity,
+>   **828** cheap live minimap, **829** Withering/biome/content pins. Files `WORK_ORDER_825`…`829_*.md`, READY.
+> - **824** = CoC+WC3 **PLAYER ENJOYMENT** master program: PO fun bar + binding ship Waves 0–6
+>   (817 glance → 822 teach → 774 deploy → 809 readiness → 800/805/821/799 → 806/807 → stakes/spice).
+>   Gap fills: soft first-raid ruling, Work empty-state teach, hub truth pass. Does NOT re-implement
+>   children. File `WORK_ORDER_824_coc_wc3_player_enjoyment_program.md`, READY.
+> - **823** = Post-review HARDENING pack: `ArmyReadiness.Compute` single source (rewire 820 Publish+Open),
+>   founding Echo soft-deadline, over-queue/readiness EditMode oracles, 819/820 RESULT hygiene.
+>   Does NOT own teach/KayKit/queue visual/perks (822/818/817/821). File
+>   `WORK_ORDER_823_post_review_hardening_pack.md`, READY — **implement 823 Phase A before 822**.
+> - **822** = Barracks teach v2 (813b): coach beat + world marker + Train-3 quest + first-raid tip +
+>   presence oracle; intro key claimed only when the beat completes (review: "toasts are not teach").
+>   File `WORK_ORDER_822_barracks_teach_v2.md`, READY (depends on 823 ArmyReadiness).
 > - **821** = Building perk research TIMED + QUEUED on the Research channel + skills-tab timers
 >   (owner F8 seq 545; naming half "Swift Recruitment -> Conditioning Drills" shipped same session).
 >   File `WORK_ORDER_821_timed_perk_research.md`, READY.

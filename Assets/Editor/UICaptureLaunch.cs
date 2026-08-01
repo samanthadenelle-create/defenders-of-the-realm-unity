@@ -43,8 +43,10 @@ using UnityEngine.Rendering;
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.UI;    // PanelManager / PanelHandle (lore-modal arbiter teardown)
+using DeNelle.Core.Quests;   // QuestDef/QuestStage/QuestReward (rumor-board worst-case fixture)
 using DeNelle.Dungeons;   // LoreReadingModal, LoreReadRequest, LoreFragmentSet (WO-795)
 using DeNelle.Village;    // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry, Tower, BuildMenu
+using DeNelle.Village.Hero; // RumorBoardPanel, RumorBoardVM, IRumorBoardBackend (WO-810 board capture)
 using DeNelle.Village.UI; // TowerManagerPanel, PlacedTowerListVM (WO-795)
 
 namespace DeNelle.Editor
@@ -103,6 +105,7 @@ namespace DeNelle.Editor
                 count += CaptureLoreReadingModal();
                 count += CaptureTowerManagerPanel();
                 count += CaptureBuildMenuUpgradeTower();
+                count += CaptureRumorBoard();
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -812,6 +815,238 @@ namespace DeNelle.Editor
             }
 
             return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: Brom's Rumor Board (RumorBoardPanel, DeNelle.Village.Hero --
+        //  referenced, so direct types + private-field reflection only). WO-810
+        //  rebuilt it as a master-detail board (chip strip / card list / detail
+        //  pane + pinned CTA); this shot covers the review's stacked-layout risk.
+        //
+        //  Open() is the panel's ONLY build entry: it registers the arbiter
+        //  handle, creates the LIVE VM (RumorBoardVM.CreateDefault) and paints
+        //  once. For a DETERMINISTIC worst case we then swap in a VM built over
+        //  the panel's own injectable backend seam (IRumorBoardBackend): 15
+        //  rumors (3 in progress, one tracked; 12 available) and one rumor whose
+        //  hook -- the detail body's variable text -- is the longest prose the
+        //  pane must carry, plus a full multi-part rewards row. That rumor is
+        //  pre-selected so the detail pane renders the worst body + Accept CTA.
+        //
+        //  EDIT-SAFE REPAINT: Repaint()'s ClearContent and RenderDetail call
+        //  runtime Destroy on the FIRST paint's children (edit-illegal), so we
+        //  DestroyImmediate the list children + the CTA ourselves (and null the
+        //  CTA field) before invoking Repaint -- the repaint then runs
+        //  Destroy-free (tower-manager parking recipe, applied as a pre-clear).
+        //
+        //  PORTRAIT: Open() picks the stacked-vs-split geometry from
+        //  Screen.height > Screen.width at BUILD time, which a synchronous
+        //  edit-mode call cannot change. The portrait branch differs ONLY in the
+        //  list-viewport + detail-pane anchor rects (same hosts, same chrome), so
+        //  after the two landscape shots we apply the authored portrait anchors
+        //  by hand and shoot 1080x2340 -- the true stacked layout.
+        // ---------------------------------------------------------------------
+        private static int CaptureRumorBoard()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            RumorBoardPanel panel = null;
+            RumorBoardVM worstVm = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapRumorBoard");
+                panel = hostGo.AddComponent<RumorBoardPanel>();
+
+                // The real build path (chrome + chips + list + detail + status).
+                panel.Open();
+
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RumorBoardPanel._ui null after Open -- rumor board skipped.");
+                    return 0;
+                }
+
+                // Swap the live VM for the worst-case VM (injectable backend seam).
+                var liveVm = GetPrivateFieldValue(panel, "_vm") as RumorBoardVM;
+                if (liveVm != null) liveVm.Dispose();   // also detaches the panel's Changed -> Repaint hook
+                worstVm = new RumorBoardVM(new WorstCaseRumorBackend(), null);
+                SetPrivateField(panel, "_vm", worstVm);
+                SetPrivateField(panel, "_selectedId", WorstCaseRumorBackend.LongestBodyId);
+
+                // Pre-clear the first paint with DestroyImmediate so the repaint below
+                // makes zero runtime-Destroy calls (edit-mode contract).
+                var contentRoot = GetPrivateGameObject(panel, "_contentRoot");
+                if (contentRoot != null)
+                {
+                    for (int i = contentRoot.transform.childCount - 1; i >= 0; i--)
+                    {
+                        var ch = contentRoot.transform.GetChild(i);
+                        if (ch != null) UnityEngine.Object.DestroyImmediate(ch.gameObject);
+                    }
+                }
+                var ctaGo = GetPrivateGameObject(panel, "_detailCtaGo");
+                if (ctaGo != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(ctaGo);
+                    SetPrivateField(panel, "_detailCtaGo", null);
+                }
+
+                InvokePrivate(panel, "Repaint");   // worst-case list + longest detail body + Accept CTA
+
+                // Landscape (the geometry Open() authored under the editor's landscape Screen).
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_2340x1080.png", 2340, 1080)) saved++;
+
+                // Portrait: apply the authored portrait anchors (the ONLY delta of the
+                // portrait branch in Open) to the same hosts, then shoot 1080x2340.
+                RectTransform listViewport = null;
+                foreach (var srScroll in canvasGo.GetComponentsInChildren<ScrollRect>(true))
+                {
+                    if (srScroll != null && srScroll.vertical && !srScroll.horizontal
+                        && srScroll.gameObject.name == "Viewport")
+                    {
+                        listViewport = (RectTransform)srScroll.transform;
+                        break;
+                    }
+                }
+                var detailPane = GetPrivateFieldValue(panel, "_detailPane") as RectTransform;
+                if (listViewport != null && detailPane != null)
+                {
+                    listViewport.anchorMin = new Vector2(0.03f, 0.48f);
+                    listViewport.anchorMax = new Vector2(0.97f, 0.855f);
+                    detailPane.anchorMin = new Vector2(0.05f, 0.05f);
+                    detailPane.anchorMax = new Vector2(0.95f, 0.46f);
+                    if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_1080x2340.png", 1080, 2340)) saved++;
+                }
+                else
+                {
+                    Debug.LogWarning("[UICap-HL] rumor board portrait shot skipped -- list viewport or "
+                                     + "detail pane not found (listViewport=" + (listViewport != null)
+                                     + ", detailPane=" + (detailPane != null) + ").");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] rumor board capture threw: " + e);
+            }
+            finally
+            {
+                // Open() registered + NotifyOpened the arbiter handle; clear it by hand
+                // (the panel's own Close() uses runtime Destroy -- edit-illegal).
+                try
+                {
+                    if (panel != null)
+                    {
+                        var handle = GetPrivateFieldValue(panel, "_handle") as PanelHandle;
+                        if (handle != null) PanelManager.NotifyClosed(handle);
+                    }
+                }
+                catch (Exception pe)
+                {
+                    Debug.LogWarning("[UICap-HL] rumor board arbiter release failed (harmless): " + pe.Message);
+                }
+                if (worstVm != null) worstVm.Dispose();
+                // Canvas FIRST so any later OnDestroy sees a dead _ui (edit-mode teardown contract).
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Worst-case rumor-board backend: the deterministic fixture behind the
+        //  RumorBoard shots. 15 rumors overflow the WO-795 list well; the
+        //  pre-selected rumor carries the longest hook (= the detail body's
+        //  variable prose) plus a full rewards row (crystals/food/magic + items).
+        // ---------------------------------------------------------------------
+        private sealed class WorstCaseRumorBackend : IRumorBoardBackend
+        {
+            public const string LongestBodyId = "uicap_rumor_longest";
+
+            private readonly List<QuestDef> _defs = new List<QuestDef>();
+            private readonly HashSet<string> _activeIds = new HashSet<string>();
+
+            public WorstCaseRumorBackend()
+            {
+                // Three in progress (the first tracked) -- the In Progress section renders populated.
+                for (int i = 1; i <= 3; i++)
+                {
+                    string id = "uicap_rumor_active" + i;
+                    _defs.Add(MakeRumor(id, "Standing Watch Over the Western Fields " + i, "story",
+                        "Hold the western fields until the lantern wardens return from the ridge.",
+                        40, 20, 0, null));
+                    _activeIds.Add(id);
+                }
+
+                // The longest-body rumor: the detail pane's worst case. Its hook is the
+                // variable prose RenderDetail folds into the body, so make it long, and give
+                // it every reward part so the rewards row is at its widest.
+                _defs.Add(MakeRumor(LongestBodyId,
+                    "The Long Letter from the Drowned Archive of Old Elarion", "endgame",
+                    "Brom unfolds a letter soaked through and dried twice over. The archivist of the "
+                    + "drowned wing writes that the shelves beneath the reservoir have begun to sing at "
+                    + "dusk, a low note that loosens the mortar and wakes the lantern eels. She asks for "
+                    + "a steady hand to carry the sealed ledger past the flooded stair, to count the "
+                    + "black candles left burning in the reading room nobody has entered since the "
+                    + "founding, and to bring back whichever page the water refuses to touch. The road "
+                    + "there crosses both gates, the old orchard, and the culvert the masons swear was "
+                    + "never on any drawing of the village.",
+                    220, 90, 45, "relic_drowned_ledger"));
+
+                // Eleven more available rumors -> 15 total on the All tab (list-well overflow).
+                for (int i = 1; i <= 11; i++)
+                {
+                    _defs.Add(MakeRumor("uicap_rumor_avail" + i,
+                        "Rumor of the " + Ordinal(i) + " Bell That Rings Itself", (i % 3 == 0) ? "gear" : "story",
+                        "Track down why the " + Ordinal(i).ToLowerInvariant()
+                        + " bell rings with nobody on the rope, and quiet it before nightfall.",
+                        10 + i, i, 0, null));
+                }
+            }
+
+            private static string Ordinal(int i)
+            {
+                string[] names = { "First", "Second", "Third", "Fourth", "Fifth", "Sixth",
+                                   "Seventh", "Eighth", "Ninth", "Tenth", "Eleventh" };
+                return i >= 1 && i <= names.Length ? names[i - 1] : i.ToString();
+            }
+
+            private static QuestDef MakeRumor(string id, string title, string type, string hook,
+                                              int crystals, int food, int magic, string itemId)
+            {
+                var def = new QuestDef { Id = id, Title = title, Type = type };
+                def.Stages.Add(new QuestStage
+                {
+                    StageId = id + "_s1",
+                    ObjectiveText = hook,
+                    Reward = new QuestReward { Crystals = crystals, Food = food, Magic = magic, GrantItemId = itemId },
+                });
+                return def;
+            }
+
+            // -- IRumorBoardBackend ------------------------------------------------
+            public IReadOnlyList<QuestDef> Catalog => _defs;
+            public bool Ready => true;
+            public bool IsActive(string id) => id != null && _activeIds.Contains(id);
+            public bool IsCompleted(string id) => false;
+            public string ObjectiveFor(string id) =>
+                "Hold the western fields until the lantern wardens return from the ridge.";
+            public string TrackedId => "uicap_rumor_active1";
+            public void StartQuest(string id) { }
+            public void SetTracked(string id) { }
+            public IReadOnlyList<RumorBoardVM.DailyRow> DailyToday => Array.Empty<RumorBoardVM.DailyRow>();
+            public event Action Changed { add { } remove { } }
         }
 
         // ---------------------------------------------------------------------

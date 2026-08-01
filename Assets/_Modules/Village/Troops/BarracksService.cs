@@ -241,21 +241,23 @@ namespace DeNelle.Village
             // ResourceCost ctor order: (wood, food, iron, crystals, coins). Charged via the
             // GameState ledger (see the wallet comment above), never the in-session pool.
             var cost = LedgerCost(new ResourceCost(def.CostWood, def.CostFood, def.CostIron));
-            var army = state.Army;
 
             // OVER-QUEUE FIX (full-army gate lane): the old per-unit army.CanTrain check read
             // the LIVE roster only — in-flight Train jobs were invisible to it, so 20+ units
             // could be enqueued against cap 10 and the roster overflowed at completion (the
-            // grant is unconditional by design, ArmyStorage.GrantTrained). Count the slots
-            // already COMMITTED to the Train channel (active + pending jobs) and refuse any
-            // unit that would push roster + committed past the cap. Charge semantics are
-            // unchanged: the spend still happens per unit, only AFTER that unit passes the
-            // cap check, so a refused unit is neither charged nor enqueued.
+            // grant is unconditional by design, ArmyStorage.GrantTrained). Refuse any unit
+            // that would push roster + committed past the cap. The SEED numbers (roster incl.
+            // wounded, committed Train slots, cap) come from ArmyReadiness.Compute — the ONE
+            // readiness formula (owner review 2026-08-01); only the per-unit growth of
+            // `committed` inside the loop stays local. Charge semantics are unchanged: the
+            // spend still happens per unit, only AFTER that unit passes the cap check, so a
+            // refused unit is neither charged nor enqueued.
+            var readiness = ArmyReadiness.Compute(state);
             int unitSlots = TroopDialogueCommands.SlotOf(troopId);
-            int rosterSlots = army.SlotsUsed(TroopDialogueCommands.SlotOf);
-            int committedBefore = CommittedTrainingSlots();
+            int rosterSlots = readiness.RosterSlots;
+            int committedBefore = readiness.QueuedSlots;
             int committed = committedBefore;
-            int cap = army.MaxArmySize;
+            int cap = readiness.CapSlots;
 
             int enqueued = 0;
             for (int i = 0; i < qty; i++)
@@ -284,8 +286,8 @@ namespace DeNelle.Village
         /// <summary>
         /// Army slots already COMMITTED to in-flight timed training: the summed slot cost
         /// of every active + pending Train-channel job (job ids "barracks-train:...").
-        /// 0 with no queue service. Used by the enqueue cap check, the Raids-button
-        /// status publisher (BuildTimerService.PublishStatus) and the raid-entry gate.
+        /// 0 with no queue service. Consumed by <see cref="ArmyReadiness.Compute(GameState)"/>
+        /// — the ONE readiness formula every gate/publisher reads (owner review 2026-08-01).
         /// </summary>
         public static int CommittedTrainingSlots()
         {

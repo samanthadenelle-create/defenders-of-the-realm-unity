@@ -81,30 +81,24 @@ namespace DeNelle.Village.Hero
         {
             // WO-813 SAFETY NET, upgraded to the FULL-ARMY gate (owner ruling: raids need a
             // full army counting ready + queued troops). This Village-side check is the
-            // AUTHORITATIVE one — it recomputes locally with the same helpers the status
-            // publisher uses and never reads the HUD's polled mirror. When not ready it
-            // toasts AND opens the drillmaster training panel directly, then returns.
-            // Stateless/headless (no GameState) opens normally — never a false block.
+            // AUTHORITATIVE one — it recomputes via ArmyReadiness.Compute, the ONE readiness
+            // formula (owner review 2026-08-01; same math the status publisher relays) and
+            // never reads the HUD's polled mirror. When not ready it toasts AND opens the
+            // drillmaster training panel directly, then returns. Stateless/headless (no
+            // GameState) -> Compute returns READY, so it opens normally — never a false block.
             var st = DeNelle.Core.State.GameStateService.Instance != null
                 ? DeNelle.Core.State.GameStateService.Instance.State : null;
-            if (st != null && st.Army != null)
+            var readiness = ArmyReadiness.Compute(st);
+            if (!readiness.Ready)
             {
-                var army = st.Army;
-                int deployable = 0;   // healthy roster slots — wounded never count
-                foreach (var t in army.GetDeployable())
-                    deployable += TroopDialogueCommands.SlotOf(t.TroopDefId);
-                int queued = BarracksService.CommittedTrainingSlots();
-                int cap = army.MaxArmySize;
-                if (deployable + queued < cap)
-                {
-                    DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                        "full-army redirect: raids opened with " + deployable + " deployable + " +
-                        queued + " queued of cap " + cap + " -> drillmaster training panel.");
-                    ElarionUiKit.ShowToast("Your army is not full. Visit the drillmaster to queue more troops.",
-                        ElarionUiKit.ToastTone.Info);
-                    TroopDialogueCommands.ShowTrainingUI();
-                    return;
-                }
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "full-army redirect: raids opened with " + readiness.DeployableSlots +
+                    " deployable + " + readiness.QueuedSlots + " queued of cap " +
+                    readiness.CapSlots + " -> drillmaster training panel.");
+                ElarionUiKit.ShowToast("Your army is not full. Visit the drillmaster to queue more troops.",
+                    ElarionUiKit.ToastTone.Info);
+                TroopDialogueCommands.ShowTrainingUI();
+                return;
             }
 
             var existing = _instance;

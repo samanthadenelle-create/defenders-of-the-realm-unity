@@ -114,6 +114,18 @@ namespace DeNelle.Village
 
         private float _nextFoundingPollAt;
 
+        // REVIEW 2026-08-01 softlock cap: if the tutorial never completes (Onboarded never
+        // flips) or a modal never closes, the soft holds would defer the founding card
+        // FOREVER. Track when the pending card first became eligible-except-for-holds
+        // (EchoCount >= 1, not yet taught); per WO-823 Phase B: after 120s of waiting --
+        // or just 30s when the tutorial IS complete and only a sticky modal blocks --
+        // bypass ONLY the Onboarded / AnyOpen holds and show it anyway. The HARD holds
+        // (gameplay scene + not Build Mode) always apply -- the card must never paint
+        // over a menu scene or the builder. -1 = clock not running.
+        private const float FoundingHoldCapSeconds = 120f;
+        private const float FoundingModalOnlyCapSeconds = 30f;   // Onboarded, AnyOpen is the sole soft hold
+        private float _foundingHeldSince = -1f;
+
         // -- HUD-leak scene gate (visibility only; service stays global) -----------
         private void OnActiveSceneChanged(Scene from, Scene to)
         {
@@ -133,10 +145,10 @@ namespace DeNelle.Village
             if (svc == null) return;
 
             // Already taught this save -> done for good; stop the pending retry loop.
-            if (FoundingTaught()) { _foundingPending = false; return; }
+            if (FoundingTaught()) { _foundingPending = false; _foundingHeldSince = -1f; return; }
 
             // No founding echo yet (defensive; EchoCount is >=1 via the property once a save exists).
-            if (svc.EchoCount < 1) { _foundingPending = false; return; }
+            if (svc.EchoCount < 1) { _foundingPending = false; _foundingHeldSince = -1f; return; }
 
             // Hold until we can show cleanly: not over a menu scene, not behind the builder.
             // OWNER RCA 2026-08-01 (Start New "flashes to the pet screen ... a second later
@@ -149,19 +161,38 @@ namespace DeNelle.Village
             bool onboarded = DeNelle.Core.State.GameStateService.Instance != null
                 && DeNelle.Core.State.GameStateService.Instance.State != null
                 && DeNelle.Core.State.GameStateService.Instance.State.Onboarded;
-            if (!IsGameplayScene(SceneManager.GetActiveScene().name)
-                || DeNelle.Core.BuildModeState.IsActive
-                || !onboarded
-                || DeNelle.Core.UI.PanelManager.AnyOpen)
+            bool gameplayScene = IsGameplayScene(SceneManager.GetActiveScene().name);
+            bool buildActive = DeNelle.Core.BuildModeState.IsActive;
+            bool anyOpen = DeNelle.Core.UI.PanelManager.AnyOpen;
+            if (!gameplayScene || buildActive || !onboarded || anyOpen)
             {
-                _foundingPending = true;   // Update() + OnActiveSceneChanged re-evaluate until clear
-                return;
+                // Start the softlock-cap clock the first time the card is held (EchoCount>=1
+                // and untaught are already proven above).
+                if (_foundingHeldSince < 0f) _foundingHeldSince = Time.unscaledTime;
+
+                // Cap expired + the HARD holds are clear -> bypass the SOFT holds
+                // (Onboarded / AnyOpen) and force the show below. A tutorial softlock must
+                // not eat the founding tale forever. Still hard-held (menu scene / builder
+                // open) -> keep waiting regardless of the clock.
+                float held = Time.unscaledTime - _foundingHeldSince;
+                // WO-823 Phase B: 120s general cap; fast 30s cap when the tutorial is done
+                // and a sticky modal is the ONLY thing holding the card.
+                float cap = (onboarded && anyOpen) ? FoundingModalOnlyCapSeconds : FoundingHoldCapSeconds;
+                bool capExpired = held > cap;
+                if (!capExpired || !gameplayScene || buildActive)
+                {
+                    _foundingPending = true;   // Update() + OnActiveSceneChanged re-evaluate until clear
+                    return;
+                }
+                FlowTrace.Fail("Echo", "founding card held " + (int)held + "s > cap " + (int)cap
+                    + "s (Onboarded=" + onboarded + ", AnyOpen=" + anyOpen + ") - forcing show");
             }
 
             // Clear to teach: AnnounceFoundingEcho raises EchoUnlocked(1) -> OnEchoUnlocked renders
             // the same card as echoes #2-6, and persists the one-shot flag ONLY on a confirmed render.
             svc.AnnounceFoundingEcho();
             _foundingPending = !FoundingTaught();   // if the card failed to render, keep retrying
+            if (!_foundingPending) _foundingHeldSince = -1f;   // taught -> stop the cap clock
         }
 
         /// <summary>Read the persisted founding-taught one-shot flag (the idempotency gate).</summary>

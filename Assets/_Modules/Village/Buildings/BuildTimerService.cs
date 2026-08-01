@@ -107,8 +107,22 @@ namespace DeNelle.Village
         // While open, complete jobs the moment they expire so the UI/visual flips without
         // waiting for the next load. Cheap: a handful of jobs across channels, checked ~1/s.
         private float _nextTick;
+        private bool _statusSeeded;   // first-frame flash fix (review 2026-08-01), see below
         private void Update()
         {
+            // FIRST-FRAME FLASH FIX (review 2026-08-01): RaidEntryGate.ArmyStatus defaults
+            // READY pre-publish, so the HUD Raids button could flash bright for up to 1s on
+            // hub load (the 1 Hz tick below may land BEFORE GameState exists, publishing the
+            // null-state READY snapshot, then wait a full second). Seed ONE publish through
+            // the same path the moment GameState is first available, off the tick cadence.
+            if (!_statusSeeded && State != null)
+            {
+                _statusSeeded = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "army status seed publish (first Update with GameState, pre-heartbeat).");
+                PublishStatus();
+            }
+
             if (Time.unscaledTime < _nextTick) return;
             _nextTick = Time.unscaledTime + 1f;
             SweepAllChannels();
@@ -693,25 +707,15 @@ namespace DeNelle.Village
         // counting ready + queued troops): publish the Raids-button army snapshot on the
         // SAME cadence as the chip snapshot (QueueChanged edges + the 1s heartbeat).
         // RaidEntryGate bumps its Version only on a value change, so the 1 Hz republish
-        // is repaint-free for the HUD. Wounded troops do NOT count (GetDeployable skips
-        // them; SlotsUsed would not). Null-safe: with no GameState/Army publish READY so
-        // headless/AutoPilot never false-dims (mirrors RaidSelectionScreen's bypass).
+        // is repaint-free for the HUD. The MATH lives in ArmyReadiness.Compute — the one
+        // readiness formula (owner review 2026-08-01); this method only relays it to the
+        // Core seam. Null GameState/Army -> Compute returns READY so headless/AutoPilot
+        // never false-dims (mirrors RaidSelectionScreen's bypass).
         private void PublishArmyStatus()
         {
-            var st = State;
-            if (st == null || st.Army == null)
-            {
-                DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(true, 0, 0, 0);
-                return;
-            }
-            var army = st.Army;
-            int deployable = 0;
-            foreach (var t in army.GetDeployable())
-                deployable += TroopDialogueCommands.SlotOf(t.TroopDefId);
-            int queued = BarracksService.CommittedTrainingSlots();
-            int cap = army.MaxArmySize;
+            var s = ArmyReadiness.Compute(State);
             DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(
-                deployable + queued >= cap, deployable, queued, cap);
+                s.Ready, s.DeployableSlots, s.QueuedSlots, s.CapSlots);
         }
 
         // Player-facing label for a queue row: strip the placement suffix ("@15_7"), then
