@@ -250,14 +250,33 @@ namespace DeNelle.Core.UI
                 onCancel:  () => { if (modal != null && modal.canvas != null) Destroy(modal.canvas); });
         }
 
+        // WO-795 (16-panel audit): while ANY arbiter-tracked modal owns the screen
+        // (Store, Cosmetic, Jukebox, Rumor Board, Hot-Swap, Bug Report ...) the coach
+        // banner SUPPRESSES (fades out + drops raycasts) so it never crosses a modal's
+        // header, and RESTORES when the modal closes. Caller state (_visible, _onSkip,
+        // progress) is untouched -- the banner picks back up exactly where it was.
+        private bool _modalSuppressed;
+
         private void Update()
         {
-            float dir = _visible ? 1f : -1f;
+            bool modal = PanelManager.AnyOpen;
+            if (modal != _modalSuppressed)
+            {
+                _modalSuppressed = modal;
+                // Trace only when the change is player-visible (a shown banner); a modal
+                // toggling while no objective is up would be per-open log noise.
+                if (_visible)
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("UI", modal
+                        ? "ObjectiveBanner suppressed - modal open ('" + (PanelManager.OpenPanelName ?? "?") + "')"
+                        : "ObjectiveBanner restored - modal closed");
+            }
+            bool shown = _visible && !_modalSuppressed;
+            float dir = shown ? 1f : -1f;
             _fadeT = Mathf.Clamp01(_fadeT + dir * (Time.unscaledDeltaTime / FadeSeconds));
             float eased = _fadeT * _fadeT * (3f - 2f * _fadeT);
             _group.alpha = eased;
             // Raycast only for a live tap target: the per-step Skip> or the persistent Skip Tutorial.
-            _group.blocksRaycasts = _visible && (_onSkip != null || _onSkipAll != null);
+            _group.blocksRaycasts = shown && (_onSkip != null || _onSkipAll != null);
             _group.interactable = _group.blocksRaycasts;
         }
     }

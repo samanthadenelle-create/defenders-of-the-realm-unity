@@ -105,6 +105,17 @@ namespace DeNelle.HUD
         // now only POLLS BuildModeState.IsActive each frame and forwards it via
         // _vm.SetBuilderActive, then reads _vm.HiddenForBuilder to hide/show its panel.
 
+        // ── WO-795 dialogue/modal truce (16-panel audit: the Sylas box sat OVER the
+        // Rumor Board's Accept and bled through Hot-Swap Skills / Bug Report) ─────
+        // While a DIFFERENT arbiter-tracked modal owns the screen (PanelManager.AnyOpen
+        // and this view is not the notified owner), a live dialogue is HIDDEN, never
+        // Closed -- closing fires Ended and would falsely complete a dialogue-gated
+        // tutorial step (same law as the WO-702 builder truce above). The state is
+        // VIEW-local (pure presentation: which surface wins the screen), polled
+        // version-cheaply each Update. On modal close the panel re-shows, re-notifies
+        // the arbiter, and the conversation resumes exactly where it was.
+        private bool _hiddenForModal;
+
         private void OnOpened(DialogueViewModel vm)
         {
             if (_vm != null) Unbind();
@@ -118,6 +129,14 @@ namespace DeNelle.HUD
             if (_vm.HiddenForBuilder)
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
                     "opened while the builder is up — starting HIDDEN (WO-702 truce); reshown on builder exit.");
+            // WO-795: opened while ANOTHER modal already owns the arbiter (e.g. a step
+            // dialogue riding a Rumor Board accept): start HIDDEN -- no overlap flash,
+            // no arbiter registration yet; the reshow Repaint registers on modal close.
+            _hiddenForModal = PanelManager.AnyOpen && !_arbiterNotified;
+            if (_hiddenForModal)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                    "Dialogue suppressed - modal open ('" + (PanelManager.OpenPanelName ?? "?") +
+                    "' at dialogue open, WO-795 truce); restored on modal close.");
             _vm.Changed += Repaint;
             var closedFor = vm;   // identity capture — this handler belongs to THIS vm only
             _vmClosedHandler = () => OnClosedFor(closedFor);
@@ -142,6 +161,7 @@ namespace DeNelle.HUD
         private void OnClosed()
         {
             Unbind();
+            _hiddenForModal = false;   // WO-795: a truce never outlives its conversation
             _portrait = null;
             if (_ui != null) { Destroy(_ui); _ui = null; }
             if (_arbiterNotified) { PanelManager.NotifyClosed(_handle); _arbiterNotified = false; }
@@ -419,7 +439,9 @@ namespace DeNelle.HUD
         private void Update()
         {
             TickBuilderTruce();
+            TickModalTruce();
             if (_vm != null && _vm.HiddenForBuilder) return;   // WO-702: no any-key advance on an invisible dialogue
+            if (_hiddenForModal) return;                       // WO-795: same law while a modal owns the screen
             if (_vm == null || !_vm.IsOpen || _vm.ShowingOptions) return;
             if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
             if (UnityEngine.Input.anyKeyDown &&
@@ -461,10 +483,64 @@ namespace DeNelle.HUD
             }
         }
 
+        // WO-795: per-frame modal truce poll (version-cheap read of PanelManager.AnyOpen).
+        // While a DIFFERENT arbiter-tracked modal is open (_arbiterNotified false means the
+        // open panel is not us), hide the live panel; the frame the modal closes, re-show it
+        // (min-hold re-armed so the modal-closing tap can't skip line 1). A modal-to-modal
+        // swap (Store to Jukebox) keeps AnyOpen true, so the truce holds without flapping.
+        private void TickModalTruce()
+        {
+            if (_vm == null) return;
+            bool otherModal = PanelManager.AnyOpen && !_arbiterNotified;
+            if (otherModal == _hiddenForModal) return;
+            _hiddenForModal = otherModal;
+
+            bool live = _vm.IsOpen && _ui != null;
+            if (!live) return;
+            if (otherModal)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                    "Dialogue suppressed - modal open ('" + (PanelManager.OpenPanelName ?? "?") +
+                    "', WO-795 truce) -- panel off, VM stays open, Ended NOT fired.");
+            }
+            else
+            {
+                _openedAt = Time.unscaledTime;   // re-arm min-hold: the modal-close tap can't skip line 1
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                    "Dialogue restored - modal closed (WO-795 truce); player can read/advance now.");
+            }
+            Repaint();
+        }
+
         private void OnBoxTapped()
         {
             if (_vm == null) return;
             if (!_vm.ShowingOptions) _vm.Advance();   // tapping the box advances lines, not choices
+        }
+
+        // WO-795: the arbiter-registered close action. The arbiter invokes it on two paths
+        // that need DIFFERENT handling:
+        //   SWAP-OUT (another modal just took the slot — NotifyOpened sets its new owner
+        //   BEFORE invoking us, so PanelManager.AnyOpen is TRUE here): HIDE the live
+        //   conversation, never destroy it — closing fires Ended and would falsely
+        //   complete a dialogue-gated tutorial step. The modal-truce poll restores it.
+        //   GENUINE CLOSE (ESC / CloseOpen / CloseAll — the record is cleared BEFORE the
+        //   invoke, so AnyOpen is FALSE): the player dismissed the dialogue; truly Close.
+        // The panel's own X button keeps its direct _vm.Close() — that path is always a
+        // real dismissal and never routes through this.
+        private void OnArbiterClose()
+        {
+            if (_vm != null && _vm.IsOpen && PanelManager.AnyOpen)
+            {
+                _arbiterNotified = false;   // the arbiter now tracks the other modal; re-notify on restore
+                _hiddenForModal = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                    "Dialogue suppressed - modal open ('" + (PanelManager.OpenPanelName ?? "?") +
+                    "' swapped in, WO-795 truce) -- panel off, VM stays open, Ended NOT fired.");
+                Repaint();
+                return;
+            }
+            _vm?.Close();
         }
 
         // ── Render the VM ────────────────────────────────────────────────────────
@@ -476,8 +552,10 @@ namespace DeNelle.HUD
             // the VM is open (hidden, not closed). Skip the paint AND the arbiter
             // notification — NotifyOpened on an inactive _ui would trip the arbiter's
             // isOpen-verify false-Fail; it fires on the reshow Repaint instead.
-            _ui.SetActive(open && !_vm.HiddenForBuilder);
-            if (!open || _vm.HiddenForBuilder) return;
+            // WO-795: the modal truce hides by the same law — NotifyOpened while another
+            // modal is up would swap-close that modal; it fires on the reshow instead.
+            _ui.SetActive(open && !_vm.HiddenForBuilder && !_hiddenForModal);
+            if (!open || _vm.HiddenForBuilder || _hiddenForModal) return;
 
             // Register + announce to the modal arbiter on the FIRST visible paint.
             // (DialogueService raises Opened BEFORE vm.Begin(), so IsOpen is still false
@@ -488,7 +566,7 @@ namespace DeNelle.HUD
             {
                 if (_handle == null)
                     _handle = PanelManager.RegisterBattleAllowed("Dialogue",
-                        () => _vm?.Close(), () => _ui != null && _ui.activeSelf);
+                        OnArbiterClose, () => _ui != null && _ui.activeSelf);
                 _arbiterNotified = true;
                 PanelManager.NotifyOpened(_handle);
             }
