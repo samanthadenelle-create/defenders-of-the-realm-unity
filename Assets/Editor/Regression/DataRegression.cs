@@ -127,6 +127,15 @@ namespace DeNelle.Editor
             // exists and BarracksNpcInjector carries no bespoke standdown seam.
             CheckSingletons(failures, log);
 
+            // --- NPC MODEL BINDING (WO-818: repo.npcModel -> KayKit body) ----------
+            // Owner mapping table 2026-08-01: 12 structure rows author repo.npcModel
+            // (a KayKit slug) that the NPC injectors resolve as Resources/NPCs/KayKit/
+            // <slug>. Gates: (a) npcModel field parity between the two catalog copies;
+            // (b) every authored slug resolves to a STAGED FBX (a typo would warn +
+            // People-fallback every load); (c) the 12 owner-approved rows carry the
+            // owner's slugs VERBATIM (creative pick is owner-only).
+            CheckNpcModels(failures, log);
+
             // --- BUILDINGS (buildings.json -> BuildingCatalog) ---------------------
             // Load through the real loader; assert non-zero + non-empty id/displayName.
             // NOTE (conservative): BuildingDef.Model is a KayKit mesh KEY, NOT a
@@ -341,6 +350,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-aura-diff suite", () => { if (!VfxAuraDifferentiationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-aura-diff] " + r); });
             // --- owner VfxManualPicks per-tier tower projectiles: archer tier ladder + arcane base/upgraded wired + every key catalogued ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-proj-map suite", () => { if (!TowerProjectileMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-proj-map] " + r); });
+            // --- WO-826 Realm Map: realm-map.json dual-copy field parity + RealmMapCatalog loader oracle ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-map suite", () => { if (!RealmMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-map] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
@@ -1141,6 +1152,116 @@ namespace DeNelle.Editor
             log.AppendLine(failures.Count == before
                 ? "  SINGLETON_TWINS_OK"
                 : $"  SINGLETON_TWINS_FAIL ({failures.Count - before} failure(s))");
+        }
+
+        // =====================================================================
+        //  NPC MODEL BINDING - WO-818 (owner mapping table 2026-08-01): mapped
+        //  structure rows author repo.npcModel (a KayKit slug) that the Village
+        //  NPC injectors resolve as Resources/NPCs/KayKit/<slug>. The DATA must
+        //  hold: (a) dual-copy field parity; (b) every authored slug resolves to
+        //  a staged FBX; (c) the 12 owner-approved rows carry the owner's slugs
+        //  VERBATIM (creative pick is owner-only - drift here is a code pick).
+        // =====================================================================
+        private static void CheckNpcModels(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+            log.AppendLine("[npcModel] repo.npcModel -> KayKit body binding (WO-818):");
+
+            var settings = new JsonSerializerSettings
+            {
+                Converters = { new StringEnumConverter() },
+                NullValueHandling = NullValueHandling.Ignore,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+            };
+
+            StructuresCatalogFile Load(string path, string label)
+            {
+                if (!System.IO.File.Exists(path))
+                {
+                    failures.Add($"[npcModel] {label} catalog copy MISSING at '{path}'");
+                    return null;
+                }
+                try
+                {
+                    return JsonConvert.DeserializeObject<StructuresCatalogFile>(
+                        System.IO.File.ReadAllText(path), settings);
+                }
+                catch (System.Exception ex)
+                {
+                    failures.Add($"[npcModel] {label} catalog copy failed to parse: {ex.Message}");
+                    return null;
+                }
+            }
+
+            // Raw file reads on purpose (same contract as CheckSingletons): the dual-copy
+            // guarantee is between the two COMMITTED files.
+            string srcPath = System.IO.Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/structures-catalog.json");
+            string resPath = System.IO.Path.Combine(Application.dataPath, "Resources/Data/Canonical/structures-catalog.json");
+            var src = Load(srcPath, "StreamingAssets");
+            var res = Load(resPath, "Resources");
+            if (src == null || res == null || src.Entries == null || res.Entries == null) return;
+
+            var resById = new Dictionary<string, CatalogEntry>();
+            foreach (var e in res.Entries)
+                if (e != null && !string.IsNullOrEmpty(e.id)) resById[e.id] = e;
+
+            // (a) dual-copy parity + (b) every authored slug resolves to a staged FBX
+            //     under the TRACKED Resources/NPCs/KayKit (a typo'd slug would warn +
+            //     People-fallback on every load - catch it at the gate instead).
+            string kayKitDir = System.IO.Path.Combine(Application.dataPath, "Resources/NPCs/KayKit");
+            int authored = 0;
+            var srcModelById = new Dictionary<string, string>();
+            foreach (var e in src.Entries)
+            {
+                if (e == null || string.IsNullOrEmpty(e.id)) continue;
+                string a = (e.repo != null) ? e.repo.npcModel : null;
+                srcModelById[e.id] = a;
+                string b = (resById.TryGetValue(e.id, out var r) && r.repo != null) ? r.repo.npcModel : null;
+                if ((a ?? "") != (b ?? ""))
+                    failures.Add($"[npcModel] '{e.id}' repo.npcModel differs between copies " +
+                                 $"(StreamingAssets='{a ?? "<null>"}', Resources='{b ?? "<null>"}')");
+                if (string.IsNullOrEmpty(a)) continue;
+                authored++;
+                string fbx = System.IO.Path.Combine(kayKitDir, a + ".fbx");
+                if (!System.IO.File.Exists(fbx))
+                    failures.Add($"[npcModel] '{e.id}' npcModel '{a}' has NO staged body at '{fbx}' " +
+                                 "(the injector would warn + fall back to the People chain every load)");
+                else
+                    log.AppendLine($"  NM {e.id} -> '{a}' | staged FBX OK");
+            }
+
+            // (c) the 12 owner-approved rows (WO-818 mapping table, VERBATIM - a change
+            //     here is an owner retag applied to BOTH this table and the catalog,
+            //     never a code-side pick).
+            var expected = new Dictionary<string, string>
+            {
+                { "barracks",             "Paladin_with_Helmet" },
+                { "workshop",             "Engineer" },
+                { "forge",                "Barbarian" },
+                { "armorer",              "BlackKnight" },
+                { "jeweler",              "Tiefling" },
+                { "market",               "Hoarder" },
+                { "arcane-tower",         "Mage" },
+                { "pet-house",            "Druid" },
+                { "collector_farm",       "Farmer_A" },
+                { "mill",                 "Farmer_B" },
+                { "collector_lumbermill", "Ranger" },
+                { "fountain_healing",     "Cleric" },
+            };
+            foreach (var kv in expected)
+            {
+                if (!srcModelById.TryGetValue(kv.Key, out var actual))
+                    failures.Add($"[npcModel] mapped structure row '{kv.Key}' is MISSING from the catalog");
+                else if (actual != kv.Value)
+                    failures.Add($"[npcModel] '{kv.Key}' npcModel '{actual ?? "<null>"}' != owner-approved '{kv.Value}' (WO-818 table)");
+            }
+            if (authored != expected.Count)
+                failures.Add($"[npcModel] {authored} row(s) author npcModel but the WO-818 owner table maps exactly {expected.Count} " +
+                             "- an extra/missing binding is not an owner-approved pick");
+
+            log.AppendLine(failures.Count == before
+                ? $"  NPC_MODELS_OK ({authored} bound row(s))"
+                : $"  NPC_MODELS_FAIL ({failures.Count - before} failure(s))");
         }
 
         // =====================================================================

@@ -1,6 +1,7 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-01 (CLI / Grok map immersion): next free WO = **830**. **782–829 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-01 (evening, CLI reconcile of the UI-seat Echo mints): next free WO = **832**. **782–831 CONSUMED.**
+> - **830** = Echo harvest affinity + synergy (all 6 echoes -> unique harvest affinities Wood/Iron/Food/Gold/Crystals/Repairs, 3 disclosed pair-synergies, 1 hidden tri-synergy; UI-seat minted). **831** = Echo emergence 2D sprite beat (new sprite + dialogue advance at unlock, no 3D). Files `WORK_ORDER_830/831_*.md`, READY.
 > - **825–829** = **IMMERSIVE WORLD / REALM MAP** program. Master **825**; children:
 >   **826** parchment Realm Map UI (`realm-map.json`), **827** discovery+travel+ZoneManager identity,
 >   **828** cheap live minimap, **829** Withering/biome/content pins. Files `WORK_ORDER_825`…`829_*.md`, READY.
