@@ -406,8 +406,10 @@ namespace DeNelle.HUD.Kit
             // WO-778: persistent Builders/Training status chip (CoC-feel, own area under System).
             BuildQueueStatusChip(pool);
 
-            // ── town action buttons (WO-778: 5 equal-width — Build / Talk / Bag / Work / Quests) ──
-            // Work = work-queue panel (Builders / Training / Research) via ObsidianQueueGate.
+            // ── town action buttons (WO-778: 5 equal-width — Build / Talk / Bag / Queues / Quests) ──
+            // Queues (owner rename 2026-08-01, was "Work" — players read Work as quests) = the
+            // work-queue panel (Builders / Training / Research) via ObsidianQueueGate. Widget key
+            // stays "workButton" (hud-areas.json occupancy rows reference it; label-only rename).
             const float btnGap = 0.01f;
             const float btnW = (1f - btnGap * 4f) / 5f;   // five equal faces across 0..1
             float bx = 0f;
@@ -452,11 +454,11 @@ namespace DeNelle.HUD.Kit
             bx += btnW + btnGap;
 
             // WO-778 P0-A: work-queue reachability — was dark (RequestToggle had zero callers).
-            var work = ElarionUiKit.BuildObsidianButton(pool, "Work",
+            var work = ElarionUiKit.BuildObsidianButton(pool, "Queues",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 BtnMin(bx), BtnMax(bx), () =>
                 {
-                    FlowTrace.Step("HudKit", "Work tapped -> ObsidianQueueGate.RequestToggle");
+                    FlowTrace.Step("HudKit", "Queues tapped (was Work) -> ObsidianQueueGate.RequestToggle");
                     ObsidianQueueGate.RequestToggle();
                 });
             Register("workQueueButton", WrapAsWidget("workQueueButton", work.gameObject));
