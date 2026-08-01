@@ -14,6 +14,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -27,5 +28,49 @@ namespace DeNelle.Core.UI
         /// zero only implicitly — the bridge logs its own subscription, so a dead tap is
         /// visible as fire-with-no-open in the [Flow:Raid] trace.</summary>
         public static void RequestOpen() => OpenRequested?.Invoke();
+
+        // ── Full-army status snapshot (owner ruling: Raids button greys unless the
+        // army is full counting ready + queued troops; a dimmed tap redirects to the
+        // drillmaster). Village publishes (BuildTimerService, ~1 Hz + on queue change);
+        // the HUD polls ArmyStatus.Version — the ObsidianQueueGate.PublishStatus
+        // precedent, no cross-assembly read. Pure Core: no Village references. ──
+
+        /// <summary>Army fullness snapshot for the HUD Raids-button grey state.</summary>
+        public struct RaidArmyStatus
+        {
+            public bool Ready;           // deployable + queued slots cover the cap
+            public int DeployableSlots;  // healthy roster slots (wounded excluded)
+            public int QueuedSlots;      // slots committed to in-flight Train jobs
+            public int CapSlots;         // army.MaxArmySize
+            public int Version;          // bumps ONLY on a value change (HUD change-detect)
+        }
+
+        private static int _armyStatusVersion;
+
+        /// <summary>Latest published army snapshot. Defaults READY (Version 0) so
+        /// headless / pre-publish scenes never false-dim the button.</summary>
+        public static RaidArmyStatus ArmyStatus { get; private set; } =
+            new RaidArmyStatus { Ready = true };
+
+        /// <summary>Village-side publisher (BuildTimerService). Bumps Version only when a
+        /// field actually changed, so the HUD poll repaints on transitions alone.</summary>
+        public static void PublishArmyStatus(bool ready, int deployableSlots, int queuedSlots, int capSlots)
+        {
+            var cur = ArmyStatus;
+            if (cur.Ready == ready && cur.DeployableSlots == deployableSlots &&
+                cur.QueuedSlots == queuedSlots && cur.CapSlots == capSlots)
+                return;   // unchanged — Version holds, HUD stays quiet
+            if (cur.Ready != ready)
+                FlowTrace.Step("Raid", "army status -> " + (ready ? "READY" : "NOT READY") +
+                    " (deployable " + deployableSlots + " + queued " + queuedSlots + " / cap " + capSlots + ")");
+            ArmyStatus = new RaidArmyStatus
+            {
+                Ready = ready,
+                DeployableSlots = deployableSlots,
+                QueuedSlots = queuedSlots,
+                CapSlots = capSlots,
+                Version = ++_armyStatusVersion
+            };
+        }
     }
 }

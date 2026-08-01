@@ -94,6 +94,17 @@ namespace DeNelle.HUD.Kit
         private Button _questContextButton;
         private TMP_Text _questContextLabel;
         private bool _questContextUpgradeFace;
+        // Full-army gate (owner ruling): the Raids button DIMS (never disables — the tap
+        // still fires so RaidSelectionScreen can redirect to the drillmaster) unless the
+        // army is full counting ready + queued troops. Polls RaidEntryGate.ArmyStatus
+        // (the ObsidianQueueGate/HudBuildingFocus precedent) by Version in Update().
+        private Button _raidsButton;
+        private Image _raidsButtonImage;          // targetGraphic face (built colour cached)
+        private TMP_Text _raidsButtonLabel;
+        private Color _raidsImageBuiltColor = Color.white;
+        private Color _raidsLabelBuiltColor = Color.white;
+        private bool _raidsDimmed;
+        private int _raidArmyStatusVersion = -1;
         private TMP_Text _fleeLabel;
         private TMP_Text _waveLabel, _waveCountdown;
         private ElarionUiKit.BarHandle _waveProgress;
@@ -463,6 +474,14 @@ namespace DeNelle.HUD.Kit
                     RaidEntryGate.RequestOpen();
                 });
             Register("raidsButton", WrapAsWidget("raidsButton", raids.gameObject));
+            // Full-army gate capture (mirrors _questContextButton): hold the button + its
+            // face image + label with their BUILT colours so the Update() army poll can
+            // dim toward ElarionUi.Disabled and restore exactly what the kit built.
+            _raidsButton = raids;
+            _raidsButtonImage = raids != null ? raids.targetGraphic as Image : null;
+            _raidsButtonLabel = raids != null ? raids.GetComponentInChildren<TMP_Text>(true) : null;
+            if (_raidsButtonImage != null) _raidsImageBuiltColor = _raidsButtonImage.color;
+            if (_raidsButtonLabel != null) _raidsLabelBuiltColor = _raidsButtonLabel.color;
             bx += btnW + btnGap;
 
             // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
@@ -1654,6 +1673,30 @@ namespace DeNelle.HUD.Kit
                         string rows = FormatQueueRows(qs);
                         _queueRowsLabel.text = rows;
                         if (_queueRowsPlate != null) _queueRowsPlate.SetActive(rows.Length > 0);
+                    }
+                }
+            }
+
+            // Full-army gate (owner ruling): poll RaidEntryGate.ArmyStatus by Version (the
+            // queue-chip precedent above). When the army is NOT full (ready + queued < cap)
+            // the Raids button dims toward ElarionUi.Disabled but stays INTERACTABLE — the
+            // tap must still fire so RaidSelectionScreen redirects to the drillmaster.
+            if (_raidsButton != null)
+            {
+                var ra = RaidEntryGate.ArmyStatus;
+                if (ra.Version != _raidArmyStatusVersion)
+                {
+                    _raidArmyStatusVersion = ra.Version;
+                    bool dim = !ra.Ready;
+                    if (dim != _raidsDimmed)
+                    {
+                        _raidsDimmed = dim;
+                        if (_raidsButtonImage != null)
+                            _raidsButtonImage.color = dim ? ElarionUi.Disabled : _raidsImageBuiltColor;
+                        if (_raidsButtonLabel != null)
+                            _raidsButtonLabel.color = dim ? ElarionUi.Disabled : _raidsLabelBuiltColor;
+                        FlowTrace.Step("HudKit", "Raids button " + (dim ? "DIMMED" : "restored") +
+                            " (army " + (ra.DeployableSlots + ra.QueuedSlots) + "/" + ra.CapSlots + " slots)");
                     }
                 }
             }

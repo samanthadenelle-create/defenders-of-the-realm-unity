@@ -686,6 +686,32 @@ namespace DeNelle.Village
                 }
             }
             DeNelle.Core.UI.ObsidianQueueGate.PublishStatus(s);
+            PublishArmyStatus();
+        }
+
+        // Full-army gate (owner ruling: HUD Raids button greys unless the army is full
+        // counting ready + queued troops): publish the Raids-button army snapshot on the
+        // SAME cadence as the chip snapshot (QueueChanged edges + the 1s heartbeat).
+        // RaidEntryGate bumps its Version only on a value change, so the 1 Hz republish
+        // is repaint-free for the HUD. Wounded troops do NOT count (GetDeployable skips
+        // them; SlotsUsed would not). Null-safe: with no GameState/Army publish READY so
+        // headless/AutoPilot never false-dims (mirrors RaidSelectionScreen's bypass).
+        private void PublishArmyStatus()
+        {
+            var st = State;
+            if (st == null || st.Army == null)
+            {
+                DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(true, 0, 0, 0);
+                return;
+            }
+            var army = st.Army;
+            int deployable = 0;
+            foreach (var t in army.GetDeployable())
+                deployable += TroopDialogueCommands.SlotOf(t.TroopDefId);
+            int queued = BarracksService.CommittedTrainingSlots();
+            int cap = army.MaxArmySize;
+            DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(
+                deployable + queued >= cap, deployable, queued, cap);
         }
 
         // Player-facing label for a queue row: strip the placement suffix ("@15_7"), then

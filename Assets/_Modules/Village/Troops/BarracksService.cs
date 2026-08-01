@@ -243,22 +243,66 @@ namespace DeNelle.Village
             var cost = LedgerCost(new ResourceCost(def.CostWood, def.CostFood, def.CostIron));
             var army = state.Army;
 
+            // OVER-QUEUE FIX (full-army gate lane): the old per-unit army.CanTrain check read
+            // the LIVE roster only — in-flight Train jobs were invisible to it, so 20+ units
+            // could be enqueued against cap 10 and the roster overflowed at completion (the
+            // grant is unconditional by design, ArmyStorage.GrantTrained). Count the slots
+            // already COMMITTED to the Train channel (active + pending jobs) and refuse any
+            // unit that would push roster + committed past the cap. Charge semantics are
+            // unchanged: the spend still happens per unit, only AFTER that unit passes the
+            // cap check, so a refused unit is neither charged nor enqueued.
+            int unitSlots = TroopDialogueCommands.SlotOf(troopId);
+            int rosterSlots = army.SlotsUsed(TroopDialogueCommands.SlotOf);
+            int committedBefore = CommittedTrainingSlots();
+            int committed = committedBefore;
+            int cap = army.MaxArmySize;
+
             int enqueued = 0;
             for (int i = 0; i < qty; i++)
             {
-                if (!army.CanTrain(troopId, TroopDialogueCommands.SlotOf)) break;   // cap full
-                if (!Ledger.ResourceLedger.TrySpend(cost)) break;                   // unaffordable
+                if (rosterSlots + committed + unitSlots > cap) break;   // cap full (incl. in-flight jobs)
+                if (!Ledger.ResourceLedger.TrySpend(cost)) break;       // unaffordable
                 string jobId = TrainPrefix + troopId + ":" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 queue.Enqueue(JobKind.TrainTroop, jobId, def.BuildSeconds);
+                committed += unitSlots;
                 enqueued++;
             }
 
             if (enqueued > 0)
             {
-                FlowTrace.Step("Barracks", $"training enqueued {enqueued}x '{troopId}' (Train, {def.BuildSeconds:0}s each).");
+                FlowTrace.Step("Barracks", $"training enqueued {enqueued}/{qty}x '{troopId}' (Train, {def.BuildSeconds:0}s each).");
                 Changed?.Invoke();
             }
+            if (enqueued < qty)
+                FlowTrace.Step("Barracks", $"training stopped at {enqueued}/{qty} '{troopId}' " +
+                    $"(cap {cap}, roster {rosterSlots}, in-flight {committedBefore}).");
             return enqueued;
+        }
+
+        // ── Army fullness accounting (full-army gate lane) ─────────────────────
+
+        /// <summary>
+        /// Army slots already COMMITTED to in-flight timed training: the summed slot cost
+        /// of every active + pending Train-channel job (job ids "barracks-train:...").
+        /// 0 with no queue service. Used by the enqueue cap check, the Raids-button
+        /// status publisher (BuildTimerService.PublishStatus) and the raid-entry gate.
+        /// </summary>
+        public static int CommittedTrainingSlots()
+        {
+            var queue = BuildTimerService.Instance;
+            if (queue == null) return 0;
+            int total = 0;
+            foreach (var j in queue.ActiveJobsOf(ChannelId.Train)) total += TrainJobSlots(j);
+            foreach (var j in queue.PendingJobsOf(ChannelId.Train)) total += TrainJobSlots(j);
+            return total;
+        }
+
+        /// <summary>Slot cost of one Train-channel job; 0 for a null/non-training job id.</summary>
+        private static int TrainJobSlots(BuildJobData j)
+        {
+            if (string.IsNullOrEmpty(j.StructureId) || !j.StructureId.StartsWith(TrainPrefix))
+                return 0;
+            return TroopDialogueCommands.SlotOf(TroopIdFromTrain(j.StructureId));
         }
 
         // ── Internals ─────────────────────────────────────────────────────────
@@ -328,8 +372,10 @@ namespace DeNelle.Village
             return jobId.Substring(TroopUpgradePrefix.Length);
         }
 
-        /// <summary>Recovers the troop id from a "barracks-train:&lt;troopId&gt;:&lt;uid&gt;" job id.</summary>
-        private static string TroopIdFromTrain(string jobId)
+        /// <summary>Recovers the troop id from a "barracks-train:&lt;troopId&gt;:&lt;uid&gt;" job id.
+        /// Internal (was private): BuildTimerService's army-status publisher parses Train
+        /// job ids through this ONE authority instead of duplicating the split.</summary>
+        internal static string TroopIdFromTrain(string jobId)
         {
             if (string.IsNullOrEmpty(jobId)) return jobId;
             // Format: barracks-train:<troopId>:<uid>. Troop ids carry hyphens, never colons,

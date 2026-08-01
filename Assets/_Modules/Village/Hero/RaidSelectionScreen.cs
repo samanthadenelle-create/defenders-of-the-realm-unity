@@ -79,22 +79,30 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open()
         {
-            // WO-813 SAFETY NET (owner 2026-07-30 "some dialogue and raid tutorial"): NEVER
-            // present an empty deploy. With ZERO deployable troops, EVERY raid entry (HUD
-            // icon bridge, the Herald, dev) redirects to the Barracks instead of opening the
-            // camp list. Stateless/headless (no GameState) opens normally — never a false block.
+            // WO-813 SAFETY NET, upgraded to the FULL-ARMY gate (owner ruling: raids need a
+            // full army counting ready + queued troops). This Village-side check is the
+            // AUTHORITATIVE one — it recomputes locally with the same helpers the status
+            // publisher uses and never reads the HUD's polled mirror. When not ready it
+            // toasts AND opens the drillmaster training panel directly, then returns.
+            // Stateless/headless (no GameState) opens normally — never a false block.
             var st = DeNelle.Core.State.GameStateService.Instance != null
                 ? DeNelle.Core.State.GameStateService.Instance.State : null;
             if (st != null && st.Army != null)
             {
-                bool any = false;
-                foreach (var t in st.Army.GetDeployable()) { any = true; break; }
-                if (!any)
+                var army = st.Army;
+                int deployable = 0;   // healthy roster slots — wounded never count
+                foreach (var t in army.GetDeployable())
+                    deployable += TroopDialogueCommands.SlotOf(t.TroopDefId);
+                int queued = BarracksService.CommittedTrainingSlots();
+                int cap = army.MaxArmySize;
+                if (deployable + queued < cap)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                        "WO-813 redirect: raids opened with ZERO deployable troops -> Barracks teach (no empty deploy screen).");
-                    ElarionUiKit.ShowToast("You need soldiers. Visit the Barracks - the drillmaster trains them.",
+                        "full-army redirect: raids opened with " + deployable + " deployable + " +
+                        queued + " queued of cap " + cap + " -> drillmaster training panel.");
+                    ElarionUiKit.ShowToast("Your army is not full. Visit the drillmaster to queue more troops.",
                         ElarionUiKit.ToastTone.Info);
+                    TroopDialogueCommands.ShowTrainingUI();
                     return;
                 }
             }
