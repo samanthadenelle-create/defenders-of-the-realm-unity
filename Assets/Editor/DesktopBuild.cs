@@ -206,6 +206,30 @@ namespace DeNelle.Editor
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
 
+            // RCA CLOSE (owner recurrence, twice-captured 2026-08-01): the pre-build
+            // SetBatchingForPlatform(0,1) readback proves memory holds static=0/dynamic=1,
+            // yet the session's exit serialization writes the Standalone entry with
+            // dynamic=0 — the reverter runs INSIDE BuildPlayer, after our set. Mirror the
+            // WebGL exceptionSupport restore above: re-assert the owner's 0/1 AFTER the
+            // build so the final ProjectSettings.asset save carries dynamic=1 and the
+            // build never leaves the tree dirty.
+            try
+            {
+                var setBatching = typeof(PlayerSettings).GetMethod("SetBatchingForPlatform",
+                    System.Reflection.BindingFlags.Static
+                    | System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.NonPublic);
+                if (setBatching != null)
+                {
+                    setBatching.Invoke(null, new object[] { BuildTarget.StandaloneWindows64, 0, 1 });
+                    Debug.Log("[DesktopBuild] post-build batching re-assert: static=0 dynamic=1 (exit-serialization guard).");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] post-build batching re-assert failed: {e.Message}");
+            }
+
             if (summary.result == BuildResult.Succeeded)
             {
                 Debug.Log($"[DesktopBuild] SUCCEEDED — {summary.totalSize / (1024 * 1024)} MB in {summary.totalTime}.");
