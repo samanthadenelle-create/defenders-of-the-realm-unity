@@ -67,6 +67,16 @@ namespace DeNelle.Core.Catalog
 
         public static int Count => _byId.Count;
 
+        /// <summary>Every registered entry (snapshot copy — safe to enumerate while registering).
+        /// Added for the StructureSingleton EnforceAll sweep (owner only-ever-one ruling) and
+        /// any future whole-catalog audit.</summary>
+        public static IReadOnlyList<CatalogEntry> All()
+        {
+            var list = new List<CatalogEntry>(_byId.Count);
+            foreach (var kv in _byId) list.Add(kv.Value);
+            return list;
+        }
+
         /// <summary>Wipe the registry (call before re-registering on startup / domain reload).</summary>
         public static void Clear()
         {
