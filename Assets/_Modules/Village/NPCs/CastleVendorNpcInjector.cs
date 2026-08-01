@@ -393,7 +393,7 @@ namespace DeNelle.Village
                     marker.transform.SetParent(anchorTf, false);
                     marker.transform.localPosition = new Vector3(0f, 0f, 6f);
 
-                    bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
+                    bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform, buildingId);
                     Destroy(marker);
                     if (anchorIsTemp) Destroy(anchorTf.gameObject);   // temp anchor served its purpose
                     if (ok)
@@ -597,7 +597,7 @@ namespace DeNelle.Village
             marker.transform.localPosition = new Vector3(0f, 0f, 6f);
 
             _lastSpawnedVendor = null;
-            bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
+            bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform, buildingId);
             Destroy(marker);
 
             if (ok)
@@ -691,12 +691,25 @@ namespace DeNelle.Village
             return h != null ? h.transform.position : new Vector3(0f, 0f, 12f);
         }
 
-        private bool SpawnVendor(Transform marker, string role, Transform hero, Transform parent)
+        private bool SpawnVendor(Transform marker, string role, Transform hero, Transform parent, string catalogId = null)
         {
             using var _ = FlowTrace.Enter("Village", $"CastleVendorNpcInjector.SpawnVendor role='{role}'");
             Vendor v = VendorFor(role);
 
-            var prefab = Resources.Load<GameObject>(v.BodyRes)
+            // WO-818: the ANCHORING catalog row's repo.npcModel (KayKit slug, owner mapping
+            // table) is the FIRST body source — a data retag swaps a vendor's body with zero
+            // code. catalogId is the building id this vendor anchors to (AnchorRoles poll /
+            // placement hook); rows with no npcModel (and null catalogId) fall straight
+            // through to the legacy People chain — a bad slug warns ONCE in the resolver.
+            string bodyRes = v.BodyRes;
+            GameObject prefab = null;
+            if (!string.IsNullOrEmpty(catalogId))
+            {
+                prefab = KayKitNpcBody.Load(catalogId, "Village", out string kayKitRes);
+                if (prefab != null) bodyRes = kayKitRes;
+            }
+            if (prefab == null)
+                prefab = Resources.Load<GameObject>(v.BodyRes)
                          ?? Resources.Load<GameObject>(BodyMerchant);
             if (prefab == null)
             {
@@ -757,17 +770,17 @@ namespace DeNelle.Village
                 // G/R: Instantiate returned/threw null — fall back to a placeholder so the storefront
                 // is never left vendorless, and self-report.
                 FlowTrace.Fail("Village",
-                    $"CastleVendorNpcInjector: Instantiate returned null for role '{role}' ('{v.BodyRes}') — placeholder used.");
+                    $"CastleVendorNpcInjector: Instantiate returned null for role '{role}' ('{bodyRes}') — placeholder used.");
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }
             go.name = $"CastleVendor_{role}";
 
             // V (render-verify): a body with no enabled mesh reads as an invisible vendor. Prove it
             // renders; on failure drop it and fall back to the placeholder (never an invisible vendor).
-            if (!VerifyNpcRenders(go, v.BodyRes))
+            if (!VerifyNpcRenders(go, bodyRes))
             {
                 FlowTrace.Fail("Village",
-                    $"CastleVendorNpcInjector: vendor body role='{role}' ('{v.BodyRes}') has no visible mesh — dropping, placeholder used.");
+                    $"CastleVendorNpcInjector: vendor body role='{role}' ('{bodyRes}') has no visible mesh — dropping, placeholder used.");
                 Destroy(go);
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }

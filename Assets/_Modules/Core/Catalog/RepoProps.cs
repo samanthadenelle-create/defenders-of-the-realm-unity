@@ -133,6 +133,18 @@ namespace DeNelle.Core.Catalog
         public string[] bakedTwins = null;
 
         /// <summary>
+        /// WO-818 (owner mapping table 2026-08-01) - the KayKit NPC body SLUG for this
+        /// structure's speaker (drillmaster / vendor). Resolved by the Village NPC
+        /// injectors as <c>Resources.Load("NPCs/KayKit/" + npcModel)</c> FIRST, falling
+        /// back to the legacy People-pack prefab chain, then the capsule placeholder.
+        /// Pure data (no Village ref), modeled on <see cref="bakedTwins"/>. Null/empty
+        /// (the default) = no KayKit body authored -> the People chain is used as before.
+        /// OWNER-ONLY creative pick: a swap is a one-word JSON retag, never a code pick.
+        /// JSON deserializes "npcModel" straight in.
+        /// </summary>
+        public string npcModel = null;
+
+        /// <summary>
         /// WO-707 (owner taxonomy 2026-07-13) — STORAGE CONTAINER capacity. The three
         /// dedicated container buildings (Lumberyard wood / Foundry iron / Silo grain)
         /// hold the village's stock; trade buildings are pure vendor/upgrade shops and

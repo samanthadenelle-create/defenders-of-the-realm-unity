@@ -241,8 +241,14 @@ namespace DeNelle.Village
             // Face the Heart / approaching hero.
             Quaternion rot = Quaternion.LookRotation(toHeart, Vector3.up);
 
-            var prefab = Resources.Load<GameObject>(BodyDrillmaster)
+            // WO-818: the catalog's repo.npcModel (KayKit slug, owner mapping table:
+            // barracks -> Paladin_with_Helmet) is the FIRST body source, so a data retag
+            // swaps the drillmaster's body with zero code. A missing/bad slug degrades
+            // (one Warn inside the resolver) to the legacy People chain below.
+            var prefab = KayKitNpcBody.Load(StructureId, "Village", out string kayKitRes)
+                         ?? Resources.Load<GameObject>(BodyDrillmaster)
                          ?? Resources.Load<GameObject>(BodyFallback);
+            string bodyRes = kayKitRes ?? BodyDrillmaster;
             if (prefab == null)
             {
                 // T/U: load-miss — fall back to a placeholder so the barracks still gets a drillmaster,
@@ -262,17 +268,17 @@ namespace DeNelle.Village
             {
                 // G/R: Instantiate returned/threw null — fall back to a placeholder, self-report.
                 FlowTrace.Fail("Village",
-                    $"BarracksNpcInjector: Instantiate returned null for '{BodyDrillmaster}' — placeholder used.");
+                    $"BarracksNpcInjector: Instantiate returned null for '{bodyRes}' — placeholder used.");
                 return SpawnPlaceholder(pos, rot, hero, parent);
             }
             go.name = "BarracksDrillmaster";
 
             // V (render-verify): a body with no enabled mesh reads as an invisible drillmaster. Prove
             // it renders; on failure drop it and fall back to the placeholder.
-            if (!VerifyNpcRenders(go, BodyDrillmaster))
+            if (!VerifyNpcRenders(go, bodyRes))
             {
                 FlowTrace.Fail("Village",
-                    $"BarracksNpcInjector: drillmaster body '{BodyDrillmaster}' has no visible mesh — dropping, placeholder used.");
+                    $"BarracksNpcInjector: drillmaster body '{bodyRes}' has no visible mesh — dropping, placeholder used.");
                 Destroy(go);
                 return SpawnPlaceholder(pos, rot, hero, parent);
             }
