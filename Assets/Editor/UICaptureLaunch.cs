@@ -33,14 +33,19 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using Newtonsoft.Json;   // lore-fragments.json parse (WO-795 lore capture)
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 using TMPro;
-using DeNelle.Village;   // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry
+using DeNelle.Core.UI;    // PanelManager / PanelHandle (lore-modal arbiter teardown)
+using DeNelle.Dungeons;   // LoreReadingModal, LoreReadRequest, LoreFragmentSet (WO-795)
+using DeNelle.Village;    // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry, Tower, BuildMenu
+using DeNelle.Village.UI; // TowerManagerPanel, PlacedTowerListVM (WO-795)
 
 namespace DeNelle.Editor
 {
@@ -93,6 +98,11 @@ namespace DeNelle.Editor
                 count += CaptureFoundingEchoCard();
                 count += CapturePauseMenu();
                 count += CaptureEchoRoster();
+                count += CaptureHelpMenu();
+                count += CaptureDailyQuestHud();
+                count += CaptureLoreReadingModal();
+                count += CaptureTowerManagerPanel();
+                count += CaptureBuildMenuUpgradeTower();
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -348,6 +358,488 @@ namespace DeNelle.Editor
             }
 
             return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the Help/Settings modal (HelpMenu) -- WO-795 wave 2 wrapped its
+        //  button column in a masked ScrollRect well so the rows can never spill
+        //  into the kit's shared Close band. Editor compiles carry the
+        //  DEVELOPMENT_BUILD/UNITY_EDITOR rows too (Dev Tools + the dev grant),
+        //  so this shot renders the WORST-case row count the well must clip.
+        //
+        //  HelpMenu lives in the DeNelle.HUD assembly, which DeNelle.Editor does
+        //  NOT reference, so every touch is via reflection (the CapturePauseMenu
+        //  recipe). Awake never runs on an edit-mode AddComponent, so no
+        //  PanelManager registration leaks from this capture.
+        // ---------------------------------------------------------------------
+        private static int CaptureHelpMenu()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                Type helpType = ResolveType("DeNelle.HUD.HelpMenu");
+                if (helpType == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HelpMenu skipped -- DeNelle.HUD.HelpMenu type not found.");
+                    return 0;
+                }
+
+                // Pre-seed an EventSystem so kit UI construction never warns in edit mode.
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapHelpMenu");
+                var help = hostGo.AddComponent(helpType);
+
+                // Build the REAL modal. EnsureBuilt is private; it constructs _modal
+                // (frame + scroll well + rows + toast) and leaves the canvas INACTIVE.
+                // SetOpen/ToggleOverlay are deliberately NOT called -- no PanelManager
+                // NotifyOpened side effect, a pure static build (pause-menu contract).
+                InvokePrivate(help, "EnsureBuilt");
+
+                object modal = GetPrivateFieldValue(help, "_modal");
+                if (modal == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HelpMenu._modal null after EnsureBuilt -- help menu skipped.");
+                    return 0;
+                }
+                canvasGo = GetFieldValue(modal, "canvas") as GameObject;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HelpMenu modal canvas null -- help menu build produced no canvas; skipped.");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "HelpMenu_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "HelpMenu_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] help menu capture threw: " + e);
+            }
+            finally
+            {
+                // Destroy the canvas FIRST so HelpMenu.OnDestroy (if it ever ran) sees a
+                // dead canvas and never calls runtime Destroy (edit-mode teardown contract).
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the Daily Quests master-detail card (DailyQuestHud) -- WO-795
+        //  wave 2 rebuilt the quest list as a ScrollRect well (Viewport drag
+        //  catcher + RectMask2D, fixed-height LayoutElement rows) so a deep quest
+        //  log scrolls instead of truncating.
+        //
+        //  DeNelle.HUD is unreferenced -> reflection (CapturePauseMenu recipe).
+        //  DailyQuestService.Instance only exists in Play mode (RuntimeInitialize
+        //  bootstrap), so the VM resolves an EMPTY set headless and the shot
+        //  carries the honest empty state (frame + wells + "No daily quests
+        //  today."). We deliberately do NOT reflect-seed the service: standing it
+        //  up would need a private static Instance injection AND writes today's
+        //  rolled set into the owner's editor PlayerPrefs -- a real side effect,
+        //  not a cheap fake. The WO-795 well itself is built by EnsureBuilt
+        //  regardless of data, so its geometry IS in the shot.
+        // ---------------------------------------------------------------------
+        private static int CaptureDailyQuestHud()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                Type hudType = ResolveType("DeNelle.HUD.DailyQuestHud");
+                if (hudType == null)
+                {
+                    Debug.LogWarning("[UICap-HL] DailyQuestHud skipped -- DeNelle.HUD.DailyQuestHud type not found.");
+                    return 0;
+                }
+
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapDailyQuestHud");
+                var hud = hostGo.AddComponent(hudType);
+
+                // EnsureBuilt creates the VM + canvas + FrameQuest chrome + the WO-795
+                // scroll well, then hides the chrome root. Repaint (normally driven by
+                // OnEnable, which never runs in edit mode) paints the list/detail wells.
+                // ClearZone preserves the kit's ZoneBacking by name, so the first paint
+                // makes zero runtime-Destroy calls -- edit-mode safe.
+                InvokePrivate(hud, "EnsureBuilt");
+                InvokePrivate(hud, "Repaint");
+
+                canvasGo = GetPrivateGameObject(hud, "_canvas");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] DailyQuestHud._canvas null after EnsureBuilt -- daily quests skipped.");
+                    return 0;
+                }
+
+                // EnsureBuilt hides the CHROME ROOT (not the canvas); show it for the shot.
+                object chrome = GetPrivateFieldValue(hud, "_chrome");
+                var chromeRoot = GetFieldValue(chrome, "root") as GameObject;
+                if (chromeRoot != null) chromeRoot.SetActive(true);
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "DailyQuestHud_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "DailyQuestHud_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] daily quest hud capture threw: " + e);
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the lore-stone reading modal (LoreReadingModal, DeNelle.Dungeons
+        //  -- a referenced assembly, so this capture is reflection-light). WO-795
+        //  wave 2 gave the body a vertical ScrollRect well so long lore scrolls at
+        //  a FIXED readable size (owner law: reflow, never shrink fonts).
+        //
+        //  WORST CASE by construction: we parse the canon lore-fragments.json from
+        //  StreamingAssets and pick the fragment with the LONGEST total body --
+        //  today that is journal-4, but the pick tracks the data as canon grows.
+        //  Show() is the panel's own public entry and runs Build synchronously
+        //  (no lifecycle dependency), so the REAL modal renders the canon prose
+        //  verbatim. Teardown NotifyCloses the arbiter handle by hand because the
+        //  panel's own Close() uses runtime Destroy (illegal in edit mode).
+        // ---------------------------------------------------------------------
+        private static int CaptureLoreReadingModal()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            LoreReadingModal modal = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                string jsonPath = Path.Combine(Application.streamingAssetsPath,
+                    "Data/Canonical/lore-fragments.json");
+                if (!File.Exists(jsonPath))
+                {
+                    Debug.LogWarning("[UICap-HL] LoreReadingModal skipped -- lore-fragments.json not found at "
+                                     + jsonPath);
+                    return 0;
+                }
+
+                LoreFragmentSet set = JsonConvert.DeserializeObject<LoreFragmentSet>(
+                    File.ReadAllText(jsonPath));
+                if (set == null || set.Fragments == null || set.Fragments.Count == 0)
+                {
+                    Debug.LogWarning("[UICap-HL] LoreReadingModal skipped -- lore-fragments.json parsed empty.");
+                    return 0;
+                }
+
+                // Longest total body = the worst case the scroll well must carry.
+                LoreFragment worst = null;
+                int worstLen = -1;
+                foreach (var f in set.Fragments)
+                {
+                    if (f == null || f.Body == null || f.Body.Length == 0) continue;
+                    int len = 0;
+                    foreach (var p in f.Body) len += p != null ? p.Length : 0;
+                    if (len > worstLen) { worstLen = len; worst = f; }
+                }
+                if (worst == null)
+                {
+                    Debug.LogWarning("[UICap-HL] LoreReadingModal skipped -- no fragment carries a body.");
+                    return 0;
+                }
+
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                LoreReadingModal.Show(new LoreReadRequest
+                {
+                    LoreStoneId = worst.Id,
+                    Title = worst.Title,
+                    Body = worst.Body,
+                });
+                modal = UnityEngine.Object.FindAnyObjectByType<LoreReadingModal>();
+                if (modal == null)
+                {
+                    Debug.LogWarning("[UICap-HL] LoreReadingModal instance not found after Show -- lore capture skipped.");
+                    return 0;
+                }
+
+                canvasGo = GetPrivateGameObject(modal, "_canvas");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] LoreReadingModal._canvas null -- modal did not build; skipped.");
+                    return 0;
+                }
+
+                Debug.Log("[UICap-HL] lore worst-case fragment = '" + worst.Id + "' (" + worstLen + " chars).");
+                if (RenderCanvasToPng(canvasGo, OutDir + "LoreReadingModal_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "LoreReadingModal_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] lore reading modal capture threw: " + e);
+            }
+            finally
+            {
+                // Build() registered + NotifyOpened the "LoreReading" arbiter handle; clear
+                // it by hand (the panel's own Close() would runtime-Destroy -- edit-illegal).
+                try
+                {
+                    if (modal != null)
+                    {
+                        var handle = GetPrivateFieldValue(modal, "_handle") as PanelHandle;
+                        if (handle != null) PanelManager.NotifyClosed(handle);
+                    }
+                }
+                catch (Exception pe)
+                {
+                    Debug.LogWarning("[UICap-HL] lore modal arbiter release failed (harmless): " + pe.Message);
+                }
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (modal != null && modal.gameObject != null) UnityEngine.Object.DestroyImmediate(modal.gameObject);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the tower manager (TowerManagerPanel, DeNelle.Village.UI --
+        //  referenced, so direct types + private-field reflection only). WO-795
+        //  wave 2 moved the tower rows into a persistent ScrollRect well so an
+        //  unbounded tower list scrolls instead of truncating at the old 0.24
+        //  floor. We spawn EIGHT stub towers (below) so the rows OVERFLOW the
+        //  well -- the clip is the thing this shot verifies.
+        //
+        //  Refresh() clears the body's non-well children with runtime Destroy()
+        //  (edit-illegal), so those children (the kit ZoneBacking plate, plus the
+        //  footer text on the no-frame fallback path) are PARKED outside the body
+        //  for the call and restored at their original sibling index after --
+        //  zero Destroy noise, true chrome in the shot. NO row is selected: row
+        //  selection spawns the in-world marker via CreatePrimitive + runtime
+        //  Destroy on its collider, which edit mode forbids.
+        // ---------------------------------------------------------------------
+        private static int CaptureTowerManagerPanel()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            GameObject[] stubTowers = null;
+            PlacedTowerListVM vm = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                stubTowers = CreateStubTowers(8);
+
+                hostGo = new GameObject("~UICapTowerManager");
+                var panel = hostGo.AddComponent<TowerManagerPanel>();
+
+                // Awake never ran (edit mode), so build the modal + inject the VM the
+                // panel's Awake would have created. CreateDefault's FindObjectsByType
+                // poll picks the stub towers up like real ones.
+                InvokePrivate(panel, "EnsureBuilt");
+                vm = PlacedTowerListVM.CreateDefault(null);
+                SetPrivateField(panel, "_vm", vm);
+
+                // Park non-well body children across Refresh (see banner).
+                var bodyHost = GetPrivateFieldValue(panel, "_bodyHost") as Transform;
+                var wellGo = GetPrivateFieldValue(panel, "_listViewport") as GameObject;
+                var parked = new List<KeyValuePair<Transform, int>>();
+                if (bodyHost != null)
+                {
+                    for (int i = 0; i < bodyHost.childCount; i++)
+                    {
+                        var ch = bodyHost.GetChild(i);
+                        if (ch == null || (wellGo != null && ch.gameObject == wellGo)) continue;
+                        parked.Add(new KeyValuePair<Transform, int>(ch, i));
+                    }
+                    foreach (var kv in parked) kv.Key.SetParent(null, false);
+                }
+                try
+                {
+                    InvokePrivate(panel, "Refresh");
+                }
+                finally
+                {
+                    foreach (var kv in parked)
+                    {
+                        if (kv.Key == null || bodyHost == null) continue;
+                        kv.Key.SetParent(bodyHost, false);
+                        kv.Key.SetSiblingIndex(kv.Value);
+                    }
+                }
+
+                object modal = GetPrivateFieldValue(panel, "_modal");
+                canvasGo = GetFieldValue(modal, "canvas") as GameObject;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] TowerManagerPanel modal canvas null -- tower manager skipped.");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "TowerManagerPanel_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "TowerManagerPanel_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] tower manager capture threw: " + e);
+            }
+            finally
+            {
+                if (vm != null) vm.Dispose();
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                DestroyStubTowers(stubTowers);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the BuildMenu UPGRADE TOWER screen (DeNelle.Village -- direct
+        //  types). WO-795 wave 2 put the placed-tower list into a ScrollRect well
+        //  above the fixed info band (UpgradeInfoTop); the info block + Upgrade
+        //  CTA stay OUTSIDE the well. Worst case rendered here: eight stub tower
+        //  rows overflowing the well PLUS the first tower SELECTED, so the cost
+        //  rows / result line / Upgrade button all render below the list.
+        //
+        //  RenderUpgradeTower is invoked DIRECTLY instead of the public Render():
+        //  Render()'s screen-switch clear uses runtime Destroy() on the body
+        //  children (edit-illegal), and on a fresh build there is nothing to
+        //  clear anyway. Known delta: the "Crystals: N" readout Render() tops
+        //  every screen with is absent from this shot (it lives in Render, not
+        //  RenderUpgradeTower). The VM is built through its public injectable
+        //  ctor (null economy -> the standalone 500-crystal fallback), so no
+        //  service/scene context is needed -- BuildModeController is NOT touched.
+        // ---------------------------------------------------------------------
+        private static int CaptureBuildMenuUpgradeTower()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            GameObject[] stubTowers = null;
+            BuildMenuVM vm = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                stubTowers = CreateStubTowers(8);
+
+                hostGo = new GameObject("~UICapBuildMenu");
+                var menu = hostGo.AddComponent<BuildMenu>();
+
+                InvokePrivate(menu, "EnsureBuilt");
+
+                // Public injectable ctor: (economy, towers, wallRepair, fallbackCrystals,
+                // onClose) -- null economy/wallRepair are the VM's own supported fallbacks.
+                vm = new BuildMenuVM(null, PlacedTowerListVM.CreateDefault(null), null, 500, null);
+                SetPrivateField(menu, "_vm", vm);
+
+                // Select the first stub tower BEFORE the single render pass so the
+                // selected-row highlight + upgrade info block are in the shot.
+                SetPrivateField(menu, "_selectedTowerForUpgrade",
+                    stubTowers[0].GetComponent<Tower>());
+
+                InvokePrivate(menu, "RenderUpgradeTower");
+
+                object modal = GetPrivateFieldValue(menu, "_modal");
+                canvasGo = GetFieldValue(modal, "canvas") as GameObject;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] BuildMenu modal canvas null -- upgrade-tower screen skipped.");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "BuildMenuUpgradeTower_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "BuildMenuUpgradeTower_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] build menu upgrade-tower capture threw: " + e);
+            }
+            finally
+            {
+                if (vm != null) vm.Dispose();
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                DestroyStubTowers(stubTowers);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Stub towers for the two tower-list captures: bare GameObjects carrying
+        //  a REAL Tower component. Tower has no RequireComponent/Reset/OnValidate
+        //  and its stat getters are null-guarded (no TowerData -> level 1, rng 0,
+        //  dmg 0), so an un-awoken edit-mode instance is inert -- but it IS what
+        //  FindObjectsByType<Tower> returns, so both panels list it through their
+        //  real VM path. Eight of them overflow the WO-795 wells on purpose: the
+        //  clip-not-spill behaviour is exactly what the screenshots verify.
+        // ---------------------------------------------------------------------
+        private static GameObject[] CreateStubTowers(int count)
+        {
+            string[] flavors = { "Flame", "Ice", "Aether", "Stone" };
+            var towers = new GameObject[count];
+            for (int i = 0; i < count; i++)
+            {
+                towers[i] = new GameObject("Tower_" + flavors[i % flavors.Length] + (i + 1));
+                towers[i].AddComponent<Tower>();
+            }
+            return towers;
+        }
+
+        private static void DestroyStubTowers(GameObject[] towers)
+        {
+            if (towers == null) return;
+            foreach (var t in towers)
+                if (t != null) UnityEngine.Object.DestroyImmediate(t);
         }
 
         // ---------------------------------------------------------------------
