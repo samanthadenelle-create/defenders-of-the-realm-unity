@@ -796,6 +796,16 @@ namespace DeNelle.DevTools
             var uiKit = AddGroup("UI Kit demo (P1)");
             AddButton(uiKit, "Toggle Obsidian kit demo", ElarionUiKitDemo.Toggle);
 
+            // ── REALM MAP (WO-826) ───────────────────────────────────────────
+            // Dev/headless door to the parchment overworld panel — same reflection-free
+            // PanelRouter route the HUD Map button uses (RealmMapPanel registers the opener).
+            var realmMap = AddGroup("Realm Map (WO-826)");
+            AddButton(realmMap, "Open Realm Map", () =>
+            {
+                if (!DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.RealmMap))
+                    Debug.LogWarning("[DevPanel] PanelId.RealmMap has no registered opener (no hero scene?)");
+            });
+
             // ── CHEATS ───────────────────────────────────────────────────────
             var cheats = AddGroup("Cheats");
             AddToggleButton(cheats, "God-mode: ON", "God-mode: OFF",

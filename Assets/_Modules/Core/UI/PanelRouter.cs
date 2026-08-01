@@ -84,6 +84,12 @@ namespace DeNelle.Core.UI
         /// spawns in Main_Castle_Overworld — 0 subscribers, log-proven. The kit Bag button now
         /// routes here, reflection-free, no scene whitelist to keep in sync).</summary>
         Inventory = 14,
+        /// <summary>Realm Map — the WO-826 full-screen parchment overworld (Elarion + the five
+        /// fog-shrouded regions from dual-copy realm-map.json). Registered scene-independently
+        /// by RealmMapPanel (spawned by RealmMapPanelBootstrap); opened by the HUD kit Map
+        /// button and the DevPanel "Open Realm Map" entry. Travel stays a disabled stub
+        /// until the WO-827 discovery/travel ledger.</summary>
+        RealmMap = 15,
     }
 
     /// <summary>

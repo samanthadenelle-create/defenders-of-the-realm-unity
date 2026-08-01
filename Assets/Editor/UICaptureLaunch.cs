@@ -106,6 +106,7 @@ namespace DeNelle.Editor
                 count += CaptureTowerManagerPanel();
                 count += CaptureBuildMenuUpgradeTower();
                 count += CaptureRumorBoard();
+                count += CaptureRealmMap();
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -955,6 +956,79 @@ namespace DeNelle.Editor
                     Debug.LogWarning("[UICap-HL] rumor board arbiter release failed (harmless): " + pe.Message);
                 }
                 if (worstVm != null) worstVm.Dispose();
+                // Canvas FIRST so any later OnDestroy sees a dead _ui (edit-mode teardown contract).
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the Realm Map parchment overworld (WO-826). Open() builds the
+        //  real code-built panel from the dual-copy realm-map.json; with no
+        //  GameStateService alive in edit mode the VM's live source reads a
+        //  fresh save (BestWave 0, empty ledger), so the shot shows exactly the
+        //  acceptance state: home Elarion selected + every region as LOCKED fog.
+        //  Open() makes zero runtime-Destroy calls on a first build (empty node
+        //  host, no CTA yet), so no DestroyImmediate pre-clear is needed.
+        // ---------------------------------------------------------------------
+        private static int CaptureRealmMap()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            RealmMapPanel panel = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapRealmMap");
+                panel = hostGo.AddComponent<RealmMapPanel>();
+
+                // The real build path (parchment plate + nodes + detail + disabled Travel CTA).
+                panel.Open();
+
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RealmMapPanel._ui null after Open -- realm map skipped.");
+                    return 0;
+                }
+
+                // Landscape at both mobile aspect ratios (the panel authored under the
+                // editor's landscape Screen; the portrait branch needs a live portrait
+                // Screen so it is not re-shot here).
+                if (RenderCanvasToPng(canvasGo, OutDir + "RealmMap_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "RealmMap_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] realm map capture threw: " + e);
+            }
+            finally
+            {
+                // Open() registered + NotifyOpened the arbiter handle; clear it by hand
+                // (the panel's own Close() uses runtime Destroy -- edit-illegal).
+                try
+                {
+                    if (panel != null)
+                    {
+                        var handle = GetPrivateFieldValue(panel, "_handle") as PanelHandle;
+                        if (handle != null) PanelManager.NotifyClosed(handle);
+                    }
+                }
+                catch (Exception pe)
+                {
+                    Debug.LogWarning("[UICap-HL] realm map arbiter release failed (harmless): " + pe.Message);
+                }
                 // Canvas FIRST so any later OnDestroy sees a dead _ui (edit-mode teardown contract).
                 if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
                 if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);

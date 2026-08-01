@@ -276,12 +276,15 @@ namespace DeNelle.Editor
                 string kitSrc = File.ReadAllText(kitPath);
                 if (kitSrc.IndexOf("ObsidianQueueGate.RequestToggle") < 0)
                     failures.Add("HudKitController does not call ObsidianQueueGate.RequestToggle (queue still dark)");
-                if (kitSrc.IndexOf("workQueueButton") < 0)
-                    failures.Add("HudKitController missing workQueueButton widget id (WO-778)");
-                else
-                    log.AppendLine("  HudKitController Work button -> ObsidianQueueGate.RequestToggle OK");
+                // Owner 2026-08-01: the bar's Queues button is RETIRED — the right-column
+                // Builders chip (QueueStatus band, above the resources dock) is the one
+                // Queues entry. A live workQueueButton widget id reappearing = regression.
+                if (kitSrc.IndexOf("Register(\"workQueueButton\"") >= 0)
+                    failures.Add("HudKitController re-registers the retired workQueueButton (owner 2026-08-01: Queues entry = the Builders chip)");
                 if (kitSrc.IndexOf("queueStatusChip") < 0)
                     failures.Add("HudKitController missing queueStatusChip (persistent Builders status, WO-778)");
+                else
+                    log.AppendLine("  HudKitController Builders chip -> ObsidianQueueGate.RequestToggle OK (bar button retired 2026-08-01)");
             }
 
             // OCCUPANCY ORACLE (the Work-button-dark lesson, 2026-07-30): a widget that is
@@ -295,7 +298,7 @@ namespace DeNelle.Editor
             {
                 if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
                 string j = File.ReadAllText(p);
-                if (j.IndexOf("workQueueButton") < 0) failures.Add("hud-areas.json missing workQueueButton row: " + p);
+                if (j.IndexOf("workQueueButton") >= 0) failures.Add("hud-areas.json still carries the retired workQueueButton row (owner 2026-08-01: Queues entry = the Builders chip): " + p);
                 if (j.IndexOf("queueStatusChip") < 0) failures.Add("hud-areas.json missing queueStatusChip row: " + p);
             }
             if (File.Exists(resJson) && File.Exists(samJson) &&

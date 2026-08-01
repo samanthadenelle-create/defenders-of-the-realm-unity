@@ -105,6 +105,9 @@ namespace DeNelle.HUD.Kit
         private Color _raidsLabelBuiltColor = Color.white;
         private bool _raidsDimmed;
         private int _raidArmyStatusVersion = -1;
+        // WO-826: the Realm Map entry — the inner button hides until Onboarded (WO-825 R4);
+        // the Update() poll toggles it so the occupancy rows keep owning the widget root.
+        private Button _mapButton;
         private TMP_Text _fleeLabel;
         private TMP_Text _waveLabel, _waveCountdown;
         private ElarionUiKit.BarHandle _waveProgress;
@@ -406,12 +409,18 @@ namespace DeNelle.HUD.Kit
             // WO-778: persistent Builders/Training status chip (CoC-feel, own area under System).
             BuildQueueStatusChip(pool);
 
-            // ── town action buttons (WO-778: 5 equal-width — Build / Talk / Bag / Queues / Quests) ──
+            // ── town action buttons (WO-826: 7 equal-width — Build / Talk / Bag / Queues /
+            // Raids / Map / Quests) ──
             // Queues (owner rename 2026-08-01, was "Work" — players read Work as quests) = the
             // work-queue panel (Builders / Training / Research) via ObsidianQueueGate. Widget key
             // stays "workButton" (hud-areas.json occupancy rows reference it; label-only rename).
+            // WO-826 note: the divisor was still /5 after Raids became the 6th button, so the
+            // trailing face anchored PAST x=1.0 (off the actionBar area); sized for the real
+            // face count so every button lands inside the zone. Owner 2026-08-01: the Queues
+            // face left the bar (the right-column Builders chip in the QueueStatus band --
+            // directly above the resources dock -- is the one Queues entry), so six faces.
             const float btnGap = 0.01f;
-            const float btnW = (1f - btnGap * 4f) / 5f;   // five equal faces across 0..1
+            const float btnW = (1f - btnGap * 5f) / 6f;   // six equal faces across 0..1
             float bx = 0f;
             Vector2 BtnMin(float x) => new Vector2(x, 0.10f);
             Vector2 BtnMax(float x) => new Vector2(x + btnW, 0.95f);
@@ -453,16 +462,10 @@ namespace DeNelle.HUD.Kit
             Register("bagButton", WrapAsWidget("bagButton", bag.gameObject));
             bx += btnW + btnGap;
 
-            // WO-778 P0-A: work-queue reachability — was dark (RequestToggle had zero callers).
-            var work = ElarionUiKit.BuildObsidianButton(pool, "Queues",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                BtnMin(bx), BtnMax(bx), () =>
-                {
-                    FlowTrace.Step("HudKit", "Queues tapped (was Work) -> ObsidianQueueGate.RequestToggle");
-                    ObsidianQueueGate.RequestToggle();
-                });
-            Register("workQueueButton", WrapAsWidget("workQueueButton", work.gameObject));
-            bx += btnW + btnGap;
+            // Queues entry (owner 2026-08-01): the bar's Queues button was RETIRED — the
+            // right-column Builders chip (BuildQueueStatusChip, QueueStatus band above the
+            // resources dock) already taps into ObsidianQueueGate.RequestToggle and is the
+            // one Queues entry. ObsidianQueueRegression 7c enforces the retirement.
 
             // RAIDS (owner F8 2026-07-30 "there is no raid option"): the raid loop's only HUD
             // door was the OLD VillageHudController crossed-swords icon — the kit rendered no
@@ -484,6 +487,24 @@ namespace DeNelle.HUD.Kit
             _raidsButtonLabel = raids != null ? raids.GetComponentInChildren<TMP_Text>(true) : null;
             if (_raidsButtonImage != null) _raidsImageBuiltColor = _raidsButtonImage.color;
             if (_raidsButtonLabel != null) _raidsLabelBuiltColor = _raidsButtonLabel.color;
+            bx += btnW + btnGap;
+
+            // MAP (WO-826): the Realm Map parchment overworld. Kit button -> Core
+            // PanelRouter -> RealmMapPanel (DeNelle.Village registers the opener at boot),
+            // reflection-free — HUD never names a Village type. WO-825 R4: the button face
+            // hides until Onboarded (the Update() poll below toggles the inner button so
+            // the hud-areas.json occupancy rows keep owning the widget root, the waveBlock
+            // self-gate precedent).
+            var map = ElarionUiKit.BuildObsidianButton(pool, "Map",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                BtnMin(bx), BtnMax(bx), () =>
+                {
+                    FlowTrace.Step("RealmMap", "HUD Map tapped -> PanelRouter.Open(RealmMap)");
+                    if (!PanelRouter.Open(PanelId.RealmMap))
+                        FlowTrace.Warn("RealmMap", "PanelId.RealmMap has no registered opener - map did not open");
+                });
+            Register("mapButton", WrapAsWidget("mapButton", map.gameObject));
+            _mapButton = map;
             bx += btnW + btnGap;
 
             // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
@@ -1700,6 +1721,22 @@ namespace DeNelle.HUD.Kit
                         FlowTrace.Step("HudKit", "Raids button " + (dim ? "DIMMED" : "restored") +
                             " (army " + (ra.DeployableSlots + ra.QueuedSlots) + "/" + ra.CapSlots + " slots)");
                     }
+                }
+            }
+
+            // WO-826 (WO-825 R4): the Map entry appears once Onboarded. Toggle the INNER
+            // button (not the widget root — occupancy rows own that, the waveBlock
+            // self-gate precedent). Explicit null checks — UnityEngine.Object never gets
+            // the ?. operator (lint law). Cheap bool poll; SetActive only on change.
+            if (_mapButton != null)
+            {
+                var gs = DeNelle.Core.State.GameStateService.Instance;
+                bool showMap = gs != null && gs.State != null && gs.State.Onboarded;
+                if (_mapButton.gameObject.activeSelf != showMap)
+                {
+                    _mapButton.gameObject.SetActive(showMap);
+                    FlowTrace.Step("RealmMap", "HUD Map button " +
+                        (showMap ? "shown (Onboarded)" : "hidden (pre-onboard)"));
                 }
             }
         }
