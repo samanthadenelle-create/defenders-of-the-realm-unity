@@ -73,13 +73,49 @@ namespace DeNelle.Dungeons
             }
             if (sb.Length == 0) sb.Append("The inscription on this stone has worn away.");
 
-            var text = ElarionUiKit.Label(body, sb.ToString(),
-                0.06f, 0.94f, ElarionUi.Parchment, ElarionUi.FontBody,
-                TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            // WO-795: long lore scrolls at a fixed readable size (reflow, never shrink
+            // fonts) -- vertical ScrollRect well on the body band, RumorBoardPanel pattern.
+            var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(body, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = new Vector2(0.06f, 0.06f);
+            vpr.anchorMax = new Vector2(0.94f, 0.94f);
+            vpr.offsetMin = Vector2.zero;
+            vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero;
+            cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 0f;
+            // Bottom pad so the final line scrolls fully clear of the mask edge.
+            vlg.padding = new RectOffset(0, 0, 4, 24);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content  = cr;
+            scroll.horizontal = false;
+            scroll.vertical   = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+
+            var text = ElarionUiKit.Label(contentGo.transform, sb.ToString(),
+                0f, 1f, ElarionUi.Parchment, ElarionUi.FontBody,
+                TextAlignmentOptions.TopLeft, 0f, 1f);
             text.textWrappingMode = TextWrappingModes.Normal;
             text.raycastTarget = false;
-            // Autosize-down so a long fragment fits the panel rather than clipping the canon prose.
-            ElarionUiKit.FitBlock(text);
+            // NO FitBlock here (owner law: the scroll carries overflow at a fixed readable size).
 
             if (_handle == null)
                 _handle = PanelManager.Register("LoreReading", Close, () => !_closed && _canvas != null);

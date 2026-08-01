@@ -18,6 +18,11 @@
 // The ONE shared Close is the chrome's; the frame supplies ALL chrome (no
 // per-screen plates/rims/fills — the old BuildRow/BgFor/RimFor grammar is gone).
 //
+// WO-795 (2026-08-01): the quest list is a ScrollRect well (Viewport drag-catcher +
+// RectMask2D; top-anchored Content = VerticalLayoutGroup + ContentSizeFitter, bottom
+// pad one row); rows are fixed-height LayoutElement hosts (MinTouchPx). The old
+// anchored-fraction rows + truncation break; are gone — a deep quest log scrolls.
+//
 // STRICT MVVM (Silo E, 2026-07-17): this View binds a DailyQuestVM and DISPLAYS
 // vm.* only — it owns NO quest data or logic. The quest set, row SELECTION, and
 // reward lookups all live in the VM (which subscribes to the service's SetChanged
@@ -33,6 +38,7 @@ using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;   // ScrollRect/RectMask2D/layout: the WO-795 scroll-list pattern
 
 namespace DeNelle.HUD
 {
@@ -43,6 +49,12 @@ namespace DeNelle.HUD
         private GameObject _canvas;
         private Transform _listHost;     // bodyLeft — dark list well
         private Transform _detailHost;   // bodyRight — parchment detail well
+        private Transform _rowHost;      // WO-795 ScrollRect Content; quest rows rebuilt into it
+        private ScrollRect _scroll;      // the quest-list scroller (built once in EnsureBuilt)
+
+        // One quest row in reference px (1080x1920 canvas). MinTouchPx keeps the tap
+        // target legal (WO-795: fixed-height layout rows replace anchored fractions).
+        private const float RowPx = ElarionUiKit.MinTouchPx;
         // Quests we've already celebrated, so a toast fires only on the FIRST time
         // a quest reaches Completed (owner WO-35: "expected something on completion").
         private readonly HashSet<string> _celebrated = new HashSet<string>();
@@ -138,25 +150,68 @@ namespace DeNelle.HUD
                 : MakeZone(_chrome.content.transform, "DetailWell",
                     new Vector2(0.52f, 0.24f), new Vector2(0.95f, 0.86f));
 
+            // WO-795 scroll well (RumorBoardPanel recipe): Viewport (near-invisible Image
+            // drag-catcher + RectMask2D) filling the list well; Content = top-anchored
+            // VerticalLayoutGroup + ContentSizeFitter. Rows are fixed-height LayoutElement
+            // hosts, so EVERY quest lists and scrolls: no fraction math, no truncation.
+            var viewportGo = new GameObject("QuestViewport",
+                typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(_listHost, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = Vector2.zero;
+            vpr.anchorMax = Vector2.one;
+            vpr.offsetMin = Vector2.zero; vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("QuestRows",
+                typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 8f;
+            // Bottom pad = one row so the last quest scrolls fully clear of the mask.
+            vlg.padding = new RectOffset(6, 6, 6, (int)RowPx + 8);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            _scroll = viewportGo.GetComponent<ScrollRect>();
+            _scroll.viewport = vpr;
+            _scroll.content  = cr;
+            _scroll.horizontal = false;
+            _scroll.vertical   = true;
+            _scroll.movementType = ScrollRect.MovementType.Clamped;
+            _scroll.scrollSensitivity = 25f;
+
+            _rowHost = contentGo.transform;
+
             _chrome.root.SetActive(false);   // built hidden; Toggle() shows it
         }
 
         // ── Repaint (renders from vm.* ONLY — strict MVVM, Silo E) ────────────────
         private void Repaint()
         {
-            if (_listHost == null || _detailHost == null || _vm == null) return;
-            ClearZone(_listHost);
+            if (_listHost == null || _detailHost == null || _rowHost == null || _vm == null) return;
+            ClearZone(_rowHost);
             ClearZone(_detailHost);
 
             var quests = _vm.Quests;
 
             if (_vm.IsEmpty)
             {
-                var none = ElarionUiKit.Label(_listHost, "No daily quests today.",
-                    0.40f, 0.60f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                var none = ElarionUiKit.Label(_rowHost, "No daily quests today.",
+                    0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                     TextAlignmentOptions.Center, 0.05f, 0.95f);
                 none.fontStyle = FontStyles.Italic;
                 ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
+                // _rowHost is layout-driven now; give the notice a row-sized slot.
+                none.gameObject.AddComponent<LayoutElement>().preferredHeight = RowPx;
                 ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "No daily quests today",
                     "Fresh quests arrive with the new day.");
             }
@@ -164,25 +219,30 @@ namespace DeNelle.HUD
             {
                 // Quest rows (dark well, left) — the Jeweler/Crafting master-list grammar:
                 // kit Obsidian buttons, selected = Yellow face, readable right-aligned state.
-                const float rowH = 0.16f, gap = 0.02f;
-                float top = 0.98f;
+                // WO-795: fixed-height LayoutElement hosts inside the ScrollRect Content;
+                // the VerticalLayoutGroup stacks them and the ScrollRect scrolls them —
+                // every quest lists, none is ever truncated (the old break; is gone).
                 for (int i = 0; i < quests.Count; i++)
                 {
                     var item = quests[i];
                     string key = item.Id;
                     bool selected = key == _vm.SelectedId;
-                    var rowBtn = ElarionUiKit.BuildObsidianButton(_listHost, item.Name,
+                    var host = new GameObject("Row_" + key,
+                        typeof(RectTransform), typeof(LayoutElement));
+                    host.transform.SetParent(_rowHost, false);
+                    var le = host.GetComponent<LayoutElement>();
+                    le.preferredHeight = RowPx;
+                    le.minHeight = RowPx;
+                    var rowBtn = ElarionUiKit.BuildObsidianButton(host.transform, item.Name,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                                  : ElarionUiKit.ObsidianButtonColor.Gray,
-                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        Vector2.zero, Vector2.one,
                         () => _vm.Select(key));   // command -> VM raises Changed -> Repaint
                     // State text carries the state (colorblind law); color = reinforcement.
                     ElarionUiKit.AddRowStateSuffix(rowBtn,
                         item.Equipped ? "+ Done" : _vm.ProgressText(key),
                         item.Equipped ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
-                    top -= rowH + gap;
-                    if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
 
                 // Detail (parchment well, right — the WO-693 shared compact card).

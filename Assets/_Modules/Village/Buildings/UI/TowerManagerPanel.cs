@@ -14,6 +14,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.UI;
 
@@ -27,6 +28,8 @@ namespace DeNelle.Village.UI
 
         private ElarionUiKit.ObsidianModal _modal;
         private Transform _bodyHost;          // frame body drop-zone — rows + actions
+        private GameObject _listViewport;     // WO-795 scroll well (survives Refresh clears)
+        private Transform _listContent;       // scroll Content — fixed-height row hosts
         private TextMeshProUGUI _detail;      // footer strip — selected-tower readout
         private GameObject _marker;
         private bool _visible;
@@ -126,6 +129,8 @@ namespace DeNelle.Village.UI
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
+            BuildTowerScrollWell();
+
             // Footer strip carries the selected-tower readout.
             var footHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer
@@ -137,11 +142,76 @@ namespace DeNelle.Village.UI
             _modal.canvas.SetActive(false);   // built hidden; Show shows it
         }
 
-        private void Refresh()
+        // -- Tower list scroll well (WO-795: rows never truncate; overflow scrolls) --
+
+        private const float RowPixelH = 112f;  // fixed row height (tappable rows: min touch target)
+
+        /// <summary>Build the vertical scroll well for the tower list, ONCE per build
+        /// (RumorBoardPanel WO-795 pattern): Viewport (near-invisible Image drag catcher
+        /// + RectMask2D) + top-anchored Content (VerticalLayoutGroup + ContentSizeFitter).
+        /// Refresh only clears/refills the Content, so scroll position survives the
+        /// 0.5s live refresh. The action row stays OUTSIDE, on the body itself.</summary>
+        private void BuildTowerScrollWell()
         {
             if (_bodyHost == null) return;
+
+            var viewportGo = new GameObject("TowerListViewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(_bodyHost, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            // The old list band ran 0.97 down to the 0.24 truncation floor; the well
+            // occupies that same band (action row keeps 0.03-0.13 below, untouched).
+            vpr.anchorMin = new Vector2(0.06f, 0.16f);
+            vpr.anchorMax = new Vector2(0.94f, 0.97f);
+            vpr.offsetMin = Vector2.zero;
+            vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("TowerListContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero;
+            cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 8f;
+            // Bottom pad = one row so the last tower scrolls fully clear of the mask.
+            vlg.padding = new RectOffset(0, 0, 0, (int)RowPixelH + 8);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content  = cr;
+            scroll.horizontal = false;
+            scroll.vertical   = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+
+            _listViewport = viewportGo;
+            _listContent  = contentGo.transform;
+        }
+
+        private void Refresh()
+        {
+            if (_bodyHost == null || _listContent == null) return;
+
+            // Clear the body EXCEPT the persistent scroll well (so the ScrollRect and
+            // its scroll position survive the 0.5s live refresh), then clear the rows
+            // inside the Content. The action row + empty-state live directly on the
+            // body and are rebuilt each pass, exactly as before.
             for (int i = _bodyHost.childCount - 1; i >= 0; i--)
-                Destroy(_bodyHost.GetChild(i).gameObject);
+            {
+                var child = _bodyHost.GetChild(i).gameObject;
+                if (child == _listViewport) continue;
+                Destroy(child);
+            }
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
 
             _vm.Refresh();                       // re-poll the live towers (drops a stale selection)
             var towers = _vm.Towers;
@@ -157,8 +227,8 @@ namespace DeNelle.Village.UI
                 // Drop a stale selection marker if its tower was destroyed.
                 if (_vm.Selected == null) ClearMarker();
 
-                const float rowH = 0.08f, gap = 0.014f;
-                float top = 0.97f;
+                // WO-795: fixed-height LayoutElement row hosts inside the scroll
+                // Content — EVERY tower lists; overflow scrolls, never truncates.
                 for (int i = 0; i < towers.Count; i++)
                 {
                     var t = towers[i];
@@ -167,15 +237,21 @@ namespace DeNelle.Village.UI
                     string label = PlacedTowerListVM.FormatManagerRow(
                         i + 1, t.CurrentLevel, t.CurrentRange, t.CurrentDamage, sel);
                     Tower captured = t;
-                    ElarionUiKit.BuildObsidianButton(_bodyHost, label,
+
+                    // Fixed-height row host; the kit button fills it (anchors 0..1).
+                    var host = new GameObject("Row_" + (i + 1), typeof(RectTransform), typeof(LayoutElement));
+                    host.transform.SetParent(_listContent, false);
+                    var le = host.GetComponent<LayoutElement>();
+                    le.preferredHeight = RowPixelH;
+                    le.minHeight = RowPixelH;
+
+                    ElarionUiKit.BuildObsidianButton(host.transform, label,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         // Selected row reads with the Yellow accent (selection canon).
                         sel ? ElarionUiKit.ObsidianButtonColor.Yellow
                             : ElarionUiKit.ObsidianButtonColor.Gray,
-                        new Vector2(0.06f, top - rowH), new Vector2(0.94f, top),
+                        Vector2.zero, Vector2.one,
                         () => Select(captured));
-                    top -= rowH + gap;
-                    if (top < 0.24f) break;   // bounded: leave room for the action row
                 }
             }
             RefreshDetail();

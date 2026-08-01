@@ -29,6 +29,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Catalog;
@@ -171,6 +172,7 @@ namespace DeNelle.Village
 
             _screen = MenuScreen.Root;            // always open on the chooser
             _selectedTowerForUpgrade = null;
+            _upgradeListScrollPos = 1f;           // WO-795: fresh open starts at the list top
             Disarm();
             Render();
             FlowTrace.Step("UI", "Build menu shown (kit modal, FrameCore)");
@@ -262,7 +264,7 @@ namespace DeNelle.Village
             AddRow("Build Tower", ElarionUiKit.ObsidianButtonColor.Yellow,
                 () => { _screen = MenuScreen.BuildTower; Render(); }, ref top);
             AddRow("Upgrade Tower", ElarionUiKit.ObsidianButtonColor.Gray,
-                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; Render(); }, ref top);
+                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; _upgradeListScrollPos = 1f; Render(); }, ref top);
             AddRow("Repair Wall", ElarionUiKit.ObsidianButtonColor.Gray, OnRepairWall, ref top);
             AddRow("Manage Towers", ElarionUiKit.ObsidianButtonColor.Gray, () =>
             {
@@ -452,11 +454,22 @@ namespace DeNelle.Village
 
         // ── Upgrade Tower screen ──────────────────────────────────────────────
 
+        // WO-795: fixed pixel row height for the tower-list scroll well (matches the
+        // RumorBoardPanel / JewelerPanelMvvm pattern rows).
+        private const float UpgradeRowPixelH = 96f;
+        // Lower edge of the list band; the upgrade info block renders BELOW this,
+        // OUTSIDE the scroll well (the old truncation boundary, now a hard band).
+        private const float UpgradeInfoTop = 0.40f;
+        // Scroll position persisted across Render() rebuilds — selecting a row
+        // re-renders the whole body, which would otherwise snap the list to the top.
+        private float _upgradeListScrollPos = 1f;   // 1 = top (uGUI normalized)
+
         /// <summary>
         /// WO-127: lists every LIVE placed <see cref="Tower"/> (not Building), so the
         /// row level matches the tower's actual <c>CurrentLevel</c>. Selecting one
         /// shows its upgrade info; the Upgrade button routes through the single
-        /// cost-enforced <see cref="Tower.TryUpgrade"/>.
+        /// cost-enforced <see cref="Tower.TryUpgrade"/>. WO-795: the list lives in a
+        /// ScrollRect well — an unbounded tower list scrolls instead of truncating.
         /// </summary>
         private void RenderUpgradeTower()
         {
@@ -480,36 +493,88 @@ namespace DeNelle.Village
             if (_selectedTowerForUpgrade == null || !stillPresent)
                 _selectedTowerForUpgrade = null;
 
+            // ── WO-795 scroll well (RumorBoardPanel Open() / JewelerPanelMvvm
+            // BuildRecipeScrollWell pattern): Viewport = near-invisible Image drag
+            // catcher + RectMask2D + ScrollRect; Content = top-anchored
+            // VerticalLayoutGroup + ContentSizeFitter. The info block stays OUTSIDE
+            // the well, anchored below UpgradeInfoTop.
+            float restoreScrollPos = _upgradeListScrollPos;
+
+            var viewportGo = new GameObject("TowerListViewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(_bodyHost, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = new Vector2(0.10f, UpgradeInfoTop + 0.02f);
+            vpr.anchorMax = new Vector2(0.90f, top);
+            vpr.offsetMin = Vector2.zero;
+            vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
+            var contentGo = new GameObject("TowerListContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewportGo.transform, false);
+            var cr = contentGo.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.offsetMin = Vector2.zero;
+            cr.offsetMax = Vector2.zero;
+            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 8f;
+            // Bottom pad = one row so the last tower scrolls fully clear of the mask.
+            vlg.padding = new RectOffset(0, 0, 0, (int)UpgradeRowPixelH + 8);
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content  = cr;
+            scroll.horizontal = false;
+            scroll.vertical   = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+            scroll.onValueChanged.AddListener(_ => _upgradeListScrollPos = scroll.verticalNormalizedPosition);
+
             bool any = false;
             foreach (var t in towers)
             {
                 if (t == null) continue;
-                const float rowH = 0.07f, gap = 0.012f;
                 bool selected = ReferenceEquals(t, _selectedTowerForUpgrade);
                 // WO-127: print the LIVE level (1..MaxLevel) so it always matches
                 // TowerManagerPanel's t.CurrentLevel for the same tower.
                 string label = DeNelle.Village.UI.PlacedTowerListVM.FormatMenuRow(t.name, t.CurrentLevel, selected);
                 Tower captured = t;
-                ElarionUiKit.BuildObsidianButton(_bodyHost, label,
+                // WO-795: fixed-height LayoutElement host; the obsidian button fills it
+                // (row internals unchanged — label / colors / click as before).
+                var rowHost = new GameObject("TowerRow", typeof(RectTransform), typeof(LayoutElement));
+                rowHost.transform.SetParent(contentGo.transform, false);
+                rowHost.GetComponent<LayoutElement>().preferredHeight = UpgradeRowPixelH;
+                ElarionUiKit.BuildObsidianButton(rowHost.transform, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.10f, top - rowH), new Vector2(0.90f, top),
+                    Vector2.zero, Vector2.one,
                     () => { _selectedTowerForUpgrade = captured; Render(); });
-                top -= rowH + gap;
                 any = true;
-                if (top < 0.40f) break;   // bounded: leave room for the info block
             }
             if (!any)
             {
-                MakeText(_bodyHost, "No towers placed yet.", 14, ElarionUi.ParchmentDim,
+                var emptyHost = new GameObject("EmptyRow", typeof(RectTransform), typeof(LayoutElement));
+                emptyHost.transform.SetParent(contentGo.transform, false);
+                emptyHost.GetComponent<LayoutElement>().preferredHeight = 60f;
+                MakeText(emptyHost.transform, "No towers placed yet.", 14, ElarionUi.ParchmentDim,
                     FontStyles.Italic, TextAlignmentOptions.Center,
-                    new Vector2(0.10f, top - 0.06f), new Vector2(0.90f, top));
-                top -= 0.07f;
+                    Vector2.zero, Vector2.one);
             }
 
+            // Restore the scroll position across a selection re-render (layout must be
+            // computed first, or the normalized set is a no-op on a zero-height content).
+            Canvas.ForceUpdateCanvases();
+            scroll.verticalNormalizedPosition = restoreScrollPos;
+
             if (_selectedTowerForUpgrade != null)
-                BuildUpgradeInfoBlock(_selectedTowerForUpgrade, top - 0.02f);
+                BuildUpgradeInfoBlock(_selectedTowerForUpgrade, UpgradeInfoTop - 0.02f);
         }
 
         /// <summary>

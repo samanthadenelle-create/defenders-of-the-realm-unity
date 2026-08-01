@@ -120,13 +120,58 @@ namespace DeNelle.HUD
                 new Vector2(0.26f, 0.12f), new Vector2(0.74f, 0.88f), Close,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "settings");
 
-            var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
+            bool bodyIsZone = _modal.chrome.layout != null && _modal.chrome.layout.body != null;
+            var body = bodyIsZone
                 ? _modal.chrome.layout.body.transform
                 : _modal.chrome.content.transform;
 
+            // -- WO-795: scrollable button well (RumorBoardPanel Viewport/Content pattern) --
+            // The plain BuildButtonColumn VLG does not clip: with 4 release rows (6 in dev
+            // builds) at the 112px touch floor / 132px preferred height the tail overflowed
+            // the body rect and collided with the kit's bottom-center shared Close band
+            // (DefaultCloseZone, fixed 360x132 box growing up from panel y=0.050). Wrap the
+            // column in a masked vertical ScrollRect sized to end ABOVE that band:
+            //  - Zone_Body path: the kit factory already raises the zone's bottom edge above
+            //    the Close box (close-band reservation), so the well fills the zone using the
+            //    column's old insets (0.06 side, 0.04 top/bottom) - same visual rect as before.
+            //  - chrome.content fallback: no reservation exists there, so anchor the well's
+            //    bottom at 0.24 of the panel - clear of the worst-case (landscape) top of the
+            //    fixed Close box (~0.22) plus a gap.
+            var wellGo = new GameObject("ButtonScrollWell",
+                typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.RectMask2D),
+                typeof(UnityEngine.UI.ScrollRect));
+            wellGo.transform.SetParent(body, false);
+            var wellRt = wellGo.GetComponent<RectTransform>();
+            wellRt.anchorMin = bodyIsZone ? new Vector2(0.06f, 0.04f) : new Vector2(0.06f, 0.24f);
+            wellRt.anchorMax = bodyIsZone ? new Vector2(0.94f, 0.96f) : new Vector2(0.94f, 0.875f);
+            wellRt.offsetMin = Vector2.zero;
+            wellRt.offsetMax = Vector2.zero;
+            wellGo.GetComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+
             // Common spaced button column (ElarionUiKit) — guaranteed spacing + no overlap at any
             // screen size (owner "fix in common"). Close is the chrome's ONE shared Close.
-            var stack = ElarionUiKit.BuildButtonColumn(body);
+            // The column now doubles as the ScrollRect CONTENT: re-anchor it top-stretched
+            // (pivot 0.5,1) inside the well - its insets moved onto the well above - and let a
+            // ContentSizeFitter grow it to the rows' preferred height so overflow scrolls
+            // instead of spilling into the Close band. Rows/behaviors unchanged.
+            var stack = ElarionUiKit.BuildButtonColumn(wellGo.transform);
+            stack.anchorMin = new Vector2(0f, 1f);
+            stack.anchorMax = new Vector2(1f, 1f);
+            stack.pivot     = new Vector2(0.5f, 1f);
+            stack.offsetMin = Vector2.zero;
+            stack.offsetMax = Vector2.zero;
+            var stackFit = stack.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            stackFit.verticalFit   = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+            stackFit.horizontalFit = UnityEngine.UI.ContentSizeFitter.FitMode.Unconstrained;
+
+            var wellScroll = wellGo.GetComponent<UnityEngine.UI.ScrollRect>();
+            wellScroll.viewport = wellRt;
+            wellScroll.content  = stack;
+            wellScroll.horizontal = false;
+            wellScroll.vertical   = true;
+            wellScroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
+            wellScroll.scrollSensitivity = 25f;
+            FlowTrace.Step("UI", "HelpMenu: button column wrapped in ScrollRect well (WO-795) bodyIsZone=" + bodyIsZone);
             ElarionUiKit.AddColumnButton(stack, "Report a Bug",
                 ElarionUiKit.ObsidianButtonColor.Gray, OnReportBug);
             ElarionUiKit.AddColumnButton(stack, "Controls",
