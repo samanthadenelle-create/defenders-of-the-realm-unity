@@ -17,12 +17,14 @@
 // LAYOUT (matches 060241 exactly, BUILDING-AGNOSTIC — every field is VM data):
 //   HEADER   : shield medallion top-left + centered GOLD "<Building> Enhancements".
 //   CURRENCY : a row of pill chips (icon left, value right) — the spendable set.
-//   TABS     : "Upgrade" (gold-filled when selected) | "Skills" (dark). 50/50.
+//   TABS     : "Upgrade" | "Skills". 50/50. Selected = gold UNDERLINE + gold text on
+//              the dark plate (WO-832: a tab NEVER wears the CTA's gold fill).
 //   BODY (Upgrade tab) = TWO COLUMNS master-detail:
 //     LEFT  "ENHANCEMENT PATH" — a HORIZONTAL row of tier CARDS (arrows between),
 //           each: "TIER n" + a per-tier BUILDING ILLUSTRATION (grows/changes per
-//           tier) + perk NAME + one-line EFFECT + a button (gold Upgrade when
-//           available / lock "Unlock '<prev>'" when locked / "Unlocked" when owned).
+//           tier) + perk NAME + one-line EFFECT + a footer tag (gold-TEXT "Ready >"
+//           when available / lock "Unlock '<prev>'" when locked / "Unlocked" when
+//           owned). WO-832: NO in-card gold commit button — the card only SELECTS.
 //           Arrow before a reachable tier is gold, grey otherwise.
 //     RIGHT  DETAIL pane for the SELECTED tier — perk NAME + "TIER n - SELECTED"
 //           + a BENEFIT LIST (green-check active vs dim-box locked, colorblind
@@ -32,8 +34,9 @@
 //           row grammar), so the Skills side keeps its existing content/behaviour.
 //   FOOTER   : one centered gold-bordered "Close".
 //
-// Tapping a tier card SELECTS it (right pane repaints); the CTA / card Upgrade
-// button routes the SAME vm.Select(id) command.  ONE panel serves EVERY upgradable
+// Tapping a tier card SELECTS it (right pane repaints); the right-pane CTA is the
+// ONE bright-gold commit button on the panel (WO-832) and routes vm.Select(id).
+// ONE panel serves EVERY upgradable
 // building (city tiers + legacy resource buildings) — nothing here is per-building.
 // SHIPS behind FeatureFlags.BuildingUpgradePanel (default ON since WO-476).
 // =============================================================================
@@ -85,8 +88,9 @@ namespace DeNelle.Village.Buildings.Progression
         private struct PillRef { public ElarionUiKit.CurrencyKind Kind; public TMPro.TextMeshProUGUI Value; }
         private readonly List<PillRef> _pills = new List<PillRef>();
 
-        // Tab visuals (restyled per active tab).
-        private struct TabRef { public Image Fill; public TMPro.TextMeshProUGUI Label; }
+        // Tab visuals (restyled per active tab). WO-832: tabs carry a gold UNDERLINE
+        // when selected (never the CTA's gold fill — one true button rule).
+        private struct TabRef { public Image Fill; public Image Underline; public TMPro.TextMeshProUGUI Label; }
         private readonly List<TabRef> _tabs = new List<TabRef>();
 
         // Status is transient: toast only NEW statuses, never the open-time baseline.
@@ -490,7 +494,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
-        // ── Tab row (Upgrade gold-filled when selected, Skills dark) ───────────────
+        // ── Tab row (dark plates; selected = gold underline + gold text, WO-832) ──
 
         private void BuildTabs(RectTransform host)
         {
@@ -514,20 +518,32 @@ namespace DeNelle.Village.Buildings.Progression
                     ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                 lbl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(lbl);
-                _tabs.Add(new TabRef { Fill = fill.GetComponent<Image>(), Label = lbl });
+                // WO-832: thin gold rule along the tab's bottom edge — the "selected"
+                // indicator (shown only for the active tab; RestyleTabs toggles it).
+                var underGo = ElarionUiKit.AddImage(fill, "SelectedUnderline",
+                    new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.10f), ElarionUi.Gilt);
+                var under = underGo.GetComponent<Image>();
+                under.raycastTarget = false;
+                _tabs.Add(new TabRef { Fill = fill.GetComponent<Image>(), Underline = under, Label = lbl });
             }
             RestyleTabs();
         }
 
         private void RestyleTabs()
         {
+            // WO-832 one-true-button: tabs are NAVIGATION, never the CTA's gold fill.
+            // The selected tab reads as a TAB — dark plate + gold underline + gold text.
+            // ElarionUi.GoldButton (solid bright fill) is reserved EXCLUSIVELY for the
+            // right-pane commit CTA (BuildDetailCta).
             for (int i = 0; i < _tabs.Count; i++)
             {
                 bool sel = i == _activeTab;
                 if (_tabs[i].Fill != null)
-                    _tabs[i].Fill.color = sel ? ElarionUi.GoldButton : TabDark;
+                    _tabs[i].Fill.color = TabDark;
+                if (_tabs[i].Underline != null)
+                    _tabs[i].Underline.enabled = sel;
                 if (_tabs[i].Label != null)
-                    _tabs[i].Label.color = sel ? ElarionUi.Ink : ElarionUi.Parchment;
+                    _tabs[i].Label.color = sel ? ElarionUi.Gilt : ElarionUi.Parchment;
             }
         }
 
@@ -735,8 +751,15 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else if (available)
             {
-                BuildGoldButton(card, "Upgrade", item.Affordable, 0.14f, 0.86f, 0.02f, 0.125f,
-                    () => { FlowTrace.Step("UpgradeUI", "upgrade " + id); _vm?.Select(id); });
+                // WO-832 one-true-button: the in-card gold Upgrade commit is REMOVED.
+                // The whole card already SELECTS (selBtn above); the SINGLE commit CTA
+                // lives in the right pane (BuildDetailCta). A quiet gold-TEXT tag keeps
+                // the card reading "ready + tappable" without a second gold fill.
+                // Colorblind-safe: text + the card's gold rim + lit fill, never hue alone.
+                var ready = ElarionUiKit.Label(card, "Ready >", 0.03f, 0.115f,
+                    ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+                ready.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(ready);
             }
             else
             {
