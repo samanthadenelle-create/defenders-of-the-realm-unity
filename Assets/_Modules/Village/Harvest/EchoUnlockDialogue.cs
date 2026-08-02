@@ -159,8 +159,7 @@ namespace DeNelle.Village
         {
             EnsureEventSystem();
 
-            // Shared obsidian chrome + the ONE canon Close (skipping is allowed -- Close
-            // ends the whole beat; Continue advances into the awakening card).
+            // Shared obsidian chrome. The scrim keeps Close as the tap-outside escape.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoEmergence", "ECHOES OF ELARION",
                 new Vector2(0.14f, 0.20f), new Vector2(0.86f, 0.82f),
@@ -168,6 +167,16 @@ namespace DeNelle.Village
                 frameName: RpgUiCatalog.FrameCore);
             _emergenceCanvas = built.canvas;
             var content = built.chrome.content.transform;
+
+            // OWNER F8 seq 628 (2026-08-02): "only leave the continue button - its not needed
+            // continue or close, both same answer". This beat is LINEAR, so two exits read as
+            // one choice offered twice. Continue is the ONE exit; retire the shared Close for
+            // THIS state only. Deliberately local (SetActive) rather than a kit change: the
+            // kit's Close is canon for ~19 other panels (ElarionUiKit.ObsidianCloseButton) and
+            // must not move for a single linear beat. The awakening card that Continue opens
+            // KEEPS its Close - that state is the terminal one.
+            if (built.chrome.close != null)
+                built.chrome.close.gameObject.SetActive(false);
 
             // -- the emergence sprite (CENTER). Fallback chain (Guard-logged, never blank):
             //    Emergence art -> portrait -> text placeholder. Missing art never blocks.

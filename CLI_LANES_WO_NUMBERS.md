@@ -1,6 +1,17 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (evening — ship wave committed): next free WO = **848**. **782–847 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (evening — F8 felt wave): next free WO = **851**. **782–850 CONSUMED.**
+> - **848** = RESTORE Android managed stripping Medium (lowered to Low 2026-08-02 because the
+>   WO-766 Solana SDK's BouncyCastle.Cryptography fails the CIL-linker resolve at Medium;
+>   captured in Builds/android-build.log + MobileSettings.cs comment). APK-size follow-up, OPEN.
+> - **849** = dungeon PURSUIT bound (F8 seq 629 "not attacking me"): WO-797's flat wander slack
+>   pinned engaged mobs on their room boundary while the hero stood 3.7m outside. Pursuit now
+>   clamps to max(slack, wakeRadius) — "a mob may pursue as far as it can perceive"; the entrance
+>   camp stays fixed (8.1m > wake 6). SHIPPED, oracle case 7 pins both halves.
+> - **850** = deepest-room TREASURE cache (owner request 2026-08-02: "treasure at deepest, simple
+>   crafting supply") — chest at the dungeon's deepest room granting basic crafting materials. OPEN.
+> - **⚠ the proposed UI-seat reserved block moves to 860–899** (850–859 now consumed/reserved by the
+>   main line; owner still to ratify).
 > - **842** = dual-wallet unify (GameState = single Wood/Iron authority; the 985k-can't-afford-800 capture) ·
 >   **843** = destroyed/sold singleton cards rebuildable (IsPlayerBuilt split from IsBuilt) ·
 >   **844** = Bag potions apply their real effect (was TryRemove + lie) ·

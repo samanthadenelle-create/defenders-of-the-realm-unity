@@ -213,17 +213,38 @@ namespace DeNelle.Village
             return new Vector3(x, point.y, z);
         }
 
+        /// <summary>
+        /// WO-849 (owner F8 seq 629 "not attacking me"): the room a mob may PURSUE into is
+        /// wider than the room it may WANDER in. Captured proof from the live starter loop:
+        ///     confined to room 'loop3' - desired (5.30,0.08,22.55) snapped to (7.00,0.08,22.55)
+        /// repeating every frame — an ENGAGED skeleton pinned on its own boundary while the
+        /// hero stood ~1.7m outside it, so five aggroed mobs were physically unable to reach
+        /// her. WO-797's flat slack fixed the entrance conga but made a hero one step outside
+        /// any room untouchable.
+        ///
+        /// THE RULE: a mob may pursue exactly as far as it can PERCEIVE — pursuit clamps to
+        /// max(slack, wakeRadius) instead of slack. Self-consistent by construction: anything
+        /// close enough to WAKE the room is now close enough to be REACHED, and anything
+        /// beyond wake never aggroed in the first place. The entrance camp stays fixed —
+        /// the entry seat is 8.1m from the junction footprint vs wake 6 (pinned in
+        /// DungeonRoomOwnershipRegression case 2), so it is still out of pursuit range.
+        /// </summary>
+        private float PursuitSlack => Mathf.Max(_roomSlack, _wakeRadius);
+
         // Route a chase/tactical destination through the WO-797 room clamp. No-op (identity)
         // when unbound. Throttled trace on an ACTUAL snap so the confinement is a captured
         // data line, never a silent behaviour change (CLAUDE.md sec.12).
-        private Vector3 ConfineDestination(Vector3 desired)
+        // pursuingHero: this destination IS the hero/taunter chase -> the wider WO-849 bound.
+        private Vector3 ConfineDestination(Vector3 desired, bool pursuingHero = false)
         {
             if (!_hasRoomArea) return desired;
-            Vector3 confined = ConfineToArea(desired, _roomArea, _roomSlack);
+            float slack = pursuingHero ? PursuitSlack : _roomSlack;
+            Vector3 confined = ConfineToArea(desired, _roomArea, slack);
             if ((confined - desired).sqrMagnitude > 0.04f)
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"confine-{GetInstanceID()}", 1f,
-                    $"{name}: confined to room '{_roomId}' - desired {desired} snapped to {confined} (slack {_roomSlack:F1}m)");
+                    $"{name}: confined to room '{_roomId}' - desired {desired} snapped to {confined} " +
+                    $"(slack {slack:F1}m, pursuing={pursuingHero})");
             }
             return confined;
         }
@@ -699,8 +720,10 @@ namespace DeNelle.Village
             {
                 _currentTarget = _taunter;
                 _enemy.SetBrainTarget(_taunter);
-                // WO-797: a room-bound mob follows the taunt only as far as its room edge.
-                _enemy.SetBrainTargetPosition(ConfineDestination(_taunter.position));
+                // WO-797/849: a room-bound mob follows the taunt out to its PURSUIT bound
+                // (perception-wide), not the tight wander slack — a taunt it cannot reach is
+                // not a taunt.
+                _enemy.SetBrainTargetPosition(ConfineDestination(_taunter.position, pursuingHero: true));
                 TriggerAttack();
                 return;
             }
@@ -729,8 +752,12 @@ namespace DeNelle.Village
                 // run with NO range cap — one hero swing towed a mob across the whole dungeon
                 // to the entrance. The room confinement is hoisted ABOVE this override: a
                 // provoked room-bound mob still fights back, but its chase destination is
-                // clamped to its room AABB + slack, so it can never leave the room.
-                _enemy.SetBrainTargetPosition(ConfineDestination(_heroTransform.position));
+                // clamped to its room AABB, so it can never tow across the dungeon.
+                // WO-849 (F8 seq 629 "not attacking me"): that clamp used the TIGHT wander
+                // slack, which pinned engaged mobs on the boundary while the hero stood just
+                // outside — aggroed and unable to touch her. The retaliation chase now uses
+                // the PURSUIT bound (perception-wide); the entrance is still out of range.
+                _enemy.SetBrainTargetPosition(ConfineDestination(_heroTransform.position, pursuingHero: true));
                 TriggerAttack();
                 return;
             }
@@ -818,9 +845,13 @@ namespace DeNelle.Village
 
             // Compute the final destination with tactical overlay applied.
             Vector3? dest = ComputeTacticalDestination(target);
-            // WO-797: room-bound mobs never path outside their room AABB + slack.
+            // WO-797: room-bound mobs never path outside their room AABB.
+            // WO-849: the bound widens to the PURSUIT slack when the chosen target IS the
+            // hero — the normal (non-retaliation) chase had the same unreachable-hero defect.
+            // A non-hero target (structure/patrol point) keeps the tight wander slack.
             if (dest.HasValue && _hasRoomArea)
-                dest = ConfineDestination(dest.Value);
+                dest = ConfineDestination(dest.Value,
+                    pursuingHero: target != null && target == _heroTransform);
             _enemy.SetBrainTargetPosition(dest);
 
             // WO-145 (Tactic B): while kiting, fire ranged attacks on cooldown when

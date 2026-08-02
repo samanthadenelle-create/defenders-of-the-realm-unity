@@ -184,8 +184,16 @@ namespace DeNelle.Village
                     _foundingPending = true;   // Update() + OnActiveSceneChanged re-evaluate until clear
                     return;
                 }
-                FlowTrace.Fail("Echo", "founding card held " + (int)held + "s > cap " + (int)cap
-                    + "s (Onboarded=" + onboarded + ", AnyOpen=" + anyOpen + ") - forcing show");
+                // OWNER F8 seq 627 (2026-08-02): this fired as an ERROR ticket after a 170s
+                // hold (Onboarded=False - she was still exploring pre-tutorial). But the cap
+                // EXPIRING IS THE DESIGNED BEHAVIOUR (WO-823 Phase B): the valve exists so a
+                // slow/absent tutorial can never eat the founding tale. Reporting a working
+                // fallback through FlowTrace.Fail raises a false error ticket in the F8
+                // harness and trains us to ignore real ones. Warn keeps the full trace line
+                // (still captured in break-log/Player.log) without crying wolf.
+                FlowTrace.Warn("Echo", "founding card held " + (int)held + "s > cap " + (int)cap
+                    + "s (Onboarded=" + onboarded + ", AnyOpen=" + anyOpen + ") - forcing show "
+                    + "(designed WO-823 safety valve, not a failure)");
             }
 
             // Clear to teach: AnnounceFoundingEcho raises EchoUnlocked(1) -> OnEchoUnlocked renders

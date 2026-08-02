@@ -74,6 +74,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "room-bounds", () => Case4_RoomBounds(failures, notes));
                 Case(failures, "binder", () => Case5_Binder(failures));
                 Case(failures, "exit-beacon", () => Case6_ExitBeacon(failures));
+                Case(failures, "pursuit-bound", () => Case7_PursuitBound(failures));
             }
             finally
             {
@@ -364,6 +365,67 @@ namespace DeNelle.Editor.Regression
             {
                 failures.Add($"[exit-beacon] Spawn threw {ex.GetType().Name}: {ex.Message}");
             }
+        }
+
+        // =====================================================================
+        //  CASE 7 - WO-849 pursuit bound (F8 seq 629 "not attacking me")
+        // =====================================================================
+        // The room a mob may WANDER in is tighter than the room it may PURSUE into.
+        // Captured cause: an engaged skeleton's chase destination was clamped with the
+        // 2m wander slack, pinning it on 'loop3's boundary while the hero stood ~1.7m
+        // outside - five aggroed mobs unable to land a hit. Rule: pursuit clamps to
+        // max(slack, wakeRadius) - "a mob may pursue as far as it can perceive".
+        // This case pins BOTH halves: the near hero becomes reachable, AND the entrance
+        // camp stays fixed (the whole point of WO-797).
+        private static void Case7_PursuitBound(List<string> failures)
+        {
+            // THE LITERAL CAPTURED CASE (F8 seq 629, Player.log, starter loop):
+            //   room 'loop3' centre (12,2,18) size (6,4,6) wake 6.0 slack 2.0
+            //   "desired (5.30, 0.08, 22.55) snapped to (7.00, 0.08, 22.55) (slack 2.0m)"
+            // loop3's XZ footprint is x 9..15; +2m wander slack reaches x=7.0; the hero
+            // stood at x=5.30 - 3.7m outside the face, so 1.7m BEYOND the wander bound.
+            var loop3 = new Bounds(new Vector3(12f, 2f, 18f), new Vector3(6f, 4f, 6f));
+            const float wanderSlack = 2f;
+            const float wakeRadius = 6f;
+            float pursuit = Mathf.Max(wanderSlack, wakeRadius);   // the WO-849 rule
+            if (pursuit <= wanderSlack)
+                failures.Add("[pursuit-bound] pursuit slack must EXCEED the wander slack or the fix is inert");
+
+            // (a) THE BUG, replayed exactly: the wander clamp snaps the chase to x=7.00,
+            //     short of the hero at x=5.30 -> engaged but physically unable to reach.
+            var heroDesired = new Vector3(5.30f, 0.08f, 22.55f);
+            Vector3 wander = EnemyBrain.ConfineToArea(heroDesired, loop3, wanderSlack);
+            if (Mathf.Abs(wander.x - 7f) > 0.01f || Mathf.Abs(wander.z - 22.55f) > 0.01f)
+                failures.Add($"[pursuit-bound] precondition drift: wander clamp put the chase at {wander}, " +
+                             "expected (7.00, _, 22.55) - the captured seq-629 defect no longer reproduces here");
+
+            // (b) THE FIX: the SAME destination under the pursuit bound passes through
+            //     unclamped - the mob can actually reach her.
+            Vector3 chased = EnemyBrain.ConfineToArea(heroDesired, loop3, pursuit);
+            if ((chased - heroDesired).sqrMagnitude > 0.0001f)
+                failures.Add($"[pursuit-bound] the captured hero position must be REACHABLE under the pursuit bound " +
+                             $"(desired {heroDesired} -> {chased}) - F8 seq 629 'not attacking me' would still repro");
+
+            // (c) WO-797 MUST STILL HOLD: against the JUNCTION room (0,2,12), the entry
+            //     seat (0,0,0.9) is 8.1m from the footprint - beyond wake 6 - so even the
+            //     WIDER bound cannot reach it. If this ever passes through unclamped, the
+            //     "all enemies gathered at the gate" camp is back.
+            var junction = new Bounds(new Vector3(0f, 2f, 12f), new Vector3(6f, 4f, 6f));
+            var entrySeat = new Vector3(0f, 0f, 0.9f);
+            Vector3 atEntrance = EnemyBrain.ConfineToArea(entrySeat, junction, pursuit);
+            if ((atEntrance - entrySeat).sqrMagnitude <= 0.0001f)
+                failures.Add("[pursuit-bound] the ENTRY SEAT must remain OUT of pursuit range - the WO-797 " +
+                             "'all enemies gathered at the gate' camp would return");
+            if (atEntrance.z < 12f - 3f - pursuit - 0.01f)
+                failures.Add($"[pursuit-bound] entrance chase clamped past the pursuit face (z={atEntrance.z:F2})");
+
+            // (d) The brain still ACCEPTS the binding contract these bounds ride on.
+            var host = new GameObject("__wo849_brain");
+            s_spawned.Add(host);
+            var brain = host.AddComponent<EnemyBrain>();
+            brain.SetRoomArea("junction", junction, wanderSlack, wakeRadius);
+            if (!brain.HasRoomArea || brain.AreaRoomId != "junction")
+                failures.Add("[pursuit-bound] SetRoomArea contract broke - the pursuit bound has nothing to ride on");
         }
 
         // ---- helpers --------------------------------------------------------

@@ -223,19 +223,32 @@ namespace DeNelle.Editor
             // link.xml, Medium would silently strip JSON models and break catalog
             // loading in the built player. Do NOT raise to High. Idempotent:
             // only writes (and logs) when the level is below Medium.
-            if (PlayerSettings.GetManagedStrippingLevel(android) != ManagedStrippingLevel.Medium
-                && PlayerSettings.GetManagedStrippingLevel(android) != ManagedStrippingLevel.High)
+            // ⚠ LOWERED Medium -> Low (2026-08-02, WO-766 Solana SDK integration).
+            // CAPTURED FAILURE (Builds/android-build.log, this date):
+            //   Fatal error in Unity CIL Linker
+            //   Mono.Cecil.AssemblyResolutionException: Failed to resolve assembly:
+            //     'BouncyCastle.Cryptography, Version=2.0.0.0'
+            // The Solana SDK ships BouncyCastle.Crypto.dll whose INTERNAL assembly name is
+            // BouncyCastle.Cryptography, referenced by Solana.Unity.{Wallet,KeyStore,Dex}.
+            // At Medium the linker must fully resolve every reference across all assemblies
+            // and dies on that one; the WINDOWS player stripped the SAME dll fine
+            // (Library/Bee/artifacts/WinPlayerBuildProgram/ManagedStripped/BouncyCastle.Crypto.dll),
+            // which is what isolates the LEVEL - not the file - as the variable. Nothing
+            // under artifacts/Android ever received it: the link step died first.
+            // Low still strips (engine-code stripping stays ON via stripEngineCode) and
+            // link.xml still guards the JSON/reflection surface; the cost is APK size.
+            // FOLLOW-UP: restore Medium once the SDK's BouncyCastle resolves (WO-848).
+            if (PlayerSettings.GetManagedStrippingLevel(android) != ManagedStrippingLevel.Low)
             {
                 log.AppendLine($"[MobileSettings] P0-2 Android managed stripping level: " +
-                               $"{PlayerSettings.GetManagedStrippingLevel(android)} -> Medium " +
-                               "(guarded by Assets/link.xml).");
-                PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Medium);
+                               $"{PlayerSettings.GetManagedStrippingLevel(android)} -> Low " +
+                               "(Medium breaks the Solana SDK BouncyCastle resolve - WO-766).");
+                PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Low);
                 changes++;
             }
             else
             {
-                log.AppendLine("[MobileSettings] P0-2 Android managed stripping level: already " +
-                               $"{PlayerSettings.GetManagedStrippingLevel(android)} (>= Medium) -- no change.");
+                log.AppendLine("[MobileSettings] P0-2 Android managed stripping level: already Low -- no change.");
             }
 
             // Strip unused mesh components -- a low-risk size lever that drops
