@@ -1,153 +1,294 @@
 # MASTER CATALOG — data-catalogs
 
-> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** there are now **~70 Resources + ~72 StreamingAssets canonical files** (not 26/32); the "6 WebGL-broken StreamingAssets-only" catalogs are all MIRRORED now (that risk is closed, DATAWEB pins them); ~40 catalogs this file never listed now exist. Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+**Rebuilt 2026-08-02, verified from the actual code + data on `wip/village2-and-f8-tickets`**
+(file reads, byte counts, live drift diff, consumer grep — not from comments; comments that lie
+are flagged in §7). Supersedes the 2026-06-12 body and its 2026-07-22 STALE banner.
 
-Area: the JSON catalogs under `Assets/Resources/Data`, `Assets/StreamingAssets/Data`,
-`Assets/Data`, plus the single WebGL-safe loader and the ~30 typed catalog classes that
-consume them. **Verified by reading the actual JSON + .cs files** (not comments).
+Area: every canonical JSON catalog under `Assets/Resources/Data/Canonical/**` and
+`Assets/StreamingAssets/Data/Canonical/**`, the single loader seam, the byte-parity /
+integrity oracles that enforce the dual-copy law, the VFX key-index trio, plus the
+non-canonical `Resources/Data` stragglers.
 
 ---
 
-## 1. THE LOADER (the dual/triple-copy sync rule)
+## 1. THE LAW — dual copies, Resources WINS
 
-### `CanonicalJson` — `Assets/_Modules/Core/Data/CanonicalJson.cs`
-- Namespace `DeNelle.Core`, asmdef `DeNelle.Core`. Static class. **The single read path** for every canonical catalog.
-- `public static string Read(string relativePath)` — `relativePath` is StreamingAssets-relative (e.g. `"Data/Canonical/abilities.json"`). Returns raw JSON text or `null`.
-  - **Step 1 (wins on ALL platforms incl. WebGL):** strips `.json`, calls `Resources.Load<TextAsset>("Data/Canonical/<name>")`. If non-empty, returns it. → **The `Assets/Resources/Data/Canonical/` copy is authoritative at runtime.**
-  - **Step 2 (desktop/editor only):** `File.ReadAllText(Application.streamingAssetsPath + relativePath)`, wrapped in try/catch (WebGL has no filesystem → throws, swallowed).
-- **Sync rule (THE law for this area):** canonical JSON lives in TWO synced copies — `Assets/Resources/Data/Canonical/` (WebGL-safe, **wins**) and `Assets/StreamingAssets/Data/Canonical/` (desktop fallback + source/superset). **Resources wins; keep them in sync.** Comment in file (lines 13-18) matches code — accurate.
+### Loader seam
+- **`CanonicalJson`** — `Assets/_Modules/Core/Data/CanonicalJson.cs` (ns `DeNelle.Core`).
+  The single read path: `CanonicalJson.Read("Data/Canonical/<file>.json")`. Since the
+  Tier-0 seam (docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md) it delegates to a swappable
+  **`ICatalogSource`** (`CanonicalJson.cs:36` — `Source` property, defaults to
+  `LocalJsonCatalogSource`; null-Source is self-healing at `CanonicalJson.cs:45-51`).
+  Every read emits `FlowTrace.Step/Warn` under `[Flow:CanonJson]` (`CanonicalJson.cs:52-58`).
+- **`LocalJsonCatalogSource`** — `Assets/_Modules/Core/Data/LocalJsonCatalogSource.cs`.
+  Precedence (verified `LocalJsonCatalogSource.cs:31-52`):
+  1. `Resources.Load<TextAsset>("Data/Canonical/<name>")` (extension stripped) — synchronous
+     on ALL platforms **including WebGL**. Non-empty → returned. **Resources WINS.**
+  2. Desktop/editor fallback: `File.ReadAllText(Application.streamingAssetsPath + rel)`,
+     wrapped in `Guard.Try` (WebGL has no filesystem — never reached there).
+- **The sync rule:** each catalog lives in TWO copies —
+  `Assets/Resources/Data/Canonical/` (WebGL-safe, wins at load) and
+  `Assets/StreamingAssets/Data/Canonical/` (desktop fallback + authoring source). Keep them
+  byte-identical **except the two curation-exempt gear files (§5)**. The rule is now
+  ENFORCED, not just documented — see §3 `DataWebRegression`.
 
-### Copy inventory (verified by `comm`/`ls`)
-| Root | Canonical files | Role |
+### Copy inventory (counted 2026-08-02)
+| Root | JSON files | Role |
 |---|---|---|
-| `Assets/Resources/Data/Canonical/` | **26** json | WebGL-safe, **wins at load** |
-| `Assets/StreamingAssets/Data/Canonical/` | **32** json | desktop fallback + source; **superset** |
-| `Assets/Data/Canonical/` | **2** json (armor, weapons) | partial stale duplicate — see FLAGS |
+| `Assets/Resources/Data/Canonical/` | **65** (57 top-level + 8 in subdirs) | runtime winner, WebGL surface |
+| `Assets/StreamingAssets/Data/Canonical/` | **65** (57 top-level + 8 in subdirs) | desktop fallback + source |
+| `Assets/Data/Canonical/` | **2** (`armor.json` 2.9KB, `weapons.json` 20KB) | **orphan third copy — §7.1** |
 
-**StreamingAssets-ONLY (6, no Resources copy → desktop-only, WebGL would get null):**
-`audio-mix.json`, `enemy-roles.json`, `heart.json`, `realm-map.json`, `towers.json`, `walls.json`.
+Subdirs (mirrored 1:1 in both roots): `dialogue/dialogues.json`,
+`dungeon-graphs/dg_starter_loop.json`, `dungeon-layouts/{d4_sunken_crypt_spine,
+demo_branching_kit, dg_starter_loop, rooms-catalog}.json`, `dungeons/healers-cottage.json`,
+`tutorial/tutorial-steps.json`.
 
-Non-Canonical data also under `Assets/Resources/Data/`:
-`castle-south-recipe.json`, `orientation-recipes.json`, `Upgrades/FarmUpgrades.json`, `Upgrades/WatchtowerUpgrades.json`.
+Root asymmetries (all deliberate, all oracle-covered or flagged):
+- **Resources-only (3):** `ad-creatives.json`, `ad-placements.json`, `widget-params.json`
+  (337KB — the largest file in the area; see §4 + §7.3).
+- **StreamingAssets-only (3):** `skr_store.json`, `skr_staking.json`,
+  `battle_monthly_packs.sample.json` — read on a StreamingAssets-DIRECT path, excluded from
+  the dual-copy law by design (`DataWebRegression.cs:101-105` `IsNonDualCopyByDesign`:
+  `skr_*` / `battle_*` / `*.sample.json`; same exclusion in `CoreDataHubRegression.cs`).
 
-### Integrity test — `Assets/Data/Tests/CanonicalJsonIntegrityTest.cs`
-- Namespace `DeNelle.Data.Tests` (EditMode NUnit). Scans `StreamingAssets/Data/Canonical/**` (NOT Resources).
-- Checks: required files present+non-empty; every file parses (Newtonsoft `JToken.Parse`); **no stray agent-output markup** (`</content>`, `</invoke>`, `</antml`, `<parameter name=` etc. — guards BUG-013 packs.json leak); tail must end in `}`/`]`; 6 "versioned" files (abilities/buildings/enemies/packs/pets/waves) must carry positive-int `version`. **Live/wired.**
+**Live drift status (diffed 2026-08-02, BOM/CRLF-normalized):** exactly **2 of 62 paired
+files drift** — `weapons.json` (S=267,125B vs R=58,492B) and `armor.json` (S=20,130B vs
+R=15,555B). Both are the **deliberate WO-747 gear-curation exemption (§5)**. Everything
+else is byte-parity green, including all 8 subdir files. The "6 StreamingAssets-only
+WebGL-broken catalogs" of the old doc (enemy-roles/towers/walls/realm-map/heart/audio-mix)
+are ALL mirrored — that risk is closed and pinned (§3.1 check 2b).
 
 ---
 
-## 2. CANONICAL JSON CATALOGS (Resources copy = authoritative)
+## 2. PER-CATALOG INVENTORY (the actual set, 2026-08-02)
 
-Entry counts verified by parsing. Schema = first-entry key set.
+`version` read from the Resources copy (the runtime winner). "Consumers" = every `.cs`
+holding the `"Data/Canonical/<file>"` literal (grep-verified); Editor-assembly consumers
+marked *(ed)*. Oracle column = the check(s) beyond the blanket §3 gates.
 
-| File | Top shape | Count | Entry schema (keys) | version |
-|---|---|---|---|---|
-| `abilities.json` | `classes{mage,knight,ranger}` | 3 classes × 4 abilities (q/w/e/r) | ability: slot,key,name,description,icon,color,effect,cooldown,manaCost,damage,range(,freeze) | 1 |
-| `weapons.json` | `weapons[]` | **16** | id,name,icon,job,rarity,damageMult,req,buyWood,buyCrystals | none |
-| `armor.json` | `armor[]` | **5** | id,name,icon,job,rarity,defense,hpBonus,req,buyWood,buyFood,buyIron | none |
-| `enemies.json` | `enemies[]` | **9** | id,name,displayName,family,role,spawn,modelKey,ai,hp,moveSpeed,contactDamage,attackInterval,height,boss,flavor | 2 |
-| `buildings.json` | `buildings[]` | **7** | id,type,displayName,descriptionKey,hp,maxHp,crystalCost,model,footprint,buildMenuOrder,isUpgradable,upgradeType | 1 |
-| `garrison-recipes.json` | `recipes[]` | **4** | id,kind,size,theme,lighting,enemies,levelRange,threat,props,element | none |
-| `gear-recipes.json` | `recipes[]` | **8** | id,displayName,outputGearId,outputKind,tier,cost,components,requiresQuestId,saga | 1 |
-| `crafting-recipes.json` | ingredients[3]+recipes[1]+ingredientPlacements[3]+pedestal{} | 1 recipe, 3 ingredients | (forge/pedestal crafting authoring) | 1 |
-| `consumables.json` | `consumables[]` | **4** | id,displayName,kind,effect,magnitude,duration,usableInFight,glyph | 1 |
-| `consumable-recipes.json` | `recipes[]` | **4** | (consumable crafting) | 1 |
-| `loot-tables.json` | `tables[]`+defaults | **2** tables | id,source,drops | 1 |
-| `packs.json` | `packs[]` | **5** | sku,tier,name,tagline,theme,pricing,contents,packExclusiveCosmetic | 1 |
-| `cosmetics.json` | `items[]` | **12** | id,category,appliesTo,displayName,description,glimmerCost,unlockMethod,previewColor | 1 |
-| `pets.json` | `pets[]` | **3** | id,species,name,element,archetype,tint,glowColor,particleColor,huntSpeed,attackRange,attackCooldown,slotIndex,bondRanks | 1 |
-| `pet-skill-trees.json` | `trees{}` | **11** trees | per-tree skill nodes | 2 |
-| `hero-talents.json` | `trees{}`+tierCosts | **3** trees | talent trees w/ respec+tier costs | 1 |
-| `waves.json` | `waves[]` | **4** | waveId,name,countdownSeconds,enemies (each entry has `_comment`) | 1 |
-| `quests.json` | `quests[]` | **24** | id,title,stages | 2 |
-| `daily-quests.json` | slots[3]+templates[19] | 19 templates, 3 slots | daily quest pool + reroll config | 1 |
-| `structures-catalog.json` | `entries[]` | **18** | id,displayName,type,kind,visualPrefabPath,repo,orientation | 2 |
-| `lore-fragments.json` | `fragments[]` | **6** | id,kind,speaker,title,placeholder,body | 1 |
-| `themes.json` | `themes{}`+default | **7** themes | palette/theme defs | none |
-| `chat-phrases.json` | categories[4]+phrases[24] | 24 phrases | NPC chatter | 1 |
-| `wallets.json` | rewardsDistributor{}+devnetPurchaseRecipient{} | (web3 wallet config) | — | 1 |
-| `canon-strings.json` | flat string map | ~scalar keys (elarion/heart canon) | string→string | none |
-| `en.json` | flat string map | UI/intro localization strings | string→string | none |
-| `dungeons/healers-cottage.json` | dungeon layout | 1 | (room layout for healer's cottage dungeon) | — |
+### 2.1 Top-level catalogs
 
-### StreamingAssets-ONLY canonical (NO Resources copy — desktop fallback only)
-| File | Top shape | Count | Entry schema |
+| File | v | Consumers | Oracle / notes |
 |---|---|---|---|
-| `enemy-roles.json` | roles{9}+creatures[25] | 25 creatures, 9 roles | id,display,role,hpScale,atkScale,speedScale,behavior |
-| `towers.json` | zones[3]+levels[4] | 3 zones, 4 levels | id,name,color,glow,sectorAngleRadians |
-| `walls.json` | tiers[4] | 4 | level,name,emoji,effect,heartDamageMultiplier,targetHeight,meshStraight,meshGate |
-| `realm-map.json` | regions[5]+homeBase+withering+progressLedger | 5 regions | id,title,description,biome,propSet,waveCount,elementBias,gate,clearReward,mapPoint,mapOrder,dungeonRegion,adjacency |
-| `heart.json` | phases[3] | 3 | id,hpThreshold,label,description |
-| `audio-mix.json` | tracks{6}+transitions[10]+volumeNudges[5]+accessibility | 6 tracks, 10 transitions | music mix config |
+| `abilities.json` | 2 | `Village/Hero/AbilityCatalog.cs`, `Onboarding/HeroCatalog.cs`, `Data/Tests/AbilityCatalogTest.cs` | Q/W/E/R per class + swap-pool + universal pool. **VFX keys:** rows carry `vfxCast` / `vfxProjectile` / `vfxImpact` / `vfxResidual` — each value is a **verbatim `HovlVfxCatalog` key** (§6). Includes keys on the extended-pool rows (e.g. `suppressing-volley` line 102, `thunderbolt` line 104) — the pool rows not currently slotted still carry live keys. v2 added optional `castAnim` (cast-anim keyword decoupled from slot). |
+| `accessories.json` | 1 | `Village/Hero/GearCatalog.cs` | rings/amulets/gems band for the jeweler shelf; in byte-parity (NOT curation-exempt). |
+| `ad-creatives.json` | 1 | **NONE** | Resources-only. Data-first ad-creative TEMPLATE table for a thin `AdCreativeGenerator` interpreter (`WORK_ORDER_ad_generator.md` §B) — **interpreter not built**; §7.3. |
+| `ad-placements.json` | 1 | **NONE** | Resources-only. Rewarded-ad placement/reward table for `AdGateService` over the `RewardedAdManager` seam — **interpreter not built**; §7.3. |
+| `armor.json` | **2 (R) / 1 (S)** | `Village/Hero/GearCatalog.cs`, `Village/Hero/HeroBodySwapper.cs`; *(ed)* GearCaster/Generator/IconRenderer/CurationExporter | **Curation-exempt (§5).** Version intentionally diverges across copies (`DataWebRegression.cs:376-384`). |
+| `audio-mix.json` | 1 | **NONE via CanonicalJson** | Music mix config; the live audio system is CODE tables (`_Modules/Audio/MusicTrack.cs:114` static registry port of audio-mix-spec §2). Mirrored + pinned (§3.1 2b) but currently data-inert; §7.4. |
+| `barracks.json` | 1 | `Village/Troops/TroopStatResolver.cs`, `Village/Troops/Data/BarracksData.cs` | training/queue config. |
+| `build-categories.json` | 2 | `Village/Catalog/BuildCategoryRegistry.cs` | build-menu carousel category bands. |
+| `building-tiers.json` | 5 | `Core/State/BuildingTierCatalog.cs` | CoC-style tier/upgrade table. |
+| `buildings.json` | 2 | `Village/Buildings/BuildingCatalog.cs`, `Village/Buildings/CrystalMine.cs`; *(ed)* `CrystalProductionRegression` | 5 gameplay buildings; `displayName` is a **canon-strings KEY, not a literal** (its `_authoringNotes.displayName`). |
+| `canon-strings.json` | — | `Village/VillageStrings.cs`, `Onboarding/CanonStrings.cs`; *(ed)* `VfxAuraDifferentiationRegression` | Versionless-by-design (`DataWebRegression.cs:90-97`). Proper-noun canon incl. **`theHeartTagline`: "The living core of Elarion — if it falls, the village falls."** Elarion/Avalon/Keeper names — never paraphrase (its `_comment`). |
+| `chat-phrases.json` | 1 | `Core/Services/ChatPhraseCatalog.cs` | NPC chatter pools. |
+| `concept-icons.json` | 1 | `Core/UI/ConceptIconResolver.cs` | concept→icon map for code-built UI. |
+| `consumable-recipes.json` | 1 | `Village/Items/ConsumableCraftingCatalog.cs` | |
+| `consumables.json` | 1 | `Village/Items/ConsumableCatalog.cs` | |
+| `cosmetics.json` | 1 | `Cosmetics/CosmeticCatalog.cs`; *(ed)* `GlimmerEconomyRegression`, `EconomyMetaCatalogRegression` | |
+| `crafting-recipes.json` | 2 | `Village/Crafting/CraftingRecipeCatalog.cs`, `Dungeons/Crafting/CraftingData.cs` | forge/pedestal authoring. |
+| `daily-quests.json` | 2 | `Core/Quests/DailyQuests.cs`, HUD `DailyQuestVM` (via instances) | 3 slots + weighted `templates[]`. **Template contract: `label` carries a literal `{target}` token** (e.g. `"Build {target} defensive towers"`, `target: 4`). The substitution lives in the VM: `DailyQuestVM.ResolveLabel` (`_Modules/HUD/DailyQuestVM.cs:213-216`) does `Label.Replace("{target}", Target)` — **committed** (mvvm-E `fc0c1d5e`), no longer in flight. Any new label surface MUST route through ResolveLabel or re-implement the token replace. |
+| `damage-states.json` | 1 | `Village/Vfx/StructureDamageVisuals.cs`; *(ed)* `BuildEconomyRegression` | structure damage-tier visuals. |
+| `echoes-balance.json` | 1 | `Village/Harvest/EchoBalanceCatalog.cs`; *(ed)* `EchoSpecializationRegression` | WO-738 Echo tuning knobs ONLY (maxLevel 8, lane-match bonus 0.75, per-echo base rates). **Identity stays in the `EchoRosterCatalog` CODE table; only numbers live here** (its `_authoringNotes`). Owner re-tunes with no recompile. |
+| `en.json` | — | `Village/VillageStrings.cs`, `Onboarding/CanonStrings.cs`, `Onboarding/OnboardingFlow.cs`; *(ed)* `LocalizationBuilder` | Versionless-by-design. UI/intro strings. |
+| `enemies.json` | **4** | `Village/Waves/WaveData.cs`, `Village/Waves/WaveCompositionBuilder.cs`, `Village/World/WildlandsRoster.cs`; *(ed)* `RegressionSuite` | Two families in one codex (hollow + orc). Schema: `family` / `role` / `spawn` / `ai` / `modelKey` (+`_schemaNotes` block is accurate). Wave-data `type` and smart composition both key into `id`. |
+| `enemy-roles.json` | 1 | **NONE via CanonicalJson** — `Core/Enemies/EnemyTaxonomy.cs:79` references its role-token vocabulary in a doc-comment only | Mirrored + pinned; currently data-inert; §7.4. |
+| `garrison-recipes.json` | — | `Core/Data/GarrisonRecipeCatalog.cs`; *(ed)* `GarrisonSceneBuilder`, `EnemyStrongholdBuilder`, `CoreCatalogRegression` | Versionless-by-design. |
+| `gear-levels.json` | 1 | `Village/Hero/GearProgression.cs`; *(ed)* `GearLevelsRegression` | |
+| `gear-recipes.json` | 1 | `Village/Crafting/GearCraftingRecipeCatalog.cs` | |
+| `guide-content.json` | 1 | `Village/UI/Guide/GuideContentCatalog.cs` | in-game guide pages (27KB). |
+| `heart.json` | 1 | **NONE via CanonicalJson** | Heart phase thresholds; mirrored + pinned; currently data-inert; §7.4. |
+| `hero-talents.json` | 2 | `Village/Talents/HeroTalentCatalog.cs`; *(ed)* `TalentStrategyRegression` | 3 trees + tier costs (33KB). |
+| `hud-areas.json` | **1** | `HUD/Kit/HudAreasConfig.cs`; *(ed)* `ObsidianQueueRegression` | HUD kit occupancy table: `postures[] → areas[] → widgets[]` (calm(town) / battle; WO-609 battle layout). |
+| `jeweler-recipes.json` | 1 | `Village/Crafting/JewelerRecipeCatalog.cs` | |
+| `loot-tables.json` | 2 | `Village/Items/LootTableCatalog.cs` | |
+| `lore-fragments.json` | 1 | `Dungeons/LoreFragments.cs`; *(ed)* `UICaptureLaunch` | |
+| `materials.json` | 2 | `Village/Items/MaterialCatalog.cs` | |
+| `motion-castings.json` | **3** | **runtime:** `Core/Combat/ActionKeywords.cs`, `Village/Vfx/ActionBundleCatalog.cs`; *(ed)* `MotionCastings.cs`, `MotionCasterWindow`, `HeroLocomotionClipRegression`, `KnightPackageControllerBuilder` (weaponskill wraps) | KEYWORD→ACTION registry: (enemy family \| hero class) × keyword → clip + optional `vfxKey`/`sfxId`. **Owner-pick law (Offset Forge, WO-490): rows with `manual: true` are CANON — never overwritten by any generator/bake.** v3 = WO-750 knight castHeal rebind + skill sfx. Its `_comment` also documents what is NOT here (R-slot atk_slashup is a hardcoded `HeroAnimatorFactory.MocapSpellClips[4]` pick). **Header stale-flag: §7.2.** |
+| `packs.json` | 2 | `Wallet/PackCatalog.cs`; *(ed)* `PackGrantRegression`, `PackCosmeticIntegrityRegression`, `MonetizationCovenantRegression`, `EconomyMetaCatalogRegression`, `PackCatalogTest` | store packs (BUG-013 markup-leak guard lives in the integrity test, §3.3). |
+| `pets.json` | 1 | `Pets/PetCatalog.cs`, `Onboarding/IntroPetCatalog.cs`; *(ed)* `EconomyMetaCatalogRegression`, `PetCatalogTest` | `pet-skill-trees.json` is **DELETED (2026-07-08)** along with `PetSkillTreeCatalog.cs` — the old doc's row is dead (`EconomyMetaCatalogRegression.cs:27,66,205` records the retirement). |
+| `population-milestones.json` | 1 | `Village/Population/PopulationMilestonesCatalog.cs` | |
+| `quests.json` | 2 | `Core/Quests/QuestCatalog.cs` | |
+| `realm-map.json` | **1** | `Core/World/RealmMapCatalog.cs`; *(ed)* `RealmMapRegression` | region-progression overworld: `regions[]` mirror React `RegionDef` verbatim; `gate` is a discriminated union on `kind` (`bestWave`/`regionCleared`); `state` is DERIVED, never stored; `progressLedger` documents the persisted save shape (not content). Home base row `id: "avalon"`, `title: "Elarion"`. |
+| `scene-configs.json` | 1 | `Village/World/SceneConfigCatalog.cs`, `Village/SceneOwnership.cs`, `Core/HubScenes.cs` | |
+| `skin.json` | 1 | `Core/Platform/CurrencySkinResolver.cs` | currency skin per platform. |
+| `spawn-areas.json` | 1 | `Core/World/SpawnAreaTable.cs` | |
+| `stake-rewards.json` | 1 | `Core/Platform/StakeRewardsResolver.cs` | |
+| `structures-catalog.json` | **6** | `Village/Catalog/CatalogBootstrap.cs` (→ CatalogRegistry at startup); *(ed)* `CatalogOrientationBaker`, `StructureHeightAudit`, `RegressionSuite`, `DataRegression`, `BuildEconomyRegression`, `StrategicPlacementRegression`, `SessionRegression`, `DefenseTargetableRegression`, `VfxAuraDifferentiationRegression` | THE build-mode structure table (31KB, 5+ oracles — the most oracle-covered file in the area). Schema law in its `notes` (line 3): `type/mustSitOn/navSurface/element` are enum NAMES; `visualPrefabPath` Resources-relative; `behaviorId` → `StructureFactory.AttachBehavior` (only DefenseTower/WallSegment/CrystalMine/Gate wired; null = inert); S4 `repo.cost` multi-resource via ResourceLedger; S5 `repo.maxLevel`/`upgradeCost` CoC upgrade sink; v5 **`repo.bakedTwins`** = legacy baked scene-root names a singleton row represents (StructureSingleton standdown/resurface, e.g. lines 493, 552); v6 adds **`npcModel`** (structure-bound NPC mesh: Cleric line 404, Druid line 491, Engineer line 536). |
+| `themes.json` | — | `Core/Theme/Theme.cs` | Versionless-by-design. |
+| `tower-perks.json` | 1 | `Village/Buildings/Tower.cs` | WC3-style tower perk rows. |
+| `towers.json` | 1 | **NONE via CanonicalJson** — `BuildModeController.cs:2119,2148` reference its tier data in comments only | Mirrored + pinned; currently data-inert; §7.4. |
+| `troop-upgrades.json` | 1 | `Village/Troops/TroopStatResolver.cs` | |
+| `troops.json` | 2 | `Village/Troops/TroopCatalog.cs`, `Village/Troops/TroopDef.cs` | |
+| `vendors.json` | **1** | `Village/Hero/VendorRegistry.cs` | WO-598 vendor registry — **each shelf is a QUERY over the item catalogs, never a hardcoded list**: `categories` (catalog bands) + `classFilter: "roster"` (drops items no playable class can use) + `maxReqLevel` tier gate + authored `emptyLine` (never a raw empty grid). `VendorStockContract.AllowedFor` consults it FIRST so legacy shop, MVVM PartyShop, ShopCatalog and the AutoPilot oracle read ONE truth (its `_comment`). Id match: exact then substring. |
+| `wallets.json` | 1 | `Wallet/WalletRegistry.cs` + tests; *(ed)* `EconomyMetaCatalogRegression` | |
+| `walls.json` | 1 | `Village/Walls/WallTierData.cs`; *(ed)* `WallHeartMitigationRegression` | |
+| `waves.json` | **1** | `Village/Waves/WaveData.cs`; *(ed)* `RegressionSuite`, `DataInjector` | **THE INERT-`enemies[]` TRUTH (WO-783 D1, 2026-07-30):** the per-wave `enemies` batch arrays were STRIPPED because they were INERT — `WaveManager.StartWave` runs the WO-362 smart-composition path (`_smartComposition` serialized 1 in both live hubs), so `WaveCompositionBuilder` GENERATES every wave's roster and the authored batches were never released (they sat dead ~4 weeks). **Still live:** `countdownSeconds`, `boss` (enemies.json id, every-6 cadence), `apexBoss` (the kinematic DragonBoss prefab — NOT an enemies.json row), and the `endless` block (cycles waves 4–20 past wave 20, count growth 0.05/wave cap 3.0×). **Do NOT re-add an `enemies` array** — the [wave-authoring] regression FAILS the gate if live-looking batches reappear while smart composition is on (its `_RETIRED_batchFields` note). Authored design intent preserved at `docs/design/WAVE_AUTHORING_REFERENCE_2026-07-30.md`. |
+| `weapons.json` | **1** | `Village/Hero/GearCatalog.cs`, `Core/Data/DataInjector.cs`; *(ed)* GearCaster/Generator/IconRenderer/CurationExporter, `GearCatalogTest` | **Curation-exempt (§5).** Resources 58KB curated+authored vs StreamingAssets 267KB full library. |
+| `weaponskill-animations.json` | 1 | *(ed)* `KnightPackageControllerBuilder` | editor-consumed controller-bake data. |
+| `widget-params.json` | — | `Core/UI/ElarionUiKitObsidian.cs` (loads `"Data/Canonical/widget-params"` — the Resources no-extension form); *(ed)* `PrefabParamExtractor` (the writer) | Resources-only, 337KB, versionless, extractor-generated UI-kit parameter dump; §7.3. |
+
+StreamingAssets-direct (non-dual-copy by design): `skr_store.json`, `skr_staking.json`,
+`battle_monthly_packs.sample.json` — consumed by the monetization path +
+*(ed)* `MonetizationCovenantRegression` (which derives the convenience-only covenant
+from `skr_staking.json`).
+
+### 2.2 Subdirectory catalogs (all mirrored, all oracle-covered per §3.1)
+
+| Path | Consumers |
+|---|---|
+| `dialogue/dialogues.json` | `Core/Dialogue/DialogueModel.cs` (runtime); *(ed)* `DialogueRegression`, `FtueHonestyRegression` |
+| `tutorial/tutorial-steps.json` | `Core/Tutorial/TutorialStepModel.cs`, `Village/BuildMode/BuildModeController.cs` |
+| `dungeons/healers-cottage.json` | `Dungeons/DungeonLayout.cs`, `Dungeons/State/DungeonRuntimeState.cs`, `Dungeons/DungeonController.cs` (prefix) |
+| `dungeon-layouts/*.json` (4: rooms-catalog + 3 layouts) | `Dungeons/RoomForge/DungeonComposeLayout.cs` (runtime); *(ed)* RoomForge suite (`RoomForgeWindow`, `DungeonBaker`, `DefaultDungeonRoomsBuilder`, `GraphDungeonComposer`), `RoomForgeRegression` |
+| `dungeon-graphs/dg_starter_loop.json` | *(ed)* `GraphDungeonComposer` |
 
 ---
 
-## 3. NON-CANONICAL DATA (Assets/Resources/Data)
+## 3. THE ORACLES (what proves the law)
 
-| File | Shape | Count | Notes |
-|---|---|---|---|
-| `castle-south-recipe.json` | `{pieces[], parentPos[3], parentRot[3]}` | 4 pieces | Captured south-side wall/gate offsets. Loaded via `Resources.Load<TextAsset>("Data/castle-south-recipe")` + `JsonUtility.FromJson` (NOT CanonicalJson) by `Assets/Editor/CastleWallsFromRecipe.cs` & `CastleHubBuilder.cs`. Editor-only; written by `Assets/Editor/CastleOffsetCapture.cs`. |
-| `orientation-recipes.json` | **JSONL** (5 newline-delimited records, NOT a JSON document) | 5 lines | Each: `{id,euler[3],offset[3],scale}`. Appended by `TowerPlacementRotateMenu.cs` (line ~922, `File.AppendAllText`). Prop-orientation memory. **Parses per-line, not as one object** — a `JToken.Parse` of the whole file would fail (it's not in the integrity-test dir, so OK). |
-| `Upgrades/FarmUpgrades.json` | `{upgrades[3]}` | 3 | id,title,description,woodCost,stoneCost,ironCost,crystalCost,boosts |
-| `Upgrades/WatchtowerUpgrades.json` | `{upgrades[3]}` | 3 | same schema |
+### 3.1 `DataWebRegression` — the byte-parity gate (PRIMARY)
+`Assets/Editor/Regression/DataWebRegression.cs`, asm `DeNelle.EditorRegression`. Headless,
+no-scene. Markers `DATAWEB_OK` / `DATAWEB_FAIL` (FAIL via `Debug.LogError` → break-log).
+**Wired into the suite at `DataRegression.cs:295`** (`DataRegression.RunAll`). Five checks:
 
----
+1. **DUAL-COPY DRIFT** (`:204-242`) — every paired `*.json` (recursive incl. subdirs)
+   content-compared, BOM-stripped + CRLF-normalized; EOL/BOM-only diffs are notes, not
+   fails. `weapons.json`/`armor.json` skipped → delegated to check 5 (`:214-217`).
+2. **WEBGL-BROKEN-BY-OMISSION** (`:246-324`) — (2a) scans every runtime (non-Editor) `.cs`
+   for `"Data/Canonical/….json"` literals; each must have a Resources copy on disk
+   (prefix literals logged as statically-unresolvable). (2b) **the historically
+   StreamingAssets-only six** (`enemy-roles/towers/walls/realm-map/heart/audio-mix`,
+   `:121-129`) are pinned by name — un-mirroring any flips red. Plus subdir mirrors
+   (CoreDataHub only sweeps top level).
+3. **PARSE** (`:328-348`) — every `*.json` under BOTH roots parses via `JToken.Parse`
+   (the Resources side — the copy that actually wins — had no parse gate before this).
+4. **VERSION** (`:352-398`) — every StreamingAssets top-level catalog must carry
+   `version`, except **VersionlessByDesign** = `canon-strings/en/garrison-recipes/themes`
+   (`:90-97`); cross-copy version mismatch fails by name; the gear pair is exempt from the
+   cross-copy compare (`:376-384`).
+5. **GEAR CURATION** (`:416-464`, WO-747) — replaces byte-drift for the gear pair; §5.
 
-## 4. CONSUMER CATALOG CLASSES (each Read()s one file via CanonicalJson)
+### 3.2 `CoreDataHubRegression` — the read-contract gate
+`Assets/Editor/Regression/CoreDataHubRegression.cs` (also wired from `DataRegression.RunAll`).
+Proves every top-level StreamingAssets catalog (minus `skr_*`/`battle_*`/`*.sample.json`)
+**reads NON-EMPTY through the real game path** (`CanonicalJson.Read`) and has its
+Resources dual-copy present. Deliberately not duplicated by 3.1 (division of labor stated
+in `DataWebRegression.cs:12-14`).
 
-All resolve their file via `CanonicalJson.Read("Data/Canonical/<x>.json")`. Pattern: a `const string ...RelativePath`, lazy `Load()`, `JsonConvert.DeserializeObject<T>` (Newtonsoft), in-memory cache. **All wired/live** unless noted.
+### 3.3 `CanonicalJsonIntegrityTest` — EditMode NUnit (legacy layer)
+`Assets/Data/Tests/CanonicalJsonIntegrityTest.cs`. StreamingAssets side only: required
+files present + parse + **no stray agent-output markup** (`</content>`, `</invoke>` etc. —
+the BUG-013 packs.json leak guard) + tail sanity + version on the historical six
+(abilities/buildings/enemies/packs/pets/waves).
 
-| Class | File path | Reads | asmdef/ns |
-|---|---|---|---|
-| `AbilityCatalog` | `_Modules/Village/Hero/AbilityCatalog.cs` | abilities.json | DeNelle.Village |
-| `GearCatalog` | `_Modules/Village/Hero/GearCatalog.cs` | weapons.json + armor.json | DeNelle.Village |
-| `BuildingCatalog` | `_Modules/Village/Buildings/BuildingCatalog.cs` | buildings.json | DeNelle.Village |
-| `GarrisonRecipeCatalog` | `_Modules/Core/Data/GarrisonRecipeCatalog.cs` | garrison-recipes.json | DeNelle.Core |
-| `GearCraftingRecipeCatalog` | `_Modules/Village/Crafting/GearCraftingRecipeCatalog.cs` | gear-recipes.json | DeNelle.Village |
-| `CraftingRecipeCatalog` | `_Modules/Village/Crafting/CraftingRecipeCatalog.cs` | crafting-recipes.json | DeNelle.Village |
-| `ConsumableCatalog` | `_Modules/Village/Items/ConsumableCatalog.cs` | consumables.json | DeNelle.Village |
-| `ConsumableCraftingCatalog` | `_Modules/Village/Items/ConsumableCraftingCatalog.cs` | consumable-recipes.json | DeNelle.Village |
-| `LootTableCatalog` | `_Modules/Village/Items/LootTableCatalog.cs` | loot-tables.json | DeNelle.Village |
-| `PackCatalog` | `_Modules/Wallet/PackCatalog.cs` | packs.json | DeNelle.Wallet |
-| `WalletRegistry` | `_Modules/Wallet/WalletRegistry.cs` | wallets.json | DeNelle.Wallet |
-| `CosmeticCatalog` | `_Modules/Cosmetics/CosmeticCatalog.cs` | cosmetics.json | DeNelle.Cosmetics |
-| `PetCatalog` | `_Modules/Pets/PetCatalog.cs` | pets.json | DeNelle.Pets |
-| `PetSkillTreeCatalog` | `_Modules/Pets/PetSkillTreeCatalog.cs` | pet-skill-trees.json | DeNelle.Pets |
-| `HeroTalentCatalog` | `_Modules/Village/Talents/HeroTalentCatalog.cs` | hero-talents.json | DeNelle.Village |
-| `WaveData` | `_Modules/Village/Waves/WaveData.cs` | waves.json | DeNelle.Village |
-| `QuestCatalog` | `_Modules/Core/Quests/QuestCatalog.cs` | quests.json | DeNelle.Core |
-| `DailyQuests` | `_Modules/Core/Quests/DailyQuests.cs` | daily-quests.json | DeNelle.Core |
-| `CatalogBootstrap` | `_Modules/Village/Catalog/CatalogBootstrap.cs` | structures-catalog.json | DeNelle.Village |
-| `Theme` | `_Modules/Core/Theme/Theme.cs` | themes.json | DeNelle.Core |
-| `ChatPhraseCatalog` | `_Modules/Core/Services/ChatPhraseCatalog.cs` | chat-phrases.json | DeNelle.Core |
-| `VillageStrings` | `_Modules/Village/VillageStrings.cs` | en.json (and/or canon) | DeNelle.Village |
-| `CanonStrings` | `_Modules/Onboarding/CanonStrings.cs` | canon-strings.json | DeNelle.Onboarding |
-| `IntroPetCatalog` | `_Modules/Onboarding/IntroPetCatalog.cs` | pets.json | DeNelle.Onboarding |
-| `LoreFragments` | `_Modules/Dungeons/LoreFragments.cs` | lore-fragments.json | DeNelle.Dungeons |
-| `DungeonLayout` | `_Modules/Dungeons/DungeonLayout.cs` | dungeons/*.json | DeNelle.Dungeons |
-| `CraftingData` | `_Modules/Dungeons/Crafting/CraftingData.cs` | crafting recipes | DeNelle.Dungeons |
-| `DataInjector` | `_Modules/Core/Data/DataInjector.cs` | (generic loot/table loader) | DeNelle.Core |
-
-Notes:
-- `DataInjector.cs` header comment (line 4) flags that "monetization catalogs all hand-roll today (CanonicalJson.Read → JsonConvert...)" — accurate description of the per-catalog pattern.
-- `enemy-roles.json`, `towers.json`, `walls.json`, `realm-map.json`, `heart.json`, `audio-mix.json` have NO Resources copy; any consumer of them returns `null` on WebGL (desktop/editor only). Verify a consumer exists before assuming live.
+### 3.4 Per-catalog domain oracles (beyond parity)
+Named in the §2 table per file; the heavy hitters: `RegressionSuite` (structures/enemies/
+waves), `BuildEconomyRegression`, `RealmMapRegression`, `MonetizationCovenantRegression`,
+`EconomyMetaCatalogRegression`, `TowerProjectileMapRegression` + 
+`VfxAuraDifferentiationRegression` (§6), `ObsidianQueueRegression` (hud-areas),
+`EchoSpecializationRegression` (echoes-balance), the wave-authoring check (§2 waves row).
 
 ---
 
-## 5. FLAGS
+## 4. NON-CANONICAL `Resources/Data` (outside the dual-copy law)
 
-1. **`Assets/Data/Canonical/{armor,weapons}.json` is a stale/orphan third copy.** Only `armor.json` + `weapons.json` exist there. `GearCatalog` reads `Data/Canonical/weapons.json` **via CanonicalJson** → resolves to the **Resources** copy, NOT this one. This `Assets/Data/Canonical/` pair is dead weight and a drift hazard (a 3rd copy nobody loads). Either delete or fold into a documented source-of-truth.
+Top level, verified on disk 2026-08-02: `castle-south-recipe.json` (editor-only —
+`CastleWallsFromRecipe`/`CastleHubBuilder` via raw `Resources.Load`+`JsonUtility`, NOT
+CanonicalJson), `castle-wall-collider-offsets.json`, `dungeon-kit.json`,
+`scene-links.json`, **`orientation-recipes.json` — still JSONL, not JSON** (newline-
+delimited records appended by `TowerPlacementRotateMenu`; whole-file parse would fail;
+`DataWebRegression` excludes `*.jsonl`-class files and this lives outside the canonical
+roots), plus `Upgrades/{Farm,Watchtower}Upgrades.json` (WO-237 spec-era, still unwired)
+and `Dungeons/`, `Economy/` subdirs. These are NOT catalogs of record — the canonical
+roots are.
 
-2. **6 StreamingAssets-only catalogs are WebGL-broken-by-omission.** `enemy-roles.json`, `towers.json`, `walls.json`, `realm-map.json`, `heart.json`, `audio-mix.json` have no Resources copy → `CanonicalJson.Read` returns `null` in WebGL (Resources miss + no filesystem). This is the exact failure class CanonicalJson exists to prevent. If any are needed in the web build, they must be mirrored to `Assets/Resources/Data/Canonical/`.
+---
 
-3. **`Upgrades/FarmUpgrades.json` + `WatchtowerUpgrades.json` are orphaned spec-era data.** Referenced ONLY in `WORK_ORDER_237_building_upgrade_panel.md` (`Resources.Load<TextAsset>("Data/Upgrades/{name}Upgrades")`), NOT in any live `.cs`. The shipped upgrade flow uses `BuildingCatalog.UpgradeType` + `ResourceBuildingState`/`ResourceBuildingProgression` (DialogueCommandBridge), not these JSON files. Dead data unless WO-237's panel is wired.
+## 5. THE GEAR CURATION DRIFT (deliberate, byte-exempt — WO-747)
 
-4. **`orientation-recipes.json` is JSONL, not JSON.** 5 newline-delimited objects, no enclosing array. Whole-file `JsonUtility`/`JToken.Parse` would fail; it is appended line-by-line by `TowerPlacementRotateMenu`. Correct as-is but mislabeled `.json` — a naive parser will break on it. (Not in the integrity-test scope, so the test doesn't catch it.)
+- **Model (verified `DataWebRegression.cs:131-158` + live diff):** the StreamingAssets
+  `weapons.json` (267KB, v1) + `armor.json` (20KB, v1) are the **full generated library**
+  (GearCasterWindow's browse surface). The Resources copies (58KB / 15.5KB, armor v2) are
+  the **runtime truth**: ALL current Resources rows UNION the owner's curated picks —
+  the exporter (`Assets/Editor/Catalog/GearCurationExporter.cs`) is **ADDITIVE, never
+  drops**, and Resources may hold authored ids that exist ONLY there (class-tier
+  progression armor, loot/vendor weapons, e.g. the Flameblade commit `6ef34a84`).
+- Byte-identity is therefore **impossible by design** → both files exempt from drift (§3.1
+  check 1) and cross-copy version compare (§3.1 check 4).
+- **Replacement oracle — `CheckGearCuration`** (`DataWebRegression.cs:416-464`,
+  `GEAR_CURATION_OK/FAIL`): (a) every `included:true` id in
+  `Assets/Editor/GearCurationPicks.json` (present ✓) + every
+  `ReferencedDefaultArmorIds` entry (`blink_armor_{centurion,beasthunter,dragonic,basic1}`
+  — the HeroBodySwapper class defaults + SaveIntegrityRegression seed, `:149-158`) must
+  resolve in the Resources catalog; (b) every Resources row well-formed (non-empty id, no
+  duplicate ids — a dup = ambiguous GearCatalog lookup).
+- **Curation flow:** owner picks in GearCasterWindow → `GearCurationPicks.json` →
+  `GearCurationExporter` merges into Resources → gate proves curation reached runtime.
 
-5. **`castle-south-recipe.json` bypasses CanonicalJson** — loaded by editor scripts (`CastleWallsFromRecipe.cs`, `CastleHubBuilder.cs`) via `Resources.Load<TextAsset>` + `JsonUtility.FromJson`. Editor-only, so WebGL-safety is moot, but it is the one canonical-area file NOT routed through the single loader.
+---
 
-6. **`version` field is inconsistent.** Present on most typed catalogs but ABSENT on `armor`, `weapons`, `garrison-recipes`, `canon-strings`, `en`, `themes`. The integrity test only asserts version on 6 files (abilities/buildings/enemies/packs/pets/waves), so the gaps pass CI silently. `weapons.json`/`armor.json` having no version means a dropped-version hand-edit on gear won't be caught.
+## 6. THE VFX KEY TRIO (owner-tag law: keys verbatim, never substituted)
 
-7. **StreamingAssets superset vs Resources subset = silent divergence risk.** 26 Resources vs 32 StreamingAssets means the "keep in sync" rule is already only partially held (the 6 extras are intentionally StreamingAssets-only, but nothing enforces that the 26 shared files stay byte-identical between the two roots). No automated cross-root diff test exists — only the within-StreamingAssets integrity test.
+Three files, one contract — a string **key** authored by the owner resolves to a Hovl
+prefab at runtime; agents map keys VERBATIM and never creative-pick a substitute
+(memory `vfx-map-owner-tags-no-creative-pick`):
 
-8. **No comment-vs-code lie found in this area's loader** (unlike the HeroLocomotion "pure transform" case). `CanonicalJson.cs`'s header (Resources-first, StreamingAssets-fallback, Resources-wins) matches its code exactly. The `DataInjector.cs` comment also matches. Flagged here for completeness: the data-loader layer's comments are accurate.
+| File | Role |
+|---|---|
+| `Assets/Editor/VfxManualPicks.json` | **The owner's canon picks** — rows `{key, prefabPath, isLoop, scale, manual:true}`. `manual:true` = CANON, merged as an OVERLAY that beats the generator's automatic map (`HovlVfxCatalogGenerator.cs:52` ManualPicksPath; merge at `:327-345`). Written back by the VfxCaster save path (`VfxCasterWindow.cs:1174-1182` → `WriteManualPick`). |
+| `Assets/Resources/VFX/HovlVfxCatalog.asset` | **The runtime resolver** — generated ScriptableObject (`DeNelle.Village.HovlVfxCatalog`) built by `Assets/Editor/HovlVfxCatalogGenerator.cs` (batchmode `DeNelle.Editor.HovlVfxCatalogGenerator.Generate`, asset path at `:47`): automatic Map rows + the manual-picks overlay. `VFXManager.Hovl` (`_Modules/Village/Vfx/VFXManager.Hovl.cs:23-24`) resolves key → prefab + pool at runtime. |
+| `Assets/Editor/VfxCasterLibraryIndex.json` | **The browse index** — a generated scan of every VFX prefab (`scannedUtc: 2026-07-26`, `count: 2871`, rows `{pack,key,catalogued,path}`) consumed by `VfxCasterWindow` (`:35`) so the owner tags keys against the full library. Regenerable; not shipped. |
+
+**Key producers (where owner-tagged keys live):** `abilities.json`
+`vfxCast/vfxProjectile/vfxImpact/vfxResidual` fields; `motion-castings.json` `vfxKey`
+(validated against catalog keys by `MotionCasterWindow.cs:932-944` — free-text falls back
+UNVALIDATED with a warning); tower rows (per-tier projectile keys).
+**Oracles:** `TowerProjectileMapRegression` (every tower-referenced projectile key must be
+catalogued or it "fires a bare pellet", `:88`; wired at `DataRegression.cs:361`) and
+`VfxAuraDifferentiationRegression` (aura keys must resolve in Map or ManualPicks;
+`UpgradeStructureComplete_Aura` must be `isLoop:false`, `:96`).
+
+---
+
+## 7. RISK LEDGER (2026-08-02, priority order)
+
+1. **The orphan third copy is ALIVE and being fed.** `Assets/Data/Canonical/{armor,weapons}.json`
+   still exists, is loaded by NOTHING (grep: zero code paths reference `Assets/Data/Canonical`),
+   yet its `weapons.json` was **updated in gear commit `6ef34a84` (2026-07-24)** — someone/
+   something is maintaining a copy nobody reads. Drift hazard + wasted effort; delete it or
+   document a source-of-truth role. (Old-doc flag confirmed still true, now worse.)
+2. **`motion-castings.json`'s own `_comment` lies about its consumers.** It still says
+   "Editor-consumed … in V1 — no Resources mirror until a runtime reader exists" — but the
+   Resources mirror EXISTS (in byte-parity) and TWO runtime readers exist
+   (`Core/Combat/ActionKeywords.cs`, `Village/Vfx/ActionBundleCatalog.cs`). Trusting the
+   comment would mis-scope any motion-castings change to "editor-only". Fix the comment.
+3. **Resources-ONLY files escape the drift + version oracles.** §3.1 checks 1/2/4 iterate
+   the *StreamingAssets* side, so `ad-creatives.json`, `ad-placements.json`,
+   `widget-params.json` get only the parse check (3). Compounding: the two ad files have
+   **NO consumer at all** — they are spec-era data for `AdGateService`/`AdCreativeGenerator`
+   interpreters (`WORK_ORDER_ad_generator.md`) that are **not built**. Per §13 pipeline law
+   that is NEW-FEATURE territory — do not RCA-"fix" the unbuilt; either build the
+   interpreters or banner the WO.
+4. **Four of the pinned six are mirrored but data-inert.** `audio-mix.json`, `heart.json`,
+   `enemy-roles.json`, `towers.json` have NO CanonicalJson consumer (audio is a CODE
+   registry at `MusicTrack.cs:114`; the others are referenced only in comments). The
+   WebGL-null risk is closed, but a change to these files changes NOTHING at runtime —
+   don't "tune" them expecting effect; wire a reader first (or retire them).
+5. **The `{target}` label contract is easy to re-break.** `daily-quests.json` labels ship
+   raw `{target}` tokens; the ONLY substitution point is `DailyQuestVM.ResolveLabel`
+   (`DailyQuestVM.cs:213-216`). Any new surface that renders `DailyQuestInstance.Label`
+   directly (toast, tooltip, web HUD) will show literal `{target}` — route through the VM
+   or replicate the replace. No oracle asserts token substitution today.
+6. **Version divergence is legal for exactly two files** (`armor` v2-R/v1-S, `weapons`) —
+   for everything else a cross-copy version mismatch fails the gate by name. When bumping
+   any catalog version, bump BOTH copies in the same edit.
+7. **Never re-add `waves.json` `enemies[]` batches** — the wave-authoring regression fails
+   the gate if live-looking batches reappear while smart composition is on (§2 waves row).
+   Authoring intent goes to `docs/design/WAVE_AUTHORING_REFERENCE_2026-07-30.md`, not here.
+8. **Dead rows from the old doc — do not resurrect:** `pet-skill-trees.json` +
+   `PetSkillTreeCatalog.cs` deleted 2026-07-08 (oracle retirement recorded at
+   `EconomyMetaCatalogRegression.cs:27`); the "6 WebGL-broken StreamingAssets-only
+   catalogs" flag is closed (all mirrored + pinned); `armor/weapons` "no version field"
+   is stale (both carry `version` since ≤2026-07-12, `DataWebRegression.cs:54-57`).

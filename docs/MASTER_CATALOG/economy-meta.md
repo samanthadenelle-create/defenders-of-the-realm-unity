@@ -1,211 +1,293 @@
-# Master Catalog — Area: economy-meta
+# MASTER CATALOG — Area: economy-meta (currencies, monetization, meta-economy)
 
-> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** `packs.json` now has **13 packs** (not 5); the pet active-slot now persists (save v34); the 3 pack→cosmetic ECON P1s are fixed + guarded (PACK_GRANT / PACK_COSMETIC_INTEGRITY). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+**Rewritten 2026-08-02 — verified from the actual code (not comments), file:line cites throughout.**
+Scope: the currency services + wallets (EconomyService, GlimmerCurrencyService), the pack store +
+`packs.json`, the battle pass, the monetization covenant oracle, the crystals-vs-SKR money split,
+the wallet/Jupiter UI surfaces, the persistence-store split, and the PENDING WO-830 Echo-affinity
+economy. Supersedes the 2026-06-12 body (and its 2026-07-22 STALE banner) in full.
 
-Scope: `Assets/_Modules/{Pets,Cosmetics,Wallet,Web3,Economy}` — pet system, wallet/crypto
-payment, pack store, Glimmer, battle pass, cosmetics, and the Solana/SKR/web3 (Jupiter) layer.
-Verified by reading every `.cs`, `.asmdef`, canonical `.json`, README, and test in scope.
+> Historical note: the 2026-06-12 revision of this file also carried the full **Pets** module
+> inventory (Pet.cs / PetDeployer / PetHarvester / acquisition / skill trees). That inventory was
+> NOT re-verified in this pass — consult this file's git history for it; only the pet↔economy
+> seams that this pass touched are re-stated below.
 
-Legend: **[LIVE]** wired & functional · **[STUB]** intentionally scaffolded · **[DEAD]** unused/superseded ·
-**[FLAG]** see FLAGS section.
+Legend: **[LIVE]** wired & functional · **[STUB]** scaffolded/inert · **[DEAD]** unused ·
+**[PENDING]** spec only, not implemented · **[FLAG n]** see Risk Ledger.
 
 ---
 
-## Assemblies (asmdef)
+## 1. THE CURRENCY MAP (the one table to know)
 
-| Assembly | refs | notable |
+| Currency | Backing store | Earn seam | Spend seam | Persists? |
+|---|---|---|---|---|
+| **Wood / Iron** | DUAL: `EconomyService._wood/_iron` in-session pool (`EconomyService.cs:114-115`) **AND** `GameState.Wood/Iron` (upgrade ledger) | `Grant` fills the pool AND mirrors to GameState (`EconomyService.cs:311-317`) | `TrySpend` deducts the POOL ONLY (`EconomyService.cs:281-282`) — **[FLAG 1]** | pool: no (session); GameState: yes |
+| **Food** | `GameState.Resources.Food` read-through (`EconomyService.cs:129-136`) | `GameStateService.AddFood` via `Grant` (`:330`) | `AddFood(-n)` via `TrySpend` (`:284`) | yes |
+| **Crystals** (Aether) | `GameState.Resources.Crystals` read-through (`EconomyService.cs:143-150`) | `AddCrystals` via `Grant` (`:333`), BattlePass rewards, packs | `AddCrystals(-n)` via `TrySpend` (`:286`) | yes |
+| **Coins (Gold)** | `GameState.Resources.Coins` read-through (`EconomyService.cs:157-164`) | `AddCoins(+)` (`:464-474`) — shops/refunds/packs | `AddCoins(-)` via `TrySpend` (`:288`) | yes (AddCoins calls `gs.Save()` `:472`) |
+| **Glimmer** | PlayerPrefs blob `dotr-cosmetics-v1` (`GlimmerCurrencyService.cs:59`) | `TryAddGlimmer` (`:193-206`) — quests, IAP top-up, packs | `TryPurchase` / `SpendGlimmer` (`:121-147`, `:214-226`) | yes (separate blob) — **[FLAG 3]** |
+| **SKR / SOL / USDC** | On-chain (stubbed) — `WalletService` over `StubWalletProvider` by default | never earned in-game | `WalletService.Pay/PayFlat` (pack purchase, top-up) | n/a |
+
+**Money-split doctrine (owner + covenant):** Crystals are an EARNABLE soft currency (battle-pass
+rewards `BattlePassManager.cs:209`, pack economy grants, planned Echo trickle in WO-830 §3b);
+real money enters only on the SKR/SOL/USDC rails via `WalletService`. Glimmer is a THIRD, separate
+soft currency — "Crystals→Glimmer is not allowed" (`GlimmerCurrencyService.cs:23-25` header, from
+cosmetic-shop-spec §2.3). Everything sellable is cosmetic / soft-currency / time-saving
+convenience — enforced by the covenant oracle (§6).
+
+---
+
+## 2. EconomyService — `Assets/_Modules/Village/EconomyService.cs`  [LIVE]
+
+`sealed MonoBehaviour : IEconomy` (`IEconomy` at `Assets/_Modules/Village/IEconomy.cs:24`),
+`DeNelle.Village`, self-bootstrapping singleton (`[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`
+`EconomyService.cs:204-211`, DDOL).
+
+- **Starting pool:** Wood 200, Iron 80 (Inspector, `:114-115`). Wood/Iron in-session pool resets
+  on reload BY DESIGN (`:33-39` header) — but see the dual-wallet reality below.
+- **API:** `CanAfford(ResourceCost)` (`:263-270`), `TrySpend(ResourceCost)` (`:278-291`),
+  `Grant(ResourceCost)` (`:294-338`), `Grant(int,int,int,int)` (`:341-344`),
+  `GrantSpendable(...)` dev/pack grant (`:361-380`), unified income seam
+  `AddResource(ResourceType|MineResource, int)` (`:393-435`), `AddCoins(int delta)` (`:464-474`),
+  event `OnChanged(ResourceSnapshot)` (`:200`, fired with subscriber-count FlowTrace `:476-483`).
+- **`ResourceCost`** struct (`:71-100`): Wood/Food/Iron/Crystals + `Coins` appended last with
+  default 0 so legacy 4-arg constructors compile unchanged (`:77-91`).
+- **Deprecated Wood-only API kept:** `[Obsolete] CanAfford(int)` / `Spend(int)` (`:442-452`) —
+  still compiled for TowerPlacementSystem/TowerUpgradeButton migration.
+- **B2 dual-wallet convergence (Grant side only):** `Grant` mirrors Wood/Iron gains into
+  `GameState.Wood/Iron` (`:311-317`, FlowTrace-proven `:318-325`) because the building-upgrade
+  flow's ResourceLedger reads/spends GameState.Wood/Iron, not the pool. `GrantSpendable` no longer
+  double-mirrors (`:363-368`) — it only adds `gs.Save()` + `ResourcesChanged.Invoke()` on top
+  (`:374-379`).
+- **HUD bridge:** subscribes `GameStateService.ResourcesChanged` → re-emits `OnChanged`
+  (`AttachResourcesBridge` `:232-239`, retried at Start `:221-222`, detached `:241-258`) so
+  GameState-side gains (harvest/empower/camp) refresh the village HUD.
+- **Territory:** `SecuredOutpostCount` / `TerritoryMultiplier = 1 + 0.05·count` (`:176-184`),
+  `OnOutpostSecured()` (`:191-195`) — fed by ClaimableCamp.
+- **Tests:** `Assets/Tests/EditMode/EconomyServiceTests.cs` — starting defaults, grant/clamp,
+  afford, atomic TrySpend, OnChanged, territory ramp (9 tests). None covers the Flag-1 asymmetry.
+
+### ★ [FLAG 1] The TrySpend asymmetry landmine
+`Grant` writes Wood/Iron to BOTH wallets (`:311-317`); **`TrySpend` deducts Wood/Iron from the
+in-session pool ONLY** (`:281-282` — no GameState mirror), and the upgrade flow's ResourceLedger
+spends GameState.Wood/Iron without touching the pool. Net effect: every earn credits both stores,
+every spend debits only one → the two Wood/Iron views drift apart monotonically (the persisted
+ledger inflates vs the pool, or vice-versa depending on which side spends). `CanAfford` also checks
+the POOL for Wood/Iron (`:265-267`) but GameState for Food/Crystals/Coins — a mixed-authority
+affordability check. Any future "why do I have more wood in the upgrade panel than the shop"
+ticket lands here.
+
+---
+
+## 3. GlimmerCurrencyService — `Assets/_Modules/Cosmetics/GlimmerCurrencyService.cs`  [LIVE]
+
+`sealed MonoBehaviour` singleton, `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` bootstrap
+(`:82-89`), DDOL. Wallet + cosmetic ownership + per-category equip state.
+
+- **Persistence:** PlayerPrefs key **`dotr-cosmetics-v1`** (`PrefKey` `:59`), Newtonsoft JSON blob
+  `GlimmerSaveData {glimmer, ownedCosmetics[], equippedByCategory{}}` (`:41-49`).
+  `StartingGlimmer = 25` (`:60`). Load-failure resets to fresh state with a `FlowTrace.Fail`
+  ("purchases at risk", `:308`).
+- **API:** `Glimmer` (`:71-74`), `Owns(id)` (`:101-106`), `EquippedFor(cat)` (`:109-114`),
+  `TryPurchase(id)` (`:121-147`), `Equip(id)` (`:154-180`), `UnequipCategory` (`:183-190`),
+  `TryAddGlimmer(n)` (`:193-206` — also reports `wildcard.earn-glimmer` daily-quest progress
+  `:204`), `SpendGlimmer(n)` (`:214-226` — BattlePass premium debit), `GrantAchievement(id)`
+  (`:233-247` — catalog-gated free grant), event `Changed` (`:65`).
+- **Debit-grant invariant instrumented:** `TryPurchase` logs DEBIT and fails loudly on
+  "DEBIT-WITHOUT-GRANT" (`:136-141`) — the highest-risk economy op is trace-proven.
+- **`MarkCosmeticOwned(id)` (`:260-272`) — the ECON-02 bridge:** registers ownership
+  **catalog-independently** (no `CosmeticCatalog.Find` gate), writing straight into the same
+  `_ownedSet`/`OwnedCosmetics` backing `Owns()` reads. Exists because pack cosmetic SKUs (e.g.
+  `cosmetic.founders-vow.hero-outfit`) are NOT `cosmetics.json` rows, so `GrantAchievement` and
+  `TryPurchase` no-op on them. Called by `PackStoreVM.TryGrantCosmeticOwnership` via reflection
+  (§5).
+- **[FLAG 3] Store split-brain (bridged, not reconciled):** cosmetic ownership lives in TWO
+  stores — `GameState.OwnedItemIds` (pack system's `IsOwned`, `PackStoreVM.cs:53-58`) and this
+  PlayerPrefs blob (wardrobe/shop's `Owns`). ECON-02 dual-writes both on pack grant
+  (`PackStoreVM.cs:111-124`), and the `PACK_COSMETIC_INTEGRITY` oracle holds it green — but the
+  stores are never migrated/reconciled: clearing one (save wipe, cloud-restore of GameState only,
+  PlayerPrefs clear) desyncs ownership silently.
+
+---
+
+## 4. Pack store — `Assets/_Modules/Wallet/` (PackStore / PackStoreVM / PackStoreBootstrap / PackCatalog)
+
+### packs.json — `Assets/Resources/Data/Canonical/packs.json` (+ byte-identical StreamingAssets copy)  [LIVE]
+- **version 2, 13 packs, tiers 1–13** (`packs.json:17`, skus at `:21,37,54,72,91,111,128,145,162,180,198,215,232`):
+  the 5 original ladder packs (hearth-spark $1.99 → founders-vow $49.99 `founderOnly:true` `:96`)
+  + 8 starter bundles authored 2026-06-28 (frostfall / embergrove / bloomtide / starters-hand /
+  echo-patron / hero-wardrobe / realm-defender / builders-cache), price-anchored to
+  $4.99/$9.99/$19.99 (`_schemaNotes.pricing` `:11`). `tier` is a UNIQUE lookup key, not the price
+  band (`:12`).
+- `currencyDisclaimer: "Token price moves with the market."` (`:18`). Convenience kinds are
+  time-saving only per `_schemaNotes.convenience` (`:13`). Every economy block carries
+  glimmer+crystals+food+coins (some add wood/iron).
+- Loader: `PackCatalog.cs` (`Packs`, `Find(sku)`, `FindByTier`, WebGL-safe via CanonicalJson).
+
+### PackStore.cs  [LIVE — code-built uGUI, PanelRouter-opened]
+- View only since WO-744. Header (`PackStore.cs:1-30`): WO-F conversion 2026-07-03 — UIDocument/
+  UITK replaced with **code-built uGUI on the Obsidian master frame** (`ElarionUiKit.BuildObsidianModal`),
+  lazily built on first open; open/close = SetActive (MarketplaceInteractor contract preserved).
+  The old "store scene-wiring DISABLED pending PanelSettings" state is OBSOLETE — the store now
+  opens via `PanelRouter.Open(PanelId.RealmStore)`.
+- Default rail `CurrencyKind.Skr` (`:52`). Purchase flow: async UniTask → `WalletService.Pay` →
+  on confirm `_vm.ApplyPackContents(pack)` (`:510-512`). Renders the covenant line
+  *"You are never required to spend anything. Ever."* verbatim + treasury transparency +
+  CurrencyDisclaimer (header `:20-25`). Registers a `PanelHandle` with PanelManager (`:60-64`).
+
+### PackStoreVM.cs  [LIVE — the money/entitlement seam]
+- `ApplyPackContents(PackDef)` (`:68-153`) — ECON-01: every advertised currency routes through its
+  canonical persisted seam, each exactly once (`:82-107`): Glimmer→`TryAddGlimmer`,
+  Wood/Iron/Food/Crystals→`EconomyService.GrantSpendable`, Coins→`AddCoins`. Ownership: pack SKU +
+  every cosmetic SKU into `GameState.OwnedItemIds` (`RecordOwned` `:111-116`, `:155-159`) AND —
+  ECON-02 — into GlimmerCurrencyService via `GrantAchievement` (catalog-gated, harmless no-op) +
+  the load-bearing `MarkCosmeticOwned` (`TryGrantCosmeticOwnership` `:213-242`).
+- All cross-asmdef grants go by AppDomain type-name reflection (Wallet can't ref Cosmetics/Village
+  — `:161-181`); **every miss is a `FlowTrace.Fail` naming a LOST paid entitlement**
+  (`:189,195,218,235,250,256` etc.). Post-grant ownership is verified before Save (`:132-137`) and
+  a single proof line logs every delta (`:142-145`).
+- Also owns the store-close resolve: `CloseViaInteractor` → reflection `MarketplaceInteractor.
+  CloseStore` + `ReEnableDisabledHeroLocomotion` soft-lock fallback (`:290-358`).
+
+### PackStoreBootstrap.cs  [LIVE]
+- Static, `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` registers the
+  `PanelId.RealmStore` opener with PanelRouter (`:43-48`); find-or-spawns the PackStore host on
+  first open (no scene dependency); demo URL trigger `?realmstore=1` auto-opens once per session
+  (`:33-36`, hook `:50-58`).
+
+### Regression oracles (all wired into `DataRegression.RunAll`)
+- **`PackGrantRegression.cs`** [pack-grant] — drives the REAL `ApplyPackContents('founders-vow')`
+  over real singletons + throwaway GameState; asserts Glimmer +1000, crystals/food/coins by
+  packs.json amounts, all 5 cosmetic SKUs `Owns()==true`. Marker `PACK_GRANT_OK` (header `:1-18`).
+- **`PackCosmeticIntegrityRegression.cs`** [pack-cosmetic-integrity] — generalizes to EVERY pack:
+  every advertised cosmetic SKU must end up owned post-grant ("advertised ⇒ grantable", explicitly
+  NOT "in cosmetics.json" — header `:9-26`). Marker `PACK_COSMETIC_INTEGRITY_OK`.
+- **[FLAG 4] Convenience tokens still not applied** — `ApplyPackContents` records the SKU but
+  grants no token inventory ("no token tray yet; Week-8 inventory pass" `PackStoreVM.cs:126-128`).
+  Every pack sells convenience counts that do nothing at runtime.
+
+---
+
+## 5. Battle pass — `Assets/_Modules/Cosmetics/BattlePassManager.cs`  [LIVE code, INERT without SO]
+
+- Singleton MonoBehaviour, DDOL (`:81-95`). **Persists to raw PlayerPrefs ints:** `BP_Level`,
+  `BP_XP`, `BP_HasPremium` (`:292-294`, save/load `:296-309`) — the third unreconciled store
+  (§7).
+- `xpPerLevel = 800` (`:63`), `premiumCostGlimmer = 2400` (`:67`), season "Season 1 - Shadow
+  Realms" (`:53`). `AddXP` loops tier-ups + `GrantReward` per tier (`:108-123`).
+  `PurchasePremiumPass` debits via `SpendGlimmer` then back-dates all premium tiers (`:130-164`,
+  debit/grant FlowTrace-paired `:146-162`).
+- Reward kinds (`ApplyReward` `:195-238`): Crystals → `GameStateService.AddCrystals` (`:209`);
+  Cosmetic → `GlimmerCurrencyService.GrantAchievement` (`:221` — catalog-gated, so a pass reward
+  SKU must exist in cosmetics.json); **Resource → log-only "hook pending"** (`:228-232`)
+  **[FLAG 5]**. Level-up VFX via reflection to `DeNelle.Village.LevelUpVFXController` (`:261-288`).
+- **[FLAG 5] Requires an authored `BattlePassData` SO in the Inspector or it is a warn-and-no-op**
+  (`:92-94`) — and nothing auto-spawns/wires this component; no scene/bootstrap reference was
+  found in this pass. The battle pass is effectively parked.
+
+---
+
+## 6. Monetization covenant oracle — `Assets/Editor/Regression/MonetizationCovenantRegression.cs`  [LIVE gate]
+
+Editor-only, wired into `DataRegression.RunAll` (`DataRegression.cs:258-259`, tag `[covenant]`).
+Enforces the covenant (monetization-v2-spec §2/§5.3): sellables are cosmetic / soft-currency /
+time-saving convenience — never combat power, never a stat, never RNG.
+
+- Sweeps 6 monetization JSONs (`:92-100`): both `packs.json` copies, `skr_store.json`,
+  `skr_staking.json`, `battle_monthly_packs.sample.json`, `WorkOrders/economy_store_packs.sample.json`.
+  Missing file = skip-with-note, never throw (`:147-151`).
+- FAILS on: banned kind strings (combat/stat/damage/buff… `:60-65`), non-zero combat-stat fields
+  on a sellable (`:68-73`, check `:201-203`), any probability/odds/roll/chance/random field — the
+  no-gacha rule (`:76-79`, `:193-199`), or a convenience/grant kind outside the allowlist
+  (`:215-218`).
+- Allowlists are DERIVED live from `skr_staking.json` (`convenienceAllowList` + `perkKindEnum`,
+  `:122-137`) unioned with the documented sets (`:42-57`) — the JSON is the single source of truth.
+
+---
+
+## 7. [FLAG 3/5] The three unreconciled persistence stores
+
+| Store | Holds | Owner |
 |---|---|---|
-| `DeNelle.Pets` | Core, Data, Unity.Localization, UniTask | NO ref to Village/Cosmetics → all cross-module via reflection bridges. autoReferenced. |
-| `DeNelle.Wallet` | Core, Data, Unity.Localization, UniTask | versionDefine `com.solana.unity_sdk` **with empty expression** → `SOLANA_SDK` define activates whenever the package is present (any version). autoReferenced. |
-| `DeNelle.Cosmetics` | Core, UniTask | autoReferenced. |
-| `DeNelle.Web3` | Core, **Wallet**, UniTask | `autoReferenced:false`. Only module that directly references Wallet. |
-| `DeNelle.Wallet.Tests` | Wallet, Core, Data, UniTask, TestRunner(s) | EditMode-only, `UNITY_INCLUDE_TESTS`. |
-| **Economy** | *(none — no asmdef)* | Folder has README only; code described in README lives in Assembly-CSharp / Village, not here. See FLAGS. |
+| `GameStateService` save (`dotr-save`; cloud-synced via Neon `/api/game/save`) | Resources (Food/Crystals/Coins), GameState.Wood/Iron ledger, `OwnedItemIds` (pack SKUs + pack cosmetics) | Core |
+| PlayerPrefs `dotr-cosmetics-v1` | Glimmer balance, cosmetic ownership set, equips | GlimmerCurrencyService |
+| PlayerPrefs `BP_Level` / `BP_XP` / `BP_HasPremium` | Battle-pass progress + premium flag | BattlePassManager |
 
-Cross-module bridge pattern (recurring): Pets/Cosmetics cannot reference Village (circular asmdef),
-so they resolve Village/Cosmetics types by `AppDomain` type-name reflection, cache members, best-effort invoke.
-
----
-
-## WALLET — `DeNelle.Wallet`  (namespace `DeNelle.Wallet`)
-
-### WalletService.cs  [LIVE]
-- `WalletService : IWalletSigner` — app-facing wallet surface (React `useGameWallet` analog). Plain C# class (not MonoBehaviour). Implements `DeNelle.Core.Web3.IWalletSigner` for backend save-auth (WO-121).
-- Enums/structs (all here): `WalletNetwork{Devnet=0,Mainnet=1}`, `CurrencyKind{Sol,Usdc,Skr}`, `WalletStatus{Disconnected,Connecting,Connected}`, `WalletAccount`, `WalletBalance`, `PaymentResult`. Interface `IWalletProvider`.
-- Const `DefaultNetwork = Devnet` (owner-gated to Mainnet, spec Part 10). `RewardsDistributorAddress` → `WalletRegistry`.
-- Ctors: `WalletService(IWalletProvider)` (null→stub); `WalletService()` auto-selects `SolanaWalletProvider` if `SolanaWalletProvider.IsSdkAvailable` else `StubWalletProvider`; static `Create(bool useStub=false)`.
-- Public: `UniTask<WalletAccount> Connect()`; `UniTask Disconnect()`; `UniTask<WalletBalance> GetBalance()`; `UniTask<PaymentResult> Pay(PackDef, CurrencyKind)`; `UniTask<PaymentResult> PayFlat(string txId, CurrencyKind, double)` (WO-7, non-pack); `void SetNetwork(WalletNetwork)` (warns on Mainnet); event `StatusChanged`.
-- On valid Connect → `CoreServices.RegisterWalletSigner(this)`; Disconnect → unregister. IWalletSigner: `CanSign` = connected && provider.CanSignMessages, `WalletAddress`, `SignMessageBase58`.
-- Deps: IWalletProvider, WalletRegistry, PackDef, CoreServices, CanonicalJson(indirect).
-
-### IWalletProvider (interface, in WalletService.cs)  [LIVE]
-Seam: `ProviderName, IsConnected, Account, Connect, Disconnect, GetBalance, SendPayment, CanSignMessages, SignMessageBase58`.
-
-### StubWalletProvider.cs  [LIVE — default provider today]
-- `StubWalletProvider : IWalletProvider` — devnet mock; no SDK. Generates deterministic base58 addr (44ch) / tx sig (88ch) via seeded `System.Random(0xDEFEED)`. Starting mock balance Sol=5/Usdc=250/Skr=2000 (generous so all 5 packs buyable). `SendPayment` simulates ~1.1s finality, debits mock balance. `CanSignMessages => false` (no key → backend auth headers skipped, offline-safe).
-
-### SolanaWalletProvider.cs  [STUB until SDK present / integrator-verify]
-- `SolanaWalletProvider : IWalletProvider` — real Solana Unity SDK seam. ALL SDK calls inside `#if SOLANA_SDK`; compiles with define off (`IsSdkAvailable` false, methods throw `InvalidOperationException`). Android/Seeker → MWA `LoginWalletAdapter`; desktop/iOS → `LoginPhantom`. Builds SystemProgram (SOL) / TokenProgram (USDC/SKR) transfers, wallet signs+sends, polls confirmation ~30s. `SignMessageBase58` via wallet ed25519. **Every SDK type/method tagged `// SDK-VERIFY:`** — names are best-knowledge, integrator must confirm against resolved package. Recipient = `WalletRegistry.DevnetPurchaseRecipientAddress`. Pure helpers `LamportsToUi/UiToBaseUnits` always compiled.
-
-### WalletEndpoints.cs  [LIVE — config constants]
-- Static `WalletEndpoints` — RPC/WS URLs (devnet/mainnet), SPL mints, decimals, MWA chain/app-identity. Devnet RPC `api.devnet.solana.com`. USDC devnet `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, USDC mainnet `EPjFW...Dt1v`. **`SkrMintDevnet=""` and `SkrMintMainnet=""` — empty: integrator must fill devnet SKR mint or SKR transfers fail cleanly.** Decimals Sol=9, Usdc=6, Skr=6. App identity name "Defenders of the Realm", uri `https://defenders-of-the-realm.app`.
-
-### WalletRegistry.cs  [LIVE]
-- Typed loader for `wallets.json` (public addresses only). Types `WalletEntry`, `WalletRegistryData`. Static `WalletRegistry`: `RewardsDistributor`, `DevnetPurchaseRecipient`, `*Address` convenience, `Reload()`. WebGL-safe via `CanonicalJson.Read`. Hard fallback consts: RewardsDistributor `2JRmE...nmNi`, DevnetRecipient `3Eeww...gaHe`. `Fill()` backfills missing entries.
-
-### PackCatalog.cs  [LIVE]
-- Typed model + loader for `packs.json`. Types `PackPricing, PackEconomy, ConvenienceItemDef, PackContents, PackDef, PackCatalogData`. Static `PackCatalog`: `Packs`, `CurrencyDisclaimer`, `Find(sku)`, `FindByTier(int)`, `Reload()`. WebGL-safe load. `PackDef.AmountFor/UsdReference/AmountLabel`.
-
-### PackStore.cs  [LIVE — but scene-wiring DISABLED, see FLAGS]
-- `PackStore : MonoBehaviour [RequireComponent(UIDocument)]` — 5-pack store UI + purchase flow. `Awake` builds its own `new WalletService()` (stub default); `SetWalletService` injects shared. **`BindElements()` IGNORES the UXML entirely and builds the whole panel in code (`ShopTheme`)** because UXML renders empty in player builds (documented trap). Public: `Render()`, `SetWalletService`, `UniTask<PaymentResult> Purchase(PackDef,CurrencyKind)`, event `PackPurchased`. `Purchase` → connect → `WalletService.Pay` → `ApplyPackContents` (writes Crystals/Food/Coins to `GameStateService.State.Resources`, records owned SKUs, `Save()`). `CloseStore()` closes the Village `MarketplaceInteractor` **via reflection** (Wallet can't ref Village). Analytics: `EventTracker.Track("bundle_viewed"/"purchase_completed")`. Convenience tokens NOT applied (flagged "Week-8 inventory pass"). Renders verbatim covenant line "You are never required to spend anything. Ever."
-
-### CryptoPaymentManager.cs  [LIVE — thin bridge, reconciled WO-74]
-- `CryptoPaymentManager : MonoBehaviour` singleton (DontDestroyOnLoad). Simple SOL/SKR/USDC top-up entry points for ShopUI/BattlePass; delegates to shared `WalletService.PayFlat`. SKR path applies `skrBonusMultiplier` (1.25) + optional `StakingBonusManager` (WO-76, resolved by reflection — **does not exist yet**). On success grants **Glimmer** (not "Aether Shards" which don't exist) via `GlimmerCurrencyService.TryAddGlimmer` **by reflection** (Wallet→Cosmetics would be circular). Public: `ConnectWallet`, `PayWith{SOL,SKR,USDC}(int)`→`UniTask<bool>`, sync `BuyWith*` (.Forget()). Inspector conversion rates aetherToSol/Usdc/Skr.
-
-### WalletConnectDialog.cs  [LIVE]
-- `WalletConnectDialog : MonoBehaviour [RequireComponent(UIDocument)]` — connect/account control (React `ConnectWalletButton`). Binds UXML by element NAME (`wallet-connect-button` etc.) — headless if absent (plain `Connect()/Disconnect()` API still works). `Awake` builds own stub `WalletService`; `SetWalletService` injects. Exposes `Wallet`, events `Connected`/`Disconnected`. NOTE: binds real UXML (unlike PackStore which code-builds) — would render empty in a player build (see FLAGS).
-
-### Tests/ (EditMode)  [LIVE]
-- `WalletServiceTest` — `FakeWalletProvider` (synchronous double) + real stub; devnet-default, connect/balance/pay guards, status events, full stub flow.
-- `StubWalletProviderTest` — connect/balance/pay/debit/insufficient/reconnect over the shipped stub ([UnityTest] for UniTask.Delay).
-- `WalletRegistryTest` — public addresses present, base58-only, **scans wallets.json for forbidden secret keywords** (privatekey/seedphrase/keypair/signer…), two distinct wallets.
+Cosmetic ownership is dual-written across stores 1+2 (ECON-02) but never migrated or
+cross-checked at load; Glimmer and battle-pass state never reach the cloud save. A
+wallet-keyed cloud restore (BoundWallet identity) restores store 1 only — paid Glimmer/premium
+state stays on-device.
 
 ---
 
-## WEB3 — `DeNelle.Web3`  (namespace `DeNelle.Web3`)  — Jupiter SKR swap
+## 8. Wallet / Web3 surfaces (spot-re-verified 2026-08-02)
 
-### JupiterSwapService.cs  [LIVE quote / STUB swap-signing]
-- `JupiterSwapService : MonoBehaviour, IJupiterService [RequireComponent(UIDocument)]`. Registers with `CoreServices.RegisterJupiter` on Awake. **REAL**: Jupiter `/v6/quote` fetch (UnityWebRequest, JsonUtility DTO parse), fee math, panel show/hide, connected-wallet lookup through `DeNelle.Wallet.WalletService` (via `WalletConnectDialog`). **STUB**: `ExecuteSwapAsync` fetches `/v6/swap` tx then hands to `WalletBridgeStub` (no real signing). Public: `OpenSwapPanel(decimal minSkr)`, `CloseSwapPanel`, `GetQuoteAsync`, `ExecuteSwapAsync`, `ConnectedWalletKey`, `FeeConfig`. Inspector `_skrMint="REPLACE_WITH_SKR_MINT_ADDRESS"` (placeholder). USDC/SOL mints sourced from `WalletEndpoints`. **CONTRADICTION: wallet stack is DEVNET-only but public Jupiter aggregator is MAINNET — flagged in file header, unreconciled.**
-
-### JupiterSwapPanelController.cs  [LIVE]
-- `: MonoBehaviour [RequireComponent(JupiterSwapService)]`. Drives `JupiterSwapPanel.uxml` by element name; debounces input (0.6s), fetches quote, refreshes fee breakdown, confirm → `ExecuteSwapAsync`. Public `Initialise(decimal minimumSkr, SwapFeeConfig)`. Hardcoded English strings (swap.* keys reserved for later loc).
-
-### SwapFeeConfig.cs  [LIVE — ScriptableObject]
-- `SwapFeeConfig : ScriptableObject` (`CreateAssetMenu "Defenders/Swap Fee Config"`). `PlatformFeeBps`(20=0.2%), `FeeWalletAddress`(""—OWNER-CONFIG SKR token-account), `SlippageBps`(50), `EnableSolInput`(false v1).
-
-### WalletBridgeStub.cs  [STUB — hard-fails in release]
-- Static `WalletBridgeStub.SignAndSendTransaction(json, onSuccess, onError)`. In `UNITY_EDITOR||DEVELOPMENT_BUILD` logs + fires fake `STUB_SIG_<guid8>`; in release build `LogError` + onError. Signs/submits nothing. Replace with real signer before shipping.
-
-### JupiterSwapBootstrap.cs  [LIVE — `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`]
-- Static. Self-spawns a `JupiterSwapHost` GameObject (UIDocument+Service+Controller) per allowed scene, borrowing PanelSettings from an existing scene UIDocument (never loads by name → no black panel). Loads `JupiterSwapPanel` UXML via Resources. Idempotent, scene-scoped, graceful-degrade (logs once, no crash). Allowed scenes: `Title, HeroSelect, PetSelect, Village2` + `Dungeon_*`. **NOTE allowed-list says `PetSelect` and `Village2`; the integrator-notes comment block at file foot mentions "Village/Dungeon" — minor doc/code drift.**
-
----
-
-## COSMETICS — `DeNelle.Cosmetics`  (namespace `DeNelle.Cosmetics`)
-
-### GlimmerCurrencyService.cs  [LIVE — `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`]
-- `GlimmerCurrencyService : MonoBehaviour` singleton (DontDestroyOnLoad). Soft-currency wallet + cosmetic ownership/equip. Persists to **PlayerPrefs key `dotr-cosmetics-v1`** (Newtonsoft JSON) — SEPARATE from GameState (spec: "Crystals→Glimmer not allowed"). `StartingGlimmer=25`. Types `GlimmerSaveData`. Public: `Glimmer`, `OwnedCosmetics`, `Owns(id)`, `EquippedFor(category)`, `bool TryPurchase(id)`, `Equip(id)`, `UnequipCategory(cat)`, `bool TryAddGlimmer(int)`, `bool SpendGlimmer(int)`, `bool GrantAchievement(id)`, event `Changed`. Consumed by CryptoPaymentManager + PetDeployer + BattlePassManager (all via reflection from other asmdefs).
-
-### CosmeticCatalog.cs  [LIVE]
-- Typed model + loader for `cosmetics.json`. Types `CosmeticDef` (Id, Category, AppliesTo, DisplayName, Description, GlimmerCost, UnlockMethod, PreviewColor; derived IsAchievement/IsBuyable/PreviewUnityColor), `CosmeticCatalogData`. Static `CosmeticCatalog`: `All`, `Find(id)`, `ByCategory(cat)`, `Reload()`. WebGL-safe via CanonicalJson (DEF-212 fix). **CosmeticDef does NOT model the `meshPath`/`specialSale` fields present on one row of cosmetics.json — silently ignored (see FLAGS).**
-
-### CosmeticApplier.cs  [LIVE — reconciled WO-73]
-- `CosmeticApplier : MonoBehaviour [RequireComponent(MeshRenderer)]`. Applies visuals: material tint (first-pass = tint MeshRenderer to `PreviewUnityColor`), prefab override, VFX attach. Inspector slots `materialOverride/prefabOverride/vfxPrefab` for art later. Public: `ApplyCosmetic(string id)`, `ApplyCosmetic(CosmeticDef)`, `ResetToDefault()`, `EquippedCosmeticId`. Ownership queried at call site via GlimmerCurrencyService. **No automatic caller wires it yet — art hookup pending.**
-
-### BattlePassManager.cs  [LIVE — reconciled WO-73; needs SO]
-- `BattlePassManager : MonoBehaviour` singleton (DontDestroyOnLoad). XP/level + free/premium tracks. Persists to **PlayerPrefs (`BP_Level`,`BP_XP`,`BP_HasPremium`)** — NOT a unified save. Needs `BattlePassData` SO (`Core/Data`) assigned in Inspector or it's a no-op (warns). Public: `AddXP(int)`, `bool PurchasePremiumPass()` (spends `premiumCostGlimmer=2400` via GlimmerCurrencyService.SpendGlimmer; back-dates rewards), `HasPremium`. Reward kinds: Crystals→`GameStateService.AddCrystals`; Cosmetic→`GlimmerCurrencyService.GrantAchievement`; Resource→log only (hook pending). LevelUpVFX called via reflection (Cosmetics→Village barred). seasonName "Season 1 - Shadow Realms".
+- **`WalletService` + `StubWalletProvider`** [LIVE] — default provider is still the devnet stub;
+  `SOLANA_SDK` flips only when the Solana Unity SDK package resolves. Nothing transacts on-chain
+  today.
+- **`CryptoPaymentManager`** [LIVE bridge] — SOL/SKR/USDC top-ups → `WalletService.PayFlat`;
+  success grants Glimmer by reflection (`GlimmerCurrencyService.TryAddGlimmer` — the landing point
+  named in `GlimmerCurrencyService.cs:200`).
+- **[FLAG 6] `WalletConnectDialog.cs` — UXML-DEAD panel.** Still binds real UXML by element name
+  (`rootVisualElement.Q<Button>("wallet-connect-button")` etc., `:115-128`). UXML renders empty in
+  player builds (CLAUDE.md §8 hard rule) → the dialog is headless in a build; only its plain C#
+  `Connect()/Disconnect()` API works.
+- **[FLAG 6] Jupiter swap (`Assets/_Modules/Web3/`) — UXML-dead + stub-signed + net-contradicted.**
+  `JupiterSwapService.cs` still targets the MAINNET public aggregator (`quote-api.jup.ag/v6/*`
+  `:51-52`) while the wallet stack is devnet; `_skrMint` is still the placeholder
+  `"REPLACE_WITH_SKR_MINT_ADDRESS"` (`:65`, guarded `:155`); swap signing is `WalletBridgeStub`
+  (fake sig in dev, LogError in release). `JupiterSwapPanelController` drives
+  `JupiterSwapPanel.uxml` by name → empty in a player build. The whole swap surface is
+  demo-plumbing, not shippable.
+- SKR mints in `WalletEndpoints` remain empty strings (integrator-fill) — SKR transfers fail
+  cleanly; SKR pack pricing works via the stub.
 
 ---
 
-## PETS — `DeNelle.Pets`  (namespace `DeNelle.Pets`)
+## 9. WO-830 — Echo harvest-affinity economy  [PENDING — spec only, NOT in code]
 
-### Pet.cs  [LIVE]  ⚠ stale comment, see FLAGS
-- `Pet : MonoBehaviour` — one in-village guardian pet. Hunts nearest hostile `IDamageable` via `Physics.OverlapSphereNonAlloc` (enemy LayerMask) — never names Village Enemy. Enum `PetMode{Idle,Defend,Fortify}`. Configured from `PetDef` + bond rank + home post + optional `PetData` SO (SO wins, WO-86). Public: `Configure(def,bondRank,homePost,mode)`, `TakeDamage(float)`, `Heal(float)`, `SetHomePost(Vector3)`, `SetEnemyMask`, `SetProgressionMultipliers(dmg,hp)`, props `PetId/Species/BondRank/Mode/Hp/MaxHp/IsAlive/HomePost/HasHostileInRange/Def`. WO-128 anti-ranged: prioritises `IRangedThreat`, dashes + applies `StatusEffect.Slow`. WO-187: self-adds & drives a **NavMeshAgent** in Awake (`_agent.Move(displacement)`) to stay wall-constrained. WO-163: animator param-presence guards (Tripo pets lack KayKit params). Records kill-XP via `DamageAttribution`, hit VFX via `PetAttackVfxBridge`.
+`WorkOrders/WORK_ORDER_830_echo_harvest_affinity_synergy.md`, status READY TO IMPLEMENT
+(owner-approved 2026-08-01; **Repairs affinity REMOVED by owner ruling 2026-08-02** — banner at
+`:5-10`). Nothing below exists in the tree yet; do not catalog it as live.
 
-### PetCatalog.cs  [LIVE]
-- Typed model + loader for `pets.json`. Types `PetBondRank, PetDef, PetCatalogData`. Static `PetCatalog`: `Pets`, `DeployRadius`(11), `Find(id)`, `FindBySpecies(species)`, `DeploySlotPosition(slotIndex, heartPos)` (ring port of React `petPost()`), `Reload()`. WebGL-safe. PetDef: id/species/name/element/archetype/tints/huntSpeed(4.4)/attackRange(2.7)/attackCooldown(0.75)/slotIndex/bondRanks[5]; `RankAt`, `TintColor`, `GlowUnityColor`.
-
-### PetDeployer.cs  [LIVE]
-- `PetDeployer : MonoBehaviour` — spawns starter pets on the Heart ring. **`UseLitePetVisuals = true` (const)** → never loads heavy Tripo FBX (~208MB), renders a `PetBillboard` sprite quad from `Resources/PetPortraits/<id>.png` (WO-211 Phase-2 WebGL bloat fix). `DIAG_SKIP_ALL_PETS=false`. Public: `DeployStarterPets()` (deploy-once guard; single chosen starter via `GameState.StarterPetId`, default `ice-wolf`), `DeployChosen(species)`, `SyncDeployedToSlots(IReadOnlyList<string>)` (WO-297 multi-slot), `Pet SummonAt(Vector3,mode)` (WO-360 Echo at outpost), `ClearDeployed()`, setters `SetHeartPosition/SetEnemyMask/SetBondRanks`, `DeployedPets`. Auto-attaches per-pet: `PetHeroLeash`, `PetHarvester`, `PetIdleRoutines`, `PetProgression`. Cosmetic pet-skin resolved by reflection to GlimmerCurrencyService. Contains big inactive `TryLoadPetMesh`/`WirePetAnimator`/`NormalizePetHeight`/`TripoMaterialFixer` path (only runs if `UseLitePetVisuals=false`). `TintPlaceholder` is **defined but currently unreferenced** ([DEAD] under lite-visuals).
-
-### PetAcquisitionService.cs  [LIVE — `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`]
-- `PetAcquisitionService : MonoBehaviour` singleton (DontDestroyOnLoad). The 3 acquisition paths + active-slot model (WO-297). Enum `PetAcquisitionSource{Starter,Tame,Hatch,Rescue,Gift}`. `DefaultMaxSlots=1`, `AbsoluteMaxSlots=6`. Public: `Tame/Hatch/Rescue(species)`→`Acquire`, `bool Acquire(species,source)` (writes GameState.Pets + OwnedPets enum + auto-slot + Save + events), `Owns`, `SetMaxSlots(int)`, `AssignSlot/ClearSlot/TryAssignFreeSlot/SpeciesInSlot`, `MaxSlots/ActiveSlotSpecies/FilledSlotCount`, events `Changed`/`PetAcquired(string)`. Slot→species runtime map rebuilt from StarterPetId on load. **FLAG (own header): exact slot assignment NOT persisted — needs a save-layer field; only the starter is auto-restored.**
-
-### PetProgression.cs  [LIVE]
-- `PetProgression : MonoBehaviour, IXpEarner [RequireComponent(Pet)]`. Per-pet XP/level (`level*85+55` curve, same as hero). On level-up applies dmg/hp multipliers to Pet (`+7%`/`+8%` per level, cap 3x; overridable by `PetData` SO). Registers under `Pet.PetId` in `XpEarnerRegistry`. Public: `AddXp(float)`, `Level`, `EarnerId`, `WorldPosition`. In-memory only (not persisted).
-
-### PetSkillTreeCatalog.cs  [LIVE]
-- Typed loader for `pet-skill-trees.json`. Types `PetSkillDef` (incl. WO-298 additive fields branch/magnitude/magnitudeType/questItem/cost), `PetSkillTreeDef`, `PetSkillTreeData`. Static: `PetMaxLevel`(20), `PetLoadoutSize`(3), `RespecFoodCost`(50), `RespecGlimmerCost`(5), `SkillsInBranch`, `GetSignature`, `GetTree`, `AllTrees`, `FindSkill`, `bool CanUnlock(skillId,petLevel,unlocked)`, `Reload`. **Catalog ships 11 species trees but only 3 (aether/flame/ice) have PetDefs in pets.json + map to PetSpecies enum — see FLAGS.**
-
-### PetHeroLeash.cs  [LIVE]
-- `PetHeroLeash : MonoBehaviour [RequireComponent(Pet)]`. Natural wander-near-hero motion: drifting heading random-walk + a "carrot" HomePost projected ahead, curve-home past explore radius, "stop & sniff" beats. Inner 4.5 / explore 9 / return 13. Resolves hero `HeroLocomotion` transform **by reflection** (per-pet seeded RNG). Also declares internal `PetNameTagBillboard` (TextMesh→camera billboard). No public API (driven by Update).
-
-### PetHarvester.cs  [LIVE]
-- `PetHarvester : MonoBehaviour [RequireComponent(Pet)]` — the core "pet gathers while you defend" loop (WO-229). State machine Idle/MovingToNode/Harvesting. Steers pet by re-anchoring `Pet.SetHomePost` to a node (suspends `PetHeroLeash` while gathering, restores after). Banks via existing `MineNode.TryAutoExtract` (no new currency). Combat ALWAYS wins (`ShouldYieldToCombat` = Defend pet with `Pet.HasHostileInRange`). detectRadius 28, scanInterval 1s, carryCapacity 50. No public API. **Superseded duplicate exists — see FLAGS.**
-
-### MineNodeBridge.cs  [LIVE — reflection seam]
-- Internal `MineNodeHandle` (wrap one Village `MineNode` Component: Position, IsValid, IsDepleted, IsClaimed, `SetClaim(bool)`, `int TryAutoExtract()`) + static `MineNodeBridge` (resolve `DeNelle.Village.MineNode` type + members once; `Available`; `FindNearest(from,radius)` via throttled `FindObjectsOfType`). Lets Pets reach Village node API without an asmdef ref.
-
-### PetAttackVfxBridge.cs  [LIVE — reflection seam]
-- Internal static. `Strike(Color,Vector3)` → Village `AbilityVfxKit.SpawnAbilityVfx` (Strike effect) by reflection; no-op if absent (WO-35).
-
-### PetClipPlayer.cs  [LIVE — WO-184 fallback]
-- `PetClipPlayer : MonoBehaviour`. Plays one embedded `AnimationClip` via `PlayableGraph` (no AnimatorController needed) for the ice-wolf (Generic rig, no shipped controller). `Initialize(Animator,AnimationClip)`; eases playback speed idle↔move off displacement. Build-safe.
-
-### PetAnimatorController.cs  [LIVE but partly UNWIRED — DEF-57]
-- `PetAnimatorController : MonoBehaviour [RequireComponent(Animator)]`. Cached-hash driver: `UpdateMovement(speed)`, `PlayAttack/PlayHit/PlayDeath`, anim-event hooks `OnAttackHit()`/`OnFootstep()` (both **TODO stubs** — "wire to PetCombat/AudioService when ticket filed"). WO-163 param guards. NOTE: Pet.cs drives its own Animator directly with hashes "Speed/Attack/Hit/**Dead**"; this component uses "**Death**" and is not auto-attached by PetDeployer → **largely unused today** ([FLAG]).
-
-### PetEmoteController.cs  [LIVE but WAVE-CLEAR WIRING STUBBED — DEF-57]
-- `PetEmoteController : MonoBehaviour`. Idle "Happy" emote, "Alert" on nearby `IDamageable` hostile (OverlapSphere), `Celebrate()` public. **`TrySubscribeWaveClear()/TryUnsubscribeWaveClear()` are EMPTY stubs** — header claims WaveManager subscription via reflection but the body is "wired externally". WO-163 param guards. Not auto-attached by PetDeployer.
-
-### PetBillboard.cs  [LIVE]
-- `PetBillboard : MonoBehaviour`. Yaw-only camera-facing billboard for the lite-pet sprite quad (WO-211). LateUpdate. Attached by PetDeployer when `UseLitePetVisuals`.
-
-### PetIdleRoutines.cs  [LIVE — self-disables, authoring gap]
-- `PetIdleRoutines : MonoBehaviour`. Cute idle routines (Sit/LieDown/Shake) after idle settle; deterministic seeded picker; param-guarded. **GAP: the cute params/clips DO NOT EXIST on any shipped pet controller** → component self-disables + logs the authoring contract once. Attached by PetDeployer. No public API.
+- **Six harvest affinities** (spec §3a table `:57-64`): Elowen→Wood, Doran→Iron, Aldwin→Food,
+  Corvin→Gold(Coins), **Bran→Crystals AND Maren→Crystals — Crystals is the one deliberately
+  DOUBLED affinity**; all six get `PreferredLane = Harvest`.
+- **Dump credits per affinity** (§3b): Gold via `EconomyService.AddCoins`, Crystals via
+  `AddCrystals`/`Grant` — with the OWNER CONFIRM constraint that the COMBINED Bran+Maren crystal
+  trickle stays the slowest income of the six (crystals are earnable but must never become a fast
+  faucet — monetization guard, §7 of the WO).
+- **Three disclosed pair-synergies** (§3c): Provisions (Elowen+Aldwin), Forge (Doran+Maren),
+  Fortune (Corvin+Bran) — populate `echoes-balance.json` `crossBonuses`.
+- **Hidden tri-synergy** (§3d): all three pairs running → undisclosed flat `hiddenTriSynergyBonus`
+  (default 0.25) applied in `AggregateHarvestMultiplier` only; MUST be excluded from every
+  displayed `+%` (applied ≠ displayed, FlowTrace-proven).
+- Also in scope: silo capacity/rate reconciliation (`EchoService.cs:148` caveat), balance re-tune
+  (`preferredLaneMatchBonus` 0.75 → ~0.35-0.45), `EchoSpecializationRegression` rewrite, both
+  `echoes-balance.json` copies byte-identical.
+- **When implemented, this file's §1 currency map gains a sixth earn seam (Echo silo Dump) for
+  Wood/Iron/Food/Gold/Crystals — update in the same commit (§15 canon rule).**
 
 ---
 
-## ECONOMY — `Assets/_Modules/Economy/`  [DOC-ONLY in this scope]
-- Contains ONLY `README.md` (+ .meta). **No `.cs`, no asmdef.** README documents the LIVE economy path which lives OUTSIDE this folder: `DeNelle.Village.MineNode`/`EconomyService`, `DeNelle.Pets.PetHarvester`+`MineNodeBridge`, `ClaimableCamp`/`Outpost`, `PetHarvestBootstrap`. States the in-folder code (ResourceNode family, old PetHarvester, ResourceInventory) is **superseded** — but those files are not present at this path (already removed/relocated). Canonical income API: `EconomyService.Instance.AddResource(ResourceType,amount)` / `Grant` / `TrySpend`.
+## RISK LEDGER (prioritized)
 
----
-
-## CANONICAL JSON DATA (`Assets/StreamingAssets/Data/Canonical/`)
-Dual-copied to `Assets/Resources/Data/Canonical/` (Resources copy WINS at load, WebGL-safe via `CanonicalJson`).
-
-| File | version | count | schema / notes |
-|---|---|---|---|
-| `packs.json` | 1 | 5 packs | hearth-spark(t1)→founders-vow(t5,founderOnly). Each: sku/tier/name/tagline/theme/pricing{usd,usdc,sol,skr}/contents{cosmetics[],economy{glimmer,crystals,food,coins},convenience[]}/packExclusiveCosmetic. Canon names verbatim. `currencyDisclaimer`="Token price moves with the market." Convenience = time-saving only (no combat power). |
-| `wallets.json` | 1 | 2 entries | rewardsDistributor(`2JRmE…nmNi`, Seed Vault, transparency-only NOT a recipient) + devnetPurchaseRecipient(`3Eeww…gaHe`, Solflare devnet sink). PUBLIC addresses only, no keys. |
-| `cosmetics.json` | 1 | 12 items | 4 hero / 4 pet / 4 village skins. Fields id/category/appliesTo/displayName/description/glimmerCost/unlockMethod(buy\|achievement)/previewColor. **`pet-aether-twilight` row carries extra `meshPath` + `specialSale` fields NOT in CosmeticDef** (ignored on load). Achievement items glimmerCost 0. |
-| `pets.json` | 1 | 3 pets | deployRadius 11. aether-sprite(slot0)/flame-pup(slot1)/ice-wolf(slot2), each 5 bondRanks(0–4). |
-| `pet-skill-trees.json` | 1 | **11 trees** | petMaxLevel 20, petLoadoutSize 3, respecFoodCost 50, respecGlimmerCost 5. Trees: aether-sprite, flame-pup, ice-wolf (12/12/11 skills) + sproutling, craghound, frostkit, emberpup, mirewing, glimmermoth, stoneback-calf, aether-fox (11 each). Skill fields: id/name/type(active\|passive)/tier/description/cooldownSeconds?/unlockLevel/prerequisites[] + WO-298 branch/magnitude/magnitudeType/questItem/cost. |
-
----
-
-## DOCS (READMEs in scope)
-- `Wallet/README.md` — "Monetization + crypto (~70% built, do NOT greenfield). Store scene-wiring DISABLED pending own PanelSettings." **CURRENT.**
-- `Cosmetics/README.md` — catalog/applier/battlepass/glimmer; shop UI in `HUD/CosmeticShopPanel` (WO-236); open Q in `docs/GLIMMER_ECONOMY_OPEN_QUESTION.md`. **CURRENT.**
-- `Web3/README.md` — Jupiter swap; lists the 4 files. **CURRENT but terse** (doesn't note the devnet/mainnet contradiction or stub-signer).
-- `Pets/README.md` — file map; explicitly notes "a second PetHarvester.cs also exists in Economy/ (superseded — use this one)". **Mostly current but references in-Economy files that aren't physically present here** (see FLAGS).
-- `Economy/README.md` — superseded-path doc; points to live Village+Pets economy. **CURRENT as a pointer, STALE as a file inventory** (describes files not in the folder).
-
----
-
-## FLAGS
-
-### Stale-comment-vs-code (the flagged class)
-1. **Pet.cs movement comment is STALE.** Section header reads `"// Movement — kinematic drift; NavMeshAgent wiring is the integrator's."` (line ~582) — but `Awake()` self-adds and configures a `NavMeshAgent` and `MoveToward` drives it via `_agent.Move(displacement)` (WO-187). The agent IS wired by Pet itself, not the integrator. Same class as the HeroLocomotion "pure transform" trap. The accurate WO-187 comment block above it contradicts the older one-liner header.
-2. **PetAnimatorController param-name mismatch.** Declares Death trigger `"Death"`; the live driver Pet.cs uses `"Dead"`. The two won't agree if both run; PetAnimatorController is not auto-attached, so this is latent, not active.
-3. **PetEmoteController header vs body.** Header documents "subscribes to WaveManager.OnWaveCleared via reflection bridge"; `TrySubscribeWaveClear/TryUnsubscribeWaveClear` are **empty stubs** — celebration is "wired externally" only. Comment overstates what the code does.
-4. **CosmeticApplier reconciliation comment** correctly notes `CosmeticData`/WO-72 SO "never built" — accurate, not stale, but worth knowing the material path is only a preview-color tint until art refs land.
-
-### Dead / duplicate / unreferenced code
-5. **Duplicate `PetHarvester`.** READMEs state a second (old) `PetHarvester.cs` exists in `Economy/` and is superseded — physically NOT present at `Assets/_Modules/Economy/` now (folder is README-only), so the dup is already gone but the docs still warn of it.
-6. **PetDeployer dead branches under lite-visuals.** With `UseLitePetVisuals=true`, the entire Tripo-FBX path (`TryLoadPetMesh`, `WirePetAnimator`, `TryLoadEmbeddedClip`, `NormalizePetHeight`, `StripPetColliders`, Camera/Light/Particle strip, `AffinityGlow`) never executes. `TintPlaceholder` is defined but **referenced nowhere** (truly dead).
-7. **PetAnimatorController + PetEmoteController not auto-attached** by PetDeployer (only Leash/Harvester/IdleRoutines/Progression are). Both are largely orphan presentation components today (DEF-57), with TODO stubs (`OnAttackHit`, `OnFootstep`, wave-clear).
-8. **StakingBonusManager (WO-76) does not exist** — CryptoPaymentManager resolves it by reflection and no-ops; the SKR staking bonus is currently just the flat 1.25x multiplier.
-
-### Scene-gated / disabled
-9. **PackStore scene-wiring DISABLED** (README + CLAUDE.md §8 / PIPELINE_STATE): store needs its own PanelSettings before re-enabling. PackStore code-builds its UI to dodge the empty-UXML player-build trap; **WalletConnectDialog and JupiterSwapPanelController still bind real UXML by name** → they would render empty in a player build (uxml-in-builds trap, per memory).
-10. **SOLANA_SDK define off by default** → all real on-chain wallet ops run through `StubWalletProvider` (devnet mock). Nothing transacts on a real chain today. Wallet asmdef versionDefine has an **empty version expression**, so the define flips on the moment the package resolves (intended) — but `SolanaWalletProvider`'s SDK calls are all `// SDK-VERIFY:` unconfirmed names.
-11. **Convenience tokens not applied** — `PackStore.ApplyPackContents` grants crystals/food/coins + records SKUs but deliberately skips convenience tokens ("Week-8 inventory pass").
-
-### Broken / contradictory
-12. **Jupiter network contradiction.** `JupiterSwapService` targets the **mainnet** public Jupiter aggregator (`quote-api.jup.ag`) while the entire wallet stack is **devnet-only and owner-gated** (spec Part 10). Flagged in the file header, **unreconciled** — a real swap can't be both devnet-wallet and mainnet-Jupiter.
-13. **SKR mint is empty everywhere.** `WalletEndpoints.SkrMintDevnet/Mainnet = ""` and `JupiterSwapService._skrMint = "REPLACE_WITH_SKR_MINT_ADDRESS"`. Any real SKR transfer or swap fails cleanly until the integrator supplies the live SKR SPL mint. (SKR pricing still works in-store via the stub.)
-14. **Swap signing is a stub that hard-fails in release.** `WalletBridgeStub` logs a fake signature in editor/dev and `LogError`s in a release build. No real Jupiter-swap signer exists; `SolanaWalletProvider` signs SystemProgram/TokenProgram transfers but has **no Jupiter-swap deserialize-and-sign path**.
-15. **pet-skill-trees.json over-specifies vs runtime.** 11 species trees authored, but only 3 species exist in `pets.json` + map to the `PetSpecies` enum (`PetAcquisitionService.TryToSpeciesEnum`). The other 8 (sproutling, craghound, …) can be acquired into `GameState.Pets` (by id) but **cannot be carried in the OwnedPets enum list** (acquisition's own FLAG) and have no PetDef to deploy from PetCatalog.
-16. **Three separate persistence stores in this area** — PackStore→`GameStateService` (unified save); GlimmerCurrencyService→PlayerPrefs `dotr-cosmetics-v1`; BattlePassManager→PlayerPrefs `BP_*`. Ownership of pack-granted cosmetic SKUs lands in `GameState.OwnedItemIds`, but Glimmer-shop cosmetic ownership lands in the SEPARATE PlayerPrefs blob → two cosmetic-ownership sources of truth that are not reconciled.
-17. **PetAcquisitionService active-slot assignment not persisted** (its own header FLAG) — only the StarterPetId slot survives a reload; multi-slot rosters reset.
+1. **TrySpend/Grant dual-wallet asymmetry (Wood/Iron)** — earns mirror to both stores, spends
+   debit only one; GameState ledger and in-session pool drift monotonically; `CanAfford` is
+   mixed-authority (`EconomyService.cs:263-291` vs `:311-317`). No oracle covers the round-trip.
+2. **WO-830 lands new money faucets (Gold + doubled Crystals) into this exact seam** — the Dump
+   path must use `AddCoins`/`AddCrystals` (GameState-authoritative) and NOT the Wood/Iron pool
+   path, or Flag 1 widens. Spec already warns (`WO-830 §7` "do NOT credit AetherCrystal via the
+   old GrantSpendable(wood,food,iron) overload").
+3. **Cosmetic-ownership split-brain is bridged, not unified** — dual-write via `MarkCosmeticOwned`
+   (ECON-02) holds only while both stores survive together; cloud restore / PlayerPrefs wipe
+   desyncs paid entitlements (§7).
+4. **Convenience tokens: sold but inert** — all 13 packs advertise counts that grant nothing
+   (`PackStoreVM.cs:126-128`). Covenant-clean but a shipped-lie risk on the pack card.
+5. **Battle pass is parked** — nothing spawns `BattlePassManager`, no `BattlePassData` SO exists,
+   Resource rewards are log-only; `BP_*` PlayerPrefs schema is live code awaiting a product
+   decision.
+6. **Wallet-connect + Jupiter panels are UXML-dead in builds**; Jupiter is additionally
+   mainnet-vs-devnet contradicted, stub-signed, and mintless. Anything demoing "real wallet"
+   flows must go through PackStore (code-built) or the Solana Mobile SDK work (WO-766), not these.
+7. **Glimmer wallet is PlayerPrefs-fragile** — a corrupt blob resets to 25 Glimmer with purchases
+   lost (guarded by a FlowTrace.Fail, but no backup/repair path; `GlimmerCurrencyService.cs:298-313`).

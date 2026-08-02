@@ -1,249 +1,233 @@
 # Master Catalog — resources-art
 
-Scope: `Assets/Resources` (non-data: prefabs, `.controller` animators, FBX, icons)
-plus `Assets/Art`, and the gitignored model packs (`Assets/Models/*` KayKit,
-`Assets/polyperfect`). Verified by reading the actual files, prefab YAML, the
-`.asset` ScriptableObjects, and every `Resources.Load*` call site in code.
-
-`Resources.Load(path)` takes a path **relative to any `Resources/` folder, no
-extension**. The catalog below pairs each load-path-family to its backing assets
-and flags the ones with **no backing asset on disk** (silent-null at runtime).
+**Verified 2026-08-02** from the actual tree (`Assets/Resources/**` on disk, `git ls-files`,
+`.gitignore`, `.gitattributes`, consumer-code grep, git history) — NOT from comments.
+Supersedes the 2026-06-12 body (+2026-07-03 note). Live anchor at write time:
+`CANON_GROUND_TRUTH_2026-08-01.md`. `Resources.Load(path)` = path relative to any
+`Resources/` folder, no extension; an FBX is loadable as a GameObject.
 
 ---
 
-## 1. Resources.Load path map (code → asset)
+## 1. Folder inventory (33 dirs under `Assets/Resources/`, non-meta file counts)
 
-Path families resolved from grepping every `Resources.Load*` literal/interpolation.
-"Backed" = matching asset(s) exist under an `Assets/Resources/` folder.
+| Folder | Files | What it is (consumer) |
+|---|---|---|
+| Arena | 28 | `ForestClearingArena.prefab` + rocks/trees FBX + `Backdrops/` jpgs — `BattleArena.cs:577,815-817` |
+| Audio | 2 | `Music/GameOver.mp3`, `bellssteel-panic.mp3` |
+| Bridges | 1 | `Bridge_Medieval_Stone.prefab` — `CastleMoatBuilder.cs:630` |
+| Cosmetics | **0** | EMPTY — `PetDeployer` cosmetic loads still silent-null |
+| Data | 77 | Canonical JSON — DATA catalog scope, not here |
+| Dialogue | 0* | `DialogueSystem.prefab` folder (prefab present; count excludes .meta quirk) |
+| Dungeons | 4 | `FolksGranary.asset` + `HealersCottage.asset` DungeonDefs, `enemy_outpost.fbx` (+tex) |
+| Echoes | 6 | `Portraits/` — 6 echo portraits (EmberPhoenix, Frosthowl, StonewardenBear, StormcoilSerpent, VerdantStag, VoidwingRaven) — `EchoRosterCatalog.cs:200` |
+| Enemies | 154 | AccuRig enemy bodies + controllers — §3 |
+| Harvest | 8 | 4 Tripo FBX `wood/iron/food/crystals` (+tex) — `MineNodeVisual.cs:65-68`, `HarvestSite.cs:357-360` |
+| Hedges | 1 | `Fence_Shrub.prefab` — `CastleMoatBuilder.cs:123` |
+| Heroes | 104 | Hero bodies + props/weapons — §4 |
+| HudIcons | 64 | Town/combat HUD icons; class dirs `Healer/Knight/Ranger/Wizard` + **new `BuildingUpgrades/`** |
+| ItemIcons | 492 | Flat sprite-sheet set — `ItemIconCatalog.cs:9` (`LoadAll<Sprite>("ItemIcons/<sheet>")`, indexed by sprite name; grew from 8 cryptic jpgs) |
+| Materials | 3 | incl. `RoundedChatBubble.mat` |
+| NPCs | 37 | 4 NPC prefabs + **`KayKit/` 12-body stage** — §2 |
+| OffsetForge | 1 | `offsets.json` hand-dialed placement offsets — `CastleMoatBuilder.cs:640` |
+| PatriciaLight | 9 | REMOVED-module remnant (`tower2.fbx`+tex); no live loader — keep-dead |
+| PetPortraits | 3 | `pet-aether-sprite/flame-pup/ice-wolf` PNGs |
+| Pets | 25 | **NOW BACKED** (was empty): `aether-sprite/flame-pup/ice-wolf.fbx` (+fox tex/fbm, Materials) — `PetDeployer.cs:616` `Load<GameObject>("Pets/"+Species)` resolves the FBX; controllers/clips still miss → procedural fallback (`PetDeployer.cs:697-705,768`) |
+| Portraits | 27 | Building portraits incl. per-tier tower portraits (`archer-tower-2/-3`, `ballista-2/-3`, `catapult-*`, `arcane-spire-*`), `brom.jpg`, `Sylas.png` |
+| ProjectileIcons | 2 | 2 sheets — `ProjectileArtCatalog` |
+| Raids | 1 | `Raids_banner.jpg` |
+| RpgUi | 482 | Code-built-UI sprite library, **21 role dirs** (abilities, badge, bars, button, classslot, crown, currency, decoration, element, emblem, font, frame, hud, icons, panel, potion, prefabs, prefab_deps, silhouette, slot, spellicons) — `RpgUiCatalog`; fed by RpgUiImporter (gitignore line 317) |
+| Sfx | 4 | `Heal.mp3`, `LookoutHorn.wav`, `Spell_Impact.mp3`, `Swords_Clash.mp3` — everything else still procedural `Generate*()` fallback in `GameSfx` |
+| Structures | 128 | ⚠ **gitignored folder with a tracked exception set** — §5 |
+| Talents | 68 | talent-tree icon PNGs: `knight/` `ranger/` `wizard/` `shared/` — `EchoService.cs:548` + skill-tree UI |
+| Textures | 2 | misc |
+| Title | 2 | `Title_H/Title_L.jpg` |
+| Towers | 4 | `ArcherTower/DevTower/FrostTower/MageTower.asset` TowerData SOs |
+| VFX | 15 | **`HovlVfxCatalog.asset`** + `VFXCatalog.asset` + 13 `Projectiles/*` prefabs — §6 |
+| VfxParade | 1 | `VfxParadeManifest.asset` — AdminOverlay "VFX Parade" (`AdminOverlay.cs:544`; bake via VfxParadeManifestBuilder.Build) |
+| Walls | 15 | `wood/iron/steel_wall.fbx` + PBR tex — `WallTierData.cs:78-85` (steel = "PENDING owner art") |
 
-| Load path (arg) | Type | Caller(s) | Backed? |
-|---|---|---|---|
-| `Heroes/<slug>` | GameObject | `AtbCombatantSwapper`, `HeroAnimatorFactory` | YES — `Resources/Heroes/{Cleric,Knight,Mage,Ranger}.fbx` |
-| `Enemies/<slug>` | GameObject | `AtbCombatantSwapper`, `EnemyOutpostBuilder` | YES — many FBX under `Resources/Enemies` |
-| `Enemies/<controller>` | RuntimeAnimatorController | `AtbCombatantSwapper`, `EnemyAnimatorFactory` | YES — `Boss/Dragon/HumanoidEnemy/LargeEnemy/OrcWarband.controller` |
-| `Enemies/Boss_Dragon` | `DragonBoss` (prefab) | `WaveManager` | YES — `Resources/Enemies/Boss_Dragon.prefab` |
-| `Pets/<species>` | GameObject | `PetDeployer` | **NO** — `Resources/Pets` is EMPTY (0 files) |
-| `Pets/<species>` / `Pets/Pet` | RuntimeAnimatorController | `PetDeployer` | **NO** — no controllers; falls to procedural |
-| `Pets/<species>` (clips) | AnimationClip[] | `PetDeployer` | **NO** |
-| `Cosmetics/Pets/<equipped>` | GameObject | `PetDeployer` | **NO** — `Resources/Cosmetics/Pets` EMPTY |
-| `Cosmetics/Previews/<id>` | Texture2D | `CosmeticShopPanel` | **NO** — no `Cosmetics/Previews` folder |
-| `PetPortraits/<id>` | Sprite / Texture2D | `PetDeployer`, `PetSelectController` | PARTIAL — 3 PNGs (`pet-aether-sprite`, `pet-flame-pup`, `pet-ice-wolf`) |
-| `HudIcons/<key>` | Sprite | `VillageHudController`, `BattleHudUgui` | YES — large `Resources/HudIcons` set |
-| `HudIcons/<sheet>` (LoadAll) | Sprite[] | `VillageHudController` | YES (sheet sub-sprites) |
-| `RpgUi/<role>` (LoadAll) | Sprite[] | `RpgUiCatalog` | YES — `Resources/RpgUi/{badge,bars,button,icons,panel,potion}` |
-| `ProjectileIcons/<sheet>` (LoadAll) | Sprite[] | `ProjectileArtCatalog` | YES — 2 sheets |
-| `Structures/Portal` | GameObject | `DungeonEntranceBootstrap` | YES — `Resources/Structures/Portal.fbx` |
-| `Towers/DevTower` | `TowerData` | `BuildMenu`, `TowerLoopDevHarness` | YES — `Resources/Towers/DevTower.asset` |
-| `Dungeons` (LoadAll) | `DungeonDef` | `DungeonWorldPortalSpawner`, `DungeonEntranceBootstrap` | YES — `FolksGranary`, `HealersCottage` |
-| `Title/Title_L` / `Title/Title_H` | Texture2D | `TitleController` | YES — `Resources/Title/` |
-| `HeroPortraits/<slug>` | Sprite/Texture2D | `TitleController`, `HeroSelectController`, `PortraitCache` | **NO Resources/HeroPortraits folder** — see FLAGS |
-| `heart-wing` | Texture2D | `HeroSelectController`, `TitleController` | **NO** — no `heart-wing` at Resources root |
-| `Intro/intro-<id>` | Texture2D | `StoryIntroController` | **NO Resources/Intro folder** |
-| `UI/panel_bg`, `UI/menu_bg` | Texture2D | `ElarionUi` | **NO Resources/UI folder** (lazy, single-try guarded) |
-| `Sfx/<id>` | AudioClip | `GameSfx`, `EnemyCombatAudio`, `AudioService`, `IntroCommandBridge` | PARTIAL — only `Sfx/LookoutHorn.wav` ships; ALL others fall back to procedural `Generate*()` |
-| `Audio/GameAudioMixer` | AudioMixer | `AudioBootstrap`, `BattleMusicManager` | (Audio folder — out of art scope; mixer expected) |
-| `DeNelleAudioService` | GameObject | `AudioBootstrap` | prefab path (audio scope) |
-| `Dialogue/DialogueSystem` | GameObject | `CompanionMeetingTrigger`, `IntroSequencePlayer` | YES — `Resources/Dialogue/DialogueSystem.prefab` |
-| `Data/Canonical/*` | TextAsset | `CanonicalJson` (all catalogs) | DATA scope (separate catalog) |
-| `DevPanelSettings`, `JupiterSwapPanel` | PanelSettings/VisualTreeAsset | DevBootstrap, JupiterSwapBootstrap | UI scope |
-
----
-
-## 2. Resources/ — art folders (inventory)
-
-### Heroes/ — 4 playable hero/companion bodies (Tripo-rigged FBX)
-- FBX + matching `.controller`: `Cleric`, `Knight`, `Mage`, `Ranger`. Slug names
-  map to roster (Cleric=Elara/Healer, Knight=Grom, Mage=Thrain/Wizard, Ranger=Sylas).
-- Each FBX has a `.fbm/` (embedded materials), a `_tex`/`Textures/` sidecar, and a
-  `.fbx.tripo-extracted` marker (written by `TripoAssetPostprocessor`; "delete to
-  force re-extract"). `Cleric_tex/` exists; Knight/Mage/Ranger share `Textures/`.
-- `Heroes/Materials/` — per-hero `_basecolor` mats + Tripo `tripo_mat_*_Pbr_Diffuse`
-  + CC skin/tongue mats (`Std_Skin_Head_Pbr`, `Std_Tongue_Pbr`, `Motion_Dummy_Female`).
-- `Heroes/Props/` — `Bow.fbx` + `Bow.prefab` + `Bow.mat` (ranger weapon), `ranger_texture.png`.
-- `Heroes/Props/Weapons/` — KayKit-style weapon FBX set: `axe_A`, `bow_A/B/C`,
-  `dagger_A`, `hammer_A`, `shield_A`, `staff_A/B/C/D`, `sword_A/D/F/G`, `wand_A` (+`Materials/`).
-
-### Enemies/ — creature FBX + shared animator controllers
-- FBX: `Demon`, `Dragon`, `Necromancer`, `OgreMage`, `Troll`,
-  `Orc_Berserker`, `Orc_Necromancer`, `Orc_Shaman`,
-  `Skeleton_Golem`, `Skeleton_Mage`, `Skeleton_Minion`, `Skeleton_Rogue`, `Skeleton_Warrior`.
-- Controllers (5): `Boss`, `Dragon`, `HumanoidEnemy`, `LargeEnemy`, `OrcWarband`.
-  Rig→controller routing lives in `EnemyAnimatorFactory.RigFor()/Controller()`
-  (Skeleton_Golem→LargeEnemy, Necromancer→Boss, Dragon→Dragon, Orc_*→OrcWarband, default→HumanoidEnemy).
-- `Boss_Dragon.prefab` — apex boss prefab, loaded as `DragonBoss` by `WaveManager`.
-- `EnemyVfxSet_Default.asset` — `DeNelle.Village.EnemyTypeVfxSet` SO; **all arrays EMPTY**
-  (hit/death/attack VFX+SFX unassigned, telegraph 0.5s). Live wiring point, currently bare.
-- `Materials/` (Dragon bump/normal, Glow, skeleton), `skeleton_texture_A.png` + `_URP.mat`.
-
-### Structures/ — buildable/decor prefabs (KayKit medieval + Tripo)
-- KayKit-derived prefabs: `Altar`, `Anvil`, `Ballista`, `Catapult`,
-  `Gate_Medieval_Medium`, `House_Medieval_{Small,Medium,Large}`, `Marketplace_Stand_Simple`,
-  `Pillar_Ionic`, `Stables_Medieval`, `Torche_Wall`, `Tower_Castle_Round`,
-  `Tower_Medieval_Big`, `Tower_Medieval_Wood`, `Wall_Medieval_{Stone,Wood}`,
-  `Watermill_Medieval`, `Well`, `Windmill_Medieval`.
-- Tripo FBX: `Portal.fbx` (+`.fbm`, tripo-extracted), `PetHouse.fbx`, `tree_of_life.fbx`.
-- Loose Tripo textures at folder root: `PetHome_basecolor.JPEG`,
-  `TreeofLife_basecolor/normal/roughness.JPEG`. `Materials/`, `Textures/` subfolders.
-
-### NPCs/ — 4 NPC prefabs
-- `NPC_Blacksmith`, `NPC_Merchant`, `NPC_Peasant_Mevina`, `NPC_Peasant_Tob`.
-  (Backed by `Models/People` optimized pack — see gitignore note §6.)
-
-### Towers/ — TowerData ScriptableObjects (`DeNelle.Core.Data.TowerData`)
-- `ArcherTower` (cost 150, targets 2, upgrade tiers w/ range/damage + visualPrefab GUID),
-  `DevTower`, `FrostTower`, `MageTower`. Loaded by `BuildMenu`/dev harness via `Towers/<name>`.
-
-### Dungeons/ — DungeonDef SO (`guid 3b08727…`)
-- `FolksGranary`, `HealersCottage` (DungeonId, NameKey i18n, DisplayName, SceneName
-  e.g. `Dungeon_HealersCottage`, Banner, AccentColor). `Resources.LoadAll<DungeonDef>("Dungeons")`.
-
-### HudIcons/ — town + combat HUD icon set
-- Root PNG/JPG: `Elarion`, `hud_build/compass/crystal/food/heart/intel/invasion_handle/
-  invasion_medal/invasion_medallion/inventory/iron/music/quest/settings/strip_bar/talk/
-  wave_clock/wave_plate/wood`, `player_frame_bg`, `player_hp_fill`, `player_mp_fill`,
-  `population`, plus stray `a pic.png`.
-- Per-class ability-icon subfolders (loaded `HudIcons/<Class>/<key>` via BattleHudUgui):
-  - `Healer/`: healer, Healer_Heal, Healer_Group_Heal, Healer_Holy, Healer_Smite
-  - `Knight/`: knight, Knight_Charge, Knight_Cleave, knight_parry, knight_thrust
-  - `Ranger/`: ranger, Ranger_Barrage, Ranger_Poison_Arrow, Ranger_Ranged_Attack, ranger_rapid_fire
-  - `Wizard/`: wiard(sic), Wizard_Fireball, Wizard_Lightining(sic), Wizard_Meteor, Wizard_Plasma
-
-### RpgUi/ — code-built-UI sprite atlas, loaded per role via `RpgUiCatalog`
-- `badge/badge_level`; `bars/bar_{fill,frame}_{blue,green,red}`; `button/button_gold`;
-  `icons/icon_{combat,compass,heart,inventory,quest,settings,shield,sword,talk,tree}`;
-  `panel/panel_{bar,inventory,quest,tab}`; `potion/potion_{fire,health,mana}`.
-
-### ItemIcons/ — 8 raw item icons (cryptic source names): `0D5St, CtQcX, Ud37F, VxBVb, WRdWM, bRUz5, inEJH, jdRCa` (.jpg).
-
-### ProjectileIcons/ — 2 sheets: `projectiles_arrows_magic.jpg`, `projectiles_spell_vfx_lifecycle.jpg` (loaded by `ProjectileArtCatalog`, `Sheets[]`).
-
-### Portraits/ — building portraits (jpg): `arcane-tower, armorer, farm, forge, lumbermill, market, pet-house`.
-
-### PetPortraits/ — 3 PNGs: `pet-aether-sprite, pet-flame-pup, pet-ice-wolf`.
-
-### VFX/Projectiles/ — 9 spell VFX prefabs (loaded by `ProjectileVFXCatalog`)
-- `Projectile_{Arcane,Fire,Ice,Storm}`, `Explosion_{Arcane,Fire,Ice,Storm}`, `Flash_generic`.
-
-### Cosmetics/Pets/ — **EMPTY** (referenced by PetDeployer skin swap; nothing to load).
-
-### Dialogue/DialogueSystem.prefab — Yarn dialogue runner prefab (Options, Action Button, Heart, line view); spawned by `CompanionMeetingTrigger`/`IntroSequencePlayer`.
-
-### PatriciaLight/ — REMOVED module remnant (per PIPELINE_STATE)
-- `tower2.fbx` + `tower2/` Tripo textures (`medievaltower3dmodel_basecolor/normal/roughness.JPEG`).
-  Only this kept after Defend-the-Tower removal; no live loader found.
-
-### Misc Resources art roots
-- `Title/Title_{H,L}.jpg` (title bg). `Textures/{CastleArch,Cathedral,Knight,Ranger}`.
-- `Materials/RoundedChatBubble.mat`. `Audio/{Music/GameOver.mp3, bellssteel-panic.mp3}`,
-  `Sfx/LookoutHorn.wav` (only shipped SFX file). `Pets/` empty.
+**ABSENT (still):** `Resources/HeroPortraits/` — `TitleController`/`HeroSelectController`/
+`PortraitCache` load `HeroPortraits/<slug>` and get null (carried landmine, anchor 08-01 §4).
+Also still unbacked: `Cosmetics/*`, `Intro/*`, `UI/panel_bg|menu_bg`, `heart-wing`.
 
 ---
 
-## 3. Assets/Art — source art (mostly NOT under Resources/, not runtime-loadable)
+## 2. NPCs — 4 prefabs + the KayKit 12-body stage (WO-818, shipped 2026-08-01)
 
-These are authoring sources / FBX imports; runtime copies live in `Resources/` where needed.
-
-- `Art/Crystals/Crystals.fbx` (+`crystals/` textures).
-- `Art/Enemies/ATB/` — ATB roster reference sheets (jpg): `goblin_family`, `orc_mixed_family`, `orc_warband`, `troll_family`.
-- `Art/Hero Select/HeroSelect.jpg`.
-- `Art/Heroes/ATB/` — animation-state ref sheets: `elara_healer_states`, `grom_knight_states`, `thrain_wizard_states`, `roster_animation_states_gray`.
-- `Art/Marketplace/marketplace.fbx` (+`marketplace/` PBR textures).
-- `Art/Title/Title_{H,L}.jpg` (source dupes of Resources/Title).
-- `Art/Towers/` — `BlastTower.fbx` (+BlastTower/ textures), `VikingWatchTower/Tower.fbx`.
-- `Art/Tree_Of_Life.fbx` (+ `Tree_Of_Life/` textures).
-- `Art/TripoStructures/` — Tripo building FBX: `BuildTower`, `Farm`, `Forge`, `LumberMill`,
-  `PetHome` (each w/ `.fbm` + `.fbx.tripo-extracted`); `Materials/` (per-part
-  `*_tripo_part_N_basecolor.mat` — many PetHome parts), `Textures/`.
-- `Art/UI/HudIcons/hud_widgets_sheet.jpg`; `Art/UI/ItemIcons/` (source jpgs + `ConsumablesCrafting/`).
-- `Art/VFX/Projectiles/` — `projectiles_arrows_magic.jpg`, `projectiles_spell_vfx_lifecycle.jpg` (source of ProjectileIcons).
-
----
-
-## 4. Art-consumer code (factories / catalogs) — public API
-
-| Class | File / asmdef | Responsibility | Key public |
-|---|---|---|---|
-| `VisualFactory` | `_Modules/Village/VisualFactory.cs` · DeNelle.Village | Runtime skinner: Resources.Load model → instantiate under host → fit/seat/strip/URP-fix. Visual-only. | `Skin(host, resourcesPath, SkinOptions)`, `Skin(host, prefab, opts)`; `SkinOptions.Enemy/Structure/Prop`. SkinOptions.LocalRotation applied BEFORE fit/seat (DEF-232 off-pivot fix). |
-| `EnemyAnimatorFactory` | `_Modules/Village/Enemies/EnemyAnimatorFactory.cs` · DeNelle.Village | Maps enemy model name → rig → shared controller, loads `Enemies/<controller>`. | `RigFor(modelName)→EnemyRig`; loads controller at runtime. |
-| `RpgUiCatalog` | `_Modules/Core/UI/RpgUiCatalog.cs` · DeNelle.Core | Lazy `Resources.LoadAll<Sprite>("RpgUi/<role>")` cache for code-built UI. | `Get(role)`, `Get(role,spriteName)`, `TryGet(...)`, `ClearCache()`. |
-| `ProjectileArtCatalog` | `_Modules/Village/Buildings/ProjectileArtCatalog.cs` · DeNelle.Village | Element→projectile/impact icon from 2 sheets. | `ForElement`, `ImpactForElement`, `ForArrow`, `ForSpellOrb`, `ForTowerName`, `ElementForTowerName`. |
-| `ProjectileVFXCatalog` | `_Modules/Village/Buildings/ProjectileVFXCatalog.cs` · DeNelle.Village | Loads `VFX/Projectiles/*` prefabs. | (path-keyed loader). |
-| `PortraitCache` | `_Modules/DialogueUI/PortraitCache.cs` · DialogueUI | Wraps Texture2D portraits (imported as Textures, not Sprites) into cached runtime Sprites; misses cached too. | static Get(path). |
-| `PetDeployer` | `_Modules/Pets/PetDeployer.cs` · DeNelle.Pets | Loads pet body/controller/clips/cosmetic/portrait from `Pets/`,`Cosmetics/Pets/`,`PetPortraits/`. | (all targets currently UNBACKED — falls to procedural). |
-| `VillageHudController` | `_Modules/HUD/VillageHudController.cs` · DeNelle.HUD | Town HUD; custom `HudIcons/<name>` sprite wins over sheet sub-sprite. | passive display. |
-| `BattleHudUgui` | `_Modules/BattleATB/BattleHudUgui.cs` · DeNelle.BattleATB | ATB combat HUD ability icons via `HudIcons/<Class>/<key>`. | — |
-| `GameSfx` | `_Modules/Village/Audio/GameSfx.cs` · DeNelle.Village | Loads `Sfx/<id>` else procedurally generates the clip (`?? Generate*()`). | per-sfx static accessors. |
+- Prefabs: `NPC_Blacksmith`, `NPC_Merchant`, `NPC_Peasant_Mevina`, `NPC_Peasant_Tob`
+  (backed by the LFS-tracked `Assets/Models/People/` pack). `TorchWardenDress.cs:53-54` loads
+  Mevina/Tob as dungeon torch-warden bodies.
+- **`NPCs/KayKit/` — 12 tracked Humanoid bodies** (commit `e8bd17b0`, `KAYKIT_STAGE_OK 12/12`):
+  Barbarian, BlackKnight, Cleric, Druid, Engineer, Farmer_A, Farmer_B, Hoarder, Mage,
+  Paladin_with_Helmet, Ranger, Tiefling — each FBX + `<name>_texture.png` + `Materials/*.mat`,
+  plus **`KayKitNpcIdle.controller`**.
+- Resolver: **`KayKitNpcBody`** (`Assets/_Modules/Village/NPCs/KayKitNpcBody.cs`) — the ONE
+  chain: `NPCs/KayKit/<npcModel>` first → People-pack chain → capsule; one `FlowTrace.Warn` on an
+  authored-but-broken slug, never a blank NPC. Driven by `repo.npcModel` on exactly 12 rows of
+  `structures-catalog.json` v6 (`RepoProps.cs:138`); consumed by `BarracksNpcInjector` +
+  `CastleVendorNpcInjector`. Body swap = one-word owner JSON retag (creative pick = OWNER-ONLY).
+- Oracle: **`CheckNpcModels`** in `DataRegression` (`NPC_MODELS_OK` — parity + slug-file existence
+  + the exactly-12 pin; a 13th row must update the oracle in the same commit).
+- Known gap: KayKit bodies stand **statically** (no AmbientNPC/Animator wiring on the FBX) —
+  animated idles = follow-up WO (anchor 08-01 §2).
 
 ---
 
-## 5. FLAGS
+## 3. Enemies — AccuRig cast + licensed dragon (WO-760)
 
-### Stale-comment-vs-code / contradictory
-- **`PortraitCache` / HeroPortraits**: comment says portraits "live at
-  `Resources/HeroPortraits/<Name>`" and code (`TitleController`, `HeroSelectController`,
-  `PortraitCache`) loads `HeroPortraits/<slug>` — but **there is NO `Resources/HeroPortraits`
-  folder on disk.** Every hero-portrait load returns null (cached miss). Class is wired
-  but the backing art folder is absent. (Editor `HeroPortraitRenderer.cs` is the intended
-  generator — portraits were apparently never rendered/committed.)
-- **`EnemyVfxSet_Default.asset`**: a real, loadable SO but **every array is empty**
-  (hit/death/attack VFX+SFX). Comment-free, but "Default VFX set" implies content; it is a
-  bare placeholder — enemies get no per-type VFX/SFX from it.
+On-disk roster (root, non-meta): **14 body FBX** — `Demon`, `Necromancer`,
+`Orc_{Berserker,Mage,Necromancer,Shaman,Tank,Warrior}`, `Skeleton_{Golem,Healer,Mage,Minion,
+Rogue,Warrior}` (+ per-orc `.json`/`.mat`, `skeleton_texture_A.png` + `_URP.mat`).
+**10 controllers**: `Boss`, `HumanoidEnemy`, `LargeEnemy`, `LargeHumanoid`, `OrcHumanoid`,
+`OrcHumanoid_Mage`, `OrcHumanoid_Tank`, `OrcHumanoid_Warrior`, `OrcWarband`, `SkeletonHumanoid`.
+Shared humanoid retarget path = `SkeletonHumanoid` / KayKit Rig_Medium (`EnemyAnimatorFactory`,
+`docs/SME/KAYKIT_SME.md`, REQUIRED_PACKS §2). `EnemyVfxSet_Default.asset` = live wiring SO whose
+ranged-cast fields are **HovlVfxCatalog string keys** (`EnemyTypeVfxSet.cs:80-139`).
 
-### Unbacked load paths (silent null at runtime — caller falls back)
-- `Pets/*` and `Cosmetics/Pets/*` — `Resources/Pets` and `Resources/Cosmetics/Pets` are
-  **EMPTY**. `PetDeployer` body/controller/clip/cosmetic loads all miss → procedural pet path.
-- `Cosmetics/Previews/<id>` — no `Cosmetics/Previews` folder (`CosmeticShopPanel` previews null).
-- `Intro/intro-<id>` — no `Resources/Intro` folder (`StoryIntroController` beat images null).
-- `heart-wing` — not at Resources root (Title/HeroSelect banner art missing).
-- `UI/panel_bg`, `UI/menu_bg` — no `Resources/UI` folder (`ElarionUi` falls to solid fills; guarded single-try).
-- `Sfx/*` (except `LookoutHorn`) — only one WAV ships; EnemyHit/EnemyDeath/TowerFire/etc.
-  all rely on the `?? Generate*()` synthesised fallback. By design, but means the "real" SFX art is unshipped.
-
-### Scene-gated / removed-module remnants
-- `Resources/PatriciaLight/` (`tower2.fbx` + textures) — leftover from the **REMOVED**
-  Defend-the-Tower module (PIPELINE_STATE §8). No live loader; dead art kept intentionally.
-- `HudIcons/a pic.png` — stray/junk filename, not referenced.
-
-### Naming bugs (typos in shipped icon keys — will mismatch a clean key)
-- `HudIcons/Wizard/wiard.jpg` (should be "wizard"), `Wizard_Lightining.jpg` (should be "Lightning").
-  Any code keying on canonical spelling won't find these.
-
-### Tripo pipeline markers (informational, not bugs)
-- `*.fbx.tripo-extracted` sidecars (Heroes, Structures, Art/TripoStructures) are
-  `TripoAssetPostprocessor` state files ("Delete to force re-extract") — not loadable assets.
-  Tripo FBX import as Phong → need `DeNelle.Core.TripoMaterialFixer` (see VisualFactory FixTripoMaterials).
+**Boss_Dragon — LICENSED (WO-760, commit `08b912bf`, 2026-07-24):**
+- `Boss_Dragon.prefab` rebuilt from the licensed **`Assets/Dragon/`** rig (WDallgraphics product
+  71047, now git-TRACKED, with `Animations/dragon@*.FBX` set) via DragonAnimatorSetup +
+  `SyndrathDragon.controller` (**force-tracked** inside otherwise-gitignored
+  `Assets/Generated/Animators` — deliberate two-machine-drift guard).
+- **CC-BY-NC removal ledger (git-rm'd in `08b912bf`):** old `Dragon.fbx` + 2 controllers +
+  materials + orphan `Prefabs/Village/Generated/Boss_Dragon.prefab`; unlicensed "RedDragon 1.2"
+  stray deleted; `EnemyFactory` dragon keys repointed `Dragon` → `Boss_Dragon` (old key retired).
+  The 07-23 "RESOLVED" was comment-only; the 07-24 builder-run + git-rm actually cleared the
+  commercial-ship blocker. Also gone vs the 06-12 catalog: `OgreMage.fbx`, `Troll.fbx`,
+  `Dragon.controller` (the CC cluster).
 
 ---
 
-## 6. Gitignored model packs (ABSENT on fresh clone)
+## 4. Heroes — KnightV3 is THE body; Cleric/Mage/Ranger FBX are GONE
 
-Confirmed via `git check-ignore` and `.gitignore`:
-
-- **`Assets/polyperfect/`** — fully gitignored (246MB Low Poly Ultimate Pack). Use
-  `_M` tier prefabs only: `polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/<Category>_M/`
-  (Animals_M, Buildings_M, Fantasy_M, Farm_M, Food_M, Furniture_M, Landmarks_M, …).
-  Re-import on fresh clone via `Defenders/Art/Fix Polyperfect URP Materials`. Catalog:
-  `docs/polyperfect-asset-catalog.md`. Missing prefab → `Debug.LogWarning` not error.
-- **`Assets/Models/*`** — gitignored (`/Assets/Models/*`) EXCEPT `Models/People/` which IS
-  committed via LFS (optimized NPC pack, DEF-91), but its `Human/`, `Orc/`, `Troll/`,
-  `textures/` subdirs are re-excluded by `.gitignore`. So on a fresh clone:
-  - **Absent**: `Models/KayKit/*` (Adventurers 2.0, Dungeon Remastered, Skeletons, City
-    Builder, Medieval Hexagon, Fantasy Weapons, RPG Tools, Resource Bits, etc.),
-    `Models/KayKit Adventurers 2.0/`, `Models/CastleGate/`, `Models/Cathedral/`, `Models/Pet/`,
-    and `Models/People/{Human,Orc,Troll,textures}/`.
-  - **Present (LFS)**: `Models/People/{Blacksmith,Merchant,Peasant,Peasant Tob}/` — backs the 4 `Resources/NPCs/*.prefab`.
-  - Note: the `Resources/Structures/*` and `Resources/Enemies/*` KayKit-derived **prefabs/FBX
-    are committed** (they live under Resources), so the runtime town/enemy art survives a fresh
-    clone even though the source `Models/KayKit` packs do not. Fresh-clone "black village" =
-    missing `Models` packs (memory: fresh-clone-missing-Models).
+- On disk/tracked FBX at root: **`Knight.fbx`, `knightV2.fbx`, `KnightV3.fbx` only** (all LFS;
+  `KnightV3.fbx` verified `filter: lfs`). `Cleric/Mage/Ranger` keep only their `.controller` +
+  stale `.fbx.tripo-extracted` markers — **the 4-hero FBX set no longer exists**; REQUIRED_PACKS
+  §3 ("Knight, KnightV3, Mage, Cleric tracked") is stale on this point.
+- **`ff.knightv3` default ON** (`FeatureFlags.cs:475-484`): `HeroBodySwapper.cs:78-86,322-345`
+  routes EVERY class to `BuildKnightV3Body` — KnightV3 is a CC/AccuRIG export, raw FBX bound to
+  `Knight.controller` at runtime, own embedded `Material_Pbr` (extracted to `KnightV3.fbm/`).
+  Fallback if missing: `KnightPackage.prefab` (Paladin package) / legacy Tripo Knight.
+  `KnightMocap.controller` = the `ff.mocaploco` studio-mocap locomotion set (ON per anchor §3b).
+  Also present: `SC_Archer.prefab`, `SC_Footman.prefab` (Supercyan troop bodies), `Emotes/` dir.
+- `Props/`: `Bow.fbx/.prefab/.mat` + `ranger_texture`; `Props/Weapons/`: axe_A, bow_A/B/C,
+  dagger_A, hammer_A, shield_A, staff_A–D, sword_D/F/G, wand_A **+ `_tripobak_sword_A.fbx` and a
+  `sword_A.prefab`** (sword_A.fbx was renamed to the `_tripobak_` backup — prop-gap: code keying
+  `Weapons/sword_A` FBX now hits the prefab/backup pair, not a root FBX). Attach-side rig fix
+  lives in `EquipmentController.cs:435` (KnightV3 CC_Base RightHand axis correction).
 
 ---
 
-Counts: ~55 distinct Resources.Load path families mapped; Resources art folders:
-Heroes (4 heroes + 16 weapons + props), Enemies (13 FBX + 5 controllers + boss prefab +
-VFX SO), Structures (20 prefabs + 3 Tripo FBX), NPCs (4), Towers (4 SO), Dungeons (2 SO),
-HudIcons (~24 root + 4 class folders ×5), RpgUi (6 role folders, ~24 sprites), ItemIcons (8),
-ProjectileIcons (2), Portraits (7), PetPortraits (3), VFX/Projectiles (9). Plus Art source
-folders (~12) and 2 gitignored pack trees. ~12 art-consumer classes documented; 11 FLAGS.
+## 5. Structures — the gitignore policy + two-machine drift (READ THIS BEFORE TRUSTING A CLONE)
 
-> UPDATE 2026-07-03: GameSfx sword-clash = 4-take variant pool (Sfx/SwordClash..4); EnemyCombatAudio death = 2 takes (EnemyDeath2). Gated ff.combatfeel (default ON).
+**Policy:** `/Assets/Resources/Structures/` is **WHOLLY gitignored** (`.gitignore:121-122`,
+"Owner Tripo art — large FBX kept local"). Everything inside travels by **LAN/zip copy** between
+the owner's machines — EXCEPT a small force-tracked exception set.
+
+- **Tracked (28 files; 4 FBX):** `ArcaneSpire_1/2/3.fbx` + `WizardTower_1.fbx` (+ their `.fbm`
+  textures/albedos), `ArcaneSpire_Albedo.png`, `ArcaneTower_Albedo.jpg`,
+  `Materials/Color_bcf8….mat`, `Textures/` (2), `TreeofLife_basecolor.JPEG`.
+- **LAN-copy only (untracked, ~37 top-level items):** ALL **23 prefabs** (Altar, Anvil, Ballista,
+  Catapult, Gate_Medieval_Medium, House_Medieval_S/M/L, Marketplace_Stand_Simple, Pillar_Ionic,
+  Stables_Medieval, Torche_Wall, Tower_Castle_Round, Tower_Medieval_Big/Wood,
+  **Tower_Tribal_Tier1/2/3**, Wall_Medieval_Stone/Wood, Watermill_Medieval, Well,
+  Windmill_Medieval) + **14 FBX** (`arcane tower`, arena, armorer, barracks, farm, Forge,
+  GenericContainer, jeweler, lumbermill, PetHouse2, Portal, store, **tree_of_life**, WoodBox)
+  + their texture folders.
+- **Live consumers of UNTRACKED assets** (a bare clone silently loses these visuals):
+  `HubStructureVisualInjector.cs:74-84,137` (arcane tower/Forge/armorer/store/jeweler/lumbermill/
+  farm/barracks/PetHouse2/arena swaps — incl. the DEF-arcane-white flat-path albedo fix note),
+  `TreeOfLifeMaterialFixer.cs:59-73` (**`Structures/tree_of_life` FBX untracked while its
+  basecolor JPEG IS tracked** — the centrepiece Tree of Life model is LAN-only),
+  `CatalogBootstrap.cs:207` (`Structures/Tower_Medieval_Big`), `CraftingStationInjector.cs:63-66`,
+  `JewelerStationInjector.cs:55-58`, `CatalogEntry.cs:44` texPath.
+- **Loud-drift mitigations (why this doesn't rot silently):**
+  1. `tools/art/REQUIRED_PACKS.md` — the human manifest of tracked-fallback vs zip-travel packs
+     (authority: `docs/PAIN_POINTS_2026-07-26.md` §1.2 ruling "Tracked runtime + zip travel").
+  2. `tools/art/verify-runtime-art.ps1` — fresh-clone gate: non-zero exit if a TRACKED fallback
+     is missing; WARNs on absent gitignored packs (run before building).
+  3. Builders degrade LOUD-but-soft: every miss = one `Debug.LogWarning` + tinted primitive,
+     never an error (`EnemyStrongholdBuilder.cs:27-31` TGVRU rule; `RaidBaseGenerator.cs:469,500`).
+  4. Precedent lessons encoded in-tree: the terrain-material RCA (§7) and the WO-760
+     force-tracked `SyndrathDragon.controller` are the same drift class, solved the same way.
+
+---
+
+## 6. VFX — Hovl catalog + projectile prefabs
+
+- **`VFX/HovlVfxCatalog.asset`** — THE key→prefab map for the (gitignored, 236MB) `Assets/Hovl
+  Studio/` pack (`.gitignore:216-219`). Authored via `Defenders/VFX/Generate Hovl VFX Catalog`
+  (`AbilityCatalog.cs:130`). Consumers resolve string keys through it: `DefenseTower.cs:809`
+  (manual overlay wins; null key = PlayKey no-op), `Enemy.cs:1573` (one VFXManager pool),
+  `GearCatalog.cs:54` (element→weapon VFX), `EnemyTypeVfxSet` ranged-cast keys, `HeroAbilities`.
+  Owner tags keys; CLI maps verbatim (memory: no creative picks).
+- `VFX/VFXCatalog.asset` — sibling catalog SO. `VFX/Projectiles/` — 13 prefabs:
+  `Projectile_{Arcane,Fire,Fire_3,Ice,Storm}`, `Explosion_{Arcane,Fire,Ice,Storm}`,
+  `Casting_Fire`, `Casting_Fire_2`, `Spell_Fire_6`, `Flash_generic` (`ProjectileVFXCatalog`).
+- ⚠ **Unity Particle Pack has NO fallback**: 54 owner-tagged keys in
+  `Assets/Editor/VfxManualPicks.json` point into gitignored `Assets/UnityTechnologies/ParticlePack/`
+  (191MB); a machine without the pack silently loses those effects (REQUIRED_PACKS table row —
+  its own flagged follow-up: promote used prefabs into tracked Resources).
+
+---
+
+## 7. Generated Terrain — TRACKED (the magenta-ground RCA)
+
+`Assets/Generated/` is gitignored EXCEPT **`!Assets/Generated/Terrain/`** (`.gitignore:182-199`):
+`ExteriorTerrainData.asset` (binary-forced), `ExteriorTerrainMaterial.mat`, 5 `.terrainlayer`
+files (Dead/Grass/Mud/Snow/Stone), `AvalonDawnSkybox.mat` — all in `git ls-files`. RCA 2026-07-15:
+the material only ever existed as a bake artifact on one machine → GUID dangled elsewhere →
+magenta ground; the WHOLE bake folder is now tracked so scene-bound GUIDs always resolve.
+(`*TerrainData.asset binary` in `.gitattributes` prevents the EOL-mangle corruption class.)
+
+---
+
+## 8. Gitignored pack ledger (ABSENT on fresh clone — zip/LAN travel)
+
+From `.gitignore` (line cites) — cross-ref the full how-to-obtain table in
+`tools/art/REQUIRED_PACKS.md`:
+- `/Assets/Models/*` (106) EXCEPT `!/Assets/Models/People/` (107, LFS-tracked) — with People's
+  `{Human,Orc,Troll,textures}/` re-excluded (304-311) and obj/ma/mtl stripped (109-114)
+- `/Assets/Resources/Structures/` (121) + `/Assets/Art/TripoStructures/` (119) — §5
+- `/Assets/polyperfect/` (128, 246MB; `_M` tier only; `docs/polyperfect-asset-catalog.md`)
+- `/Assets/Quaternius/` (288)
+- `/Assets/Hovl Studio/` (218, 236MB — only HovlVfxCatalog keys referenced)
+- `Assets/UnityTechnologies/ParticlePack` (392-393, 191MB/886 files — NO fallback, §6)
+- `/Assets/Lana Studio/Casual RPG VFX/Upgrade for URP/` (312) — the base Lana pack IS tracked
+  (its 15 demo scenes appear in `git ls-files`)
+- Supercyan pack (132-134 policy note; `SC_Archer/SC_Footman` prefabs in Resources/Heroes are the
+  tracked fallback)
+
+**LFS patterns** (`.gitattributes`): `*.mp3 *.wav *.fbx *.png *.jpg *.jpeg *.JPEG *.tga *.mp4
+*.psd` → LFS; Unity text assets forced `text eol=lf` (`*.asset *.unity *.prefab *.meta *.mat
+*.anim *.controller` …) with binary overrides for `*TerrainData.asset`, `NavMesh-*.asset`,
+`LightingData.asset`, the chain/DungeonCompose scenes; `Assets/Firebase/**` +
+`Assets/GoogleSignIn/**` native binaries → LFS (WO-769).
+
+---
+
+## 9. Risk ledger / FLAGS
+
+- **FLAG-1 (two-machine drift, standing):** §5 — 23 prefabs + 14 FBX under Resources/Structures
+  exist ONLY on machines that received the LAN copy; consumers degrade to warnings/primitives.
+  Run `verify-runtime-art.ps1` on every fresh clone. Highest-value promote-to-tracked candidates:
+  `tree_of_life.fbx` (hub centrepiece), `Tower_Medieval_Big.prefab` (CatalogBootstrap default).
+- **FLAG-2 (stale doc vs disk):** REQUIRED_PACKS.md §3 still lists Mage/Cleric hero FBX as
+  tracked — only Knight/knightV2/KnightV3 exist (§4). PetDeployer's "all targets UNBACKED" note
+  in older canon is half-stale: bodies now resolve, controllers/clips/cosmetics still don't.
+- **FLAG-3 (absent art, carried):** `HeroPortraits/` folder still absent (every hero-portrait
+  load nulls); `Cosmetics/` empty; `Intro/`, `UI/`, `heart-wing` unbacked; Sfx beyond the 4
+  shipped files = procedural fallback.
+- **FLAG-4 (no-fallback pack):** ParticlePack keys (54) silently vanish on a pack-less machine —
+  the ONE pack whose absence has no tracked runtime fallback (§6).
+- **FLAG-5 (license hygiene, resolved but watch):** CC-BY-NC dragon cluster git-rm'd in
+  `08b912bf`; licensed `Assets/Dragon/` + force-tracked `SyndrathDragon.controller` are the only
+  sanctioned dragon assets. Never resurrect `Enemies/Dragon.*` keys.
+- **FLAG-6 (naming bugs, carried):** `HudIcons/Wizard/wiard.jpg`, `Wizard_Lightining.jpg` typo
+  keys; `HudIcons/a pic.png` stray; `Structures/arcane tower.fbx` space-in-name (its albedo had
+  to move OUT of the same-named folder to resolve — `HubStructureVisualInjector.cs:75`).
+- **FLAG-7 (static KayKit NPCs):** the 12 staged bodies have no Animator wiring — they idle
+  frozen until the follow-up WO lands (§2).
+- **FLAG-8 (EnemyVfxSet bare-ish):** `EnemyVfxSet_Default.asset` remains the live per-type VFX
+  wiring point; ranged-cast keys route through HovlVfxCatalog — un-authored keys no-op by design
+  (`HeroAbilities.cs:1422`), so silence here is expected, not proof of wiring.

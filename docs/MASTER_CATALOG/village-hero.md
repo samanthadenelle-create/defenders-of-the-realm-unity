@@ -1,482 +1,630 @@
-# MASTER CATALOG — village-hero
+# MASTER CATALOG — village-hero (rewritten 2026-08-02)
 
-> **STALE: 2026-06-28** — "Blaise + class bodies" / party-of-4 / Blink full-body rig is RETIRED.
-> Player hero = a **single Tripo self-rigged Knight ("Grom")**, static armor, **no mesh-swap / no body
-> swap** (combat pivot 2026-06-22; Blink hero rig JUNKED). Treat any "Blaise / class body swap / party"
-> prose below as historical. Current truth = `CANON_GROUND_TRUTH_2026-06-28.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
->
-> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** live hero = a single Knight **Grom** (KnightV3 rig + `KnightMocap.controller`), no party / no body-swap; the "Blaise / class-bodies / party-of-4" body is retired. Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+> **Verified from CODE at HEAD `b77a178e` (branch `wip/village2-and-f8-tickets`), 2026-08-02.**
+> Every entry below was read from source, NOT from file-header comments (comments lie — several
+> headers in this folder still describe retired systems; each lie is flagged inline + in FLAGS).
+> Supersedes the 2026-06-12 body and its 06-28 / 07-22 / 07-26 banners entirely.
 
-> ➕ **ADDENDUM 2026-07-26 (postdates the 06-12 body below) — the raid V1 spine (Hero + Troops):**
-> `Village/Hero/` now also hosts the raid front-end: **`RaidSelectionScreen`/`RaidSelectionVM`** (pick a
-> difficulty card), **`RaidDeployScreen`/`RaidDeployVM`** (pre-raid loadout), **`TroopTrainingVM`** (train
-> queue UI). The deploy/combat half lives in the **NEW `Assets/_Modules/Village/Troops/` folder**:
-> `RaidDeployController` (tap-deploy tray), `TroopDeployer.SpawnFromArmy(...)`, `TroopController`
-> (auto-fight), `RaidScoring` (180s/stars/loot), `RaidHudController`, plus `TroopStatResolver` +
-> `Data/BarracksData`. Army roster lives in `Core/State/ArmyStorage.cs`. Flags: `ff.raidwalk` OFF,
-> `ff.barracks` + `ff.buildtimers` ON. **Product-truth + beat→class map = `docs/RAID_NORTHSTAR.md` §2A;
-> raid-UX polish (loadout hand-off, naming split, deploy ring, "Defenders %" copy) is IN FLIGHT (WO-774).**
+**Scope:** `Assets/_Modules/Village/Hero/` — 99 `.cs` files (~40k lines). The player-hero feature
+area: locomotion, abilities/casts, gear/equip, health, cameras/input, HUD bridges, plus the
+UI surfaces that live here by location: raid front-end, barracks/troop panels, rumor board,
+realm map (WO-826), vendor shops, inventory/equip screens. **Assembly:** `DeNelle.Village`
+(`DeNelle.Village.asmdef`). Namespace split: gameplay components = `DeNelle.Village`; the
+MVVM UI cluster (shops/inventory/raid/rumor/realm-map/barracks VMs + views) = `DeNelle.Village.Hero`.
 
-**Scope:** `Assets/_Modules/Village/Hero/` — the player-hero (Blaise + class bodies) feature
-area: locomotion, abilities, body swap, gear/equip, combat-feel, cameras, input, HUD bridges,
-inventory/shop UI. **Assembly:** `DeNelle.Village` (`DeNelle.Village.asmdef`); refs include
-`DeNelle.Core`, `DeNelle.AI`, `DeNelle.Cosmetics`, `DeNelle.Data`, `DeNelle.Pets`,
-`DeNelle.Wallet`, `DeNelle.Audio`, `Unity.InputSystem`, `Unity.Cinemachine`, `LeanTouch`,
-`LeanCommon`, `CW.Common`, `Unity.AI.Navigation`, `YarnSpinner.Unity`. Most types are
-`namespace DeNelle.Village`; the equip/shop/rumor UI cluster is `namespace DeNelle.Village.Hero`.
-Verified by reading every `.cs` file (~50 types) + the JSON data.
+## LIVE CANON (what is actually true at HEAD)
 
-> **Top correction (the reason this catalog exists):** `HeroLocomotion`'s file-header comment
-> says *"no Rigidbody, no NavMeshAgent — pure transform"*. **This is STALE/FALSE.** Awake()
-> adds and drives a `NavMeshAgent` (`_agent.Move(step)`); the pure-transform path is only an
-> off-mesh fallback. See FLAGS for the full comment-vs-code mismatch class — it recurs across
-> the folder.
-
----
-
-## CODE — Movement / control core
-
-### HeroLocomotion `HeroLocomotion.cs` — `DeNelle.Village`
-WASD/dpad/stick/touch walking for the hero. **MonoBehaviour**, `[DisallowMultipleComponent]`.
-Wired by VillageSceneBuilder.BuildHero / re-ensured by HeroControlEnsurer.
-- **REAL movement model (NOT the header):** Awake() does `GetComponent<NavMeshAgent>() ?? AddComponent`,
-  configures it (radius 0.4, height 1.8, `updateRotation=false`, `autoBraking=false`, speed 30 so
-  Move() never caps), and each Update reads input → eased `Velocity` → `_agent.Move(step)` when
-  `_agent.isOnNavMesh`, else `transform.position += step` (off-mesh fallback). Facing = manual
-  `LookRotation(Velocity)` on the root. So: **NavMeshAgent kinematically driven by input** (not
-  pathfinding, not pure transform).
-- Awake() also OVERRIDES serialized `_moveSpeed`/accel/decel (6/55/45) — scene-baked values stale.
-- Key public surface:
-  - `Vector3 Velocity {get;}` — XZ velocity; read by SmartMobileCamera, HeroFootstepController.
-  - `static bool InputSuppressed {get;}` — WO-377 global input gate; **owned here**, raised on Yarn
-    dialogue start/cleared on complete (hooks DialogueRunner, resilient retry coroutine, single-flight
-    guarded against a coroutine fork-bomb). Consulted by HeroAbilityInput (+ PlayerAttackController/BuildMode out-of-scope).
-  - `void WarpTo(Vector3, Quaternion?)` — WO-383 teleport-aware seam warp (disable agent → move → `agent.Warp` → re-enable); raises `event Action OnTeleported` (SmartMobileCamera subscribes to snap).
-  - `bool IsAutoWalking`, `bool AutoWalkArrived`, `void SetAutoWalk(Transform)`, `void ClearAutoWalk()` — WO-277 tutorial auto-walk (drives hero along NavMesh to a target).
-  - `static bool GroundSnapEnabled` — DEF-147 off-mesh gravity ground-snap / re-bind (anti hover-exploit).
-- Subscribes WaveManager.OnWaveCleared → 2.5s victory pose (DEF-70; the never-clearing-latch bug fixed).
-- Drives both legacy `Animator.SetFloat("Speed")` (param-guarded, WO-174) AND `ActorAnimator` (canonical).
-- Reads camera basis from `SmartMobileCamera.CameraYaw` (WO-387 camera-relative; 0 in top-down).
-- Reflection-reads `DeNelle.HUD.VirtualDPadLean.Move` (no hard HUD ref) + `VirtualJoystick.Move`.
-- `static bool IsLiftCarrying()` → `LiftPlatform.AnyCarrying()` (direct, both in DeNelle.Village).
-
-### HeroControlEnsurer `HeroControlEnsurer.cs` — `DeNelle.Village`
-**MonoBehaviour** + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` self-bootstrap DDOL singleton.
-Keeps the hero controllable and RECOVERS if the hero root is destroyed early. Activates for Village*/
-Castle*/MainCastle*/CastleHub* scenes. **This is the runtime attach-point for many hero components:**
-on Ensure() it adds (if absent) HeroLocomotion, HeroDeathLogger, **HeroTargetIndicator**, PlayerAttackController,
-GearLoadout, and wires SmartMobileCamera (`SetTarget`+`ForceFollowImmediate`), disabling CinemachineBrain.
-`SpawnEmergencyHero()` builds a capsule "Hero (Blaise)" if none exists (≤8 retries, polled via Watch coroutine).
-Deliberately does NOT attach HeroReachRing (DEF-205, see FLAGS). Nested `HeroDeathLogger` MonoBehaviour
-warns if the hero is destroyed while "Village2" is active.
+- **Hero = ONE Tripo/CC Knight, "Grom".** `HeroBodySwapper` routes the Knight through
+  `ff.knightv3` (**default ON**, `FeatureFlags.cs:484`) → `Resources/Heroes/KnightV3.fbx`
+  (CC/AccuRIG humanoid), controller slug "Knight", and — with `ff.mocaploco` (default ON,
+  `FeatureFlags.cs:497`) — binds **`KnightMocap.controller`** (studio-mocap idle/walk/run/turn)
+  (`HeroBodySwapper.cs:78-90, 331-390, 458-471`). Forward yaw +15°, height 1.75m
+  (`HeroBodySwapper.cs:354-373`). Global animator speed restored to **1.0×** (the old 0.5×
+  Mixamo band-aid removed, `HeroBodySwapper.cs:31-38`). Blaise/party/class-bodies/Blink armor
+  swap = historical; `ff.knightonly` default ON (`FeatureFlags.cs:58`).
+- **Owner rulings recorded 2026-08-01/02 (BINDING):**
+  1. **Basic attack = swing + hit ONLY.** No impact bursts on the basic melee swing — the
+     2026-08-02 F8 ("rocks on swing" / which-VFX-drew-that) ruled the extra impact bursts OUT;
+     `VFXManager.PlayKey` now traces every successful play (`b77a178e`) so the offending key is
+     one grep away. Conformance work is IN FLIGHT — keep the swing clean (swing anim + connect
+     feedback on the enemy; no cast-style burst at the blade).
+  2. **Single Knight Grom, no mesh-swap.** No body/armor mesh swapping on the hero; armor
+     reads via tier TINT (`EquipmentController.SetArmorTier`, MPB multiply — see below) and
+     rim-light, never a body swap.
+  3. **Mobile-first: no keyboard letter hotkeys.** The 1/2/3/4 ability hotkeys are REMOVED
+     (`HeroAbilityInput.cs:110-113`); abilities fire from HUD skill buttons + gamepad face
+     buttons only. The HUD **ATTACK PILL** (bottom-right stadium button, built in
+     `HUD/Kit/HudKitController.cs:390` via `ElarionUiKit.BuildAttackPill` :2918) is the mobile
+     primary-attack input; desktop keeps left-click/Space.
+  4. **Registry-only motion VFX** (owner 2026-07-12, still in force): abilities.json `vfx*`
+     defaults are SUPPRESSED; the ONLY cast/projectile/impact VFX authority is the owner's
+     Motion Caster registry (`HeroAbilities.cs:1424-1435`, `RegistryOnlyMotionVfx=true` :1430).
+  5. **Elemental on-hit: owner-tagged keys only; earth/holy/water/nature HELD**
+     (`WeaponVfxMap.cs:182-241`).
+- **2026-08-01 dungeon-rig guard:** `HeroControlEnsurer` now SKIPS its entire camera takeover
+  when a `DeNelle.Dungeons.DungeonCameraRig` is live in the scene (reflection type lookup — no
+  asmdef cycle), while all hero component ensures still run (`HeroControlEnsurer.cs:287-302,
+  508-529`).
+- **RumorBoard**: WO-810 master-detail rebuild (owner-signed wireframe) is the live layout; a
+  2026-08-02 conformance fix wave is IN FLIGHT — re-verify this section after it lands.
+- **RealmMap (WO-826)** shipped `eb5d0710`; travel is a DISABLED stub until WO-827.
 
 ---
 
-## CODE — Abilities (Q/W/E/R)
+## 1. Movement / control core
 
-### HeroAbilities `HeroAbilities.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Blaise's Q/W/E/R kit; owns mana pool + per-slot
-cooldowns; resolves casts via `Physics.OverlapSphere` → Core `IDamageable`. Port of React castAbility.ts.
-- Public: `float Mana`, `MaxMana`, `string HeroClass`, `float ManaRegenMultiplier {get;set;}`,
-  `float CooldownRemaining(slot)`, `float CooldownFraction(slot)`, `bool CanCast(slot)`,
-  `void SetHeart(HeartController)`, `void SetHeroClass(string)` (HeroBodySwapper calls this post-swap),
-  `bool TryCast(AbilitySlot)` (the cast entry; cooldown+mana gate).
-- DTT/aim override fields: `Vector3? AimPointOverride`, `IDamageable LockedTarget` (set by HeroTargetIndicator),
-  `Func<float,bool> HealHandler`.
-- Damage chain: `def.Damage × HeroTalentModifiers.DamageMultiplier × HeroProgression.DamageMultiplier ×
-  AttackTimingBonus × GearLoadout.WeaponMult`. Offensive casts LAUNCH a visible projectile (RangedAttackVFX)
-  and land damage on arrival; meteor explodes on arrival; heal routes to HeroHealth (or HealHandler in DTT).
-- Awake() self-resolves class from `GameStateService.State.HeroClass` (WO-36 backstop; Cleric→"mage" loadout).
-- Lazily AddComponents: HeroProgression(get), RangedAttackVFX, GearLoadout. Param-guards "Cast" trigger (WO-163).
-- Reaches the airborne apex boss via `WaveManager.LiveApexBoss` (WO-125).
+### HeroLocomotion — `HeroLocomotion.cs` (1499 lines) — `DeNelle.Village`
+**The headline comment-lie, now self-documenting:** header :1-16 carries the 2026-06-12
+CORRECTION — the class XML summary (:27-31 "Kinematic transform translation") is still stale.
+**Real model: a NavMeshAgent driven KINEMATICALLY by input.** Awake gets-or-adds the agent and
+configures it (radius 0.4, height 1.8, speed 30 so `Move()` never caps, `updateRotation=false`,
+no avoidance) `:462-474`; Awake also **overrides serialized tuning** (speed 6, accel 55, decel 45
+`:452-454` — scene-baked values are dead). Update: input → eased `Velocity` → `_agent.Move(step)`
+when on-mesh else `transform.position += step` `:905-909`; facing = manual Slerp toward the move
+heading (town: input heading; combat: velocity) `:930-947`.
+- **Speed tiers (owner 2026-07-10 "Option 2"):** overworld = RUN 6 m/s, combat = planted 5 m/s
+  (`:95-96`, cap chosen at `:798-799` via `IsWaveInCombat()` `:672-689` — BattleLock OR wave
+  Active OR countdown ≤5s, mirroring the HUD posture rule).
+- **Input** (`ReadMoveInput` `:1410-1473`): new Input System WASD/arrows + gamepad stick/dpad +
+  `VirtualJoystick.Move` + reflection-read `DeNelle.HUD.Kit.HudMoveInput.Move` (`:1479-1496` —
+  NOTE: `VirtualDPadLean` is DELETED; HudMoveInput replaced it) + deadzoned legacy axis fallback.
+  Test seam: `SetScriptedMove/ClearScriptedMove` `:121-124` for the headless HERO_TURN_PROBE.
+- **`static bool InputSuppressed`** `:258` — THE global player-input gate. Raised/cleared by
+  **`DeNelle.Core.Dialogue.DialogueService.Started/Ended`** (`HookDialogueGate` `:529-549`;
+  **Yarn is REMOVED — WO-557**; the old Yarn-runner retry coroutine is gone). Consumed here and
+  by HeroAbilityInput / PlayerAttackController / BuildMode.
+- `static bool WantsToMove` `:57` (0.02 deadzone — cancels cast wind-ups);
+  `static bool HasAnyMoveInput` `:66` (0.0001 — camera recenter suspend).
+- **`WarpTo(Vector3, Quaternion?)`** `:290-339` — teleport-aware seam warp: NavMesh.SamplePosition
+  (5m), agent disable→move→`Warp`→re-enable, guarded `ResetPath` (F8 2026-07-30 off-mesh throw),
+  raises `event OnTeleported` (SmartMobileCamera snaps). **Signature is reflection-load-bearing**
+  (BattleArena resolves it by exact signature, `:293-295`). DeathTrace names every caller.
+- **Facing writers** (sole rotation owner): move-Slerp `:930-947`; `FaceToward` `:143` (WO-423
+  attack-facing, cancelled by input); **lock-face/strafe** `SetLockFace/ClearLockFace` `:161-180`
+  + `ApplyLockFaceYaw` (WO-512, gated on `FeatureFlags.LockOn` — default OFF `FeatureFlags.cs:334`);
+  pure `StepYaw` `:207` (edit-mode tested). Turn-in-place clip feed `DriveTurnSignal` `:224-245`
+  fires ONLY in combat at the run tier `:1039-1048` (KnightMocap TurnDir; guarded no-op elsewhere).
+- **Auto-walk** (WO-277) `SetAutoWalk/ClearAutoWalk/IsAutoWalking/AutoWalkArrived` `:354-393` +
+  `AutoWalkStep` `:1362-1397`; auto-walk also traverses crossings `:758-765`.
+- **Ground-snap** (DEF-147) `static GroundSnapEnabled=true` `:402`; off-mesh gravity fall +
+  agent re-bind `:1085-1157`; suspended while `LiftPlatform.AnyCarrying()` `:1405-1408`.
+- **Seam traversal** `TryTraverseSeamLink` `:1244-1328`: (a) paired `HeroLinkCrossing` portals —
+  enter-triggered, id-paired, re-arm on exit `:1285-1311`; (b) LEGACY castle↔OuterWorld slide
+  (corridor-guarded, endpoints ride `castle.liftY` PlayerPrefs) `:1235-1240, 1313-1348`.
+- Animator: `ActorAnimator.SetLocomotion` is the **sole Speed writer** (raw SetFloat retired,
+  `:1162-1168`); `SetAnimator(Animator)` `:624` is the WO-581 direct injection HeroBodySwapper
+  calls (no reflection). Victory pose = 2.5s, input-cancellable `:436-443, 775-781`. Combat
+  stance + `EquipmentController.SetCombatActive` driven off the same `engaged` flag `:1059-1076`.
+- Diagnostics: `[Flow:HeroTurn]` probe (TurnDebug, default off) `:106, 958-977`; `[Flow:HeroDrift]`
+  10 Hz forward-hold trace `:979-1024`; T-pose-while-moving `FlowTrace.Fail` `:1196-1205`.
 
-### HeroAbilityInput `HeroAbilityInput.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent][RequireComponent(HeroAbilities)]`. Fires TryCast from
-keyboard `1/2/3/4` (NOT Q/W/E/R — W is movement), gamepad face buttons (S/E/W/N), and **left-click/Space
-fire slot Q** (primary attack at the locked target). Respects `HeroLocomotion.InputSuppressed`.
-
-### AbilityCatalog `AbilityCatalog.cs` — `DeNelle.Village`
-Static loader for `abilities.json`. Enums `AbilitySlot {Q,W,E,R}`, `AbilityEffect {Strike,Snare,Aoe,Cleave,Heal,Meteor}`;
-`[Serializable]` `AbilityDef` (Newtonsoft, with `SlotEnum`/`EffectEnum`/`UnityColor` accessors), `AbilityClassDef`, `AbilityCatalogData`.
-`const DefaultClass="mage"`. `GetLoadout(class)`, `Find(class,slot)`, `Reload()`. WebGL-safe via `CoreServices`-adjacent `DeNelle.Core.CanonicalJson.Read` (Resources first, StreamingAssets fallback).
-
-### AttackTimingBonus `AttackTimingBonus.cs` — `DeNelle.Village`
-**MonoBehaviour** singleton, `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` bootstrap (DDOL).
-DEF-47 combo-rhythm: chains casts within 1.2s → 1.0/1.15/1.30/1.50× damage. `static float NotifyCast(pos)`
-(HeroAbilities calls it), `static int ChainDepth`, `static float WindowRemaining`, `event Action<int> OnChainChanged`.
-Pops a `DamageNumberSpawner.SpawnLabel` "CHAIN ×N". Awake `Destroy(this)` (not gameObject) on dup — singleton-dedup safe.
-
----
-
-## CODE — Body swap / animation / IK / pose
-
-### HeroBodySwapper `HeroBodySwapper.cs` — `DeNelle.Village` (1187 lines — the big one)
-**MonoBehaviour**, `[DisallowMultipleComponent]`. At Start() swaps the baked Wizard placeholder for the
-chosen class FBX (`Resources/Heroes/<slug>.fbx`; Knight/Ranger/Mage/Cleric). Uses the shared
-`VisualFactory.Skin` (FitHeight/SeatOnGround/StripColliders + `LocalRotation = -90° yaw` forward correction, WO-326).
-Loads `Resources/Heroes/<slug>.controller`; ensures the Humanoid avatar; `applyRootMotion=false`; `speed=0.5`
-(Mixamo too fast); `cullingMode=AlwaysAnimate`; `Rebind()`. **Reflection-writes** the private `_animator` field
-on HeroLocomotion + HeroAbilities post-swap and calls `SetHeroClass(abilitySlug)` (Cleric→Mage). Adds
-GearLoadout + EquipmentController; calls `GearVisualApplier.Apply`; for Ranger calls `HeroBowAttachment.AttachTo`.
-Material pipeline: `RetargetMaterialsToUrp` (Phong→URP/Lit, double-sided), `ApplyExtractedTexture` (per-class
-basecolor atlas from `Resources/Heroes/Textures/*`), `ApplyClassTint` fallback, Knight `ApplyFlatSteelStopgap`.
-WO-376: drives a clean idle (`DriveIdlePose`), holds idle during Yarn dialogue (resilient runner hook +
-single-flight retry, same fork-bomb guard as HeroLocomotion). **Heavy comment archaeology** — many
-contradictory dated WO notes about the Knight texture (see FLAGS).
-
-### HeroAimIK `HeroAimIK.cs` — `DeNelle.Village`
-**MonoBehaviour** (root) + nested **HeroAimIKReceiver** MonoBehaviour (on the HeroBody/Animator GO, because
-`OnAnimatorIK` only fires on the Animator's own GO). DEF-70 upper-body aim IK toward `_aimTarget` via
-`SetIKRotation(RightHand)`. `void SetAimTarget(Transform)`, `float IkWeight`. **Largely DORMANT:** the spec
-wants an "UpperBody" layer-1 + avatar mask the current controller doesn't have, and **no code sets an aim
-target** (no caller of SetAimTarget found in this folder) — degrades gracefully to layer-0 / no-op. See FLAGS.
-
-### HeroChargeVFX `HeroChargeVFX.cs` — `DeNelle.Village`
-**MonoBehaviour**. DEF-70 charge-up particle + audio. `void StartCharge()`, `void ReleaseCharge()`.
-**DEAD/UNWIRED:** both methods are explicitly TODO "wire from HeroCombat once it lands" — **no caller exists**.
-Builds a placeholder ParticleSystem if none assigned. See FLAGS.
-
-### HeroImpactFeedback `HeroImpactFeedback.cs` — `DeNelle.Village`
-**MonoBehaviour**. DEF-70: `void PlayRecoil()` (Animator "BowRecoil" trigger — param-guarded, controller lacks it
-today → no-op) + `void PlayHaptic(intensity,duration)` (gamepad rumble). PlayHaptic IS LIVE — called by
-HeroHealth.TakeDamage. PlayRecoil is unwired ("wire from HeroCombat" TODO). See FLAGS.
-
-### HeroVictoryPoseBridge `HeroVictoryPoseBridge.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[RequireComponent(WaveManager)]` — a BRIDGE that lives on the WaveManager GO. Fires the hero
-Animator "VictoryPose" trigger on OnWaveCleared / resets on OnWaveStarted. **Mostly inert:** the controller has
-no "VictoryPose" param (param-guarded no-op). Note: HeroLocomotion ALSO does its own victory pose on
-OnWaveCleared via the "Victory" trigger — two parallel victory paths. See FLAGS (duplicate).
-
-### HeroPoseController `HeroPoseController.cs` — `DeNelle.Village`
-**MonoBehaviour** + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` DDOL singleton. WO-365 context pose:
-TOWN (relaxed, weapon sheathed) ↔ COMBAT (ready, weapon drawn). Listens (listen-only) to WaveManager
-OnWaveStarted/OnBreach/OnWaveCleared/OnDefeat + 0.5s poll. Drives Animator bool "Combat" (param-guarded; controller
-lacks it → no-op) AND the always-working half: SetActive on "BowProp"/"GearVisual_*" weapon children at the
-0.30s transition midpoint. Village-scene-gated, WebGL try/catch-guarded.
-
-### HeroFootstepController `HeroFootstepController.cs` — `DeNelle.Village`
-**MonoBehaviour**. DEF-57 velocity-driven footstep audio (reads `HeroLocomotion.Velocity`, lerps interval
-walk↔run). `void PlayStep()` (also callable from an Animation Event). **Needs `_footstepClips` assigned** (none
-wired by default → silent until clips set). Auto-adds a 3D AudioSource.
+### HeroControlEnsurer — `HeroControlEnsurer.cs` (545) — `DeNelle.Village`
+DDOL singleton, `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` `:49-54`; re-runs `Ensure()` on
+every sceneLoaded. Active-scene predicate `IsVillageScene` `:42-47` = Village*/Castle*/
+MainCastle*/CastleHub* **+ raid scenes** (`HubScenes.IsRaid`). **The runtime attach point for the
+hero component stack** — `Ensure()`:
+1. `DedupeHeroes()` `:94-115` (return-to-town double-hero: keep the DDOL-carried one).
+2. **Recover before fabricate** `TryRecoverCarriedHero` `:125-185`: re-homes a real hero parked
+   in the DontDestroyOnLoad scene (component, Player-tag, or "Hero (" name match) into the
+   active scene, seats it at `HeroStartPoint_PlayerSpawn` via `WarpTo`; only then
+   `SpawnEmergencyHero()`.
+3. Tags root **`Player`** (WO-450 canon) `:238`; adds if absent: HeroLocomotion `:239`,
+   HeroDeathLogger `:241`, HeroTargetIndicator `:243`, **PlayerAttackController** `:250` (melee,
+   every class), **WeaponTrailController** `:255`, GearLoadout `:258`, **HeroArmorVisual** `:264`,
+   **HeroLoadout** `:273` + `ReloadFromPrefs()` `:280` (carried heroes skip Awake).
+   Deliberately does **NOT** attach HeroReachRing (DEF-205) `:281-285`.
+4. **DUNGEON GUARD (2026-08-01):** if `DungeonCameraRigPresent()` `:516-529` (cached reflection
+   type `DeNelle.Dungeons.DungeonCameraRig` — Village must not ref Dungeons) → log + RETURN
+   `:296-302`; everything below is camera takeover and would stomp the dungeon rig.
+5. Camera takeover: find/create a gameplay camera (creates "GameplayCamera (ensured)" +
+   AudioListener when none, `:323-330`), attach SmartMobileCamera `:331-335`, disable
+   CinemachineBrain `:337-344`, `EnforceSoleCamera` `:347-351`, `SetTarget`+`ForceFollowImmediate`
+   `:358-363`, then a **hard direct camera seat** behind the hero `:374-380`.
+- `Watch()` coroutine `:386-399`: 0.5s poll; ≤8 emergency spawns per scene.
+- `SpawnEmergencyHero` `:411-499`: root "Hero (Blaise)" + Player tag + a "HeroBody" capsule child
+  (collider stripped) so the attached **HeroBodySwapper** `:466-475` swaps in the REAL Knight even
+  on the fabricate path; lavender tint via `MagentaGuard.BuildUrpLitMaterial` `:452-455` (never
+  Standard-shader magenta); seats at the marker or `castle.liftY+1` fallback `:432-433`.
+  `FlowTrace.Fail("Hero", "EMERGENCY pill spawned…")` is the §12 proving line `:416-417`.
+- Nested `HeroDeathLogger` `:533-544`: warns only if destroyed while Village2 is active.
 
 ---
 
-## CODE — Combat-feel / VFX / projectiles
+## 2. Abilities (Q/W/E/R + extra bar)
 
-### RangedAttackVFX `RangedAttackVFX.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. DEF-23 projectile launcher. `void FireArrow(targetPos, onArrive)`,
-`void FireSpellOrb(targetPos, onArrive)` — HeroAbilities calls these. Spawns a real particle-FX-bodied projectile
-(`ProjectileVFXCatalog.SpawnFlying`) carried by ProjectileMover; green-fire/red-land cast bursts. Raw placeholder
-primitives suppressed by default (`ShowPlaceholderProjectiles=false`, WO-280; `-showPlaceholderProjectiles` opt-in).
+### HeroAbilities — `HeroAbilities.cs` (1958) — `DeNelle.Village`
+The cast engine. Owns mana (10 max, 0.9/s regen × Aether-perk × talent `:295-300`), per-slot
+cooldowns `:93`, per-id extra-bar cooldowns `:101-103`.
+- **Resolution:** `Resolve(slot)` `:172-185` = HeroLoadout-equipped id (W/E/R only; **Q is
+  locked** to the class basic) → `AbilityCatalog.FindById`, else class stock def. Public facade
+  `ResolvedDef(slot)` `:198` — the HUD medallion icon source of truth (icon == what casts).
+- **`TryCast(slot)`** `:400-448`: refuses while `_casting`/lockout; cooldown+mana gate; talent
+  cooldown scale; then either INSTANT commit or — when `def.CastSeconds > 0` — an
+  **interruptible wind-up** `CastRoutine` `:511-538`: mana/cd charged up front, moving
+  (`HeroLocomotion.WantsToMove`) CANCELS + refunds + 0.2s anti-flicker lockout; commit calls the
+  unchanged `CastResolved`. External `CancelCast()` `:545-553` aborts WITHOUT refund.
+- **`TryCastExtra(abilityId)`** `:459-496` (WO-574 assignable bar): same core, per-id cooldown,
+  resolves its own anim variant.
+- **`CastResolved(def, castVariant)`** `:562-645`: param-guarded "Cast" trigger; ActorAnimator
+  `PlayAttack(0)` **suppressed for heal/gracebuff** (F8-48 — a support cast must never read as a
+  sword swing, `:606-610`); **`ResolveAnimVariant`** `:1450-1525` picks the cast CLIP from the
+  RESOLVED ability (explicit `castAnim` key > effect-shape keyword > pressed slot) — fixes
+  "equipped ability plays the wrong cast clip"; `AttackTimingBonus.NotifyCast` `:627`;
+  `FaceCastTarget` `:695-735` (offensive only; faces the SAME blast centre the effect uses);
+  then registry VFX + `ResolveEffect`.
+- **Effect shapes** `ResolveEffect` `:737-956` + raw-string pre-switch `:751-761`:
+  `dash` (Heroic Leap: WarpTo + strike + stun `:970-999`), `knockback` (cone + slow + interrupt
+  `:1027-1057`), `taunt` (slow-hold + temp-shield heal; Holy-Retribution burn rider `:1066-1112`),
+  `blink` (universal dash `:1009-1019`), `dot` (Emberbrand: projectile + Burn DoT `:1128-1161`),
+  `healovertime` (Oathmend drip via `HeroHealth.RegenTick` `:1253-1265`), `invuln` (Eternal Aegis
+  → `HeroHealth.ActivateInvuln` `:1272-1283`), **`gracebuff`** (WO-750 Warden's Grace: %-max-HP
+  heal + Defense-scaled bonus + 8s Grace-Shield HoT + HUD marker; **the −20% DR is PENDING a
+  HeroHealth mitigation seam** `:1310-1353`). Canonical enum shapes: Heal (self, Heal_Cast/Heal_Aura
+  full prefabs `:786-817`), Strike/Snare (locked-target reach-gated, projectile-carried damage
+  `:819-910`), Aoe/Cleave (reach-capped blast centre `:912-925`), Meteor (projectile + blast
+  `:927-954`).
+- **Damage chain** `:776`: `def.Damage × talent × HeroProgression.DamageMultiplier ×
+  AttackTimingBonus chain × GearLoadout.WeaponMult` (WeaponMult now carries the WO-808 gear
+  LEVEL — see GearLoadout). Attribution via `DamageAttribution.Record(…, "hero", …)`;
+  `MarkNextHitFromHero` on every hit (combo/RAMPAGE eligibility).
+- **Registry-only motion VFX** (owner 2026-07-12): `RegistryOnlyMotionVfx = true` `:1430`.
+  `CastVariantKeyword = { "cast","skill1","skill2","castHeal", null }` `:1435` (variant 4 / R has
+  NO registry keyword yet → silent). `RegistryTarget = "knight"` `:1529` (single-Knight canon).
+  Cast beat `PlayCastVfxKey` `:1539-1558` (row vfxKey + vfxDelay; no row = silent BY DESIGN);
+  projectile key from the row's `vfxProjectile` `:1394-1395`; impact `PlayImpactVfxKey`
+  `:1575-1603` (row vfxImpact, travel-oriented, + `sfxImpact` clip); residuals SUPPRESSED
+  `:1626`. abilities.json vfx fields stay authored but dormant — flip the const to restore.
+- **Knight projectile rule** `:1405-1415`: Knight resolves melee-INSTANT; thrown actives fly a
+  COSMETIC Hovl projectile (`FlyCosmeticProjectile` `:1644-1671`, rotation Y-flattened per F8
+  2026-07-11) while damage lands instantly.
+- Venombrand poison rider: per-foe stack ledger capped at 2, None-element DoT (no Burn tell)
+  `:1188-1245`. Reach caps: melee blast centre = weapon reach (default 3.4m), ranged 45m
+  `:1745-1772`. `Mana`/`RestoreManaOverTime`/`RestoreManaToFull` `:354-392` (safe-zone restore).
+  DTT-era `AimPointOverride`/`LockedTarget`/`HealHandler` `:676-685` — today AimPointOverride is
+  ONLY ever the HeroTargetIndicator reticle.
 
-### ProjectileMover `ProjectileMover.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Lerps start→target with optional parabolic arc, faces travel,
-spawns `ImpactFX`, fires `onArrive` payload (damage/status land on connect), self-destructs. `void Launch(target,speed,arc,onArrive)`.
+### HeroAbilityInput — `HeroAbilityInput.cs` (125) — `DeNelle.Village`
+`[RequireComponent(HeroAbilities)]`. Respects `InputSuppressed` `:51`; **combat-gated on
+`BattleLock.IsInBattle()`** `:59-70` (owner 2026-06-24: no combat moves in town; suppression is
+FlowTraced). Primary attack = **left-click / Space** (+ legacy mouse fallback) fires slot Q at
+the locked target `:76-82, 93-102`. **Keyboard 1/2/3/4 REMOVED (mobile-first)** `:110-113`;
+gamepad face buttons S/E/W/N = Q/W/E/R `:114-120`. HUD paths (skill buttons, ATTACK pill)
+converge on the same `TryCast` gate.
 
-### AbilityVfxKit `AbilityVfxKit.cs` — `DeNelle.Village`
-Static, asset-free procedural ability VFX (WO-35/37). `PlayHeroAbility(kind,color,pos,radius,targetHint,class)`
-(tries VFXManager prefab first, then procedural), `SpawnAbilityVfx(...)`, `SpawnAbilityVfxForClass(...)` —
-class-specific shapes (Knight ground-shockwave, Ranger arrow streak, Mage arcane). URP-safe runtime particles +
-soft-dot texture. Nested internal `VfxLightFade` MonoBehaviour (fades a point-light then self-destroys).
+### AbilityCatalog — `AbilityCatalog.cs` (339) — `DeNelle.Village`
+Typed loader for `abilities.json` (WebGL-safe `CanonicalJson.Read`: Resources first,
+StreamingAssets fallback `:309-337`). Enums `AbilitySlot{Q,W,E,R}` `:31`, `AbilityEffect`
+(6 canonical shapes) `:47` — the dash/knockback/taunt/blink/dot/healovertime/invuln/gracebuff
+strings deliberately parse to Strike and are handled by HeroAbilities' raw-string switch.
+`AbilityDef` fields incl. `CastSeconds` `:106` (wind-up), `CastAnim` `:117` (explicit clip
+keyword), `Id` `:80`, and the 4 dormant `vfx*` keys `:133-139`. `DefaultClass="mage"` `:207`;
+`GetLoadout` / `Find` / **`FindById`** `:262-278` (flat id index for loadout-equipped skills).
 
-### AbilityAudioBridge `AbilityAudioBridge.cs` — `DeNelle.Village`
-Static. Per-ability + per-class SFX through `CoreServices.Audio` (WO-41, reflection removed). `PlayForKind`,
-`PlayForClassAndKind`, `PlayMusic(name)`, `PlayDangerSting()`. Nested internal `ProceduralSfx` synthesises
-click-free clips in code (cached; prefers `Resources/Sfx/<Kind>` if present).
+### abilities.json — `Assets/Resources/Data/Canonical/` (+ StreamingAssets mirror)
+**5 class blocks:** `mage`, `knight`, `ranger`, **`knight-skills`** (13 skill-tree actives:
+Throwing Spear, Shield Bash, Thunderbolt, Emberbrand Throw, Warden's Roar, Oathmend, Eternal
+Aegis, Sweeping Cut, Champion's Combo…), **`universal-skills`** (Arcane Bolt / Mend / Dash-blink).
+Live Knight stock kit: Q **Sword Heroic** (dash), W **Shield Charge** (knockback), E **Warden's
+Grace** (gracebuff), R **Radiant Strike** (meteor). Most spells carry `castSeconds` 0.35–0.5
+(interruptible); basics are instant. **No `cleric` class** — Cleric maps to the mage loadout in
+code (`HeroAbilities.cs:276`).
 
-### AbilityCooldownUI `AbilityCooldownUI.cs` — `DeNelle.Village`
-**MonoBehaviour**. Drives an `Image.fillAmount` cooldown sweep on an ability button. `void StartCooldown(duration)`.
-Belt-and-braces fallback path (HeroAbilities `GetComponent<AbilityCooldownUI>()?.StartCooldown`); the live HUD
-sweep goes via HeroAbilitiesHudBridge reflection. Mostly a legacy/secondary surface.
-
-### HeroTargetIndicator `HeroTargetIndicator.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Camera-facing reticle billboard over the current hostile target +
-Tab/right-shoulder manual cycle. Attached by HeroControlEnsurer. `IDamageable CurrentTarget {get;}`. Scans via
-TargetManager registry ∪ Enemy-layer OverlapSphere (Enemy-mask, 128-buf — the 64-buf overflow bug fixed). Forward-arc
-gate (DEF-269, 45m range, dot 0.35) for auto-acquire; manual lock bypasses. Feeds `HeroAbilities.AimPointOverride`
-+ `LockedTarget`; toggles `FloatingHealthBar.SetTargetedOn`. Runtime ring texture + URP/Unlit transparent quad (WebGL-safe).
-
-### HeroReachRing `HeroReachRing.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Faint ground ring showing melee reach (auto-syncs to
-PlayerAttackController.AttackRange). **DEAD-BY-POLICY:** HeroControlEnsurer deliberately does NOT attach it (DEF-205
-"mystery indicator" removed); class kept for a future opt-in. See FLAGS.
-
----
-
-## CODE — Health / hit reactions
-
-### HeroHealth `HeroHealth.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`, `: IDamageableStructure`. Singleton `Instance`. Hero HP + contact
-damage (OverlapSphere Enemy layer, 1s ticks) + IMGUI health bar (suppressed when `CoreServices.Hud != null`, WO-411).
-`float MaxHp/Hp/Fraction`, `bool IsAlive`, `void TakeDamage(float)`, `void Heal(float)`, `void Respawn(Vector3)`;
-`event Action<float,float> OnHealthChanged`, `event Action OnDied`, `event Action OnDeath`. DEF-102 death→respawn
-(hero is NOT the lose condition — the Heart is). Applies `GearLoadout.ArmorDefense` reduction + perfect-parry
-(`PlayerAttackController.TryConsumeParry`). Drives ActorAnimator Die/Revive (WO-284/285). **Bootstrap:** nested
-`HeroHealthBootstrap` MonoBehaviour + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` DDOL — polls for a
-HeroAbilities GO and AddComponents HeroHealth + HeroHitReaction (deliberately NO floating bar on the hero).
-
-### HeroHitReaction `HeroHitReaction.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Red IMGUI screen-edge damage flash + death slow-mo (Time.timeScale
-ramp). Driven off HeroHealth.OnHealthChanged/OnDied (this branch's real C# events, NOT the greenfield WO UnityEvents).
-Plays ActorAnimator `PlayHit(Gut)` on non-fatal hits (WO-285). Attached by HeroHealthBootstrap.
-
----
-
-## CODE — Gear / equip system
-
-### GearCatalog `GearCatalog.cs` — `DeNelle.Village`
-Static loader for `weapons.json` / `armor.json`. `[Serializable]` `GearReq{level,dex,arcane,might}`,
-`WeaponDef` (id/name/icon/job/rarity/damageMult/reach/req/setId/saga/flavor/makersMark/buy{Wood,Food,Iron,Crystals},
-`bool IsAegis`), `ArmorDef` (…/defense/hpBonus/…). `BestWeapon(job,level)`, `BestArmor(job,level)`, `FindWeapon(id)`,
-`FindArmor(id)`, `AllWeapons()`, `AllArmors()`, `GetBuyCost(def)→ResourceCost`, `Reload()`. WebGL-safe via
-`DeNelle.Core.CanonicalJson` + Newtonsoft. Graceful: missing catalog → no gear (1.0 mult / 0 defense).
-
-### GearLoadout `GearLoadout.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. The live hero gear model. Auto-equips best eligible weapon+armor
-by class+level (re-evaluates on HeroProgression.OnLevelUp). `float WeaponMult` (HeroAbilities reads), `float ArmorDefense`
-(HeroHealth reads), `WeaponDef EquippedWeapon`, `ArmorDef EquippedArmor`, `event Action OnGearChanged`,
-`void Refresh()`, `void EquipWeaponById(id)`, `void EquipArmorById(id)`. WO-295 Aegis full-set bonus:
-`bool AegisSetActive`, `float WardRefundFraction` (0.25 when set), per-class weapon perk folded into WeaponMult +
-bonus defense; lazily attaches AegisSetEffect. **The canonical equip model the inventory/shop drive.**
-
-### EquipmentController `EquipmentController.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Visually equips REAL KayKit weapon meshes on the Humanoid rig's
-hand bones (shields→LeftHand), driven by GearLoadout.EquippedWeapon. `void Equip(weaponId)`, `void EquipBestForHero()`,
-`void Unequip()`, `void EquipOffHand(WeaponDef|string)` (shield→LeftHand), `void SetCombatActive(bool)` (idle-lowered ↔ combat-ready hold), `void SetArmorTier(int)` (**WO-567: tints the static hero BODY per tier via MaterialPropertyBlock — NO mesh swap, no Blink revival; coexists with HeroArmorRimLight emission via GetPropertyBlock-merge; tier table = owner-tunable BONES**).
-Maps weapon ids → KayKit mesh + grip preset (Sword/Dagger/Axe/Hammer/Staff/Wand/Bow/Shield); bounds-normalizes any FBX
-(`NormalizeInto`); **geometric sword grip-point inference** (`SeatByHandle` — vertex width-profile finds the crossguard
-spike → grips the handle; build-safe `isReadable` guard). **MESH-LOADING GAP:** loads from `Resources/Heroes/Props/Weapons/<mesh>`
-which is NOT yet populated → falls back to a tinted primitive (see FLAGS / file header ACTION). Skips bows when
-HeroBowAttachment owns them. Re-attaches on OnGearChanged.
-
-### GearVisualApplier `GearVisualApplier.cs` — `DeNelle.Village`
-Static. Legacy PRIMITIVE-cube gear visuals (sword/staff/mace on RightHand, shield/pauldron/chest for plate).
-`void Apply(body, loadout)`, `void ReapplyForHero(loadout)`. **GATED OFF by default:** `static bool EnablePrimitiveGear = false`
-(the cubes "read as a square in the torso"). Apply() still always CLEARS stale "GearVisual_*" children. Bows always
-skipped (HeroBowAttachment owns them). Superseded by EquipmentController for real meshes; see FLAGS (legacy/duplicate).
-
-### HeroBowAttachment `HeroBowAttachment.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Cosmetic bow on the Ranger's LeftHand bone. `static void AttachTo(heroRoot,body)`
-(HeroBodySwapper calls for Ranger). Loads `Resources/Heroes/Props/Bow` (committed) → else builds a procedural low-poly
-bow+string. Bounds-normalizes (`NormalizeInto`: longest→+Y, narrowest→+X, grip-centred, scaled to BowHeldLength 0.92m);
-`GripLocalEuler = (0,0,0)` (the "+91 Z = bow turned sideways" bug removed). Self-bootstrap retry (≤120 frames) until Humanoid bones bind.
-
-### AegisSetEffect `AegisSetEffect.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. WO-295 "Oathweld" ward — while the full Aegis set is worn, refunds
-a fraction (`GearLoadout.WardRefundFraction` 0.25) of hero damage taken as HP to the HeartController (+ ward VFX pulse).
-Listens HeroHealth.OnHealthChanged (decrease-only). `bool WardActive`, `void Refresh()`. Lazily attached by
-GearLoadout.EnsureSetEffect(); inert when set not equipped.
-
-### GearAppraisal `GearAppraisal.cs` — `DeNelle.Village`
-Static, read-only lore/value surface (WO-300). `GearAppraisalResult Appraise(WeaponDef|ArmorDef)` + `…WeaponId/ArmorId(id)`.
-Derives maker's mark (Emberhand/Oathweld/Heartwood/Last-Pressing) from def/saga, tier label/hex (GearTierTable), estimated
-crystal value (tier base + stat worth + legendary/Elarion premium). `GearAppraisalResult` has `Summary()`/`FullText()`.
-Used by ShopPanel buy labels. No I/O, WebGL-safe.
-
-### ItemIconCatalog `ItemIconCatalog.cs` — `DeNelle.Village`
-Static. Maps a weapon/armor/consumable → a real artwork Sprite sliced from `Resources/ItemIcons/*` sheets
-(`Resources.LoadAll<Sprite>`, WebGL-safe), keyword + rarity-tier matching; null → caller uses glyph fallback.
-`ForWeapon(WeaponDef)`, `ForArmor(ArmorDef)`, `ForConsumable(id,name)`. Used by HeroInventoryController. Depends on
-ItemIconSlicer (editor) having produced the sheets.
-
-### HeroEquipment `HeroEquipment.cs` — `DeNelle.Village.Hero` (NOTE: different namespace)
-**MonoBehaviour**. WO-109 "basic equip" with `enum EquipmentSlot{MainHand,Armor}` + `[Serializable] EquippedItem`.
-`bool Equip(itemId)` / `void Unequip(slot)` / `EquippedItem GetEquipped(slot)` / `void TryEquipDemoWeapon()`.
-**DEMO/STALE PARALLEL SYSTEM:** only knows hardcoded `"basic_sword"`/`"leather_armor"`; attaches a primitive cube
-"EquippedSword"; bonuses only `Debug.Log`'d (TODO "patch the controller"). **Superseded by GearLoadout/EquipmentController**
-— this is the foundation stub, only opened by EquipmentPanel via Yarn "OpenEquip". See FLAGS (duplicate/stale).
+### Supporting ability files
+- **HeroLoadout** (`HeroLoadout.cs`, 255): per-hero slot→abilityId map (W/E/R only; **Q locked**),
+  PlayerPrefs-persisted, edits battle-locked (`EditsLocked` via the Core HUD-context signal).
+  Attached by HeroControlEnsurer; `ReloadFromPrefs` re-syncs carried heroes.
+- **HeroLoadoutAccess** (103): static resolver over the live hero's HeroLoadout (Player tag);
+  safe no-ops with no hero.
+- **AssignableSkillBar** (193) + **AssignableSkillBarAccess** (99): the bottom-middle EXTRA
+  skill bar (slotIndex→abilityId, PlayerPrefs, battle-locked) — casts go through
+  `HeroAbilities.TryCastExtra`. Separate-by-design from HeroLoadout.
+- **AttackTimingBonus** (190): DDOL singleton; 1.2s chain window → 1.0/1.15/1.30/1.50× damage;
+  `NotifyCast`, `ChainDepth`, `OnChainChanged`; "CHAIN ×N" label.
+- **AbilityCooldownUI** (64): legacy `Image.fillAmount` sweep; belt-and-braces only (live sweep
+  = HUD bridge).
+- **AbilityAudioBridge** (189): static per-class/kind SFX via `CoreServices.Audio` + procedural
+  synth fallback.
+- **AbilityVfxKit** (994): static procedural class-shaped ability VFX — legacy fallback layer;
+  skipped when a def has authored Hovl keys (`HeroAbilities.cs:1887-1891`) and largely bypassed
+  in registry-only mode.
 
 ---
 
-## CODE — Cameras
+## 3. Combat feel / projectiles / targeting
 
-### SmartMobileCamera `SmartMobileCamera.cs` — `DeNelle.Village` (the canonical camera, ~950 lines)
-**MonoBehaviour**, `[DisallowMultipleComponent][RequireComponent(Camera)]`. Singleton `Instance`. DEF-53 adaptive
-third-person follow: movement-lead, combat-zoom (FOV+distance), optional auto-framing, player-authoritative orbit
-(`_panYaw` via `AddYaw`/`AddPitch` — NEVER velocity-driven, kills the curl/spiral), WO-385 occluder-FADE (ShadowsOnly)
-instead of pull-in, WO-383 teleport snap (subscribes HeroLocomotion.OnTeleported). `float CameraYaw {get}` (HeroLocomotion's
-movement basis; 0 when orbit off), `void SetTarget(Transform)`, `void ForceFollowImmediate()`, `void Shake(intensity,duration)`,
-`bool FramingEnabled`, `void EnforceSoleCamera()`. Awake() force-migrates the baked top-down/orbit-off scene values
-(`_forceCameraFix`) with no rebake. **Disables sibling VillageCamera** (sole-camera contract).
-
-### VillageCamera `VillageCamera.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[RequireComponent(Camera)]`. The LEGACY trivial fixed-offset follow rig + sole-camera enforcer +
-editor-only drift diagnostics. `void SetTarget(Transform)`. **DISABLED at runtime by SmartMobileCamera** (kept as fallback).
-See FLAGS (superseded).
-
-### HeroCinemachineRig `HeroCinemachineRig.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`. Cinemachine-3 OTS rig (CinemachineCamera + ThirdPersonFollow + Deoccluder,
-IgnoreTag "Player"). **DEAD/UNUSED:** its own header + VillageCamera's note say it's commented out of the builder; the live
-camera is SmartMobileCamera; HeroControlEnsurer actively DISABLES CinemachineBrain. See FLAGS (dead).
-
-### CameraModeController `CameraModeController.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[RequireComponent(Camera)][DefaultExecutionOrder(100)]`. WO-338 context camera: post-processes SMC's
-seat to add a TOWN bird's-eye mode (locked to town centre/origin) and blends 0.6s. `CameraMode Mode`, `bool IsTownActive`,
-`void SetTownCentre(Vector3)`. **Effectively gated to BUILD MODE ONLY** — `EvaluateContext` resolves TOWN only while
-`BuildModeController.IsActive` (the idle-in-town TOWN engaged a "stuck on the tree" bug, now disabled); the IsWaveActive/
-IsInBattle/IsExploring helpers exist but no longer drive the mode. Suspends/resumes SMC as the single writer.
-
-### CameraModeControllerBootstrap `CameraModeControllerBootstrap.cs` — `DeNelle.Village`
-**static** + `[RuntimeInitializeOnLoadMethod(SubsystemRegistration reset + AfterSceneLoad)]`. Auto-AddComponents
-CameraModeController onto the SMC camera in "Village"-named scenes (idempotent, try/catch). No scene edit.
+- **RangedAttackVFX** (342): `FireArrow` / `FireSpellOrb(target, onArrive, projectileKey, …,
+  tint)` — flies the Hovl travel FX (or placeholder body) via ProjectileMover; used by
+  mage/ranger paths and companions; the Knight bypasses it (cosmetic-projectile rule).
+- **ProjectileMover** (191): lerp/arc mover, `onArrive` payload, impact FX; now pooled via —
+- **MoverProjectilePool** (295): sibling of the tower ProjectilePool for hero/companion shots
+  (per-shot GC kill; owner "control strays" directive).
+- **ImpactFXPool** (165): pooled impact burst bodies keyed by prefab (Clear+Play reset contract).
+- **HeroTargetIndicator** (861): reticle billboard + soft lock. Auto-acquire = TargetManager
+  registry ∪ Enemy-layer OverlapSphere, 45m, forward-arc gate; manual lock via right-click/
+  shoulder/tap. Writes `HeroAbilities.AimPointOverride` + `LockedTarget`; drives
+  `HeroLocomotion.SetLockFace` when `ff.lockon` (default OFF). Attached by HeroControlEnsurer.
+- **HeroCombatStatus** (56): buff/debuff timer tracker on the hero for the HUD row
+  (`ApplyNamed`/`ClearNamed` — Mana Draught, Grace Shield markers).
+- **HeroImpactFeedback** (147): `PlayHaptic` LIVE (HeroHealth damage + `ReportRumble` on hero
+  hits, `HeroAbilities.cs:1372-1378`); `PlayRecoil` still UNWIRED (no caller).
+- **HeroInjuredVignette** (152): IMGUI low-HP red edge vignette, driven by
+  `HeroHealth.SetInjuredVisual` (single injured-threshold owner).
+- **HeroHitReaction** (150): red damage flash + death slow-mo off HeroHealth events; ActorAnimator
+  `PlayHit(Gut)`.
+- Dead/dormant (unchanged since 06-12, re-verified): **HeroChargeVFX** (no caller), **HeroAimIK**
+  (no SetAimTarget caller; controller lacks the UpperBody layer), **HeroReachRing**
+  (dead-by-policy DEF-205), **HeroVictoryPoseBridge** (param-guarded no-op; HeroLocomotion owns
+  the live victory pose), **HeroFootstepController** (clips never assigned; NOTE HeroLocomotion
+  ALSO has its own `DriveFootsteps` loop `:697-720` loading `Sfx/FootstepsWalk` — the live path).
 
 ---
 
-## CODE — Input drivers
+## 4. Health / progression
 
-### VirtualJoystick `VirtualJoystick.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]` + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` DDOL singleton.
-Code-built on-screen thumbstick (polls legacy `UnityEngine.Input` touch/mouse, no EventSystem). `static Vector2 Move`
-(HeroLocomotion reads), `static bool IsInZone(screenPos)` (CameraPanInput excludes the stick zone). Shown only on a
-touch/mobile target with a live hero. WebGL/mobile movement input.
+### HeroHealth — `HeroHealth.cs` (1261) — `DeNelle.Village`, `IDamageableStructure`
+Singleton `Instance` `:37`. Max HP = `_maxHp + EffectiveBonus` (gear/talent HP bonuses) `:175`.
+Contact damage intake (Enemy-layer scan, 1s ticks); IMGUI bar suppressed when `CoreServices.Hud`
+is live. `TakeDamage` `:463` (armor reduction via GearLoadout, parry consume, invuln window),
+`ActivateInvuln(seconds)` `:663`, `Heal` `:1008`, `RegenTick` `:1025` (silent drip),
+`RestoreToFull` `:1055`, `Respawn` `:846` (DEF-102 — hero death ≠ lose). Events:
+`OnHealthChanged` `:202`, `OnDied` `:204`, `OnDeath` `:679` (+ F8-15 listener-name death
+forensics `:579-597`). **`static MoveSpeedMultiplier`** `:195` — the injured-stance slow
+(`:1102`) HeroLocomotion multiplies into every step. Nested `HeroHealthBootstrap` `:1224` DDOL
+attaches HeroHealth + HeroHitReaction to the HeroAbilities GO per scene.
 
-### CameraPanInput `CameraPanInput.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]` + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` DDOL singleton.
-DEF-202/204 slide-to-pan (Lean Touch) + right-mouse + Q/E/R/F keyboard orbit → `SmartMobileCamera.AddYaw/AddPitch`.
-`static Instance`. Tap-vs-drag threshold (12px) so taps pass to attack; excludes joystick-zone + GUI + build mode;
-hero-presence gated. Keyboard orbit is the WebGL-reliable path (browser eats right-drag).
-
----
-
-## CODE — HUD bridge / progression
-
-### HeroAbilitiesHudBridge `HeroAbilitiesHudBridge.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent][RequireComponent(HeroAbilities)]`. Cross-asmdef **reflection** bridge to
-`DeNelle.HUD.VillageHudController` (Village can't ref HUD). IN: HUD `AbilityRequested` event → `HeroAbilities.TryCast`.
-OUT (per-frame reflection invokes): `SetMana`, `SetHeroHp`, `SetAbilityCooldown`, `SetAbilitySlot` (5- or 6-arg with accent
-hex) — pushes the active class's Q/W/E/R glyph/name/desc when the class changes (WO-36). Self-resolves the HUD at runtime
-(WO-428/421) since the serialized ref is only wired in VillageSceneBuilder.
-
-### HeroProgression `HeroProgression.cs` — `DeNelle.Village`
-**MonoBehaviour**, `[DisallowMultipleComponent]`, `: IXpEarner`. Hero XP/level + level rewards. Singleton `Instance`;
-**Bootstrap** `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` DDOL standalone that ProgressionManager later migrates onto
-the hero (Awake takes-over + migrates XP, never Destroy(gameObject) — the frozen-village bug fixed). `const Id="hero"`
-(matches HeroAbilities damage attribution). `int Level`, `float Xp/XpToNext/LifetimeXp`, `float DamageMultiplier`
-(+6%/level, cap 3×; HeroAbilities reads), `int AddXp(float)`; `event Action<int> OnLevelUp`, `static event Action<int> OnAnyLevelUp`
-(instance-swap-proof, DEF-261), `event Action<float,float> OnXpChanged`. Front-loaded quadratic XP curve; grants Wisdom
-(WisdomCurrencyService) + skill points (SkillSystem) per level. Registers in Core XpEarnerRegistry. Core→Village circular-ref
-note: damage attribution writes via the registry id, not a direct call.
+### HeroProgression — `HeroProgression.cs` (280) — `IXpEarner`, id `"hero"`
+XP/level; curve `level*120 + 80`; `DamageMultiplier` (+6%/level, cap 3×); grants **Wisdom**
+per level (level-gated only — WO-763: Wisdom is earned via level-ups, not sprayed) + skill
+points. **Persisted in GameState (HeroLevel/HeroXp/HeroLifetimeXp, schema v29, F8-47)** —
+restores on attach (never downgrades a live higher level), writes back on every change; the
+old "level 1 after outpost" reset is fixed. `OnLevelUp`, `static OnAnyLevelUp`, `OnXpChanged`.
 
 ---
 
-## CODE — Equip / shop / quest UI (`DeNelle.Village.Hero` namespace)
+## 5. Gear / equip system
 
-### HeroEquipHud `HeroEquipHud.cs` — `DeNelle.Village` (note: NOT .Hero)
-**MonoBehaviour** singleton + `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` Bootstrap. A single compact bag-icon HUD
-button → opens the inventory modal. `static EnsureExists()`, `void` build. Auto-spawns in hub scenes (MainCastle_Hall/Village2/
-CastleHub). WO-411: now wires to the HUD TOWN-ACTIONS row's BAG via reflection (`InventoryRequested`) → `HeroInventoryController.Open`;
-self-heals the wire each frame until bound (the "BAG dead in castle" fix). Code-built uGUI, WebGL-safe rounded sprite.
+### GearCatalog — `GearCatalog.cs` (500) — `DeNelle.Village`
+Loader for **weapons.json (100 weapons)** / **armor.json (24 armors)** + accessories
+(`AccessoryDef`). `WeaponDef` now carries **`element`** (drives `WeaponVfxMap.ElementalOnHitKey`;
+only `knight_flameblade` = "fire" is authored so far) and `reach`; both defs carry rarity /
+`setId` / saga / makersMark / buy costs / `IsAegis`. `BestWeapon/BestArmor(job,level)`,
+`FindWeapon/FindArmor`, `WeaponFitsClass/ArmorFitsClass`, `MeetsReq`, `GetBuyCost`, `Reload`.
+**The old aegis data bug is FIXED:** all four `aegis_*` weapons now carry `"setId":"aegis"`
+(verified in JSON) → `GearLoadout.AegisSetActive` is reachable. Legendary armor sets
+oathplate/leafcloak/aethercloak also authored.
 
-### HeroInventoryController (split) — `HeroInventoryController.cs` + `InventoryUIBuilder.cs` / `InventoryPaperDoll.cs` / `InventoryGrid.cs` / `InventorySidebar.cs` (DeNelle.Village.Hero ns, partial class)
-**MonoBehaviour** singleton (partial across 5 files for maintainability; no behaviour change). Full-screen code-built uGUI inventory + gear modal (same Open/Close/Toggle/Ensure, same GearLoadout drive, same W/A Tech dark-wood+gold styling via ElarionUiKit + Tech hud pack sprites for sockets/tabs/cells). Tabs Weapons/Armor/Outfits/Consumables, paper-doll, 4-col grid, detail sidebar with TechPrimary EQUIP. PanelManager registered. **DATA GAP unchanged.** (Split executed to resolve prior monolithic 1573-line state while preserving 100% prior layout/Tech W/A polish and calls from HeroEquipHud/VillageHud.)
+### GearLoadout — `GearLoadout.cs` (690) — the canonical equip model
+Slots: main-hand `EquippedWeapon`, `EquippedOffHand` (2H↔off-hand mutually enforced via
+`EnforceHandSlots`), `EquippedArmor`, `EquippedRing`/`EquippedAmulet` (WO-543 accessories —
+pure stat, no mesh). Publishes **`WeaponMult`** / **`ArmorDefense`** / `GearHpBonus`;
+`event OnGearChanged`. Per-class PlayerPrefs persistence (`dotr-equip-*-<class>`) with the
+**`__none__` removed-slot sentinel** `:109-119` (a deliberate unequip is never auto-refilled).
+**WO-808 gear levels are applied at the ONE choke point** `ApplyStats` `:260-272`:
+`GearStatResolver.EffectiveDamageMult/EffectiveDefense(def, GearProgression.GearLevelOf(gs,id))`
+— every combat consumer reads the leveled scalars. Aegis set (WO-295): ward refund 0.25 +
+per-class perk mult + defense bonus `:76-101`; lazily attaches AegisSetEffect + HeroArmorRimLight.
+`EquipWeaponById/EquipOffHandById/EquipArmorById/EquipAccessoryById/Unequip*` `:385-668`,
+`BindOwnerClass` `:131` (companions), `ArmorVisualTier` `:343`.
 
-### VendorRegistry `VendorRegistry.cs` — `DeNelle.Village` (WO-598)
-Static loader for `vendors.json` (Resources/StreamingAssets via CanonicalJson + Newtonsoft, mirrors MaterialCatalog).
-`VendorDef{Id,DisplayName,Layout(gear|goods|jeweler),Categories[],ClassFilter,MaxReqLevel,EmptyLine}`. `All`,
-`Find(vendorContext)` (exact id first, then substring), `EmptyLineFor(id)`, `Reload()`. THE vendor/shops registry:
-each shoppable vendor's shelf is a declared QUERY over the item catalogs, never a hardcoded list. Consulted FIRST by
-`VendorStockContract.AllowedFor` (categories→GearKind flags — one truth for legacy shop, ShopCatalog, PartyShop, AutoPilot).
-Graceful: missing registry ⇒ legacy heuristic unchanged.
+### GearProgression — `GearProgression.cs` (276) — WO-808 Option A (owner-locked 2026-07-30)
+Per-INSTANCE gear power levels ("improve THIS sword"): `gear-levels.json` curves →
+`GearLevelCatalog` → pure `GearStatResolver`; levels keyed by gear id in
+`GameState.GearLevels` (additive, no schema bump). **Improve is INSTANT V1** (no queue channel;
+Resources-only). Mirrors the barracks troop-level stack piece for piece. Surfaced as
+"Improve at the Forge/Armorer + Lv N" across gear UIs (WO-808 `3b66efb3`).
 
-### VendorStockResolver `VendorStockResolver.cs` — `DeNelle.Village.Hero` (WO-598)
-Static. `Resolve(vendorContext, job, level, rosterOverride?) → IReadOnlyList<VendorWare>` — resolves the vendor's
-query against GearCatalog (weapons/armor, ROSTER-FILTERED: items no currently-playable class can use are EXCLUDED —
-Knight-only V1 ⇒ no Mage wands; level-gated rows return locked "Requires Lv N"), ConsumableCatalog + MaterialCatalog
-(Market goods; gems = crystal band → Jeweler), GearCatalog.Accessories (rings/amulets), CraftableCatalogRegistry.
-Also `LayoutFor`, `EmptyLineFor` (never null — authored line or safe default), `DisplayNameFor`, `PriceFor(Consumable|Material)`
-(data `price` field first), `RosterClasses()` (ff.knightonly). §12: Guard.TryEach per loop; traces
-`[Flow:Vendor] <id> resolved N items (query: …)`. Regression: `DataRegression.CheckVendorStock`.
+### EquipmentController — `EquipmentController.cs` (2879 — the biggest file in the folder)
+Visual weapon attach on the Humanoid rig. Equip pipeline: Addressables first
+(`BeginAddressableEquip` `:735`), Resources `Heroes/Props/Weapons/<mesh>` fallback `:808`,
+tinted-primitive last resort. Weapon-class map (Sword/Dagger/Axe/Hammer/Staff/Wand/Bow/Shield
+`:81-168`); geometric **`SeatByHandle`** sword-grip inference; bounds-normalizing `NormalizeInto`;
+render-verify + rollback (`VerifyWeaponRendersNow` `:1046`, `RollbackWeaponProp` `:1091`).
+Off-hand shields → LeftHand (`EquipOffHand` `:1403+`). **`SetCombatActive(bool)`** `:1722` —
+drawn↔sheathed (back-socket resolve `:1961`, sheath rotation `:1994`); driven per-frame by
+HeroLocomotion's `engaged` flag (the "sword out in town" fix). **`SetArmorTier(int)`** `:2095` —
+WO-567 armor read WITHOUT mesh swap: MPB multiply-tint on the body renderers `:2120-2158`
+(merges with HeroArmorRimLight emission via GetPropertyBlock). Attach-override seams:
+`RigAttachmentRegistry` (rig-profiles.json authored attach bones, authoritative over the
+avatar auto-map) + `AttachmentOffsetRegistry` (Offset Forge authored offsets; persistentDataPath
+wins, reload before every equip). Bows delegated to HeroBowAttachment. `ReseatForBody` `:547`
+re-seats after a body swap; `GripRoot` `:329` exposed for the trail. Skips everything when a
+`PackageBakedGearMarker` is present `:226`.
 
-### ShopPanel `ShopPanel.cs` — `DeNelle.Village.Hero` (994 lines)
-**MonoBehaviour**. Code-built vendor shop (BUY/SELL/EQUIP). `void Open(string vendorContext)`. Opened via Yarn "OpenShop"
-(NPCCommandBridge). Uses EconomyService (TrySpend/Grant ResourceCost), VillageInventory (Add/Get/TryConsume), GearLoadout
-(equip), GearCatalog (stock), GearAppraisal (maker's-mark labels). Vendor flavour filter (armorer/forge) with a never-empty
-fallback (WO-406); scrollable content (WO-412 collapse fix). Light-parchment palette. LIVE.
+### WeaponVfxMap — `WeaponVfxMap.cs` (244) — pure resolver
+Rarity → swing-trail color/width (steel/green/blue/violet/**gold** apex; monotonic widths;
+makersMark theme tint 0.18) `:52-173` — DataRegression-pinned. **`ElementalOnHitKey(WeaponDef)`**
+`:207-241`: element string → owner-tagged full-prefab impact key (fire→Fireball_Impact,
+ice/frost→Frost_Impact, lightning→Thunderbolt_Impact, arcane→Arcane_Impact,
+poison→PosionCloud_Cast [sic — the catalog key really is misspelled]); **holy/water/earth/nature
+HELD — return null until the owner tags a key. Never substitute creatively.**
 
-### EquipmentPanel `EquipmentPanel.cs` — `DeNelle.Village.Hero`
-**MonoBehaviour**. WORLD-SPACE code-built panel for the **legacy HeroEquipment** stub. `void Open()`. Opened via Yarn "OpenEquip".
-Only the two demo items (basic_sword/leather_armor). **STALE/DEMO** — paired with the superseded HeroEquipment, not the
-canonical GearLoadout path. See FLAGS (duplicate/stale).
+### ArmorVfxMap (208) + HeroArmorRimLight (140)
+Armor/accessory channel analog: dominant rarity across armor+ring+amulet → rim-light
+color/intensity via MPB emission (no material instancing); legendary apex plays "Burst_rings".
+Lazily attached by GearLoadout; fully Guard-ed.
 
-### RumorBoardPanel `RumorBoardPanel.cs` — `DeNelle.Village.Hero`
-**MonoBehaviour**. WO-304 Brom's quest board (browse/accept) — code-built overlay (uGUI+TMPro). `void Open()/Close()`.
-Read-only consumer of Core `QuestService`/`QuestCatalog` (only write is `StartQuest(id)`); repaints on QuestChanged.
-Opened via Yarn "OpenRumorBoard". (Hero-adjacent, in the Hero folder by location; quest-domain.)
+### HeroArmorVisual — `HeroArmorVisual.cs` (979)
+**Header lies by omission:** it describes the Blink full-body armor mesh-swap. Under the
+single-Grom no-mesh-swap ruling the Blink swap path is effectively RETIRED; the component
+self-guards (no humanoid "HeroBody"/no Blink asset → keeps the existing body, never naked) and
+HeroBodySwapper's KnightV3 path suppresses the Blink overlay (`useKnightV3:true` keeps KnightV3
+visible, `HeroBodySwapper.cs:386-390`). Still universally attached by HeroControlEnsurer —
+treat as a dormant compatibility layer, do not extend.
 
----
-
-## DATA (JSON)
-
-### weapons.json — `Assets/StreamingAssets/Data/Canonical/` (+ Resources/Data/Canonical mirror that WINS at load; +`Assets/Data/Canonical` source)
-Schema `{ "_note", "weapons":[ {id,name,icon(emoji),job(mage|knight|ranger|cleric),rarity,damageMult,reach?,req:{level,dex?,arcane?,might?},setId?,saga?,flavor?,makersMark?,buyWood?,buyFood?,buyIron?,buyCrystals?} ] }`.
-**16 weapons:** 4 each mage/knight/ranger (common→epic, mult 1.0→2.1) + 4 legendary `aegis_*` (one per class incl. cleric,
-mult 2.2–2.4, `setId:"aegis"` only on… actually only the armor carries setId here — note: aegis WEAPONS have NO setId field, so
-`WeaponDef.IsAegis` returns FALSE for them — see FLAGS). reach only on knight/cleric melee. **Copy:** mirror MUST stay in sync
-(Resources copy wins in WebGL). Editing tunes gear with no recompile.
-
-### armor.json — same locations
-Schema `{ "_note", "armor":[ {id,name,icon,job("any"),rarity,defense(0..0.9),hpBonus,req,setId?,saga?,flavor?,makersMark?,buy*} ] }`.
-**5 armors:** cloth/leather/chain/plate (common→epic, def 0.04→0.20) + `aegis_plate` "Aegis of Elarion" (legendary, def 0.28,
-`setId:"aegis"`). hpBonus carried but **v1 applies defense only** (per _note). The aegis armor IS the only piece with setId.
-
-### abilities.json — `Assets/StreamingAssets/Data/Canonical/` (+ Resources mirror)
-Schema `{ version, "_comment", classes:{ <class>:{ displayName, abilities:{ q/w/e/r:{slot,key,name,description,icon,color(hex),effect,cooldown,manaCost,damage,range,freeze?} } } } }`.
-**3 classes** (mage/knight/ranger; **no cleric class** → Cleric uses mage loadout in code). Mage is VERBATIM React port; Knight+Ranger
-are **AUTHORED placeholders** flagged for re-sync when React v1 publishes (see _comment). `description` is HUD-only, re-authorable.
-Keyboard `key` differs from slot (W uses "F" — W is movement).
-
----
-
-## FLAGS
-
-### Stale comment-vs-code (the requested mismatch class)
-1. **HeroLocomotion** — header: *"no Rigidbody, no NavMeshAgent — pure transform"* and *"primitive Capsule with auto-collider…
-   depenetration"*. **CODE:** it IS a `NavMeshAgent`, driven by `_agent.Move()`; the hero has no movement collider; walls are
-   enforced by the absence of NavMesh, not depenetration. The class XML summary ("Kinematic transform translation") is also stale.
-   **This is the headline mismatch.**
-2. **VillageCamera** — header claims it's the single active camera and "HeroCinemachineRig is commented-out". True today only
-   because **SmartMobileCamera disables VillageCamera at runtime**; the header reads as if VillageCamera is live.
-3. **HeroAimIK / HeroChargeVFX / HeroImpactFeedback.PlayRecoil / HeroVictoryPoseBridge / HeroPoseController** — all carry long
-   headers describing controller additions ("UpperBody layer 1 + mask", "VictoryPose/BowRecoil/Combat params") **that the live
-   HeroAnimatorSetup controller does NOT contain**, so these drives are param-guarded no-ops today. The comments describe intended,
-   not actual, behaviour.
-4. **ItemIconCatalog** `Sheets[]` lists `ItemIcons/inEJH` (bows) but the folder listing shows other sheet GUIDs present
-   (Ud37F/WRdWM/VxBVb/bRUz5/CtQcX/jdRCa have `.meta`s in git status); verify `inEJH` exists or bow art silently falls to glyph.
-
-### Dead / unwired code
-- **HeroCinemachineRig** — superseded by SmartMobileCamera; HeroControlEnsurer disables CinemachineBrain. Not in the builder. DEAD.
-- **HeroChargeVFX** — `StartCharge/ReleaseCharge` have no caller (explicit "wire from HeroCombat" TODO). DEAD.
-- **HeroAimIK** — no code calls `SetAimTarget`; with no aim target IkWeight collapses to 0. Effectively DORMANT.
-- **HeroReachRing** — intentionally NOT attached (DEF-205); kept for a future opt-in. DEAD-BY-POLICY.
-- **HeroImpactFeedback.PlayRecoil** — no caller (TODO). (PlayHaptic IS live via HeroHealth.)
-- **GearVisualApplier** — primitive-cube path gated off (`EnablePrimitiveGear=false`); superseded by EquipmentController. LEGACY.
-
-### Duplicate / parallel systems
-- **Two equip stacks:** canonical **GearLoadout + EquipmentController** (data-driven, real meshes, drives HeroAbilities/HeroHealth)
-  vs legacy **HeroEquipment + EquipmentPanel** (`DeNelle.Village.Hero`, hardcoded demo items, cube sword, log-only bonuses, Yarn
-  "OpenEquip"). The latter is a stale WO-109 stub — do not extend it; route equip through GearLoadout.
-- **Two weapon-visual paths:** EquipmentController (real KayKit, current) vs GearVisualApplier (primitive cubes, gated off).
-- **Two victory-pose paths on wave-clear:** HeroLocomotion's own "Victory" trigger + 2.5s movement-suppress, AND
-  HeroVictoryPoseBridge's "VictoryPose" trigger on the WaveManager GO. Both subscribe OnWaveCleared. (The bridge is inert today
-  — no param — so no live conflict, but it's redundant intent.)
-- **Namespace split:** equip-system + shop/quest UI live in `DeNelle.Village.Hero` while everything else is `DeNelle.Village`
-  (HeroEquipHud is `.Village` despite opening the `.Village.Hero`-adjacent inventory). Easy to mis-reference.
-
-### Scene-gated / disabled / contradictory
-- **CameraModeController TOWN mode** is gated to BUILD MODE ONLY (the idle-town bird's-eye caused the "stuck on the tree"
-  unplayable-village bug); its IsWaveActive/IsInBattle/IsExploring helpers are now vestigial.
-- **EquipmentController mesh gap:** real KayKit weapon meshes aren't in `Resources/Heroes/Props/Weapons/` → every hero shows the
-  tinted-primitive fallback until art is copied (file-header ACTION FOR ART/CLI). Not a bug, but the "real meshes" are not live.
-- **aegis weapons have no `setId`** in weapons.json (only `aegis_plate` armor does) → `WeaponDef.IsAegis` is FALSE for all four
-  aegis weapons → `GearLoadout.AegisSetActive` (needs BOTH aegis weapon AND armor) can NEVER be true → the Oathweld ward
-  (AegisSetEffect) + per-class Aegis weapon perk are effectively UNREACHABLE. **Likely a data bug** (add `"setId":"aegis"` to the
-  four aegis weapons). Flag for owner.
-- **HeroFootstepController** ships with no `_footstepClips` → silent until clips are assigned.
-- **abilities.json** has no `cleric` class; Cleric body (own FBX) + Cleric.controller exist but fire the Mage loadout (by design,
-  routed in HeroBodySwapper `abilitySlug` + HeroAbilities Awake) — intentional, documented, but a latent gap if a cleric kit is expected.
-- **IMGUI hero HP bar (HeroHealth.OnGUI)** is a FALLBACK only — suppressed whenever `CoreServices.Hud` is registered (WO-411);
-  same for the contact-damage IMGUI bar. The real bar is the uGUI VillageHudController via HeroAbilitiesHudBridge.
+### Other gear files
+- **AegisSetEffect** (136): Oathweld ward — refunds `WardRefundFraction` of hero damage to the
+  Heart; now REACHABLE (setId data fixed).
+- **GearVisualApplier** (307): legacy primitive-cube gear, `EnablePrimitiveGear=false` — gated
+  off; still clears stale `GearVisual_*` children.
+- **HeroBowAttachment** (336): ranger bow on LeftHand; procedural fallback; retry until bones
+  bind. Dormant under knight-only but intact.
+- **GearAppraisal** (276): pure lore/value surface (maker's mark, tier label, crystal value) —
+  shop labels.
+- **ItemIconCatalog** (317) + **GearIconCatalog** (113): sprite resolution. GearIconCatalog is
+  the MVVM presentation seam — Views resolve icons by ROLE+ID keys and never name GearCatalog.
+- **AccessoryDef** (90): rings/amulets typed model (damageMult/defense/hpBonus additive);
+  Jeweler-only.
+- **HeroEquipment** (157, `DeNelle.Village.Hero`) — the WO-109 demo stub (basic_sword/
+  leather_armor, log-only bonuses). **DO NOT EXTEND** — superseded by GearLoadout/
+  EquipmentController. Note: EquipmentPanel NO LONGER pairs with it (see §9).
 
 ---
 
-*Items cataloged: ~50 code types (45 files) + 3 JSON data files. All entries verified by reading the source, not comments.*
+## 6. Body / animation
+
+### HeroBodySwapper — `HeroBodySwapper.cs` (2129)
+**Header lies:** still says "Knight / Ranger / Mage" class swap. LIVE path: `ff.knightv3` ON →
+`BuildKnightV3Body` `:331-390` skins `Resources/Heroes/KnightV3.fbx` via `VisualFactory.Skin`
+(forward yaw **+15°**, height 1.75m, owner felt-tuned `:354-373`), names it "HeroBody", then
+`WireHeroBody(..., "Knight", …, useKnightV3:true)` `:390` — controller slug stays "Knight" so
+cast/skill states resolve; **`ff.mocaploco` ON binds `KnightMocap.controller`** `:458-471`
+(MOCAP-DECISION FlowTrace proves the bind). Legacy Tripo Knight / Paladin package = fallback
+chain; other classes' FBX paths remain but are unreachable under knight-only. Post-swap it
+calls `HeroLocomotion.SetAnimator` + `HeroAbilities.SetAnimator` DIRECTLY (WO-581 — the old
+reflection write is gone) and `SetHeroClass`. `applyRootMotion=false`; animator speed 1.0
+`:33-38`; `cullingMode=AlwaysAnimate`. Holds a clean idle during dialogue (DialogueService
+hooks). Material pipeline: embedded PBR diffuse for KnightV3; URP retarget + class tints for
+legacy bodies. Also attached to the EMERGENCY hero (HeroControlEnsurer) so even the pill
+becomes Grom.
+
+### Animation-adjacent
+- **HeroPoseController** (396): TOWN↔COMBAT pose flips + weapon-prop SetActive at transition
+  midpoint (param-guarded "Combat" bool is still absent from the controller → the prop half is
+  the working half).
+- **HeroEmote** (158): plays KnightV3's extracted DANCE clip as a one-shot PlayableGraph, then
+  restores the locomotion controller. Trigger hook only — no wheel/HUD (coordinator scope rule).
+- **HeroLocomotionCadence** (119): runtime cadence knob — PlayerPrefs `anim.runCadence`
+  (default 1.5) applied only while in a locomotion state.
+- **HeroGaitForensics** (164): owner-F8 2026-07-12 per-frame gait/camera capture —
+  `[Flow:GaitF]` change lines + `gait-forensics.csv` (hip weave vs camera yaw). Diagnostic;
+  leave in place per §12 until the gait file is closed.
+
+---
+
+## 7. Cameras / input drivers
+
+- **SmartMobileCamera** (1102) — THE camera. Follow + movement-lead + combat zoom + optional
+  framing; player-authoritative orbit (`AddYaw/AddPitch`, never velocity-driven — curl-proof);
+  occluder-FADE (WO-385); teleport snap via `HeroLocomotion.OnTeleported`; `CameraYaw` is the
+  movement basis (0 in top-down); `EnforceSoleCamera` disables sibling VillageCamera;
+  facing-recenter suspends on `HasAnyMoveInput` (SME 2026-07-12 fix). Runtime-attached by
+  HeroControlEnsurer wherever missing — EXCEPT dungeons (rig guard).
+- **VillageCamera** (175): legacy fixed-offset follow — disabled at runtime by SMC; kept as
+  fallback. Header still reads as if it were live.
+- **HeroCinemachineRig** (136): DEAD (Cinemachine OTS rig; brain actively disabled by the
+  ensurer). In dungeons the live Cinemachine rig is `DeNelle.Dungeons.DungeonCameraRig`, NOT
+  this.
+- **CameraModeController** (452) + **CameraModeControllerBootstrap** (83): TOWN bird's-eye
+  mode — still **build-mode-only** (idle-town TOWN caused the "stuck on the tree" bug);
+  bootstrap auto-attaches in Village scenes.
+- **CameraPanInput** (235): Lean-Touch slide-to-pan + right-mouse + Q/E/R/F keyboard orbit →
+  SMC AddYaw/AddPitch; excludes joystick zone/GUI/build mode.
+- **VirtualJoystick** (241): code-built touch thumbstick; `static Move` feeds HeroLocomotion;
+  `IsInZone` excludes the pan input; touch-targets only, late-touch re-check for mobile init.
+
+---
+
+## 8. HUD bridges
+
+- **HeroAbilitiesHudBridge** (473): reflection bridge to `DeNelle.HUD.VillageHudController`
+  (Village must not ref HUD). IN: HUD `AbilityRequested` → `TryCast`. OUT per-frame: SetMana /
+  SetHeroHp / SetAbilityCooldown / SetAbilitySlot (glyph/name/desc/accent from `ResolvedDef` —
+  the icon==cast guarantee). Self-resolves the HUD at runtime.
+- **HeroEquipHud** (260): the single bag-icon inventory button + bootstrap; wires the HUD
+  TOWN-ACTIONS BAG via reflection → `HeroInventoryController.Open`. NOTE commit `16783d62`
+  moved the visible entry to a **Grom portrait in the HUD kit** — the HUD side is the live
+  skin; this component remains the Village-side opener/bridge.
+- **RaidEntryBridge** (222): reflection-subscribes the HUD's `RaidRequested` UnityEvent →
+  `RaidSelectionScreen.Open()`; self-bootstraps per hub scene. The HUD **Raids button** itself
+  (added `2598f2f7`) + the WO-820 full-army dim gate live HUD-side (`ArmyReadiness` in Core is
+  the single readiness source, WO-823).
+
+---
+
+## 9. UI surfaces (namespace `DeNelle.Village.Hero`, all code-built uGUI — NO UXML, canon §8)
+
+All of these follow the strict-MVVM split (UI_MVVM_MIGRATION_PLAN): a PURE VM (IPanelViewModel,
+no UnityEngine UI types, icons as ROLE+ID keys, unit-testable) + a dumb-skin View on the shared
+`ElarionUiKit` chrome (BuildObsidianPanel / BuildModalCanvas + Scrim + the ONE shared Close),
+registered with PanelManager (modal arbiter) and/or PanelRouter.
+
+### Raid front-end
+- **RaidSelectionScreen** (372) + **RaidSelectionVM** (122): the Raids card grid over
+  `SceneConfigCatalog` — 3 flagship enemy raids (`raider_camp_small`, `fortified_garrison`,
+  `mage_enclave`; fallback = all enemy raids). Card = displayName + difficulty badge +
+  3-star target time + reward hint. Tap → `RaidDeployScreen.Open(def)`. Static `Open()`
+  self-heals a host.
+- **RaidDeployScreen** (458) + **RaidDeployVM** (245): pre-raid deploy — party portraits,
+  deployable troops grouped by TroopDefId from `ArmyStorage.GetDeployable()`, army-cap readout,
+  power rating (attack × veterancy), DEPLOY → `SceneRouter.GoRaid(def.sceneName)`. Still
+  first-pass: static clear-time estimate, stub Auto-Recommend (file-header TODOs are accurate).
+  The in-raid half (TroopDeployer/RaidScoring/RaidHudController) lives in
+  `Assets/_Modules/Village/Troops/` — see that catalog section.
+
+### Barracks / troops
+- **TroopTrainingPanel** (676) + **TroopTrainingVM** (441): the Barracks TRAIN panel
+  (WO-737 FrameCrafting master-detail; WO-744 strict MVVM). WO-778: `CreateDefault` wires
+  **`BarracksService.EnqueueTraining`** → training is TIMED on the Train channel
+  (`TrainOutcome.Queued`); the instant `ArmyStorage.TrainNow` loop survives only for tests.
+  Ladder shows ALL 7 troops incl. locked (tier education).
+- **BarracksPanel** (452) + **BarracksPanelVM** (430): the WO-771.9 UPGRADE panel — barracks
+  level card + per-troop levels/abilities/costs over `BarracksService`/`BarracksProgression`;
+  VM also owns host resolution (deliberately not-pure — scene lookups belong in the VM layer
+  here). Gated on `BarracksUnlock.IsUnlocked`. Barracks charges the REAL wallet (`ce74ac41`).
+
+### Rumor board (⚠ 2026-08-02 conformance wave IN FLIGHT)
+- **RumorBoardPanel** (689): WO-810 owner-signed master-detail — scrollable full-label filter
+  chips (selected = gilt + underline + ASCII `*` marker; colorblind law: shape never color
+  alone; ASCII only — the font tofus non-Latin glyphs), left ~42% two-line quest CARDS (whole
+  card selects, NO row buttons), right ~58% detail with the primary CTA pinned bottom
+  (Accept/Track/Pinned — the "ACC…" truncation fix), portrait stacks panes.
+- **RumorBoardVM** (328): pure VM over `IRumorBoardBackend` (live = QuestService + QuestCatalog +
+  DailyQuestService; tests fake it). Tabs All/Story/Daily/Gear/Endgame; tracked-quest flag;
+  StartQuest/SetTracked writes.
+- **RumorBoardPanelBootstrap** (40): eager `PanelRouter.Register(PanelId.RumorBoard, …)` at
+  scene load — the "HUD quest button cold-open" fix.
+
+### Realm map (WO-826, shipped `eb5d0710`)
+- **RealmMapPanel** (441): full-screen parchment map on the Obsidian modal frame — Elarion
+  centre + 5 fog regions at `realm-map.json` mapPoint (y DOWNWARD, the React convention);
+  node language locked/discovered/cleared/home/selected (all shape+text, ≥48dp buttons);
+  landscape map-left/detail-right, portrait stacked; PanelManager + PanelRouter
+  (PanelId.RealmMap). Adjacency lines skipped on first ship.
+- **RealmMapVM** (348): pure VM over `RealmMapCatalog` (Core) + an ISource save seam.
+  RegionState is DERIVED (never stored): home → Home; ledger Cleared → Cleared; ledger
+  Discovered OR live gate (bestWave / regionCleared) → Discovered; else Locked. **Nothing
+  writes the Discovered ledger yet** and **TravelEnabled is always false** — both are the
+  WO-827 stub (FlowTrace.Once documents it). Fresh save: all fog except Thornwood at wave 3.
+- **RealmMapPanelBootstrap** (70): per-scene host spawn; suppressed in enemy-owned scenes
+  (WO-550); global dedupe.
+
+### Shops / vendors
+- **ShopPanel** (935) + **ShopVM** (766): the legacy-context vendor shop, fully MVVM'd (WO-431)
+  — VM owns economy reads, stock building (VendorStockContract ∩ type filter), WO-406
+  never-empty fallback, buy/sell/equip, vendor-gold pools, `CurrentStock` (AutoPilot asserts
+  it). Opened by `CmdOpenShop` when `ff.partyshop` is OFF.
+- **PartyShopPanelMvvm** (1631) + **PartyShopVM** (1596) + **PartyShopPanelMvvmBootstrap** (75):
+  the store-to-spec party shop (STORE_EQUIP_SPEC): party-member selector (IEquipTarget), tap→
+  filter by class/level/vendor-type, BUY/SELL same screen, real item art + stat deltas.
+  **Flag-gated on `FeatureFlags.PartyShop`** — bootstrap + PanelId.PartyShop routing only when ON.
+- **ShopCatalog** (217): the ONE "what is shoppable here" resolver —
+  `Shoppable(vendorContext, job, level)` reconciles VendorStockContract × GearCatalog fit/req
+  gates, and extends to craftables via the Core Catalog seam.
+- **VendorRegistry** (125): `vendors.json` loader — each vendor's shelf is a declared QUERY
+  (layout/categories/classFilter/maxReqLevel/emptyLine), consulted FIRST by
+  `VendorStockContract.AllowedFor`.
+- **VendorStockContract** (166): store-TYPE → allowed GearKind flags; one contract, two
+  consumers (shop filter + AutoPilot assertion).
+- **VendorStockResolver** (376): resolves a vendor's query against Gear/Consumable/Material/
+  Craftable catalogs, roster-filtered (knight-only ⇒ no wands) + level-locked rows;
+  `[Flow:Vendor]` traces; `DataRegression.CheckVendorStock`.
+- **StoreStockService** (219): WO-429 offline-first stock — LOCAL catalog is authoritative;
+  an optional `IStoreStockProvider` remote snapshot MERGES on top; no network creds client-side.
+
+### Inventory / equip screens
+- **HeroInventoryController** (772, partial across **InventoryUIBuilder** 434 /
+  **InventoryPaperDoll** 214 / **InventoryGrid** 382 / **InventorySidebar** 116): the
+  full-screen inventory modal (tabs Weapons/Armor/Outfits/Consumables, paper-doll, grid,
+  detail sidebar; Tech W/A dark-wood+gold skin). Drives GearLoadout equip; PanelManager
+  registered; opened via HeroEquipHud / HUD BAG.
+- **InventoryVM** (425) + **EquipVM** (480) over the seams **IInventoryStore** (234 — owned
+  items + defs + fit-by-class over VillageInventory+GearCatalog) and **IEquipTarget** (210 —
+  equip/unequip a hero OR companion without naming GearLoadout): the WO-434 Phase-B pure VMs.
+  InventoryVM lists what the player OWNS (closing the old catalog-only data gap).
+- **EquipmentPanel** (1003): **REWORKED (2026-06-28 Gear-Preview WO)** — no longer the
+  HeroEquipment demo pair. Now the Obsidian "Gear Preview" screen: a live 3D hero preview
+  (**HeroPreviewViewer**, 450 — RenderTexture rig with its own EquipmentController so the
+  preview holds the real weapon) framed by slot plates (Full Armor / Shield / Weapon / Amulet /
+  Ring) + a bottom drawer of compatible owned items; bound to EquipVM. Main-hand and off-hand
+  lists are delineated (shields only in off-hand).
+
+---
+
+## 10. Misc / infrastructure
+
+- **HeroLinkCrossing** (66): the id-paired portal marker (`crossingId`, `enterRadius`,
+  `bidirectional`, static `Registry`) HeroLocomotion's crossing loop consumes.
+- **CastleSpawnMarkerHider** (175): runtime guard hiding every stray placeholder capsule near
+  the hub spawn (multiple independent pill sources — see its header list).
+- **AttachmentOffsetRegistry** (362): Offset Forge authored offsets; load order Resources →
+  persistentDataPath (wins) + PlayerPrefs mirror; `Reload()` before every equip.
+- **RigAttachmentRegistry** (203): rig-profiles.json attach-bone overrides (model stays
+  pristine; runtime-only resolution; avatar auto-map is the fallback).
+
+## 11. Data files consumed by this folder (all dual-copy: `Assets/Resources/Data/Canonical/` wins in WebGL; StreamingAssets mirror must stay in sync)
+
+| File | State |
+|---|---|
+| `abilities.json` | 5 blocks (mage/knight/ranger/knight-skills/universal-skills); castSeconds wind-ups; vfx keys authored but dormant (registry-only mode) |
+| `weapons.json` | **100 weapons**; `element` field (flameblade=fire only); aegis setId FIXED |
+| `armor.json` | **24 armors**; aegis_plate + 3 legendary class sets |
+| `accessories.json` | rings/amulets (WO-543) |
+| `gear-levels.json` | WO-808 per-instance level curves |
+| `vendors.json` | vendor shelf queries (WO-598) |
+| `realm-map.json` | WO-826 home + 5 regions, mapPoint/gate/description |
+| `motion-castings.json` / `VfxManualPicks.json` | the owner's Motion Caster registry — the ONLY motion-VFX authority |
+
+---
+
+## FLAGS / RISK LEDGER (2026-08-02)
+
+### Comment-vs-code lies (trust the lines cited above, not the headers)
+1. **HeroLocomotion** class XML summary still says "kinematic transform translation" — it is a
+   NavMeshAgent (`Awake :462`). The file header is corrected; the summary isn't.
+2. **HeroBodySwapper** header still describes the Knight/Ranger/Mage class swap — the live path
+   is KnightV3+KnightMocap single-Knight (`:78-90`); other class paths are unreachable code
+   under `ff.knightonly`.
+3. **HeroArmorVisual** header describes the Blink full-body armor swap — retired under
+   no-mesh-swap; component is a dormant guard layer.
+4. **VillageCamera** header reads as if it were the live camera — SMC disables it at runtime.
+5. **HeroAbilityInput** header (":1/2/3/4 keys") contradicts its own body — the number-row keys
+   are REMOVED at `:110-113`; only the header's first paragraph is stale.
+6. **AbilityCatalog.AbilityEffect** doc says "the six shapes" — eight more raw-string shapes
+   (dash/knockback/taunt/blink/dot/healovertime/invuln/gracebuff) resolve in HeroAbilities and
+   deliberately parse to Strike in the enum. Reading only the enum under-counts the kit.
+
+### Dead / dormant / do-not-extend
+- Dead: HeroChargeVFX, HeroCinemachineRig, HeroAimIK (dormant), HeroVictoryPoseBridge (inert),
+  HeroReachRing (dead-by-policy DEF-205), HeroImpactFeedback.PlayRecoil,
+  GearVisualApplier (gated off), HeroFootstepController (superseded by HeroLocomotion's own
+  footstep loop — two implementations exist, only the locomotion one can go live today).
+- **Do-not-extend: `HeroEquipment` (WO-109 stub).** All equip goes through GearLoadout →
+  EquipmentController. EquipmentPanel no longer references it.
+- Dormant under knight-only: HeroBowAttachment, the mage/ranger branches of LaunchProjectile /
+  HeroBodySwapper, `ranger`/`mage` ability blocks (kept for the second-class future).
+
+### Open gaps / pending seams (real, verified)
+- **Warden's Grace −20% damage reduction is NOT implemented** — needs a HeroHealth.TakeDamage
+  mitigation seam (`HeroAbilities.cs:1352` logs "PENDING"). The HUD shows the Grace marker
+  regardless.
+- **CastVariantKeyword[4] (R) = null** — the R-slot cast beat has NO registry keyword; R casts
+  are VFX-silent until the vocabulary grows a row (`HeroAbilities.cs:1432-1435`).
+- **Realm map WO-827 stub:** Discovered ledger never written; TravelEnabled always false.
+- **RaidDeployScreen first-pass TODOs** (live clear-time, scout report, quantity sliders) are
+  real and documented in-file.
+- **EquipmentController weapon meshes**: Addressables path first now, but the Resources
+  `Heroes/Props/Weapons/` fallback dir remains partially populated — a missing mesh still
+  degrades to the tinted primitive (render-verify + rollback protects against invisible props).
+- **`ff.lockon` default OFF** — the whole WO-512 lock-face/strafe path is dark in normal play.
+- **elemental on-hit**: only `fire` is authored on a weapon (flameblade); ice/lightning/arcane/
+  poison keys are mapped but no weapon data uses them yet; earth/holy/water/nature HELD by
+  owner rule.
+- **2026-08-02 in-flight:** the basic-attack swing+hit-only conformance (impact-burst removal)
+  and the RumorBoard conformance wave — re-verify §2/§9 and this ledger when they land.
+
+### Duplicate / parallel systems (by design or debt)
+- Two footstep systems (HeroLocomotion.DriveFootsteps LIVE vs HeroFootstepController unwired).
+- Two victory-pose subscribers on OnWaveCleared (locomotion live; bridge inert).
+- Two shop stacks (ShopPanel legacy-context vs PartyShopPanelMvvm flag-gated) — deliberate
+  flag migration, `CmdOpenShop` is the router.
+- Two inventory-ish surfaces (HeroInventoryController modal vs EquipmentPanel gear-preview) —
+  both live, different jobs (bag vs paperdoll/preview).
+- Namespace split `DeNelle.Village` vs `DeNelle.Village.Hero` persists — check the `using`
+  before referencing UI types from gameplay code.
+
+---
+
+*99 files verified from source at HEAD `b77a178e`. Keep this file green: any change to the cast
+engine choke points (`Resolve`/`CastResolved`/`ApplyStats`), the ensurer attach list, the
+dungeon-rig guard, or a flag default listed above MUST update this catalog in the same commit
+(CLAUDE.md §15).*

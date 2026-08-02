@@ -4,11 +4,19 @@ The single master index a new session reads to understand the whole project
 **without operating on assumptions**. Each area below has a deep section catalog
 under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comments).
 
-Section catalogs compiled **2026-06-12** (verified-from-code; "how it actually works" is still accurate).
-Current branch = **`wip/village2-and-f8-tickets`** (HEAD `8aa24c32`) — the `feat/tower-core-loop` label
-here and in the section files is STALE metadata only.
+> ## ✅ FULL SME REFRESH 2026-08-02 (WO-836 — the owner-ordered 14-agent fleet)
+> **ALL 19 section catalogs under `docs/MASTER_CATALOG/` were REWRITTEN 2026-08-02, verified from code
+> at HEAD `b77a178e`+** (file:line cites; comments-lie law applied; per-file inventory + seams + risk
+> ledger each). The 07-22 §6 catalog-drift ledger is PAID for every area. Read the section files
+> directly — they are current. Live anchor = `CANON_GROUND_TRUTH_2026-08-01.md` (+ the 08-02 delta).
+> Fleet risk roll-up: see the 08-02 session HANDOVER block.
 
-> ⚠ **STALE top-level framing (2026-06-12, pre-pivot):** the section files describe the hero as **"Blaise"
+Section catalogs compiled **2026-08-02** (previously 2026-06-12; the stale-framing banner below is
+retained for history only — the section files no longer carry the pre-pivot framing).
+Current branch = **`wip/village2-and-f8-tickets`**.
+
+> ⚠ **HISTORICAL (2026-06-12, pre-pivot — no longer describes the section files):** the old section files
+> described the hero as **"Blaise"
 > + Blink/class bodies** and a **party-of-4** — both SUPERSEDED by the 06-22 single-Knight pivot (hero =
 > single Tripo self-rigged "Grom", Blink hero rig JUNKED, everything else autonomous). For LIVE state read
 > `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`. The per-area code mechanics below

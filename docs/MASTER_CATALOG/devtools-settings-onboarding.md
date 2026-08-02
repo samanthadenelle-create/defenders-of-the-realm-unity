@@ -1,209 +1,325 @@
 # Master Catalog — DevTools / Settings / Onboarding
 
-Reference catalog for the dev-tools, settings menus, and onboarding/dev-grant area.
-Verified by reading source 2026-06-12. Terse; see code for full detail.
-
-Scope: `Assets/_Modules/DevTools`, `Assets/_Modules/Settings`,
-`Assets/_Modules/HUD/AdminOverlay*`, `Assets/_Modules/Core/OnboardingMode.cs`,
-`Assets/_Modules/Onboarding/{OnboardingFlow,TitleController}`,
-`Assets/_Modules/Village/OnboardingIntegrator.cs`,
-`Assets/_Modules/Core/State/DifficultyTuning.cs`, + the two grant paths.
+Verified **from the actual code** (not comments) **2026-08-02**. Supersedes the 2026-06-12/2026-07-13 body wholesale.
+Scope: `Assets/_Modules/DevTools/**`, `Assets/_Modules/Settings/**`, `Assets/_Modules/Onboarding/**`,
+plus the owner/dev grant surfaces in `Assets/_Modules/HUD` (AdminOverlay, OwnerDevToolsOverlay) and the
+cross-module onboarding trio (`Core/OnboardingMode.cs`, `Village/OnboardingIntegrator.cs`).
 
 ---
 
-## 1. DevTools — asmdef `DeNelle.DevTools` (ns `DeNelle.DevTools`)
+## 1. DevTools — asmdef `DeNelle.DevTools` (ns `DeNelle.DevTools`), 10 files
 
-asmdef refs: Core, Village, Wallet, HUD, UniTask. **defineConstraints:
-`UNITY_EDITOR || DEVELOPMENT_BUILD`** → whole assembly absent from release builds
-(module-isolation EXCEPTION: tooling may reference gameplay modules).
+asmdef defineConstraints `UNITY_EDITOR || DEVELOPMENT_BUILD` → the whole assembly is absent from release
+builds; every file ALSO wraps its body in `#if DEVELOPMENT_BUILD || UNITY_EDITOR` (belt + braces).
+Module-isolation EXCEPTION by design: tooling may reference Core, Village, HUD, Wallet.
 
-### DevPanelController.cs
-- File: `Assets/_Modules/DevTools/DevPanelController.cs`
-- Responsibility: in-game QA/debug console (UI Toolkit overlay) — grants resources, jumps state, spawns boss, mock wallet, cheat toggles.
-- **Whole file body is `#if DEVELOPMENT_BUILD || UNITY_EDITOR`** (belt + asmdef constraint).
-- MonoBehaviour, `[RequireComponent(typeof(UIDocument))]`. Toggled by F1 hotkey (`_toggleKey`) + on-screen "DEV" corner chip. Spawned by DevBootstrap (no per-scene wiring).
-- UI is **fully code-built with inline styles in `BindElements()`** — does NOT read DevPanel.uxml/.uss (UXML renders empty in builds). Self-comment confirms this; **NOT a stale comment** — see FLAGS.
-- Static cheat flags read by gameplay: `GodMode` / `InstantWinWave` (get; private set), events `GodModeChanged` / `InstantWinWaveChanged`. (No integrator currently reads them in-tree — see FLAGS.)
-- Live metrics panel refreshed ~5x/s while open (FPS, wave/phase, live enemies by EnemyDefId, boss, hero level/xp, heart hp/state, economy, wisdom, cheats).
-- Public methods: `SetOpen(bool)`, `Close()`, `IsBound` (prop).
-- Action groups: Resources (+crystals, +50k wood/stone/iron via `EconomyService.GrantSpendable`, wisdom, hero xp/level, trigger wave), Entitlements (grant by id / all packs via PackCatalog), Heart (hp/state), Waves (spawn enemy, Spawn Syndrath dragon, jump-to-wave, instant-win toggle), Scene jump (SceneRouter), Mock wallet (DevWalletProbe), Cheats (god-mode).
-- Deps: GameStateService, EconomyService, PackCatalog, HeroProgression, WisdomCurrencyService, WaveManager, HeartController, DragonBoss, SceneRouter, VillageHudController, DamageNumberSpawner, DevWalletProbe.
-- **Known dev-seam gaps (documented in code):** `JumpToWave`/`SpawnEnemy` fall back to `WaveManager.BeginLoop()` because `WaveManager.DevJumpToWave`/`DevSpawnOne` are NOT implemented — status line says so. `_dragonBossPrefab` must be inspector-assigned for Spawn Syndrath (auto-spawn via DevBootstrap leaves it null → reports cleanly).
-- WIRED + LIVE (dev builds only).
+### DevPanelController.cs — the F1/corner-tap QA console (DEPRECATED-but-still-growing)
+- **Header says DEPRECATED** (owner 2026-06-24: "F10 dev menu retired — use Settings → DevTools (AdminOverlay)";
+  TAGGED FOR REMOVAL 2026-06-28) — `DevPanelController.cs:2-7` — yet it keeps receiving new entries (WO-826 Realm
+  Map button, line 799). It is the *headless/dev door*, not dead. Treat "remove after confirming no tool is lost"
+  as still unconfirmed.
+- MonoBehaviour `[RequireComponent(UIDocument)]` (`:73-74`), UI **code-built** at runtime (UXML files are
+  editor-reference only). Spawned by DevBootstrap on a DDOL host — zero per-scene wiring.
+- Hotkey: F1 toggle is gated by the **global `FeatureFlags.DevHotkeys` kill-switch, default OFF**
+  (`DevPanelController.cs:238-248`; flag at `Core/FeatureFlags.cs:~275`) — a key press can never pop it unless
+  PlayerPrefs `ff.devhotkeys=1`. The on-screen path is `DevCornerTapGesture` (below) + the "DEV" chip.
+- Action groups (verified `AddGroup` calls, `:699-828`): Resources (699) · City upgrades free/dev (722) ·
+  Grant pack/entitlement (737) · Heart (743) · Waves & enemies (753) · Scene jump (763) · **Raids (dev)** (774) ·
+  Mock wallet balance (783) · UI Kit demo (796) · **Realm Map (WO-826)** (802) · Cheats (810) ·
+  **AutoPilot (QA bot)** (820) · **Animation (feel)** (828).
+- **Open Realm Map entry (WO-826)** `:799-807`: reflection-free — `DeNelle.Core.UI.PanelRouter.Open(PanelId.RealmMap)`,
+  the same route the HUD Map button uses (RealmMapPanel registers the opener); warns if no opener registered
+  (no hero scene). This is the dev/headless door to the parchment overworld panel.
+- Static cheat flags `GodMode`/`InstantWinWave` + events remain exposed.
 
-### DevBootstrap.cs
-- File: `Assets/_Modules/DevTools/DevBootstrap.cs`
-- Responsibility: DEV-only auto-spawner — creates the DevPanel once, persistent, every scene.
-- Whole body `#if DEVELOPMENT_BUILD || UNITY_EDITOR`. `static`.
-- **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → `Spawn()`** (guarded `_spawned`). Creates DontDestroyOnLoad GameObject "[DEV] QA Dev Console" + UIDocument (sortingOrder 9000) + DevPanelController.
-- `ResolvePanelSettings()`: (1) Resources "DevPanelSettings", (2) adopt a themed sibling UIDocument's PanelSettings, (3) runtime-create one borrowing any theme. UXML at Resources "DevPanel" is OPTIONAL (controller code-builds).
-- WIRED + LIVE (dev builds).
+### DevBootstrap.cs — DEV auto-spawner
+- `static`, `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → one DDOL "[DEV] QA Dev Console" GameObject with
+  UIDocument (sortingOrder 9000) + `DevPanelController` (`DevBootstrap.cs:111`) + **`DevCornerTapGesture`**
+  (`:116`) so the touch entry exists in every scene of a dev build. PanelSettings resolved Resources-first,
+  adopt-sibling, else runtime-created. WIRED + LIVE (dev builds).
 
-### DevWalletProbe.cs
-- File: `Assets/_Modules/DevTools/DevWalletProbe.cs`
-- Responsibility: DEV-only `IWalletProvider` with QA-settable mock balances; wraps `StubWalletProvider`, overrides only `GetBalance`.
-- Whole body `#if DEVELOPMENT_BUILD || UNITY_EDITOR`. `sealed class : IWalletProvider`.
-- Static seed balance (5 SOL / 250 USDC / 2000 SKR). Public: `static SetMockBalance(CurrencyKind,double)`, `static MockBalance` (prop), + IWalletProvider members (Connect/Disconnect/GetBalance/SendPayment/SignMessageBase58/CanSignMessages all delegate to inner stub).
-- LIVE only if a wallet screen builds its WalletService over DevWalletProbe (no in-tree consumer wires it — probe is set-only from DevPanel; see FLAGS).
+### DevCornerTapGesture.cs — keyboard-less console opener
+- `[RequireComponent(DevPanelController)]`; **FIVE taps in a bottom-LEFT hotspot within ~3 s** toggles the console
+  (`DevCornerTapGesture.cs:42-45`). Exists because F-keys don't exist on web/mobile and UITK synthetic clicks are
+  unreliable in built WebGL players (header `:9-16`) — it polls raw touch/mouse and calls `Toggle()`. LIVE (dev builds).
 
-### DevPanel.uxml (67 lines) / DevPanel.uss (210 lines)
-- Editor-reference only. NOT loaded at runtime (controller code-builds). Effectively **dead at runtime** (kept as reference).
+### AutoPilotDriver.cs — the autonomous playtest bot
+- Coroutine state machine that drives the game **through real public seams** (never fakes input / sets transforms);
+  the always-on `BreakCaptureHarness` does the recording (break-log.jsonl); the bot writes only
+  `autopilot-summary.json` (`AutoPilotDriver.cs:2-11`).
+- Phases (`:21-31`): BootToGameplay (MainCastle_Hall) → ResolveHero → WalkToEachGate → OpenEachVendor →
+  OpenEachHUDPanel → TriggerWave → AttemptExitCastle; plus WO-449 outpost walk-to/engage and WO-602 home-return
+  round-trip legs. Every phase has a **REALTIME watchdog** (F8 sets timeScale=0; scaled waits would hang) and a
+  global cap of **420 s** (`:70` — raised 240→300→420 for the WO-597 popup oracle + 2026-07-07 verification probes).
+- Anti-warp guard: single-frame hero displacement > 3 m = WARP fail (`:86-89`). Quits on completion unless
+  launched from the dev-panel button (`quitOnDone:false`).
 
-### README.md
-- `DeNelle.DevTools` blurb. Current but terse (3 files listed).
+### AutoPilotInstaller.cs — opt-in spawner
+- `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`; spawns the driver **only** on `--autopilot` CLI arg or
+  `AUTOPILOT` env var (`AutoPilotInstaller.cs:41-48`). Fleet support: `--seed=`, `--run=` (namespaced output),
+  `--scene=` / `AUTOPILOT_SCENE` boot-scene override (`:58-68`). Inert in normal play. LIVE (headless fleet).
 
----
+### AutoPilotProbes.cs — passive world-state assertion probes
+- Rides alongside the driver; reports via `FlowTrace.Fail/Warn("[Flow:AutoTest]")`. FIVE probes
+  (`AutoPilotProbes.cs:11-32`): unexpected-cross (raid scene loaded during normal traversal), coplanar-floor
+  (z-fight), wall-clip (hero inside wall collider), dual-navmesh/stranded/link faults, seam-reachable (every
+  SceneTransitionTrigger on-mesh + walkable). No-ops unless `_armed` by the driver.
 
-## 2. AdminOverlay (the owner/dev grant path) — asmdef `DeNelle.HUD` (ns `DeNelle.HUD`)
+### AutoPilotLogGuards.cs — UI-layer health guard (WO-452 §A)
+- Watches for the duplicate-UIDocument / dead-panel class: >1 enabled UIDocument sharing one PanelSettings, and
+  any Onboarding-PanelSettings document alive in a gameplay scene (the "dev tools dead after Yarn" detector)
+  (`AutoPilotLogGuards.cs:10-19`). Armed only by the driver; emits `FlowTrace.Fail("BotUI",…)`, deduped per run.
 
-### AdminOverlay.cs
-- File: `Assets/_Modules/HUD/AdminOverlay.cs`
-- Responsibility: owner-only debug overlay. **NOT `#if`-gated — ships in release builds** (unlike DevTools). Gated instead by owner-wallet match OR the debug chord.
-- MonoBehaviour, `[DisallowMultipleComponent]`. Self-adds UIDocument in Awake, adopts a sibling PanelSettings, sortingOrder **2710** (just above HelpMenu 2700). Registers with `PanelManager` (DEF-212 single-modal arbiter, "Admin" slot).
-- Owner gate: `const string OwnerWalletAddress = ""` (TODO(owner) — empty → `IsAuthorised()` always false → reachable ONLY via chord). Chord: **Ctrl+Shift+A** (`Update()`, legacy Input).
-- **All gameplay calls go through `System.Reflection`** (HUD asmdef must not ref Village/Core.State): GameStateService, WaveManager, EconomyService, TowerPlacementRotateMenu.
-- Public: `Toggle()`, `Open()` (Help menu "Dev tools" routes here), `Close()`, `IsOpen` (prop).
-- **LIVE panel (owner-trimmed 2026-06-11) has only 3 buttons:** "Load resources (full base)" (`OnLoadResources` → reflection `EconomyService.GrantSpendable(50k wood,25k food,50k iron,25k crystals)`), "Reset Yarn (replay tutorial)" (`OnReplayTutorial` → clears PlayerPrefs `yarn.companionMeeting.seen`, `SceneRouter.GoHeroSelect()`), "Close".
-- **DEAD-but-retained handlers (kept in file, NOT wired to any button):** `OnTriggerWave`, `OnGiveCrystals`, `OnSetOnboarded`, `OnSave`, `OnReset`, `BuildOrientRow`/`OnOrientAsset`/`OpenOrientMenu` (dev orient tool). See FLAGS.
-- `OnReset` (dead) reflects `ResetToNewGame`, clears the FTUE PlayerPrefs gate, reloads "Village2".
+### ClickableActuator.cs — "press every button" helper
+- Static; actuates uGUI `Button` + UITK `Button` on the open surface, DENYLIST for destructive controls
+  (Quit/Logout/Reset/Delete/Disconnect/Wallet), every click try/caught + per-surface cap (`ClickableActuator.cs:7-18`).
 
-### AdminOverlayBootstrap.cs
-- File: `Assets/_Modules/HUD/AdminOverlayBootstrap.cs`
-- Responsibility: autospawn AdminOverlay in every scene (overlay stays hidden until chord/wallet).
-- `static`. **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → `EnsureFirst()`** + `SceneManager.sceneLoaded` hook. Per-scene de-dup. WIRED + LIVE.
+### DevWalletProbe.cs — mock IWalletProvider
+- Wraps `StubWalletProvider`, overrides `GetBalance` with QA-settable statics (5 SOL / 250 USDC / 2000 SKR).
+  Set from the DevPanel "Mock wallet balance" group; still no in-tree consumer builds a WalletService over it
+  (latent seam, unchanged).
 
-**TWO PARALLEL DEV PANELS** (per memory `playable-loop-exists-but-scene-gated`): corner "DEV" chip = DevPanelController (dev builds only, code-built); Settings→Dev tools / Ctrl+Shift+A = AdminOverlay (ships, reflection, 3 live buttons). Both grant the same EconomyService.GrantSpendable bundle.
+### KayKitAnimProof.cs — animation A/B proof harness
+- Dev-panel "Animation (feel)" tool: spawns the KayKit Adventurers 2.0 Knight beside the Tripo hero, driven by
+  the proven `Resources/Enemies/HumanoidEnemy` controller, walking a scripted square (`KayKitAnimProof.cs:7-16`).
+  **Editor-only spawn** (loads via AssetDatabase — the gitignored pack is outside Resources); dev player builds
+  warn + no-op (`:18-21`). Despawn removes every trace.
 
----
-
-## 3. Settings — asmdef `DeNelle.Settings` (ns `DeNelle.Settings`)
-
-asmdef refs: **Core, UniTask only** (no Audio, no Village) → cross-module calls use reflection.
-
-### SettingsModel.cs
-- File: `Assets/_Modules/Settings/SettingsModel.cs`
-- Responsibility: static store + apply layer for all options. `static class`.
-- Also defines `enum QualityTier { SeekerLow=0, SeekerHigh=1, Desktop=2 }` and `static class ScreenShakeSetting { bool Enabled }` (gameplay reads this flag without depending on the persistence layer).
-- Persistence split: Music/SFX/Mute/**Difficulty** → GameStateService (canonical `dotr-save`); Master/QualityTier/ScreenShake → PlayerPrefs keys (`dotr-settings-*`).
-- Props: `MasterVolume`, `MusicVolume`, `SfxVolume` (UI scale 0..1.5; GameState stores 0..100), `Muted` (fresh default **true**, a11y), `Difficulty` (GameState #23, default Normal), `Quality` (default = SeekerBootstrap auto-pick), `HasExplicitQuality`, `ScreenShake` (default true).
-- Apply: `ApplyAll()` / `ApplyAudio()` (→ AudioMixerBridge) / `ApplyQuality()` (→ SeekerBootstrap.ApplyTier) / `ApplyScreenShake()`. `ResetToDefaults()`. Tier name mapping helpers `TierName`/`TierFromName`/`TierLabel`.
-- Deps: GameStateService, AudioMixerBridge, SeekerBootstrap (Core), DifficultyTuning. WIRED + LIVE.
-
-### SettingsController.cs (re-verified from code 2026-07-13, WO-714 W8)
-- File: `Assets/_Modules/Settings/SettingsController.cs`
-- Responsibility: the options menu — Master/Music/SFX sliders + Music On/Off + global mute, 3-way Difficulty selector + blurb, 3-tier Quality selector, screen-shake toggle, Game Guide (WO-588) + Reset Defaults, Back = chrome Close. Modal.
-- **CODE-BUILT since 2026-07-03 (WO-F, coverage row #47): NO UIDocument/UXML.** Lazy `ElarionUiKit.BuildObsidianModal` (FrameSettings, sortingOrder 32000) on first `Open()`; all controls are composed uGUI/TMP through the kit. WO-714 W8 (2026-07-13): modal widened to x 0.08–0.92 and every label routed through `FitSingleLine`/`FitBlock` at the WO-693 mobile font floor.
-- Public: `Open()`, `Close()`, `IsOpen`, event `SettingsClosed` (UnityEvent). Every control persists+applies through SettingsModel (no save step). Music On/Off also drives live audio via AudioServiceBridge.
-- Opened by PauseController's Settings button. LIVE via `PauseHudBootstrap` (below) — no scene placement needed.
-
-### SettingsBootstrap.cs
-- File: `Assets/_Modules/Settings/SettingsBootstrap.cs`
-- Responsibility: re-apply persisted settings at launch + forward changes to AudioService.
-- `static`. **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → `Init()`** (after SeekerBootstrap's BeforeSceneLoad). Calls `SettingsModel.ApplyAll()`, subscribes `GameStateService.SettingsChanged`, reflectively calls `DeNelle.Audio.AudioService.ApplyPersistedSettings()` (DEF-22, asmdef isolation). `HasRun` prop. WIRED + LIVE.
-
-### AudioMixerBridge.cs
-- File: `Assets/_Modules/Settings/AudioMixerBridge.cs`
-- Responsibility: 0..1.5 linear → dB onto AudioMixer exposed params (`MasterVol`/`MusicVol`/`SfxVol`). `static`.
-- **Seam-safe: no-ops quietly when no mixer asset present** (resolves Resources `Audio/GameAudioMixer` lazily, or `SetMixer()` direct). `HasMixer`, `SetMaster/Music/Sfx/Group`, `LinearToDecibels`/`DecibelsToLinear`, `MaxLinear=1.5`, `ResetCache()`. The mixer asset is the parallel-Audio seam — may be absent → sliders persist but per-mixer audio unaffected (AudioService per-source fallback covers playback). WIRED, partially-live (mixer-dependent).
-
-### PauseController.cs (re-verified from code 2026-07-13, WO-714 W8)
-- File: `Assets/_Modules/Settings/PauseController.cs`
-- Responsibility: pause overlay + `Time.timeScale` freeze (audit P0-10). Resume/Settings/Quit-to-Title; chrome Close = Resume.
-- **CODE-BUILT since 2026-07-03 (WO-F, coverage row #47b): NO UIDocument/UXML, NO Esc handling.** Lazy kit modal (FrameOptions, sortingOrder 31500 — below Settings 32000) on first `Pause()`. Toggle arrives via `PauseGate.PauseToggleRequested` (the Core back/pause seam); `OnApplicationPause(true)` auto-pauses (mobile compliance), never auto-resumes.
-- Public: `TogglePause()`, `Pause()`, `Resume()`, `IsPaused`, `AttachSettings(SettingsController)` (WO-714 W8 runtime wiring — the serialized `_settings` ref is scene-only), event `PauseStateChanged(bool)`. Settings button builds only if a settings screen is attached. Quit → restores timeScale FIRST then `SceneRouter.GoTitle()`. LIVE via `PauseHudBootstrap`.
-
-### PauseHudBootstrap.cs (NEW 2026-07-13, WO-714 W8 — the routing that made Pause/Settings reachable)
-- File: `Assets/_Modules/Settings/PauseHudBootstrap.cs`
-- Responsibility: closes the "panels exist but nothing routes to them" gap (proved by grep: no scene carried either controller's GUID; `PauseGate.RequestBack()` had zero call sites). Contains 2 types:
-  - `static PauseHudBootstrap` — **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` + sceneLoaded hook** (HelpMenuBootstrap pattern, global dedupe). Per gameplay scene spawns `PauseSettingsHost` = SettingsController + PauseController (wired via `AttachSettings`) + PauseHudButton. Skips front-end scenes (Title/HeroSelect/PetSelect/Intro/Splash/Loading).
-  - `PauseHudButton : MonoBehaviour` — the on-screen pause chip (own uGUI canvas sort 90, 52px kit slot plate + gear icon, top-right edge at the retired MusicToggleHud's vacated spot right 14 / top 200; null-art fallback = two gold pause bars, glyph-proof). Tap → `PauseGate.RequestBack()`. Hides while `PanelManager.AnyOpen` (QuestTrackerHud pattern).
-- WIRED + LIVE (no scene wiring needed).
-
-### MusicToggleBootstrap.cs
-- File: `Assets/_Modules/Settings/MusicToggleBootstrap.cs`
-- Responsibility: always-visible ♪ on/off button installed into every scene (owner: "music toggle everywhere"). Contains 3 types:
-  - `static MusicToggleBootstrap` — **Bootstrap: `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` → `Init()`** + sceneLoaded hook; borrows top-sorted UIDocument's PanelSettings, spawns MusicToggleHud (+50 sort).
-  - `MusicToggleHud : MonoBehaviour [RequireComponent(UIDocument)]` — code-built button top-right (top 200, right 14), loads sprite `HudIcons/hud_music`. `Toggle()` drives SettingsModel + AudioServiceBridge.
-  - `internal static AudioServiceBridge` — reflection bridge to `DeNelle.Audio.AudioService` (SetMuted / SetVolume(MixerGroup.Music)). No-ops if Audio absent.
-- DORMANT since 2026-07-12: `ForceHudButton = false` keeps the HUD overlay retired (owner bug — it overlapped mobile controls); the affordance moved into Settings. `AudioServiceBridge` remains the live audio seam SettingsController uses.
-
-### UXML/USS
-- **NONE remain in this module (verified 2026-07-13).** SettingsScreen.uxml/.uss + PauseOverlay.uxml/.uss were retired with the 2026-07-03 code-built conversion and are deleted from the tree — the whole area now code-builds; the UXML-in-builds risk class is closed here (MASTER_CATALOG P1 #8 marked RESOLVED).
-
-### README.md — current.
+### DevPanel.uxml / DevPanel.uss — editor reference only, dead at runtime (unchanged).
 
 ---
 
-## 4. Onboarding mode + flow
+## 2. Owner/dev grant surfaces in DeNelle.HUD (ship in release)
 
-### OnboardingMode.cs — ns `DeNelle.Core` (asmdef `DeNelle.Core`)
-- File: `Assets/_Modules/Core/OnboardingMode.cs`
-- Responsibility: fast-path vs full-tutorial switch for a new game (owner 2026-06-06: default = fast into battle). `static class`.
-- `FullTutorial` (get/set, mirrors PlayerPrefs `onboarding.fullTutorial`), `FastPath` (= !FullTutorial), `ChooseFastPath()`, `ChooseFullTutorial()`. Lives in Core (only assembly both Onboarding + Village ref). WIRED + LIVE.
-- Set by TitleController splash buttons; read by Village TutorialDirector/CompanionMeetingTrigger.
+### AdminOverlay.cs — Ctrl+Shift+A owner overlay (GREW since 2026-06-11 trim)
+- Still not `#if`-gated (ships); owner-wallet gate still permanently false (`OwnerWalletAddress = ""`,
+  `AdminOverlay.cs:32`). The chord is now **also gated by `FeatureFlags.DevHotkeys` (default OFF)**
+  (`:148-152`) — in a shipped build the overlay is unreachable by keyboard unless `ff.devhotkeys=1`; the Help
+  menu "Dev tools" button remains a caller.
+- **LIVE panel is no longer 3 buttons** — the 2026-06-11 trim was reversed piecemeal. Wired buttons (verified
+  `scroll.Add(Button(...))`, `:223-251` + `:316`): Load resources (full base) · Set Level 5 / Level 10
+  (+skill pts) · +25 / +100 Wisdom · Trigger next wave · VFX Parade · Seating Editor (gear) · Lock-on toggle ·
+  **FULL RESET (new player — wipes + quits)** · Orient Asset (`:316`). Handlers `OnGiveCrystals`, `OnSetOnboarded`,
+  `OnSave`, `OnReset`, `OnReplayTutorial` (`:605-898`) exist but are not bound to buttons — dead-but-retained.
+- All gameplay calls still via `System.Reflection` (HUD asmdef isolation). `AdminOverlayBootstrap` autospawn
+  unchanged (`[RuntimeInitializeOnLoadMethod]` + sceneLoaded, per-scene dedupe).
 
-### OnboardingFlow.cs — ns `DeNelle.Onboarding` (asmdef `DeNelle.Onboarding`; refs Core, Data, Localization, UniTask, Timeline)
-- File: `Assets/_Modules/Onboarding/OnboardingFlow.cs`
-- Responsibility: first-run guided 6-beat coach-mark tutorial (audit P0-11). Flips `GameState.Onboarded` on finish/skip → stops cold-open replay.
-- MonoBehaviour, `[RequireComponent(typeof(UIDocument))]`. Defines `enum TutorialGate { None, BuildTower, PlacePet }`.
-- **Code-built fallback overlay** (`BuildOverlayInCode`) when UXML elements absent (UXML-renders-empty trap) — binds from TutorialOverlay.uxml first, falls back. sortingOrder 250 (DEF-153, above HUD).
-- Beats use canon strings from en.json (`tutorial.steps.*`) via `CanonStrings.Locale`. 6 beats: Welcome / Heart / Force-field / Raise tower (BuildTower) / Wardens (PlacePet) / Hold the line.
-- Public: `TryRun()` (gated by `ShouldRun` = `!Onboarded`), `Run()` (ungated, for Replay), `NotifyTowerBuilt()`, `NotifyPetPlaced()`, `IsRunning`, `HasFinished`, `BeatCount`. UnityEvents: `OpenBuildMenuRequested`, `BeginWaveRequested`, `TutorialClosed`. `Finish()` → `GameStateService.FinishOnboarding()`.
-- Module-isolated: only Core + UnityEvents; gameplay wiring lives in OnboardingIntegrator. WIRED + LIVE.
+### OwnerDevToolsOverlay.cs — RELEASE-safe owner-gated mobile dev tools (NEW since old catalog)
+- Owner directive 2026-07-01: every other dev surface is keyboard-driven and/or compile-stripped, so nothing
+  reached the mobile release player. This is a touch-driven, **release-shipping** overlay that only builds its
+  UI when the signed-in Pi username equals the owner's ("samanthadenelle", case-insensitive)
+  (`OwnerDevToolsOverlay.cs:2-32`). Self-bootstraps via `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`, DDOL,
+  fully try/caught. uGUI canvas sortingOrder 5500 (above Pi sign-in 5000), bottom-left toggle.
+- Reaches Core directly (SceneRouter/GameStateService/FeatureFlags/DebuggingController) and Village singletons by
+  reflection (EconomyService/HeroProgression/WisdomCurrencyService/WaveManager — the AdminOverlay idiom).
+  Includes **FeatureFlags toggles** incl. `devhotkeys` (`:247`).
 
-### OnboardingIntegrator.cs — ns `DeNelle.Village` (asmdef `DeNelle.Village`)
-- File: `Assets/_Modules/Village/OnboardingIntegrator.cs`
-- Responsibility: WO-133 bridge wiring OnboardingFlow (resolved by **full-name reflection**, held as UnityEngine.Object) into BuildMenu/WaveManager/VillageController/PetDeployer.
-- MonoBehaviour, `[DisallowMultipleComponent]`. `Start()`→`Wire()`. Attached at runtime by `VillageController.EnsureOnboardingIntegrator`.
-- Seams: OpenBuildMenuRequested→BuildMenu.Open; BeginWaveRequested→WaveManager.BeginLoop().Forget(); TutorialClosed→VillageController.OnOnboardingClosed; BuildMenu.BuildingPlaced→NotifyTowerBuilt; PetDeployer pets-deployed (polled in Update, no per-pet event)→NotifyPetPlaced. All null-guarded; degrades silently if OnboardingFlow type absent. WIRED + LIVE.
-
-### TitleController.cs — ns `DeNelle.Onboarding`
-- File: `Assets/_Modules/Onboarding/TitleController.cs`
-- Responsibility: Title scene orchestrator + the splash gate where OnboardingMode is set; the title landing IS the hero-select (code-built, no UXML dependency, WebGL-safe).
-- MonoBehaviour, `[RequireComponent(typeof(UIDocument))]`. Splash buttons: **"Start New"→`OnboardingMode.ChooseFastPath()`** + build hero-select; **"Play Intro"→`OnboardingMode.ChooseFullTutorial()`** + `IntroLauncher.Play`; **"Continue"→`SceneRouter.GoCastle()`**.
-- Heavy regression scar-tissue: DEF-253 watchdog, WebGL orphan re-assert, WO-335 NeutralizeOverlayPanels (shared OnboardingPanelSettings pick-stealing), VerifyFourCardsEven self-heal. Hero pick routes to PetSelect. Serialized `_splash` assigned but **never played** (bumper cut 2026-06-04 — see FLAGS). WIRED + LIVE.
-- (Sibling onboarding files not deep-cataloged here: SplashLoading, StoryIntroController [`ShouldAutoPlay = !Onboarded`], PetSelectController, HeroSelectController, HeroCatalog, IntroPetCatalog, CanonStrings, TitleStarfield.)
-
-### DifficultyTuning.cs — ns `DeNelle.Core.State`
-- File: `Assets/_Modules/Core/State/DifficultyTuning.cs`
-- Responsibility: single source of truth for what Difficulty changes — the between-wave countdown multiplier. `static class`.
-- `CountdownMultiplier(Difficulty)`: Easy 2.0 / Normal 1.0 / Hard 0.6 (derived from 600/300/180 s targets). `Label()`, `Blurb()`, consts `NormalBuildWindowSeconds=300`/`Easy=600`/`Hard=180`. Read by SettingsController (labels) + WaveManager (multiplier). WIRED + LIVE.
-- `enum Difficulty { Easy, Normal, Hard }` lives in `Assets/_Modules/Core/State/Enums.cs` (EnumMember "easy"/"normal"/"hard").
-
-### OnboardingSceneBuilder.cs — ns `DeNelle.Editor` (editor-only)
-- File: `Assets/Editor/OnboardingSceneBuilder.cs`
-- Responsibility: Week-1 scene generator — `BuildAll()` creates Title (fully built) + 3 near-empty scenes, wires TitleController/SplashLoading/StoryIntroController **by reflection** (Editor asmdef can't ref Onboarding). Idempotent. Triggered manually / `-executeMethod`. Editor tool, not runtime.
+**THREE parallel dev surfaces now:** DevPanel (dev builds; F1-behind-kill-switch + 5-tap corner) ·
+AdminOverlay (ships; chord-behind-kill-switch + Help menu) · OwnerDevToolsOverlay (ships; Pi-owner-gated touch).
 
 ---
 
-## 5. The two grant paths (summary)
+## 3. Settings — asmdef `DeNelle.Settings` (ns `DeNelle.Settings`), 7 files
 
-1. **DevPanel** (dev builds): `GiveCrystals`, `GiveBuildMaterials`→`EconomyService.GrantSpendable(50k wood,25k food,50k iron,25k crystals)` + Stone 50k + Magic 100, `GrantEntitlement`/`GrantAllPacks` (PackCatalog), `GiveWisdom`, `GiveHeroXp`/`LevelHero`/`SetHeroLevel`.
-2. **AdminOverlay** (ships): single live "Load resources (full base)" button → reflection `EconomyService.GrantSpendable(50k,25k,50k,25k)`. Note: Wood/Iron must route through GrantSpendable to land in BOTH the in-session pool (shop/HUD) AND GameState ledger (upgrades) — both grant paths document this.
+asmdef refs: **Core, UniTask, UnityEngine.UI, Unity.TextMeshPro** (`DeNelle.Settings.asmdef:4-9`) — no
+Village/HUD/Audio; cross-module reach is reflection bridges. Whole area is **code-built kit uGUI** (all UXML
+retired 2026-07-03; still true).
+
+### SettingsModel.cs — static store + apply layer. LIVE.
+- Persistence split (`SettingsModel.cs:8-21`): Music/SFX/Mute/Difficulty → GameStateService canonical `dotr-save`
+  (`:109-173`; GameState 0..100, UI 0..1.5, scale const `:82`); Master/Quality/ScreenShake → PlayerPrefs
+  `dotr-settings-*` (`:64-66`). `ScreenShakeSetting.Enabled` static for gameplay reads (`:334-342`).
+- `ApplyAudio()` → AudioMixerBridge (mute collapses groups w/o disturbing sliders `:245-251`); `ApplyQuality()`
+  → `SeekerBootstrap.ApplyTier` (`:258-261`); `ResetToDefaults()` sets Muted **false** — distinct from the
+  fresh-save default true (`:278-291`). `QualityTier` SeekerLow/SeekerHigh/Desktop (`:46-54`).
+
+### AudioMixerBridge.cs — linear→dB pusher onto exposed mixer params. LIVE code, **seam UNFULFILLED**.
+- Targets exposed params `MasterVol/MusicVol/SfxVol` (`AudioMixerBridge.cs:41-45`); lazy Resources lookup
+  `"Audio/GameAudioMixer"` (`:52`, `:157-176`), `MaxLinear=1.5` (`:55`), −80 dB floor (`:136-141`).
+- **DRIFT (P1):** a mixer asset now EXISTS at `Assets\Audio\Resources\Audio\GameAudioMixer.mixer` (nested
+  Resources folder — resolves at "Audio/GameAudioMixer") **but has `m_ExposedParameters: []`** — no
+  MasterVol/MusicVol/SfxVol. `SetFloat` fails into the warn-once branch (`:111-123`): sliders persist but still
+  do not drive the mixer. Playback volume works only via AudioServiceBridge's per-source fallback. Worse,
+  `HasMixer` is now TRUE, so SettingsController's "mixer not wired" notice (`SettingsController.cs:348-349`) is
+  **wrongly hidden**.
+
+### SettingsBootstrap.cs — launch re-apply. LIVE.
+- `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` (`SettingsBootstrap.cs:65-66`) → `SettingsModel.ApplyAll()`;
+  subscribes `GameStateService.SettingsChanged`; DEF-22 reflection call
+  `DeNelle.Audio.AudioService.Instance.ApplyPersistedSettings()` on boot + each change (`:101-131`). Deliberately
+  AfterSceneLoad so the player's explicit tier overrides SeekerBootstrap's BeforeSceneLoad auto-pick (`:8-16`).
+
+### SettingsController.cs — the options modal. LIVE via PauseHudBootstrap.
+- Lazy code-built ObsidianModal `FrameSettings`, sortingOrder 32000 (`SettingsController.cs:150-153`). Sections
+  (`:204-250`): Audio (Master/Music/SFX + Music On/Off + Mute-all) · Gameplay (Easy/Normal/Hard →
+  `GameState.Difficulty`) · Graphics (3 tiers) · Comfort (screen shake) · Help (Game Guide WO-588 + Reset).
+- 2026-07-30 audit rebuild: fixed px-ladder rows (`RequiredLadderPx = 1238f`, `:76`) inside a vertical
+  ScrollRect (`BuildScrollHost` `:515-542`) so ClampMinTouch can't inflate rows over captions. Music On/Off
+  drives live audio via AudioServiceBridge (`:412-432`). PanelManager battle-allowed (`:157-158`). Serialized
+  `_audioMixer` never set (component is AddComponent-installed, `:95-101`) — the Resources path always applies.
+
+### PauseController.cs — pause overlay + timeScale freeze. LIVE via PauseHudBootstrap.
+- Kit modal `FrameOptions`, sortingOrder 31500 (`PauseController.cs:155-158`); Resume/Settings/Quit column
+  (`:170-177`). Pause captures + zeroes `Time.timeScale`, Resume restores the CAPTURED scale (`:62`, `:200-221`).
+  `OnApplicationPause(true)` auto-pauses only (`:126-130`). Toggle rides Core `PauseGate.PauseToggleRequested`
+  (`:76-77`); PanelManager battle-allowed "Pause" (`:181-182`). `AttachSettings()` runtime wiring (`:102-112`);
+  Settings opens over pause (pause yields its arbiter slot first, `:239-248`). Quit restores timeScale then
+  `SceneRouter.GoTitle()` (`:259-271`).
+
+### PauseHudBootstrap.cs — the per-scene installer. LIVE.
+- `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` + sceneLoaded (`PauseHudBootstrap.cs:47-55`); per gameplay
+  scene spawns `PauseSettingsHost` = SettingsController + PauseController wired via AttachSettings (`:89-93`);
+  global dedupe for additive streaming (`:77-87`); skips Title/HeroSelect/PetSelect/*Intro*/*Splash*/*Loading*
+  (`:58-66`).
+- **DRIFT: the on-screen `PauseHudButton` chip is CULLED** (owner cosmetic flag A, 2026-07-24) — SpawnInScene no
+  longer adds it (`:94-99`); the pause door is the "Pause" tab in HudKitController's left gold gear dock (same
+  `PauseGate.RequestBack()` caller). The `PauseHudButton` class remains in-file, unreferenced — DORMANT (`:112-225`).
+
+### MusicToggleBootstrap.cs — DORMANT bootstrap, LIVE bridge.
+- `ForceHudButton = false` (`MusicToggleBootstrap.cs:47`) → `Init()` returns immediately (`:52`); the HUD ♪
+  button stays retired (2026-07-12; the affordance is Settings' Music On/Off row). `MusicToggleHud` retained
+  (`:92-170`). `AudioServiceBridge` (internal static, `:186-251`) is the **live** reflection seam to
+  `DeNelle.Audio.AudioService` (`Instance`, `SetMuted`, `SetVolume(MixerGroup.Music)`) — what makes Settings'
+  music toggle audible despite the param-less mixer.
+
+### UXML/USS — none in this module (unchanged since the 2026-07-03 conversion).
 
 ---
 
-## FLAGS
+## 4. Onboarding — asmdef `DeNelle.Onboarding` (ns `DeNelle.Onboarding`), 14 files
 
-### Stale-comment-vs-code
-- ~~PauseController Esc header/body contradiction~~ **RESOLVED (verified 2026-07-13):** the current PauseController has NO Update()/Esc handling at all — the toggle rides `PauseGate.PauseToggleRequested` (keyboard-removal sweep), and the HUD-button caller landed as `PauseHudButton` (WO-714 W8).
-- DevPanelController / DevBootstrap headers reference DevPanel.uxml as the UI source, but the code **explicitly does NOT use it** (code-built). The code comments self-correct this clearly, so it is documented-not-stale — but the class-doc summary line "drives DevPanel.uxml" wording could mislead a skim.
-- AdminOverlay class header says actions "call through reflection so the HUD asmdef stays decoupled" — accurate. But the header's list of actions (waves, give crystals, reset) describes the **pre-2026-06-11 trim**; only Load-resources + Reset-Yarn are now wired (inline comment at ~143 documents the trim). Header is partially stale.
-- AdminOverlay sortingOrder inline comment references an old "170" value that was raised to 2710 — documented, not a live bug.
+asmdef refs (`DeNelle.Onboarding.asmdef:4-13`): Core, Data, Unity.Localization, UniTask, Unity.Timeline,
+UnityEngine.UI, Unity.TextMeshPro, **GoogleSignIn (NEW, WO-769)**.
 
-### Dead / duplicate code
-- **AdminOverlay dead handlers** (compiled, unreachable — no button binds them): `OnTriggerWave`, `OnGiveCrystals`, `OnSetOnboarded`, `OnSave`, `OnReset`, `BuildOrientRow` + `OnOrientAsset` + `OpenOrientMenu` (whole dev-orient-tool subsystem). Retained by owner decision "in case wanted back."
-- **DevWalletProbe** has no in-tree consumer that constructs a WalletService over it; DevPanel only *sets* mock balances. The mock numbers are inert unless a wallet screen is manually built over the probe (documented seam, currently latent).
-- **DevPanel.uxml / DevPanel.uss** — not loaded at runtime; dead-at-runtime editor reference.
-- **TitleController `_splash`** SerializeField — assigned by builder but the studio bumper was cut (2026-06-04); `RunArrival` never plays it. Dead-but-wired field.
-- DevPanelController static cheat flags `GodMode`/`InstantWinWave` + their Changed events — exposed for an integrator that does not appear to consume them in-tree (the integrator-note shows the intended `#if`-gated read pattern but no gameplay file reads them). Latent feature.
+### FoundingChoiceController.cs — Build-Your-Own vs Default Town (WO-748). LIVE.
+- Fires ONCE at founding, before first hub entry. Gate `ShouldOffer` (`FoundingChoiceController.cs:80-92`):
+  `!Onboarded` AND empty `BaseLayout` + session latch.
+- **Entry chain (WO-769):** `PresentOrContinue(onContinue)` routes through
+  `LoginPanelController.PresentOrContinue` (login-or-guest) FIRST, then the founding choice (`:102-110`).
+  Callers: `HeroSelectController.OnDiveVillageClicked` (the DEFAULT `BypassPetSelect` path — FTUE-01 fix,
+  `HeroSelectController.cs:644-657`) and `PetSelectController.OnEnable` belt-and-braces
+  (`PetSelectController.cs:125-131`); both continue into `SceneRouter.GoCastle`.
+- **"Default Town"** (`:214-251`): Core-only write — `State.StrategicPlacementMigrated = false` + Save inside
+  `Guard.Try` (`:234-238`); the Castle-load one-shot `StrategicPlacementMigration.RunIfNeeded` then converts the
+  live baked ring into movable BaseLayout records. Free — does not touch FreeBuildsUsed (`:208-213`).
+- **"Build Your Own"** (`:253-259`): a literal no-op (leaves `StrategicPlacementMigrated = true`), just
+  `Continue()` → `LoadingOverlay.Show("Founding your town…")` → GoCastle (`:261-279`). Forced choice: Close
+  hidden (`:160-163`); PanelManager close-delegate = Continue (`:199-201`).
+- **WO-834 interaction (verified):** NO WO-834 code in this module — grep clean. WO-834
+  (`WorkOrders/WORK_ORDER_834_blank_town_baked_standdown.md`, IMPLEMENTED 2026-08-02) fixed the downstream bug
+  (Build-Your-Own still showed the furnished baked town) in the BuildMode/save silo: persisted
+  `everBuiltStructureIds` (save v35→v36) + `StructureSingleton.MayBakedTwinSurface(id, everBuilt, migrated)` —
+  `StrategicPlacementMigrated == false` still surfaces everything (covers Default Town); otherwise only
+  ever-built ids surface. FoundingChoiceController deliberately unchanged (no new founding flag).
 
-### Scene-gated / disabled
-- DevTools whole assembly compiled out of release (`#if` + asmdef defineConstraints) — by design.
-- AdminOverlay owner-wallet gate is permanently false (`OwnerWalletAddress = ""`) → only the Ctrl+Shift+A chord opens it.
-- ~~SettingsController / PauseController only render if a scene/integrator places their UIDocument~~ **RESOLVED 2026-07-13 (WO-714 W8):** no UIDocument/PanelSettings involved anymore (code-built kit modals) and `PauseHudBootstrap` auto-installs both + the on-screen pause chip per gameplay scene — no scene wiring.
-- MusicToggleBootstrap HUD overlay DORMANT since 2026-07-12 (owner bug: button overlapped mobile controls) behind `ForceHudButton = false`; the Music On/Off affordance lives in Settings (same SettingsModel + AudioServiceBridge seam). AudioServiceBridge itself stays live.
-- AudioMixerBridge no-ops until the parallel Audio mixer asset exists at `Resources/Audio/GameAudioMixer` — sliders persist but don't drive the mixer (per-source AudioService fallback covers actual playback).
+### HeroSelectController.cs — the hero pick. LIVE.
+- Code-built kit uGUI on `FrameCore`, forced flow (`HeroSelectController.cs:194-198`): left class column /
+  center portrait stage / right specs (lore, pips, signature, Q-F-E-R) / green "Enter Elarion" CTA (`:227-247`).
+- V1: only Knight (Grom) playable (`:107`); other classes are locked previews ("Coming soon" scrim + disabled
+  CTA, `:317-341`, `:414-432`, `:603-609`). Returning player with a persisted HeroClass self-skips → GoCastle
+  (`:113-124`). Confirm (`:637-661`): persist hero → `FeatureFlags.BypassPetSelect` (default ON) →
+  **`FoundingChoiceController.PresentOrContinue(SceneRouter.GoCastle)`**; flag OFF → GoPetSelect. Portraits from
+  `Resources/HeroPortraits/<slug>` (Thrain/Grom/Sylas/Elara, `:687-745`).
 
-### Broken / contradictory
-- ~~UXML-bound risk: SettingsScreen.uxml + PauseOverlay.uxml~~ **RESOLVED (verified from code 2026-07-13):** both UXML surfaces were deleted with the 2026-07-03 code-built conversion; the whole area now code-builds. See MASTER_CATALOG P1 #8 (marked RESOLVED).
+### HeroCatalog.cs — static presentation catalog. **FOUR heroes** now — Mage, Knight, Ranger, **Cleric (Elara)**
+  (`HeroCatalog.cs:122-171`); the file header still says "three heroes" — comment lies.
+
+### TitleController.cs — title screen. LIVE.
+- Fully code-built uGUI (WO-C); legacy UIDocuments hard-disabled in Awake (`TitleController.cs:100-103`,
+  `:143-165`). Title art `Resources/Title/Title_L|Title_H` with text fallback (`:186-245`).
+- Bottom row (`:270-311`): **Continue** (only when a save exists; persists Knight if class missing → GoCastle,
+  `:283-287`, `:412-429`) · **Start New** → `ResetToNewGame()` + `DialogueResetService.ResetForNewGame()` +
+  `OnboardingMode.ChooseFastPath()` → GoHeroSelect (`:350-371`) · **Play Intro** →
+  `OnboardingMode.ChooseFullTutorial()` + clears HeroClass → `IntroLauncher.Play` (9-screen cinematic) /
+  StoryIntro cold-open fallback (`:376-409`). DEF-253 8 s unscaled watchdog (`:96-98`, `:499-509`); "Powered
+  with SKR" badge behind `ff.skrpreview` (`:318-334`); spawns TitleStarfield (`:105-112`).
+
+### Tutorial V2 hooks — NONE in this module (verified by grep).
+Tutorial V2 lives in Core + Village: `FeatureFlags.TutorialV2` **default ON** (`Core/FeatureFlags.cs:462`),
+signals/model in `Core/Tutorial/` (TutorialSignals.cs, TutorialStepModel.cs — WO-T1), interpreter
+`Village/Tutorial/V2/TutorialFlow.cs` (self-bootstraps on hub scenes when ON, `:50`), legacy
+`Village/Tutorial/TutorialDirector.cs` stands down while ON (`:128-134`),
+`Village/NPCs/SylasStewardInjector.cs` gated `TutorialV2 && !Onboarded` (`:82`, `:141`). Onboarding's only
+touchpoints: TitleController sets OnboardingMode; TutorialDirector suppresses legacy OnboardingFlow by reflection
+(`TutorialDirector.cs:689`).
+
+### Cross-module trio — all intact (re-verified)
+- `Core/OnboardingMode.cs` — static `FullTutorial` ↔ PlayerPrefs `onboarding.fullTutorial` (`:32`, `:44-62`),
+  `ChooseFastPath()/ChooseFullTutorial()` (`:68-71`); default fast path.
+- `Onboarding/OnboardingFlow.cs` — 6-beat coach-mark (Welcome/Heart/Force-field/BuildTower/PlacePet/Wave1,
+  `:199-210`) gated `!Onboarded` (`ShouldRun`, `:383-394`); code-built kit card, legacy TutorialOverlay.uxml
+  UIDocument disabled in Awake (`:219-232`); finish/skip → `GameStateService.FinishOnboarding()`.
+  **Now the TutorialV2-OFF fallback path**, not the live FTUE.
+- `Village/OnboardingIntegrator.cs` — full-name-reflection bridge, five seams (OpenBuildMenu→BuildMenu.Open,
+  BeginWave→WaveManager.BeginLoop, TutorialClosed→VillageController, BuildingPlaced→NotifyTowerBuilt,
+  PetDeployer poll→NotifyPetPlaced), attached by `VillageController.EnsureOnboardingIntegrator`
+  (`:24-26`, `:46-50`, `:72-83`). Unchanged.
+
+### Remaining files (terse)
+- **LoginPanelController.cs (NEW, WO-769)** — Obsidian email/password sign-in + "Play as Guest"; presentation over
+  `Core.Auth.FirebaseAuthService`; `PresentOrContinue` self-skips when signed in (`:72-89`); guest = existing
+  device-hash id. Sits in front of the founding choice at the new-game chokepoint.
+- **LoginViewModel.cs (NEW, WO-769)** — pure-C# VM over FirebaseAuthService; success binds Firebase UID as save
+  player-id via `GameStateService.BindWallet` (`:8-11`); GoogleSignIn `#if UNITY_ANDROID || UNITY_EDITOR` (`:18-23`).
+- **PetSelectController.cs** — 3-starter-Warden pick; still UIDocument/UITK-hosted (`:51`); **effectively DORMANT**:
+  `BypassPetSelect` ON routes OnEnable straight to founding-choice→GoCastle (`:125-131`); self-skips when a pet
+  is already chosen (`:136-140`). Writes `GameState.StarterPetId` + Save when it does run.
+- **StoryIntroController.cs** — Stone Choir cold-open, code-built; `ShouldAutoPlay = !Onboarded` (`:121-130`);
+  tap-advance with 1.25 s grace + Skip (CTS cancel); `ForceHide()` used by the title watchdog.
+- **SplashLoading.cs** — bumper **video permanently OFF** (`_playBumperVideo = false`, `:49` — the clip crashes the
+  Windows player decoder); static "DeNelle Studios presents" card from canon key `publisher`.
+- **CanonStrings.cs** — lazy loader of `StreamingAssets/Data/Canonical/canon-strings.json` + `en.json`; unknown
+  key renders `[[missing:key]]` (`:16-17`); gameTitle "Echoes of Elarion" (`:46-49`).
+- **IntroPetCatalog.cs** — display-subset pets.json reader so PetSelect needs no DeNelle.Pets ref (`:4-20`).
+- **TitleStarfield.cs** — runtime ~240-star ParticleSystem; comets removed WO-451 (`:30-31`).
+- **OnboardingPanelGuard.cs** — `[RuntimeInitializeOnLoadMethod]` + sceneLoaded: disables any
+  OnboardingPanelSettings-bound UIDocument in non-onboarding scenes (the dev-tools-dead-after-Yarn *preventer*,
+  `:21-32`). LIVE. (DevTools' AutoPilotLogGuards is the matching *detector*.)
+- **OnboardingSceneBuilder.cs** (`Assets/Editor/`) — editor-only Week-1 scene generator, reflection-wired. Unchanged.
+
+### DifficultyTuning.cs — `Core/State/DifficultyTuning.cs`, unchanged: countdown multiplier Easy 2.0 / Normal 1.0 /
+Hard 0.6; read by SettingsController (labels/blurbs) + WaveManager.
+
+---
+
+## 5. The grant paths (summary, 2026-08-02)
+
+1. **DevPanel** (dev builds): resources/upgrades/entitlements/waves/scene-jump/raids/mock-wallet/cheats + AutoPilot
+   launcher + Realm Map opener + KayKit anim proof.
+2. **AdminOverlay** (ships, chord+Help-menu, DevHotkeys-gated): load-resources, level/wisdom sets, trigger wave,
+   VFX parade, seating editor, lock-on, FULL RESET, orient-asset.
+3. **OwnerDevToolsOverlay** (ships, Pi-owner-gated, touch): Core-direct + Village-reflection grants and flag toggles —
+   the only dev surface reachable on a keyboard-less release build.
+
+---
+
+## FLAGS (risk ledger)
+
+### Broken / misleading
+- **P1 — Mixer seam unfulfilled + notice wrongly hidden:** `GameAudioMixer.mixer` exists (nested Resources at
+  `Assets\Audio\Resources\Audio\`) with **zero exposed parameters** (`m_ExposedParameters: []`); AudioMixerBridge's
+  warn-once branches fire and the Settings "mixer not wired" notice is hidden because `HasMixer` is now true.
+  Expose MasterVol/MusicVol/SfxVol or key the notice on a param-verify.
+- HeroCatalog header says three heroes; code ships four (Cleric added). Comment lies — trust `:122-171`.
+- DevPanelController header block says DEPRECATED/TAGGED FOR REMOVAL, yet WO-826 added the Realm Map entry to it —
+  it is the live dev/headless door; the removal note is stale intent.
+- AdminOverlay's "trimmed to 3 buttons" history (old catalog) is obsolete — ~11 buttons are live again incl.
+  FULL RESET; the un-bound handlers list also changed. Trust `:223-251`.
+
+### Dead / dormant
+- `PauseHudButton` (culled 2026-07-24, class retained) · `MusicToggleHud` (retired 2026-07-12,
+  `ForceHudButton=false`) · AdminOverlay unbound handlers (`OnGiveCrystals/OnSetOnboarded/OnSave/OnReset/
+  OnReplayTutorial`) · DevPanel.uxml/.uss (runtime-dead) · DevWalletProbe (no consumer builds a WalletService
+  over it) · `PetSelectController` (BypassPetSelect default ON) · `OnboardingFlow` 6-beat (TutorialV2 default ON
+  supersedes it) · SplashLoading bumper video (`_playBumperVideo=false`).
+
+### Gating quick-reference
+- `ff.devhotkeys` default OFF kills F1 (DevPanel), F12 (DebugCanvas), Ctrl+Shift+A (AdminOverlay), test spawners,
+  jukebox J — everywhere incl. editor. On-screen doors remain: 5-tap corner (dev builds), Help-menu Dev tools,
+  OwnerDevToolsOverlay (owner Pi account).
+- `FeatureFlags.BypassPetSelect` default ON — PetSelect skipped; founding choice fires on the HeroSelect path,
+  behind the WO-769 login-or-guest gate.
+- `FeatureFlags.TutorialV2` default ON — Village TutorialFlow owns FTUE; legacy OnboardingFlow/TutorialDirector
+  stand down.
+- DevTools assembly compiled out of release (asmdef constraint + `#if`) — by design.
+- AdminOverlay owner-wallet gate permanently false (`OwnerWalletAddress = ""`).

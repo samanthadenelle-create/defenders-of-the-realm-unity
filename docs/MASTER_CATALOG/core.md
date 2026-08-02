@@ -1,292 +1,615 @@
 # MASTER CATALOG — Core (`Assets/_Modules/Core`)
 
-> ⚠ **STALE 2026-07-22 — corrections (live anchor `CANON_GROUND_TRUTH_2026-07-22.md`):** save schema is **v34** (not v33), and Tribes/Wards/Arena + the pet active-slot ARE persisted (v34); `CoreServices` now has **7 slots** — Hud / HudModel / Population / Audio / Jupiter / WalletSigner / SceneLinkResolver — not 4; `SceneRouter.Castle` is now a PROPERTY = `MergedWorld ? "Main_Castle_Overworld" : "MainCastle_Hall"` (MergedWorld default ON). Body below is the 2026-06-12 point-in-time map; trust these lines + the anchor over it.
+> **Verified from code 2026-08-02** (HEAD ~b77a178e, branch `wip/village2-and-f8-tickets`). Every claim
+> below was read from the actual `.cs` files, NOT from their comments — file banners lie (the worst
+> offenders are ledgered in RISK at the end). Supersedes the 2026-06-12 body + the 07-22/07-26 addenda.
+> **Headline state: SaveSchema v36 · SaveMigrator top step 36 · CoreServices 7 slots ·
+> FeatureFlags 62 flags (12 XML-summary lies) · PanelId 0–15 (RealmMap=15) · ZoneManager home box 52/52.**
 
-> ➕ **ADDENDUM 2026-07-26 (postdates the 06-12 body below):**
-> - **Save schema is now v35** (not v33/v34 above). `SaveSchema.CurrentVersion = 35`; `SaveMigrator` runs
->   `MigrateToV30…MigrateToV35`. **`MigrateToV35` (WO-773)** appends the `ObsidianQueue` job state and folds
->   legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` timers into the Builder channel (idempotent, no-loss).
-> - **NEW subsystem `Core/Jobs/` — the multi-channel "Obsidian" work queue (WO-773):** `JobKind.cs`,
->   `IJobEffect.cs`, `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`),
->   `ObsidianQueueEngine.cs` (offline-fair resolve). One queue, three channels — train no longer competes with
->   build. Player copy = "Builders"/"Training"/"Research"; the code name "Obsidian" never shows in UI.
-> - **NEW `Core/Enemies/EnemyResolver.cs` — IN FLIGHT** (present, not asserted done; feeds dungeon placement +
->   raid rosters/art, fixes the generic-skeleton spawn bug). Regression `Editor/Regression/EnemyResolverRegression.cs`.
-> - **`SceneRouter.GoRaid(sceneName)`** added for the raid V1 spine (loads a `RaidBase_*` scene with fade);
->   it takes ONLY a scene name — no `RaidParams`/loadout hand-off yet (the WO-774 P0 seam).
+Foundation layer. Three asmdefs live here (verified from the `.asmdef` files):
 
-Foundation layer. Two asmdefs live here: **`DeNelle.Core`** (root namespace `DeNelle.Core`, refs UniTask/TextMeshPro/Addressables/ResourceManager only — first-party nothing) and **`DeNelle.AI`** (`DeNelle.AI`, refs DeNelle.Core). Plus **`DeNelle.Core.Tests`** (Editor-only, refs DeNelle.Core + DeNelle.Data). Every other module references Core; Core references nothing first-party. Verified by reading every `.cs` (~120 files).
+| Assembly | rootNamespace | refs |
+|---|---|---|
+| `DeNelle.Core` (`DeNelle.Core.asmdef`) | `DeNelle.Core` | UniTask, Unity.TextMeshPro, Unity.Addressables, Unity.ResourceManager — **first-party nothing** |
+| `DeNelle.AI` (`Scripts/AI/DeNelle.AI.asmdef`) | `DeNelle.AI` | DeNelle.Core |
+| `DeNelle.Core.Tests` (`Tests/…asmdef`, Editor) | `DeNelle.Core.Tests` | DeNelle.Core, **DeNelle.Data**, TestRunner |
 
-**Cross-module pattern:** Core defines interfaces; implementing modules register concrete services via `CoreServices` / per-feature static hooks, so Village↔HUD↔Wallet etc. never reference each other (CLAUDE.md §5). Reflection bridge used only in `PersistenceBridge` (Core→Village WaveManager).
+**Cross-module pattern:** Core defines interfaces + static seams; implementing modules register concrete
+services via `CoreServices` / per-feature static hooks (PanelRouter, DialogueService, HudCommands,
+JobEffectRegistry, …) so Village↔HUD↔Wallet never reference each other (CLAUDE.md §5). Reflection
+bridges survive only in `PersistenceBridge` (→Village WaveManager) and `SceneRouter`'s return-point
+hero warp (→Village HeroLocomotion, `SceneRouter.cs:350,383`).
 
 ---
 
 ## ROOT FILES
 
-| Class | Path | Responsibility / key API | Bootstrap | Status |
-|---|---|---|---|---|
-| `CoreServices` (static) | `CoreServices.cs` | Cross-asmdef service registry. Slots: `Hud` (IVillageHud), `Audio` (IAudioService), `Jupiter` (IJupiterService), `WalletSigner` (IWalletSigner). `RegisterX/UnregisterX`; callers null-check. | — | LIVE |
-| `HubScenes` (static) | `HubScenes.cs` | Single source of "is this a hub/town scene". `Names = {Village2, MainCastle_Hall, CastleHub, CastleHub_MainKeep}`; `IsHub(name)` (exact-or-Contains). Resolves WO-411 HUD-drift. | — | LIVE |
-| `SceneRouter` (static) | `SceneRouter.cs` | React-Router port. Scene-name consts; `LoadScene`, `LoadSceneWithFade` (UniTask), `GoTitle/GoHeroSelect/GoPetSelect/GoVillage/GoCastle/GoDungeon/GoBattle/GoPatriciaLight`. `LoadVillageWithLoader` (async + VillageLoadOverlay). `BattleParams`/`PatriciaLightParams` hand-off; `ISceneFader`. **Village const = "Village2"; Castle = "MainCastle_Hall".** | — | LIVE (PatriciaLight paths DEAD — DTT removed, see FLAGS) |
-| `Constants` (static) | `Constants.cs` | Solana AdminAddress/ProjectVaultAddress/Sol/Usdc literals + `TowerSlots = 9`. | — | LIVE; FLAG: wallet literals self-flagged as should-flow-from-data |
-| `DevBootScene` (static) | `DevBootScene.cs` | `-bootScene <Scene>` CLI arg → load that scene, skip onboarding. Arg-gated no-op in normal play. | `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` | LIVE (QA tool) |
-| `IntroLauncher` (static) | `IntroLauncher.cs` | Decoupling hook: `Action Play` set by DialogueUI, invoked by Title button. Onboarding↔DialogueUI seam. | — | LIVE |
-| `SeekerBootstrap` (static) | `SeekerBootstrap.cs` | Frame-pacing + Seeker device detect → quality tier (Seeker_Low/High/Desktop) + targetFrameRate (30/60), vSync off. `ApplyTier`, `LooksLikeSeeker`. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` | LIVE (tiers depend on editor MobileSettings.cs) |
-| `OnboardingMode` (static) | `OnboardingMode.cs` | FAST-PATH (default) vs FULL-TUTORIAL switch. PlayerPrefs-backed `FullTutorial`/`FastPath`; `ChooseFastPath/ChooseFullTutorial`. | — | LIVE |
-| `DialogueEventBus` (static) | `Events/DialogueEventBus.cs` | Gameplay→Yarn signal bus. `Raise(name)`/`HasFired`/`Clear`/`ClearAll`; latches until cleared. Case-insensitive. | — | LIVE |
-| `DialoguePortrait` (static) | `DialoguePortrait.cs` | `Forced` (Resources path) to override Yarn speaker portrait. | — | LIVE |
-| `AwarenessState` (enum) | `AwarenessState.cs` | Unaware/Alerted/Engaged perception. Orthogonal to EnemyTacticalState. | — | data |
-| `FormationType`/`FormationContext` (enums) | `FormationType.cs` | 5 dynamic pack shapes (LooseRing/Wedge/Line/TightPack/Column) + Roam/Engage/Flee context. Monster-family arch. | — | data |
-| `ResourceType` (enum) | `ResourceType.cs` | Iron/Wood/Food/AetherCrystal — cross-asmdef mirror of Village.MineResource. | — | data; FLAG stale comment (see FLAGS) |
-
-**Material/visual fixers (root):**
-
-| Class | Path | Responsibility | Bootstrap |
+| Class | Path | Responsibility (verified) | Bootstrap |
 |---|---|---|---|
-| `TripoMaterialFixer` (MonoBehaviour) | `TripoMaterialFixer.cs` | Awake: rebuild Phong FBX materials → URP/Lit, carry texture (`_MainTex`/`_BaseMap`), optional Resources fallback tex. | per-object component |
-| `TreeOfLifeMaterialFixer` (MonoBehaviour) | `TreeOfLifeMaterialFixer.cs` | Runtime grey-tree safety net for Village2 centrepiece (polyperfect SM_Tree_Round). Also located by SceneRouter to seat tree at (0,-0.25,0). Old name-based search was a no-op (corrected 2026-06-04). | per-object component |
-| `EnvironmentTreeMaterialFixer` (MonoBehaviour) | `EnvironmentTreeMaterialFixer.cs` | WO-332 WebGL white-tree fix for polyperfect+KayKit trees (everything except Tree of Life). | per-object/scene |
-| `GroundZFightFixer` (MonoBehaviour) | `GroundZFightFixer.cs` | WO-333 runtime fix: lower baked Village2 "Ground" plane Y=0→-0.05 to stop coplanar z-fight with OuterWorld terrain (no rebake). | scene-load |
+| `CoreServices` (static) | `CoreServices.cs` | Cross-asmdef registry, **7 slots** — see next section. | — |
+| `FeatureFlags` (static) | `FeatureFlags.cs` | **62** demo/web feature gates — see dedicated section. | — |
+| `SceneRouter` (static) | `SceneRouter.cs` | Scene routing — see dedicated section. | — |
+| `HubScenes` (static) | `HubScenes.cs` | ONE hub/overworld/raid/enemy-scene classifier — see Behaviors. | — |
+| `Constants` (static) | `Constants.cs` (38L) | Solana Admin/Vault/Sol/Usdc literals + `TowerSlots = 9`. | — |
+| `DevBootScene` (static) | `DevBootScene.cs` | `-bootScene <Scene>` CLI arg → load scene, skip onboarding. Arg-gated no-op otherwise. | `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` |
+| `IntroLauncher` (static) | `IntroLauncher.cs` (19L) | `Action Play` hook: DialogueUI sets, Title button invokes. | — |
+| `SeekerBootstrap` (static) | `SeekerBootstrap.cs` (161L) | Frame pacing + Seeker device detect → quality tier + targetFrameRate. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` |
+| `OnboardingMode` (static) | `OnboardingMode.cs` | FAST-PATH (default) vs FULL-TUTORIAL PlayerPrefs switch (`onboarding.fullTutorial`). | — |
+| `DialogueEventBus` (static) | `Events/DialogueEventBus.cs` | Gameplay→dialogue latch bus (`Raise/HasFired/Clear`), case-insensitive. | — |
+| `DialoguePortrait` (static) | `DialoguePortrait.cs` (16L) | `Forced` Resources path overriding speaker portrait. | — |
+| `DialogueResetService` (static) | `DialogueResetService.cs` (73L) | Wipes dialogue/Yarn state keys for a fresh New Game. | — |
+| `BuildModeState` (static) | `BuildModeState.cs` (52L) | WO-702 cross-module "is the builder open?" seam (pauses Sylas FTUE dialogue). | — |
+| `MagentaGuard` (MonoBehaviour) | `MagentaGuard.cs` (469L) | TKT-1 runtime safety net: rebinds broken Built-in/Standard mats → URP/Lit so nothing renders magenta in builds. | self-installing |
+| `AwarenessState` / `FormationType`+`FormationContext` / `ResourceType` (enums) | root | Perception enum · 5 pack shapes + context · Iron/Wood/Food/AetherCrystal mirror. | — |
+| `TripoMaterialFixer` / `TreeOfLifeMaterialFixer` / `EnvironmentTreeMaterialFixer` / `GroundZFightFixer` (MonoBehaviours) | root | Material/visual fixers (Tripo FBX→URP with optional forced texture via `SetForcedTexture`; Village2 centrepiece grey-tree net — also SceneRouter's tree locator; WO-332 WebGL white-tree; WO-333 ground z-fight Y-0.05). | per-object |
 
 ---
 
-## Combat/ (`DeNelle.Core.Combat`)
+## CoreServices — 7 slots (`CoreServices.cs`, 200L)
 
-| Type | Path | Responsibility / key API | Notes |
+Register-in-Awake / Unregister-in-OnDestroy; callers null-check (`CoreServices.Hud?.…`). Replacing a
+live registration logs a FlowTrace `Warn` (`:51`, `:115`, `:187`).
+
+| Slot | Interface | Registered by | Lines |
 |---|---|---|---|
-| `IDamageableStructure` | `Combat/IDamageableStructure.cs` | `IsAlive`; `ApplyContactDamage(float)`. Impl: HeartController, HeroHealth, Building, Tower, Gate (Village). | interface |
-| `IDamageable` (+ `CombatFaction`, `CombatLayer`, `ICombatLayered`, `IDamageTintable`, `DamageElement`, `StatusEffect`) | `Combat/IDamageable.cs` | Cross-module attack target: `Faction/WorldPosition/Hp/IsAlive`; `TakeDamage(amount,element)`, `ApplyStatus(effect,sec)`. Air/ground via ICombatLayered. Impl: Village.Enemy; consumed by Pets+hero. | interface bundle |
-| `IActorAnimator` | `Combat/IActorAnimator.cs` | Verb-level anim driver: SetLocomotion/SetCombatStance/PlayAttack/PlayCast/PlayWindUp/SetBlocking/PlayHit/Die/Revive/PlayVictory/PlayTurn/PlayEmote. | interface |
-| `ActorAnimator` (MonoBehaviour, `[DisallowMultipleComponent]`) | `Combat/ActorAnimator.cs` | Concrete IActorAnimator. Resolves child Animator, caches declared params (guards absent-param spam), re-scans on runtime body/controller swap. WO-218 upper-body layer; WO-217 `ShapeAttackTempo`. `InvalidateAnimator`. | LIVE |
-| `AnimParams` (static) + `HitDirection`/`DeathDirection`/`TurnDirection`/`EmoteType` enums | `Combat/AnimParams.cs` | Canonical anim param names+hashes (Speed/InCombat/Attack/Combo/Cast/WindUp/Block/Hit/HitDir/Dead/DeathDir/Victory/TurnDir/Emote). Speed = RAW world u/s. | data |
-| `DamageAttribution` (static) | `Combat/DamageAttribution.cs` | Per-target damage ledger for shared kill-XP. `Record/Drain/Forget/Clear`. Keyed by target object ref. | LIVE |
-| `EnemyState` (enum) | `Combat/EnemyState.cs` | Idle/Chase/Attack/Hit/Dead. Drives Animator "State" int. | data |
-| `IRangedThreat` | `Combat/IRangedThreat.cs` | Optional `IsRangedAttacker` marker (WO-128 pet anti-ranged). Integrator seam noted; not yet implemented on enemies. | interface (additive, dormant) |
+| `Hud` | `IVillageHud` (`HUD/IVillageHud.cs`) | VillageHudController | 43–59 |
+| `HudModel` | `IHudModel` (`HudModel/HudModels.cs`, WO-541) | HudModelHost | 67–80 |
+| `Population` | `IPopulationService` (`Population/IPopulationService.cs`, WO-587) | PopulationService | 88–100 |
+| `Audio` | `IAudioService` (`Audio/IAudioService.cs`) | AudioService | 107–123 |
+| `Jupiter` | `IJupiterService` (`Web3/IJupiterService.cs`) | JupiterSwapService | 130–144 |
+| `WalletSigner` | `IWalletSigner` (`Web3/IWalletSigner.cs`) | WalletService on Connect | 155–169 |
+| `SceneLinkResolver` | `ISceneLinkResolver` (`World/ISceneLinkResolver.cs`, WO1) | SceneLinkResolverHost | 179–198 |
+
+---
+
+## FeatureFlags — 62 flags (`FeatureFlags.cs`, 876L)
+
+Resolution: `Get(name, defaultOn)` (`:667`) — PlayerPrefs `ff.<name>` 0/1 wins, else the coded default.
+`IsDevBuild` = editor OR Debug.isDebugBuild (`:664`). `ApplyUrlActivationOnce()` (`:706`) lets a WebGL
+URL query flip ONLY the allow-list `{trace, stakedemo, skrpreview}` (`:682–697`). Editor menu toggles
+for BlinkChrome/OverworldEncounter/LockOn/StakeDemo/SkrPreview/CombatHud611 (`:750–873`).
+
+**READING RULE (BINDING): the `defaultOn:` argument in code is the ONLY truth. When an XML `<summary>`
+disagrees, the trailing `//` comment on the property line (owner reversal note) is the current ruling.**
+
+All 62, actual default, with the **12 XML-summary lies** marked ⚠ (XML states the OPPOSITE default):
+
+| Flag (`ff.<key>`) | Default | Line | Note |
+|---|---|---|---|
+| Raid (`raid`) | ON | 27 | core raid loop closed |
+| Arena (`arena`) | OFF | 33 | V1 descope; code kept |
+| SingleHero (`singlehero`) | ON | 40 | ATB party = hero only |
+| BlinkArmor (`blinkarmor`) | OFF | 52 | armor swap junked |
+| KnightOnly (`knightonly`) | ON | 58 | ChooseHero forces Knight |
+| BaseBuilding (`basebuilding`) | OFF | 67 | convert-on-clear etc. gated |
+| BuildTimers (`buildtimers`) | ON | 75 | WO-612 CoC timers |
+| ⚠ RaidContinuousWalk (`raidwalk`) | **OFF** | 88 | XML says "Default ON"; WO-771 comment locks Teleport/Deploy |
+| OverworldLeaderOnlyRoam (`overworldleaderonlyroam`) | ON | 95 | rep-only roam |
+| OutpostTravel (`outposttravel`) | OFF | 104 | no outpost fast travel |
+| BlinkChrome (`blinkchrome`) | OFF | 111 | hide our UI dressing |
+| ⚠ WebTrace (`webtrace`) | **ON** | 120 | XML says "Default OFF (don't spam the DB)" — WebGL streams traces to Neon by default |
+| BuildingUpgradePanel (`buildingupgradepanel`) | ON | 128 | MVVM WC3 perk grid |
+| ⚠ PartyShop (`partyshop`) | **ON** | 138 | XML says "Default OFF" |
+| CustomDialogue (`customdialogue`) | ON | 145 | Yarn fully removed (WO-557) — OFF has no fallback |
+| ⚠ OverworldEncounter (`overworldencounter`) | **ON** | 154 | XML says OFF; owner REVERSAL 2026-07-30 (F8 seq511) in trailing comment |
+| ⚠ RegionRoam (`regionroam`) | **ON** | 162 | XML says OFF per 07-26; reversed 07-30 in trailing comment |
+| BypassPetSelect (`bypasspetselect`) | ON | 171 | intro skips PetSelect |
+| RuntimeWorldSeam (`runtimeworldseam`) | OFF | 183 | superseded by merged world — dead code pending removal |
+| EnemyInjuredStance (`enemyinjured`) | ON | 190 | |
+| HeroInjuredStance (`heroinjured`) | ON | 198 | |
+| EnemyRootedCast (`enemyrootedcast`) | ON | 205 | |
+| EnemyStructureAwareness (`enemystructureaware`) | ON | 217 | all-direction structure sweep |
+| EnemyWeapons (`enemyweapons`) | OFF | 226 | weaponless until grip perfected |
+| ⚠ BattleHud9Zone (`battlehud9zone`) | **ON** | 242 | XML's last word says "ships OFF for V1"; trailing PREVIEW comment = ON |
+| WaveAutoStart (`waveautostart`) | ON | 250 | prepare countdown auto-arms in hub |
+| WaveBreachToAtb (`wavebreachtoatb`) | OFF | 260 | breach resolves in-hub, no ATB swap |
+| DungeonRealtimeBattle (`dungeonrealtime`) | ON | 273 | dungeon fights → BattleArena, ATB retired-reversible |
+| DevHotkeys (`devhotkeys`) | OFF | 283 | global dev-hotkey kill switch (F8/F9 unaffected) |
+| DevResourceTool (`devresourcetool`) | **IsDevBuild** | 299 | store-hardened: OFF in release APK |
+| FlagButton (`flagbutton`) | **IsDevBuild** | 315 | mobile F8 chip; OFF in release APK |
+| HubAmbientVfx (`hubambientvfx`) | ON | 325 | |
+| LockOn (`lockon`) | OFF | 334 | WO-512 soft lock-on, unproven |
+| CastleMoat (`castlemoat`) | ON | 346 | |
+| ⚠ MergedWorld (`mergedworld`) | **ON** | 358 | XML says "Default OFF until baked"; trailing TEST-BUILD comment = ON. Drives `SceneRouter.Castle` |
+| HomeReturnPortal (`homereturnportal`) | ON | 366 | |
+| ⚠ GateTraversal (`gatetraversal`) | **OFF** | 379 | XML says "Default ON"; 07-26 comment: warp teleport reverted, hero walks through |
+| CastleEditorBridgeSeam (`castleeditorbridgeseam`) | OFF | 385 | |
+| GateBeacon (`gatebeacon`) | OFF | 392 | |
+| ⚠ OutpostCaves (`outpostcaves`) | **ON** | 403 | **WORST lie — XML says "this ships OFF" with NO correcting comment**; the resolver the XML says "DOES NOT EXIST YET" gates what ON arms |
+| DungeonPortals (`dungeonportals`) | ON | 419 | XML self-corrects (ON since 07-13) |
+| WorldFeel (`worldfeel`) | ON | 432 | |
+| NoAutoHeal (`noautoheal`) | ON | 441 | field HP/MP persist; safe-zone heals |
+| CombatFeel (`combatfeel`) | ON | 451 | |
+| TutorialV2 (`tutorialv2`) | ON | 462 | data-driven FTUE |
+| HeroPackage (`heropackage`) | ON | 473 | Paladin package |
+| KnightV3 (`knightv3`) | ON | 484 | checked BEFORE heropackage |
+| ⚠ MocapLocomotion (`mocaploco`) | **ON** | 497 | XML says "Default OFF until felt-approved"; trailing comment: approved 07-04 |
+| WeaponGripInfer (`weapongripinfer`) | OFF | 505 | legacy inference path |
+| StakeDemo (`stakedemo`) | OFF | 517 | URL-activatable |
+| SkrPreview (`skrpreview`) | OFF | 535 | store-hardened OFF; URL-activatable |
+| RealmStorePurchase (`realmstorepurchase`) | **IsDevBuild** | 545 | buy CTA rail; NOT URL-activatable |
+| CombatHud611 (`combathud611`) | ON | 561 | XML self-corrects (approved = default) |
+| BattleHudVm (`battlehudvm`) | OFF | 572 | ATB HUD VM A/B |
+| SheathedDrawnRotFallback (`sheathdrawnrot`) | ON | 585 | XML self-corrects at end |
+| PetCombat (`petcombat`) | OFF | 595 | pets harvest/companion only |
+| ⚠ Barracks (`barracks`) | **ON** | 605 | XML says "When OFF (default)"; WO-771 trailing comment flips ON (raid roster needs it) |
+| Colosseum (`colosseum`) | OFF | 614 | |
+| WallsTab (`wallstab`) | OFF | 621 | |
+| ⚠ PoiCallouts (`poicallouts`) | **ON** | 635 | XML says "Default OFF (dark-ship)"; trailing comment flipped ON for felt-test |
+| DungeonFpv (`dungeonfpv`) | ON | 650 | FPV dungeon camera; wins over iso |
+| DungeonCameraIso (`dungeoniso`) | OFF | 657 | legacy top-down escape hatch |
+
+(Removed flags, do not resurrect: `ff.herotalents` — eyes-sweep 07-06, comment `:42`;
+`ff.strategicplacement` — WO-682, always-on, comment `:637`.)
 
 ---
 
 ## State/ (`DeNelle.Core.State`) — the save/persistence spine
 
-| Class | Path | Responsibility / key API | Bootstrap | Status |
-|---|---|---|---|---|
-| `GameState` (ScriptableObject, sealed) | `State/GameState.cs` | Pure-data persisted store. 41 React `partialize` fields + many append-only (Zones/Tribes/Settlements/Wards/BaseLayout/PartyMemberIds/Arena/ArenaDefense/BuildJobs/Magic/GearInventory/PetName). `SchemaVersion = SaveSchema.CurrentVersion`. `[CreateAssetMenu]`. Asset at `State/GameState.asset`. `AetherCrystals` field DEPRECATED (folded into Resources.Crystals v18). `PartySize` derived. | — | LIVE; some fields in-memory-only (not yet in SaveSchema: Tribes/Wards/Arena). Settlements (v21) + PetName ARE round-tripped. |
-| `GameStateService` (MonoBehaviour, sealed, singleton) | `State/GameStateService.cs` | Behaviour layer (Zustand analog). `Load()`/`Save()` (PlayerPrefs `dotr-save` → migrate → validate → apply). 11 per-domain UnityEvents. Typed mutators (AddCrystals/AddFood/RecordRun/BindWallet/ChooseHero/Set*/AdvanceTutorial/AddToParty/RemoveFromParty/FinishOnboarding). `ResetToNewGame` carve-out. Backend delta-sync (SyncToBackend/LoadFromBackend/SyncAfterWave/SaveBeforeSceneChange, offline queue, WO-121 wallet-signed auth). `EnsureZoneGraph`. Vercel URLs hard-coded (backend never deployed). | `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)] EnsureInstance` + GameStateBootstrap (BeforeSceneLoad) — DUAL bootstrap, both guarded | LIVE |
-| `GameStateBootstrap` (static) | `State/GameStateBootstrap.cs` | Spawns GameStateService at startup if absent. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` | LIVE (note: overlaps GameStateService.EnsureInstance AfterSceneLoad — redundant but both guard on Instance) |
-| `SaveSchema` (static) + `SaveFile`/`PersistedState`/`SaveValidationException`/`SaveValidationResult` | `State/SaveSchema.cs` | Save shape + validator (Zod port). `CurrentVersion = 33`, `FileFormat = 1`, key `dotr-save`. `PersistedState` = all-nullable ~60 fields ([JsonProperty] camelCase). `Validate` (NonNegInt/FiniteInt clamps, NaN/Inf reject). `JsonSettings` (StringEnumConverter + TutorialStepConverter). | — | LIVE; FLAG file-banner header still says v10 (see FLAGS) |
-| `SaveMigrator` (static) + `SaveMigrationResult` | `State/SaveMigrator.cs` | Registry-based v1→v33 migration. Steps dict (2-10,14,17,18,21-33; 11-13,15,16,19,20 are additive-default-on-read, no step). `Migrate`/`MigrateForImport` (rejects newer-than-build). | — | LIVE; FLAG file-banner header still says "v1→v10 / nine-step" (stale) |
-| `PersistenceBridge` (MonoBehaviour, sealed, `[DisallowMultipleComponent]`) | `State/PersistenceBridge.cs` | DDOL bridge: wave-clear→SyncAfterWave (reflection to Village.WaveManager.OnWaveCleared), scene-enter→LoadFromBackend, app-quit→Save. `_loadOnEnterScenes = {Village2, ATBBattle, PatriciaLight_TD}`. | `EnsureExists()` called by GameStateService.Awake | LIVE; FLAG: PatriciaLight_TD is a dead scene name (DTT removed) |
-| `Enums` | `State/Enums.cs` | Difficulty/MovementStyle/BreachStyle/HeroClass/PetSpecies/TutorialStep — all `[EnumMember]` wire strings. TutorialStep `1..7|done`. | — | data |
-| `NestedTypes` | `State/NestedTypes.cs` | PetData, ResourceBalance (struct, Starter{250,80,15}), PendingTowerBuild, AtbInventory, ChatContact, **ChatMessage**, LootStash, ActiveDungeonRun, SeedTree, DungeonProgress, QuestState, QuestProgress, RegionProgress. | — | data |
-| `DifficultyTuning` (static) | `State/DifficultyTuning.cs` | Difficulty→between-wave countdown multiplier (Easy 2.0/Normal 1.0/Hard 0.6 off 300s base). `CountdownMultiplier/Label/Blurb`. | — | LIVE |
-| `ServerConfig` (sealed) | `State/ServerConfig.cs` | Backend remote-config (boss drops, pack sales, events, empowerment cost, maintenance). All nullable + `Default` + accessor helpers + `IsEventActive`. | — | LIVE (never null; backend undeployed) |
-| `BackendAuthConfig` (static) | `State/BackendAuthConfig.cs` | WO-121 master flag for wallet-signed save auth. `Enforced` = runtime `Override` ?? `BACKEND_AUTH_ENFORCED` define. Defaults OFF. | — | LIVE (off) |
-| `HeroClassOpt` (enum) + `HeroClassOptExtensions` | `State/HeroClassOpt.cs` | Inspector-serializable `HeroClass?` wrapper (None sentinel). `ToNullable`/`ToOpt`. SO only — save uses real `HeroClass?`. | — | data |
-| `SerializableDict<K,V>` | `State/SerializableDict.cs` | Unity-serializable Dictionary subclass via ISerializationCallbackReceiver parallel lists. | — | util |
-| `TutorialStepConverter` | `State/TutorialStepConverter.cs` | Newtonsoft converter: Step1-7→ints, Done→"done"; reads either, >7→Done. | — | util |
-| `ArenaProgress` (struct) | `State/ArenaProgress.cs` | Arena async-PvP W/L ledger (Wins/Losses/Streak/TotalPurse/`Empty`/`TotalRaids`). In-memory + PlayerPrefs (not in SaveSchema yet). | — | data |
-| `BuildJobData` (struct) + `BuildJobType` enum | `State/BuildJobData.cs` | WO-172 CoC build timer (StructureId/JobType/StartMs/DurationMs/`FinishMs`/`Type`). unix-ms, offline-counting. | — | data |
-| `PlacedStructureData` (struct) | `State/PlacedStructureData.cs` | WO-108 base-layout record (itemId/cellX/cellZ/yawSteps/level/yawOffset). Grid-relative, server-replayable. | — | data |
-| `PlacedDefenderData` (struct) | `State/PlacedDefenderData.cs` | WO-389 Arena-defense twin of above (itemId/cellX/cellZ/yawSteps). | — | data |
+### GameState (ScriptableObject, sealed — `State/GameState.cs`, 567L)
+Pure-data persisted store (~66 fields; asset `State/GameState.asset`). `SchemaVersion = SaveSchema.CurrentVersion` (=36, `:34`).
+Field map (line = declaration; ALL append-only at the end per the save law):
+
+- Player: `Onboarded :38`, `BestWave :40`, `HeroClass` (HeroClassOpt `:45`), `BoundWallet :47`.
+- Resources: `Resources` (ResourceBalance.Starter {250,80,15} `:51`), `Voidshards=5 :53`,
+  `AetherCrystals` **DEPRECATED v18, kept 0** `:58`, `Stone=20 :60`, `Iron=5 :62`, `Wood=15 :64`, `OwnedItemIds :66`.
+- Pets: `Pets :70`, `StarterPetId :72`, `PetBonds :74`, `OwnedPets :76`, `PetActiveSlots` (v34 deploy map `:88`), `PetName` (WO-277 `:280`).
+- Village: `Towers`/`TowerAbilities` ([0]×9 `:92,:94`), `WallLevel :96`, `BuildingCooldowns :98`,
+  `PendingBuilds :100`, `BuildingDamage :102`.
+- Settings: `JoystickSensitivity :106`, `MovementStyle :108`, `BreachStyle :110`, `Muted :114`,
+  `MusicVolume=70 :116`, `SfxVolume=80 :118`, `Difficulty :120`, `VoiceOvers :122`.
+- Tutorial: `TutorialStep :126`, `SeenTutorials :128`.
+- Combat: `Inventory` (AtbInventory `:132`), `GearInventory` (v20 `:135`), `AtbLossStreak :137`.
+- Progress ledgers: `Dungeons :141`, `ActiveDungeonRun :143`, `Quests :145`, `Regions :147`.
+- Social: `MyInviteCode :151`, `Contacts :153`, `BlockedCodes :155`, `Inbox :157`, `LastInboxSyncAt :159`.
+- Echo/harvest: `LastHarvestClaimMs` (WO-115 accrual clock `:171`), `EchoCount=1 :182`, `SiloResources :190`,
+  `WavesCompleted :198`, `EchoLanes` ("lane:level" CSV, initializer `"wood"` — legacy token normalizes to Harvest lv1 on read `:448`).
+- Timers/jobs: `BuildJobs` (**wire back-compat only, not read at runtime since v35** `:208`),
+  `AdSkipsUsedToday :214`, `AdSkipDayKey :220`, `ObsidianQueue` (v35, never null `:478`).
+- World: `Zones` (v17 `:230`), `Tribes` (v34 `:239`), `Settlements` (v21 `:246`), `Wards` (v34 `:256`).
+- Build mode: `BaseLayout` (v14 `:270`), `StrategicPlacementMigrated` (v30 `:432`), `FreeBuildsUsed` (v32 `:463`),
+  `EverBuiltStructureIds` (**v36 WO-834** monotonic ledger `:530`; `MarkEverBuilt :538` idempotent
+  OrdinalIgnoreCase set-add, caller owns Save; `HasEverBuilt :550`).
+- Progression: `Magic` (v15 `:291`), `PartyMemberIds` (v16 `:305`; `PartySize` derived `:308`),
+  `BuildingTiers` (v23 `:365`), `VillageTier` (v24 `:373`), `OwnedBuildingPerks` (v24 `:380`),
+  `PopulationXP/Quests/Outposts/EchoSlots` (v28 `:389–401`), `HeroLevel/HeroXp/HeroLifetimeXp` (v29 `:412–418`).
+- Arena/Army: `Arena` (ArenaProgress, v34 `:324`), `ArenaDefense` (v19 `:340`), `Army` (ArmyStorage, v22 `:354`).
+- WO-771.9/WO-808 (additive, NO schema bump): `BarracksLevel=1 :489`, `TroopLevels :499`, `GearLevels :512`.
+
+**Everything above round-trips through SaveSchema as of v36 — the old "Tribes/Wards/Arena unpersisted"
+claim is DEAD (closed by v34).**
+
+### GameStateService (MonoBehaviour, sealed singleton — `State/GameStateService.cs`, 1573L)
+- **Pluggable save IO**: `static ISaveProvider Provider = new LocalSaveProvider()` (`:61`; WO-547 seam —
+  serialization stays in the service, raw read/write/exists/delete delegated).
+- 11 per-domain UnityEvents (`:81–101`): Resources/WaveRecorded/Tutorial/Player/Settings/Pets/Village/
+  DungeonProgress/Combat/Social + `StateReplaced`.
+- `Load()` (`:186`) — Provider read → **LB-3 atomic embedded-HMAC gate** (`TryExtractSigned`; invalid sig
+  = reject + fresh state `:229–234`; legacy unsigned = load-once + re-sign `:278–282`) → parse →
+  `SaveMigrator.MigrateForImport` → `SaveSchema.Validate` → `ApplyPersisted` (`:456`). Every reject is
+  FlowTrace-loud and keeps fresh defaults.
+- `Save()` (`:297`) — `EnsureAccount` (mints deterministic `guest-local-…` wallet when unbound, `:948,:942`) →
+  Snapshot (`:362`) → serialize → `Provider.Write(key, SaveSchema.EmbedSignature(json))` single atomic value (`:319`).
+- Mutators: AddCrystals `:334` / AddFood `:351` / FinishOnboarding (`:560` — also enrols the first
+  companion via `FirstCompanionId()` `:585`, canon mapping Mage→Knight·Knight→Ranger·Ranger→Cleric·Cleric→Mage) /
+  AddToParty `:609` / RemoveFromParty `:631` / IsInParty `:641` / RecordRun `:651` / BindWallet `:659` /
+  **ChooseHero `:668` — applies the `FeatureFlags.KnightOnly` force at `:673`** /
+  `EnsureHeroClassPersisted` `:689` (unset-after-load → defaults Knight) / Set* settings `:699–765` /
+  AdvanceTutorial `:770` / MarkTutorialSeen `:780`.
+- `ResetToNewGame()` (`:802–905`) — React reset() carve-out: keeps BoundWallet + BreachStyle + all social.
+  Notables: founding seed ZERO (`StartingBudget.StrategicWood/Iron = 0`, `NestedTypes.cs:75–81` — replaced
+  by FreeBuildsUsed freebies), `StrategicPlacementMigrated = true` (`:889` — blank-template New Game),
+  `EverBuiltStructureIds` cleared (`:893` — closes every baked-twin surface gate = truly blank town),
+  `EchoLanes = "harvest:1"` (`:890`), `ObsidianQueue = Empty()` (`:857`), `EnsureZoneGraph` (`:898`, def at `:548`).
+- Backend delta-sync (`:907–1523`): `BackendBase = https://defenders-of-the-realm-v2.vercel.app` (`:925`,
+  same in both build configs), `/api/game/save|load`, `/api/auth/nonce`; offline queue PlayerPrefs
+  `dotr-sync-queue` (`:932`); `MinSyncDelay 8s`; `SyncAfterWave :998`, `SaveBeforeSceneChange :1008`,
+  `LoadFromBackend :1019`, wallet-signed auth headers `:1145` (gated by `BackendAuthConfig.Enforced`, default OFF).
+- Bootstrap is DUAL (both guard on Instance): `GameStateBootstrap` `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`
+  (`GameStateBootstrap.cs:16`) AND `GameStateService.EnsureInstance` AfterSceneLoad (`GameStateService.cs:167`).
+
+### SaveSchema (static — `State/SaveSchema.cs`, 914L)
+- `CurrentVersion = 36` (`:36` — the const line doubles as the full v13→v36 changelog),
+  `FileFormat = 1` (`:38`), key `dotr-save` (`:42`), legacy settings key (`:44`), `StarterDungeonId "healers_cottage"` (`:48`).
+- `JsonSettings` (`:55–74`): StringEnumConverter + TutorialStepConverter, `MaxDepth = 64` (LB-3 deep-nesting cap).
+- **LB-3 save integrity** (`:76–191`): keyed HMAC-SHA256, key assembled from fragments (`:101–106`,
+  obfuscation only — server is authority); `ComputeSignature :109`, `VerifySignature :124` (constant-time);
+  **atomic single-key envelope** `EmbedSignature :148` / `TryExtractSigned :160` (`<64-hex>\n<json>`;
+  legacy raw JSON detected + migrated once).
+- `SaveFile` envelope (`:203–215`): format/storeVersion/exportedAt/wallet/state.
+- `PersistedState` (`:228–628`): **84 wire fields**, all nullable (Zod `.partial()` mirror), camelCase
+  `[JsonProperty]`, unknown keys dropped. Last five: `obsidianQueue :586`, `barracksLevel :596`,
+  `troopLevels :604`, `gearLevels :612`, `everBuiltStructureIds :628`.
+- `Validate()` (`:677–853`): NonNegInt/FiniteInt clamps + NaN/Inf reject across resources, arrays, pets,
+  inventory, pendingBuilds, dungeon run, inbox, echo, population, hero XP, buildJobs, **ObsidianQueue
+  channels (`:821–831` via `ClampJobList :864`)**; Zones/Settlements null→empty (`:834–839`); volumes
+  finite-only (not clamped, `:842–845`). `SaveValidationException :878` / `SaveValidationResult :892`.
+
+### SaveMigrator (static — `State/SaveMigrator.cs`, 698L)
+Registry-based chain, `Steps` dict (`:37–78`) = **{2–10, 14, 17, 18, 21–36}**; v11–13, 15, 16, 19, 20 are
+additive-default-on-read (no step). `Migrate :85` (cumulative `< N`), `MigrateForImport :103` (rejects
+newer-than-build / non-finite). Notable steps:
+- v8→v9 (`:239`): pendingBuilds seed + legacy `realm-defenders-settings` fold + delete.
+- v17→v18 (`:329`): AetherCrystals → Resources.Crystals fold, then zeroed.
+- **v34→v35 (`MigrateToV35 :524–596`)**: builds ObsidianQueueState + folds legacy `buildJobs` (Kind
+  backfilled from JobType), `pendingBuilds` (→ TowerBuild jobs, remaining time from FinishAt), and
+  future-dated `buildingCooldowns` (→ Build jobs) into the **Builder** channel; legacy lists cleared;
+  `FoldGuardHasId :655` prevents double-creation; Train+Research channels ensured.
+- **v35→v36 (`MigrateToV36 :625–651`, WO-834)**: seeds `everBuiltStructureIds` = BaseLayout itemIds ∪
+  FreeBuildsUsed ∪ (when BaseLayout non-empty = "established town") the **frozen hardcoded template
+  snapshot** `DefaultTownTemplateIdsV36` (`:619–623` — workshop, collector_lumbermill, collector_farm,
+  pet-house, forge, arcane-tower, market, jeweler, apothecary, jewelers-bench, barracks). An EMPTY
+  BaseLayout (the blank-founding save) seeds only legs 1+2 → truly blank town. Never clobbers (`:627`).
+
+### The rest of State/
+
+| Type | Path | Verified essentials |
+|---|---|---|
+| `ArmyStorage` (sealed class) | `State/ArmyStorage.cs` (334L) | Persisted army on GameState (v22). `DefaultMaxArmySize=10 :43`; **`MaxArmySize` is DYNAMIC** — base 10 + `ModifierService.Active.ArmyCapBonus` (`:58–73`, derived/not serialized; change-only `[Flow:Perk]` log via static `s_lastLoggedCap :49`). `NextId` monotonic troop-id mint (`:80`, "troop-{n}"). `LastRecoveryTickMs` (WO-779 persisted recovery-clock anchor `:92`). `SlotsUsed/Remaining/CanTrain` take a `slotOf` seam delegate (`:101–132`); `TrainNow :148` (capacity → afford seam → mint); `GrantTrained :168` (WO-771.9 unconditional — paid at enqueue); wounded-recovery NO-permadeath: `MarkWounded :194`, `ReconcileAfterRaid :216`, `TickRecovery :253` (pure dt step), **`AdvanceRecovery :290`** (wall-clock resolver: fresh anchor seeds-to-now credits nothing; backwards clock ticks nothing); `AddVeterancy :316` (cap `PlayerTroop.MaxVeterancyRank`). |
+| `PlayerTroop` | `State/PlayerTroop.cs` (111L) | One owned troop: Id/TroopDefId/Wounded/RecoveryRemaining/VeterancyRank/IsDeployable. |
+| `BuildingTierCatalog` (static) + `BuildingPerkDef`/`BuildingTierDef`/`BuildingUpgradeDef`/`BuildingTierCatalogData` | `State/BuildingTierCatalog.cs` (199L) | Typed loader over `Data/Canonical/building-tiers.json` (`:100`) via CanonicalJson. `BuildingTierDef` carries cost W/F/C + `requiresVillageTier` (WC3 tech-gate `:60`) + `structureHpBonusPct` (cumulative-absolute `:68`) + cumulative `GameModifiers :73` + `Perks :76`. `BuildingPerkDef` = Gold-cost research perk whose effect IS a GameModifiers (`:46`). API: `All :104` / `Find :107` / `TierOf :117` / `MaxTier :127` / `IsUpgradable :137` / `FindPerk :140` / `PerkUnlockTier :156` / `Reload :170`. Load failure → LogError + empty catalog (`:178–197`). |
+| `ModifierService` (static) | `State/ModifierService.cs` (161L) | THE read-point: compiles `GameState.BuildingTiers` + `OwnedBuildingPerks` through BuildingTierCatalog into the active `GameModifiers` (`Active` never null). |
+| `GameModifiers` | `State/GameModifiers.cs` (78L) | Flat JSON-serializable perk contract (multipliers + `ArmyCapBonus` etc.); unset fields = no-op. |
+| `EchoLaneBonuses` (static) | `State/EchoLaneBonuses.cs` (59L) | WO-738 passive per-lane multiplier contract (Core side of Echo lanes). |
+| `ItemCapability` | `State/ItemCapability.cs` (54L) | Composable capability flags of a catalog Entry. |
+| `ISaveProvider` / `LocalSaveProvider` | `State/ISaveProvider.cs` / `LocalSaveProvider.cs` | WO-547 raw-IO seam; default = exact legacy PlayerPrefs IO. |
+| `Enums` | `State/Enums.cs` (81L) | Difficulty/MovementStyle/BreachStyle/HeroClass/PetSpecies/TutorialStep — `[EnumMember]` wire strings. |
+| `NestedTypes` | `State/NestedTypes.cs` (277L) | PetData, ResourceBalance (Starter {250,80,15}), **`StartingBudget` = 0/0 (`:75–81`, freebies replaced the seed)**, PendingTowerBuild, AtbInventory, ChatContact, `ChatMessage` (1:1 mailbox — **name-collides with `Services.ChatMessage`**), LootStash, ActiveDungeonRun, SeedTree, DungeonProgress, QuestState/Progress, RegionProgress. |
+| `BuildJobData` (struct) + `BuildJobType` | `State/BuildJobData.cs` | WO-172 offline-fair timer record, now + `Kind` + `Channel` (v35, additive default-on-read) — IS the "ObsidianJob". |
+| `PlacedStructureData` / `PlacedDefenderData` (structs) | `State/PlacedStructureData.cs` / `PlacedDefenderData.cs` | Base-layout record (+ v27 `worldY`/`wallMounted`) · Arena-defense twin (WO-389). |
+| `DifficultyTuning` / `ServerConfig` / `BackendAuthConfig` / `HeroClassOpt` / `SerializableDict` / `TutorialStepConverter` / `ArenaProgress` | `State/*` | As before: countdown multipliers · backend remote-config (never null) · WO-121 auth flag default OFF · nullable-HeroClass wrapper · serializable dict · `1..7\|"done"` converter · Arena W/L struct (NOW persisted, v34). |
+| `PersistenceBridge` (MonoBehaviour) | `State/PersistenceBridge.cs` | DDOL: wave-clear→SyncAfterWave (reflection to Village.WaveManager), scene-enter→LoadFromBackend, quit→Save. **`_loadOnEnterScenes` still lists dead `"PatriciaLight_TD"`** (`:61`; also mismatches SceneRouter's `"PatriciaLightMode"`). |
 
 ---
 
-## World/ (`DeNelle.Core.World`)
+## Jobs/ (`DeNelle.Core.Jobs`) — the "Obsidian" multi-channel work queue (WO-773)
 
-| Type | Path | Responsibility / key API | Notes |
-|---|---|---|---|
-| `ZoneManager` (static) | `World/ZoneManager.cs` | THE region classifier. `GetZone(pos)`/`ZoneAt`/`DangerTierAt`/`Depth`/`ThreatLevel` (depth×danger). Village half-extents 42/33. `DefaultZoneGraph` (5 ZoneStates), `DefaultDestination`. | LIVE |
-| `RegionId`/`RegionZone`/`NodeType`/`ZoneState` | `World/RegionZone.cs` | Region enum (Village/Goldfields/Stoneback/Mirewood/Ashwood, append-never-renumber), static facts, City/Horde tag, persisted ZoneState (string RegionKey, Neighbors, Destination). | data |
-| `RegionSpawnTable` (static) + `DepthBand`/`RegionEnemyEntry` | `World/RegionSpawnTable.cs` | WO-155 region→enemy roster, depth-banded weighted pick. `PickEnemyId/RosterFor/HasRoster/BandFor`. Mid 0.34/Core 0.67. Forward-design enemy ids. | data/logic |
-| `GameClock` (static) | `World/GameClock.cs` | `CurrentDay()` from PlayerPrefs epoch (`dotr-gameclock-epoch`), 1 game-day = 1 real day. WO-159 razed lockout. Self-flagged as stopgap (no real day-system on branch). | LIVE (stopgap) |
-| `CrystalGrade` (enum) + `CrystalRegion` (static) | `World/CrystalGrade.cs` | Aether/Verdant/Mire/Wraith grade; `TopGradeFor(dangerTier)`. Lean WO-144 slice (no ledger yet). | data |
-| `WardStoneDef`/`WardStoneState`/`WardReach` | `World/WardContent.cs` | WO-112 ward-tether exploration. Reach math (`ReachForRegion`/`DistancePastReach`, BaseReach 12). In-memory only (not in SaveSchema). | data/logic |
-| `TribeDef`/`TribeState`/`SettlementPhase`/`SettlementState`/`WorldPoint` | `World/WorldContent.cs` | WO-159/160 settlements + roaming tribes. JsonUtility-safe. In-memory only (GameState.Tribes/Settlements not in SaveSchema yet). | data |
-| `GarrisonRecipe`/`GarrisonRecipeFile` | `World/GarrisonRecipe.cs` | Recipe-first garrison/dungeon data (id/kind/size/theme/enemies/levelRange/threat/props). Convenience accessors. | data |
-| `GarrisonRecipeCatalog` (static) | `World/GarrisonRecipeCatalog.cs` | WebGL-safe loader for `garrison-recipes.json` via CanonicalJson. `All/Find/Reload`. | LIVE |
+Player copy = "Builders"/"Training"/"Research"; "Obsidian" never surfaces in UI (`JobKind.cs:21–22`).
 
----
-
-## Catalog/ (`DeNelle.Core.Catalog`) — build-system data model
-
-| Type | Path | Responsibility | Notes |
-|---|---|---|---|
-| `CatalogEntry` + `CellPlacement` + `OrientationFix` | `Catalog/CatalogEntry.cs` | One catalog def: id/displayName/type/kind/visualPrefabPath (LOOK)/repo (BEHAVIOR)/composite/orientation. OrientationFix: per-axis scale, only manual=true applied. | data |
-| `CatalogRegistry` (static) | `Catalog/CatalogRegistry.cs` | id+type registry. `Register/Get/OfType/Count/Clear`. Content modules register at startup. | LIVE |
-| `CatalogType`/`EntryKind`/`NavSurfaceKind`/`PlacementSurface` | `Catalog/CatalogType.cs` | Taxonomy enums. | data |
-| `PlacementRules` | `Catalog/PlacementRules.cs` | Declarative placement conditions (surface/overlap/footprint/gate-clearance/support/affordable/ownedGate). | data |
-| `RepoProps` + `ResourceCost` | `Catalog/RepoProps.cs` | BEHAVIOR half: navSurface/buildCost/cost (multi-resource)/maxLevel/upgradeCost/upgradeVisualPath/behaviorId/singleton/placement/visualHeight + combat stats (range/damage/fireRate/canHitAir/element) + AoE (aoeRadius/slowSeconds/splashFraction). | data |
-| `BuildTimerConfig` (ScriptableObject) + `BuildJobKind` | `Catalog/BuildTimerConfig.cs` | WO-172 timer tuning SO (hybrid duration curve, ad-skip, instant-finish, build slots). `DurationSecondsForTier/InstantFinishPrice/CreateDefault`. Resources path `Economy/BuildTimerConfig`. | data; code-default fallback |
-
----
-
-## Data/ (`DeNelle.Core.Data`)
-
-| Type | Path | Responsibility | Notes |
-|---|---|---|---|
-| `CanonicalJson` (static) | `Data/CanonicalJson.cs` | **WebGL-safe JSON reader** — Resources.Load<TextAsset> first, StreamingAssets File fallback. `Read(relativePath)`. The dual-copy contract hub. (namespace `DeNelle.Core`, not `.Data`) | LIVE core util |
-| `DataInjector` (static) | `Data/DataInjector.cs` | Generic `Inject<T>`/`TryInject<T>` over CanonicalJson. (namespace `DeNelle.Core`) | LIVE |
-| `BattlePassData` (SO) + `BattlePassReward`/`BattlePassRewardKind` | `Data/BattlePassData.cs`, `Data/BattlePassReward.cs` | DEF-69 season tracks (free+premium, cosmetics/currency only). Pure authoring. | data; runtime manager is follow-up |
-| `CampaignData` (SO)/`CampaignProgressRecord`/`MissionData` (SO) | `Data/CampaignData.cs`, `Data/CampaignProgressRecord.cs`, `Data/MissionData.cs` | DEF-68 Spire Chronicles. Lean field set; progress in-memory only. | data |
-| `PetType` (SO) | `Data/PetType.cs` | DEF-57 pet-species stub (name/moveSpeed/range/damage/cooldown). | data stub |
-| `SkillType` (enum) + `SkillRequirement` | `Data/SkillTypes.cs` | LOCKED craft-skill enum (None/Blacksmith/Woodworking/Arcane/GatheringSpeed) + placement gate. | data |
-| `SpecialAbility`/`EmpowermentAbility` (enums) | `Data/SpecialAbility.cs` | Per-upgrade passive + max-level empowerment (ManaSurge/GlacialCore/EternalEmber/TrueAim). | data |
-| `TacticalData` (SO) + `EnemyArchetype` | `Data/TacticalData.cs` | DEF-72/WO-145 per-archetype tactical AI (flank/retreat/suppress/target-scoring/kiting/reposition). Archetypes Standard/Flanker/Siege/Flyer/Support/Boss/Kiter. | data |
-| `TowerData` (SO) + `TowerTargets`/`TowerUpgrade`/`TowerEmpowermentData` | `Data/TowerData.cs` | DEF-73/74 tower type + 3-level upgrade chain + targeting matrix `CanTarget(targets,layer)`. No prefab field (visuals from upgrades). | data |
-| `GarrisonRecipe`/`GarrisonRecipeCatalog` | (in World/, namespace `DeNelle.Core.World`) | see World section. | — |
-
----
-
-## Progression/ (`DeNelle.Core.Progression`)
-
-| Type | Path | Responsibility | Bootstrap |
-|---|---|---|---|
-| `SkillSystem` (MonoBehaviour, singleton) | `Progression/SkillSystem.cs` | Craft-skill levels (Blacksmith/Woodworking/Arcane/GatheringSpeed, start 0, 2 free points). `HasRequiredSkill/GrantPoints/SetLevel/GrantSkillPoint/SpendPoint/GetSkillLevel`. `OnSkillsChanged`. | `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)] Bootstrap` |
-| `IXpEarner` | `Progression/IXpEarner.cs` | `EarnerId/WorldPosition/Level/AddXp`. Hero+pet shared kill-XP. | — |
-| `XpEarnerRegistry` (static) | `Progression/XpEarnerRegistry.cs` | id→IXpEarner map. `Register/Unregister/TryGet`. | — |
+| Type | Path | Verified essentials |
+|---|---|---|
+| `JobKind` (enum) | `Jobs/JobKind.cs:32–56` | 11 kinds 0–10: Build/Upgrade/Repair/UnlockTier/LearnMagic/TrainTroop/TowerBuild/TowerUpgrade/WallUpgrade/**BarracksUpgrade=9**/**TroopUpgrade=10** (WO-771.9). |
+| `ChannelId` (enum) | `Jobs/JobKind.cs:63–71` | Builder=0 / Train=1 / Research=2 — channels NEVER share slots. |
+| `JobChannels.DefaultChannel` | `Jobs/JobKind.cs:81–94` | TrainTroop→Train; UnlockTier/LearnMagic/**TroopUpgrade**→Research; rest→Builder. |
+| `ChannelState` | `Jobs/ObsidianQueueState.cs:33–54` | `BoughtSlots` + `ActiveJobs` (StartMs>0) + FIFO `PendingQueue` (StartMs=0) + `Count` + `EnsureLists`. SlotCount is DERIVED at runtime (config free slots + BoughtSlots) — never persisted. |
+| `ObsidianQueueState` | `Jobs/ObsidianQueueState.cs:61–89` | `Channels` dict keyed ChannelId (enum-name on wire); `Channel(id)` create-on-demand never-null; `Empty()` seeds all three. |
+| `ObsidianQueueEngine` (static, PURE) | `Jobs/ObsidianQueueEngine.cs` | No MonoBehaviour/statics/clock — takes ChannelState + slotCount + explicit nowMs (headless unit-testable). `Enqueue :43` (start iff slot free, else FIFO tail); `Resolve :65` — completes due jobs earliest-finish-first, **auto-pull starts the next job AT the freed slot's FinishMs (not now, `:111`) so offline chains resolve back-to-back in one call**; pending (StartMs≤0) never completes; 100000-iteration guard; `PullIntoFreeSlots :122`. Effects are the caller's job (BuildTimerService). |
+| `IJobEffect` / `JobEffectRegistry` | `Jobs/IJobEffect.cs` | Per-kind completion handler seam (`:32`); registry `Register :51` (last wins) / `Has :59` / `Apply :66` (Guard-wrapped; unregistered kind = safe no-op — Build/Upgrade use their pre-existing seams and never double-apply). |
 
 ---
 
 ## Quests/ (`DeNelle.Core.Quests`)
 
-| Type | Path | Responsibility | Bootstrap |
-|---|---|---|---|
-| `DailyQuestService` (MonoBehaviour, singleton) + DTOs (`DailyQuestTemplate`/`DailyQuestSlotReward`/`DailyQuestCatalogData`/`DailyQuestInstance`/`DailyQuestSet`) + `DailyQuestCatalog` (static) | `Quests/DailyQuests.cs` | 3-slot daily quests (combat/exploration/wildcard). PlayerPrefs per-day. `Report/Reroll/ForceRollToday`, `QuestCompleted` event (Village reward bridge). Day-1 guaranteed build-towers quest. `FeatureShipped` gates several as NOT-shipped (harvesting/tower-build/cosmetic-shop/hero-talents). | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` |
-| `QuestService` (MonoBehaviour, singleton) | `Quests/QuestService.cs` | Story quests → GameState.Quests (syncs w/ save). `StartQuest/AdvanceQuest/CompleteQuest/GetStage/SetFlag/HasFlag/GiveKeystone`, `RewardEarned` event (Village grants). | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` |
-| `QuestCatalog` (static) + DTOs (`QuestReward`/`QuestStage`/`QuestDef`/`QuestCatalogData`) | `Quests/QuestCatalog.cs` | Story-quest loader (`quests.json` via CanonicalJson). `Quests/FindQuest/Stages/Reload`. | — |
+| Type | Path | Verified essentials |
+|---|---|---|
+| `DailyQuestCatalog` (static) + DTOs | `Quests/DailyQuests.cs` (425L) | Loader over `Data/Canonical/daily-quests.json` (`:75`) via CanonicalJson (WebGL-safe, `:109–115`). DTOs: template (id/slot/target/weight/requiresHero/requiresFeature/`day1Guaranteed :44`), slot rewards, knobs (slotCount 3, 1 free reroll, 50-crystal reroll, max 3). |
+| `DailyQuestService` (MonoBehaviour singleton) | same file | 3-slot daily roll, PlayerPrefs per-day (`dotr-daily-quests-v1`), `Report/Reroll/ForceRollToday`, `QuestCompleted` event; Day-1 guaranteed build-towers force-select (`:341–346`). **`FeatureShipped` (`:382–394`) now returns `true` for EVERY branch including `_ =>` — the FLAG-6 stale gate was fixed; the `requiresFeature` filter is currently vacuous (dead gate).** Bootstrap `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`. |
+| `QuestService` (MonoBehaviour singleton) | `Quests/QuestService.cs` | Story quests → `GameState.Quests` (save-synced). `StartQuest/AdvanceQuest/CompleteQuest/GetStage/SetFlag/HasFlag/GiveKeystone`, `RewardEarned` event. BeforeSceneLoad bootstrap. |
+| `QuestCatalog` (static) + DTOs | `Quests/QuestCatalog.cs` | `quests.json` loader via CanonicalJson. `Quests/FindQuest/Stages/Reload`. |
 
 ---
 
-## Services/ (`DeNelle.Core.Services`)
+## World/ (`DeNelle.Core.World`)
 
-| Type | Path | Responsibility | Bootstrap | Status |
-|---|---|---|---|---|
-| `ClanService` (MonoBehaviour, singleton) + `ClanRole`/`ClanMember`/`ChatMessage`/`ClanState` | `Services/ClanService.cs` | Local-only clan + team-chat stub (PlayerPrefs). `CreateClan/LeaveClan/AddTemplatedMessage/AddCustomMessage`. Ring buffer 100, 140-char custom cap. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` | LIVE stub (no backend) |
-| `ChatPhraseCatalog` (static) + DTOs | `Services/ChatPhraseCatalog.cs` | `chat-phrases.json` loader via CanonicalJson. `FindPhrase/TextFor/PhrasesByCategory`. | — | LIVE |
-| `LeaderboardService` (MonoBehaviour, singleton) + `LeaderboardMetric`/`LeaderboardEntry`/`PlayerProfile`/`ILeaderboardSource`/`LocalStubLeaderboardSource` | `Services/LeaderboardService.cs` | Pluggable leaderboard; default `LocalStubLeaderboardSource` (real local profile from GameState + sample rivals, honest IsLocalStub). `FetchTopAsync/GetLocalProfile/SubmitLocalAsync/SetSource`. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` | LIVE stub (drop-in remote later) |
+| Type | Path | Verified essentials |
+|---|---|---|
+| `ZoneManager` (static) | `World/ZoneManager.cs` (210L) | THE region classifier. **Home-zone half-extents are now `VillageHalfX = VillageHalfZ = 52f` (`:41–42`)** — resized 2026-07-26 from the stale 42/33 Village.unity footprint to contain the merged castle (walls ±44, gates ±50); any doc still citing 42/33 is stale. `GetZone :56` (inside box = Village; else dominant normalized axis: +X Goldfields · −X Stoneback · +Z Ashwood · −Z Mirewood); `Regions` table w/ danger tiers 0–4 (`:45–53`); `ZoneAt :82`; `DangerTierAt :92`; `Depth :127` (overrun/`RegionDepthSpan 220` `:108`); `ThreatLevel :148` = 5×tier + round(4×depth) (`:112–116`); `DefaultZoneGraph :168` (5 ZoneStates, Village hub); `DefaultDestination :201` (tier≤1 City, ≥3 Horde). Hot path throttle-traced (`:60`). |
+| `RealmMapCatalog` (static) + `RealmMapPoint`/`RealmRegionGate`/`RealmClearReward`/`HomeBaseDef`/`RealmRegionDef`/`RealmMapData` | `World/RealmMapCatalog.cs` (199L) | **WO-826** typed loader over dual-copy `Data/Canonical/realm-map.json` (`RelativePath :118`) — THE single source for the Realm Map (WO-825 boot rule: never author a second region list in C#). Gate = discriminated union on `kind` (`"bestWave"` reads Value, `"regionCleared"` reads RegionId; consts `:56–58`). Regions sorted by mapOrder (`:171`); `Home :124` / `Regions :128` / `Find :132` / `TitleFor :142` / `Reload :153`. Guard-wrapped parse; absent file → FlowTrace.Fail + EMPTY catalog (home-only render, never throws, `:183–185`). Region STATE derived at runtime from RegionProgress (WO-827 ledger pending). |
+| `RegionId`/`RegionZone`/`NodeType`/`ZoneState` | `World/RegionZone.cs` | Region enum (append-never-renumber), static facts, persisted ZoneState. |
+| `RegionSpawnTable` (static) | `World/RegionSpawnTable.cs` | WO-155 region→enemy roster, depth-banded weighted pick; `HasRoster` false only in the Village box (the safe-zone read). |
+| `GameClock` (static) | `World/GameClock.cs` (61L) | `CurrentDay()` from PlayerPrefs epoch `dotr-gameclock-epoch`; self-flagged stopgap. |
+| `CrystalGrade`/`CrystalRegion` | `World/CrystalGrade.cs` | Grade enum + `TopGradeFor(dangerTier)`. |
+| `WardStoneDef/State/WardReach` | `World/WardContent.cs` | WO-112 ward-tether reach math. Persisted since v34. |
+| `TribeDef/State`, `SettlementPhase/State`, `WorldPoint` | `World/WorldContent.cs` | WO-159/160 settlements + tribes. Persisted (v21/v34). |
+| `SceneLink` / `ISceneLinkResolver` | `World/SceneLink.cs` / `ISceneLinkResolver.cs` | WO1 data-driven scene-crossing model + the Core contract behind `CoreServices.SceneLinkResolver`. |
+| `SpawnAreaTable` (static) | `World/SpawnAreaTable.cs` (291L) | WO-606 geotagged spawn AREAS as queryable data. |
+| `IHarvestSource` | `World/IHarvestSource.cs` | WO-656 registered harvest-faucet contract (CoC collector spine). |
+
+(Note: `GarrisonRecipe.cs` + `GarrisonRecipeCatalog.cs` now live under `Data/` but KEEP namespace
+`DeNelle.Core.World` — folder≠namespace, verified `Data/GarrisonRecipe.cs:23`.)
 
 ---
 
-## Analytics / Promo / Referral
+## Catalog/ (`DeNelle.Core.Catalog`) — build-system data model
 
-| Type | Path | Responsibility | Bootstrap | Status |
-|---|---|---|---|---|
-| `EventTracker` (MonoBehaviour, singleton, `[DisallowMultipleComponent]`) | `Analytics/EventTracker.cs` | Batched analytics → `/api/events/track`. Offline queue (PlayerPrefs, cap 200), retry w/ backoff, circuit breaker. `Track(name,props)` static. Fires session_start. | `EnsureExists()` from GameStateService.Awake | LIVE (backend undeployed → circuit opens harmlessly) |
-| `PromoCodeService` (MonoBehaviour, singleton) + `PromoReward` | `Promo/PromoCodeService.cs` | Promo redemption → `/api/promo/redeem`. Local dedup (PlayerPrefs). Awards via GameState.Resources. `RedeemAsync`, `OnRedeemed/OnRedeemFailed`. | `EnsureExists()` | LIVE (needs live backend) |
-| `PromoCodeUI` (MonoBehaviour, singleton) | `Promo/PromoCodeUI.cs` | **UI-Toolkit (UIDocument)** promo entry panel. `Open()`. | scene `_document` | FLAG: UXML/UIDocument doesn't render in player builds (PIPELINE §8) |
-| `ReferralService` (MonoBehaviour, singleton) | `Referral/ReferralService.cs` | Referral generate/share/claim → `/api/referral/*`. X-share. Awards via `AddCrystals`. `EnsureCodeAsync/ShareOnX/ClaimAsync`. | `EnsureExists()` | LIVE (needs live backend) |
-| `InviteFriendsUI` (MonoBehaviour, singleton) | `Referral/InviteFriendsUI.cs` | **UI-Toolkit (UIDocument)** referral panel. `Open()`. | scene `_document` | FLAG: same UXML-in-build risk |
+| Type | Path | Verified essentials |
+|---|---|---|
+| `CatalogEntry` + `CellPlacement` + `OrientationFix` | `Catalog/CatalogEntry.cs` (125L) | id/displayName/type/kind, `visualPrefabPath` (LOOK `:37`), **`visualTexturePath`** (forced albedo for texture-lost Tripo FBX, `:50`), `repo` (BEHAVIOR `:53`), `composite :56`, `orientation :66` — only `manual=true` fixes applied; `OrientationFix.EffectiveScale` = uniform × per-axis, forced positive (`:100–111`). |
+| `CatalogRegistry` (static) | `Catalog/CatalogRegistry.cs` (87L) | id+type registry: `Register :20` (replace logs Warn), `Get :43`, **`ResolveUpgradeId :55`** (collector id → bare `collectorBuildingId` so upgrade ladder agrees with placement), `OfType :63`, `Count :68`, `All() :73` (snapshot — StructureSingleton EnforceAll sweep), `Clear :81`. |
+| `RepoProps` + `ResourceCost` | `Catalog/RepoProps.cs` (246L) | BEHAVIOR half. `navSurface :36`, `buildCost :45` (crystals fallback), `cost :54` (multi-resource wins when non-zero), `maxLevel :62`, `upgradeCost :73`, `upgradeVisualPath :86`, `upgradeTexturePath :101` (WO-719 per-tier forced albedo), `behaviorId :104`, `collectorBuildingId :114`, `singleton :123`, **`bakedTwins :133`** (legacy baked scene-root names that REPRESENT the row — singleton twin standdown/resurface + IsBuilt with zero code), **`npcModel :145`** (WO-818, catalog **v6**: KayKit NPC body slug, resolved `Resources/NPCs/KayKit/<slug>` first → People-pack chain → capsule; OWNER-ONLY creative pick, a swap is a one-word JSON retag), `storageCapacity :155` + `storageResource :163` + `IsStorageContainer :174` (WO-707: containers-only are raid targets — TODO seam noted at `:169`), `capacity :188` (collector reserve, designer-tunable), `placement :191`, **`heightMul :203`** (WO-764 multiplier vs the ONE global 4m base — SUPERSEDES `visualHeight :212`, deprecated + no longer read), combat stats `:215–224` (range/damage/fireRate/canHitAir/**airOnly** anti-air specialist `:223`/element), `projectileStyle :235` ("pellet"/"bolt"/"spell", visual only), AoE `:242–244`. |
+| `CatalogType`/`EntryKind`/`NavSurfaceKind`/`PlacementSurface` | `Catalog/CatalogType.cs` | Taxonomy enums. |
+| `PlacementRules` | `Catalog/PlacementRules.cs` | Declarative placement conditions. |
+| `BuildTimerConfig` (SO) + `BuildJobKind` | `Catalog/BuildTimerConfig.cs` | WO-172 timer tuning SO (`Economy/BuildTimerConfig`, code-default fallback); its `freeBuildSlots` + `ChannelState.BoughtSlots` derive the Obsidian slot count. |
 
 ---
 
 ## UI/ (`DeNelle.Core.UI`)
 
-| Type | Path | Responsibility | Notes |
-|---|---|---|---|
-| `ElarionUi` (static) | `UI/ElarionUi.cs` | THE in-game UI palette + UI-Toolkit inline-style helpers + swappable panel/menu bg hook (Resources/UI/panel_bg, menu_bg). Shared by HUD(uGUI)+Village(UIElements). | LIVE theme |
-| `ElarionUiKit` (static) | `UI/ElarionUiKit.cs` | Code-built uGUI coherence kit (modal/panel/frame builders, WebGL-safe rounded sprite). Additive — older surfaces unchanged. | LIVE |
-| `PanelManager` (static) + `PanelHandle` | `UI/PanelManager.cs` | DEF-212 one-modal-at-a-time arbiter. `NotifyOpened/NotifyClosed/AnyOpen`. Pure static, no scene object. | LIVE |
-| `PanelRouter` (static) + `PanelId` | `UI/PanelRouter.cs` | DEF-213 reflection-free named-panel open registry (Village opens HUD panels). `Open(PanelId)`. Replaces fragile reflection. | LIVE |
-| `AddressableUIManager` (MonoBehaviour, singleton) | `UI/AddressableUIManager.cs` | Async UI prefab load/unload via Addressables (UI-Core/Debug/Menus/Tower labels). `ShowAsync/Hide`. | LIVE (needs Addressables groups authored) |
-| `PortraitLockOverlay` (MonoBehaviour) | `UI/PortraitLockOverlay.cs` | "Rotate to portrait" landscape gate. Code-built uGUI, max sortingOrder. | `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` self-bootstrap |
-| `RpgUiCatalog` (static) | `UI/RpgUiCatalog.cs` | WebGL-safe RPG-UI sprite-pack accessor (Resources/RpgUi/<role>). Sprite-or-null contract. Role/name consts (RolePanel/RoleSlot/RoleIcons…, PanelWindowDark/SlotItem/ButtonGold…). | LIVE (sprites mirrored in by `BlinkUiImporter`; null-safe until present) |
-| `ConceptIconResolver` (static) | `UI/ConceptIconResolver.cs` | Data-driven icon resolver: concept id → sprite via `Resources/Data/Canonical/concept-icons.json`. `Resolve`/`ResolveAny`/`ResolveOverride`. Sprite-or-null (caller keeps glyph fallback). | LIVE |
-| `ShopTheme` (static) | `UI/ShopTheme.cs` | WO-175 shared shop palette + UI-Toolkit helpers (CosmeticShop + PackStore). NOTE: a DUPLICATE of `ElarionUi`'s palette (aliases the same colours) — slated to fold into the `UiStyle` authority (Obsidian spec §6.1). | LIVE theme |
-| `IPanelView` / `IPanelViewModel` (interfaces) | `UI/Mvvm/IPanelView.cs`, `UI/Mvvm/IPanelViewModel.cs` | The strict-MVVM panel seam. View is a dumb skin (Bind/Unbind, renders from VM, routes input as commands); VM is View-agnostic (no UnityEngine UI types, `Title`/`Changed`/`Close`/`Dispose`, unit-testable). SAME VM binds our ElarionUiKit panel OR a Blink prefab. Implemented by `HeroSkillTreePanelMvvm`+`HeroSkillTreeVM`, `InventoryVM`, etc. (in `DeNelle.Village`). | LIVE (MVVM seam — supersedes the older HUD event-bridge+reflection pattern for new panels) |
-| `VillageLoadOverlay` (MonoBehaviour, sealed) | `UI/VillageLoadOverlay.cs` | Code-built uGUI village loading screen (spinner/progress/lore). `Show/HideAndDestroy/SetProgress`. Driven by SceneRouter. | LIVE |
+### PanelManager (static modal arbiter — `UI/PanelManager.cs`, 240L, DEF-212)
+- `PanelHandle` (`:40–57`): Close action + IsOpen probe + Name + **`BattleAllowed`** (WO-437).
+  `Register :83` (battleAllowed:false) / `RegisterBattleAllowed :94` (Battle HUD, Pause only).
+- `NotifyOpened` (`:104`): no-op on same handle; **battle-lock gate `:122`** — while
+  `BattleLock.IsInBattle()` a non-battle panel is REJECTED (its Close invoked, returns false — a
+  CONTRACT, not a failure); closes the previous panel; F8-15 `DeathTrace` window logging via
+  CallerInfo params (`:107–108,:116`); **WO-465 visibility verify `:168–184`** — asks the handle's
+  own IsOpen probe and FlowTrace.Fails the "recorded open but not visible" invisible-scrim class.
+- `NotifyClosed :194` (stale close ignored), `CloseAll :212` (WO-611 hostile-posture sole ownership,
+  bounded 32), `CloseOpen :223`, `AnyOpen :73`, `OpenPanelName :76`, `OpenStateChanged :70`.
+
+### PanelRouter (static open registry — `UI/PanelRouter.cs`, 327L, DEF-213)
+- `PanelId` (`:37–93`), stable values: `HeroTalents=0` **RETIRED** (kept for default(PanelId)),
+  `Crafting=1`, `BuildingUpgrade=2`, `CosmeticShop=3`, *(4 retired — pet skill tree deleted)*,
+  `PartyShop=5`, `RumorBoard=6`, `HeroSkillTree=7`, `HeroLoadout=8`, `ConsumableCrafting=9`,
+  `JewelerCrafting=10`, `EquipmentPanel=11`, `GameGuide=12`, `RealmStore=13`, `Inventory=14`,
+  **`RealmMap=15`** (`:92` — WO-826 parchment overworld, registered scene-independently by
+  RealmMapPanel; travel a disabled stub until WO-827).
+- Three opener maps: plain `Action` (`:104`), context `Action<string>` (DEF-186 `:114`),
+  subject+mode `Action<string,string>` (`:123`). Register/Unregister per arity (`:131–195`,
+  unregister only removes the exact delegate).
+- `Open(id)` `:224` → Guard-wrapped invoke → **`VerifyOpenedVisible :248`**: PanelManager must record a
+  panel open afterwards; battle-lock refusal is Warned as the WO-437 contract (`:259–264`), anything
+  else Fails as invisible-scrim; success raises `PanelOpened` event (`:201`, WO-T1 tutorial signal
+  "panel.opened:<id>"). `Open(id, ctx)` `:284` and `Open(id, ctx, mode)` `:311` fall back down the arity chain.
+
+### ElarionUiKit (static, partial — surface only; details are HUD-lane canon)
+`UI/ElarionUiKit.cs` (3204L) + partials `ElarionUiKitObsidian.cs` (2565L, Obsidian widget family —
+single writer = Kit/Factory team), `ElarionUiKitConformance.cs` (WO-714 shared primitives),
+`ElarionUiKitDetailCard.cs` (WO-693 parchment detail card), `ElarionUiKitNameplate.cs` (party HP/MP plate).
+Public surface (line refs in ElarionUiKit.cs): `BuildModalCanvas :96`, `Scrim :120`, `Panel :142`,
+`BuildObsidianPanel :514`, `BuildObsidianModal :812`, `ObsidianCloseButton :839`, `PinCanonicalCtaSize :871`,
+`ClampMinTouch :919`, `BuildConfirmModal :1204`, `Header :1247`, `Button :1297`, `TechPrimaryButton :1372`,
+`Slot :1483`, `Card :1549`, rarity helpers `:1659–1710`, `Bar :1797`, `Portrait :1934`, `PartyFrameRow :2063`,
+`BuildSlideTab :2424`, `BuildCompass :2521`, `BuildVirtualDPad :2637`, `BuildAttackPill :2918`,
+`AddSoftCooldownGlow :3034`, `BuildActionBarHousing :3060`, `BuildLockCrosshairBadge :3158`. Decorative
+chrome is gated by `FeatureFlags.BlinkChrome`.
+
+### Other UI/ files (one line each)
+
+| Type | Path (lines) | Purpose |
+|---|---|---|
+| `UiStyle` (static) | `UI/UiStyle.cs` (355L) | THE one style authority every dumb View pulls tokens from. |
+| `ElarionUi` (static) | `UI/ElarionUi.cs` (409L) | Legacy shared palette + UI-Toolkit inline-style helpers (predates UiStyle). |
+| `ShopTheme` (static) | `UI/ShopTheme.cs` (443L) | WO-175 shop palette (CosmeticShop + PackStore) — duplicate of the palette, slated to fold into UiStyle. |
+| `RpgUiCatalog` (static) | `UI/RpgUiCatalog.cs` (355L) | WebGL-safe sprite-pack accessor `Resources/RpgUi/<role>`; sprite-or-null. |
+| `ConceptIconResolver` (static) | `UI/ConceptIconResolver.cs` (236L) | concept id → sprite via `concept-icons.json`; sprite-or-null. |
+| `CombatTextLayer` | `UI/CombatTextLayer.cs` (222L) | Pooled, capped, non-stacking combat stamps (single writer). |
+| `HudCommands` (static) | `HUD/HudCommands.cs` (124L) | Core command sink HUD-kit → Village handlers (HUD_OBSIDIAN A4). |
+| `HudBuildingFocus` (static) | `UI/HudBuildingFocus.cs` | Cross-assembly "hero near upgradable building" proximity signal. |
+| `HarvestPanelGate` / `ObsidianQueueGate` / `PauseGate` / `RaidEntryGate` (statics) | `UI/*Gate.cs` | Core open/close seams: Echo harvest panel · work-queue panel (WO-773) · back/pause · **RaidEntryGate** (F8 2026-07-30: HudKit "Raids" button → Village raid selection). |
+| `LoadingOverlay` | `UI/LoadingOverlay.cs` (211L) | Reusable code-built loading screen (Load Default / Design My Own delay). |
+| `VillageLoadOverlay` | `UI/VillageLoadOverlay.cs` (265L) | Village-specific loader (spinner/progress/lore) driven by SceneRouter. |
+| `ObjectiveBannerUi` | `UI/ObjectiveBannerUi.cs` (283L) | WO-T2 one-line objective strip (kit language). |
+| `UiSpotlight` / `TutorialHighlightRegistry` / `UiKitTween` | `UI/*.cs` | WO-T2 dim+cutout spotlight · stable-id spotlight-target registry · the kit's one tween runner. |
+| `SkrShowcasePanel` / `StakeRewardsPanel` | `UI/*.cs` | Grant-preview branding panel (ff.skrpreview) · read-only stake→rewards display (both no-wallet, presentation only). |
+| `AddressableUIManager` (MonoBehaviour singleton) | `UI/AddressableUIManager.cs` (244L) | Async UI prefab load/unload via Addressables (UI-Core/Debug/Menus/Tower labels). |
+| MVVM seam: `IPanelView`/`IPanelViewModel` + `BarVM`/`CraftRecipeVM`/`ItemVM`/`SlotVM`/`StakeRewardsVM`/`WalletVM` | `UI/Mvvm/*` | Strict-MVVM panel contracts (View = dumb skin; VM = no UnityEngine UI types) + shared VM records. |
+| `ElarionUiKitDemo` | `UI/ElarionUiKitDemo.cs` (334L) | P1 kit demo overlay (acceptance surface). |
+
+(**Removed since the old catalog:** `PortraitLockOverlay` — file no longer exists.)
 
 ---
 
-## VFX / Debug / Diagnostics / Validation / Addressables / Scripts/AI
+## SceneRouter (`SceneRouter.cs`, 680L)
 
-| Type | Path | Responsibility | Bootstrap | Notes |
-|---|---|---|---|---|
-| `Hud` (static) | `VFX/Hud.cs` | Reusable "draw attention" API. `Focus(target)/Unfocus`. (namespace `DeNelle.Core`) | — | LIVE |
-| `AttentionGlow` (MonoBehaviour, sealed, `[RequireComponent(LineRenderer)]`) | `VFX/AttentionGlow.cs` | Scrolling-glow square frame around a target. `Attach`. Driven by Hud only. | — | LIVE |
-| `DebugCanvasUI` (MonoBehaviour, sealed) | `Debug/DebugCanvasUI.cs` | F12 playtest overlay (wallet bind/sync/state). **namespace `DeNelle.Core.DevOverlay`** (NOT `.Debug`). | scene-wired | Editor/dev only |
-| `BreakCaptureHarness` (MonoBehaviour, sealed) | `Diagnostics/BreakCaptureHarness.cs` | Always-on flight recorder: errors/softlocks/scene-transitions → break-log.jsonl + screenshots + EventTracker. Reentrancy-guarded. `using Debug = UnityEngine.Debug`. | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] Install` | LIVE (zero-setup) |
-| `OrientationValidator` (static) | `Validation/OrientationValidator.cs` | WO-363 pure facing-matches-input rule (XZ, 30° tolerance). | — | logic |
-| `OrientationGuard` (MonoBehaviour, sealed, `[DisallowMultipleComponent]`) | `Validation/OrientationGuard.cs` | Opt-in per-character runtime guard (logs GATE-FAILED). Inert unless `_enabled` + `ORIENTATION_GATE` define. | per-object | dormant by default |
-| `AddressablesGroupConfigBase` (+concrete) (SO) | `Addressables/AddressablesGroupConfig.cs` | Typed AssetReference registry SOs. **namespace `DeNelle.Core.AssetDelivery`** (NOT `.Addressables`). | — | data |
-| `AddressablesMemoryProfiler` (MonoBehaviour, sealed) | `Addressables/AddressablesMemoryProfiler.cs` | Handle-leak tracker (TrackHandle/UntrackHandle/HandleCount/GetReport). namespace `DeNelle.Core.AssetDelivery`. | scene | dev tool |
-| `SkinController` (MonoBehaviour) | `Addressables/SkinController.cs` | Async Addressables skin loader per slot (Material/Texture/GameObject/Mesh). `ApplySkinAsync/RemoveSkin`. namespace `DeNelle.Core.AssetDelivery`. | per-object | LIVE |
-| `BTNode`/`Selector`/`Sequence`/`ActionNode`/`Condition` | `Scripts/AI/*.cs` | DEF-43 lightweight behaviour-tree primitives. **Assembly `DeNelle.AI`, namespace `DeNelle.AI`** (separate asmdef). | — | logic |
-
----
-
-## Web3/ (`DeNelle.Core.Web3`)
-
-| Type | Path | Responsibility | Notes |
-|---|---|---|---|
-| `IJupiterService` + `SwapQuote`/`SwapInputToken` | `Web3/IJupiterService.cs` | Jupiter swap-panel contract. `OpenSwapPanel/CloseSwapPanel/GetQuoteAsync`. Impl: Web3.JupiterSwapService. Devnet-gated, no real swap signed. | interface |
-| `IWalletSigner` | `Web3/IWalletSigner.cs` | WO-121 ed25519 message signer. `CanSign/WalletAddress/SignMessageBase58`. Impl: Wallet.WalletService. Stub can't sign. | interface |
-
----
-
-## Audio / HUD interfaces
-
-| Type | Path | Responsibility | Notes |
-|---|---|---|---|
-| `IAudioService` | `Audio/IAudioService.cs` | `PlaySfx/PlayMusic/PlayUiClick`. Impl: Audio.AudioService via CoreServices.Audio. | interface |
-| `MusicTrack` (enum) | `Audio/MusicTrack.cs` | Village/Battle/Victory/Dungeon/Overworld/Defeat/Title/Arena (append-only indices). | data |
-| `IVillageHud` | `HUD/IVillageHud.cs` | Passive HUD contract: SetWave/SetCountdown/SetHeartHp/SetCrystals/SetResources/SetAttackDirections/SetWaveImminent/ShowWaveClearBanner/ShowRepairPrompt/SetForgettingLevel/SetWardsReadout. Impl: VillageHudController via CoreServices.Hud. | interface |
+- Consts: `Title`, `HeroSelect`, `PetSelect`, `Village = "Village2"` (`:135`), `ATBBattle :154`,
+  `PatriciaLight = "PatriciaLightMode"` (`:164`, DEAD — DTT removed), 3 raid consts
+  `RaidBase_raider_camp_small` / `RaidBase_fortified_garrison` / `RaidBase_mage_enclave` (`:173–177`),
+  7 dungeon consts (`:180–186`, only HealersCottage + FolksGranary are real scenes), `Dungeon(id) :195`.
+- **`Castle` is a PROPERTY (`:150–152`)**: `FeatureFlags.MergedWorld ? "Main_Castle_Overworld" : "MainCastle_Hall"` —
+  MergedWorld defaults ON, so the live home hub is the merged scene.
+- `LoadScene :213` (sync; aborts + logs on unregistered scene; saves first) / `LoadSceneWithFade :238`
+  (UniTask; **WO-769: `SaveBeforeSceneChange` failure is caught and never blocks the load `:260–266`**).
+- **Return-point feature** (`:299–401, :599–642`): `GoBattle :567` stashes scene + hero pose on static
+  `Return :588`; `ArmReturnPointRestore :299` one-shot sceneLoaded handler (detach-before-attach de-dupe
+  `:309`); restore warps via reflected `HeroLocomotion.WarpTo(Vector3, Quaternion?)` (`:350–357`) —
+  Core never references Village; transform fallback at `:363`.
+- `GoTitle/GoHeroSelect/GoPetSelect :408–420`; `GoVillage :428` → `LoadVillageWithLoader :470`
+  (VillageLoadOverlay + async progress + `SeatTreeOfLifeRootsUnderground :532` planting the decorative
+  tree at (0,−0.25,0) — the gameplay Heart anchor stays (0,0,0)); `GoCastle :437` (fade to `Castle`);
+  **`GoRaid(sceneName) :456`** — the raid V1 entry: fade-load a `RaidBase_*` scene, name-only contract
+  (no RaidParams/loadout hand-off; unregistered names rejected by LoadSceneWithFade);
+  `GoDungeon :560`; `GoBattle :567` + `PendingBattle :581`; `GoPatriciaLight :651` + params (DEAD path).
+- `BattleParams` (`:50–78`) incl. `ReturnScene` + WO-770.3 `LastOutcome` (`BattleResultKind :46` — Core
+  mirror so the dungeon can read Victory/Defeat without a BattleATB ref); `ReturnPoint :90`;
+  `ISceneFader :672` (set by Core bootstrap).
 
 ---
 
-## Tests/ (`DeNelle.Core.Tests`, Editor-only)
+## Diagnostics/ (`DeNelle.Core.Diagnostics`)
 
-`SaveLoadRoundTripTest` (round-trip + simulated restart), `ResetCarveOutTest` (ResetToNewGame preserves wallet/breachStyle/social), `SaveMigratorTest` (migration step chain + version gate — note: header says v1→v10, schema is now v33), `SaveSchemaValidateTest` (NaN/Inf reject + clamps), `TestSupport` (SpawnService/ClearSave/MakeRichState/WriteSaveFile via reflection). asmdef refs DeNelle.Core + **DeNelle.Data** (note: not DeNelle.Core.Data namespace — a separate `DeNelle.Data` asmdef).
-
----
-
-## DATA / JSON (loaded by Core, dual-copy contract)
-
-Core loaders read canonical JSON via `CanonicalJson.Read` (Resources/Data/Canonical/*.json wins, StreamingAssets/Data/Canonical/*.json fallback — **keep both in sync**):
-- `quests.json` (QuestCatalog) — story quest defs {version, quests[]: id/title/stages[]}
-- `daily-quests.json` (DailyQuestCatalog) — {version, slotCount, reroll knobs, slots[], templates[]}
-- `chat-phrases.json` (ChatPhraseCatalog) — {version, categories[], phrases[]}
-- `garrison-recipes.json` (GarrisonRecipeCatalog) — {recipes[]: id/kind/size/theme/enemies/levelRange/...}
-- `themes.json` (Theme) — {default:"midnight-luxe", themes:{key→ {name/radius/font/colors HSL}}}
-- generic tables via `DataInjector.Inject<T>(path)` (weapons/waves/etc. — owned by other modules)
-
-PlayerPrefs keys owned/read by Core: `dotr-save` (GameState), `dotr-sync-queue` (backend delta), `dotr-event-queue` (analytics), `dotr-daily-quests-v1` + `dotr-daily-quests-day1-done-v1`, `dotr-clans-v1` + `dotr-account-id-v1`, `dotr-redeemed-promos`, `dotr-referral-*`, `dotr-gameclock-epoch`, `realm-defenders-settings` (legacy, read+deleted by migrator v9), `onboarding.fullTutorial`.
+| Type | Path | Verified essentials |
+|---|---|---|
+| `FlowTrace` (static) | `Diagnostics/FlowTrace.cs` (415L) | **`Enabled` defaults `Application.isEditor \|\| Debug.isDebugBuild`** (`:28`) — a release player ships tracing OFF (PII); WebTrace flips it on for web sessions. Pluggable `Sink` (`:42`, never null, default `UnityLogSink :409`); per-category `Only/Mute/AllOn` (`:67–95`) behind `s_traceLock` (`:64`, lock taken only after the !Enabled early-out); `Step :139` / `Warn :147` / `Fail :151` (all `[Flow:<system>]`-tagged + depth-indented via `[ThreadStatic] s_depth :115`, capped visual depth 24 `:122`); `Throttle :163`; `Once :180`; `ResetSession :191`; `Measure :209` (budget-warn scope); `Enter :249` (`FlowScope` →/← with ms); `Try :288/:298` (always LogErrors independent of Enabled); **`Configure(TraceConfig) :328`** — runtime-reversible enable/sink/URL/filters (web sink = `WebTraceSink`, retargetable, flushed on swap-down); `TraceConfig :373`; `ITraceSink :397`. |
+| `Guard` (static) | `Diagnostics/Guard.cs` (94L) | Error factory: `Try :29` (bool), `Try<T> :48` (fallback), `TryEach :67` ((built,failed) per-item). **`Report :80` logs DIRECTLY via `Debug.LogError`, deliberately NOT FlowTrace.Fail** (survives FlowTrace strip; includes full `ex.StackTrace` innermost-first). |
+| `BreakCaptureHarness` (MonoBehaviour) | `Diagnostics/BreakCaptureHarness.cs` (836L) | Always-on flight recorder. Install `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] :102`; **early-outs on WebGL `:109`** (WebTrace covers web). Captures errors/exceptions/asserts, softlocks (**180s** no-move+no-progress, `:45`; input-suppression read from Village via cached reflection `:75–83`), scene transitions → `break-log.jsonl` + PNGs (cap 25/session `:51`) + `[BREAK]` console + EventTracker. **F8** flag key (`:87`) = owner subjective bug: clean-frame screenshot + optional typed note; flag PNGs carry a per-session UTC stamp (`:93`, evidence-loss fix). `Instance :61` lets the mobile `FlagCaptureButton` fire the same capture. Reentrancy-guarded, dedupes, never throws into gameplay. |
+| `WebTrace` (MonoBehaviour) | `Diagnostics/WebTrace.cs` (447L) | WO-443 WebGL remote log sink. **LIVE IN PROD — the header self-documents this (`:11–23`)**: `FeatureFlags.WebTrace` defaults ON and `TraceEndpoint` is the hardcoded prod URL `https://defenders-of-the-realm-v2.vercel.app/api/trace` (`:76`), so a shipped WebGL player streams `[Flow:*]` to Neon (`analytics_events`, event_name `web_trace`) by default; activation also flips `FlowTrace.Enabled=true`. Bounded ring 500 / flush 50-or-5s / 200-per-POST (`:80–83`). Remote POST is `#if UNITY_WEBGL && !UNITY_EDITOR` — clean no-op elsewhere. |
+| `WebTraceSink` | `Diagnostics/WebTraceSink.cs` (300L) | The SIBLING direct `ITraceSink` for `FlowTrace.Configure` (batches trace lines → configurable URL). WebTrace captures the whole Unity log; this one only FlowTrace output. |
+| `DeathTrace` (static) | `Diagnostics/DeathTrace.cs` (221L) | F8-15 hero-death forensic WINDOW: opened by HeroHealth at the lethal moment; PanelManager logs every screen open/close + opener while `Active`. |
+| `ScreenOpenWatchdog` | `Diagnostics/ScreenOpenWatchdog.cs` (164L) | `[Flow:ScreenOpen]` line whenever any registered modal becomes active (steady-state twin of DeathTrace). |
+| `PerfReporter` | `Diagnostics/PerfReporter.cs` (227L) | Self-reporting perf gauge riding `[Flow:Perf]` → web-trace pipeline (real device FPS/frame/memory). |
+| `PrivacySensitiveUi` (static) | `Diagnostics/PrivacySensitiveUi.cs` (112L) | WO-596 identity-widget opt-in registry; report captures hide registered widgets. |
+| `UICaptureMode` | `Diagnostics/UICaptureMode.cs` (663L) | Graphics-enabled UI screenshot harness (deterministic panel opens via PanelRouter) — the "headless fleet frames are blank" fix. |
+| `ArcaneTowerDiag` / `FloorDeepDiag` | `Diagnostics/*.cs` | Point diagnostics: white-arcane-tower disambiguator · MainCastle "pink floor" deep dump. Keep-while-unstable tools. |
 
 ---
 
-## FLAGS
+## Dialogue/ (`DeNelle.Core.Dialogue`) — OUR dialogue system (WO-455/WO-557; Yarn fully removed)
 
-### Stale comment vs. code
-1. **`SaveSchema.cs` header** (lines 11-13) says "CurrentVersion = 10, FileFormat = 1" — actual `CurrentVersion = 33` (FileFormat = 1 is still correct). The inline doc on the const IS up to date; the file banner is stale. (Also `SaveSchema.cs:209` calls PersistedState "the 41-field persisted payload" — now ~60 fields.)
-2. **`SaveMigrator.cs` header** describes "the migration chain v1 → v10 (nine stacked-if)" and "nine-step" — the chain now runs to **v33** (Steps 2-10,14,17,18,21-33 + several additive-default-on-read versions). Banner stale; the Steps dict + step XML are current.
-3. **`Theme.cs` header** (lines 13-19) says it loads via `Application.streamingAssetsPath` and that "spec Part 3 forbids Resources.Load" — the actual `EnsureLoaded()` (line 187) loads via `CanonicalJson.Read` (Resources-first, WebGL-safe). The header documents the OLD, abandoned loading approach.
-4. **`ResourceType.cs` header** maps `ResourceType.AetherCrystal → GameState.AetherCrystals` and `Food → GameState.Resources.Food` — but `GameState.AetherCrystals` is **DEPRECATED** (folded into `Resources.Crystals` as of save v18). The mapping comment points at a retired field.
-5. **`SaveMigratorTest` header** ("v1→v2 ... v9->v10", "nine-step") — stale like #2; the real chain now runs to v33 (test still validates the real chain but the doc count is wrong).
+| Type | Path | Verified essentials |
+|---|---|---|
+| `DialogueService` (static) | `Dialogue/DialogueService.cs` (107L) | The seam: Village registers `IDialogueCommandSink` + `IDialogueConditionSource` at boot (`:23–24`). `Play(id) :47` — catalog lookup → new VM → `Opened` (View builds/binds BEFORE first line) → `Started` → `vm.Begin`; **`PlayDef(def) :80`** runs a runtime code-built def through the same flow; `Stop :105` (synchronous, race-free); events `Opened :27`, `Started :32` / `Ended :34` (input-suppression pair), `EndedWithId :40` (WO-T1 tutorial "dialogue.ended:<id>"); `ActiveVm/IsRunning :42–43`. |
+| `DialogueModel` + `DialogueCatalog` | `Dialogue/DialogueModel.cs` (171L) | Node-graph data (nodes → lines/commands/options); `DialogueCatalog` loads **`Data/Canonical/dialogue/dialogues.json`** (`:114`) via CanonicalJson (one file holds the lot). |
+| `DialogueRunner` | `Dialogue/DialogueRunner.cs` (178L) | Plain C# state machine (no MonoBehaviour/async/codegen) — headless unit-testable; owns lifecycle (no Yarn "No node" race / teardown NRE). |
+| `DialogueViewModel` | `Dialogue/DialogueViewModel.cs` (161L) | MVVM VM: ALL state/logic incl. speaker/portrait projection; DialogueView is a dumb skin calling `Advance/Choose`. Locked by `Tests/DialogueViewModelTests.cs`. |
 
-### Folder ≠ namespace (intentional, per memory `core-namespace-shadows-unityengine-statics` — flagged so a reader isn't surprised, NOT a bug)
-- `Debug/DebugCanvasUI.cs` → namespace `DeNelle.Core.DevOverlay` (avoids a `DeNelle.Core.Debug` namespace shadowing `UnityEngine.Debug`).
-- `Addressables/*` (AddressablesGroupConfig/MemoryProfiler/SkinController) → namespace `DeNelle.Core.AssetDelivery` (avoids shadowing `UnityEngine.Addressables`).
-- `Data/CanonicalJson.cs` + `Data/DataInjector.cs` → namespace `DeNelle.Core` (not `.Data`).
-- `World/GarrisonRecipe*.cs` + `Data/...` split: garrison types live in `DeNelle.Core.World`, not `.Data`.
+---
 
-### Dead / stale scene references (DTT/PatriciaLight removed 2026-06-09 per PIPELINE_STATE)
-- `SceneRouter.PatriciaLight` const + `GoPatriciaLight` + `PendingPatriciaLight` + `PatriciaLightParams` — the "Defend the Tower" scene is **REMOVED**; these routing paths are DEAD (no live caller / scene not in build).
-- `PersistenceBridge._loadOnEnterScenes` includes `"PatriciaLight_TD"` — dead scene name (also note the name disagrees with SceneRouter's `"PatriciaLightMode"` const — they never matched).
-- `SceneRouter` dungeon consts (DungeonHealersCottage..DungeonApothecarysVault) — only HealersCottage ships; others are stubs (dungeon-stub-builder pattern).
+## Enemies/ (`DeNelle.Core.Enemies`) — WO-772 Phase 1 taxonomy + resolver
 
-### Redundant / duplicated
-- **Dual GameStateService bootstrap:** `GameStateBootstrap` (BeforeSceneLoad) AND `GameStateService.EnsureInstance` (AfterSceneLoad) both auto-spawn the singleton. Both guard on `Instance`, so harmless, but two mechanisms do one job.
-- **Two `ChatMessage` types:** `DeNelle.Core.State.ChatMessage` (NestedTypes, 1:1 mailbox) and `DeNelle.Core.Services.ChatMessage` (ClanService team-chat) — different namespaces, both valid, easy to confuse.
-- `AetherCrystals` exists in 3 places (GameState field, PersistedState `aetherCrystals`, SyncDelta) all DEPRECATED/zeroed post-v18 but retained for save back-compat (deliberate, documented).
+| Type | Path | Verified essentials |
+|---|---|---|
+| `EnemyTaxonomy` types | `Enemies/EnemyTaxonomy.cs` (146L) | `EnemyFaction :29–43` (HollowOnes=0 · **Wildlands=1 reserved stub, no members** · Boss=2); `EnemyEquipParts :52` (armor part keys + weapon prop key — Phase-1 SCHEMA only, nothing attaches yet); `EnemyClass :74` / `EnemyFamily :114` / `ResolvedEnemyModel :128`. Pure data, headless. |
+| `EnemyResolver` (static, pure) | `Enemies/EnemyResolver.cs` (344L) | THE id→family→class→distinct-model authority (fixes the generic-skeleton collapse), shared by wave loop + dungeons. `LintMarker "ENEMY_RESOLVER_OK" :42`. `KnownHollowModels :49–58` (7 committed meshes — data `modelKey` may only override to one of these). **`HollowTable :64–188` — 16 registered ids**: hollow-walker/warrior (sword_A)/rogue/acolyte/mage/reaper (scythe_A, Warrior variant)/brute/cellar-hollow, canon-locked necromancer + hollow-apprentice, 4 dungeon underscore-aliases (villager-a/b, apprentice-minor, healer), and **alduin (`:180`, `CombatSpawnable=false` — dialogue NPC, never a boss fight)**. `ApprovedHollowCombatIds :192–197` (10, codex order). **`Norm :231` folds `_`→`-`** (dungeon JSON spelling) + trim/lower. **Wildlands deferral gate**: `_deferredWildlandsIds :248–252` = {orc-raider, caveman, feral-wolf, tiefling-cultist} (no shippable art — exploded retarget); `IsCombatApproved :260`; `SubstituteHollowId :271` (heavy role/≥1.8m → hollow-warrior, else hollow-walker). Shipping Orc Warband stays approved. `FactionForFamily :282` (absent/hollow/undead → HollowOnes, any living token → Wildlands). `TryResolveHollowModel :304` (factory hook; data modelKey wins only if committed); `Resolve :321` (full identity; Alduin maps to Boss faction `:333`). Regression: `Editor/Regression/EnemyResolverRegression.cs`. |
 
-### Scene-gated / feature-flagged OFF
-- `DailyQuestService.FeatureShipped` returns **false** for harvesting / tower-build / cosmetic-shop / hero-talents — daily-quest templates requiring those features are filtered OUT (the features exist elsewhere but the quest gate treats them as un-shipped; stale gate vs. actual feature state worth a designer check).
-- `BackendAuthConfig.Enforced` defaults OFF (wallet-signed save auth dormant until backend deploys + real signer lands).
-- `OrientationGuard` inert unless `_enabled` + `ORIENTATION_GATE` define.
+---
 
-### Backend-dependent (never deployed — see memory `backend-never-connected`)
-- `GameStateService` delta-sync/LoadFromBackend, `EventTracker`, `PromoCodeService`, `ReferralService`, `LeaderboardService` all target `https://defenders-of-the-realm-v2.vercel.app` — the backend was **never deployed**. These run resilient (local-save-only, circuit-breaker, honest stub sources); they are NOT live bugs, they are pre-deploy stubs. `ClanService` is a pure local PlayerPrefs stub by design.
+## Combat/ (`DeNelle.Core.Combat`) — unchanged core + newer battle-lock stack
 
-### UXML-in-build risk (per memory `uxml-uidocuments-dont-render-in-builds`)
-- `PromoCodeUI` and `InviteFriendsUI` are **UI-Toolkit (UIDocument)** — these come up empty in player builds. Core's newer UI (ElarionUiKit / VillageLoadOverlay / PortraitLockOverlay) deliberately uses code-built uGUI to avoid this; the two promo/referral panels predate that discipline.
+| Type | Path | Notes |
+|---|---|---|
+| `IDamageableStructure` | `Combat/IDamageableStructure.cs` | `IsAlive` + `ApplyContactDamage`. Impl: HeartController, HeroHealth, Building, Tower, Gate. |
+| `IDamageable` bundle (+ CombatFaction/Layer/ICombatLayered/IDamageTintable/DamageElement/StatusEffect) | `Combat/IDamageable.cs` | Cross-module attack target; air/ground via ICombatLayered. |
+| `BattleLock` (static) | `Combat/BattleLock.cs` (79L) | WO-437 single source of "is a battle active" — the PanelManager/PanelRouter gate. |
+| `HeroCombatEngagement` / `PursuitBattleProbe` | `Combat/*.cs` | Battle-lock sources: in-scene real-time fight (2026-06-30) · "actively pursued = in battle" (F8-46 Option A). |
+| `CombatStatusTracker` | `Combat/CombatStatusTracker.cs` (146L) | Timed statuses (slow/freeze/burn + named buffs). |
+| `ActorAnimator` / `IActorAnimator` / `AnimParams` (+ direction enums) | `Combat/*.cs` | Verb-level anim driver + canonical param hashes (Speed = raw world u/s); re-scans on body swap. |
+| `ActionKeywords` (static) | `Combat/ActionKeywords.cs` (128L) | WO-670 motion-casting keyword vocabulary. |
+| `CombatDeathDirection` | `Combat/CombatDeathDirection.cs` | Killing-hit → death-clip bucket resolver. |
+| `DamageAttribution` (static) | `Combat/DamageAttribution.cs` | Per-target damage ledger for shared kill-XP (`Record/Drain/Forget/Clear`). |
+| `ISiegeLootTarget` | `Combat/ISiegeLootTarget.cs` | WO-664 high-value siege-target marker (see the WO-707 container-only TODO in RepoProps `:169`). |
+| `EnemyState` (enum) / `IRangedThreat` | `Combat/*.cs` | Idle/Chase/Attack/Hit/Dead · optional ranged marker (dormant). |
 
-### Append-only fields not yet round-tripped through SaveSchema (documented, in-memory + PlayerPrefs-snapshot only)
-`GameState.Tribes`, `Wards`, `Arena` — live correctly in-memory within a session but the schema round-trip + version bump is an explicitly-deferred save-owner follow-up. `Settlements` (v21) and `PetName` ARE now wired (SaveSchema PersistedState field + Snapshot + ApplyPersisted), as are `Zones`/`BaseLayout`/`PartyMemberIds`/`ArenaDefense` (v17/v14/v16/v19). Only Tribes/Wards/Arena remain genuinely unpersisted.
+---
+
+## Everything else (verified one-liners)
+
+| Area | Types | Notes |
+|---|---|---|
+| **HudModel/** (`DeNelle.Core.HudModel`) | `HudModels.cs` (679L — the 11 Core HUD models + `IHudModel` facade + holder; producer-only mutators fire `Changed` + `[Flow:HUD]`), `HudModelTypes.cs` (shared enums/record structs; contract FROZEN per WO541_MODEL_API.md), `PostureSignals.cs` (calm→hostile(prebattle\|activebattle\|postbattle) battle-arc signals for the HUD kit). | WO-541 model layer behind `CoreServices.HudModel`. |
+| **Arena/** | `ArenaContracts.cs` (124L) | Bounded-context data boundary: `ArenaRequest` in, `ArenaResult` out — JSON only crosses the seam (owner-ratified 2026-06-23). |
+| **Platform/** (`DeNelle.Core.Platform`) | `CurrencySkin` + `CurrencySkinResolver` (WO-603: ONE build presents Pi OR Solana/$SKR skin, resolved pre-first-render from runtime skin.json + URL param), `IPiPlatform`/`PiPlatform`/`EditorPiPlatform`/`WebGLPiPlatform`/`PiSignInController` (Pi auth surface), `StakeRewardsResolver` (351L — READ-ONLY native-SKR-stake → in-game cosmetic perks; never mints/custodies), `StakeRewardsDemoBootstrap` (ff.stakedemo mock seed, self-installing). | |
+| **Auth/** | `FirebaseAuthService.cs` (256L) | WO-769: email/password Firebase identity → verified ID token attached as Bearer to Neon `/api/game/save` (save keyed by Firebase UID). Async over the Firebase SDK, main-thread resume. |
+| **Audio/** | `IAudioService`, `MusicTrack` (append-only), `IMusicAuthority` (the ONE music-request seam, 2026-07-09), `MusicLayer` (priority layers), `MusicRequest` (typed request). | Core owns the contracts; DeNelle.Audio implements. |
+| **HUD/** | `IVillageHud` (passive display contract via CoreServices.Hud), `HudCommands` (kit→Village command sink). | |
+| **Web3/** | `IJupiterService` (+SwapQuote/SwapInputToken), `IWalletSigner` (WO-121 ed25519; stub can't sign). | |
+| **Progression/** | `SkillSystem` (craft-skill singleton, AfterSceneLoad bootstrap), `IXpEarner`, `XpEarnerRegistry`. | |
+| **Population/** | `IPopulationService` (WO-587 milestone-driven Echo slot unlocks, via CoreServices.Population). | |
+| **Services/** | `ClanService` (local PlayerPrefs clan+chat stub; own `ChatMessage` at `:67`), `ChatPhraseCatalog` (chat-phrases.json), `LeaderboardService` (pluggable; honest `LocalStubLeaderboardSource`). | |
+| **Analytics/Promo/Referral** | `EventTracker` (batched → `/api/events/track`, offline queue cap 200, circuit breaker), `PromoCodeService`/`PromoCodeUI`, `ReferralService`/`InviteFriendsUI`. | The two `*UI` panels are UI-Toolkit/UIDocument — the known empty-in-player-builds risk. |
+| **Data/** | `CanonicalJson` (static, **namespace `DeNelle.Core`** — Resources-first + StreamingAssets fallback, THE dual-copy contract hub), `DataInjector`, `ICatalogSource`/`LocalJsonCatalogSource` (Tier-0 source-agnostic seam; local source byte-identical to CanonicalJson.Read), `GarrisonRecipe(+Catalog)` (**namespace `DeNelle.Core.World`**), plus authoring SOs: BattlePassData/Reward, CampaignData/MissionData/CampaignProgressRecord, PetType, SkillTypes, SpecialAbility, TacticalData, TowerData. | |
+| **Addressables/** (`DeNelle.Core.AssetDelivery`) | `AddressablesGroupConfig` (typed AssetReference SOs), `AddressablesMemoryProfiler` (handle-leak tracker), `SkinController` (async per-slot skin loader), **`HeroAssetLoader` + `HeroTextureLoader`** (WO-545 Tier-1 per-hero body/texture seams). | Folder ≠ namespace (avoids shadowing UnityEngine Addressables). |
+| **Theme/** | `Theme.cs` (307L) — themes.json tokens via CanonicalJson (`:187`). **Header (:15) still claims streamingAssetsPath-only loading — stale.** | |
+| **Tutorial/** | `TutorialSignals` (WO-T1 stable-id completion bus: "build.tower_placed", "panel.opened:<id>", "dialogue.ended:<id>"), `TutorialStepModel` (tutorial-steps.json data shape; interpreter is Village.TutorialFlow). | |
+| **Geometry/** | `WeaponBoundsOrient` (canonical mesh-axis seating; BINDING doc WEAPON_ARMOR_ORIENT_LOGIC.md). | |
+| **Validation/** | `OrientationValidator` (pure facing rule), `OrientationGuard` (inert unless `_enabled` + `ORIENTATION_GATE`). | |
+| **VFX/** | `Hud` (Focus/Unfocus attention API, namespace `DeNelle.Core`), `AttentionGlow` (LineRenderer frame). | |
+| **Debug/ + Dev/** | `DebugCanvasUI` (F12 overlay, **namespace `DeNelle.Core.DevOverlay`**), `FlagCaptureButton` (mobile F8 chip → same BreakCaptureHarness capture; gated `ff.flagbutton`). | |
+| **Scripts/AI/** | `BTNode`/`Selector`/`Sequence`/`ActionNode`/`Condition` — behaviour-tree primitives, **assembly `DeNelle.AI`**. | |
+| **Tests/** | `SaveLoadRoundTripTest`, `ResetCarveOutTest`, `SaveMigratorTest`, `SaveSchemaValidateTest`, `TestSupport`, **`DialogueViewModelTests`** (WO-744 §2c gate on the VM speaker/portrait projection). | Editor-only; refs DeNelle.Core + DeNelle.Data. |
+
+---
+
+## DATA / JSON loaded by Core (dual-copy law: Resources/Data/Canonical wins, StreamingAssets fallback — keep byte-identical)
+
+`quests.json` (QuestCatalog) · `daily-quests.json` (DailyQuestCatalog) · `chat-phrases.json`
+(ChatPhraseCatalog) · `garrison-recipes.json` (GarrisonRecipeCatalog) · `themes.json` (Theme) ·
+`building-tiers.json` (BuildingTierCatalog) · **`realm-map.json` (RealmMapCatalog, WO-826)** ·
+`dialogue/dialogues.json` (DialogueCatalog) · `scene-configs.json` (HubScenes ownership mirror) ·
+`concept-icons.json` (ConceptIconResolver) · `tutorial-steps.json` (TutorialStepModel, walked by Village)
+· generic tables via `DataInjector.Inject<T>` (owned by other modules).
+
+PlayerPrefs keys owned/read by Core: `dotr-save` (+ embedded HMAC; the legacy sibling `.sig` key is
+retired — signature is IN the value now) · `dotr-sync-queue` · `dotr-event-queue` ·
+`dotr-daily-quests-v1` (+ day1-done) · `dotr-clans-v1` + `dotr-account-id-v1` · `dotr-redeemed-promos` ·
+`dotr-referral-*` · `dotr-gameclock-epoch` · `onboarding.fullTutorial` · every `ff.<flag>` override ·
+`realm-defenders-settings` (legacy; read+deleted by migrator v9).
+
+---
+
+## Behaviors & seams (cross-assembly contracts)
+
+- **Service registry:** `CoreServices` (7 slots, above). Callers null-check; register Awake / unregister OnDestroy.
+- **Panel routing:** panel registers opener on `PanelRouter` (+ optional context / context+mode arities);
+  any assembly opens by `PanelId`; visibility is arbitered by `PanelManager` (one modal at a time,
+  WO-437 battle-lock, WO-465 IsOpen verify). `PanelRouter.PanelOpened` feeds TutorialSignals.
+- **Hub/scene classification:** `HubScenes.Names` (`:25`) = {Village2, MainCastle_Hall, CastleHub,
+  CastleHub_MainKeep, **Main_Castle_Overworld**}; `IsHub :29` (exact-or-contains), `IsOverworld :42`
+  (== Main_Castle_Overworld only), `IsRaid :52` (`RaidBase*` prefix), `IsEnemyOwnedScene :82`
+  (scene-configs.json mirror of Village SceneOwnership — one cached parse), `SuppressTownHud :97`
+  (the WO-550 chokepoint ~14 panel bootstraps gate on).
+- **Jobs:** enqueue/resolve through `ObsidianQueueEngine` (pure); effects via `JobEffectRegistry`
+  (Build/Upgrade keep their legacy seams); state on `GameState.ObsidianQueue`; clock = TimeSource.NowUnixMs
+  (Village side), shared with `ArmyStorage.AdvanceRecovery`.
+- **Dialogue:** gameplay verbs cross via `IDialogueCommandSink` / conditions via `IDialogueConditionSource`
+  (Village registers); Views subscribe `DialogueService.Opened`; input suppression rides `Started`/`Ended`.
+- **Enemy identity:** every spawner funnels through EnemyFactory.Build (Village), which consults
+  `EnemyResolver.IsCombatApproved` → `SubstituteHollowId` → `TryResolveHollowModel`.
+- **Army seams:** ArmyStorage's catalog-dependent methods take delegates (`slotOf`, `tryAfford`) wired
+  Village-side to TroopCatalog/EconomyService — Core never references Village.
+- **Reflection (only two spots):** PersistenceBridge → Village.WaveManager; SceneRouter return-point →
+  Village.HeroLocomotion.WarpTo. Everything else is delegate/interface seams.
+- **Save law:** every persisted-shape change = append-only nullable wire field + either a Steps entry or
+  documented additive-default-on-read; keep the version triple aligned (SaveMigrator top step ==
+  SaveSchema.CurrentVersion == GameState.SchemaVersion source).
+
+---
+
+## RISK / LANDMINE LEDGER (2026-08-02 — each verified from code)
+
+### Comments/XML that LIE (trust code, then trailing comments)
+1. **FeatureFlags — 12 XML-summary lies** (see ⚠ rows above): RaidContinuousWalk, WebTrace, PartyShop,
+   OverworldEncounter, RegionRoam, BattleHud9Zone, MergedWorld, GateTraversal, **OutpostCaves** (the
+   worst: XML asserts "ships OFF", code is ON, no correcting comment — and the XML says the resolver it
+   arms "DOES NOT EXIST YET"), MocapLocomotion, Barracks, PoiCallouts. Rule: `defaultOn:` is truth;
+   trailing `//` owner-reversal comment is the current ruling.
+2. `Theme.cs:15` header still documents the abandoned streamingAssetsPath-only load; actual
+   `EnsureLoaded` uses CanonicalJson (`:187`).
+3. `ResourceType.cs:17` maps AetherCrystal → `GameState.AetherCrystals` — that field is DEPRECATED
+   (folded into Resources.Crystals at v18, kept 0 for wire back-compat).
+4. `GameState.cs` banner and several field XMLs still say "schema v34" / "~60 fields" — current is v36 / 84 wire fields.
+5. `GameState.Wards :250–255` XML self-contradicts (says both "round-trips (v34)" and "remain in-memory
+   only" in the same block) — the truth is it ROUND-TRIPS (v34, verified in SaveSchema `:549` + MigrateToV34).
+
+### Live-in-prod surprises
+6. **WebTrace is LIVE by default** — `ff.webtrace` ON + hardcoded prod endpoint (`WebTrace.cs:76`); a
+   shipped WebGL player streams FlowTrace to Neon. The file header itself documents the 2026-07-15
+   incident where a CLI believed the old "dormant" claim. Read path: Vercel `[sig]` echo / admin db endpoint.
+7. The Vercel backend (`defenders-of-the-realm-v2.vercel.app`) is no longer "never deployed" — Neon
+   `/api/game/save` (Firebase-token-keyed, WO-769) and `/api/trace` are live surfaces. Old "backend
+   undeployed, all stubs" claims are stale; EventTracker/Promo/Referral endpoints remain
+   deploy-dependent per-route.
+8. `DailyQuestService.FeatureShipped` (`DailyQuests.cs:382–394`) now returns true for EVERYTHING
+   including `_ =>` — the `requiresFeature` template gate is vacuous dead code (behavior fine; the
+   switch is a trap for anyone re-adding a gated feature expecting it to filter).
+
+### Dead / stale references
+9. `SceneRouter.PatriciaLight` (+ GoPatriciaLight/PendingPatriciaLight/params) — DTT removed; DEAD
+   routing. `PersistenceBridge._loadOnEnterScenes` still lists `"PatriciaLight_TD"` (`:61`), which
+   ALSO never matched SceneRouter's `"PatriciaLightMode"`.
+10. Dungeon consts: only HealersCottage + FolksGranary are real playable scenes; the other 5 consts are stubs.
+11. `RuntimeWorldSeam` infrastructure is self-declared DEAD CODE pending removal (superseded by merged world).
+12. `RepoProps.visualHeight :212` is deprecated and no longer read (heightMul supersedes) — kept only
+    so old JSON deserializes.
+
+### Behavioral landmines
+13. **PanelRouter.Open returns false for BOTH "no opener registered" and "battle-lock refused"** — a
+    caller showing "coming soon" on false will mislabel the in-battle refusal (the refusal is Warned,
+    not Failed, but the return value doesn't distinguish).
+14. `ArmyStorage.MaxArmySize` is a property with side effects (FlowTrace on change) and a **static**
+    `s_lastLoggedCap` cache (`:49`) shared across all ArmyStorage instances — harmless for logging,
+    but do not add per-instance logic there.
+15. `GameState.BuildJobs` is wire-back-compat ONLY since v35 — runtime reads the ObsidianQueue. Writing
+    to BuildJobs at runtime is a silent no-op for gameplay.
+16. `MigrateToV36`'s template snapshot is deliberately HARDCODED (`SaveMigrator.cs:619`) — do NOT
+    "helpfully" re-point it at the live census (a migration is a point-in-time transform; the v8
+    gate-0→gate-2 precedent).
+17. `EchoLanes` initializer is `"wood"` (`GameState.cs:448`) but New Game seeds `"harvest:1"`
+    (`GameStateService.cs:890`) — consistent only because the WO-738 read-normalizer folds legacy
+    wood/iron/food → Harvest lv1. Removing that normalizer breaks fresh-SO (non-reset) boots.
+18. `ZoneManager` home box is **52/52** — code citing the old 42/33 (docs, spawn math) mis-classifies
+    the courtyard band as an outer region again (the exact 2026-07-26 bug: enemies inside the castle
+    during the tutorial).
+19. Two `ChatMessage` classes: `DeNelle.Core.State.ChatMessage` (NestedTypes `:123`, 1:1 mailbox) vs
+    `DeNelle.Core.Services.ChatMessage` (ClanService `:67`, team chat). Fully-qualify.
+20. Dual GameStateService bootstrap (GameStateBootstrap BeforeSceneLoad + EnsureInstance AfterSceneLoad)
+    — both guard on Instance; harmless but two mechanisms for one job.
+21. Folder ≠ namespace set (intentional, memory `core-namespace-shadows-unityengine-statics`):
+    `Debug/` → `DeNelle.Core.DevOverlay`; `Addressables/` → `DeNelle.Core.AssetDelivery`;
+    `Data/CanonicalJson|DataInjector` → `DeNelle.Core`; `Data/GarrisonRecipe*` → `DeNelle.Core.World`.
+22. `PromoCodeUI` / `InviteFriendsUI` remain UI-Toolkit UIDocument panels — empty in player builds
+    (PIPELINE §8); every newer Core UI is code-built uGUI.
+23. Store-hardening flags (`DevResourceTool`, `FlagButton`, `RealmStorePurchase`) default `IsDevBuild` —
+    a PlayerPrefs `ff.*=1` still re-enables them on ANY build; a store-release checklist must verify no
+    stale prefs override ships in a first-run state.
+24. `CustomDialogue` OFF has NO fallback (Yarn removed, WO-557) — flipping `ff.customdialogue=0` breaks
+    all dialogue; the flag is now effectively a kill-switch, not an A/B.
