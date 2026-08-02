@@ -1,6 +1,13 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (afternoon — THIRD two-seat collision today): next free WO = **842**. **782–841 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (evening — ship wave committed): next free WO = **848**. **782–847 CONSUMED.**
+> - **842** = dual-wallet unify (GameState = single Wood/Iron authority; the 985k-can't-afford-800 capture) ·
+>   **843** = destroyed/sold singleton cards rebuildable (IsPlayerBuilt split from IsBuilt) ·
+>   **844** = Bag potions apply their real effect (was TryRemove + lie) ·
+>   **845** = login error mapping + password reset ("Internal error" F8) ·
+>   **846** = bug-report attribution + notify (playerId = BoundWallet; api bugreports view; watcher trio) ·
+>   **847** = wallet-first Android login ("connect wallet or play as guest"; desktop keeps email).
+>   All SHIPPED in commits `a7e4acb2` / `731840e7` (2026-08-02).
 > - **839** = raid deploy screen cleanup (UI seat; renumbered from a collided 834 mint) ·
 >   **840** = armorer reachability + shop panel cleanup (UI seat; was 835) ·
 >   **841** = upgrade panel countdown live-tick (UI seat; was 836). All READY, specs on disk.
