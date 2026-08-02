@@ -75,6 +75,16 @@ namespace DeNelle.Village
         // (knight); ranged jobs (mage/ranger) attack via AbilityDef.Range and leave
         // this 0, so their reach is unaffected.
         public float reach = 0f;
+
+        // SHIELD MITIGATION (owner 2026-08-02: "make shields add different defense levels and
+        // gate them by levels"). Fractional incoming-damage reduction the OFF-HAND contributes,
+        // mirroring ArmorDef.defense below. Shields were DOUBLE-inert before this: every
+        // category "shield" row carried no defense value at all, AND GearLoadout never summed
+        // the equipped off-hand into ArmorDefense - so a shield was decoration on both halves.
+        // Absent in JSON => 0 on every non-shield row, so ordinary weapons are untouched.
+        // GearLoadout.ApplyStats sums it under the SAME 0.70 ceiling as armor + accessories.
+        public float defense;     // 0..0.9 fractional damage reduction (shields only)
+
         public GearReq req;
 
         // WO-295: Legendary "Aegis of Elarion" set. setId groups items into a set

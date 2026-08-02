@@ -415,8 +415,16 @@ namespace DeNelle.Village
 
             weapon *= (1f + Mathf.Max(0f, accDamage));
 
+            // SHIELDS WERE INERT (owner 2026-08-02): every category "shield" row carried no
+            // defense value AND the equipped off-hand was never summed here - decoration on both
+            // halves, so a Squire's Heater did exactly nothing. The off-hand now contributes
+            // exactly like an accessory: additive, floor-guarded (a negative authored value can
+            // never HEAL through the mitigation formula), and under the SAME 0.70 ceiling, so a
+            // shield can never make the hero immune.
+            float offHandDefense = EquippedOffHand != null ? EquippedOffHand.defense : 0f;
+
             WeaponMult   = weapon;
-            ArmorDefense = Mathf.Clamp(armor + Mathf.Max(0f, accDefense), 0f, 0.70f);
+            ArmorDefense = Mathf.Clamp(armor + Mathf.Max(0f, accDefense) + Mathf.Max(0f, offHandDefense), 0f, 0.70f);
             GearHpBonus  = Mathf.Max(0, Mathf.RoundToInt(EquippedArmor != null ? EquippedArmor.hpBonus : 0f) + accHp);
 
             // Drive the body's armor visual tier off the equipped piece. EquipmentController

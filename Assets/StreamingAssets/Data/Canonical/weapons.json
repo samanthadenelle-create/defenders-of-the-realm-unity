@@ -71,6 +71,7 @@
       "job": "knight",
       "category": "shield",
       "rarity": "common",
+      "defense": 0.03,
       "req": {
         "level": 1
       },
@@ -388,6 +389,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "Heroes/Props/Weapons/shield_A",
       "generated": true,
       "manual": true,
@@ -6814,6 +6816,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_01",
       "generated": true,
       "manual": true,
@@ -6839,6 +6842,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_02",
       "generated": true,
       "manual": true,
@@ -6866,6 +6870,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "epic",
+      "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_03",
       "generated": true,
       "manual": true,
@@ -6893,6 +6898,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_04",
       "generated": true,
       "manual": false,
@@ -6918,6 +6924,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_05",
       "generated": true,
       "manual": false,
@@ -6943,6 +6950,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_06",
       "generated": true,
       "manual": false,
@@ -6968,6 +6976,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_07",
       "generated": true,
       "manual": false,
@@ -6993,6 +7002,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_08",
       "generated": true,
       "manual": false,
@@ -7018,6 +7028,7 @@
       "hand": "1h",
       "damageType": "melee",
       "rarity": "common",
+      "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_09",
       "generated": true,
       "manual": false,
@@ -7042,7 +7053,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_10",
       "generated": true,
       "manual": false,
@@ -7050,7 +7062,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7067,7 +7079,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_11",
       "generated": true,
       "manual": false,
@@ -7075,7 +7088,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7092,7 +7105,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_12",
       "generated": true,
       "manual": false,
@@ -7100,7 +7114,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7117,7 +7131,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_13",
       "generated": true,
       "manual": false,
@@ -7125,7 +7140,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7142,7 +7157,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_14",
       "generated": true,
       "manual": false,
@@ -7150,7 +7166,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7167,7 +7183,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
+      "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_15",
       "generated": true,
       "manual": false,
@@ -7175,7 +7192,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7192,7 +7209,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_16",
       "generated": true,
       "manual": false,
@@ -7200,7 +7218,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7217,7 +7235,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_17",
       "generated": true,
       "manual": false,
@@ -7225,7 +7244,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7242,7 +7261,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_18",
       "generated": true,
       "manual": false,
@@ -7250,7 +7270,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7267,7 +7287,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_19",
       "generated": true,
       "manual": false,
@@ -7275,7 +7296,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7292,7 +7313,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_20",
       "generated": true,
       "manual": false,
@@ -7300,7 +7322,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7317,7 +7339,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
+      "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_21",
       "generated": true,
       "manual": false,
@@ -7325,7 +7348,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7342,7 +7365,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
+      "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_22",
       "generated": true,
       "manual": false,
@@ -7350,7 +7374,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7367,7 +7391,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
+      "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_23",
       "generated": true,
       "manual": false,
@@ -7375,7 +7400,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7392,7 +7417,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
+      "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_24",
       "generated": true,
       "manual": false,
@@ -7400,7 +7426,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -7417,7 +7443,8 @@
       "job": "any",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
+      "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_25",
       "generated": true,
       "manual": false,
@@ -7425,7 +7452,7 @@
       "damageMult": 1.0,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,

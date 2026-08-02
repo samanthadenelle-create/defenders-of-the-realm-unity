@@ -377,6 +377,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
             // --- WO-860 starter loadout + shelf: new game clears dotr-equip-*, Knight starts sword+shield (not the stale axe / not auto-best Flameblade), shelf capped + equippable-only + no blink_* ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-loadout suite", () => { if (!DeNelle.Editor.Regression.StarterLoadoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-loadout] " + r); });
+            // --- shields: every shield carries a real defense value, the ladder climbs with req.level, and GearLoadout actually SUMS the off-hand (all three were missing - shields were pure decoration) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "shield-defense suite", () => { if (!DeNelle.Editor.Regression.ShieldDefenseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shield-defense] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
