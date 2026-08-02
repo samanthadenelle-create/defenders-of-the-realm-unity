@@ -1,6 +1,14 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (midday): next free WO = **838**. **782–837 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (afternoon — THIRD two-seat collision today): next free WO = **842**. **782–841 CONSUMED.**
+> - **839** = raid deploy screen cleanup (UI seat; renumbered from a collided 834 mint) ·
+>   **840** = armorer reachability + shop panel cleanup (UI seat; was 835) ·
+>   **841** = upgrade panel countdown live-tick (UI seat; was 836). All READY, specs on disk.
+> - **⚠ PROPOSED RULE (owner to ratify — the collision struck 3x on 2026-08-02 alone):**
+>   **the UI seat mints ONLY from a reserved block 850–899**; the CLI mints the main line from this
+>   banner. Two seats can then mint in parallel without collision; the CLI reconciles 850-block WOs
+>   into the main sequence only if/when renumbering is ever needed. Until ratified, the CLI keeps
+>   renumbering collisions by first-on-disk-and-referenced-wins.
 > - **837** = Stockpiles cap resource capacity (owner ruling: lumberyard/foundry/silo(="Quarry"?) are
 >   the stockpiles — OUT of the FoundingKit array; their storageCapacity becomes the live wallet-cap
 >   mechanic; founding_stores tutorial re-spec). File `WORK_ORDER_837_stockpiles_cap_capacity.md`, READY.
