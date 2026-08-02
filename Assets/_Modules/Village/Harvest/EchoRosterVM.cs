@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace DeNelle.Village
 {
-    /// <summary>One roster card's fully-projected identity + status (mirrors EchoCardVM.LaneChip's
+    /// <summary>One roster card's fully-projected identity + status (mirrors EchoCardVM.ResourceChip's
     /// bespoke-struct pattern -- carries the portrait Sprite the same way EchoCardVM.Portrait does).</summary>
     public readonly struct EchoRosterCardVM
     {
@@ -103,18 +103,24 @@ namespace DeNelle.Village
             _cards = list;
         }
 
-        /// <summary>Owned card status: short lane/level/bonus only (colorblind-safe TEXT).
-        /// Does NOT prefix the catalog Element ("Essence of a fallen keeper") -- that line is
-        /// lore for the unlock dialogue; on the roster card it stacked over the display name
-        /// (owner F8 2026-07-24 pet screen).</summary>
+        /// <summary>Owned card status: short resource/level/bonus only (colorblind-safe TEXT).
+        /// WO-830: a harvesting Echo names the ASSIGNED RESOURCE ("Wood - Lv 1 - +55% (best)")
+        /// so the roster reads the whole workforce at a glance; a legacy non-harvest lane keeps
+        /// its lane label. Does NOT prefix the catalog Element ("Essence of a fallen keeper") --
+        /// that line is lore for the unlock dialogue; on the roster card it stacked over the
+        /// display name (owner F8 2026-07-24 pet screen). The % excludes the pair synergy
+        /// (disclosed on the card) and the hidden tri (never shown -- WO-830 Sec.3d).</summary>
         private static string OwnedStatus(int index, string element)
         {
             var ro = EchoBonusCalculator.ReadoutFor(index);
             if (ro.Lane == LaneType.Idle)
                 return "Idle -- tap to assign";
 
-            string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
-            string line = laneLabel + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
+            string what = ro.Lane == LaneType.Harvest
+                ? EchoAssignments.ResourceLabelFor(EchoAssignments.ResourceTokenOf(index))
+                : EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
+            if (string.IsNullOrEmpty(what)) what = "Harvest";
+            string line = what + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
             if (ro.PreferredMatch) line += " (best)";
             return line;
         }

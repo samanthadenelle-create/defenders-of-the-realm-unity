@@ -434,7 +434,12 @@ namespace DeNelle.Village.Hero
             _categoryBar = new GameObject("CategoryBar", typeof(RectTransform));
             _categoryBar.transform.SetParent(bodyHost, false);
             var cb = _categoryBar.GetComponent<RectTransform>();
-            cb.anchorMin = new Vector2(0.04f, 0.705f); cb.anchorMax = new Vector2(0.96f, 0.748f);
+            // WO-840 B2: the category/type rows sat 0.705-0.748 / 0.655-0.70 — a ~0.005
+            // gap the selected chip's gold pennant plate overdraws (owner capture: the
+            // "All" pennant bleeding over the neighbour row). Re-spaced with real gaps
+            // (tab band 0.755 -> cb 0.744 -> 0.703 -> tyb 0.690 -> 0.648) and the chips
+            // inset a touch deeper inside each bar (0.10-0.90) so the plate art clears.
+            cb.anchorMin = new Vector2(0.04f, 0.703f); cb.anchorMax = new Vector2(0.96f, 0.744f);
             cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
             _categoryTabs.Clear();
             CreateCategory("All",     new Vector2(0.01f, 0.32f),  PartyShopCategory.All);
@@ -446,7 +451,9 @@ namespace DeNelle.Village.Hero
             _typeBar = new GameObject("TypeBar", typeof(RectTransform));
             _typeBar.transform.SetParent(bodyHost, false);
             var tyb = _typeBar.GetComponent<RectTransform>();
-            tyb.anchorMin = new Vector2(0.04f, 0.655f); tyb.anchorMax = new Vector2(0.96f, 0.70f);
+            // WO-840 B2: dropped from 0.655-0.70 to open the pennant-clearing gap below
+            // the category bar (see cb above).
+            tyb.anchorMin = new Vector2(0.04f, 0.648f); tyb.anchorMax = new Vector2(0.96f, 0.690f);
             tyb.offsetMin = Vector2.zero; tyb.offsetMax = Vector2.zero;
 
             // The scroll list area - SLIM name column (WO-501 owner point 2): narrowed to the left ~36%
@@ -475,9 +482,13 @@ namespace DeNelle.Village.Hero
             // preview bottoms 0.23 (all body-relative; panel-y of the buttons is now ~0.19+).
             // WO-714 W1: both actions are kit BuildObsidianButton — the kit owns plate art,
             // label ink (contrast law: gold plate = dark Ink, dark plate = Parchment) and text-fit.
+            // WO-840 B3: the old 0.04-0.28 / 0.30-0.60 / 0.64-0.86 slots left 0.86-1.0
+            // EMPTY while "Improve"/"Unequip"/"Purchase NNN Gold" ellipsized ("Impro...",
+            // "Uneq..." on the owner's device). All three widened into the free margin
+            // (0.02-0.30 / 0.32-0.68 / 0.70-0.98); heights (touch size) unchanged.
             _buySellBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Purchase",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.30f, 0.10f), new Vector2(0.60f, 0.175f),
+                new Vector2(0.32f, 0.10f), new Vector2(0.68f, 0.175f),
                 () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); });
             _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
 
@@ -488,7 +499,7 @@ namespace DeNelle.Village.Hero
             // with a status line rather than mis-acting).
             _equipBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Equip",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.64f, 0.10f), new Vector2(0.86f, 0.175f),
+                new Vector2(0.70f, 0.10f), new Vector2(0.98f, 0.175f),   // WO-840 B3: widened (was 0.64-0.86)
                 () =>
                 {
                     if (_vm == null) return;
@@ -501,13 +512,13 @@ namespace DeNelle.Village.Hero
             // disabled cue dims the SAME ink (luminance cue) instead of forcing a hue.
             _equipLabelBase = _equipLabel != null ? _equipLabel.color : ElarionUi.Parchment;
 
-            // WO-808 IMPROVE (Option A reforge): the free x 0.04-0.28 band of the raised action
-            // row. Visible only when the selected row is OWNED gear (RenderActionBar drives
-            // label/enable/visibility); the VM re-verifies on tap, so a stale tap no-ops with
-            // an honest status line.
+            // WO-808 IMPROVE (Option A reforge): the left x 0.02-0.30 band of the raised action
+            // row (WO-840 B3 widened from 0.04-0.28). Visible only when the selected row is
+            // OWNED gear (RenderActionBar drives label/enable/visibility); the VM re-verifies
+            // on tap, so a stale tap no-ops with an honest status line.
             _improveBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Improve",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.04f, 0.10f), new Vector2(0.28f, 0.175f),
+                new Vector2(0.02f, 0.10f), new Vector2(0.30f, 0.175f),
                 () => _vm?.ImproveSelected());
             _improveLabel = _improveBtn != null ? _improveBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             _improveLabelBase = _improveLabel != null ? _improveLabel.color : ElarionUi.Parchment;
@@ -527,7 +538,7 @@ namespace DeNelle.Village.Hero
         private void CreateCategory(string label, Vector2 anchorX, PartyShopCategory cat)
         {
             var tab = ElarionUiKit.BuildTab(_categoryBar.transform, label,
-                new Vector2(anchorX.x, 0.08f), new Vector2(anchorX.y, 0.92f),
+                new Vector2(anchorX.x, 0.10f), new Vector2(anchorX.y, 0.90f),   // WO-840 B2: deeper inset, pennant clears the bar
                 () => _vm?.SetCategory(cat));
             if (tab != null) _categoryTabs.Add((cat, tab));
         }
@@ -563,7 +574,7 @@ namespace DeNelle.Village.Hero
                 var chip = chips[i];
                 float x0 = gap + i * (w + gap);
                 var tab = ElarionUiKit.BuildTab(_typeBar.transform, chip.label,
-                    new Vector2(x0, 0.08f), new Vector2(x0 + w, 0.92f),
+                    new Vector2(x0, 0.10f), new Vector2(x0 + w, 0.90f),   // WO-840 B2: deeper inset, pennant clears the bar
                     () => _vm?.SetType(chip.type));
                 if (tab == null) continue;
                 if (tab.button != null) tab.button.name = "Type_" + chip.type;
@@ -648,13 +659,20 @@ namespace DeNelle.Village.Hero
                     ElarionUiKit.Label(btn.transform, ClassCrest(member.Class), 0.44f, 0.98f, ElarionUi.Gilt,
                         ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: true);
                 }
-                // Member first name under the token. F8-10: band was 0.02..0.34 of a ~40px chip
-                // = 13px — below the 12pt guard floor's ~15px line, so Ellipsis culled ALL glyphs
-                // (fleet 4/4, TextFitGuard capture). With the taller PartyBar (0.80..0.90) this
-                // 0.02..0.40 band seats ~18px: the floor's line fits with margin.
-                var nameTag = ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.40f, ElarionUi.Parchment,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: member.Selected);
-                ElarionUiKit.FitSingleLine(nameTag, 0f, ElarionUi.FontMicro);   // flag_06: chip names never spill
+                // Member first name under the token — UNSELECTED chips only (WO-840 B1).
+                // The SELECTED member's name is already carried by the _memberLabel
+                // sub-header ("Name - Class (Lv N)") directly under the bar, and the
+                // duplicate chip-local copy crowded the portrait's lower edge + painted
+                // over that sub-header (owner capture 2026-08-02: "Grom" over the
+                // portrait). The redundant selected-chip name goes; unselected chips
+                // keep theirs so the player can tell who to tap. Band history (F8-10):
+                // 0.02..0.40 of the 0.80..0.90 bar seats ~18px, above the 12pt floor.
+                if (!member.Selected)
+                {
+                    var nameTag = ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.40f, ElarionUi.Parchment,
+                        ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: false);
+                    ElarionUiKit.FitSingleLine(nameTag, 0f, ElarionUi.FontMicro);   // flag_06: chip names never spill
+                }
 
                 var plate = btn.GetComponent<Image>();
                 if (plate != null) plate.color = member.Selected ? TabSelectedTint : TabRestTint;
@@ -802,7 +820,7 @@ namespace DeNelle.Village.Hero
             // flag_06 t=209 ("i need scrollable area on all menus"): the list zone is now a KIT
             // scroll zone (§1.14 MakeScrollZone) — vertical-only, clamped (no elastic), masked,
             // auto-hiding scrollbar. One call; the hand-rolled viewport plumbing is gone.
-            var zone = ElarionUiKit.MakeScrollZone(_contentRoot.transform, RowGapPx, 4);
+            var zone = ElarionUiKit.MakeScrollZone(_contentRoot.transform, RowGapPx, ListBasePadPx);
             _scrollContent = zone.content;
             return zone.content.transform;
         }
@@ -814,9 +832,44 @@ namespace DeNelle.Village.Hero
             var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
             if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            CenterShortList();
             // §12 layout oracle: capture the real child rects after every rebuild so a
             // renders-empty screenshot is diagnosable from the log, not re-theorized.
             ElarionUiKit.DumpZoneLayout(_contentRoot != null ? _contentRoot.transform : null, "PartyShop.list");
+        }
+
+        // The base top/bottom padding MakeScrollZone was built with (BuildScrollContent).
+        private const int ListBasePadPx = 4;
+
+        // WO-840 B4: the roster-filtered V1 stock is small (2-3 rows) inside a tall column,
+        // so the list read as mostly-empty black (owner capture 2026-08-02). LAYOUT-ONLY fix
+        // (the roster/stock filter is untouched by design): when the stacked rows are SHORTER
+        // than the viewport, split the slack into the layout group's top/bottom padding so the
+        // rows sit vertically centred; content taller than the zone keeps the plain
+        // top-anchored scroll (padding restored to the base).
+        private void CenterShortList()
+        {
+            if (_scrollContent == null) return;
+            var vlg = _scrollContent.GetComponent<VerticalLayoutGroup>();
+            var viewport = _scrollContent.parent as RectTransform;
+            if (vlg == null || viewport == null) return;
+
+            float rowsH = 0f;
+            int rows = 0;
+            for (int i = 0; i < _scrollContent.childCount; i++)
+            {
+                var le = _scrollContent.GetChild(i).GetComponent<LayoutElement>();
+                if (le == null) continue;
+                rowsH += Mathf.Max(le.preferredHeight, le.minHeight);
+                rows++;
+            }
+            if (rows > 1) rowsH += (rows - 1) * RowGapPx;
+
+            float slack = viewport.rect.height - (rowsH + ListBasePadPx * 2f);
+            int pad = slack > 0f ? ListBasePadPx + Mathf.FloorToInt(slack * 0.5f) : ListBasePadPx;
+            if (vlg.padding.top == pad && vlg.padding.bottom == pad) return;
+            vlg.padding = new RectOffset(ListBasePadPx, ListBasePadPx, pad, pad);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
         // SLIM name-only row (WO-501 owner point 2): one plate (for the selected-row hold tint) + the

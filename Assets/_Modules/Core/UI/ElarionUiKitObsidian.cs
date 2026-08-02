@@ -792,26 +792,40 @@ namespace DeNelle.Core.UI
 
             var plate = go.GetComponent<Image>();
             var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementStat);
+            // WO-840 B5 (owner "garbled coin chip"; UI review 2026-08-01 P2-9 illegible
+            // resource chips): element_stat is ~1024px-wide art whose swirl-ornamented
+            // CENTER, 9-sliced into a ~150px chip, compresses into chrome scribble noise
+            // between the icon and the amount. The chip's currency ICON was never the
+            // failure (currency/currency_gold resolves) — the plate was. The root image
+            // is now the flat dark glass plate and the sprite contributes only its chrome
+            // BORDER via a child frame drawn with the center fill OFF — clean at any chip
+            // size; every consumer (party shop / inventory / resource strips) inherits.
+            plate.color = Glass;
+            ApplyRounded(plate);
+            plate.raycastTarget = false;
             if (plateSprite != null)
             {
-                plate.sprite = plateSprite;
-                plate.type = Image.Type.Sliced;
-                plate.fillCenter = true;
-                plate.color = ChromeTint;                          // chrome
+                var frameGo = new GameObject("PlateFrame", typeof(Image));
+                frameGo.transform.SetParent(go.transform, false);
+                var frt = (RectTransform)frameGo.transform;
+                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+                frt.offsetMin = Vector2.zero; frt.offsetMax = Vector2.zero;
+                var frame = frameGo.GetComponent<Image>();
+                frame.sprite = plateSprite;
+                frame.type = Image.Type.Sliced;
+                frame.fillCenter = false;                          // border only — the ornate center never draws
+                frame.color = ChromeTint;                          // chrome
+                frame.raycastTarget = false;
             }
-            else
-            {
-                plate.color = Glass;
-                ApplyRounded(plate);
-            }
-            plate.raycastTarget = false;
 
             // Icon well (left) — OUR icon via the concept resolver; hidden when unresolved
             // (consumers may SetIcon a specific sprite; the icon mandate stays ours).
             var iconGo = new GameObject("Icon", typeof(Image));
             iconGo.transform.SetParent(go.transform, false);
             var irt = (RectTransform)iconGo.transform;
-            irt.anchorMin = new Vector2(0.04f, 0.14f); irt.anchorMax = new Vector2(0.30f, 0.86f);
+            // WO-840 B5 companion: the icon well grows a touch (0.14-0.86 -> 0.08-0.92 tall)
+            // so the coin/resource glyph reads at footer-chip sizes (P2-9 legibility).
+            irt.anchorMin = new Vector2(0.04f, 0.08f); irt.anchorMax = new Vector2(0.30f, 0.92f);
             irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
             var icon = iconGo.GetComponent<Image>();
             icon.preserveAspect = true;

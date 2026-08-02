@@ -9,13 +9,15 @@
 // a host multiplies its yield by the relevant field and a missing/never-written
 // value is identity.
 //
-// OWNERSHIP (phase split): the VILLAGE layer (EchoService / a bonus-recompute pass)
-// WRITES all four values in phase 2 from the per-echo lane assignment + element match
-// + cross/set bonuses. CONSUMPTION STATUS (verified from code): only HarvestBonusMult
-// currently has a real reader; the other three are WRITE-ONLY STUBS -- computed and
-// stored, but NO production system reads them yet. They are the FORWARD SEAM, pending
-// host wiring:
-//   HarvestBonusMult-> CONSUMED: EchoService.RatePerSecond / DumpSilos capped total bonus
+// OWNERSHIP: the VILLAGE layer (EchoBonusCalculator.Recompute, event-driven) WRITES
+// all four values from the per-echo assignment + affinity match + pair/set bonuses.
+// CONSUMPTION STATUS (verified from code, WO-830 pass): ALL FOUR are currently
+// WRITE-ONLY MIRRORS -- EchoService.RatePerSecond reads
+// EchoBonusCalculator.AggregateHarvestMultiplier() LIVE (never this holder), so
+// HarvestBonusMult is a diagnostic mirror of the APPLIED aggregate (it may carry the
+// WO-830 hidden tri-synergy term; safe precisely BECAUSE nothing player-facing reads
+// it). The other three are the FORWARD SEAM, pending host wiring:
+//   HarvestBonusMult-> MIRROR (unconsumed): the applied harvest aggregate, for hosts/diagnostics
 //   CraftingMult    -> STUB (unconsumed): intended for Forge / crafting yield+speed
 //   DefenseMult     -> STUB (unconsumed): intended for the OFFLINE async city-raid resolver
 //   ExplorationMult -> STUB (unconsumed): intended for the dungeon-run reward grant
@@ -23,8 +25,8 @@
 // This is a Core-owned STATIC holder (Core may not reference Village, so Village
 // writes INTO Core, hosts read FROM Core -- the GameModifiers/CoreServices pattern).
 // Pure data: no MonoBehaviour, no Village refs, no side effects. Not persisted --
-// it is RECOMPUTED from the persisted EchoLanes assignment on load (phase 2), the
-// same way GameModifiers is recompiled from BuildingTiers rather than saved.
+// it is RECOMPUTED from the persisted EchoLanes assignment on load (live since
+// WO-738), the same way GameModifiers is recompiled from BuildingTiers rather than saved.
 // =============================================================================
 
 namespace DeNelle.Core.State

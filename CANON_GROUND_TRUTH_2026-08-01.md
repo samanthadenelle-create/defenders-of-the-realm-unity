@@ -73,6 +73,18 @@
 - **Echo canon UPDATE (2026-08-01, supersedes part of the 07-17/07-19 lane model):** all 6 echoes get
   a unique harvest affinity; Defense/Exploration lanes stay hidden/unwired (the old "wire Defense next"
   guidance is retired). Memory `echo-lane-design-rulings` updated by the UI seat.
+- **WO-830/831 IMPLEMENTED 2026-08-02 (pending gates):** all 6 roster rows `PreferredLane=Harvest`
+  with affinities Aldwin→Food, Elowen→Wood, Corvin→Gold, Bran→Crystals, Doran→Iron, Maren→Crystals
+  (Repairs REMOVED per the 08-02 banner; crystals = the doubled affinity, Bran+Maren rates 0.45 each
+  so the combined trickle is slowest). Owner ruling honored: the card is a per-Echo RESOURCE PICKER
+  (5 chips; affinity = match bonus 0.40, never a lock); echoLanes grammar extended to
+  `<resource>:<level>` tokens (read-migrated, NO schema bump); Dump = 5-way split (Gold→AddCoins,
+  Crystals→GrantSpendable crystals param); 3 disclosed pair synergies (+0.10 each) + hidden
+  tri-synergy (+0.25, applied-only, never displayed); silo capacity reconciled to the rate basis.
+  WO-831: EchoUnlockDialogue = emergence sprite beat (Resources/Echoes/Emergence, LFS; Guard
+  fallback to portrait — art not yet supplied) → Continue → awakening card. New/updated oracles:
+  EchoSpecializationRegression + EchoResourcePickerRegression (registration in DataRegression owed
+  by the committer).
 
 ## 3. BUILDS / RELEASE TRAIN (this evening)
 

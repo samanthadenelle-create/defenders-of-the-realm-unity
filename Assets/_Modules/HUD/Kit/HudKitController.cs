@@ -26,8 +26,9 @@
 //     flash exists in the component (owner rule enforced by the factory).
 //   • 4 round move buttons  — BuildControllerCluster -> HudMoveInput (replaces
 //     the square D-pad + VirtualDPadLean).
-//   • Talk button appears   — visibility from PostureSignals.TalkAvailable
-//     (Core static; the stale one-shot reflection push is retired).
+//   • Talk button appears   — availability from PostureSignals.TalkAvailable
+//     (Core static; the stale one-shot reflection push is retired), consumed via
+//     HudActionBarModel (WO-835: the face packs in/out, no dim, no hole).
 //   • raid-"x"/harvest-"Y"  — not rebuilt (earns-its-place: no verified
 //     backing feature surface); Pi sign-in stays off the HUD (Title-gated).
 // =============================================================================
@@ -86,28 +87,30 @@ namespace DeNelle.HUD.Kit
         private GameObject _resExpandedRow;
         private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
         private bool _resPanelOpen;         // WO-440: town collapse state (collapsed by default)
-        private Button _talkButton, _fleeButton, _startWaveButton;
-        // Owner report 2026-07-06 ("I do not see Quest changing to upgrade walking to upgradable
-        // buildings") — the HudBuildingFocus reroute was ported from the retired HUD but its
-        // VISIBLE face swap wasn't (classified 07-06: write-side fires from 3 pollers; this was
-        // the only missing reader). The context button now relabels Quests <-> Upgrade on focus.
-        private Button _questContextButton;
-        private TMP_Text _questContextLabel;
-        private bool _questContextUpgradeFace;
-        // Full-army gate (owner ruling): the Raids button DIMS (never disables — the tap
-        // still fires so RaidSelectionScreen can redirect to the drillmaster) unless the
-        // army is full counting ready + queued troops. Polls RaidEntryGate.ArmyStatus
-        // (the ObsidianQueueGate/HudBuildingFocus precedent) by Version in Update().
-        private Button _raidsButton;
+        private Button _fleeButton, _startWaveButton;
+        // ── WO-835 action bar (owner architecture law 2026-08-02): the bottom bar renders
+        // ONLY the applicable buttons, packed + centered. Every predicate (Talk in range,
+        // Raids capable, Map onboarded, Upgrade focus, posture set) lives in the Core
+        // HudActionBarModel; this View holds the button GameObjects and renders the array
+        // it is passed (ApplyActionBar), NOTHING else. The old Update() gate polls
+        // (talk dim / raids dim / map hole-hide / Quests<->Upgrade relabel) are RETIRED
+        // from this class — moved into the model.
+        private HudActionBarModel _barModel;
+        private readonly GameObject[] _barButtons = new GameObject[HudActionBarModel.ButtonCount];
+        private readonly RectTransform[] _barButtonRects = new RectTransform[HudActionBarModel.ButtonCount];
+        // Constant per-button width (owner default: never resize a face as context
+        // changes) sized so the 7-button MAX packs the ActionBar zone exactly; smaller
+        // sets keep the SAME width and the group centers ((1 - gap*(max-1)) / max).
+        private const float BarGap = 0.01f;
+        private const float BarSlotW = (1f - BarGap * 6f) / 7f;
+        private const float BarY0 = 0.10f, BarY1 = 0.95f;
+        // Raids dim visuals (WO-820 semantics preserved: dim toward Disabled, never
+        // uninteractable — the tap still reaches the drillmaster redirect). The DECISION
+        // (RaidsDimmed) comes from the model; only the built-colour restore lives here.
         private Image _raidsButtonImage;          // targetGraphic face (built colour cached)
         private TMP_Text _raidsButtonLabel;
         private Color _raidsImageBuiltColor = Color.white;
         private Color _raidsLabelBuiltColor = Color.white;
-        private bool _raidsDimmed;
-        private int _raidArmyStatusVersion = -1;
-        // WO-826: the Realm Map entry — the inner button hides until Onboarded (WO-825 R4);
-        // the Update() poll toggles it so the occupancy rows keep owning the widget root.
-        private Button _mapButton;
         private TMP_Text _fleeLabel;
         private TMP_Text _waveLabel, _waveCountdown;
         private ElarionUiKit.BarHandle _waveProgress;
@@ -409,45 +412,43 @@ namespace DeNelle.HUD.Kit
             // WO-778: persistent Builders/Training status chip (CoC-feel, own area under System).
             BuildQueueStatusChip(pool);
 
-            // ── town action buttons (WO-826: 7 equal-width — Build / Talk / Bag / Queues /
-            // Raids / Map / Quests) ──
-            // Queues (owner rename 2026-08-01, was "Work" — players read Work as quests) = the
-            // work-queue panel (Builders / Training / Research) via ObsidianQueueGate. Widget key
-            // stays "workButton" (hud-areas.json occupancy rows reference it; label-only rename).
-            // WO-826 note: the divisor was still /5 after Raids became the 6th button, so the
-            // trailing face anchored PAST x=1.0 (off the actionBar area); sized for the real
-            // face count so every button lands inside the zone. Owner 2026-08-01: the Queues
-            // face left the bar (the right-column Builders chip in the QueueStatus band --
-            // directly above the resources dock -- is the one Queues entry), so six faces.
-            const float btnGap = 0.01f;
-            const float btnW = (1f - btnGap * 5f) / 6f;   // six equal faces across 0..1
-            float bx = 0f;
-            Vector2 BtnMin(float x) => new Vector2(x, 0.10f);
-            Vector2 BtnMax(float x) => new Vector2(x + btnW, 0.95f);
+            // ── town action bar (WO-835 APPLICABILITY REPACK): Build / Talk / Bag /
+            // Raids / Map / Quests / Upgrade ──
+            // The bar is no longer a fixed-divisor row. The Core HudActionBarModel computes
+            // the ordered ACTIVE set from the context signals (posture, talk range, raid
+            // capability, Onboarded, building focus) and ApplyActionBar() renders EXACTLY
+            // that array — constant button width, group centered, no holes (owner
+            // 2026-08-02: "the visible array should only be the ones active"). Buttons are
+            // built here at a placeholder slot and positioned by the render pass; each keeps
+            // its own widget id so the hud-areas.json occupancy rows still own the roots.
+            // Queues stays retired (owner 2026-08-01): the right-column Builders chip is the
+            // one Queues entry (ObsidianQueueRegression 7c enforces).
+            var slot0Min = new Vector2(0f, BarY0);
+            var slot0Max = new Vector2(BarSlotW, BarY1);
 
             var build = ElarionUiKit.BuildObsidianButton(pool, "Build",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                BtnMin(bx), BtnMax(bx),
+                slot0Min, slot0Max,
                 () => { if (_owner != null) _owner.BuildRequested?.Invoke(); });
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.build_button", (RectTransform)build.transform);
-            Register("buildButton", WrapAsWidget("buildButton", build.gameObject));
-            bx += btnW + btnGap;
+            RegisterBarButton(ActionBarButtonId.Build, "buildButton", build);
 
-            _talkButton = ElarionUiKit.BuildObsidianButton(pool, "Talk",
+            var talk = ElarionUiKit.BuildObsidianButton(pool, "Talk",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                BtnMin(bx), BtnMax(bx), () =>
+                slot0Min, slot0Max, () =>
                 {
                     FlowTrace.Step("HudKit", "Talk tapped -> HudCommands.Talk + TalkRequested");
                     HudCommands.Talk();
                     if (_owner != null) _owner.TalkRequested?.Invoke();   // legacy bridge compat
                 });
-            Register("talkButton", WrapAsWidget("talkButton", _talkButton.gameObject));
-            bx += btnW + btnGap;
+            // WO-835: Talk HIDES (repacks out) when no NPC is in range — the model drops it
+            // from the array; the old dim-to-0.45 CanvasGroup treatment is retired.
+            RegisterBarButton(ActionBarButtonId.Talk, "talkButton", talk);
 
             var bag = ElarionUiKit.BuildObsidianButton(pool, "Bag",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                BtnMin(bx), BtnMax(bx), () =>
+                slot0Min, slot0Max, () =>
                 {
                     // Owner 07-06 "Clicking bag doesnt do anything" (RCA log-proven): the two
                     // events below had ZERO live listeners in Main_Castle_Overworld (HeroEquipHud
@@ -459,8 +460,7 @@ namespace DeNelle.HUD.Kit
                     if (_owner != null) _owner.InventoryRequested?.Invoke();
                     VillageHudController.RaiseInventoryRequested();
                 });
-            Register("bagButton", WrapAsWidget("bagButton", bag.gameObject));
-            bx += btnW + btnGap;
+            RegisterBarButton(ActionBarButtonId.Bag, "bagButton", bag);
 
             // Queues entry (owner 2026-08-01): the bar's Queues button was RETIRED — the
             // right-column Builders chip (BuildQueueStatusChip, QueueStatus band above the
@@ -473,48 +473,51 @@ namespace DeNelle.HUD.Kit
             // -> RaidSelectionScreen (whose Open carries the WO-813 zero-troops safety net).
             var raids = ElarionUiKit.BuildObsidianButton(pool, "Raids",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                BtnMin(bx), BtnMax(bx), () =>
+                slot0Min, slot0Max, () =>
                 {
                     FlowTrace.Step("HudKit", "Raids tapped -> RaidEntryGate.RequestOpen");
                     RaidEntryGate.RequestOpen();
                 });
-            Register("raidsButton", WrapAsWidget("raidsButton", raids.gameObject));
-            // Full-army gate capture (mirrors _questContextButton): hold the button + its
-            // face image + label with their BUILT colours so the Update() army poll can
-            // dim toward ElarionUi.Disabled and restore exactly what the kit built.
-            _raidsButton = raids;
+            // WO-835 §3d (owner default 1): Raids HIDES when the player cannot raid at all
+            // (no barracks / no troops / flag off — the model's RaidCapable input). The
+            // WO-820 full-army gate is PRESERVED on a visible face: dim toward Disabled,
+            // never uninteractable, so the tap still reaches the drillmaster redirect.
+            // Capture the face image + label with their BUILT colours so ApplyRaidsDim can
+            // restore exactly what the kit built.
+            RegisterBarButton(ActionBarButtonId.Raids, "raidsButton", raids);
             _raidsButtonImage = raids != null ? raids.targetGraphic as Image : null;
             _raidsButtonLabel = raids != null ? raids.GetComponentInChildren<TMP_Text>(true) : null;
             if (_raidsButtonImage != null) _raidsImageBuiltColor = _raidsButtonImage.color;
             if (_raidsButtonLabel != null) _raidsLabelBuiltColor = _raidsButtonLabel.color;
-            bx += btnW + btnGap;
 
             // MAP (WO-826): the Realm Map parchment overworld. Kit button -> Core
             // PanelRouter -> RealmMapPanel (DeNelle.Village registers the opener at boot),
-            // reflection-free — HUD never names a Village type. WO-825 R4: the button face
-            // hides until Onboarded (the Update() poll below toggles the inner button so
-            // the hud-areas.json occupancy rows keep owning the widget root, the waveBlock
-            // self-gate precedent).
+            // reflection-free — HUD never names a Village type. WO-825 R4 semantics kept:
+            // the face appears once Onboarded — now via the model's MapUnlocked input, and
+            // the bar REPACKS (WO-835 kills the old fixed-slot hole).
             var map = ElarionUiKit.BuildObsidianButton(pool, "Map",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                BtnMin(bx), BtnMax(bx), () =>
+                slot0Min, slot0Max, () =>
                 {
                     FlowTrace.Step("RealmMap", "HUD Map tapped -> PanelRouter.Open(RealmMap)");
                     if (!PanelRouter.Open(PanelId.RealmMap))
                         FlowTrace.Warn("RealmMap", "PanelId.RealmMap has no registered opener - map did not open");
                 });
-            Register("mapButton", WrapAsWidget("mapButton", map.gameObject));
-            _mapButton = map;
-            bx += btnW + btnGap;
+            RegisterBarButton(ActionBarButtonId.Map, "mapButton", map);
 
-            // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
-            var quest = ElarionUiKit.BuildObsidianButton(pool, "Quests",
+            // QUESTS (WO-835 §3c): its OWN always-in-town face — the 07-06 Quests<->Upgrade
+            // relabel hijack is retired (owner: "allows quests to be active more often").
+            var quests = ElarionUiKit.BuildObsidianButton(pool, "Quests",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                BtnMin(bx), BtnMax(bx), OnContextAction);
-            Register("questButton", WrapAsWidget("questButton", quest.gameObject));
-            _questContextButton = quest;
-            _questContextLabel = quest.GetComponentInChildren<TMP_Text>(true);
-            _questContextUpgradeFace = false;
+                slot0Min, slot0Max, OnQuestsAction);
+            RegisterBarButton(ActionBarButtonId.Quests, "questButton", quests);
+
+            // UPGRADE (WO-835 §3c split-out): its own CONTEXT face — the model packs it in
+            // only while a building holds focus (HudBuildingFocus), out when it doesn't.
+            var upgrade = ElarionUiKit.BuildObsidianButton(pool, "Upgrade",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                slot0Min, slot0Max, OnUpgradeAction);
+            RegisterBarButton(ActionBarButtonId.Upgrade, "upgradeButton", upgrade);
 
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
@@ -622,6 +625,18 @@ namespace DeNelle.HUD.Kit
         {
             _widgets[id] = root;
             root.SetActive(false);   // occupancy rows switch widgets on
+        }
+
+        // WO-835: capture a bar face for the model-driven render pass. The widget wrap
+        // (occupancy-owned root) registers exactly as before; the INNER button starts
+        // hidden — ApplyActionBar() activates + positions exactly the model's array
+        // (the WO-826 Map inner-button precedent, generalized to every face).
+        private void RegisterBarButton(ActionBarButtonId id, string widgetId, Button button)
+        {
+            _barButtons[(int)id] = button.gameObject;
+            _barButtonRects[(int)id] = (RectTransform)button.transform;
+            Register(widgetId, WrapAsWidget(widgetId, button.gameObject));
+            button.gameObject.SetActive(false);
         }
 
         private void BuildWaveBlock(Transform pool)
@@ -1121,6 +1136,7 @@ namespace DeNelle.HUD.Kit
 
         private void BindModels()
         {
+            BindActionBar();   // WO-835: model-independent of IHudModel — bind first, always
             var m = _models;
             if (m == null)
             {
@@ -1155,9 +1171,71 @@ namespace DeNelle.HUD.Kit
             Sub(m.TargetCycle, OnTargetCycle);  OnTargetCycle();
             _targetFrame.Bind(m.Target);
             _castBar.Bind(m.Cast);
-            PostureSignals.TalkChanged += OnTalkChanged; _unsubscribe.Add(() => PostureSignals.TalkChanged -= OnTalkChanged);
-            OnTalkChanged();
             FlowTrace.Step("HudKit", "models bound (vitals/economy/wave/world/abilities/cycle/target/cast)");
+        }
+
+        // =====================================================================
+        // WO-835 ACTION BAR — the View consumes the Core model's array, only.
+        // =====================================================================
+
+        // Bind the shared Core applicability model. The View's ONLY action-bar inputs
+        // from here on are ActiveButtonsChanged (render the new array) and
+        // RaidsDimmedChanged (tint the Raids face) — zero predicate reads remain.
+        private void BindActionBar()
+        {
+            _barModel = HudActionBarModel.Shared;
+            _barModel.ActiveButtonsChanged += ApplyActionBar;
+            _unsubscribe.Add(() => _barModel.ActiveButtonsChanged -= ApplyActionBar);
+            _barModel.RaidsDimmedChanged += ApplyRaidsDim;
+            _unsubscribe.Add(() => _barModel.RaidsDimmedChanged -= ApplyRaidsDim);
+            // Sync to the model's CURRENT state (a scene-swap kit binds an already-live
+            // shared model whose set may not change again for a while).
+            ApplyActionBar();
+            ApplyRaidsDim();
+        }
+
+        // Render pass (purely mechanical): SetActive + position EXACTLY the buttons in
+        // the model's ordered array — constant slot width, group centered in the zone,
+        // holes impossible by construction. Runs only on ActiveButtonsChanged (and the
+        // bind-time sync), never per-frame.
+        private void ApplyActionBar()
+        {
+            if (_barModel == null) return;
+            var active = _barModel.Active;
+            int n = active.Count;
+            float groupW = n > 0 ? n * BarSlotW + (n - 1) * BarGap : 0f;
+            float x = (1f - groupW) * 0.5f;
+
+            for (int i = 0; i < _barButtons.Length; i++)
+                if (_barButtons[i] != null && _barButtons[i].activeSelf)
+                    _barButtons[i].SetActive(false);
+
+            for (int i = 0; i < n; i++)
+            {
+                int idx = (int)active[i];
+                var rt = _barButtonRects[idx];
+                var go = _barButtons[idx];
+                if (rt == null || go == null) continue;
+                rt.anchorMin = new Vector2(x, BarY0);
+                rt.anchorMax = new Vector2(x + BarSlotW, BarY1);
+                rt.offsetMin = Vector2.zero;
+                rt.offsetMax = Vector2.zero;
+                go.SetActive(true);
+                x += BarSlotW + BarGap;
+            }
+            FlowTrace.Step("HudKit", "action bar repacked: " + n + " face(s) centered");
+        }
+
+        // Raids dim visuals (WO-820 semantics via the model's decision): tint face +
+        // label toward Disabled, restore the BUILT colours; interactable is never
+        // touched, so a dimmed tap still reaches the drillmaster redirect.
+        private void ApplyRaidsDim()
+        {
+            bool dim = _barModel != null && _barModel.RaidsDimmed;
+            if (_raidsButtonImage != null)
+                _raidsButtonImage.color = dim ? ElarionUi.Disabled : _raidsImageBuiltColor;
+            if (_raidsButtonLabel != null)
+                _raidsButtonLabel.color = dim ? ElarionUi.Disabled : _raidsLabelBuiltColor;
         }
 
         private void Sub(HeroVitalsModel m, Action h)    { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
@@ -1427,15 +1505,8 @@ namespace DeNelle.HUD.Kit
             }
         }
 
-        // TALK §0 FIX: visibility follows the Core signal — never a stale reflection push.
-        private void OnTalkChanged()
-        {
-            if (_talkButton == null) return;
-            _talkButton.interactable = PostureSignals.TalkAvailable;
-            if (!_talkButton.TryGetComponent(out CanvasGroup cg))
-                cg = _talkButton.gameObject.AddComponent<CanvasGroup>();
-            cg.alpha = PostureSignals.TalkAvailable ? 1f : 0.45f;
-        }
+        // (WO-835: the old OnTalkChanged dim handler is retired — Talk availability now
+        // packs the face in/out through HudActionBarModel; see ApplyActionBar.)
 
         // Two-tap flee (see BuildWidgets) — arm, confirm-inside-window, or disarm.
         private float _fleeArmedUntil;
@@ -1464,16 +1535,23 @@ namespace DeNelle.HUD.Kit
                 _resExpandedRow.SetActive(open);
         }
 
-        // Context action (carried over from the old HUD, Core-only): focused upgradable
-        // building -> Upgrade; else the Quest/Rumor board.
-        private void OnContextAction()
+        // WO-835 §3c: the old OpenQuestOrUpgrade context relabel is SPLIT into two
+        // dedicated handlers — Quests always opens the board; Upgrade routes the focused
+        // building. (Reading HudBuildingFocus here is COMMAND ROUTING — the tap's target
+        // argument — not an applicability predicate; visibility lives in the model.)
+        private void OnQuestsAction()
+        {
+            if (!PanelRouter.Open(PanelId.RumorBoard))
+                FlowTrace.Warn("HudKit", "RumorBoard opener not registered — quest board unreachable");
+        }
+
+        private void OnUpgradeAction()
         {
             string id = HudBuildingFocus.CurrentBuildingId;
             var custom = HudBuildingFocus.CurrentUpgradeAction;
-            if (custom != null) { FlowTrace.Step("HudKit", "context action -> custom upgrade"); custom(); }
+            if (custom != null) { FlowTrace.Step("HudKit", "upgrade action -> custom upgrade"); custom(); }
             else if (!string.IsNullOrEmpty(id)) PanelRouter.Open(PanelId.BuildingUpgrade, id);
-            else if (!PanelRouter.Open(PanelId.RumorBoard))
-                FlowTrace.Warn("HudKit", "RumorBoard opener not registered — quest board unreachable");
+            else FlowTrace.Warn("HudKit", "Upgrade tapped with no focused building — stale repack?");
         }
 
         // WO-439: the LEFT slide-out dock — a gear tab pinned to the left screen edge (collapsed by
@@ -1618,7 +1696,10 @@ namespace DeNelle.HUD.Kit
             // Dynamic gates on top of the rows (availability, never layout):
             if (_widgets.TryGetValue("fleeButton", out var flee) && flee.activeSelf)
                 flee.SetActive(HudCommands.HasFlee);
-            OnTalkChanged();
+            // WO-835: relay the posture key to the applicability model (a relay of the
+            // notification this View already receives — the key->set mapping lives in
+            // the model). A set change comes back as ActiveButtonsChanged -> render.
+            if (_barModel != null) _barModel.SetPosture(HudPostureKeys.Key(posture));
             OnConsumables();
             OnPlayerStatus();
             OnTargetStatus();
@@ -1639,21 +1720,12 @@ namespace DeNelle.HUD.Kit
                 _lockBadge.SetState(!t.HasTarget ? 0 : (t.Locked ? 2 : 1));
             }
 
-            // Context-button face swap (owner 07-06): HudBuildingFocus is written by the three
-            // proximity pollers; the tap already rerouted (OnContextAction) but nothing VISIBLE
-            // changed — the face-swap reader was never ported from the retired HUD. Poll the
-            // Core static (no event exists) and relabel Quests <-> Upgrade on transitions.
-            if (_questContextLabel != null)
-            {
-                bool upgradeFace = !string.IsNullOrEmpty(HudBuildingFocus.CurrentBuildingId);
-                if (upgradeFace != _questContextUpgradeFace)
-                {
-                    _questContextUpgradeFace = upgradeFace;
-                    _questContextLabel.text = upgradeFace ? "Upgrade" : "Quests";
-                    FlowTrace.Step("HudKit", "context button face -> " + (upgradeFace ? "Upgrade" : "Quests") +
-                        " (focus='" + (HudBuildingFocus.CurrentBuildingId ?? "<none>") + "')");
-                }
-            }
+            // WO-835: tick the Core applicability model — it polls the no-event Core
+            // statics (focus/onboarded/army version/capability) and edge-triggers
+            // ActiveButtonsChanged/RaidsDimmedChanged; this View holds zero predicates.
+            // (Replaces the retired Quests<->Upgrade relabel, Raids dim and Map hide
+            // polls that used to live right here.)
+            if (_barModel != null) _barModel.Tick();
 
             // Cheap availability polls (no model event exists for these Core statics).
             if (_widgets.TryGetValue("fleeButton", out var flee))
@@ -1700,45 +1772,8 @@ namespace DeNelle.HUD.Kit
                 }
             }
 
-            // Full-army gate (owner ruling): poll RaidEntryGate.ArmyStatus by Version (the
-            // queue-chip precedent above). When the army is NOT full (ready + queued < cap)
-            // the Raids button dims toward ElarionUi.Disabled but stays INTERACTABLE — the
-            // tap must still fire so RaidSelectionScreen redirects to the drillmaster.
-            if (_raidsButton != null)
-            {
-                var ra = RaidEntryGate.ArmyStatus;
-                if (ra.Version != _raidArmyStatusVersion)
-                {
-                    _raidArmyStatusVersion = ra.Version;
-                    bool dim = !ra.Ready;
-                    if (dim != _raidsDimmed)
-                    {
-                        _raidsDimmed = dim;
-                        if (_raidsButtonImage != null)
-                            _raidsButtonImage.color = dim ? ElarionUi.Disabled : _raidsImageBuiltColor;
-                        if (_raidsButtonLabel != null)
-                            _raidsButtonLabel.color = dim ? ElarionUi.Disabled : _raidsLabelBuiltColor;
-                        FlowTrace.Step("HudKit", "Raids button " + (dim ? "DIMMED" : "restored") +
-                            " (army " + (ra.DeployableSlots + ra.QueuedSlots) + "/" + ra.CapSlots + " slots)");
-                    }
-                }
-            }
-
-            // WO-826 (WO-825 R4): the Map entry appears once Onboarded. Toggle the INNER
-            // button (not the widget root — occupancy rows own that, the waveBlock
-            // self-gate precedent). Explicit null checks — UnityEngine.Object never gets
-            // the ?. operator (lint law). Cheap bool poll; SetActive only on change.
-            if (_mapButton != null)
-            {
-                var gs = DeNelle.Core.State.GameStateService.Instance;
-                bool showMap = gs != null && gs.State != null && gs.State.Onboarded;
-                if (_mapButton.gameObject.activeSelf != showMap)
-                {
-                    _mapButton.gameObject.SetActive(showMap);
-                    FlowTrace.Step("RealmMap", "HUD Map button " +
-                        (showMap ? "shown (Onboarded)" : "hidden (pre-onboard)"));
-                }
-            }
+            // (WO-835: the Raids army-dim poll and the Map Onboarded poll that lived here
+            // moved into HudActionBarModel — the View consumes its events above.)
         }
 
         private static string Cap(string s) =>

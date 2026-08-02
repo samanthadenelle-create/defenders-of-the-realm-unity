@@ -1,15 +1,28 @@
 // =============================================================================
-// EchoBonusCalculator -- the shared Echo specialization MATH (WO-738, SERVICE lane).
+// EchoBonusCalculator -- the shared Echo specialization MATH (WO-738 SERVICE lane,
+// WO-830 affinity match + pair synergies + hidden tri-synergy).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // PURE STATIC, null/absent-safe. The ONE place the specialization curve lives so
 // EchoService (harvest income + dump split + silo cadence) and the roster/picker UI
 // all read the SAME numbers -- no per-system math scattered. Reads:
-//   - EchoAssignments (LaneOf / LevelOf per owned echo index 0..EchoCount-1)
+//   - EchoAssignments (LaneOf / ResourceTokenOf / LevelOf per owned echo index)
 //   - EchoBalanceCatalog (the owner-tunable knobs: MaxLevel, PreferredLaneMatchBonus,
-//     BaseContributionPerEcho, SixSetBonusGlobalHarvest, PerLevelBonus, BaseRateFor)
-//   - EchoRosterCatalog (the fixed identity table: PreferredLane, HarvestResource, Id)
+//     BaseContributionPerEcho, SixSetBonusGlobalHarvest, PerLevelBonus, BaseRateFor,
+//     CrossBonuses, HiddenTriSynergyBonus)
+//   - EchoRosterCatalog (the fixed identity table: PreferredLane, Affinity, Id)
+//
+// WO-830 MATCH LAW: the "preferred match" bonus fires when the echo's ASSIGNED harvest
+// resource equals its AFFINITY (player-picked; affinity is a bonus, never a lock).
+// PAIR SYNERGIES (disclosed): a crossBonuses pair "runs" when BOTH members are owned
+// AND harvest-assigned to their own affinity resources; each running pair adds its
+// `bonus` to the global harvest spec sum. HIDDEN TRI-SYNERGY (UNDISCLOSED): when ALL
+// pairs run at once, `hiddenTriSynergyBonus` is added to the APPLIED path ONLY --
+// it must NEVER appear in ReadoutFor / any displayed "+%" (the whole point).
+// The per-echo ReadoutFor.BonusPct stays base+match+level (disclosed per-echo terms);
+// the pair bonus is disclosed through SynergyFor (its own card line), applied ONCE
+// per pair globally so no per-echo number double-counts it.
 //
 // SAFETY: no GameState / no service => neutral (multipliers 1.0, weights fall back to
 // even Wood/Iron/Food). Nothing here mutates state; Recompute() is the ONLY writer and
@@ -38,20 +51,45 @@ namespace DeNelle.Village
         /// <summary>The echo's level (1..MaxLevel).</summary>
         public int Level;
         /// <summary>This echo's additive bonus to its assigned lane, as a PERCENT (e.g. 18f == +18%).
-        /// Idle contributes nothing (0). Composed of the base-to-all floor + the element match
-        /// bonus (when preferred) + the per-level increment.</summary>
+        /// Idle contributes nothing (0). Composed of the base-to-all floor + the affinity match
+        /// bonus (when the assigned resource matches) + the per-level increment. Deliberately
+        /// EXCLUDES the pair synergies (disclosed separately via SynergyFor, applied once per
+        /// pair) and the hidden tri-synergy (never displayed anywhere -- WO-830 Sec.3d).</summary>
         public float BonusPct;
-        /// <summary>True when this echo's element/preferred-lane matches its assigned lane (earns the match bonus).</summary>
+        /// <summary>True when this echo's assigned harvest resource matches its affinity
+        /// (earns the match bonus). For legacy non-harvest lanes: lane == PreferredLane.</summary>
         public bool PreferredMatch;
     }
 
+    /// <summary>WO-830: one echo's pair-synergy status for the card UI (DISCLOSED). The hidden
+    /// tri-synergy is deliberately NOT represented here or anywhere player-facing.</summary>
+    public struct EchoSynergyReadout
+    {
+        /// <summary>True when this echo is a member of a defined synergy pair.</summary>
+        public bool HasPair;
+        /// <summary>The pair's display name ("Provisions"/"Forge"/"Fortune"). "" when none.</summary>
+        public string PairName;
+        /// <summary>The partner echo's display name. "" when none.</summary>
+        public string PartnerName;
+        /// <summary>The partner's affinity resource label ("Food") -- the hint for activating.</summary>
+        public string PartnerResourceLabel;
+        /// <summary>True when the pair is RUNNING (both owned + both on their affinity resources).</summary>
+        public bool Active;
+        /// <summary>The pair's disclosed bonus as a PERCENT (e.g. 10f == +10%).</summary>
+        public float BonusPct;
+    }
+
     /// <summary>
-    /// The shared Echo specialization math (WO-738). Pure functions over the persisted
+    /// The shared Echo specialization math (WO-738/830). Pure functions over the persisted
     /// assignment + the tunable balance + the fixed roster identity. See file header for
     /// the composition law (spine folded in ONCE by AggregateHarvestMultiplier).
     /// </summary>
     public static class EchoBonusCalculator
     {
+        // Hidden tri-synergy activation edge (trace on transition, not per frame --
+        // AggregateHarvestMultiplier runs every tick). Internal-only observability.
+        private static bool s_triWasActive;
+
         // =====================================================================
         //  HARVEST -- the applied total multiplier (folds the count spine).
         // =====================================================================
@@ -64,14 +102,16 @@ namespace DeNelle.Village
         ///   AggregateHarvestMultiplier
         ///     = EchoCount                                            // the WO-709 count-quadratic SPINE
         ///       x ( 1
-        ///           + Σ over echoes ASSIGNED to Harvest of
+        ///           + Sum over echoes ASSIGNED to Harvest of
         ///               [ BaseContributionPerEcho                    // "no echo wasted" floor
-        ///                 + (PreferredLane == Harvest ? PreferredLaneMatchBonus : 0)   // element match
+        ///                 + (assigned resource == affinity ? PreferredLaneMatchBonus : 0)  // WO-830 match
         ///                 + PerLevelBonus * (level - 1) ]            // level growth
-        ///           + (all 6 owned ? SixSetBonusGlobalHarvest : 0) ) // the 6-of-6 set bonus
+        ///           + Sum of RUNNING pair-synergy bonuses            // WO-830 disclosed pairs
+        ///           + (all 6 owned ? SixSetBonusGlobalHarvest : 0)   // the 6-of-6 set bonus
+        ///           + (ALL pairs running ? HiddenTriSynergyBonus : 0) ) // WO-830 HIDDEN (applied only)
         ///
-        /// Neutral (1.0) when no GameState/service exists. With defaults, one matched Lv1 Harvest
-        /// echo adds 1 + 0.15 + 0.75 = 1.90x the specialization factor on top of the count spine.
+        /// Neutral (1.0) when no GameState/service exists. The hidden tri term exists ONLY here
+        /// (the applied path); every displayed number excludes it (WO-830 Sec.3d hard rule).
         /// </summary>
         public static float AggregateHarvestMultiplier()
         {
@@ -85,26 +125,44 @@ namespace DeNelle.Village
                 specSum += LaneContribution(i, LaneType.Harvest);
             }
 
+            specSum += PairBonusSum(count);
+
             if (AllOwned(count))
                 specSum += EchoBalanceCatalog.SixSetBonusGlobalHarvest;
+
+            // WO-830 Sec.3d: the UNDISCLOSED tri-synergy -- applied, never displayed.
+            bool triActive = HiddenTriSynergyActive(count);
+            if (triActive) specSum += EchoBalanceCatalog.HiddenTriSynergyBonus;
+            if (triActive != s_triWasActive)
+            {
+                s_triWasActive = triActive;
+                // Internal-only observability (headless verify) -- no player-facing surface.
+                FlowTrace.Step("Echo", triActive
+                    ? $"hidden tri-synergy ACTIVE (+{EchoBalanceCatalog.HiddenTriSynergyBonus:0.###} applied, undisclosed)"
+                    : "hidden tri-synergy inactive");
+            }
 
             return count * (1f + specSum);
         }
 
         /// <summary>
-        /// Per-resource split WEIGHTS for DumpSilos (WO-738): each Harvest-assigned echo contributes
-        /// its (BaseRateFor(id) * level) weight to its element's HarvestResource; a Harvest echo with
-        /// a null HarvestResource spreads evenly across Wood/Iron/Food. Non-Harvest echoes contribute
-        /// nothing. If the total is 0 (no harvest echoes), falls back to an even Wood/Iron/Food split
-        /// so the caller never divides by zero. AetherCrystal is never weighted (premium currency).
+        /// WO-830: per-TARGET split WEIGHTS for DumpSilos across all five harvest targets
+        /// (Wood/Iron/Food/Gold/Crystals). Each Harvest-assigned echo contributes its
+        /// (BaseRateFor(id) * level) weight to its ASSIGNED resource (player-picked --
+        /// EchoAssignments.ResourceTokenOf; a v33 generic "harvest" token defaults to the
+        /// echo's affinity on read). Non-Harvest echoes contribute nothing. If the total is
+        /// 0 (no harvest echoes), falls back to an even Wood/Iron/Food split so the caller
+        /// never divides by zero (Gold/Crystals never flow without an explicit assignment).
         /// </summary>
-        public static Dictionary<ResourceType, float> HarvestResourceWeights()
+        public static Dictionary<HarvestTarget, float> HarvestTargetWeights()
         {
-            var weights = new Dictionary<ResourceType, float>
+            var weights = new Dictionary<HarvestTarget, float>
             {
-                { ResourceType.Wood, 0f },
-                { ResourceType.Iron, 0f },
-                { ResourceType.Food, 0f },
+                { HarvestTarget.Wood, 0f },
+                { HarvestTarget.Iron, 0f },
+                { HarvestTarget.Food, 0f },
+                { HarvestTarget.Gold, 0f },
+                { HarvestTarget.Crystals, 0f },
             };
 
             int count = OwnedCount();
@@ -112,6 +170,7 @@ namespace DeNelle.Village
             for (int i = 0; i < count; i++)
             {
                 if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Harvest) continue;
+                if (!EchoAssignments.TryTargetOf(i, out var target)) continue;
 
                 var entry = EchoRosterCatalog.ByIndex(i);
                 if (entry == null) continue;
@@ -120,30 +179,103 @@ namespace DeNelle.Village
                 float w = Mathf.Max(0f, EchoBalanceCatalog.BaseRateFor(entry.Id)) * Mathf.Max(1, level);
                 if (w <= 0f) continue;
 
-                if (entry.HarvestResource.HasValue && weights.ContainsKey(entry.HarvestResource.Value))
-                {
-                    weights[entry.HarvestResource.Value] += w;
-                }
-                else
-                {
-                    // Null / non-spendable resource -> spread evenly across the three build harvestables.
-                    float third = w / 3f;
-                    weights[ResourceType.Wood] += third;
-                    weights[ResourceType.Iron] += third;
-                    weights[ResourceType.Food] += third;
-                }
+                weights[target] += w;
                 total += w;
             }
 
             if (total <= 0f)
             {
-                // No harvest echoes -> even split (never divide by zero downstream).
-                weights[ResourceType.Wood] = 1f;
-                weights[ResourceType.Iron] = 1f;
-                weights[ResourceType.Food] = 1f;
+                // No harvest echoes -> even classic split (never divide by zero downstream).
+                weights[HarvestTarget.Wood] = 1f;
+                weights[HarvestTarget.Iron] = 1f;
+                weights[HarvestTarget.Food] = 1f;
             }
 
             return weights;
+        }
+
+        // =====================================================================
+        //  WO-830 pair synergies (disclosed) + hidden tri (applied-only).
+        // =====================================================================
+
+        /// <summary>True when the crossBonuses pair at <paramref name="def"/> is RUNNING:
+        /// both member echoes owned AND harvest-assigned to their own affinity resources.</summary>
+        private static bool PairActive(EchoCrossBonusDef def, int ownedCount)
+        {
+            return MemberActive(def != null ? def.A : null, ownedCount)
+                && MemberActive(def != null ? def.B : null, ownedCount);
+        }
+
+        /// <summary>One pair member's activation: owned + Harvest lane + assigned resource == affinity.</summary>
+        private static bool MemberActive(string echoId, int ownedCount)
+        {
+            if (string.IsNullOrEmpty(echoId)) return false;
+            var entry = FindEntry(echoId);
+            if (entry == null) return false;
+            int index = entry.Order - 1;
+            if (index < 0 || index >= ownedCount) return false;
+            if (LaneTypeOf(EchoAssignments.LaneOf(index)) != LaneType.Harvest) return false;
+            return EchoAssignments.ResourceTokenOf(index) == EchoRosterCatalog.TargetToken(entry.Affinity);
+        }
+
+        /// <summary>Sum of the DISCLOSED bonuses of all running pairs (additive spec-sum terms).</summary>
+        private static float PairBonusSum(int ownedCount)
+        {
+            var defs = EchoBalanceCatalog.CrossBonuses;
+            if (defs == null || defs.Count == 0) return 0f;
+            float sum = 0f;
+            for (int i = 0; i < defs.Count; i++)
+                if (PairActive(defs[i], ownedCount)) sum += Mathf.Max(0f, defs[i].Bonus);
+            return sum;
+        }
+
+        /// <summary>WO-830 Sec.3d: true when EVERY defined pair is running at once (the secret
+        /// condition). False when no pairs are defined. Internal -- never surfaced to a player.</summary>
+        private static bool HiddenTriSynergyActive(int ownedCount)
+        {
+            var defs = EchoBalanceCatalog.CrossBonuses;
+            if (defs == null || defs.Count == 0) return false;
+            for (int i = 0; i < defs.Count; i++)
+                if (!PairActive(defs[i], ownedCount)) return false;
+            return true;
+        }
+
+        /// <summary>WO-830: the DISCLOSED pair-synergy status for one echo (card UI line).
+        /// Carries the pair name, the partner + the partner's affinity resource (the hint),
+        /// active state, and the disclosed bonus %. Never mentions the tri-synergy.</summary>
+        public static EchoSynergyReadout SynergyFor(int echoIndex)
+        {
+            var ro = new EchoSynergyReadout
+            {
+                HasPair = false, PairName = "", PartnerName = "", PartnerResourceLabel = "",
+                Active = false, BonusPct = 0f,
+            };
+
+            var entry = EchoRosterCatalog.ByIndex(echoIndex);
+            if (entry == null) return ro;
+
+            var defs = EchoBalanceCatalog.CrossBonuses;
+            if (defs == null) return ro;
+
+            for (int i = 0; i < defs.Count; i++)
+            {
+                var def = defs[i];
+                if (def == null) continue;
+                string partnerId = null;
+                if (def.A == entry.Id) partnerId = def.B;
+                else if (def.B == entry.Id) partnerId = def.A;
+                if (partnerId == null) continue;
+
+                var partner = FindEntry(partnerId);
+                ro.HasPair = true;
+                ro.PairName = def.Name ?? "";
+                ro.PartnerName = partner != null ? partner.DisplayName : partnerId;
+                ro.PartnerResourceLabel = partner != null ? EchoRosterCatalog.TargetLabel(partner.Affinity) : "";
+                ro.Active = PairActive(def, OwnedCount());
+                ro.BonusPct = Mathf.Max(0f, def.Bonus) * 100f;
+                return ro;
+            }
+            return ro;
         }
 
         // =====================================================================
@@ -152,10 +284,12 @@ namespace DeNelle.Village
 
         /// <summary>
         /// The passive multiplier for a Crafting/Defense/Exploration lane (WO-738):
-        ///   1 + Σ over echoes ASSIGNED to that lane of
-        ///       [ BaseContributionPerEcho + (preferred+element match ? PreferredLaneMatchBonus : 0)
+        ///   1 + Sum over echoes ASSIGNED to that lane of
+        ///       [ BaseContributionPerEcho + (preferred match ? PreferredLaneMatchBonus : 0)
         ///         + PerLevelBonus * (level - 1) ].
-        /// Harvest/Idle return 1.0 here (Harvest is handled by AggregateHarvestMultiplier; Idle is a no-op).
+        /// Harvest/Idle return 1.0 here (Harvest is handled by AggregateHarvestMultiplier; Idle is
+        /// a no-op). WO-830 note: these lanes are no longer pickable (Harvest-only picker), but any
+        /// legacy-stored token still computes so an old save never silently loses a bonus.
         /// </summary>
         public static float LaneMultiplier(LaneType lane)
         {
@@ -177,7 +311,9 @@ namespace DeNelle.Village
         //  UI readout.
         // =====================================================================
 
-        /// <summary>A per-echo specialization readout (lane, level, bonus %, matched) for the roster/picker UI.</summary>
+        /// <summary>A per-echo specialization readout (lane, level, bonus %, matched) for the
+        /// roster/picker UI. BonusPct = base + match + level ONLY (see the struct doc --
+        /// pair synergies disclose via <see cref="SynergyFor"/>; the hidden tri never shows).</summary>
         public static EchoBonusReadout ReadoutFor(int echoIndex)
         {
             var lane = LaneTypeOf(EchoAssignments.LaneOf(echoIndex));
@@ -201,9 +337,10 @@ namespace DeNelle.Village
         /// Recompute the three passive lane multipliers + the harvest total and push them into the
         /// Core <see cref="EchoLaneBonuses"/> holder (Village writes, hosts read). Idempotent -- safe
         /// to call on every assignment/count change event. HarvestBonusMult mirrors the applied
-        /// AggregateHarvestMultiplier so a HUD reading the contract sees the same number EchoService
+        /// AggregateHarvestMultiplier so a host reading the contract sees the same number EchoService
         /// applies (EchoService itself reads AggregateHarvestMultiplier() LIVE -- no double-apply).
-        /// [Flow:Echo].
+        /// The mirror carries the hidden tri term (it is the APPLIED value); no UI reads it
+        /// (verified: write-only stub + regression), so nothing player-facing discloses. [Flow:Echo].
         /// </summary>
         public static void Recompute()
         {
@@ -231,7 +368,8 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>The additive specialization contribution (FRACTION) of one echo to a given lane:
-        /// BaseContributionPerEcho + (preferred match ? PreferredLaneMatchBonus : 0) + PerLevelBonus*(level-1).</summary>
+        /// BaseContributionPerEcho + (affinity/preferred match ? PreferredLaneMatchBonus : 0)
+        /// + PerLevelBonus*(level-1). Pair + tri terms live in AggregateHarvestMultiplier only.</summary>
         private static float LaneContribution(int echoIndex, LaneType lane)
         {
             int level = EchoAssignments.LevelOf(echoIndex);
@@ -241,12 +379,31 @@ namespace DeNelle.Village
             return c;
         }
 
-        /// <summary>True when the echo's identity PreferredLane matches the lane it's evaluated against.</summary>
+        /// <summary>WO-830 match law: on the HARVEST lane the match is the echo's ASSIGNED
+        /// resource equaling its AFFINITY (player pick lands on the calling). On a legacy
+        /// non-harvest lane the pre-830 rule survives (lane == PreferredLane) so old stored
+        /// tokens keep their exact bonus.</summary>
         private static bool PreferredMatches(int echoIndex, LaneType lane)
         {
             if (lane == LaneType.Idle) return false;
             var entry = EchoRosterCatalog.ByIndex(echoIndex);
-            return entry != null && entry.PreferredLane == lane;
+            if (entry == null) return false;
+            if (lane == LaneType.Harvest)
+            {
+                if (entry.PreferredLane != LaneType.Harvest) return false;
+                return EchoAssignments.ResourceTokenOf(echoIndex) == EchoRosterCatalog.TargetToken(entry.Affinity);
+            }
+            return entry.PreferredLane == lane;
+        }
+
+        /// <summary>Find a roster entry by id (null when absent).</summary>
+        private static EchoRosterEntry FindEntry(string echoId)
+        {
+            var all = EchoRosterCatalog.All;
+            if (all == null) return null;
+            for (int i = 0; i < all.Length; i++)
+                if (all[i] != null && all[i].Id == echoId) return all[i];
+            return null;
         }
 
         /// <summary>Owned echo count. 0 when no GameState/service exists (=> neutral bonuses).</summary>

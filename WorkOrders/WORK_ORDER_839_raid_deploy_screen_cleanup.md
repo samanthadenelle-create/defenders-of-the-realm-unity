@@ -1,6 +1,14 @@
 # WORK ORDER 839 — Raid Deploy screen: cleaner layout (header, button row, preview)
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED (pending gates — CompileGate + headless UI capture; FrameCore is shared, capture 2-3 other FrameCore panels)
+**Implementation note (2026-08-02):** root cause refined — the sweep-9413 factory relocation DID re-seat FrameCore's
+inherited footer above the Close, but kept its designed ~0.065 height; that band is too thin for the `MinTouchPx=112`
+button floor, so `ClampMinTouch` grew Auto Recommend/DEPLOY past the band into the Close underneath. Fix = explicit
+raised 0.13-height FrameCore footer + a new sub-header zone (kit-level, `ZonesFor`); #6 shipped as a flippable
+`GateDeployAtZeroTroops` flag (default false = scout-enabled, owner confirm pending); §3 dev-guard fixed in
+`BreakCaptureHarness` (note box + freeze entry compiled out of release; release F8 falls back to the no-freeze
+capture path). New contract pins: `Assets/Editor/Regression/RaidDeployUiRegression.cs` (needs DataRegression.RunAll
+registration — sole-committer lane). Party row untouched beyond re-anchor + WO-774.0 forward-note (spectator ruling pending).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — `RaidDeployScreen.cs` + a shared-kit zone fix in `ElarionUiKit.cs` (FrameCore).
 **Origin:** owner felt-test 2026-08-02, "RAID: Small Raider Camp" — *"Raid screen needs cleaner."*

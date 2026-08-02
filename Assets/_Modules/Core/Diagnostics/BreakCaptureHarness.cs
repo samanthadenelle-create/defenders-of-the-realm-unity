@@ -92,11 +92,17 @@ namespace DeNelle.Core.Diagnostics
         // can clobber another's captures (the RCA-proof-by-data rule depends on these files).
         readonly string _sessionStamp = System.DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         float _toastUntil = -1f;
-        // note-entry: tap F8 -> screenshot clean frame -> freeze + type one line
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // note-entry: tap F8 -> screenshot clean frame -> freeze + type one line.
+        // WO-839 §3 release-safety: the typed-note flow is DEV-ONLY. The harness installs
+        // on every non-WebGL platform, and this state (plus its OnGUI box below) was the
+        // one piece OUTSIDE the dev guard — the "What looks wrong?" capture field could
+        // render on a NON-development player build. Compiled out of release entirely.
         bool _noteMode;
         string _noteBuffer = "";
         int _noteShowFrame;
         float _prevTimeScale = 1f;
+#endif
 
         // ---- bootstrap (zero setup) -------------------------------------------
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -457,6 +463,7 @@ namespace DeNelle.Core.Diagnostics
         // ---- owner-pressed flag (F8): screenshot, freeze, type one line ---------
         void FlagHere()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_noteMode) return;                                 // already flagging
             // screenshot the CLEAN frame first (the note box draws next frame)
             try { ScreenCapture.CaptureScreenshot(ScreenshotPath($"flag_{_sessionStamp}_{_flagCount:00}.png")); }
@@ -466,8 +473,17 @@ namespace DeNelle.Core.Diagnostics
             _prevTimeScale = Time.timeScale;
             Time.timeScale = 0f;                                   // freeze so typing can't drive the hero
             _noteMode = true;
+#else
+            // WO-839 §3 release-safety: the typed-note flow (freeze + IMGUI text field) is
+            // compiled OUT of non-development players. F8 still captures — it routes through
+            // the no-keyboard path (same screenshot + "flagged" record, no freeze), so a
+            // release build can neither render the dev note box NOR softlock at timeScale 0
+            // waiting for a commit no OnGUI block would ever deliver.
+            FlagFromButton("F8 (release build - note entry is dev-only)");
+#endif
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         void CommitFlag()
         {
             _noteMode = false;
@@ -477,6 +493,7 @@ namespace DeNelle.Core.Diagnostics
             _flagCount++;
             _toastUntil = Time.realtimeSinceStartup + 1.6f;
         }
+#endif
 
         // =====================================================================
         // MOBILE FLAG BUTTON entry point (owner has NO keyboard on the Android
@@ -511,7 +528,11 @@ namespace DeNelle.Core.Diagnostics
 
         void OnGUI()
         {
-            // note-entry box (only after the screenshot frame so it isn't captured)
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // note-entry box (only after the screenshot frame so it isn't captured).
+            // WO-839 §3: moved INSIDE the dev guard — this block previously sat OUTSIDE it,
+            // so the "What looks wrong?" capture field could render on a RELEASE player
+            // build (the harness installs on every non-WebGL platform).
             if (_noteMode && Time.frameCount >= _noteShowFrame)
             {
                 try
@@ -534,7 +555,8 @@ namespace DeNelle.Core.Diagnostics
                 catch { CommitFlag(); }
                 return;
             }
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // (the dev guard opened at the top of OnGUI continues — note box + Flag button
+            // are one dev-only region; the confirmation toast below stays in all builds)
             // RELIABLE capture trigger (owner: "no F8"). F8 is unreliable in the editor (Game-view
             // focus / function-key interception) and ABSENT on mobile — and this game is mobile-first.
             // A small always-visible IMGUI button flags a bug with ZERO input-system / focus dependency

@@ -97,7 +97,11 @@ namespace DeNelle.HUD.Kit
             Add(HudArea.System,      new Vector2(0.845f, 0.880f), new Vector2(0.995f, 0.985f));
             Add(HudArea.TargetInfo,  new Vector2(0.280f, 0.660f), new Vector2(0.720f, 0.840f));
             Add(HudArea.ActionRail,  new Vector2(0.780f, 0.040f), new Vector2(0.995f, 0.420f));
-            Add(HudArea.ActionBar,   new Vector2(0.280f, 0.015f), new Vector2(0.720f, 0.150f));
+            // WO-835: widened 0.280-0.720 -> 0.270-0.730 (still symmetric, clear of the
+            // MoveCluster right edge at 0.270 and the ActionRail left edge at 0.780) so the
+            // 7-face applicability MAX (Build/Talk/Bag/Raids/Map/Quests/Upgrade) keeps each
+            // face near the previous 6-face touch size at the constant per-button width.
+            Add(HudArea.ActionBar,   new Vector2(0.270f, 0.015f), new Vector2(0.730f, 0.150f));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
             Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.430f));
             // Heart of Elarion status: left column, directly BELOW the Vitals cluster (WO-432).

@@ -1,6 +1,6 @@
 # WORK ORDER 830 — Echo Harvest Affinity + Synergy System
 
-**Status:** READY TO IMPLEMENT (design owner-approved 2026-08-01; three soft spots flagged `OWNER CONFIRM` inline)
+**Status:** IMPLEMENTED 2026-08-02 — pending gates (CompileGate + DataRegression by the committer; see `WORK_ORDER_830_echo_harvest_affinity_synergy.RESULT.md` for the balance math + file list). OWNER CONFIRM defaults taken: Crafting chip removed; crystals Echo-farmable with the combined Bran+Maren trickle slowest.
 
 > ⚠ **OWNER RULING 2026-08-02 (afternoon, F8 seq 619 + verbal): the player SELECTS which resource
 > each Echo harvests.** "cant do anything from this screen should select harvest which resource" /

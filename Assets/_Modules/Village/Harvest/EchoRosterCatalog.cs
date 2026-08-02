@@ -24,9 +24,22 @@
 // indexes straight into this (order == count). A wave-unlock that raises the count
 // to N fires the dialogue for ByCount(N) = the newly earned spirit.
 //
+// WO-830 AFFINITY MODEL (owner ruling 2026-08-02): every Echo prefers HARVEST and
+// carries a distinct resource AFFINITY (Wood/Iron/Food/Gold/Crystals -- Crystals is
+// the ONE deliberately doubled affinity, Bran + Maren). The PLAYER picks what each
+// Echo harvests (EchoAssignments resource tokens); the affinity is a match BONUS
+// when the pick lands on the Echo's calling, NEVER a lock. Pair synergies + the
+// hidden tri-synergy (EchoBonusCalculator) key off the ACTUAL assignments.
+// HarvestResource stays populated only for the three affinities that map to a real
+// DeNelle.Core.ResourceType wallet split (Wood/Iron/Food); Gold routes to Coins and
+// Crystals to the Aether wallet at DumpSilos time via the 5-way target weights.
+//
 // Portraits: Assets/Resources/Echoes/Portraits/<PortraitName>.(png|jpg). Loaded as
 // Texture2D + Sprite.Create at runtime (owner: "no importer settings needed; guard
 // null") -- see LoadPortrait, Guard-wrapped so a missing image logs + skips.
+// Emergence art (WO-831): Assets/Resources/Echoes/Emergence/<PortraitName>_emerge.png
+// (LFS; owner/art supplies) -- see LoadEmergence, Guard-wrapped with a portrait
+// fallback so missing art NEVER blocks an unlock.
 // =============================================================================
 using UnityEngine;
 using DeNelle.Core;
@@ -57,6 +70,20 @@ namespace DeNelle.Village
         Exploration,
     }
 
+    /// <summary>The five harvestable targets an Echo can be assigned to (WO-830). This is the
+    /// resource-picker vocabulary AND the affinity axis: Wood/Iron/Food map to the classic
+    /// <see cref="DeNelle.Core.ResourceType"/> silo split; Gold credits Coins and Crystals
+    /// credits the Aether wallet at Dump time. Distinct from ResourceType on purpose --
+    /// Gold is not a ResourceType, and extending the Core enum would ripple the save schema.</summary>
+    public enum HarvestTarget
+    {
+        Wood,
+        Iron,
+        Food,
+        Gold,
+        Crystals,
+    }
+
     /// <summary>One canonical Echo spirit's card identity (immutable data row).</summary>
     public sealed class EchoRosterEntry
     {
@@ -74,15 +101,24 @@ namespace DeNelle.Village
         public string Flavor;
         /// <summary>Extended lore revealed by the dialogue's "Tell me more" button (ASCII).</summary>
         public string Lore;
+        /// <summary>WO-831: the one-line emergence intro shown BEFORE the awakening card
+        /// (the 2D "rising from the Heart-tree" beat). ASCII, colorblind-safe TEXT.</summary>
+        public string EmergeLine;
 
-        // ── WO-738 specialization identity (derived, non-tunable -- element identity,
+        // ── WO-738/830 specialization identity (derived, non-tunable -- element identity,
         //    NOT a balance knob; the tunable numbers live in echoes-balance.json). ──
         /// <summary>This spirit's element (WO-738 identity axis).</summary>
         public ElementType ElementType;
-        /// <summary>The lane this spirit is best at -- a match here earns the affinity bonus.</summary>
+        /// <summary>The lane this spirit is best at. WO-830: ALL SIX prefer Harvest (every
+        /// affinity is reachable); the per-resource calling lives in <see cref="Affinity"/>.</summary>
         public LaneType PreferredLane;
-        /// <summary>For a Harvest-preferred spirit, the real resource it favors (the DumpSilos split
-        /// weight). Null for a non-Harvest spirit (n/a). Maps to a real GameState wallet field.</summary>
+        /// <summary>WO-830: this spirit's harvest AFFINITY -- the resource pick that earns the
+        /// match bonus. A guidance signal, never a lock (the player assigns freely).</summary>
+        public HarvestTarget Affinity;
+        /// <summary>For an affinity that maps to a real <see cref="ResourceType"/> wallet field
+        /// (Wood/Iron/Food), that resource; null for Gold (Coins) and Crystals (Aether), which
+        /// route through their own wallet movers at Dump time. Kept so pre-830 consumers of the
+        /// classic three-way split keep working unchanged.</summary>
         public ResourceType? HarvestResource;
     }
 
@@ -94,6 +130,10 @@ namespace DeNelle.Village
     public static class EchoRosterCatalog
     {
         // ASCII-only flavor + lore (colorblind owner reads TEXT, not hue; glyph-safe TMP).
+        // WO-830 affinity table (owner-approved 2026-08-01, amended 2026-08-02):
+        //   Aldwin/Frost -> Food, Elowen/Nature -> Wood, Corvin/Shadow -> Gold,
+        //   Bran/Storm -> Crystals, Doran/Earth -> Iron, Maren/Fire -> Crystals.
+        // Crystals is deliberately DOUBLED (Bran + Maren); Repairs was removed 2026-08-02.
         private static readonly EchoRosterEntry[] s_all =
         {
             new EchoRosterEntry {
@@ -107,7 +147,10 @@ namespace DeNelle.Village
                 // echo-is-essence-of-guarded-person), NOT an elemental monster. ASCII only.
                 Flavor = "The Heart of Elarion remembers every soul it has guarded, and I was the first it kept -- Aldwin, a keeper of the old light, held safe in the tree until a new defender rose. I wake now as your Echo. While you rest I gather; while you fight I tend the fields. Name my task -- wood, iron, or grain -- and it is done.",
                 Lore = "In life I kept the last lantern of Elarion burning through the long dark. When I fell, the Heart drew my essence down among its roots and held it close. Every keeper the tree remembers wakes one Echo before all others -- I am yours. Bring the light back to the Heart, and I grow stronger with it.",
-                ElementType = ElementType.Frost, PreferredLane = LaneType.Exploration, HarvestResource = null,
+                EmergeLine = "The Heart stirs -- its first-kept soul rises to meet you.",
+                // WO-830: founding card "tend the fields... grain" = winter stores -> Food.
+                ElementType = ElementType.Frost, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Food, HarvestResource = ResourceType.Food,
             },
             new EchoRosterEntry {
                 Id = "echo-verdant-stag", Order = 2,
@@ -115,7 +158,9 @@ namespace DeNelle.Village
                 PortraitName = "VerdantStag",
                 Flavor = "Green light stirs among the roots, and Elowen lifts her head to your call -- the grove-warden who once walked Elarion's every furrow, wakened now from the tree that keeps her.",
                 Lore = "Elowen tended the fields and the forest edge until her last season turned. The Heart could not let so gentle a hand go dark and drew her essence into the roots. Where her Echo walks the land gives freely -- growth answering your command.",
-                ElementType = ElementType.Nature, PreferredLane = LaneType.Harvest, HarvestResource = ResourceType.Wood,
+                EmergeLine = "Green light gathers among the roots -- a grove-warden wakes.",
+                ElementType = ElementType.Nature, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Wood, HarvestResource = ResourceType.Wood,
             },
             new EchoRosterEntry {
                 Id = "echo-voidwing-raven", Order = 3,
@@ -123,7 +168,11 @@ namespace DeNelle.Village
                 PortraitName = "VoidwingRaven",
                 Flavor = "A shadow unfolds where none stood, and Corvin steps from it -- the scout who ranged the far dark for Elarion and never came home, kept safe within the Heart of the tree.",
                 Lore = "Corvin walked the paths between one light and the next, mapping the dark so others need not fear it. When the far road took him, the Heart gathered his essence back to Elarion. His Echo reaches what no other can, carrying spoils across the void.",
-                ElementType = ElementType.Shadow, PreferredLane = LaneType.Exploration, HarvestResource = null,
+                EmergeLine = "A shadow slips free of the bark -- the lost scout comes home.",
+                // WO-830: "carrying spoils across the void" = treasure -> Gold (Coins wallet;
+                // no ResourceType maps to coins, so HarvestResource stays null).
+                ElementType = ElementType.Shadow, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Gold, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stormcoil-serpent", Order = 4,
@@ -131,7 +180,11 @@ namespace DeNelle.Village
                 PortraitName = "StormcoilSerpent",
                 Flavor = "Thunder gathers, and Bran stands within it -- the watchman who held Elarion's wall through every gale, wakened from the Heart that keeps him.",
                 Lore = "Bran stood the parapet through storms that broke lesser souls, calling every alarm in time. When he fell at his post, the Heart would not lose so steady a guard and kept his essence in its roots. His Echo drives the whole workforce on, restless as the sky that made it.",
-                ElementType = ElementType.Storm, PreferredLane = LaneType.Defense, HarvestResource = null,
+                EmergeLine = "Thunder rolls beneath the boughs -- the watchman takes his post.",
+                // WO-830: storm-charged aether -> Crystals (the deliberately doubled affinity,
+                // shared with Maren; routed to the Aether wallet, not the 3-way silo split).
+                ElementType = ElementType.Storm, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Crystals, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stonewarden-bear", Order = 5,
@@ -139,10 +192,12 @@ namespace DeNelle.Village
                 PortraitName = "StonewardenBear",
                 Flavor = "The ground shifts and rises, and Doran shakes the dust of ages from his shoulders -- the mason who raised Elarion's stones, kept whole within the tree.",
                 Lore = "Doran laid the first stones of Elarion's walls and mended them all his life. When age took him, the Heart drew his essence down among the roots he had built upon. Tireless and unbreakable, his Echo hauls the heaviest loads without complaint.",
+                EmergeLine = "The roots grind like millstones -- the old mason shoulders free.",
                 // Owner-final map says "Stone", but Stone is RETIRED (DEF-121) and NOT in ResourceType
                 // {Iron,Wood,Food,AetherCrystal}; the WO's reconciled table maps this Earth spirit to
                 // Iron ("hauls the heaviest loads" = ore). Real-resource-only, no invented type.
-                ElementType = ElementType.Earth, PreferredLane = LaneType.Harvest, HarvestResource = ResourceType.Iron,
+                ElementType = ElementType.Earth, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Iron, HarvestResource = ResourceType.Iron,
             },
             new EchoRosterEntry {
                 Id = "echo-ember-phoenix", Order = 6,
@@ -150,7 +205,11 @@ namespace DeNelle.Village
                 PortraitName = "EmberPhoenix",
                 Flavor = "From a single spark a firebird rises, and Maren wakes within the flame -- the hearth-keeper whose forge never went cold, kept alight in the Heart of Elarion.",
                 Lore = "Maren kept Elarion's forge and hearth burning so no one went without warmth or a mended blade. When her fire finally guttered, the Heart caught the last ember of her essence and held it. Her Echo sets the whole workforce alight -- fastest when the work is hardest.",
-                ElementType = ElementType.Fire, PreferredLane = LaneType.Crafting, HarvestResource = null,
+                EmergeLine = "An ember climbs out of the heartwood -- the forge-fire wakes.",
+                // WO-830 owner ruling 2026-08-02: Repairs affinity REMOVED -- Maren's forge-fire
+                // anneals raw aether into crystal. Second Crystals harvester (with Bran).
+                ElementType = ElementType.Fire, PreferredLane = LaneType.Harvest,
+                Affinity = HarvestTarget.Crystals, HarvestResource = null,
             },
         };
 
@@ -177,6 +236,53 @@ namespace DeNelle.Village
         {
             if (index < 0 || index >= s_all.Length) return null;
             return s_all[index];
+        }
+
+        // -- harvest-target vocabulary (WO-830) --------------------------------
+        // The token strings ARE the persisted echoLanes grammar (EchoAssignments);
+        // keep them lowercase-stable forever (save-compat law).
+
+        /// <summary>The persisted/UI token for a harvest target ("wood".."crystals").</summary>
+        public static string TargetToken(HarvestTarget target)
+        {
+            switch (target)
+            {
+                case HarvestTarget.Wood:     return "wood";
+                case HarvestTarget.Iron:     return "iron";
+                case HarvestTarget.Food:     return "food";
+                case HarvestTarget.Gold:     return "gold";
+                case HarvestTarget.Crystals: return "crystals";
+                default:                     return "wood";
+            }
+        }
+
+        /// <summary>ASCII display label for a harvest target ("Wood".."Crystals").</summary>
+        public static string TargetLabel(HarvestTarget target)
+        {
+            switch (target)
+            {
+                case HarvestTarget.Wood:     return "Wood";
+                case HarvestTarget.Iron:     return "Iron";
+                case HarvestTarget.Food:     return "Food";
+                case HarvestTarget.Gold:     return "Gold";
+                case HarvestTarget.Crystals: return "Crystals";
+                default:                     return "Wood";
+            }
+        }
+
+        /// <summary>Parse a harvest-target token back to the enum. Returns false on any
+        /// non-target token (lane words, idle, garbage) -- caller decides the fallback.</summary>
+        public static bool TryTargetFromToken(string token, out HarvestTarget target)
+        {
+            switch (token)
+            {
+                case "wood":     target = HarvestTarget.Wood;     return true;
+                case "iron":     target = HarvestTarget.Iron;     return true;
+                case "food":     target = HarvestTarget.Food;     return true;
+                case "gold":     target = HarvestTarget.Gold;     return true;
+                case "crystals": target = HarvestTarget.Crystals; return true;
+                default:         target = HarvestTarget.Wood;     return false;
+            }
         }
 
         // -- portrait loader (Texture2D -> Sprite.Create, Guard-wrapped) -----------
@@ -208,6 +314,38 @@ namespace DeNelle.Village
             }, fallback: null);
 
             if (sprite != null) s_spriteCache[portraitName] = sprite;
+            return sprite;
+        }
+
+        /// <summary>
+        /// WO-831: load a spirit's EMERGENCE sprite ("rising from the Heart-tree", 2D)
+        /// from Resources/Echoes/Emergence/. Tries <c>&lt;PortraitName&gt;_emerge</c> first,
+        /// then a bare <c>&lt;PortraitName&gt;</c> in the same folder. Returns null (logged
+        /// Warn, never throws) when the art has not been supplied yet -- the caller falls
+        /// back to the portrait / text so the unlock beat is NEVER blocked by missing art.
+        /// </summary>
+        public static Sprite LoadEmergence(string portraitName)
+        {
+            if (string.IsNullOrEmpty(portraitName)) return null;
+            string key = "emerge:" + portraitName;
+            if (s_spriteCache.TryGetValue(key, out var cached) && cached != null)
+                return cached;
+
+            var sprite = Guard.Try("Echo", "load echo emergence " + portraitName, () =>
+            {
+                var tex = Resources.Load<Texture2D>("Echoes/Emergence/" + portraitName + "_emerge");
+                if (tex == null)
+                    tex = Resources.Load<Texture2D>("Echoes/Emergence/" + portraitName);
+                if (tex == null)
+                {
+                    FlowTrace.Warn("Echo", $"LoadEmergence: Resources/Echoes/Emergence/{portraitName}_emerge missing -- emergence beat falls back to the portrait.");
+                    return (Sprite)null;
+                }
+                return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
+                                     new Vector2(0.5f, 0.5f), 100f);
+            }, fallback: null);
+
+            if (sprite != null) s_spriteCache[key] = sprite;
             return sprite;
         }
     }

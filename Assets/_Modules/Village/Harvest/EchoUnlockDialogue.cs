@@ -1,18 +1,27 @@
 // =============================================================================
 // EchoUnlockDialogue -- the "Echoes of Elarion" portrait unlock card (owner
-// felt-test 2026-07-17 + mockup Screenshot 2026-07-17 062124.png).
+// felt-test 2026-07-17 + mockup Screenshot 2026-07-17 062124.png) with the
+// WO-831 2D EMERGENCE BEAT in front of it.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // When a new Echo is earned (EchoService.EchoUnlocked -> newCount), a spirit
-// AWAKENS and speaks. This is the full portrait dialogue card the owner asked for,
-// DATA-DRIVEN from EchoRosterCatalog.ByCount(newCount): whichever spirit unlocks,
-// its portrait / name / element / flavor fill the card. It REPLACES the old plain
-// EchoUnlockToast center banner (EchoUnlockFeedback still fires the SFX + the
-// persistent "Echoes N/6" pip -- no double banner; the toast class is retired).
+// AWAKENS and speaks. WO-831 (owner: "leave the sprite as 2D -- would only be to
+// introduce new sprite and advance dialog"): the flow is now a TWO-STATE beat --
+//   STATE 1 (EMERGENCE): a 2D sprite of the spirit rising from the Heart-tree
+//     (Resources/Echoes/Emergence/<PortraitName>_emerge.png, LFS) + the one-line
+//     EmergeLine intro + a "Continue" advance. A soft fade/scale-in (CanvasGroup
+//     coroutine -- no tween lib, no Timeline, no video) makes it "emerge".
+//     Missing art DEGRADES (Guard + Warn): portrait stands in, then a text
+//     placeholder -- the beat NEVER blocks the unlock. NO 3D (portrait-spirit canon).
+//   STATE 2 (AWAKENING CARD): the existing full portrait dialogue card,
+//     DATA-DRIVEN from EchoRosterCatalog.ByCount(newCount) -- portrait / name /
+//     element / flavor, "I accept your power" / "Tell me more".
+// Both unlock paths ride this (founding echo via AnnounceFoundingEcho, #2-6 via
+// the wave bridge) -- they all land in Show().
 //
-// LAYOUT (matches the mockup, clean not ornate -- reuses ElarionUiKit obsidian
-// chrome, code-built uGUI, NO UXML per PIPELINE_STATE S8):
+// LAYOUT (card state -- matches the mockup, clean not ornate; reuses ElarionUiKit
+// obsidian chrome, code-built uGUI, NO UXML per PIPELINE_STATE S8):
 //   frame title "ECHOES OF ELARION"      (BuildObsidianModal header)
 //   gold "Echo Leveled Up to N!" banner  (top strip)
 //   LEFT : portrait (Sprite.Create) + essence subtitle ("Essence of a fallen keeper")
@@ -24,8 +33,9 @@
 //     game-wide-consistent, is canon (ElarionUiKit "one consistent Close" ruling).
 //
 // Colorblind-safe: identity reads from PORTRAIT + TEXT, never hue alone. Portrait
-// load + card build are Guard-wrapped (a missing image logs + shows a text
-// fallback, never blanks). ASCII-only strings. FlowTrace on show.
+// load + both builds are Guard-wrapped (a missing image logs + shows a text
+// fallback, never blanks; a faulted emergence falls straight through to the card).
+// ASCII-only strings. FlowTrace on show/advance.
 // =============================================================================
 using System;
 using UnityEngine;
@@ -37,9 +47,10 @@ using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
-    /// <summary>Data-driven Echo-unlock portrait dialogue. Built on the unlocked
-    /// spirit's <see cref="EchoRosterEntry"/>. One on screen at a time; self-destroys
-    /// on any close/accept/dismiss.</summary>
+    /// <summary>Data-driven Echo-unlock beat: the WO-831 2D emergence intro, advancing on
+    /// tap into the awakening portrait card. Built on the unlocked spirit's
+    /// <see cref="EchoRosterEntry"/>. One on screen at a time; self-destroys on any
+    /// close/accept/dismiss.</summary>
     [DisallowMultipleComponent]
     public sealed class EchoUnlockDialogue : MonoBehaviour
     {
@@ -50,22 +61,30 @@ namespace DeNelle.Village
         /// tall rect, so this floor is a safety net for the longest lore, not the usual size.</summary>
         private const float FlavorFontMin = 30f;
 
-        /// <summary>TRUE while an unlock card is on screen. Read by EchoService.AnnounceFoundingEcho
-        /// to confirm the founding card actually rendered before persisting its one-shot flag.</summary>
+        /// <summary>Emergence fade/scale-in duration (unscaled seconds). Short and cheap --
+        /// a CanvasGroup lerp, no tween lib (WO-831 polish scope).</summary>
+        private const float EmergeFadeSeconds = 0.45f;
+
+        /// <summary>TRUE while the unlock beat (emergence OR card state) is on screen. Read by
+        /// EchoService.AnnounceFoundingEcho to confirm the founding beat actually rendered
+        /// before persisting its one-shot flag.</summary>
         public static bool IsShowing => s_active != null;
 
-        private GameObject _canvas;
+        private GameObject _canvas;            // the awakening-card canvas (state 2)
+        private GameObject _emergenceCanvas;   // the WO-831 emergence canvas (state 1)
         private EchoRosterEntry _entry;
+        private int _newCount;
         private TextMeshProUGUI _flavorLabel;
         private Button _tellMoreBtn;
         private bool _showingLore;
         private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
         private bool _open;
 
-        /// <summary>Build + show the unlock card for the spirit earned at
-        /// <paramref name="newCount"/>. Idempotent: replaces any card on screen. Returns TRUE
-        /// when the card is on screen (used by the founding-echo teaching to persist its
-        /// one-shot flag only after a confirmed render), FALSE on a null entry / build fault.</summary>
+        /// <summary>Build + show the unlock beat for the spirit earned at
+        /// <paramref name="newCount"/>: the WO-831 emergence intro first, advancing into the
+        /// awakening card. Idempotent: replaces any beat on screen. Returns TRUE when the beat
+        /// is on screen (used by the founding-echo teaching to persist its one-shot flag only
+        /// after a confirmed render), FALSE on a null entry / build fault.</summary>
         public static bool Show(EchoRosterEntry entry, int newCount)
         {
             if (entry == null)
@@ -80,10 +99,18 @@ namespace DeNelle.Village
             var host = new GameObject("EchoUnlockDialogue");
             var dlg = host.AddComponent<EchoUnlockDialogue>();
             s_active = dlg;
+            dlg._entry = entry;
+            dlg._newCount = newCount;
 
-            // Whole card build guarded -- a construction fault logs + tears down, never
-            // wedges a half-card over gameplay (Sec.12 no-silent-failure).
-            bool ok = Guard.Try("Echo", "build echo unlock dialogue", () => dlg.Build(entry, newCount));
+            // WO-831: emergence beat first, Guard-wrapped. A faulted emergence build must
+            // NEVER block the unlock -- fall straight through to the awakening card (also
+            // guarded). Only when BOTH states fault do we tear down and report false.
+            bool ok = Guard.Try("Echo", "build echo emergence beat", () => dlg.BuildEmergence(entry));
+            if (!ok)
+            {
+                FlowTrace.Warn("Echo", "emergence beat failed to build -- advancing straight to the awakening card (unlock never blocked).");
+                ok = Guard.Try("Echo", "build echo unlock dialogue", () => dlg.Build(entry, newCount));
+            }
             if (!ok)
             {
                 if (dlg != null) Destroy(dlg.gameObject);
@@ -92,9 +119,9 @@ namespace DeNelle.Village
             }
 
             // HUD-1: register with the single-modal arbiter and announce the open. The unlock
-            // card CLOSES any other Echo modal (roster/card/harvest) that was up -- one modal only.
+            // beat CLOSES any other Echo modal (roster/card/harvest) that was up -- one modal only.
             // Battle-lock (WO-437): a rejected open self-closes (SFX + pip still fire) -> return false
-            // so the founding-echo teaching does not persist its one-shot on an un-rendered card.
+            // so the founding-echo teaching does not persist its one-shot on an un-rendered beat.
             dlg._open = true;
             dlg._panelHandle = PanelManager.Register("EchoUnlockDialogue", dlg.Close, () => dlg._open);
             if (!PanelManager.NotifyOpened(dlg._panelHandle))
@@ -102,7 +129,7 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Echo", "unlock dialogue rejected by PanelManager (battle-lock) -- not shown.");
                 return false;
             }
-            FlowTrace.Step("Echo", $"unlock dialogue shown id={entry.Id} count={newCount}");
+            FlowTrace.Step("Echo", $"unlock beat shown id={entry.Id} count={newCount} (state={(dlg._emergenceCanvas != null ? "emergence" : "card")})");
             return true;
         }
 
@@ -115,6 +142,123 @@ namespace DeNelle.Village
         {
             return newCount <= 1 ? "An Echo Awakens" : $"Echo Leveled Up to {newCount}!";
         }
+
+        /// <summary>WO-831: the emergence intro line for a spirit -- the authored EmergeLine,
+        /// with a shared default when absent (never blank). Pure + public for headless asserts.</summary>
+        public static string EmergeLineFor(EchoRosterEntry entry)
+        {
+            if (entry != null && !string.IsNullOrEmpty(entry.EmergeLine)) return entry.EmergeLine;
+            return "The Heart stirs -- a keeper wakes.";
+        }
+
+        // =====================================================================
+        //  STATE 1 -- the WO-831 emergence beat (2D sprite + one line + advance)
+        // =====================================================================
+
+        private void BuildEmergence(EchoRosterEntry entry)
+        {
+            EnsureEventSystem();
+
+            // Shared obsidian chrome + the ONE canon Close (skipping is allowed -- Close
+            // ends the whole beat; Continue advances into the awakening card).
+            var built = ElarionUiKit.BuildObsidianModal(
+                "EchoEmergence", "ECHOES OF ELARION",
+                new Vector2(0.14f, 0.20f), new Vector2(0.86f, 0.82f),
+                onClose: Close, sortingOrder: 31020,   // same MODAL band as the card state
+                frameName: RpgUiCatalog.FrameCore);
+            _emergenceCanvas = built.canvas;
+            var content = built.chrome.content.transform;
+
+            // -- the emergence sprite (CENTER). Fallback chain (Guard-logged, never blank):
+            //    Emergence art -> portrait -> text placeholder. Missing art never blocks.
+            var sprite = EchoRosterCatalog.LoadEmergence(entry.PortraitName);
+            bool usedFallback = sprite == null;
+            if (sprite == null) sprite = EchoRosterCatalog.LoadPortrait(entry.PortraitName);
+            if (sprite != null)
+            {
+                var pg = new GameObject("EmergenceSprite", typeof(Image));
+                pg.transform.SetParent(content, false);
+                // NON-OVERLAP BUDGET (content fractions, every band DISJOINT):
+                //   sprite ......... y[0.42-0.86] x[0.30-0.70]  (center stage)
+                //   intro line ..... y[0.28-0.40] x[0.08-0.92]
+                //   bottom row ..... y[0.05-0.245]: shared Close center, Continue x[0.64-0.955]
+                var prt = pg.GetComponent<RectTransform>();
+                prt.anchorMin = new Vector2(0.30f, 0.42f);
+                prt.anchorMax = new Vector2(0.70f, 0.86f);
+                prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+                var pimg = pg.GetComponent<Image>();
+                pimg.sprite = sprite;
+                pimg.preserveAspect = true;
+                pimg.raycastTarget = false;
+                if (usedFallback)
+                    FlowTrace.Warn("Echo", $"emergence beat: no emergence art for '{entry.PortraitName}' -- portrait stands in (degrade, never block).");
+            }
+            else
+            {
+                // Never blank: a text placeholder stands in for missing art entirely.
+                ElarionUiKit.Label(content, "[ " + entry.Element + " ]", 0.56f, 0.72f,
+                    ElarionUi.ParchmentDim, ElarionUi.FontHead, TextAlignmentOptions.Center,
+                    0.20f, 0.80f, bold: true);
+                FlowTrace.Warn("Echo", $"emergence beat: no emergence OR portrait art for '{entry.PortraitName}' -- text placeholder shown.");
+            }
+
+            // -- the one-line intro (under the sprite; ASCII, colorblind-safe TEXT) ---
+            var line = ElarionUiKit.Label(content, EmergeLineFor(entry), 0.28f, 0.40f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
+                0.08f, 0.92f, bold: false);
+            ElarionUiKit.FitSingleLine(line);
+
+            // -- the advance (bottom-RIGHT, flanking the shared bottom-center Close;
+            //    same bottom-row budget as the card state -- y[0.05-0.245] x[0.64-0.955],
+            //    ~118px tall, above MinTouchPx=112; the intro line (0.27+) clears it) ---
+            ElarionUiKit.Button(content, "Continue", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.64f, 0.05f), new Vector2(0.955f, 0.245f), OnEmergenceContinue);
+
+            // -- WO-831 polish: soft fade/scale-in so the spirit "emerges" (CanvasGroup
+            //    coroutine on unscaled time -- no tween lib, no Timeline, no video). ---
+            var group = built.chrome.content.GetComponent<CanvasGroup>();
+            if (group == null) group = built.chrome.content.AddComponent<CanvasGroup>();
+            if (Application.isPlaying)
+                StartCoroutine(EmergeIn(group, content));
+            else
+                group.alpha = 1f;   // edit-mode capture (RunCaptureHeadless): no coroutine tick -- render fully opaque
+        }
+
+        private System.Collections.IEnumerator EmergeIn(CanvasGroup group, Transform contentRoot)
+        {
+            float t = 0f;
+            var baseScale = contentRoot != null ? contentRoot.localScale : Vector3.one;
+            while (t < EmergeFadeSeconds && group != null)
+            {
+                t += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(t / EmergeFadeSeconds);
+                group.alpha = k;
+                if (contentRoot != null)
+                    contentRoot.localScale = baseScale * Mathf.Lerp(0.9f, 1f, k);
+                yield return null;
+            }
+            if (group != null) group.alpha = 1f;
+            if (contentRoot != null) contentRoot.localScale = baseScale;
+        }
+
+        /// <summary>The WO-831 advance: emergence -> the existing awakening card. Guarded --
+        /// a faulted card build closes the beat cleanly (SFX + pip already fired; never a
+        /// wedged half-card).</summary>
+        private void OnEmergenceContinue()
+        {
+            FlowTrace.Step("Echo", $"emergence beat: Continue -> awakening card id={_entry?.Id}");
+            if (_emergenceCanvas != null) { Retire(_emergenceCanvas); _emergenceCanvas = null; }
+            bool ok = Guard.Try("Echo", "build echo unlock dialogue", () => Build(_entry, _newCount));
+            if (!ok)
+            {
+                FlowTrace.Warn("Echo", "awakening card failed to build after emergence -- closing the beat (unlock itself already granted).");
+                Close();
+            }
+        }
+
+        // =====================================================================
+        //  STATE 2 -- the awakening portrait card (pre-831 layout, unchanged)
+        // =====================================================================
 
         private void Build(EchoRosterEntry entry, int newCount)
         {
@@ -248,8 +392,19 @@ namespace DeNelle.Village
             // (self-replace + arbiter swap) never double-notifies. Guarded-safe on destroyed objects.
             _open = false;
             if (_panelHandle != null) { PanelManager.NotifyClosed(_panelHandle); _panelHandle = null; }
-            if (_canvas != null) { Destroy(_canvas); _canvas = null; }
-            Destroy(gameObject);
+            if (_emergenceCanvas != null) { Retire(_emergenceCanvas); _emergenceCanvas = null; }
+            if (_canvas != null) { Retire(_canvas); _canvas = null; }
+            Retire(gameObject);
+        }
+
+        /// <summary>Destroy that is safe in BOTH modes: runtime Destroy in play mode,
+        /// DestroyImmediate in edit mode (the headless UI-capture harness drives the
+        /// emergence advance outside play mode, where runtime Destroy errors).</summary>
+        private static void Retire(GameObject go)
+        {
+            if (go == null) return;
+            if (Application.isPlaying) Destroy(go);
+            else DestroyImmediate(go);
         }
 
         private void OnDestroy()

@@ -1,6 +1,6 @@
 # WORK ORDER 831 — Echo Emergence Sprite Beat (2D unlock cutscene-lite)
 
-**Status:** READY TO IMPLEMENT (owner-scoped 2026-08-01)
+**Status:** IMPLEMENTED 2026-08-02 — pending gates + art (code wired with the Guard fallback; the 6 emergence PNGs under `Assets/Resources/Echoes/Emergence/` are owner/art-supplied and NOT yet present — the beat degrades to the portrait until they land). See `WORK_ORDER_831_echo_emergence_sprite_beat.RESULT.md`.
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** VFX/Presentation (§9) — self-contained, no gameplay/economy dependency. Runs parallel to WO-830.
 **Sibling:** WO-830 (affinity/synergy economy). Do NOT couple; this is presentation only.

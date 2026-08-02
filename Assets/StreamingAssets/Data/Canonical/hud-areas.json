@@ -52,7 +52,8 @@
             "bagButton",
             "raidsButton",
             "mapButton",
-            "questButton"
+            "questButton",
+            "upgradeButton"
           ]
         },
         {

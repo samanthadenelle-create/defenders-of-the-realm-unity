@@ -1,6 +1,10 @@
 # WORK ORDER 835 — HUD action bar: show only APPLICABLE buttons, re-packed
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED (pending gates) — 2026-08-02. Core `HudActionBarModel` + `PostureSignals.RaidCapable`
++ Village `RaidCapabilityHudBridge` + HudKit render-from-array repack + `upgradeButton` face/rows +
+`HudActionBarModelTests` + `HudActionBarRegression` (orchestrator registers). Both §7 defaults applied
+(Raids fully hidden when uncapable; constant width + centered group). ActionBar zone widened
+0.270-0.730 (`HudAreasHost.cs`) so the 7-face max keeps near-today button size.
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — primarily `HudKitController.cs` (View). No scene edits.
 **Origin:** owner felt-test 2026-08-02, town HUD — *"HUD buttons should not show if not applicable … the collection

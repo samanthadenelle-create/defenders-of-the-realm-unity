@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "_authoringNotes": "WORK_ORDER_738 -- Echo per-echo agency + specialization balance. Tunable knobs the owner re-tunes in playtest with NO recompile (loaded via CanonicalJson; the Resources copy wins, StreamingAssets is the desktop source -- keep the two byte-identical). Identity (name/element/preferred-lane/harvest-resource) stays in the EchoRosterCatalog CODE table; ONLY the numbers live here. maxLevel bounds the EchoAssignments level clamp. Defaults are sensible placeholders; owner fine-tunes.",
+  "_authoringNotes": "WORK_ORDER_738 + WORK_ORDER_830 -- Echo specialization + affinity/synergy balance. Tunable knobs the owner re-tunes in playtest with NO recompile (loaded via CanonicalJson; the Resources copy wins, StreamingAssets is the desktop source -- keep the two byte-identical). Identity (name/element/affinity) stays in the EchoRosterCatalog CODE table; ONLY the numbers live here. WO-830: preferredLaneMatchBonus lowered 0.75 -> 0.40 for the all-matched reality (all 6 Echoes now prefer Harvest and the player picks each resource); crossBonuses are the 3 DISCLOSED pair synergies (both members owned + both harvesting their own affinity resource); hiddenTriSynergyBonus is the UNDISCLOSED bonus when all 3 pairs run at once -- applied to income only, NEVER shown in any readout. perEchoBaseRate doubles as the DumpSilos split weight per assigned resource: Bran+Maren (0.45 each) are the two Crystals harvesters and their COMBINED 0.90 stays below every other single affinity rate (food/gold 1.0, wood 1.1, iron 1.15) so crystals remain the slowest faucet (monetization guard, WO-830 Sec.3b).",
   "maxLevel": 8,
-  "preferredLaneMatchBonus": 0.75,
+  "preferredLaneMatchBonus": 0.40,
   "baseContributionPerEcho": 0.15,
   "sixSetBonusGlobalHarvest": 0.20,
   "levelCurve": "linear",
@@ -11,9 +11,14 @@
     "echo-frosthowl": 1.0,
     "echo-verdant-stag": 1.1,
     "echo-voidwing-raven": 1.0,
-    "echo-stormcoil-serpent": 1.05,
+    "echo-stormcoil-serpent": 0.45,
     "echo-stonewarden-bear": 1.15,
-    "echo-ember-phoenix": 1.1
+    "echo-ember-phoenix": 0.45
   },
-  "crossBonuses": []
+  "crossBonuses": [
+    { "name": "Provisions", "a": "echo-verdant-stag", "b": "echo-frosthowl", "bonus": 0.10 },
+    { "name": "Forge", "a": "echo-stonewarden-bear", "b": "echo-ember-phoenix", "bonus": 0.10 },
+    { "name": "Fortune", "a": "echo-voidwing-raven", "b": "echo-stormcoil-serpent", "bonus": 0.10 }
+  ],
+  "hiddenTriSynergyBonus": 0.25
 }

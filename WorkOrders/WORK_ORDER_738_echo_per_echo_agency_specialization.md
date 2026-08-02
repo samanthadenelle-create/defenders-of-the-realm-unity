@@ -1,6 +1,14 @@
 # WORK ORDER 738 — Echo per-echo agency + specialization (Path B)
 
 > ⚠ SUPERSEDED 2026-08-01 by WO-830 (echo harvest affinity + synergy — all 6 echoes get unique harvest affinities; hidden tri-synergy).
+> ⚠ WO-830 IMPLEMENTED 2026-08-02: the affinity TABLE in this doc is now WRONG in shipped code —
+> all six roster entries are `PreferredLane = Harvest` with resource affinities Aldwin→Food,
+> Elowen→Wood, Corvin→Gold, Bran→Crystals, Doran→Iron, Maren→Crystals (crystals deliberately
+> doubled; Repairs never shipped). The player PICKS each Echo's harvest resource
+> (wood/iron/food/gold/crystals tokens in echoLanes); affinity is a match bonus, never a lock.
+> The dialogue-copy section below ("Frosthowl (Ice | prefers Harvest)", "Stormcoil → Defense",
+> "Ember → Crafting" etc.) is STALE against the shipped WO-830 data — treat every per-echo lane
+> claim in this file as historical only; live truth = `EchoRosterCatalog.cs` + WO-830.
 
 **Status: SPEC — needs owner pins (see "Owner pins"), then READY TO IMPLEMENT.**
 **Lane:** Economy/Harvest + HUD (Village/Harvest silo; picker/roster UI). **Type:** design

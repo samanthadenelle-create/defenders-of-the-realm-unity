@@ -1,23 +1,26 @@
 // =============================================================================
-// EchoCardView -- the WO-681 Echo select card (dumb skin; MVVM strict).
+// EchoCardView -- the Echo select card (dumb skin; MVVM strict; WO-681 card,
+// WO-830 per-Echo harvest RESOURCE PICKER).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // A small Obsidian modal (master factory: ElarionUiKit.BuildObsidianModal +
 // FrameCore -- UI_BLINK_TEMPLATE_CANON SS2, ONE shared Close) that introduces an
 // Echo (real name/element/flavor/portrait from EchoRosterCatalog) and hosts the
-// functional lane picker. Only the LIVE lanes are offered -- Harvest + Crafting
-// (EchoAssignments.PickableLanes); Defense + Exploration are not shown because their
-// unlock is not designed (owner ruling 2026-07-24; no stub/teaser rows). The View
+// WO-830 RESOURCE PICKER: five chips (Wood/Iron/Food/Gold/Crystals --
+// EchoAssignments.PickableResources). The dead Crafting chip is REMOVED and
+// Defense/Exploration stay hidden (owner rulings 2026-07-24 + 2026-08-02). The
+// card also shows the DISCLOSED pair-synergy status line (SynergyText); nothing
+// on this card ever discloses the hidden tri-synergy (WO-830 Sec.3d). The View
 // reads NOTHING from services -- every string/state/sprite comes from EchoCardVM;
-// the only outbound call is vm.AssignLane on a lane tap. PanelManager-registered
+// the only outbound call is vm.AssignResource on a chip tap. PanelManager-registered
 // (one modal at a time; battle-lock respected -- a rejected open never shows a half-card).
 //
 // Layout mirrors EchoWorkforceHud's fraction-in-content approach (same kit, same
-// chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). The vertical lane
-// picker keeps its bottom edge above the shared Close band (>= 0.25, the WO-555
-// clearance lesson documented in EchoWorkforceHud.Build). With only the two live lanes
-// offered, the modal height is shrunk to hug that content (no dead black space).
+// chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). The vertical
+// resource picker keeps its bottom edge above the shared Close band (the WO-555
+// clearance lesson documented in EchoWorkforceHud.Build). With FIVE chips offered
+// the modal is TALLER than the old two-lane card (0.10-0.90 vs 0.30-0.80).
 //
 // Reached via a TAP on an OWNED roster card (EchoRosterView) -> EchoCard.Open(echoIndex).
 // Singleton view host on a DDOL GameObject.
@@ -51,8 +54,9 @@ namespace DeNelle.Village
     }
 
     /// <summary>
-    /// The Echo select card view: name/portrait socket + WHAT + live STATE + the
-    /// "What should you gather?" lane-picker row. Dumb skin over <see cref="EchoCardVM"/>.
+    /// The Echo select card view: name/portrait socket + WHAT (element + affinity) +
+    /// live STATE + synergy status + the "What should this Echo gather?" resource-picker
+    /// rows. Dumb skin over <see cref="EchoCardVM"/>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class EchoCardView : MonoBehaviour
@@ -61,6 +65,7 @@ namespace DeNelle.Village
         private TextMeshProUGUI _nameLabel;
         private TextMeshProUGUI _whatLabel;
         private TextMeshProUGUI _stateLabel;
+        private TextMeshProUGUI _synergyLabel;
         private TextMeshProUGUI _askLabel;
         private Transform _chipRow;
         private Image _portrait;
@@ -125,12 +130,12 @@ namespace DeNelle.Village
         {
             // Same law as EchoRosterView (owner F8 2026-07-24): parent into layout.body so
             // labels never paint over the FrameCore title plate or the shared Close.
-            // Compact card, centred; MODAL band above the roster (31000). Height shrunk to
-            // hug the two-live-lane content (owner ruling 2026-07-24) so it no longer floats
-            // in dead black space.
+            // Centred; MODAL band above the roster (31000). WO-830: taller than the old
+            // two-lane card -- the five-resource picker needs the vertical room while every
+            // chip stays >= the mobile touch floor.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoCard", "ECHO",
-                new Vector2(0.22f, 0.30f), new Vector2(0.78f, 0.80f),
+                new Vector2(0.22f, 0.10f), new Vector2(0.78f, 0.90f),
                 onClose: Close, sortingOrder: 31010,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
@@ -145,12 +150,13 @@ namespace DeNelle.Village
                 ? built.chrome.layout.body
                 : built.chrome.content.transform;
 
-            // Body bands (0..1 of body well only -- no cross-stack):
-            //   portrait + name   0.82-0.98
-            //   what (element)    0.74-0.80   single short line
-            //   state             0.66-0.72   single line
-            //   ask               0.58-0.64   single line
-            //   lane picker       0.06-0.54   two live lanes, above Close (body already reserved)
+            // Body bands (0..1 of body well only -- no cross-stack, every band DISJOINT):
+            //   portrait + name   0.86-0.98
+            //   what (element+affinity) 0.79-0.85   single short line
+            //   state             0.72-0.78   single line
+            //   synergy status    0.65-0.71   single line (WO-830 disclosed pair line)
+            //   ask               0.59-0.64   single line
+            //   resource picker   0.05-0.57   five chips, above Close (body already reserved)
             var portraitSprite = Guard.Try("Echo", "load echo portrait",
                 () => _vm != null ? _vm.Portrait : null, fallback: null);
             if (portraitSprite != null)
@@ -158,7 +164,7 @@ namespace DeNelle.Village
                 var pg = new GameObject("EchoPortrait", typeof(Image));
                 pg.transform.SetParent(body, false);
                 var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.04f, 0.82f);
+                prt.anchorMin = new Vector2(0.04f, 0.86f);
                 prt.anchorMax = new Vector2(0.20f, 0.98f);
                 prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
                 _portrait = pg.GetComponent<Image>();
@@ -167,32 +173,38 @@ namespace DeNelle.Village
                 _portrait.raycastTarget = false;
             }
 
-            _nameLabel = ElarionUiKit.Label(body, "", 0.84f, 0.97f,
+            _nameLabel = ElarionUiKit.Label(body, "", 0.87f, 0.97f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
                 0.22f, 0.96f, bold: true);
             ElarionUiKit.FitSingleLine(_nameLabel);
 
-            // Element only -- full Flavor was painting the entire card (F8 capture).
-            _whatLabel = ElarionUiKit.Label(body, "", 0.74f, 0.81f,
+            // Element + "Favors: <resource>" -- the affinity disclosed in TEXT (WO-830).
+            _whatLabel = ElarionUiKit.Label(body, "", 0.79f, 0.85f,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
                 0.06f, 0.94f, bold: false);
             ElarionUiKit.FitSingleLine(_whatLabel);
 
-            _stateLabel = ElarionUiKit.Label(body, "", 0.66f, 0.73f,
+            _stateLabel = ElarionUiKit.Label(body, "", 0.72f, 0.78f,
                 new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.06f, 0.94f, bold: true);
             ElarionUiKit.FitSingleLine(_stateLabel);
 
-            _askLabel = ElarionUiKit.Label(body, "", 0.58f, 0.65f,
+            // WO-830: the DISCLOSED pair-synergy status ("Provisions synergy ... ACTIVE").
+            _synergyLabel = ElarionUiKit.Label(body, "", 0.65f, 0.71f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                0.06f, 0.94f, bold: false);
+            ElarionUiKit.FitSingleLine(_synergyLabel);
+
+            _askLabel = ElarionUiKit.Label(body, "", 0.59f, 0.64f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
                 0.06f, 0.94f, bold: false);
             ElarionUiKit.FitSingleLine(_askLabel);
 
-            var rowGo = new GameObject("LanePicker", typeof(RectTransform));
+            var rowGo = new GameObject("ResourcePicker", typeof(RectTransform));
             rowGo.transform.SetParent(body, false);
             var rowRt = rowGo.GetComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.06f, 0.06f);
-            rowRt.anchorMax = new Vector2(0.94f, 0.54f);
+            rowRt.anchorMin = new Vector2(0.06f, 0.05f);
+            rowRt.anchorMax = new Vector2(0.94f, 0.57f);
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
             _chipRow = rowGo.transform;
         }
@@ -217,6 +229,11 @@ namespace DeNelle.Village
                 _stateLabel.text = _vm.StateText;
                 ElarionUiKit.FitSingleLine(_stateLabel);
             }
+            if (_synergyLabel != null)
+            {
+                _synergyLabel.text = _vm.SynergyText;
+                ElarionUiKit.FitSingleLine(_synergyLabel);
+            }
             if (_askLabel != null)
             {
                 _askLabel.text = _vm.AskText;
@@ -235,21 +252,21 @@ namespace DeNelle.Village
                 if (_chips[i] != null) Destroy(_chips[i]);
             _chips.Clear();
 
-            var chips = _vm.LaneChips();
+            var chips = _vm.ResourceChips();
             int n = Mathf.Max(1, chips.Length);
             int index = 0;
             // Guard.TryEach: one bad chip logs + skips, never blanks the picker (SS12.2).
-            Guard.TryEach("Echo", "build lane chip", chips, chip =>
+            Guard.TryEach("Echo", "build resource chip", chips, chip =>
             {
                 int i = index++;
                 // Vertical stack: row 0 at the top, each row a full-width slice of the host.
                 float rowH = 1f / n;
-                float gap = 0.03f;
+                float gap = 0.015f;
                 float y1 = 1f - i * rowH;
                 float y0 = y1 - rowH + gap;
 
-                // Row container holds the tappable lane button + an honesty/preferred note under it.
-                var rowGo = new GameObject("LaneRow_" + chip.Id, typeof(RectTransform));
+                // Row container holds the tappable resource button + an affinity note under it.
+                var rowGo = new GameObject("ResourceRow_" + chip.Id, typeof(RectTransform));
                 rowGo.transform.SetParent(_chipRow, false);
                 var rrt = rowGo.GetComponent<RectTransform>();
                 rrt.anchorMin = new Vector2(0f, y0);
@@ -257,18 +274,18 @@ namespace DeNelle.Village
                 rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
                 _chips.Add(rowGo);
 
-                string laneId = chip.Id;   // capture for the closure
+                string resId = chip.Id;   // capture for the closure
                 bool hasNote = !string.IsNullOrEmpty(chip.Note);
                 // Button fills the top band (whole row when there is no note).
                 float btnBottom = hasNote ? 0.42f : 0f;
 
-                // Selected lane = Gold (plus the "(now)" TEXT cue -- never hue alone).
+                // Selected resource = Gold face (plus the "(now)" TEXT cue -- never hue alone).
                 var kind = chip.Selected ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
                 var btn = ElarionUiKit.Button(rowGo.transform, chip.Label, kind,
                     new Vector2(0f, btnBottom), new Vector2(1f, 1f),
-                    () => OnChipTapped(laneId));
+                    () => OnChipTapped(resId));
 
-                // Honesty / preferred note UNDER the button -- single line (was wrapping into Close).
+                // Affinity note UNDER the button -- single line (never wraps into Close).
                 if (hasNote)
                 {
                     var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 0.38f,
@@ -279,10 +296,10 @@ namespace DeNelle.Village
             });
         }
 
-        private void OnChipTapped(string laneId)
+        private void OnChipTapped(string resourceId)
         {
-            FlowTrace.Step("Echo", $"Card: lane chip tapped '{laneId}'.");
-            _vm?.AssignLane(laneId);
+            FlowTrace.Step("Echo", $"Card: resource chip tapped '{resourceId}'.");
+            _vm?.AssignResource(resourceId);
             // VM raises Changed via the seam -> Refresh re-binds STATE + selected chip.
         }
     }

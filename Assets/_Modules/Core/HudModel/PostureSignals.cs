@@ -143,5 +143,30 @@ namespace DeNelle.Core.HudModel
             FlowTrace.Step("HudKit", "talk available -> " + available);
             TalkChanged?.Invoke();
         }
+
+        // ── Raid capability (WO-835 — the SetTalkAvailable mirror pattern) ───
+        // Village-side RaidCapabilityHudBridge publishes "the player CAN raid":
+        // FeatureFlags.Raid AND barracks built AND >=1 deployable troop. The
+        // HudActionBarModel reads it to pack the Raids face in/out (hide, not
+        // dim — WO-835 §3d owner default). Distinct from RaidEntryGate.
+        // ArmyStatus.Ready (the WO-820 full-army DIM gate, which still applies
+        // to a VISIBLE Raids face).
+
+        /// <summary>True while the player can raid at all (Village-published).
+        /// Defaults TRUE so headless / pre-publish scenes never hide the raid
+        /// door (the RaidEntryGate.ArmyStatus never-false-block precedent).</summary>
+        public static bool RaidCapable { get; private set; } = true;
+
+        /// <summary>Raised when <see cref="RaidCapable"/> changes value.</summary>
+        public static event Action RaidCapableChanged;
+
+        /// <summary>Producer-only (Village RaidCapabilityHudBridge).</summary>
+        public static void SetRaidCapable(bool capable)
+        {
+            if (RaidCapable == capable) return;
+            RaidCapable = capable;
+            FlowTrace.Step("HudKit", "raid capable -> " + capable);
+            RaidCapableChanged?.Invoke();
+        }
     }
 }

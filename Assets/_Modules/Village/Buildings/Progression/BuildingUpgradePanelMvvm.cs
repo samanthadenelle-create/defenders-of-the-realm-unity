@@ -39,6 +39,15 @@
 // ONE panel serves EVERY upgradable
 // building (city tiers + legacy resource buildings) — nothing here is per-building.
 // SHIPS behind FeatureFlags.BuildingUpgradePanel (default ON since WO-476).
+//
+// WO-841 (2026-08-02): the "Under construction - Ns" CTA countdown TICKS LIVE —
+// Update() rewrites JUST that cached label's text when the whole second changes
+// (fed by vm.UnderConstructionSeconds, the same BuildTimerService snapshot seam);
+// ContentSignature still excludes RemainingSeconds so no per-second full rebuild.
+// WO-832 §4 (2026-08-02, fresh-pixel confirmed): card/detail text bands are now
+// FIXED ref-pixel bands sized in whole FontFloor line boxes (the RumorBoard TMP
+// vertical-cull lesson) — fraction bands under-heighted the font's line at real
+// aspects and TMP truncated mid-word ("...Structu", "Opens ... (Wood", "Unlock 'Re").
 // =============================================================================
 
 using System.Collections;
@@ -118,6 +127,34 @@ namespace DeNelle.Village.Buildings.Progression
         private const float RowGapPx      = 12f;
         private const float ButtonFadeSec = 0.12f;   // hover/press transition — never snap
 
+        // ── WO-832 §4 truncation-proof text bands (fixed REF-PIXEL) ──────────────
+        // RumorBoard lesson 2026-08-02: fraction bands scale with the card/pane height
+        // and under-height the font's line box at real aspects — TMP then TRUNCATES the
+        // fitted text mid-word. Every text band below is a FIXED-pixel band sized as a
+        // whole number of FLOOR LINES (the kit's FontFloor auto-size floor x the ~1.25em
+        // TMP line box), so the floor-size text always seats. Never sub-floor literals —
+        // everything derives from the kit constants. Public so the EditMode suite
+        // (BuildingUpgradePanelLayoutTests) pins the invariants.
+        public const float FloorLinePx      = ElarionUiKit.FontFloor * 1.25f + 2f; // one floor-size line box
+        public const float CardHeadBandPx   = 46f;                    // "TIER n" — single fitted line
+        public const float CardNameBandPx   = FloorLinePx * 2f;       // perk name wraps to 2 lines
+        public const float CardEffectBandPx = FloorLinePx * 3f;       // effect copy wraps to 3 lines
+        public const float CardFooterBandPx = FloorLinePx * 2f;       // Ready/Unlocked tag or 2-line lock reason
+        public const float BandGapPx        = 8f;
+        public const float BenefitRow1Px    = FloorLinePx + 8f;       // short benefit line (single fit line)
+        public const float BenefitRow2Px    = FloorLinePx * 2f + 4f;  // wrapping benefit line (2 lines)
+        public const int   BenefitSingleLineChars = 24;               // longest text trusted to one row line
+        public const float CtaBottomPx      = 12f;                    // detail CTA band bottom inset
+        // The detail CTA band height is the kit touch floor (ElarionUiKit.MinTouchPx =
+        // 112) — >= 2 floor lines, so busy/lock reasons WRAP instead of clipping.
+
+        // ── WO-841 live countdown ────────────────────────────────────────────────
+        // The "Under construction - Ns" CTA label, cached so Update() can tick JUST its
+        // text once per whole second — never a full RebuildUpgrade (ContentSignature
+        // deliberately excludes RemainingSeconds; see the WO-fix 2026-07-19 dedup note).
+        private TMPro.TextMeshProUGUI _ctaCountdownLabel;
+        private int _ctaCountdownLastSec = -1;
+
         // ── Registration ─────────────────────────────────────────────────────────
 
         private void Awake()
@@ -194,6 +231,30 @@ namespace DeNelle.Village.Buildings.Progression
             if (_vm == null) return;
             var st = DeNelle.Core.UI.ObsidianQueueGate.Status;
             if (st.Version != _queueVersionSeen) { _queueVersionSeen = st.Version; Render(); }
+
+            // WO-841 — the cheap per-second countdown tick. If the CTA is showing the
+            // "Under construction" label, rewrite ONLY its text when the whole second
+            // flips (one TMP string assignment — no teardown, no fit re-arm, no rebuild).
+            // Completion needs no work here: IsBuilding flips -> the queue publish above
+            // bumps Version -> Render -> the signature changes -> RebuildUpgrade swaps
+            // the CTA back to "Upgrade" and clears this cache.
+            if (_ctaCountdownLabel != null && _vm.UnderConstruction)
+            {
+                int sec = _vm.UnderConstructionSeconds;
+                if (sec != _ctaCountdownLastSec)
+                {
+                    _ctaCountdownLastSec = sec;
+                    _ctaCountdownLabel.text = FormatCountdown(sec);
+                }
+            }
+        }
+
+        /// <summary>WO-841 — the ONE composer for the CTA countdown text. Build-time and
+        /// per-second tick both call this, so the strings stay byte-identical. ASCII only.</summary>
+        public static string FormatCountdown(int seconds)
+        {
+            if (seconds < 0) seconds = 0;
+            return "Under construction - " + seconds + "s";
         }
 
         // ── Render: repaint from vm.* ONLY ────────────────────────────────────────
@@ -315,6 +376,12 @@ namespace DeNelle.Village.Buildings.Progression
 
             // Capture the open-time status as the toast baseline (do NOT toast the idle hint).
             _lastStatus = _vm != null ? _vm.Status : null;
+
+            // WO-832 §4: settle the fresh canvas' first layout pass NOW so the first
+            // RebuildUpgrade (Bind -> Render, same frame) can read real rect heights for
+            // its fixed-pixel band math — rects are otherwise zero until the canvas lays
+            // out (the RumorBoard "unknowable at build time" trap).
+            Canvas.ForceUpdateCanvases();
 
             // Eased open: scale 0.92->1 + fade 0->1, ease-out (scale the outer card incl. border).
             var fx = _ui.AddComponent<PanelOpenCloseFx>();
@@ -593,6 +660,11 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_vm == null || _pathCardsHost == null || _detailHost == null) return;
 
+            // WO-841: the rebuild tears the CTA down — drop the cached countdown label
+            // (the under-construction branch re-stashes a fresh one when still building).
+            _ctaCountdownLabel = null;
+            _ctaCountdownLastSec = -1;
+
             var tiers = new List<ItemVM>();
             foreach (var item in _vm.Perks)
                 if (item.Id != null && item.Id.StartsWith("tier-"))
@@ -682,13 +754,24 @@ namespace DeNelle.Village.Buildings.Progression
             string id = item.Id;
             selBtn.onClick.AddListener(() => SelectTier(id));
 
+            // WO-832 §4 fixed-pixel band stack (bottom-up): footer tag/lock, effect,
+            // name — each a whole number of floor lines; the illustration FLEXES in
+            // whatever remains between the name band and the header. Fractions only
+            // carry the horizontal spans now.
+            float footerBot = BandGapPx;
+            float effectBot = footerBot + CardFooterBandPx + BandGapPx;
+            float nameBot   = effectBot + CardEffectBandPx + BandGapPx;
+            float artBot    = nameBot + CardNameBandPx + BandGapPx;
+            float artTop    = 6f + CardHeadBandPx + BandGapPx;
+
             // "TIER n" header.
-            var head = ElarionUiKit.Label(card, TierHeader(item), 0.865f, 0.955f,
+            var head = ElarionUiKit.Label(card, TierHeader(item), 0f, 1f,
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             head.characterSpacing = 4f;
             head.raycastTarget = false;
             ElarionUiKit.FitSingleLine(head);
+            PinBandFromTop(head.rectTransform, 6f, CardHeadBandPx);
 
             // BUILDING ICON — the SAME building art at the SAME size on EVERY tier (owner
             // 2026-07-17: buildings do NOT visually change per tier; a tier upgrade just unlocks
@@ -703,10 +786,11 @@ namespace DeNelle.Village.Buildings.Progression
                 var g = new GameObject("Building", typeof(Image));
                 g.transform.SetParent(card, false);
                 var rt = g.GetComponent<RectTransform>();
-                // Illustration shrunk (was 0.44..0.82) to free vertical room below for the
-                // perk name + effect to WRAP instead of ellipsize.
-                rt.anchorMin = new Vector2(0.20f, 0.56f); rt.anchorMax = new Vector2(0.80f, 0.855f);
-                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                // WO-832 §4: the illustration is the FLEX band — it takes whatever
+                // vertical room remains once the fixed text bands are seated, so the
+                // text can never be squeezed into truncation by the art again.
+                rt.anchorMin = new Vector2(0.20f, 0f); rt.anchorMax = new Vector2(0.80f, 1f);
+                rt.offsetMin = new Vector2(0f, artBot); rt.offsetMax = new Vector2(0f, -artTop);
                 var img = g.GetComponent<Image>();
                 img.sprite = art; img.preserveAspect = true; img.raycastTarget = false;
                 img.color = new Color(1f, 1f, 1f, dim);
@@ -714,40 +798,51 @@ namespace DeNelle.Village.Buildings.Progression
             else
             {
                 // Consistent neutral placeholder (identical on every tier — no growth): a crest glyph.
-                var gl = ElarionUiKit.Label(card, ElarionUi.CrestGlyph, 0.56f, 0.855f,
+                var gl = ElarionUiKit.Label(card, ElarionUi.CrestGlyph, 0f, 1f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.7f * dim),
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.16f, 0.84f, bold: true);
                 gl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(gl);
+                var glr = gl.rectTransform;
+                glr.anchorMin = new Vector2(glr.anchorMin.x, 0f);
+                glr.anchorMax = new Vector2(glr.anchorMax.x, 1f);
+                glr.offsetMin = new Vector2(0f, artBot);
+                glr.offsetMax = new Vector2(0f, -artTop);
             }
 
-            // Perk NAME — WRAPPING block (was a single-line ellipsize: narrow cards cut
-            // "Reinforced Blades" mid-word). Taller band + FitBlock lets it wrap to 2 lines.
-            var nameLbl = ElarionUiKit.Label(card, CardName(item), 0.37f, 0.545f,
+            // Perk NAME — WRAPPING block on a FIXED 2-floor-line band (WO-832 §4: the old
+            // 0.37-0.545 fraction band under-heighted at real aspects and cut mid-word).
+            var nameLbl = ElarionUiKit.Label(card, CardName(item), 0f, 1f,
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             nameLbl.raycastTarget = false;
             ElarionUiKit.FitBlock(nameLbl);
+            PinBandFromBottom(nameLbl.rectTransform, nameBot, CardNameBandPx);
 
-            // EFFECT — WRAPPING block (was too short: "Wood productio[n]" clipped). Taller
-            // band + full width so the effect copy wraps to a readable 2-3 lines.
+            // EFFECT — WRAPPING block on a FIXED 3-floor-line band (WO-832 §4: the fresh
+            // capture still showed "Wood production +12%. Structu" — the 0.145-0.36
+            // fraction band could not seat three floor lines on the owner's aspect).
             string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
             if (!string.IsNullOrEmpty(effect))
             {
-                var eff = ElarionUiKit.Label(card, effect, 0.145f, 0.36f,
+                var eff = ElarionUiKit.Label(card, effect, 0f, 1f,
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
                 eff.raycastTarget = false;
                 ElarionUiKit.FitBlock(eff);
+                PinBandFromBottom(eff.rectTransform, effectBot, CardEffectBandPx);
             }
 
-            // BUTTON.
+            // FOOTER — a fixed 2-floor-line band (WO-832 §4: the old 0.03-0.125 fraction
+            // band was ~41 ref px — it could not seat even ONE floor line, so lock
+            // reasons truncated to "Unlock 'Re"; two lines now wrap fully).
             if (owned)
             {
-                var tag = ElarionUiKit.Label(card, "Unlocked", 0.03f, 0.115f,
+                var tag = ElarionUiKit.Label(card, "Unlocked", 0f, 1f,
                     ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
                 tag.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(tag);
+                PinBandFromBottom(tag.rectTransform, footerBot, CardFooterBandPx);
             }
             else if (available)
             {
@@ -756,18 +851,43 @@ namespace DeNelle.Village.Buildings.Progression
                 // lives in the right pane (BuildDetailCta). A quiet gold-TEXT tag keeps
                 // the card reading "ready + tappable" without a second gold fill.
                 // Colorblind-safe: text + the card's gold rim + lit fill, never hue alone.
-                var ready = ElarionUiKit.Label(card, "Ready >", 0.03f, 0.115f,
+                var ready = ElarionUiKit.Label(card, "Ready >", 0f, 1f,
                     ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
                 ready.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(ready);
+                PinBandFromBottom(ready.rectTransform, footerBot, CardFooterBandPx);
             }
             else
             {
                 // Locked — a dim lock button carrying the requirement (colorblind: glyph + text, not hue).
                 string reason = !string.IsNullOrEmpty(item.LockReason) ? item.LockReason : "Locked";
-                BuildLockButton(card, reason, 0.06f, 0.94f, 0.02f, 0.125f,
+                var lockLbl = BuildLockButton(card, reason, 0.06f, 0.94f, 0f, 1f,
                     () => SelectTier(id));
+                PinBandFromBottom((RectTransform)lockLbl.transform.parent, footerBot, CardFooterBandPx);
             }
+        }
+
+        // ── WO-832 §4 fixed-pixel band pins (RumorBoard pattern) ──────────────────
+        // Re-hang an already-fraction-anchored control on its parent's TOP or BOTTOM
+        // edge with a FIXED ref-pixel band. X anchors/offsets are preserved; only the
+        // vertical seat changes, so bands never scale (and never under-height) again.
+
+        private static void PinBandFromTop(RectTransform rt, float topPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 1f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, -(topPx + heightPx));
+            rt.offsetMax = new Vector2(rt.offsetMax.x, -topPx);
+        }
+
+        private static void PinBandFromBottom(RectTransform rt, float bottomPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 0f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 0f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, bottomPx);
+            rt.offsetMax = new Vector2(rt.offsetMax.x, bottomPx + heightPx);
         }
 
         // ── RIGHT column: the selected tier's detail pane ─────────────────────────
@@ -795,9 +915,9 @@ namespace DeNelle.Village.Buildings.Progression
 
             // BENEFIT LIST — active (green check) up to the selected tier, locked (dim box) above.
             var lines = new List<(bool active, string text)>();
-            // The selected tier's own name + concrete effect read as its delivered benefits.
-            string selName = CardName(sel);
-            if (!string.IsNullOrEmpty(selName)) lines.Add((true, selName));
+            // WO-832 §4: the selected tier's NAME row was DROPPED — it was a verbatim
+            // duplicate of the pane title two lines above and paid for a whole row that
+            // the truncating preview lines needed. The concrete effect leads instead.
             string selEffect = _vm != null ? _vm.EffectFor(sel.Id) : "";
             if (!string.IsNullOrEmpty(selEffect)) lines.Add((true, selEffect));
             // Lower owned tiers below the selected one contribute their effect as active benefits.
@@ -822,16 +942,23 @@ namespace DeNelle.Village.Buildings.Progression
                 }
             }
 
-            // Taller rows (was 0.092) so a long preview line like "Opens Reinforced Blades
-            // (Wood production +25%)" WRAPS to ~2 legible lines instead of ellipsizing.
-            const float listTop = 0.845f, listBot = 0.455f, rowH = 0.126f;
-            int maxRows = Mathf.Max(1, Mathf.FloorToInt((listTop - listBot) / rowH));
-            int shown = Mathf.Min(lines.Count, maxRows);
-            for (int i = 0; i < shown; i++)
+            // WO-832 §4 (RumorBoard fixed-pixel-band lesson): rows are FIXED-pixel bands
+            // hung from the list-zone top. The old 0.126-fraction rows gave ~65 ref px —
+            // which cannot seat two FontFloor lines (~79) — so previews like "Opens
+            // Reinforced Blades (Wood production +25%)" TRUNCATED mid-word. Short lines
+            // take a single-line row, long lines a 2-line row; the loop stops when the
+            // next row can't FULLY seat (a dropped trailing row beats a mid-word cut).
+            var listZone = MakeZone(_detailHost, "BenefitList", new Vector2(0f, 0.455f), new Vector2(1f, 0.845f));
+            float zoneH = (0.845f - 0.455f) * _detailHost.rect.height;
+            if (zoneH < 60f) zoneH = 210f;   // pre-layout fallback (landscape ref math)
+            float cursor = 0f;
+            for (int i = 0; i < lines.Count; i++)
             {
-                float yTop = listTop - i * rowH;
-                float yBot = yTop - (rowH - 0.012f);
-                BuildBenefitRow(_detailHost, yBot, yTop, lines[i].active, lines[i].text);
+                bool twoLine = lines[i].text != null && lines[i].text.Length > BenefitSingleLineChars;
+                float rowPx = twoLine ? BenefitRow2Px : BenefitRow1Px;
+                if (cursor + rowPx > zoneH) break;
+                BuildBenefitRow(listZone, cursor, rowPx, twoLine, lines[i].active, lines[i].text);
+                cursor += rowPx + BandGapPx;
             }
 
             // Divider.
@@ -863,12 +990,16 @@ namespace DeNelle.Village.Buildings.Progression
             string nextId = null;
             foreach (var t in tiers) { if (!t.Equipped) { nextId = t.Id; break; } }
 
-            const float x0 = 0.04f, x1 = 0.96f, yb = 0.115f, yt = 0.235f;
+            // WO-832 §4: the CTA seats on a FIXED bottom-hung band at the kit touch floor
+            // (MinTouchPx = 112 ref px, >= 2 floor lines) — the old 0.115-0.235 fraction
+            // band was ~62 ref px, which seats ONE floor line but truncated every reason
+            // that needed two. PinCta() re-hangs whatever button a branch built.
+            const float x0 = 0.04f, x1 = 0.96f;
             string selId = sel.Id;
 
             if (sel.Equipped)
             {
-                BuildGoldButton(host, "Unlocked", false, x0, x1, yb, yt, null);
+                PinCta(BuildGoldButton(host, "Unlocked", false, x0, x1, 0f, 1f, null));
                 return;
             }
             if (sel.Id == nextId)
@@ -878,8 +1009,8 @@ namespace DeNelle.Village.Buildings.Progression
                 {
                     // Village-gated next tier: the CTA raises the global Village Tier (the mechanism
                     // that opens this tier). Routes to the SOLE VillageTierService caller in the VM.
-                    BuildGoldButton(host, "Raise Village Tier", true, x0, x1, yb, yt,
-                        () => { FlowTrace.Step("UpgradeUI", "raise-village from " + selId); _vm?.Select(BuildingUpgradeVM.VillageTierRowId); });
+                    PinCta(BuildGoldButton(host, "Raise Village Tier", true, x0, x1, 0f, 1f,
+                        () => { FlowTrace.Step("UpgradeUI", "raise-village from " + selId); _vm?.Select(BuildingUpgradeVM.VillageTierRowId); }));
                     return;
                 }
 
@@ -888,44 +1019,54 @@ namespace DeNelle.Village.Buildings.Progression
                 // read as an unexplained dead button (or, on tap, a wrong "can't afford"). Read
                 // the SAME timer gates the VM's tap-path mirrors and grey the button with the
                 // live reason instead — CoC behaviour: the button always says why.
-                var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
-                string vmId = _vm != null ? _vm.BuildingId : null;
-                if (timerSvc != null && vmId != null && timerSvc.IsBuilding(vmId))
+                if (_vm != null && _vm.UnderConstruction)
                 {
-                    BuildLockButton(host, "Under construction — " + (int)timerSvc.RemainingSeconds(vmId) + "s",
-                        x0, x1, yb, yt, null);
+                    // WO-841: build the countdown from the VM's queue-snapshot read and STASH
+                    // the label — Update() ticks just its text every whole second from the
+                    // same FormatCountdown composer, so the panel counts down live.
+                    int sec = _vm.UnderConstructionSeconds;
+                    var busyLbl = BuildLockButton(host, FormatCountdown(sec), x0, x1, 0f, 1f, null);
+                    PinCta((RectTransform)busyLbl.transform.parent);
+                    _ctaCountdownLabel = busyLbl;
+                    _ctaCountdownLastSec = sec;
                     return;
                 }
+                var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
                 if (timerSvc != null && !timerSvc.HasFreeSlot)
                 {
-                    BuildLockButton(host, "All build crews are busy", x0, x1, yb, yt, null);
+                    PinCta((RectTransform)BuildLockButton(host, "All build crews are busy", x0, x1, 0f, 1f, null).transform.parent);
                     return;
                 }
                 if (!sel.Affordable)
                 {
-                    BuildLockButton(host, "Not enough resources yet", x0, x1, yb, yt, null);
+                    PinCta((RectTransform)BuildLockButton(host, "Not enough resources yet", x0, x1, 0f, 1f, null).transform.parent);
                     return;
                 }
-                BuildGoldButton(host, "Upgrade", true, x0, x1, yb, yt,
-                    () => { FlowTrace.Step("UpgradeUI", "upgrade " + selId); _vm?.Select(selId); });
+                PinCta(BuildGoldButton(host, "Upgrade", true, x0, x1, 0f, 1f,
+                    () => { FlowTrace.Step("UpgradeUI", "upgrade " + selId); _vm?.Select(selId); }));
                 return;
             }
             // Further-out locked tier — disabled CTA carrying the requirement.
             string reason = !string.IsNullOrEmpty(sel.LockReason) ? sel.LockReason : "Locked";
-            BuildLockButton(host, reason, x0, x1, yb, yt, null);
+            PinCta((RectTransform)BuildLockButton(host, reason, x0, x1, 0f, 1f, null).transform.parent);
         }
 
+        // Seat a just-built CTA control on the fixed bottom-hung touch-floor band.
+        private static void PinCta(RectTransform rt) => PinBandFromBottom(rt, CtaBottomPx, ElarionUiKit.MinTouchPx);
+
         // One benefit line: colorblind-safe glyph (green filled box = active / dim empty box =
-        // locked) + luminance + text. Never hue alone.
-        private void BuildBenefitRow(RectTransform parent, float yBot, float yTop, bool active, string text)
+        // locked) + luminance + text. Never hue alone. WO-832 §4: the row is a FIXED-pixel
+        // band hung <paramref name="topPx"/> below the list zone's top; short lines fit one
+        // line (ellipsis backstop), long lines WRAP on the 2-line band (never mid-word cut).
+        private void BuildBenefitRow(RectTransform parent, float topPx, float heightPx, bool twoLine, bool active, string text)
         {
             var glyphSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement,
                 active ? RpgUiCatalog.ElementToggleBoxOn : RpgUiCatalog.ElementToggleBoxOff);
             var g = new GameObject(active ? "Check" : "Lock", typeof(Image));
             g.transform.SetParent(parent, false);
             var grt = g.GetComponent<RectTransform>();
-            grt.anchorMin = new Vector2(0.0f, yBot); grt.anchorMax = new Vector2(0.075f, yTop);
-            grt.offsetMin = Vector2.zero; grt.offsetMax = Vector2.zero;
+            grt.anchorMin = new Vector2(0.0f, 1f); grt.anchorMax = new Vector2(0.075f, 1f);
+            grt.offsetMin = new Vector2(0f, -(topPx + heightPx)); grt.offsetMax = new Vector2(0f, -topPx);
             var gimg = g.GetComponent<Image>();
             if (glyphSprite != null)
             {
@@ -939,16 +1080,18 @@ namespace DeNelle.Village.Buildings.Progression
             }
             gimg.raycastTarget = false;
 
-            var lbl = ElarionUiKit.Label(parent, text, yBot, yTop,
+            var lbl = ElarionUiKit.Label(parent, text, 0f, 1f,
                 active ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, 0.10f, 1f);
             lbl.raycastTarget = false;
-            ElarionUiKit.FitBlock(lbl);
+            if (twoLine) ElarionUiKit.FitBlock(lbl); else ElarionUiKit.FitSingleLine(lbl);
+            PinBandFromTop(lbl.rectTransform, topPx, heightPx);
         }
 
         // ── Shared clean buttons (gold CTA + dim lock) ────────────────────────────
 
-        private void BuildGoldButton(Transform parent, string label, bool enabled,
+        // Returns the button's root RectTransform so callers can re-pin it (WO-832 §4).
+        private RectTransform BuildGoldButton(Transform parent, string label, bool enabled,
             float x0, float x1, float y0, float y1, System.Action onClick)
         {
             var go = ElarionUiKit.AddImage(parent, "GoldBtn", new Vector2(x0, y0), new Vector2(x1, y1),
@@ -965,9 +1108,12 @@ namespace DeNelle.Village.Buildings.Progression
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             lbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(lbl);
+            return (RectTransform)go.transform;
         }
 
-        private void BuildLockButton(Transform parent, string reason, float x0, float x1, float y0, float y1, System.Action onClick)
+        // Returns the reason LABEL (a direct child of the button root) — WO-841 caches it
+        // for the live countdown tick; callers reach the root via label.transform.parent.
+        private TMPro.TextMeshProUGUI BuildLockButton(Transform parent, string reason, float x0, float x1, float y0, float y1, System.Action onClick)
         {
             var go = ElarionUiKit.AddImage(parent, "LockBtn", new Vector2(x0, y0), new Vector2(x1, y1),
                 new Color(0.11f, 0.105f, 0.10f, 1f));
@@ -999,6 +1145,7 @@ namespace DeNelle.Village.Buildings.Progression
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, textX0, 0.96f);
             lbl.raycastTarget = false;
             ElarionUiKit.FitBlock(lbl);
+            return lbl;
         }
 
         // ── Building illustration resolver (per-tier portrait; real art) ──────────
@@ -1423,6 +1570,8 @@ namespace DeNelle.Village.Buildings.Progression
             _tabs.Clear();
             _lastStatus = null;
             _lastContentSig = null;   // fresh chrome next Open -> force the first rebuild
+            _ctaCountdownLabel = null;   // WO-841 — label dies with the chrome
+            _ctaCountdownLastSec = -1;
             if (_ui != null)
             {
                 var fx = _ui.GetComponent<PanelOpenCloseFx>();

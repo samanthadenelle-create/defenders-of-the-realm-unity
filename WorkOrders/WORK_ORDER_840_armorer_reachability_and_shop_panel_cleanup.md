@@ -1,6 +1,8 @@
 # WORK ORDER 840 — Armorer (armor-only) reachability + Shop panel UI cleanup
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED (pending gates) — Part B complete; Part A verified from code: filter correct,
+reachability gap is REAL but its one-line fix lives in `CastleVendorNpcInjector.AnchorRoles` (fenced to
+another agent this wave — exact fix documented in the implementation note at the bottom).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** Village vendor data + HUD/UI. Panel = `PartyShopPanelMvvm.cs` (the live shop; `ShopPanel.cs` is legacy/off).
 **Origin:** owner felt-test 2026-08-02, "The Forge" screen — *"Purchase from Armorer should only be armor and needs
@@ -88,3 +90,66 @@ All issues + anchors verified in `Assets/_Modules/Village/Hero/PartyShopPanelMvv
 - Do NOT add/duplicate the vendor category filter (already correct in `vendors.json` + `VendorStockContract`).
 - Do NOT change the roster/stock filter to "fill" the list — fix emptiness with layout only.
 - Do NOT hand-edit scenes; keep `vendors.json` Resources/StreamingAssets copies byte-identical if touched.
+
+---
+
+## Implementation note — 2026-08-02 (edit-only agent, code-verified)
+
+### Part A verdict: filter CORRECT (re-verified), Armorer NOT reachable — RCA + exact fix
+- Filter re-verified from code: `vendors.json` `armorer -> ["armor"]` (:37-46), `VendorRegistry` loads it,
+  `VendorStockContract.AllowedFor` armor branch (:105) enforces it. Untouched, as directed.
+- The WO's premise "no placed armorer catalog row yet" is STALE: `structures-catalog.json:746` HAS the
+  `armorer` row (displayName "Blacksmith", GameplayBuilding, singleton, cost 130) — added by WO-673 L4.
+  Both catalog copies carry it.
+- The REAL reachability chain, all verified from code, is triple-blocked:
+  1. **Palette:** WO-707 grooming LOCKED id `armorer` out of the Town palette (`build-categories.json`
+     lockedIds + `BuildCategoryRegistry.BuildFallback`), reasoning "armor=Armorer via id forge". That
+     reasoning is FALSE at the vendor layer (see 3) — so the only placeable route to the armor vendor
+     was removed.
+  2. **Default-Town/legacy saves:** the injector's Lever-1 baked fallback for role Blacksmith gates on
+     `MayBakedTwinSurface("armorer")` (`CastleVendorNpcInjector.cs:445`), but the migration template
+     grant (`StrategicPlacementMigration` BakedRows) marks `workshop` ever-built, never `armorer` —
+     gate closes post-migration, so the pre-standing town seats NO armor vendor.
+  3. **The "Armorer" tile the player CAN place (catalog id `forge`, displayName "Armorer", visual
+     `Structures/armorer`, baked twin `Forge_Armor_Storefront`) seats the WEAPONS vendor:**
+     `AnchorRoles` maps `("Forge","forge")` -> `VendorFor("forge")` -> context `forge` -> "The Forge"
+     weapons shop. This is almost certainly the owner's felt bug: the building labelled/skinned as the
+     Armorer opens a weapons shop. Placement-land taxonomy (WO-707 + StrategicPlacementMigration:
+     `workshop`=weapons Blacksmith storefront, `forge`=armor storefront) and vendor-land
+     (`forge`=weapons context) disagree about what id `forge` means.
+- **Exact fix (one line, in the FENCED `CastleVendorNpcInjector.cs` — for the injector-owning agent/CLI):**
+  in `AnchorRoles`, change `("Forge", "forge")` to `("Blacksmith", "forge")` (keep
+  `("Forge","collector_forge")` and `("Forge","workshop"...)` via `RoleForBuildingId` as the weapons
+  seats; also update `RoleForBuildingId`'s implicit reverse map if needed). Then the placed/replayed
+  `forge` building ("Armorer" tile, armor-skinned, Forge_Armor_Storefront twin) seats the Blacksmith
+  role -> vendor context `armorer` -> armor-only shop, on BOTH placed and Default-Town saves, honoring
+  WO-707 one-tile-per-trade. NO palette unlock needed (un-retiring the `armorer` tile would contradict
+  WO-707 and was deliberately not done).
+- `OWNER CONFIRM` (carried): Forge(weapons)+Armorer(armor) split kept per WO-444; also confirm the
+  displayName knot (catalog id `forge` labelled "Armorer" vs vendors.json vendor id `forge` labelled
+  "The Forge") — a data-only rename either way once the AnchorRoles fix lands.
+- No regression added: the pinned data contract (armorer=armor-only bands) is already asserted by
+  `DataRegression.CheckVendorStock`; a reachability oracle would fail-by-design until the AnchorRoles
+  fix lands — spelled out here instead of shipping a red gate.
+
+### Part B: all five items implemented
+- B1 `PartyShopPanelMvvm.RebuildPartyBar`: the SELECTED member's chip no longer draws the redundant
+  name (the `_memberLabel` sub-header carries it); unselected chips keep theirs.
+- B2 `BuildChrome`/`CreateCategory`/`RebuildTypeBar`: category bar 0.703-0.744, type bar 0.648-0.690,
+  chips inset 0.10-0.90 — real pennant-clearing gaps at every seam of the filter stack.
+- B3 action row widened into the empty right margin: Improve 0.02-0.30, Purchase/Sell 0.32-0.68,
+  Equip/Unequip 0.70-0.98 (heights/touch size unchanged).
+- B4 `CenterShortList` (new, called from `FinalizeScroll`): when stacked rows are shorter than the
+  viewport, the slack becomes symmetric layout-group padding — rows vertically centred; taller content
+  keeps the plain top-anchored scroll. Roster/stock filter untouched.
+- B5 **RCA correction** — the WO's "missing sprite key" hypothesis is DISPROVED: `gold` maps to
+  `currency/currency_gold` in concept-icons.json, the PNG is a valid Sprite import and renders clean.
+  The garble (per the party_shop capture) is the `element_stat` plate: ~1024px-wide ornate CENTER art
+  9-slice-compressed ~7x inside a small chip = chrome scribble noise. `ElarionUiKit.CurrencyChip` now
+  renders a flat dark-glass plate with the sprite contributing its chrome BORDER only
+  (`fillCenter=false` child frame), plus a slightly larger icon well (0.08-0.92) — shared-kit, so the
+  Inventory/Party garbled chips (UI review P2-9) inherit the fix.
+
+Braces balanced (PartyShopPanelMvvm 151/151, ElarionUiKitObsidian 248/248), no NULs, vendors.json
+copies untouched and verified byte-identical. Gates (CompileGate + RunCaptureHeadless party_shop) owed
+by CLI per pipeline.

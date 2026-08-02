@@ -152,7 +152,9 @@ namespace DeNelle.Editor
                     return 0;
                 }
 
-                // Build the REAL card via its own public entry (data-driven, guarded).
+                // Build the REAL beat via its own public entry (data-driven, guarded).
+                // WO-831: Show now opens on the EMERGENCE state (2D sprite + intro line);
+                // the awakening card builds on the Continue advance.
                 bool shown = EchoUnlockDialogue.Show(entry, 1);
                 dlg = UnityEngine.Object.FindAnyObjectByType<EchoUnlockDialogue>();
                 if (dlg == null)
@@ -162,11 +164,27 @@ namespace DeNelle.Editor
                     return 0;
                 }
 
+                // -- EMERGENCE state (WO-831 acceptance: the new beat renders headless) --
+                GameObject emergenceGo = GetPrivateGameObject(dlg, "_emergenceCanvas");
+                if (emergenceGo != null)
+                {
+                    if (RenderCanvasToPng(emergenceGo, OutDir + "EchoUnlockDialogue_Aldwin_emergence_1920x1080.png", 1920, 1080)) saved++;
+                    if (RenderCanvasToPng(emergenceGo, OutDir + "EchoUnlockDialogue_Aldwin_emergence_2340x1080.png", 2340, 1080)) saved++;
+
+                    // Advance exactly as the player does (the Continue tap). Edit-mode safe:
+                    // the dialogue retires its emergence canvas via DestroyImmediate here.
+                    InvokePrivate(dlg, "OnEmergenceContinue");
+                }
+                else
+                {
+                    Debug.LogWarning("[UICap-HL] EchoUnlockDialogue._emergenceCanvas was null -- emergence state skipped (card may have built directly).");
+                }
+
                 canvasGo = GetPrivateGameObject(dlg, "_canvas");
                 if (canvasGo == null)
                 {
                     Debug.LogWarning("[UICap-HL] EchoUnlockDialogue._canvas was null -- card did not build; skipped.");
-                    return 0;
+                    return saved;
                 }
 
                 // -- FLAVOR state (the default awaken copy) --

@@ -1,25 +1,34 @@
 // =============================================================================
-// EchoAssignments -- the per-echo lane assignment SEAM (WO-658/681 storage, WO-738
-// functional lanes + level).
+// EchoAssignments -- the per-echo assignment SEAM (WO-658/681 storage, WO-738
+// functional lanes + level, WO-830 per-echo harvest RESOURCE).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// Owns the STORAGE half of per-echo agency: a per-echo lane + level keyed by echo
-// index, persisted in GameState.EchoLanes as a CSV of "lane:level" tokens
-// (e.g. "harvest:3,idle,crafting:1"). WO-738 evolved the vocabulary from resource
-// lanes (wood/iron/food) to FUNCTIONAL lanes (harvest/crafting/defense/exploration
-// + idle) and enriched the token from a bare lane to lane:level.
+// Owns the STORAGE half of per-echo agency: a per-echo assignment + level keyed by
+// echo index, persisted in GameState.EchoLanes as a CSV of tokens.
 //
+// TOKEN GRAMMAR (v33 lane:level, EXTENDED additively by WO-830 -- NO schema bump,
+// read-migrated per the SaveMigrator additive law; documented in SaveSchema.cs too):
+//   idle                       -> Idle (carries no level, no resource)
+//   <lane>:<level>             -> functional lane token harvest/crafting/defense/
+//                                 exploration. For "harvest" the RESOURCE defaults
+//                                 on read to the echo's AFFINITY (EchoRosterCatalog).
+//   <resource>:<level>         -> the WO-830 primary form: a HARVEST assignment with
+//                                 an explicit resource -- wood/iron/food/gold/crystals.
+//                                 Lane reads as Harvest; the resource is preserved.
+//   any bare token (no :level) -> level 1 (default-on-read).
 // BACKWARD-COMPATIBLE READ (additive, default-on-read, NO migrator):
-//   - a legacy resource token wood/iron/food  -> the functional Harvest lane
-//   - a bare token with no ":level" suffix     -> level 1
-//   - "idle"                                    -> Idle (carries no level)
-// So the shipped "wood" starter value keeps working (reads Harvest / level 1).
+//   - pre-v33 legacy "wood"/"iron"/"food" -> Harvest at that resource, level 1
+//     (the pre-733 resource vocabulary is now FIRST-CLASS again -- WO-830 note:
+//     the grammar started as resource tokens before v33 and returns to them);
+//   - v33 "harvest:N" -> Harvest at the echo's affinity resource, level N;
+//   - unknown tokens -> Idle.
+// WRITE PATH: the resource picker writes the explicit <resource>:<level> form;
+// generic Assign(LaneHarvest) keeps writing "harvest:<level>" (reads as affinity).
 //
-// SCOPE (still deliberate): this seam STORES + REPORTS. The rate/dump split + the
-// EchoLaneBonuses recompute that CONSUME this field are phase 2 (a later agent);
-// this file is the contract they read. Public API preserved for the phase-2 callers
-// EchoRosterView + EchoCardVM: LaneOf / Lanes / Assign / LabelFor / LaneIdle / Changed.
+// SCOPE: this seam STORES + REPORTS. The consumers are live (WO-738 shipped them):
+// EchoBonusCalculator (rate math + dump weights + readouts) and the card/roster VMs
+// read LaneOf/LevelOf/ResourceTokenOf; EchoService recomputes off Changed.
 // =============================================================================
 using System;
 using DeNelle.Core.Diagnostics;
@@ -28,9 +37,9 @@ using DeNelle.Core.State;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Static storage seam for per-Echo lane + level assignments. Reads/writes
-    /// <see cref="GameState.EchoLanes"/> (a CSV of "lane:level" tokens); raises
-    /// <see cref="Changed"/> after any write so the card + HUD refresh.
+    /// Static storage seam for per-Echo assignment (lane + harvest resource + level).
+    /// Reads/writes <see cref="GameState.EchoLanes"/> (a CSV of tokens -- see the file
+    /// header grammar); raises <see cref="Changed"/> after any write so the card + HUD refresh.
     /// </summary>
     public static class EchoAssignments
     {
@@ -41,38 +50,75 @@ namespace DeNelle.Village
         public const string LaneDefense     = "defense";
         public const string LaneExploration = "exploration";
 
-        // ── Legacy resource-lane tokens (pre-738), kept as COMPATIBILITY ALIASES
-        //    so any lingering reference compiles and any stored value normalizes
-        //    forward to the functional Harvest lane on read. Not in Lanes (the
-        //    picker offers the functional lanes only).
-        public const string LaneWood = "wood";
-        public const string LaneIron = "iron";
-        public const string LaneFood = "food";
+        // ── Harvest RESOURCE tokens (WO-830 -- first-class again). wood/iron/food
+        //    date from the pre-v33 grammar (kept read-compatible ever since); gold +
+        //    crystals are the WO-830 additions. All five read as the Harvest lane
+        //    with the resource preserved. ──
+        public const string ResWood     = "wood";
+        public const string ResIron     = "iron";
+        public const string ResFood     = "food";
+        public const string ResGold     = "gold";
+        public const string ResCrystals = "crystals";
+
+        // Back-compat aliases (pre-830 code referenced these names).
+        public const string LaneWood = ResWood;
+        public const string LaneIron = ResIron;
+        public const string LaneFood = ResFood;
 
         /// <summary>The assignable functional lanes, in display order (Idle is a state, not a pick).</summary>
         public static readonly string[] Lanes = { LaneHarvest, LaneCrafting, LaneDefense, LaneExploration };
 
-        /// <summary>The lanes the picker actually OFFERS right now -- only the LIVE lanes (Harvest,
-        /// Crafting). Defense + Exploration stay in <see cref="Lanes"/> (constants + LabelFor +
-        /// NormalizeLane intact) so any already-stored token still reads back, but they are NOT
-        /// offered as picks: their unlock is not designed, so the card shows no stub/teaser rows
-        /// (owner ruling 2026-07-24).</summary>
-        public static readonly string[] PickableLanes = { LaneHarvest, LaneCrafting };
+        /// <summary>The lanes the picker actually OFFERS: HARVEST ONLY (WO-830 ruling --
+        /// the card is a per-Echo RESOURCE picker; the dead Crafting chip is removed
+        /// entirely per the Sec.3e owner-confirmed default). Defense + Exploration remain
+        /// in <see cref="Lanes"/> (constants + LabelFor + normalization intact) so any
+        /// already-stored token still reads back, but none of the three is offered
+        /// (unlock undesigned -- owner ruling 2026-07-24; no stub/teaser rows).</summary>
+        public static readonly string[] PickableLanes = { LaneHarvest };
 
-        /// <summary>Raised after any lane/level assignment changes (the card + HUD listen).</summary>
+        /// <summary>The five harvest resources the card's RESOURCE PICKER offers (WO-830),
+        /// in display order. Identity is carried by icon + TEXT, never hue (colorblind law).</summary>
+        public static readonly string[] PickableResources = { ResWood, ResIron, ResFood, ResGold, ResCrystals };
+
+        /// <summary>Raised after any assignment/level change (the card + HUD listen).</summary>
         public static event Action Changed;
 
-        // ── Read API (bare lane token; level parsed separately) ───────────────
+        // ── Read API ──────────────────────────────────────────────────────────
 
         /// <summary>
-        /// The functional lane assigned to the Echo at <paramref name="echoIndex"/> (bare token,
-        /// no ":level"). Absent state / out-of-range index reads the safe defaults: index 0 =
-        /// Harvest (the starter Echo auto-assignment), any later index = Idle. Legacy resource
-        /// tokens (wood/iron/food) normalize forward to Harvest.
+        /// The functional lane assigned to the Echo at <paramref name="echoIndex"/> (bare lane
+        /// token, no ":level"). Resource tokens (wood/iron/food/gold/crystals) read as Harvest.
+        /// Absent state / out-of-range index reads the safe defaults: index 0 = Harvest (the
+        /// starter Echo auto-assignment), any later index = Idle.
         /// </summary>
         public static string LaneOf(int echoIndex)
         {
-            return ParseLane(RawToken(echoIndex), echoIndex);
+            return LaneFromToken(CanonicalPart(RawToken(echoIndex), echoIndex));
+        }
+
+        /// <summary>
+        /// WO-830: the harvest RESOURCE token assigned to the Echo at <paramref name="echoIndex"/>
+        /// ("wood".."crystals"), or "" when the echo is not on the Harvest lane. A generic
+        /// "harvest" token (v33 saves) defaults on read to the echo's AFFINITY resource
+        /// (EchoRosterCatalog) -- the read-migration that keeps old saves matched.
+        /// </summary>
+        public static string ResourceTokenOf(int echoIndex)
+        {
+            string part = CanonicalPart(RawToken(echoIndex), echoIndex);
+            if (IsResourceToken(part)) return part;
+            if (part == LaneHarvest)
+            {
+                var entry = EchoRosterCatalog.ByIndex(echoIndex);
+                return entry != null ? EchoRosterCatalog.TargetToken(entry.Affinity)
+                                     : EchoRosterCatalog.TargetToken(HarvestTarget.Wood);
+            }
+            return "";   // idle / crafting / defense / exploration -- no harvest resource
+        }
+
+        /// <summary>WO-830: the typed harvest target of an echo. False when not harvesting.</summary>
+        public static bool TryTargetOf(int echoIndex, out HarvestTarget target)
+        {
+            return EchoRosterCatalog.TryTargetFromToken(ResourceTokenOf(echoIndex), out target);
         }
 
         /// <summary>
@@ -85,13 +131,14 @@ namespace DeNelle.Village
             return ClampLevel(ParseLevel(RawToken(echoIndex)));
         }
 
-        // ── Write API (rebuilds the CSV of richer lane:level tokens) ──────────
+        // ── Write API (rebuilds the CSV of tokens; resources preserved) ───────
 
         /// <summary>
-        /// Assign the Echo at <paramref name="echoIndex"/> to <paramref name="lane"/> (a functional
-        /// lane id, or a legacy/idle token -- normalized). PRESERVES the echo's current level.
-        /// Persists via GameStateService.Save() and raises <see cref="Changed"/>. Returns false
-        /// (logged, never silent) when state is absent or the index is out of range. [Flow:Echo].
+        /// Assign the Echo at <paramref name="echoIndex"/> to <paramref name="lane"/> -- a
+        /// functional lane id, a harvest RESOURCE token (WO-830 picker), or idle. PRESERVES
+        /// the echo's current level. Persists via GameStateService.Save() and raises
+        /// <see cref="Changed"/>. Returns false (logged, never silent) when state is absent
+        /// or the index is out of range. [Flow:Echo].
         /// </summary>
         public static bool Assign(int echoIndex, string lane)
         {
@@ -114,21 +161,38 @@ namespace DeNelle.Village
             int level = LevelOf(echoIndex);   // keep the echo's level across a lane change
             var tokens = BuildTokens(count);
             string before = tokens[echoIndex];
-            tokens[echoIndex] = BuildToken(lane, level);
+            tokens[echoIndex] = BuildToken(NormalizeToken(lane), level);
             s.EchoLanes = string.Join(",", tokens);
             gs.Save();
 
             FlowTrace.Step("Echo",
-                $"AssignLane: echo {echoIndex} '{before}' -> '{tokens[echoIndex]}' (lanes now [{s.EchoLanes}]). " +
-                "Storage seam only -- the rate-split / bonus recompute consume this in phase 2.");
+                $"AssignLane: echo {echoIndex} '{before}' -> '{tokens[echoIndex]}' (lanes now [{s.EchoLanes}]).");
             Changed?.Invoke();
             return true;
         }
 
         /// <summary>
+        /// WO-830: assign the Echo at <paramref name="echoIndex"/> to HARVEST a specific
+        /// resource (the card's resource-picker verb). <paramref name="resourceToken"/> must be
+        /// one of <see cref="PickableResources"/>; anything else logs + no-ops (returns false).
+        /// Writes the explicit <c>&lt;resource&gt;:&lt;level&gt;</c> token form.
+        /// </summary>
+        public static bool AssignHarvest(int echoIndex, string resourceToken)
+        {
+            string norm = (resourceToken ?? "").Trim().ToLowerInvariant();
+            if (!IsResourceToken(norm))
+            {
+                FlowTrace.Warn("Echo", $"AssignHarvest(echo={echoIndex}, resource='{resourceToken}') -- not a harvest resource token; ignored.");
+                return false;
+            }
+            return Assign(echoIndex, norm);
+        }
+
+        /// <summary>
         /// Set the LEVEL (clamped to [1, <see cref="EchoBalanceCatalog.MaxLevel"/>]) of the Echo at
-        /// <paramref name="echoIndex"/>, keeping its current lane. Persists + raises <see cref="Changed"/>.
-        /// Returns false (logged) when state is absent or the index is out of range. [Flow:Echo].
+        /// <paramref name="echoIndex"/>, keeping its current assignment (lane AND resource).
+        /// Persists + raises <see cref="Changed"/>. Returns false (logged) when state is absent
+        /// or the index is out of range. [Flow:Echo].
         /// </summary>
         public static bool SetLevel(int echoIndex, int level)
         {
@@ -149,23 +213,24 @@ namespace DeNelle.Village
             }
 
             int clamped = ClampLevel(level);
-            string lane = LaneOf(echoIndex);
             var tokens = BuildTokens(count);
             string before = tokens[echoIndex];
-            tokens[echoIndex] = BuildToken(lane, clamped);
+            string part = CanonicalPart(before, echoIndex);
+            tokens[echoIndex] = BuildToken(part, clamped);
             s.EchoLanes = string.Join(",", tokens);
             gs.Save();
 
             FlowTrace.Step("Echo",
-                $"SetLevel: echo {echoIndex} lane '{lane}' level -> {clamped} (was token '{before}'; lanes now [{s.EchoLanes}]).");
+                $"SetLevel: echo {echoIndex} '{part}' level -> {clamped} (was token '{before}'; lanes now [{s.EchoLanes}]).");
             Changed?.Invoke();
             return true;
         }
 
-        /// <summary>ASCII display label for a lane id ("harvest" -> "Harvest"; legacy/idle normalized).</summary>
+        /// <summary>ASCII display label for a lane id ("harvest" -> "Harvest"; resource tokens
+        /// label as "Harvest" -- use <see cref="ResourceLabelFor"/> for the resource word).</summary>
         public static string LabelFor(string lane)
         {
-            switch (NormalizeLane(lane))
+            switch (LaneFromToken(NormalizeToken(lane)))
             {
                 case LaneHarvest:     return "Harvest";
                 case LaneCrafting:    return "Crafting";
@@ -173,6 +238,15 @@ namespace DeNelle.Village
                 case LaneExploration: return "Exploration";
                 default:              return "Idle";
             }
+        }
+
+        /// <summary>ASCII display label for a harvest resource token ("wood" -> "Wood").
+        /// Empty string for a non-resource token.</summary>
+        public static string ResourceLabelFor(string resourceToken)
+        {
+            return EchoRosterCatalog.TryTargetFromToken(resourceToken, out var t)
+                ? EchoRosterCatalog.TargetLabel(t)
+                : "";
         }
 
         // ── Internals ─────────────────────────────────────────────────────────
@@ -196,31 +270,32 @@ namespace DeNelle.Village
             return parts[echoIndex];
         }
 
-        /// <summary>Rebuild the full index-aligned token array from the current read-side values.</summary>
+        /// <summary>Rebuild the full index-aligned token array from the current stored values,
+        /// PRESERVING each echo's canonical part (resource tokens stay resource tokens).</summary>
         private static string[] BuildTokens(int count)
         {
             var tokens = new string[count];
             for (int i = 0; i < count; i++)
-                tokens[i] = BuildToken(LaneOf(i), LevelOf(i));
+                tokens[i] = BuildToken(CanonicalPart(RawToken(i), i), LevelOf(i));
             return tokens;
         }
 
-        /// <summary>Compose a "lane:level" token (idle carries no level suffix).</summary>
-        private static string BuildToken(string lane, int level)
+        /// <summary>Compose a token from a canonical part + level (idle carries no level suffix).</summary>
+        private static string BuildToken(string part, int level)
         {
-            string norm = NormalizeLane(lane);
-            if (norm == LaneIdle) return LaneIdle;
-            return norm + ":" + ClampLevel(level);
+            if (string.IsNullOrEmpty(part) || part == LaneIdle) return LaneIdle;
+            return part + ":" + ClampLevel(level);
         }
 
-        /// <summary>The bare functional lane of a raw token (splits off ":level", normalizes).</summary>
-        private static string ParseLane(string token, int echoIndex)
+        /// <summary>The canonical stored PART of a raw token: splits off ":level", normalizes,
+        /// and applies the index-0 starter default when empty.</summary>
+        private static string CanonicalPart(string token, int echoIndex)
         {
             if (string.IsNullOrEmpty(token))
                 return echoIndex == 0 ? LaneHarvest : LaneIdle;
             int colon = token.IndexOf(':');
-            string lanePart = colon < 0 ? token : token.Substring(0, colon);
-            return NormalizeLane(lanePart);
+            string part = colon < 0 ? token : token.Substring(0, colon);
+            return NormalizeToken(part);
         }
 
         /// <summary>The level suffix of a raw token; a bare token (no ":") reads level 1.</summary>
@@ -244,25 +319,61 @@ namespace DeNelle.Village
             return level;
         }
 
-        /// <summary>Normalize a lane id to a canonical functional token (legacy wood/iron/food -> Harvest).</summary>
-        private static string NormalizeLane(string lane)
+        /// <summary>True when <paramref name="part"/> is one of the five harvest resource tokens.</summary>
+        private static bool IsResourceToken(string part)
         {
-            if (string.IsNullOrEmpty(lane)) return LaneIdle;
-            switch (lane.Trim().ToLowerInvariant())
+            switch (part)
+            {
+                case ResWood:
+                case ResIron:
+                case ResFood:
+                case ResGold:
+                case ResCrystals:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>Normalize any incoming part to a canonical STORAGE token. Resource tokens are
+        /// PRESERVED (WO-830 -- they carry the assignment); lane tokens pass through; unknown -> idle.</summary>
+        private static string NormalizeToken(string part)
+        {
+            if (string.IsNullOrEmpty(part)) return LaneIdle;
+            switch (part.Trim().ToLowerInvariant())
             {
                 case LaneHarvest:     return LaneHarvest;
                 case LaneCrafting:    return LaneCrafting;
                 case LaneDefense:     return LaneDefense;
                 case LaneExploration: return LaneExploration;
-                // Legacy resource lanes map forward to Harvest (additive-safe, default-on-read).
-                case LaneWood:
-                case LaneIron:
-                case LaneFood:
-                    FlowTrace.Once("Echo", "legacy-lane-forward",
-                        "EchoAssignments: legacy resource lane token (wood/iron/food) read forward to the functional Harvest lane (level defaults to 1). Backward-compatible, no migrator.");
-                    return LaneHarvest;
+                case ResWood:         return ResWood;
+                case ResIron:         return ResIron;
+                case ResFood:         return ResFood;
+                case ResGold:         return ResGold;
+                case ResCrystals:     return ResCrystals;
                 case LaneIdle:        return LaneIdle;
                 default:              return LaneIdle;
+            }
+        }
+
+        /// <summary>Map a canonical part to its FUNCTIONAL lane (resource tokens -> Harvest).</summary>
+        private static string LaneFromToken(string part)
+        {
+            if (IsResourceToken(part))
+            {
+                FlowTrace.Once("Echo", "resource-token-read",
+                    "EchoAssignments: harvest resource token read as the Harvest lane with the resource preserved (WO-830 grammar; pre-v33 wood/iron/food remain compatible).");
+                return LaneHarvest;
+            }
+            switch (part)
+            {
+                case LaneHarvest:
+                case LaneCrafting:
+                case LaneDefense:
+                case LaneExploration:
+                    return part;
+                default:
+                    return LaneIdle;
             }
         }
     }

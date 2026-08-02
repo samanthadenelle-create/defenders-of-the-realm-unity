@@ -1,24 +1,30 @@
 // =============================================================================
-// EchoCardVM -- view-model for the WO-681 Echo select card (MVVM strict).
+// EchoCardVM -- view-model for the Echo select card (MVVM strict; WO-681 card,
+// WO-830 per-Echo harvest RESOURCE PICKER).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // The VM owns ALL EchoService / EchoAssignments / GameState reads and the assign
 // verb; the View (EchoCardView) is a dumb skin built through ElarionUiKit that
-// binds these strings and calls AssignLane -- it never touches a service
+// binds these strings and calls AssignResource -- it never touches a service
 // (SESSION_CANON_LOADER "MVVM strict"; ARCHITECTURE_PRINCIPLES SS2 presentation
 // never touches the objects).
 //
-// STATE line semantics (WO-738): live from the shared EchoBonusCalculator --
-//   assigned lane -> "Harvest - Lv 3 - +65%"   (lane label + level + current
-//                    specialization bonus %; the readout math lives in the calculator)
-//   idle          -> "Idle - waiting for your word."
+// WO-830 (owner ruling 2026-08-02): the card's PRIMARY interaction is a per-Echo
+// RESOURCE PICKER -- Wood/Iron/Food/Gold/Crystals. The Echo's AFFINITY is a match
+// BONUS (flagged "(best -- this Echo's calling)" on the matching chip), never a
+// lock. The DISCLOSED pair-synergy status renders as its own line (SynergyText);
+// the hidden tri-synergy is NEVER represented in any string here (Sec.3d).
+// The dead Crafting chip is REMOVED (Sec.3e default); Defense/Exploration stay
+// hidden (owner ruling 2026-07-24).
+//
+// STATE line semantics: live from the shared EchoBonusCalculator --
+//   harvesting  -> "Gathering Wood - Lv 3 - +65% (best -- this Echo's calling)"
+//   idle        -> "Idle - waiting for your word."
 // Identity (name / element / flavor / portrait) is read from EchoRosterCatalog.ByIndex
-// (the six named spirits), NOT hardcoded. The lane picker offers only the LIVE lanes --
-// Harvest + Crafting (EchoAssignments.PickableLanes); Defense + Exploration are omitted
-// because their unlock is not designed yet (owner ruling 2026-07-24; no teaser rows).
-// ASCII-only separators ('-' not the middle-dot) -- glyph-safe on the shipped TMP
-// font; states read as TEXT, never by color alone (colorblind owner).
+// (the six named spirits), NOT hardcoded. ASCII-only separators ('-' not the
+// middle-dot) -- glyph-safe on the shipped TMP font; states + resource identity read
+// as TEXT, never by color alone (colorblind owner).
 // =============================================================================
 using System;
 using UnityEngine;
@@ -28,24 +34,23 @@ using DeNelle.Core.State;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// View-model for the Echo select card (WO-681). One instance per open card,
+    /// View-model for the Echo select card (WO-681/830). One instance per open card,
     /// bound to a specific echo index. Owns every service read; raises
     /// <see cref="Changed"/> when the underlying workforce state moves.
     /// </summary>
     public sealed class EchoCardVM : IDisposable
     {
-        /// <summary>One pickable functional lane for the "Assign &lt;Echo&gt; to a task" picker.
-        /// Only the LIVE lanes are offered (harvest / crafting); Defense + Exploration are omitted
-        /// because their unlock is not designed yet (owner ruling 2026-07-24). Selected/preferred
-        /// state is carried in TEXT, never hue (colorblind owner).</summary>
-        public readonly struct LaneChip
+        /// <summary>One pickable HARVEST RESOURCE for the "What should this Echo gather?"
+        /// picker (WO-830). Selected/affinity state is carried in TEXT, never hue
+        /// (colorblind owner). Id is the persisted resource token ("wood".."crystals").</summary>
+        public readonly struct ResourceChip
         {
-            public readonly string Id;        // functional lane token ("harvest"/"crafting"/"defense"/"exploration")
-            public readonly string Label;     // main lane name (+ " (now)" when selected -- TEXT cue, never hue)
-            public readonly string Note;      // honesty + preferred subtext (ASCII; may be "")
-            public readonly bool Selected;    // this echo is currently assigned to this lane
-            public readonly bool Preferred;   // this lane is the echo's element-preferred lane (its +bonus lands here)
-            public LaneChip(string id, string label, string note, bool selected, bool preferred)
+            public readonly string Id;        // resource token ("wood"/"iron"/"food"/"gold"/"crystals")
+            public readonly string Label;     // resource name (+ " (now)" when selected -- TEXT cue, never hue)
+            public readonly string Note;      // affinity subtext (ASCII; may be "")
+            public readonly bool Selected;    // this echo currently gathers this resource
+            public readonly bool Preferred;   // this resource is the echo's AFFINITY (its match bonus lands here)
+            public ResourceChip(string id, string label, string note, bool selected, bool preferred)
             {
                 Id = id; Label = label; Note = note; Selected = selected; Preferred = preferred;
             }
@@ -74,7 +79,7 @@ namespace DeNelle.Village
 
         // ── Displayed strings (View binds verbatim; ASCII only) ────────────────
 
-        /// <summary>Card header name, e.g. "Echo 2 of 4 - Verdant Stag (Nature Echo)" -- the REAL
+        /// <summary>Card header name, e.g. "Echo 2 of 4 - Elowen, the Nature Echo" -- the REAL
         /// spirit identity from the roster catalog (WO-738; no longer the stale "Spirit of the Tree").</summary>
         public string NameText
         {
@@ -88,7 +93,7 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The element subtitle for this Echo ("Ice Elemental"), from the roster catalog.</summary>
+        /// <summary>The element subtitle for this Echo ("Essence of a grove-warden"), from the roster catalog.</summary>
         public string ElementText
         {
             get
@@ -98,22 +103,22 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Short WHAT line under the name -- Element only (ASCII). Full Flavor/Lore
-        /// belongs on the unlock dialogue; dumping it here stacked over the lane picker
-        /// (owner F8 2026-07-24 Echo card screenshot).</summary>
+        /// <summary>Short WHAT line under the name -- Element + the Echo's AFFINITY ("Favors: Gold",
+        /// WO-830 -- the calling is disclosed so the picker choice is informed). ASCII, single line.</summary>
         public string WhatText
         {
             get
             {
                 var entry = EchoRosterCatalog.ByIndex(EchoIndex);
-                string element = entry != null ? entry.Element : "";
-                if (!string.IsNullOrEmpty(element)) return element;
-                return "A spirit of Elarion -- gathers while you fight.";
+                if (entry == null) return "A spirit of Elarion -- gathers while you fight.";
+                string favors = "Favors: " + EchoRosterCatalog.TargetLabel(entry.Affinity);
+                return string.IsNullOrEmpty(entry.Element) ? favors : entry.Element + " - " + favors;
             }
         }
 
-        /// <summary>The live STATE line: assigned lane + level + current specialization bonus % (from the
-        /// shared EchoBonusCalculator), or the idle ask. State carried in TEXT (colorblind-safe).</summary>
+        /// <summary>The live STATE line: gathered resource + level + current specialization bonus %
+        /// (from the shared EchoBonusCalculator), or the idle ask. State carried in TEXT
+        /// (colorblind-safe). The % excludes pair synergy (own line) + the hidden tri (never shown).</summary>
         public string StateText
         {
             get
@@ -121,22 +126,53 @@ namespace DeNelle.Village
                 var ro = EchoBonusCalculator.ReadoutFor(EchoIndex);
                 if (ro.Lane == LaneType.Idle)
                     return "Idle - waiting for your word.";
-                string laneLabel = EchoAssignments.LabelFor(EchoAssignments.LaneOf(EchoIndex));
-                string s = $"{laneLabel} - Lv {ro.Level} - +{Mathf.RoundToInt(ro.BonusPct)}%";
+                string what;
+                if (ro.Lane == LaneType.Harvest)
+                {
+                    string res = EchoAssignments.ResourceLabelFor(EchoAssignments.ResourceTokenOf(EchoIndex));
+                    what = string.IsNullOrEmpty(res) ? "Gathering" : "Gathering " + res;
+                }
+                else
+                {
+                    // Legacy-stored non-harvest lane (no longer pickable) -- still honest.
+                    what = EchoAssignments.LabelFor(EchoAssignments.LaneOf(EchoIndex));
+                }
+                string s = $"{what} - Lv {ro.Level} - +{Mathf.RoundToInt(ro.BonusPct)}%";
                 if (ro.PreferredMatch) s += " (best -- this Echo's calling)";
                 return s;
             }
         }
 
-        /// <summary>The action-row prompt (one ask, one row) -- reads PICK-ONE, not a bonus list,
-        /// naming the Echo's short name from the roster catalog (pattern from NameText).</summary>
+        /// <summary>WO-830: the DISCLOSED pair-synergy line. Active: names the pair + partner +
+        /// bonus; inactive: the plain-text recipe to activate it. "" when no pair is defined.
+        /// The hidden tri-synergy is NEVER mentioned here or anywhere (Sec.3d).</summary>
+        public string SynergyText
+        {
+            get
+            {
+                var sy = EchoBonusCalculator.SynergyFor(EchoIndex);
+                if (!sy.HasPair) return "";
+                string pair = string.IsNullOrEmpty(sy.PairName) ? "Synergy" : sy.PairName + " synergy";
+                if (sy.Active)
+                    return $"{pair} with {sy.PartnerName}: ACTIVE (+{Mathf.RoundToInt(sy.BonusPct)}% all harvest)";
+                string hint = string.IsNullOrEmpty(sy.PartnerResourceLabel)
+                    ? sy.PartnerName
+                    : $"{sy.PartnerName} ({sy.PartnerResourceLabel})";
+                return $"{pair}: pair with {hint} to activate";
+            }
+        }
+
+        /// <summary>The action-row prompt (one ask, one row) -- the WO-830 resource-picker ask,
+        /// naming the Echo's short name (the part before the comma) from the roster catalog.</summary>
         public string AskText
         {
             get
             {
                 var entry = EchoRosterCatalog.ByIndex(EchoIndex);
                 string name = entry != null ? entry.DisplayName : "this Echo";
-                return "Assign " + name + " to a task";
+                int comma = name.IndexOf(',');
+                if (comma > 0) name = name.Substring(0, comma);
+                return "What should " + name + " gather?";
             }
         }
 
@@ -151,60 +187,37 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The live lane chips (harvest/crafting only -- EchoAssignments.PickableLanes). Selected
-        /// state and the element-preferred "best" tag are carried AS TEXT (never hue) so the picker never
-        /// misleads a colorblind player. Defense/Exploration are not offered (unlock undesigned, no teaser).</summary>
-        public LaneChip[] LaneChips()
+        /// <summary>The five live resource chips (WO-830 -- EchoAssignments.PickableResources).
+        /// Selected state and the affinity "best" tag are carried AS TEXT (never hue) so the
+        /// picker never misleads a colorblind player. Affinity is a bonus, never a lock: every
+        /// chip is always tappable.</summary>
+        public ResourceChip[] ResourceChips()
         {
-            string current = EchoAssignments.LaneOf(EchoIndex);
+            string current = EchoAssignments.ResourceTokenOf(EchoIndex);
             var entry = EchoRosterCatalog.ByIndex(EchoIndex);
-            var lanes = EchoAssignments.PickableLanes;
-            var chips = new LaneChip[lanes.Length];
-            for (int i = 0; i < lanes.Length; i++)
+            string affinityToken = entry != null ? EchoRosterCatalog.TargetToken(entry.Affinity) : "";
+            var resources = EchoAssignments.PickableResources;
+            var chips = new ResourceChip[resources.Length];
+            for (int i = 0; i < resources.Length; i++)
             {
-                string lane = lanes[i];
-                bool sel = lane == current;
-                bool preferred = entry != null && entry.PreferredLane == LaneTypeFor(lane);
-                string label = EchoAssignments.LabelFor(lane) + (sel ? " (now)" : "");
-                chips[i] = new LaneChip(lane, label, NoteFor(lane, preferred), sel, preferred);
+                string res = resources[i];
+                bool sel = res == current;
+                bool preferred = res == affinityToken;
+                string label = EchoAssignments.ResourceLabelFor(res) + (sel ? " (now)" : "");
+                string note = preferred ? "best -- this Echo's calling" : "";
+                chips[i] = new ResourceChip(res, label, note, sel, preferred);
             }
             return chips;
         }
 
-        /// <summary>The honesty + preferred subtext for a lane chip (ASCII, TEXT-carried). Defense +
-        /// Exploration are passive bonuses that only pay off in offline raids / dungeons -- say so plainly.</summary>
-        private static string NoteFor(string lane, bool preferred)
-        {
-            string honesty = "";
-            if (lane == EchoAssignments.LaneDefense)          honesty = "passive - active in raids";
-            else if (lane == EchoAssignments.LaneExploration) honesty = "passive - active in dungeons";
-
-            if (preferred)
-                return string.IsNullOrEmpty(honesty) ? "best for this Echo" : "best for this Echo - " + honesty;
-            return honesty;
-        }
-
-        /// <summary>Map a functional lane token to its LaneType (unknown/idle -> Idle).</summary>
-        private static LaneType LaneTypeFor(string lane)
-        {
-            switch (lane)
-            {
-                case EchoAssignments.LaneHarvest:     return LaneType.Harvest;
-                case EchoAssignments.LaneCrafting:    return LaneType.Crafting;
-                case EchoAssignments.LaneDefense:     return LaneType.Defense;
-                case EchoAssignments.LaneExploration: return LaneType.Exploration;
-                default:                              return LaneType.Idle;
-            }
-        }
-
         // ── The assign verb (the ONLY mutation this card performs) ─────────────
 
-        /// <summary>Assign this Echo to <paramref name="laneId"/> via the WO-658 seam.
-        /// EchoAssignments traces + persists + raises Changed (card + HUD refresh).</summary>
-        public void AssignLane(string laneId)
+        /// <summary>Assign this Echo to harvest <paramref name="resourceToken"/> via the
+        /// WO-658/830 seam. EchoAssignments traces + persists + raises Changed (card + HUD refresh).</summary>
+        public void AssignResource(string resourceToken)
         {
-            FlowTrace.Step("Echo", $"Card: assign requested echo={EchoIndex} lane='{laneId}'.");
-            EchoAssignments.Assign(EchoIndex, laneId);
+            FlowTrace.Step("Echo", $"Card: harvest-resource requested echo={EchoIndex} resource='{resourceToken}'.");
+            EchoAssignments.AssignHarvest(EchoIndex, resourceToken);
         }
 
         // ── First-meeting one-shot (WO-681 spec 3) ──────────────────────────────

@@ -24,7 +24,7 @@ retired from this file — see git history for the frozen text.)
 | **Blank founding = truly blank.** On a migrated save a baked twin surfaces only for ids in `GameState.EverBuiltStructureIds` (monotonic; selling never removes). | 2026-08-02 | `StructureSingleton.cs:156-198`, `GameState.cs:518-545` (WO-834, save v36) |
 | **Fresh hub: baked stores PRE-STAND, visible + staffed** (CoC/WWCD, "Lever 1") — baked standdown keys on `HasRecord` alone (+ the WO-834 gate), never on has-catalog-row. | 2026-07-24 | `StrategicPlacementMigration.cs:182-208` |
 | **ONE true gold button per panel** (WO-832) — the upgrade panel's right-pane CTA is the only gold-filled commit; tabs get a gold underline, cards only select. | 2026-08-02 | `Buildings/Progression/BuildingUpgradePanelMvvm.cs:20-38,91-94` |
-| **WO-830 Echo affinity redesign is RULED but NOT IMPLEMENTED** — all 6 Echoes get harvest affinities; Repairs affinity removed; **Maren harvests Crystals** (Bran+Maren = the one doubled affinity); hidden 3-synergy bonus. | 2026-08-02 | `WorkOrders/WORK_ORDER_830_*.md` banner; live code still pre-830 (see §7 + Risk ledger) |
+| **WO-830 Echo affinity/synergy IMPLEMENTED (pending gates)** — all 6 Echoes prefer Harvest with distinct affinities; the PLAYER picks each Echo's resource (5-chip picker; affinity = match bonus, never a lock); **Maren harvests Crystals** (Bran+Maren = the one doubled affinity, combined trickle slowest); 3 disclosed pair synergies + a hidden tri-synergy (applied-only, NEVER displayed). WO-831 emergence sprite beat wired (art pending, Guard fallback). | 2026-08-02 | `EchoRosterCatalog.cs` / `EchoBonusCalculator.cs` / `EchoAssignments.cs` / `echoes-balance.json`; specs `WorkOrders/WORK_ORDER_830_*.md` + `_831_*.md` |
 
 ---
 
@@ -208,44 +208,64 @@ Two generations coexist deliberately:
 
 ## 6. Harvest/ — Echo workforce + offline accrual
 
-### 6.1 The Echo faucet (LIVE)
-- **EchoService.cs** (574) — owns EchoCount (1..`MaxEchoes=6`, wave-earned every
+### 6.1 The Echo faucet (LIVE — WO-830 affinity/synergy implemented 2026-08-02, pending gates)
+- **EchoService.cs** — owns EchoCount (1..`MaxEchoes=6`, wave-earned every
   `WavesPerEcho=5`), the pooled SILO (hours-capped buffer), Dump-to-wallet, unlock events.
   Persisted in GameState (EchoCount/SiloResources/WavesCompleted, schema v25+). Income:
   `RatePerSecond = EchoCount × (BaseRatePerHour/3600) × EchoBonusCalculator.AggregateHarvestMultiplier() × (1 + HarvestRateBonus())`
-  (:126 — the count-quadratic spine folded ONCE, never `GlobalHarvestMultiplier` too);
-  `SiloCapacity = SiloCapHours × BaseRatePerHour × EchoCount × GlobalHarvestMultiplier`
-  (:148 — WO-738 cadence fix). Offline accrual shares ONLY the clock
-  (`GameState.LastHarvestClaimMs`) with OfflineHarvestService — separate faucets, no
-  double-grant (header :19-27). Dump banks via `EconomyService.GrantSpendable` (persisting
-  path). Founding-echo teaching one-shot `FoundingTaughtKey` (:81-85).
-- **EchoBonusCalculator.cs** (281) — WO-738 pure specialization math, the ONE place the curve
-  lives; `AggregateHarvestMultiplier()` formula at :59-90 (per-echo base + preferred-match +
-  per-level, 6-set global bonus); neutral 1.0 with no state; only `Recompute()` writes (into
-  Core `EchoLaneBonuses`).
-- **EchoRosterCatalog.cs** (214) — the fixed 6-spirit code table (deliberately NOT JSON,
-  header :8-16); order == EchoCount; each Echo = the awakened essence of a soul the Heart
-  guards (WO-752). **Current (pre-WO-830) identity rows (:110-153):** Aldwin/Frost→
-  Exploration (no resource), Elowen/Nature→Harvest **Wood**, Corvin/Shadow→Exploration,
-  Bran/Storm→Defense, Doran/Earth→Harvest **Iron**, Maren/Fire→**Crafting**.
-- **EchoAssignments.cs** (269) — per-echo lane:level storage in `GameState.EchoLanes` CSV,
-  back-compat token reads; **`PickableLanes = { Harvest, Crafting }` (:60)** — Defense/
-  Exploration not assignable.
-- UI/feedback: EchoWorkforceHud (191) + VM (258) + Bootstrap (62), EchoRosterView (328) +
-  EchoRosterVM/EchoCardView/EchoCardVM, EchoUnlockFeedback (360), EchoUnlockDialogue (272),
-  EchoWispInjector (343), EchoSpiritPresentation (133), EchoWaveUnlockBridge (64),
-  EchoBalanceCatalog (130 — the owner-tunable knobs, echoes-balance.json).
+  (the count-quadratic spine folded ONCE, never `GlobalHarvestMultiplier` too);
+  `SiloCapacity = SiloCapHours × BaseRatePerHour × EchoCount × AggregateHarvestMultiplier()`
+  (WO-830 reconcile — capacity now shares the rate's multiplier basis so fill-time ≈
+  SiloCapHours; the STEWARD talent factor stays excluded). Offline accrual shares ONLY the
+  clock (`GameState.LastHarvestClaimMs`) with OfflineHarvestService — separate faucets, no
+  double-grant. **Dump is a 5-WAY split** (WO-830): Wood/Iron/Food/Gold/Crystals by
+  `HarvestTargetWeights` (largest-remainder, exact pool); Wood/Iron/Food+Crystals bank via
+  `EconomyService.GrantSpendable(..., crystals:)`, Gold via `EconomyService.AddCoins`.
+  Founding-echo teaching one-shot `FoundingTaughtKey`.
+- **EchoBonusCalculator.cs** — the ONE place the curve lives (WO-738/830);
+  `AggregateHarvestMultiplier()` = count × (1 + per-echo [base + affinity-match + level]
+  + running PAIR bonuses + 6-set + **hidden tri-synergy** when ALL pairs run — the tri term
+  is APPLIED-ONLY, excluded from `ReadoutFor().BonusPct` and every displayed string
+  (WO-830 §3d; FlowTrace edge-logs activation)). Match law = ASSIGNED resource == affinity.
+  `HarvestTargetWeights()` (5-way, by actual assignment) replaced the old 3-way
+  `HarvestResourceWeights`. `SynergyFor()` = the DISCLOSED pair readout for the card.
+- **EchoRosterCatalog.cs** — the fixed 6-spirit code table; order == EchoCount; each Echo =
+  the awakened essence of a soul the Heart guards (WO-752). **WO-830 identity rows: ALL SIX
+  `PreferredLane = Harvest`** with affinities Aldwin/Frost→**Food**, Elowen/Nature→**Wood**,
+  Corvin/Shadow→**Gold**, Bran/Storm→**Crystals**, Doran/Earth→**Iron**, Maren/Fire→
+  **Crystals** (the one deliberately doubled affinity; Repairs removed 2026-08-02).
+  New `HarvestTarget` enum + token/label helpers; WO-831 `EmergeLine` per entry +
+  `LoadEmergence` (Guard-wrapped, portrait/text fallback).
+- **EchoAssignments.cs** — per-echo token storage in `GameState.EchoLanes` CSV. **WO-830
+  grammar:** `<resource>:<level>` (wood/iron/food/gold/crystals — the primary form, resource
+  preserved) alongside `<lane>:<level>` + `idle`; a v33 generic `harvest:N` defaults on read
+  to the echo's AFFINITY resource; pre-v33 bare wood/iron/food read at that resource L1. NO
+  schema bump (grammar documented on `SaveSchema.PersistedState.EchoLanes`).
+  **`PickableLanes = { Harvest }` only** (dead Crafting chip removed);
+  **`PickableResources` = the 5 targets** the card's resource picker offers.
+  New APIs: `ResourceTokenOf` / `TryTargetOf` / `AssignHarvest` / `ResourceLabelFor`.
+- UI/feedback: EchoWorkforceHud + VM + Bootstrap, EchoRosterView +
+  EchoRosterVM/EchoCardView/EchoCardVM (**WO-830: the card is a 5-chip RESOURCE PICKER** —
+  affinity disclosed as "Favors: X" + the "(best -- this Echo's calling)" text flag; the
+  disclosed pair-synergy line via `SynergyText`; hidden tri never worded), EchoUnlockFeedback,
+  **EchoUnlockDialogue (WO-831: two-state — 2D EMERGENCE beat first (`Resources/Echoes/
+  Emergence/<PortraitName>_emerge.png`, LFS; CanvasGroup fade-in; missing art degrades to
+  portrait→text, never blocks) then Continue → the awakening card)**, EchoWispInjector,
+  EchoSpiritPresentation, EchoWaveUnlockBridge, EchoBalanceCatalog (owner-tunable knobs,
+  echoes-balance.json: WO-830 `preferredLaneMatchBonus 0.40`, 3 `crossBonuses` pairs
+  Provisions/Forge/Fortune @ +0.10, `hiddenTriSynergyBonus 0.25`, Bran+Maren rates 0.45 each
+  so the combined crystal trickle stays the slowest faucet).
+- Oracles: `EchoSpecializationRegression` (affinity table, balance dual-copy, token grammar,
+  pair/tri math incl. applied≠displayed, save round-trip, dump credit across all 5 wallets)
+  + `EchoResourcePickerRegression` (chip projection, picker verb, card strings, synergy line,
+  WO-831 emergence data/fallback).
 
-### 6.2 WO-830 — the PENDING affinity redesign (ruled 2026-08-02, **NOT yet implemented**)
-Spec: `WorkOrders/WORK_ORDER_830_echo_harvest_affinity_synergy.md`. When implemented, expect:
-all 6 rosters `PreferredLane = Harvest` with distinct resource affinities (Elowen Wood, Doran
-Iron, Aldwin Food, Corvin Gold/Coins, Bran Crystals, **Maren Crystals** — Repairs affinity
-REMOVED by the 2026-08-02 banner; crystals is the one doubled, deliberately-slow trickle),
-Dump extended to credit Coins/Crystals, Forge synergy pair = Iron+Crystals (Doran+Maren), and
-a hidden 3-synergy bonus. Also flagged there: silo capacity vs rate reconciliation and the
-no-per-frame-persist rule for the new currencies. **Until that lands, 4 of 6 Echoes cannot
-earn their affinity** (lanes Defense/Exploration are dead + unassignable; Crafting is
-cosmetic — no gameplay reader of `EchoLaneBonuses.CraftingMult`).
+### 6.2 WO-830 — status
+Implemented 2026-08-02 (this section previously tracked it as pending). Spec + banners:
+`WorkOrders/WORK_ORDER_830_echo_harvest_affinity_synergy.md`; sprite beat:
+`WORK_ORDER_831_echo_emergence_sprite_beat.md`. Emergence ART is not yet supplied — the
+loader degrades to the portrait until the 6 LFS files land under
+`Assets/Resources/Echoes/Emergence/`.
 
 ### 6.3 Offline accrual + legacy workers
 OfflineHarvestService (335, WO-115 claims-on-resume; `OfflineHarvestBootstrap` DDOL) +
@@ -278,10 +298,11 @@ storefront (idempotent, `LightSkin_` marker child) — the post-sell resurface b
 
 ## 8. Risk ledger (prioritized)
 
-1. **WO-830 spec/code divergence (HIGH, by design until implemented):** the owner ruling is
-   minted but `EchoRosterCatalog.cs:110-153` + `EchoAssignments.cs:60` are still pre-830 —
-   any doc/dialogue implying "every Echo has a harvest affinity" is ahead of the build.
-   Implementers: the WO's own RCA section is the accurate current-state map.
+1. **WO-830 implemented 2026-08-02 (pending CompileGate + DataRegression):** the roster/
+   assignments/calculator now match the ruling (see §6.1). Residual risks: the WO-738 doc's
+   dialogue copy is banner-flagged STALE; WO-831 emergence ART is not yet supplied (loader
+   degrades to portrait); the two new oracles must be registered in `DataRegression.RunAll`
+   by the committer.
 2. **Comment drift — catalog version:** `StructureSingleton.cs:17` and `:418` say
    "structures-catalog.json **v5**"; the live JSON is **`version: 6`**. Harmless today
    (fields unchanged) but the §15 canon rule says fix the comment on next touch.
@@ -309,6 +330,6 @@ storefront (idempotent, `LightSkin_` marker child) — the post-sell resurface b
 9. **Wood/Iron dual-wallet hazard persists** (EconomyService in-session pool vs GameState
    ledger; `GrantSpendable` writes both). WallRepairController and EchoService.Dump both
    deliberately use the both-sides path — keep doing that.
-10. **Silo capacity vs rate:** capacity scales `EchoCount²` (`EchoService.cs:148`) while rate
-    additionally scales the specialization factor — with bonuses active the silo fills faster
-    than `SiloCapHours` intends. Reconciliation is in-scope for WO-830 (§2 caveat 1).
+10. **Silo capacity vs rate: RECONCILED (WO-830, 2026-08-02)** — `SiloCapacity` now scales by
+    the same `AggregateHarvestMultiplier()` basis as rate (talent factor still excluded by
+    design), so fill-time ≈ `SiloCapHours` with specialization active.

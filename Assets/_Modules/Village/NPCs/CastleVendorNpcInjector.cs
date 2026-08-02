@@ -251,7 +251,12 @@ namespace DeNelle.Village
             ("Lumbermill",    "collector_lumbermill"), // WO-707: Sawmill retires from the palette — anchor to the surviving Lumbermill tile; dialogue structureId stays "lumbermill" (VendorFor)
             ("Windmill",      "collector_farm"),       // WO-707: Mill retires from the palette — anchor to the Farm tile; dialogue structureId stays "farm" (VendorFor)
             ("EchoHollow",    "pet-house"),
-            ("Forge",         "forge"),
+            // WO-840 (owner F8 2026-08-02): catalog id "forge" is the ARMOR-visual building the
+            // palette labels "Armorer" — it was anchored to the WEAPONS role ("Forge"), so the
+            // armor building opened the weapons shop. WO-444 law: BLACKSMITH sells armor, FORGE
+            // sells weapons -> the "forge" building seats the Blacksmith (armor) vendor; the
+            // weapons Forge vendor lives on the placeable collector_forge tile below.
+            ("Blacksmith",    "forge"),
             ("Forge",         "collector_forge"), // WO-707 palette: the placeable Forge is a ResourceCollector
                                                   // (structures-catalog id "collector_forge", bare id "forge") — NOT a
                                                   // Building — so this second Forge anchor lets the widened poll seat it

@@ -140,12 +140,13 @@ namespace DeNelle.Village
         }
 
         /// <summary>The silo's absolute capacity in resources = capHours x ratePerHour x echoCount
-        /// x GlobalHarvestMultiplier (WO-738 cadence fix, owner pin #7). Rate is quadratic in count
-        /// (RatePerSecond folds the count-quadratic spine) while capacity WAS only linear, so a full
-        /// roster used to fill in ~40 min. Scaling capacity by the same GlobalHarvestMultiplier keeps
-        /// fill-time ~constant (~SiloCapHours) as the roster grows WITHOUT touching the WO-709 power
-        /// spike (rate is unchanged). Only the buffer ceiling scales.</summary>
-        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount * GlobalHarvestMultiplier;
+        /// x AggregateHarvestMultiplier (WO-830 cadence reconcile -- WO-830 Sec.2 caveat 1). Rate
+        /// folds the FULL specialization aggregate while capacity only carried the count spine, so
+        /// with bonuses active the silo filled well before the intended SiloCapHours. Scaling
+        /// capacity by the SAME multiplier basis as rate keeps fill-time ~= SiloCapHours as the
+        /// roster/specialization grows. The STEWARD talent factor is deliberately excluded
+        /// (capacity is `collectorCap`'s seam, not `harvestRate`'s -- WO-676 note above).</summary>
+        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount * EchoBonusCalculator.AggregateHarvestMultiplier();
 
         /// <summary>Silo fill fraction 0..1 (silo / capacity). 0 when capacity is 0.</summary>
         public float FillFraction
@@ -339,34 +340,44 @@ namespace DeNelle.Village
                 return 0;
             }
 
-            // WO-738 split: the pooled silo divides across Wood / Iron / Food by the
-            // Harvest-lane echoes' element->resource WEIGHTS (EchoBonusCalculator), replacing
-            // the old even-thirds. Crystals/Aether stay premium (never auto-split). Uses
-            // LARGEST-REMAINDER apportionment so the integer split sums to the EXACT pool (no
-            // unit created or lost); leftover units go to the largest fractional shares (the
-            // top-share resource), preserving the old "no fraction lost" invariant.
-            var weights = EchoBonusCalculator.HarvestResourceWeights();
-            double wW = weights.TryGetValue(DeNelle.Core.ResourceType.Wood, out var vw) ? vw : 0.0;
-            double wI = weights.TryGetValue(DeNelle.Core.ResourceType.Iron, out var vi) ? vi : 0.0;
-            double wF = weights.TryGetValue(DeNelle.Core.ResourceType.Food, out var vf) ? vf : 0.0;
-            double totalW = wW + wI + wF;
-            if (totalW <= 0.0) { wW = 1.0; wI = 1.0; wF = 1.0; totalW = 3.0; }   // defensive even split
+            // WO-830 split: the pooled silo divides across the FIVE harvest targets
+            // (Wood / Iron / Food / Gold / Crystals) by the Harvest-assigned echoes'
+            // player-picked assignment WEIGHTS (EchoBonusCalculator.HarvestTargetWeights --
+            // rate x level per echo, routed to its ASSIGNED resource). Gold credits Coins
+            // (EconomyService.AddCoins); Crystals credits the Aether wallet via the
+            // crystals param of GrantSpendable (NEVER the old 3-param form -- WO-830 Sec.7);
+            // both only flow when an echo is explicitly assigned there. Uses LARGEST-
+            // REMAINDER apportionment so the integer split sums to the EXACT pool (no unit
+            // created or lost); leftover units go to the largest fractional shares.
+            var weights = EchoBonusCalculator.HarvestTargetWeights();
+            double wW = weights.TryGetValue(HarvestTarget.Wood, out var vw) ? vw : 0.0;
+            double wI = weights.TryGetValue(HarvestTarget.Iron, out var vi) ? vi : 0.0;
+            double wF = weights.TryGetValue(HarvestTarget.Food, out var vf) ? vf : 0.0;
+            double wG = weights.TryGetValue(HarvestTarget.Gold, out var vg) ? vg : 0.0;
+            double wC = weights.TryGetValue(HarvestTarget.Crystals, out var vc) ? vc : 0.0;
+            double totalW = wW + wI + wF + wG + wC;
+            if (totalW <= 0.0) { wW = 1.0; wI = 1.0; wF = 1.0; wG = 0.0; wC = 0.0; totalW = 3.0; }   // defensive classic split
 
-            double[] exact = { pool * (wW / totalW), pool * (wI / totalW), pool * (wF / totalW) };
-            int[] alloc = new int[3];
-            double[] fracs = new double[3];
+            const int n = 5;
+            double[] exact =
+            {
+                pool * (wW / totalW), pool * (wI / totalW), pool * (wF / totalW),
+                pool * (wG / totalW), pool * (wC / totalW),
+            };
+            int[] alloc = new int[n];
+            double[] fracs = new double[n];
             int used = 0;
-            for (int k = 0; k < 3; k++)
+            for (int k = 0; k < n; k++)
             {
                 alloc[k] = (int)Math.Floor(exact[k]);
                 fracs[k] = exact[k] - alloc[k];
                 used += alloc[k];
             }
-            int remainder = pool - used;   // in {0,1,2}: sum of fractional parts < 3
+            int remainder = pool - used;   // in {0..n-1}: sum of fractional parts < n
             for (int r = 0; r < remainder; r++)
             {
                 int best = -1; double bestFrac = -1.0;
-                for (int k = 0; k < 3; k++) { if (fracs[k] > bestFrac) { bestFrac = fracs[k]; best = k; } }
+                for (int k = 0; k < n; k++) { if (fracs[k] > bestFrac) { bestFrac = fracs[k]; best = k; } }
                 if (best < 0) break;
                 alloc[best] += 1;
                 fracs[best] = -1.0;   // consume so each leftover unit lands on a distinct top share
@@ -374,23 +385,34 @@ namespace DeNelle.Village
             int wood = alloc[0];
             int iron = alloc[1];
             int food = alloc[2];
+            int gold = alloc[3];
+            int crystals = alloc[4];
             FlowTrace.Step("Echo",
-                $"DumpSilos split (pool {pool}) by harvest weights [W {wW:0.##}/I {wI:0.##}/F {wF:0.##}] -> " +
-                $"wood {wood}, iron {iron}, food {food} (sum {wood + iron + food}).");
+                $"DumpSilos split (pool {pool}) by harvest weights [W {wW:0.##}/I {wI:0.##}/F {wF:0.##}/G {wG:0.##}/C {wC:0.##}] -> " +
+                $"wood {wood}, iron {iron}, food {food}, gold {gold}, crystals {crystals} (sum {wood + iron + food + gold + crystals}).");
 
             var eco = EconomyService.Instance;
             if (eco != null)
             {
-                // GrantSpendable persists Wood/Iron into GameState (upgrade ledger) AND
-                // fills the in-session pool + routes Food through GameState. The single
-                // banking path -- no double-grant (the silo is the ONLY source here).
-                eco.GrantSpendable(wood: wood, food: food, iron: iron);
+                // GrantSpendable persists Wood/Iron into GameState (upgrade ledger), fills
+                // the in-session pool, routes Food + Crystals through GameState (the crystals
+                // param -- the single wallet after WO-842). AddCoins is the GOLD mover
+                // (GameState.Resources.Coins). The single banking path -- no double-grant
+                // (the silo is the ONLY source here).
+                eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
+                if (gold > 0) eco.AddCoins(gold);
             }
             else
             {
-                FlowTrace.Warn("Echo", "DumpSilos: EconomyService absent -- writing Wood/Iron directly to GameState as fallback.");
+                // Defensive fallback (EconomyService is always installed in practice): keep
+                // the classic direct Wood/Iron write; route Crystals through the public
+                // GameStateService mover; a Gold share cannot be banked without the economy
+                // service -- log it LOUDLY (never silent) rather than poke the wallet struct.
+                FlowTrace.Warn("Echo", "DumpSilos: EconomyService absent -- writing Wood/Iron directly to GameState as fallback"
+                    + (gold > 0 ? $"; {gold} gold NOT banked (no coin mover without EconomyService)" : "") + ".");
                 s.Wood = Mathf.Max(0, s.Wood + wood);
                 s.Iron = Mathf.Max(0, s.Iron + iron);
+                if (crystals > 0 && gs != null) gs.AddCrystals(crystals);
             }
 
             // Reset the silo (keep the sub-1 fractional remainder so slow rates aren't lost).
@@ -402,7 +424,7 @@ namespace DeNelle.Village
             s.LastHarvestClaimMs = TimeSource.NowUnixMs();
             if (gs != null) gs.Save();
 
-            FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food (pool {pool}); silo reset, clock advanced.");
+            FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food, +{gold} gold, +{crystals} crystals (pool {pool}); silo reset, clock advanced.");
             Changed?.Invoke();
             return pool;
         }

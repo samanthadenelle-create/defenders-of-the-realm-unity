@@ -62,6 +62,17 @@ After 3a+3b the ONLY bright-gold filled button anywhere on the panel is the righ
 (Upgrade / Raise Village Tier). Selecting a tier card repaints the right pane; the CTA commits. One true button.
 
 ## 4. Secondary (verify, fix only if confirmed real — not the core ask)
+
+> **FIXED (2026-08-02, edit-only agent, alongside WO-841):** the UI seat CONFIRMED the clipping on
+> fresh pixels (NOT a stale build), so the §4 tail was implemented in `BuildingUpgradePanelMvvm.cs`
+> using the RumorBoard fixed-pixel-band lesson (TMP vertical culling: fraction bands scaled with the
+> card/pane and under-heighted the font's line box). Tier-card head/name/effect/footer and the detail
+> benefit rows + CTA are now FIXED ref-pixel bands sized in whole `ElarionUiKit.FontFloor` line boxes
+> (card effect = 3 lines, footer/lock = 2 lines, benefit rows 1 or 2 lines by length, CTA band =
+> `MinTouchPx`); the illustration flexes in the remainder. The detail list also dropped its first row
+> (verbatim duplicate of the pane title) to make room. Invariants pinned in
+> `Assets/Tests/EditMode/BuildingUpgradePanelLayoutTests.cs`. Pending gates: CompileGate + EditMode +
+> `RunCaptureHeadless building_upgrade` re-capture.
 The owner's screenshot still shows effect/preview text clipping mid-word — card "Wood production +12%. **Structu**",
 detail "Wood production +12%. **Structur**", "Opens Reinforced Blades (**Wood**" and truncated tier buttons
 "Unlock '**Re**". The code added `FitBlock` wrapping (~line 708-726, 802-812), so this may be a STALE build (the same

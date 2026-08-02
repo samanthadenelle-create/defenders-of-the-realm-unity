@@ -59,9 +59,10 @@ namespace DeNelle.Tests.EditMode
             Assert.That(card.DisplayName, Is.EqualTo(entry.DisplayName));
             // OwnedStatus now emits the lane/level/bonus readout ONLY (colorblind-safe TEXT). The
             // Element + "\n" prefix was dropped (owner F8 2026-07-24 pet screen: it stacked over the
-            // display name). Echo index 0 defaults to the Harvest lane at Lv 1 (EchoAssignments starter
-            // default with no GameState), so the readout leads "Harvest - Lv 1 - +N%".
-            Assert.That(card.StatusText, Does.StartWith("Harvest - Lv 1"));
+            // display name). WO-830 (2026-08-02): the roster readout now LEADS WITH THE ASSIGNED
+            // RESOURCE ("<Resource> - Lv N - +X% ..."); with no GameState the starter default is the
+            // echo's affinity resource at Lv 1 — index 0 = Aldwin -> Food.
+            Assert.That(card.StatusText, Does.StartWith("Food - Lv 1"));
             Assert.That(card.StatusText, Does.Not.Contain("\n"),
                 "the Element + newline prefix is gone — status is a single readout line.");
         }

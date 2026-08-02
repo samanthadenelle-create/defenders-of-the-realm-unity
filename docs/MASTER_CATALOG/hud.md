@@ -432,13 +432,25 @@ harmless but are a trap for a data-reader assuming row ⇒ rendered (risk #3).
 5. **Raids dims, never disables** (WO-820): the tap must always reach
    RaidSelectionScreen's drillmaster redirect (`HudKitController.cs:98-101`).
 6. **Map hidden pre-Onboarded** (WO-825 R4 / WO-826) (`:1727-1741`).
-7. **WO-835 "action-bar applicability repack" is a READY spec, NOT built**
-  (`WorkOrders/WORK_ORDER_835_hud_action_bar_applicability_repack.md`, status READY
-  TO IMPLEMENT): show only applicable buttons, packed and centered, with the
-  applicability array computed in a **Core model (`HudActionBarModel`), not the
-  View** (owner architecture law 2026-08-02). No `HudActionBarModel` /
-  `ActionBarButtonId` exists in the tree yet (verified 2026-08-02). It will replace
-  the fixed `/6` bar math and the dim/hole behaviours above.
+7. **WO-835 "action-bar applicability repack" — IMPLEMENTED 2026-08-02 (pending
+  gates + PO felt-verify).** The bar renders ONLY applicable faces, packed +
+  centered at constant width, from the ordered array computed in
+  **`Assets/_Modules/Core/HudModel/HudActionBarModel.cs`** (`ActionBarButtonId`
+  enum order = bar order; `Shared` instance; edge-triggered
+  `ActiveButtonsChanged`/`RaidsDimmedChanged`; `ISource` seam +
+  `HudActionBarModelTests` / `HudActionBarRegression`). The View's fixed `/6`
+  math, Talk dim, Raids army-dim poll, Map Onboarded poll and the
+  Quests<->Upgrade relabel are all RETIRED from `HudKitController` —
+  it binds the model and runs a render-from-array pass (`ApplyActionBar`) +
+  `ApplyRaidsDim`. New pieces: `PostureSignals.RaidCapable` (mirror seam,
+  default TRUE never-false-block), Village
+  `Troops/RaidCapabilityHudBridge.cs` (FeatureFlags.Raid + `StructureSingleton.
+  IsBuilt("barracks")` + `ArmyReadiness.Compute` deployable>=1, WO-823
+  single-source), the split-out **Upgrade** face (`upgradeButton` widget +
+  calm(town) occupancy row in BOTH json copies), ActionBar zone widened to
+  x 0.270-0.730. SEMANTICS PRESERVED: Map still Onboarded-gated (WO-825 R4,
+  now repacked — no hole); a VISIBLE Raids face still dims-not-disables on a
+  not-full army (WO-820); rulings #4/#5/#6 below read through this model now.
 
 ---
 
@@ -449,11 +461,12 @@ harmless but are a trap for a data-reader assuming row ⇒ rendered (risk #3).
    and legacy UXML — none exist in the module anymore — and never mentions Kit/ or
    the VMs. `README_HUD.md` describes the never-shipped HUD-001 `HUDManager`. A
    fresh agent following the README system lands on fiction. Action: rewrite both.
-2. **WO-835 will collide with the Update() gate polls.** The map-hole, talk-dim and
-   raids-dim logic in `HudKitController.Update` (`:1631-1742`) is exactly what the
-   spec moves into Core; until it lands, hiding Map pre-onboard leaves a **visible
-   hole** in the 6-slot bar (spec §2 confirms). Any interim bar tweak should be
-   deferred to the WO-835 implementation.
+2. **RESOLVED 2026-08-02 (WO-835 implemented, pending gates).** The map-hole,
+   talk-dim and raids-dim Update() polls moved into `HudActionBarModel` (Core);
+   the bar is render-from-array, so holes are impossible by construction. Residual
+   watch item: line-number cites in §1 of this catalog for `HudKitController.cs`
+   (bar build ~:412-517, Update polls ~:1631-1742) predate the WO-835 edit and
+   have shifted; re-verify cites on the next catalog pass.
 3. **Inert hud-areas.json rows** (`xpBar`, `settingsButton`) look load-bearing but
    render nothing (unregistered ids). Safe today, but a future widget accidentally
    registered under one of these ids would silently appear in postures nobody

@@ -361,6 +361,16 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-proj-map suite", () => { if (!TowerProjectileMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-proj-map] " + r); });
             // --- WO-826 Realm Map: realm-map.json dual-copy field parity + RealmMapCatalog loader oracle ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-map suite", () => { if (!RealmMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-map] " + r); });
+            // --- WO-839 raid deploy screen: FrameCore footer/subHeader zones + F8 harness dev-guard + ScoutReport honesty ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-ui suite", () => { if (!RaidDeployUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-ui] " + r); });
+            // --- WO-766 wallet provider: Android-only SOLANA_SDK define + real-provider selection + transfer confinement ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
+            // --- WO-835 action bar: Core applicability model invariants + View purity ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-actionbar suite", () => { if (!HudActionBarRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-actionbar] " + r); });
+            // --- WO-830 echo resource picker: picker/token/affinity contract (sibling to the echo-spec suite) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-picker suite", () => { if (!EchoResourcePickerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-picker] " + r); });
+            // --- WO-797 dungeon room ownership: encounter schema + wake/confine math + exit beacon (F8 seq 622) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-room-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonRoomOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-room-ownership] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

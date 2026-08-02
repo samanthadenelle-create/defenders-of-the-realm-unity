@@ -27,8 +27,10 @@
 // TODO (out of first-pass scope, noted for the next increment):
 //  - Live "Estimated Clear Time" that recomputes as troops are added/removed (this
 //    pass shows the config's recommended/2-star band statically).
-//  - A real SCOUT REPORT (wall tier / AA-tower density / choke vs open / boss) in
-//    the intel area to drive the soft RPS + a meaningful Auto-Recommend comp.
+//  - WO-839 #3 built the SCOUT REPORT intel band (honest config facts: walls /
+//    gates / garrison / boss, via vm.ScoutReport). Still TODO: the deeper analysis
+//    (AA-tower density / choke vs open) driving the soft RPS + a meaningful
+//    Auto-Recommend comp.
 //  - Per-troop quantity sliders + deploy slots (this pass shows owned counts; the
 //    in-raid deploy tray handles the actual unit placement).
 // =============================================================================
@@ -120,18 +122,25 @@ namespace DeNelle.Village.Hero
                 ? (Transform)chrome.layout.body : chrome.content.transform;
             var footer = chrome.layout != null && chrome.layout.footer != null
                 ? (Transform)chrome.layout.footer : body;
+            // WO-839 #1: FrameCore now carves a thin SUB-HEADER band (right of the medallion
+            // socket, under the title) -- the badge / stars / target-time meta row seats there
+            // so the body top is no longer a second stacked header row. Null on the
+            // procedural fallback path (frame art absent); builders then keep the legacy
+            // body-top strip.
+            var subHeader = chrome.layout != null && chrome.layout.subHeader != null
+                ? (Transform)chrome.layout.subHeader : null;
 
             // WO-714 P8: the ONE shared open ease (scale target = the panel rect).
             ElarionUiKit.AttachPanelOpenFx(_ui,
                 chrome.root != null ? chrome.root.transform as RectTransform : null);
 
-            BuildHeader(body);
+            BuildHeader(subHeader, body);
 
             // LEFT column — Your Forces (party row + troop list + cap indicator).
-            BuildLeftColumn(body);
+            BuildLeftColumn(body, hasSubHeader: subHeader != null);
 
-            // CENTER/RIGHT column — battle preview + estimated clear time + summary.
-            BuildCenterColumn(body);
+            // RIGHT column — battle preview + estimated clear time + summary + scout report.
+            BuildCenterColumn(body, hasSubHeader: subHeader != null);
 
             // FOOTER action strip — Auto Recommend + the big glowing DEPLOY CTA.
             BuildDeployBar(footer);
@@ -146,17 +155,25 @@ namespace DeNelle.Village.Hero
             Debug.Log($"[RaidDeployScreen] Opened for raid '{_vm.RaidId}' -> scene '{_vm.SceneName}'.");
         }
 
-        // Sub-row (difficulty badge + star row + target time) across the TOP band of the
-        // BODY zone. The chrome's header zone carries the ONE title; the body zone starts
-        // below the FrameCore medallion socket, so no per-screen dodge fractions remain
-        // (WO-714 W4 — the old sweep-9413 / #29 hand-tuned offsets are the kit's job now).
-        private void BuildHeader(Transform body)
+        // Meta row (difficulty badge + star row + target time). WO-839 #1: on the frame
+        // path this seats in the chrome's SUB-HEADER band -- beside/below the title, right
+        // of the medallion socket -- so it never stacks a second header row into the body
+        // top and the pill can never collide with the medallion. Fallback (procedural
+        // chrome, no sub-header zone): the legacy body-top strip.
+        private void BuildHeader(Transform subHeader, Transform body)
         {
+            Transform host = subHeader != null ? subHeader : body;
+            // Fractions OF THE HOST: the sub-header band uses (near) full-height rows; the
+            // body fallback keeps the legacy thin top strip.
+            float y0 = subHeader != null ? 0.06f : 0.945f;
+            float y1 = subHeader != null ? 0.94f : 1.00f;
+
             Color tint = DifficultyColor(_vm != null ? _vm.Difficulty : null);
-            var badge = ElarionUiKit.AddImage(body, "DiffBadge",
-                new Vector2(0.00f, 0.945f), new Vector2(0.20f, 1.00f),
+            var badge = ElarionUiKit.AddImage(host, "DiffBadge",
+                new Vector2(0.00f, y0), new Vector2(0.16f, y1),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
+            // Colorblind text-first: the tint is decoration, the WORD carries the meaning.
             var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_vm != null ? _vm.Difficulty : null),
                 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
@@ -165,27 +182,42 @@ namespace DeNelle.Village.Hero
             // zero m_Unicode:9733 hits), so the old "★★★" text rendered as boxes in
             // builds. Procedural gold diamonds instead (EndStateView's pattern via
             // the shared StarRatingRow), then a plain font-safe "Target:" label.
-            StarRatingRow.Build(body, 3, 3, 0.23f, 0.945f, 0.32f, 1.00f, sizePx: 12f);
-            var timeLbl = ElarionUiKit.Label(body, "Target: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
-                0.945f, 1.00f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.335f, 0.75f, bold: true);
+            StarRatingRow.Build(host, 3, 3, 0.19f, y0, 0.28f, y1, sizePx: 12f);
+            var timeLbl = ElarionUiKit.Label(host, "Target: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
+                y0, y1, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.305f, 0.75f, bold: true);
             timeLbl.raycastTarget = false;
         }
 
+        // WO-839 #3: the columns widen to 0.49 / 0.51 (the old 0.48 / 0.52 left a dead
+        // 4%-wide center seam the owner flagged).
+        private const float LeftColX1  = 0.49f;
+        private const float RightColX0 = 0.51f;
+
         // LEFT — Your Forces: hero + companions portrait row, then the scrollable
         // troop-card list grouped by TroopDefId, then the army-cap indicator.
-        private void BuildLeftColumn(Transform body)
+        // WO-839 #1: with the meta row gone to the chrome sub-header, the left column
+        // starts at the top of the body (spec: "YOUR FORCES" from body yMax ~= 0.90).
+        // The fallback (no sub-header) keeps the legacy offsets below the body-top row.
+        private void BuildLeftColumn(Transform body, bool hasSubHeader)
         {
-            // Section label — top of the left half of the body zone, below the sub-row.
-            var lbl = ElarionUiKit.Label(body, "YOUR FORCES", 0.855f, 0.915f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
+            float forcesY0 = hasSubHeader ? 0.900f : 0.855f;
+            float forcesY1 = hasSubHeader ? 0.960f : 0.915f;
+            float partyY0  = hasSubHeader ? 0.735f : 0.700f;
+            float partyY1  = hasSubHeader ? 0.885f : 0.845f;
+            float capY0    = hasSubHeader ? 0.665f : 0.635f;
+            float capY1    = hasSubHeader ? 0.715f : 0.685f;
+            float listY1   = hasSubHeader ? 0.645f : 0.615f;
+
+            var lbl = ElarionUiKit.Label(body, "YOUR FORCES", forcesY0, forcesY1, ElarionUi.Gilt,
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
-            BuildPartyRow(body);
+            BuildPartyRow(body, partyY0, partyY1);
 
             // Army-cap indicator (VM-computed SlotsUsed / MaxArmySize).
-            var capLbl = ElarionUiKit.Label(body, _vm != null ? _vm.ArmyCapText : "Army: -", 0.635f, 0.685f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, 0.48f, bold: true);
+            var capLbl = ElarionUiKit.Label(body, _vm != null ? _vm.ArmyCapText : "Army: -", capY0, capY1,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
             capLbl.raycastTarget = false;
 
             // Troop list region (left half of the body zone, below the cap line). The body
@@ -195,7 +227,7 @@ namespace DeNelle.Village.Hero
             listGo.transform.SetParent(body, false);
             _troopListArea = listGo.GetComponent<RectTransform>();
             _troopListArea.anchorMin = new Vector2(0.00f, 0.00f);
-            _troopListArea.anchorMax = new Vector2(0.48f, 0.615f);
+            _troopListArea.anchorMax = new Vector2(LeftColX1, listY1);
             _troopListArea.offsetMin = Vector2.zero;
             _troopListArea.offsetMax = Vector2.zero;
 
@@ -206,7 +238,12 @@ namespace DeNelle.Village.Hero
         // left column. The hero's class = GameState.HeroClass; companions = the class
         // strings in PartyMemberIds. (Hero is added explicitly so the row always shows
         // the player even before any companion has joined.)
-        private void BuildPartyRow(Transform body)
+        // WO-774.0 FORWARD NOTE (spectator-model ruling PENDING — RAID_BATTLEFIELD_
+        // ANATOMY_2026-08-02 §7): when the owner/Grok ruling lands, the hero leaves raid
+        // scenes entirely and this hero+companion party row is expected to be REPLACED by
+        // a troop-loadout row (folds into WO-774 §2). Kept deliberately minimal here —
+        // do NOT deepen hero-in-raid coupling on this screen.
+        private void BuildPartyRow(Transform body, float rowY0, float rowY1)
         {
             var classes = _vm != null ? _vm.PartyClasses : new List<string>();
 
@@ -214,8 +251,8 @@ namespace DeNelle.Village.Hero
             var rowHost = new GameObject("PartyRow", typeof(RectTransform));
             rowHost.transform.SetParent(body, false);
             var rr = rowHost.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.00f, 0.700f);
-            rr.anchorMax = new Vector2(0.48f, 0.845f);
+            rr.anchorMin = new Vector2(0.00f, rowY0);
+            rr.anchorMax = new Vector2(LeftColX1, rowY1);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
 
@@ -304,55 +341,116 @@ namespace DeNelle.Village.Hero
             ownedLbl.raycastTarget = false;
         }
 
-        // CENTER/RIGHT — battle-preview placeholder + estimated clear time + summary.
-        // Fractions are OF THE BODY ZONE (WO-714 W4).
-        private void BuildCenterColumn(Transform body)
+        // RIGHT — battle preview + estimated clear time + summary + scout report.
+        // Fractions are OF THE BODY ZONE (WO-714 W4). WO-839 #3: the column widens to
+        // RightColX0 (seam closed) and the bare lower band becomes the SCOUT REPORT
+        // intel area (the header TODO's intended occupant).
+        private void BuildCenterColumn(Transform body, bool hasSubHeader)
         {
-            // Battle preview placeholder (the RaidBaseGenerator thumbnail goes here later).
+            // Battle preview well. WO-839 #4: an INTENTIONAL framed pre-battle state
+            // instead of the raw "(enemy base)" stub copy. No runtime thumbnail exists yet
+            // (RaidBaseGenerator is a BAKE-TIME editor tool — nothing renders the target
+            // base at runtime), so the well frames a crest + honest copy until a thumbnail
+            // pipeline lands. With the meta row gone to the sub-header the well also grows
+            // upward to the column top.
             // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
             // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
-            var preview = ElarionUiKit.Well(body, new Vector2(0.52f, 0.36f), new Vector2(1.00f, 0.845f));
+            float prevTop = hasSubHeader ? 0.960f : 0.845f;
+            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.42f), new Vector2(1.00f, prevTop));
             preview.GetComponent<Image>().raycastTarget = false;
-            var pvLbl = ElarionUiKit.Label(preview.transform, "Battle Preview\n(enemy base)", 0.40f, 0.60f,
-                ElarionUi.ParchmentDim, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+
+            var crest = ElarionUiKit.AddImage(preview.transform, "PreviewCrest",
+                new Vector2(0.38f, 0.44f), new Vector2(0.62f, 0.86f),
+                new Color(1f, 1f, 1f, 0.55f));
+            var crestImg = crest.GetComponent<Image>();
+            var crestSprite = UiStyle.Icon("combat", "crest", "shield", "emblem");
+            if (crestSprite != null)
+            {
+                crestImg.sprite = crestSprite;
+                crestImg.preserveAspect = true;
+            }
+            else
+            {
+                // No icon art in this build: a quiet gilt plate keeps the framed read.
+                crestImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.18f);
+            }
+            crestImg.raycastTarget = false;
+
+            var pvTitle = ElarionUiKit.Label(preview.transform, "ENEMY BASE", 0.28f, 0.40f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            pvTitle.raycastTarget = false;
+            var pvLbl = ElarionUiKit.Label(preview.transform, "Scout sketch not yet available", 0.14f, 0.26f,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
             pvLbl.raycastTarget = false;
 
             // Estimated Clear Time readout (FIRST PASS: static from the config; TODO live).
             string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
-            var estLbl = ElarionUiKit.Label(body, "Est. Clear Time: ~" + est, 0.27f, 0.33f, ElarionUi.Gilt,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
+            var estLbl = ElarionUiKit.Label(body, "Est. Clear Time: ~" + est, 0.34f, 0.40f, ElarionUi.Gilt,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, RightColX0, 1.00f, bold: true);
             estLbl.raycastTarget = false;
 
             // Summary — total deployable troops + a simple power rating (VM-computed).
             int totalTroops = _vm != null ? _vm.DeployableCount : 0;
             int power = _vm != null ? _vm.PowerRating : 0;
-            var sumLbl = ElarionUiKit.Label(body, $"Troops: {totalTroops}    Power: {power}", 0.19f, 0.25f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.52f, 1.00f, bold: true);
+            var sumLbl = ElarionUiKit.Label(body, $"Troops: {totalTroops}    Power: {power}", 0.26f, 0.32f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, RightColX0, 1.00f, bold: true);
             sumLbl.raycastTarget = false;
+
+            // WO-839 #3: SCOUT REPORT intel band fills the previously bare lower band.
+            // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
+            // facts only (walls / gates / garrison / boss; never the cosmetic reward
+            // fields the loot math ignores).
+            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.00f), new Vector2(1.00f, 0.24f));
+            intel.GetComponent<Image>().raycastTarget = false;
+            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.76f, 0.98f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            intelHdr.raycastTarget = false;
+            var report = _vm != null ? _vm.ScoutReport : null;
+            string intelText = report != null && report.Count > 0
+                ? string.Join("\n", report) : "No scout intel available.";
+            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.04f, 0.74f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
+            intelLbl.raycastTarget = false;
         }
 
-        // FOOTER action strip — Auto Recommend (stub) + the big glowing DEPLOY CTA.
-        // The footer zone is re-seated ABOVE the shared Close band at the factory
-        // (WO-714 P6), so the old hand-computed Close-dodge row math is retired:
-        //   Auto Recommend (left) | DEPLOY (right); Close sits in its own band below.
+        // WO-839 #6 flag (OWNER CONFIRM pending): false = DEPLOY stays enabled at 0 troops
+        // so the player can enter to SCOUT (deliberate feature — the spec's default);
+        // true = grey it out + toast a reason ("don't offer what you can't do", WO-833).
+        // static readonly (not const) so the dead branch never trips CS0162.
+        private static readonly bool GateDeployAtZeroTroops = false;
+
+        // FOOTER action strip — Auto Recommend (stub) + the big DEPLOY CTA.
+        // WO-839 #5: FrameCore's footer is now an explicit RAISED band tall enough for
+        // MinTouchPx buttons (root cause: the inherited thin default band forced
+        // ClampMinTouch to grow both buttons past the band into the shared Close below).
+        // Auto Recommend and DEPLOY share the band with a real gap; Close keeps its own
+        // band underneath.
         private void BuildDeployBar(Transform footer)
         {
             // Auto Recommend — FIRST PASS stub: selects all deployable (no comp logic yet).
             ElarionUiKit.Button(footer, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.00f, 0.05f), new Vector2(0.32f, 0.95f), OnAutoRecommend);
+                new Vector2(0.00f, 0.05f), new Vector2(0.34f, 0.95f), OnAutoRecommend);
 
-            // DEPLOY — the big glowing primary CTA. Confirm-green with a gilt ember glow
-            // ring behind it so it reads as the dominant action.
+            // DEPLOY — the big glowing primary CTA. WO-839 #5: the old DeployGlow was a
+            // flat gilt RECT deliberately larger than the button on every side
+            // (x0.60-1.00 / y0.00-1.00) — the owner's "gold slivers". Replaced by a thin
+            // ROUNDED halo hugging the button (~1% margin, rounded sprite corners), so a
+            // soft gold rim reads as the ember glow with no hard slab edge.
             var glow = ElarionUiKit.AddImage(footer, "DeployGlow",
-                new Vector2(0.60f, 0.00f), new Vector2(1.00f, 1.00f),
-                new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.35f));
-            glow.GetComponent<Image>().raycastTarget = false;
+                new Vector2(0.385f, 0.00f), new Vector2(1.00f, 1.00f),
+                new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.30f));
+            var glowImg = glow.GetComponent<Image>();
+            glowImg.raycastTarget = false;
+            ElarionUiKit.ApplyRounded(glowImg);
 
             var deployBtn = ElarionUiKit.Button(footer, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.615f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
-            // Gold-ink-on-green reads as the ember CTA; keep it enabled (the raid can be
-            // entered to scout even with no troops — the in-raid tray handles placement).
-            if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy;
+                new Vector2(0.40f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
+            // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either
+            // way the WO-820 readiness gate upstream (RaidEntryGate / ArmyReadiness.Compute
+            // at the HUD button + selection grid) stays the ONE authority — this screen
+            // never re-derives or bypasses readiness.
+            bool troopsOk = !GateDeployAtZeroTroops || (_vm != null && _vm.DeployableCount > 0);
+            if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy && troopsOk;
         }
 
         private void OnAutoRecommend()
@@ -374,6 +472,13 @@ namespace DeNelle.Village.Hero
                 // WO-714 P5: player-visible transient feedback, not just a console line.
                 ElarionUiKit.ShowToast("This raid has no battleground yet.", ElarionUiKit.ToastTone.Danger);
                 Debug.LogWarning("[RaidDeployScreen] DEPLOY: no scene to load for this raid.");
+                return;
+            }
+            // WO-839 #6 (flag OFF by default — scouting with 0 troops is deliberate).
+            if (GateDeployAtZeroTroops && _vm.DeployableCount <= 0)
+            {
+                ElarionUiKit.ShowToast("No troops trained yet. Visit the Barracks.", ElarionUiKit.ToastTone.Danger);
+                Debug.Log("[RaidDeployScreen] DEPLOY blocked: 0 deployable troops (GateDeployAtZeroTroops).");
                 return;
             }
             Debug.Log($"[RaidDeployScreen] DEPLOY -> SceneRouter.GoRaid('{_vm.SceneName}').");

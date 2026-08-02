@@ -1,6 +1,15 @@
 # WORK ORDER 841 — Upgrade panel "Under construction" countdown ticks live
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED (pending gates — CompileGate + EditMode + RunCaptureHeadless not yet run; edit-only agent 2026-08-02)
+
+> **Implementation note (2026-08-02, edit-only agent):** done per §2 with one MVVM refinement —
+> the countdown feed lives on the VM (`BuildingUpgradeVM.UnderConstruction` /
+> `UnderConstructionSeconds`, same BuildTimerService seam the tap-path mirrors), and the View's
+> `Update()` ticks ONLY the cached CTA label text when the whole second flips (composer:
+> `BuildingUpgradePanelMvvm.FormatCountdown`, ASCII "Under construction - Ns"). `ContentSignature`
+> untouched (no per-second rebuild). Cache cleared on rebuild/close; completion still flows through
+> the existing signature-flip path. Sibling suite: `Assets/Tests/EditMode/BuildingUpgradePanelLayoutTests.cs`.
+> Also fixed in the same file: the CONFIRMED WO-832 §4 truncation tail (see that WO's dated note).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — `BuildingUpgradePanelMvvm.cs` (+ 1-line reference to WO-816 for the queue bar).
 **Origin:** owner felt-test 2026-08-02, Barracks Enhancements — *"the countdown doesn't move till refreshed and

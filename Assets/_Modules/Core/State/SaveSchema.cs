@@ -495,19 +495,25 @@ namespace DeNelle.Core.State
             /// </summary>
             [JsonProperty("strategicPlacementMigrated")] public bool? StrategicPlacementMigrated;
 
-            // ── WO-681/658 — Echo lane assignments (WO-738 richer token) ─────────
+            // ── WO-681/658 — Echo assignments (WO-738 lane:level, WO-830 resource) ─
             /// <summary>
-            /// Per-Echo lane + level CSV by echo index. WO-738 enriched the token grammar
-            /// from a bare lane to <c>lane:level</c> — e.g. <c>"harvest:3,idle,crafting:1"</c>.
-            /// The FUNCTIONAL lanes are harvest/crafting/defense/exploration (+ idle, which
-            /// carries no level). Written by the Echo card + level API (EchoAssignments);
-            /// the rate/dump split + EchoLaneBonuses recompute consume the same field (phase 2).
-            /// SAME wire shape (string) as v31 — this is a NO-MIGRATOR bump. Nullable per the
-            /// <c>.partial()</c> convention; absent on an older save → GameState's initializer
-            /// default applies on read. BACKWARD-COMPATIBLE READ (default-on-read, no migrator):
-            /// a bare legacy token maps forward — <c>wood</c>/<c>iron</c>/<c>food</c> → Harvest;
-            /// <c>idle</c> → Idle; any token with no <c>:level</c> suffix → level 1. So an old
-            /// save's <c>echoLanes="wood"</c> loads Harvest / level 1 unchanged. Append-only
+            /// Per-Echo assignment CSV by echo index. TOKEN GRAMMAR (v33 base, extended
+            /// additively by WO-830 — SAME wire shape, NO schema bump, NO migrator):
+            /// <c>idle</c> (no level, no resource); <c>&lt;lane&gt;:&lt;level&gt;</c> with lane in
+            /// harvest/crafting/defense/exploration; or the WO-830 PRIMARY form
+            /// <c>&lt;resource&gt;:&lt;level&gt;</c> with resource in wood/iron/food/gold/crystals —
+            /// a HARVEST assignment carrying the player-picked resource (e.g.
+            /// <c>"wood:3,idle,crystals:1"</c>). Written by the Echo resource picker + level
+            /// API (EchoAssignments); the rate/dump split + EchoLaneBonuses recompute consume
+            /// the same field. Nullable per the <c>.partial()</c> convention; absent on an
+            /// older save → GameState's initializer default applies on read.
+            /// BACKWARD-COMPATIBLE READ (default-on-read, no migrator):
+            /// a pre-v33 bare <c>wood</c>/<c>iron</c>/<c>food</c> → Harvest at that resource,
+            /// level 1 (the resource vocabulary predates v33 and is first-class again);
+            /// a v33 generic <c>harvest:N</c> → Harvest at the echo's AFFINITY resource
+            /// (EchoRosterCatalog default-on-read); <c>idle</c> → Idle; any token with no
+            /// <c>:level</c> suffix → level 1; unknown tokens → Idle. So an old save's
+            /// <c>echoLanes="wood"</c> loads Harvest/Wood/L1 unchanged. Append-only
             /// field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("echoLanes")] public string EchoLanes;

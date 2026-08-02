@@ -233,6 +233,9 @@ namespace DeNelle.Core.UI
         {
             /// <summary>Title band (top), already carrying the gold title label.</summary>
             public RectTransform header;
+            /// <summary>WO-839: thin SUB-HEADER band under the title (meta rows: badge / stars /
+            /// timers), or null for frames without one. Clears the medallion socket by design.</summary>
+            public RectTransform subHeader;
             /// <summary>The main content well (grid / list / detail) — the big dark interior.</summary>
             public RectTransform body;
             /// <summary>Circular portrait socket (top-left medallion), or null for frames without one.</summary>
@@ -266,6 +269,11 @@ namespace DeNelle.Core.UI
             public Vector4 header, body, medallion, footer, close;
             public Vector4 bodyLeft, bodyRight;
             public bool hasMedallion, hasFooter, hasSplitBody;
+            /// <summary>WO-839: optional thin SUB-HEADER band under the title (right of the
+            /// medallion socket) for meta rows (difficulty badge / stars / target time), so a
+            /// screen never stacks a second header row into the body top. Off by default.</summary>
+            public Vector4 subHeader;
+            public bool hasSubHeader;
             /// <summary>TWO-TONE FRAME (FrameCrafting / FrameQuest): the frame art bakes a dark
             /// obsidian well on the LEFT and a tan parchment well on the RIGHT, split at an art seam.
             /// A screen that drops content into the full <see cref="body"/> straddles that seam, so
@@ -403,7 +411,21 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.037f, 0.868f, 0.220f, 0.988f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.24f, 0.900f, 0.88f, 0.972f);
-                    z.body        = new Vector4(0.055f, 0.075f, 0.945f, 0.855f);
+                    // WO-839 ROOT CAUSE fix: FrameCore previously INHERITED the default thin
+                    // footer (0.030-0.095). The sweep-9413 relocation re-seats that band above
+                    // the Close box but keeps its designed ~0.065 height -- too thin for the
+                    // MinTouchPx=112 button floor, so ClampMinTouch grew footer CTAs past the
+                    // band into the shared Close underneath (the Raid Deploy bottom-row overlap).
+                    // Explicit RAISED, button-height band instead: 0.13 panel height holds a
+                    // MinTouch CTA on the post-scale landscape canvas; the relocation still
+                    // fires as a safety net when the Close box tops out higher than 0.140.
+                    z.footer      = new Vector4(0.055f, 0.155f, 0.945f, 0.285f);
+                    // WO-839 #1: thin SUB-HEADER band under the title, RIGHT of the medallion
+                    // socket (x >= 0.24 clears the socket's 0.220 edge) -- badge / stars /
+                    // target-time meta rows seat here instead of stacking into the body top.
+                    z.subHeader    = new Vector4(0.24f, 0.845f, 0.945f, 0.896f);
+                    z.hasSubHeader = true;
+                    z.body        = new Vector4(0.055f, 0.075f, 0.945f, 0.835f);
                     break;
                 case RpgUiCatalog.FrameSettings:
                     // 1936x1461, pixel-measured: full-bleed dark slab with a top-centre tab (the
@@ -650,6 +672,10 @@ namespace DeNelle.Core.UI
                     header = Zone(chrome.content.transform, "Zone_Header", z.header),
                     body   = Zone(chrome.content.transform, "Zone_Body",   z.body),
                 };
+                // WO-839: optional thin SUB-HEADER band (badge / stars / meta rows) under the
+                // title. Null for frames without one; screens fall back to their body top.
+                if (z.hasSubHeader)
+                    layout.subHeader = Zone(chrome.content.transform, "Zone_SubHeader", z.subHeader);
                 // PARCHMENT-BLEED FIX (shared): a two-tone frame (FrameCrafting / FrameQuest) bakes a
                 // dark-left / parchment-right seam into its art. A single-well screen that fills the
                 // full body straddles that seam (half black, half tan). Paint a UNIFORM dark obsidian

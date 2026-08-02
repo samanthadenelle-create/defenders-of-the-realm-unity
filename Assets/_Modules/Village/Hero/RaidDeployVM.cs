@@ -103,6 +103,16 @@ namespace DeNelle.Village.Hero
         public int DeployableCount { get; private set; }
         public int PowerRating { get; private set; }
 
+        private readonly List<string> _scoutReport = new List<string>();
+
+        /// <summary>WO-839 #3: scout-report intel lines for the deploy screen's intel band —
+        /// honest facts the scouting party could see, from the raid's SceneConfigDef only
+        /// (wall tier + gates, garrison headcount, boss). DELIBERATELY never surfaces
+        /// rewardMultiplier / shardDropChance: they are cosmetic-only config fields the loot
+        /// math ignores (RAID_BATTLEFIELD_ANATOMY_2026-08-02) and would be lies on screen.
+        /// Never null; always at least one line.</summary>
+        public IReadOnlyList<string> ScoutReport => _scoutReport;
+
         /// <summary>"Army: N / M slots" (or "Army: -" with no roster).</summary>
         public string ArmyCapText { get; private set; }
 
@@ -166,6 +176,71 @@ namespace DeNelle.Village.Hero
             if (_partyClasses.Count == 0) _partyClasses.Add("Knight");
 
             Rebuild();
+            BuildScoutReport();
+        }
+
+        // WO-839 #3: honest intel from the def only (walls / gates / garrison / boss).
+        // Pure string work — stays unit-testable with no Unity types.
+        private void BuildScoutReport()
+        {
+            _scoutReport.Clear();
+            if (_def != null)
+            {
+                if (!string.IsNullOrEmpty(_def.wallTier))
+                {
+                    string gates = _def.entranceCount > 0
+                        ? ", " + _def.entranceCount + (_def.entranceCount == 1 ? " gate" : " gates")
+                        : "";
+                    _scoutReport.Add("Walls: " + SpaceCamelCase(_def.wallTier) + gates);
+                }
+                var g = _def.garrison;
+                if (g != null)
+                {
+                    int defenders = 0;
+                    if (g.composition != null)
+                        foreach (var u in g.composition)
+                            if (u != null && u.count > 0) defenders += u.count;
+                    if (defenders > 0)
+                        _scoutReport.Add("Garrison: " + defenders + (defenders == 1 ? " defender" : " defenders"));
+                    if (!string.IsNullOrEmpty(g.boss))
+                        _scoutReport.Add("Boss: " + TitleCaseId(g.boss));
+                }
+            }
+            if (_scoutReport.Count == 0) _scoutReport.Add("No scout intel available.");
+        }
+
+        /// <summary>"ReinforcedSteel" -> "Reinforced Steel" (pure, no Unity/regex).</summary>
+        private static string SpaceCamelCase(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(s[i]) && !char.IsUpper(s[i - 1]) && s[i - 1] != ' ')
+                    sb.Append(' ');
+                sb.Append(s[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>"necromancer" / "orc-warlord" -> "Necromancer" / "Orc Warlord" (id, never raw on screen).</summary>
+        private static string TitleCaseId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "";
+            var sb = new System.Text.StringBuilder(id.Length);
+            bool startOfWord = true;
+            foreach (var ch in id)
+            {
+                if (ch == '-' || ch == '_' || ch == ' ')
+                {
+                    sb.Append(' ');
+                    startOfWord = true;
+                    continue;
+                }
+                sb.Append(startOfWord ? char.ToUpperInvariant(ch) : ch);
+                startOfWord = false;
+            }
+            return sb.ToString().Trim();
         }
 
         private void Rebuild()
