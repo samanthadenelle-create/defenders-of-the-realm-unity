@@ -2,6 +2,17 @@
 
 **Status:** READY TO IMPLEMENT (design owner-approved 2026-08-01; three soft spots flagged `OWNER CONFIRM` inline)
 
+> ⚠ **OWNER RULING 2026-08-02 (afternoon, F8 seq 619 + verbal): the player SELECTS which resource
+> each Echo harvests.** "cant do anything from this screen should select harvest which resource" /
+> "should allow to select new item for echo to harvest". This AMENDS §3e: do NOT collapse the card to
+> a single Harvest assignment — the card's primary interaction is a RESOURCE PICKER
+> (Wood/Iron/Food/Gold/Crystals) per Echo. Affinity is a BONUS when the assignment matches (the
+> match-bonus model), never a lock; the pair-synergies + hidden tri-synergy key off the ACTUAL
+> assignments (both members assigned to their affinity resources). Data note: the echoLanes token
+> grammar started as resource tokens ("wood,iron,idle") before v33 — extend the current lane:level
+> grammar to carry the assigned resource (e.g. "wood:3") per the SaveMigrator additive law.
+> Colorblind law: resource identity by icon + text, never hue.
+
 > ⚠ **OWNER RULING 2026-08-02: the Repairs affinity is REMOVED — Maren harvests CRYSTALS instead.**
 > Crystals is the one deliberately DOUBLED affinity (Bran + Maren both credit crystals; each trickle
 > stays slow — the combined faucet must still respect §7). The affinity model simplifies to
