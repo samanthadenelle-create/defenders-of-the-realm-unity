@@ -1,6 +1,24 @@
 # WORK ORDER 797 — Dungeon rooms own their enemies (per-area seating + confinement)
 
-**Status: READY TO IMPLEMENT** (owner routing: F8 seq 461 "all enemies are at the enterance.
+**Status: IMPLEMENTED pending gates** (2026-08-02 — compile gate + AutoPilot/regression run + re-bake still owed)
+
+> **2026-08-02 implementation note (F8 seq 622 evidence):** the owner's felt-test that day
+> reproduced the drift at scale — 13 `outpost-hollow-*` enemies with no room ownership
+> CAMPED THE ENTRANCE GATE, burying the runtime-injected RETURN exit
+> (DungeonExitInteractable/DungeonExitSpawner injects at entry + (0,0,-2.6)) so the run read
+> as "no way to exit". Implemented: per-room `encounter` blocks in the graph + layout JSON
+> (all 4 dual-copies), `EnemyBrain.SetRoomArea` wake-from-footprint + destination confinement
+> (hoisted above the retaliation override), spawner room binding (bake-time via
+> `DungeonBaker.WriteEncounterFields` SerializedObject writes AND runtime via the new
+> `DungeonRoomBinder` for the already-baked binary scene — no immediate re-bake needed),
+> the exit discoverability beacon (pulsing light + glow beam + EXIT label, prompt radius
+> 3.0 -> 4.5), `DungeonRoomOwnershipRegression` + new EnemyLeashLogicTests cases.
+> Deviation from the spec text: the encounter-block oracle requires every room WITH an
+> encounter to be valid/confined, not that every combat-archetype room HAS one — corridors
+> (corr1/turn1-3/loop2) are archetype "combat" but were never authored with spawners, and
+> re-authoring composition was out of scope. EW-4 stat divergence: DEFERRED (untouched).
+
+**Original status: READY TO IMPLEMENT** (owner routing: F8 seq 461 "all enemies are at the enterance.
 should be pinned to areas")
 **Classification (QA triage 2026-07-30):** per-area pinning = NEW FEATURE (the dungeon graph
 schema has ZERO enemy/spawn/area fields; spawner rooms are a hardcoded literal). One EXISTING

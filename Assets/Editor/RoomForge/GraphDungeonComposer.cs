@@ -58,6 +58,12 @@ namespace DeNelle.Editor.RoomForge
         [JsonProperty("id")] public string id;
         /// <summary>Room prefab stem under Assets/Dungeon/Rooms/ (e.g. "TurnRight").</summary>
         [JsonProperty("prefab")] public string prefab;
+        /// <summary>
+        /// WO-797: optional per-room encounter (rooms own their enemies). Carried verbatim
+        /// into the emitted compose layout; DungeonBaker seats one confined spawner per
+        /// encounter room. Null = no enemies in this room.
+        /// </summary>
+        [JsonProperty("encounter")] public EncounterSpec encounter;
     }
 
     /// <summary>A door-to-door connection: fromNode.fromSocket mates toNode.toSocket.</summary>
@@ -384,6 +390,8 @@ namespace DeNelle.Editor.RoomForge
                         cell = new[] { Mathf.RoundToInt(p.x), Mathf.RoundToInt(p.y), Mathf.RoundToInt(p.z) },
                         yawDeg = Mathf.Repeat(t.eulerAngles.y, 360f),
                         archetype = arch,
+                        // WO-797: carry the authored encounter block verbatim (rooms own their enemies).
+                        encounter = n.encounter,
                     });
                 }
 

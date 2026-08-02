@@ -976,15 +976,12 @@ namespace DeNelle.Village
         /// Spends an in-kind materials cost through the SAME construction-economy
         /// path build-mode placement charges: <see cref="EconomyService.TrySpend"/>
         /// (the atomic multi-resource debit BuildModeController.ChargeLedger
-        /// drives at placement, WO-131). DUAL-WALLET MIRROR (the known B2
-        /// divergence, MASTER_CATALOG §2c): TrySpend debits Wood/Iron from the
-        /// EconomyService IN-SESSION pool only, while ResourceLedger / the
-        /// upgrade flow reads GameState.Wood/Iron — so, mirroring the
-        /// <see cref="EconomyService.GrantSpendable"/> both-sides pattern on the
-        /// DEBIT side, the same Wood/Iron amounts are also deducted from
-        /// GameState (clamped ≥ 0), persisted, and announced via
-        /// ResourcesChanged. Food is already GameState-backed inside TrySpend.
-        /// FlowTrace on every spend + fail — no silent path.
+        /// drives at placement, WO-131). WO-842: TrySpend now debits the SINGLE
+        /// GameState-backed wallet (GameState.Wood/Iron — the same fields
+        /// ResourceLedger spends) and persists+announces it itself, so the old
+        /// dual-wallet DEBIT mirror this method carried is GONE — re-debiting
+        /// GameState here would charge the repair TWICE. FlowTrace on every
+        /// spend + fail — no silent path.
         /// </summary>
         private bool SpendMaterials(CoreCost cost, string what)
         {
@@ -1005,19 +1002,8 @@ namespace DeNelle.Village
                 return false;
             }
 
-            // GameState Wood/Iron mirror (GrantSpendable pattern, debit side) so
-            // the repair spend never desyncs the two wallets.
-            var gs = GameStateService.Instance;
-            if (gs != null && gs.State != null && (cost.wood > 0 || cost.iron > 0))
-            {
-                gs.State.Wood = Mathf.Max(0, gs.State.Wood - cost.wood);
-                gs.State.Iron = Mathf.Max(0, gs.State.Iron - cost.iron);
-                gs.Save();
-                gs.ResourcesChanged.Invoke();
-            }
-
             FlowTrace.Step("Repair",
-                $"SPENT {DescribeMaterials(cost)} on '{what}' (EconomyService.TrySpend + GameState mirror; wallet now {WalletLine()})");
+                $"SPENT {DescribeMaterials(cost)} on '{what}' (EconomyService.TrySpend, unified GameState wallet WO-842; wallet now {WalletLine()})");
             return true;
         }
 

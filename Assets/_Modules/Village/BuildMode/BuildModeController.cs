@@ -1908,13 +1908,17 @@ namespace DeNelle.Village
         /// </summary>
         internal static bool IsSingletonBuilt(CatalogEntry entry)
         {
-            // StructureSingleton v2: the ONE authority answers "built?" (records ->
-            // active baked twin from repo.bakedTwins -> live PlacedStructure -> live
-            // Building), memoized per-frame for this per-card per-render poll. The
-            // bespoke records/PlacedStructure/BakedStorefronts body this wrapper used
-            // to carry is DELETED - no second copy of the truth query.
+            // StructureSingleton v2: the ONE authority answers, memoized per-frame for
+            // this per-card per-render poll — no second copy of the truth query.
+            // WO-843 (owner F8 2026-08-02 "lumber mill destroyed no option to rebuild"):
+            // the card/arm gate now asks IsPlayerBuilt, NOT IsBuilt. IsBuilt counts an
+            // ACTIVE BAKED TWIN — but after a WO-753 destruction (or a sell) the twin
+            // RESURFACES as the WO-819 visual stand-in, and counting it locked the card
+            // as "Built" with no way to rebuild. A twin-only state must read BUILDABLE
+            // at full cost (freebies stay burned); committing the rebuild stands the
+            // twin down via NotifyPlaced -> Enforce (placed wins, only-ever-ONE holds).
             if (entry?.repo == null || !entry.repo.singleton) return false;
-            return StructureSingleton.IsBuilt(entry);
+            return StructureSingleton.IsPlayerBuilt(entry);
         }
 
         private static bool SingletonAlreadyBuilt(CatalogEntry entry)

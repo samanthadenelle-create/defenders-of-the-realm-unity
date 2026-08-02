@@ -119,14 +119,22 @@ namespace DeNelle.Village.Buildings.Progression
             _isCity = BuildingTierCatalog.IsUpgradable(_buildingId);
             _isResource = !_isCity && ResourceBuildingProgression.IsResourceBuilding(_buildingId);
 
+            // WO-842 (F8 2026-08-02, arcane-tower "TryUpgrade FALSE" with a full wallet):
+            // these handlers used to call Raise() ONLY — the View re-rendered STALE tiles.
+            // When a build timer completed while the panel sat open (ModifierService.
+            // Recompute -> Changed), CurrentTier stayed stale, the owned tier still showed
+            // as the gold "next" tile, and tapping it sent targetTier == the ALREADY-OWNED
+            // tier into BuildingUpgradeService.TryUpgrade, whose next-tier guard silently
+            // returned false — misreported as "can't afford" against 985k wood. Every
+            // change now REBUILDS the grid (fresh CurrentTier + affordability) before Raise.
             if (_economy != null)
             {
-                _ecoHandler = _ => Raise();
+                _ecoHandler = _ => { Rebuild(); Raise(); };
                 _economy.OnChanged += _ecoHandler;
             }
-            _modHandler = Raise;
+            _modHandler = () => { Rebuild(); Raise(); };
             ModifierService.Changed += _modHandler;
-            _levelHandler = _ => Raise();
+            _levelHandler = _ => { Rebuild(); Raise(); };
             ResourceBuildingState.LevelChanged += _levelHandler;
 
             Rebuild();
@@ -201,6 +209,33 @@ namespace DeNelle.Village.Buildings.Progression
         public string GateFor(string id) =>
             id != null && _gateById.TryGetValue(id, out var g) ? g : "";
 
+        // ── WO-841 live-countdown feed ──────────────────────────────────────────
+        // The View's per-second "Under construction" tick reads THESE (MVVM: the VM
+        // owns the queue-snapshot read; the View only renders). Same BuildTimerService
+        // seam the tap-path mirrors above (F8-51) — pure reads, no state mutated, and
+        // both return the idle shape (false/0) when the BuildTimers flag is off.
+
+        /// <summary>True while a build/upgrade job is in flight for this building (WO-841).</summary>
+        public bool UnderConstruction
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null && t.IsBuilding(_buildingId);
+            }
+        }
+
+        /// <summary>Whole seconds left on this building's in-flight job; 0 when idle (WO-841).</summary>
+        public int UnderConstructionSeconds
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                if (t == null || !t.IsBuilding(_buildingId)) return 0;
+                return (int)t.RemainingSeconds(_buildingId);
+            }
+        }
+
         /// <summary>Live wallet readout (View rebuilds its "Wood … Food … Crystals" line from these).</summary>
         public int Wood     => _economy?.Wood ?? 0;
         public int Food     => _economy?.Food ?? 0;
@@ -215,6 +250,23 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_isCity)
             {
+                // WO-842 stale-grid guard: if the LIVE tier moved since the last Rebuild
+                // (timer completion / another surface upgraded), resync instead of sending
+                // a mismatched targetTier into the service (whose next-tier guard returns a
+                // bare false that read as "can't afford" — the captured F8). Honest + traced.
+                int liveTier = ModifierService.TierOf(_buildingId);
+                if (liveTier != CurrentTier)
+                {
+                    FlowTrace.Warn("Upgrade", _buildingId + " grid was STALE (vm tier=" + CurrentTier
+                        + " live tier=" + liveTier + ") - resynced instead of a mismatched unlock (WO-842)");
+                    Status = liveTier > CurrentTier
+                        ? "Tier " + liveTier + " is already unlocked - grid refreshed."
+                        : "Grid refreshed.";
+                    Rebuild();
+                    Raise();
+                    return;
+                }
+
                 int next = CurrentTier + 1;
                 if (next > MaxTier) { Status = "Every enhancement here is already unlocked."; Raise(); return; }
 

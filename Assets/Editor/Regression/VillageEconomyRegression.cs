@@ -11,17 +11,18 @@
 //       direct set AND after an EconomyService.TrySpend(crystals), all three views move in
 //       lockstep. (Any divergence = a stale parallel crystal pool, the flag in the catalog.)
 //
-//   (B) Wood/Iron DUAL-WALLET — the catalog FLAG: EconomyService.Wood/Iron live in an
-//       in-session pool (shop + HUD read it) while the building-upgrade ResourceLedger
-//       reads GameState.Wood/Iron. They do NOT auto-sync. Two probes:
-//         B1 (PASS): GrantSpendable(wood,iron) writes BOTH wallets equally (the deliberate
-//            both-wallet path).
-//         B2 (FAIL-BY-DESIGN): a plain Grant(wood) reaches the shop pool but NOT the
-//            ledger — so wood earned via the ordinary Grant path (e.g. wave rewards) is
-//            INVISIBLE to the upgrade flow. This oracle asserts the invariant "a wood grant
-//            is visible to both wallets" and FAILS TRUTHFULLY, surfacing the divergence with
-//            data instead of a comment. Fix = route income through GrantSpendable (or unify
-//            the pools); do NOT silence this oracle.
+//   (B) Wood/Iron SINGLE WALLET (WO-842 unification — the old dual-wallet seam is DEAD):
+//       EconomyService.Wood/Iron now read/write THROUGH GameState.Wood/Iron, the same
+//       fields the building-upgrade ResourceLedger spends. Three probes:
+//         B1 (PASS): GrantSpendable(wood,iron) moves the economy view AND the ledger
+//            equally (one write, one store).
+//         B2 (PASS): a plain Grant(wood) — the ordinary income path (wave rewards) —
+//            moves both views identically (they are the same store now).
+//         B3 (PASS — the WO-842 captured F8): riches granted GAMESTATE-SIDE (dev tool /
+//            save load writing state.Wood directly, the owner's W985646 wallet) MUST be
+//            spendable through EconomyService: CanAfford true -> TrySpend succeeds ->
+//            both views agree on the debited balance. This is the exact asymmetry that
+//            read "TryUpgrade FALSE (needed W800..., have W985646...)".
 //
 // SAFETY: snapshots the raw PlayerPrefs save + restores/reloads it in a finally.
 // Mirrors MonetizationCovenantRegression: public static bool Run(out string reason).
@@ -114,7 +115,7 @@ namespace DeNelle.Editor
                 if (ledgerW1 - ledgerW0 != 40)
                     failures.Add($"(B1) GrantSpendable(40) LEDGER delta {ledgerW1 - ledgerW0} != 40 (the both-wallet path failed)");
 
-                // ---- (B2) plain Grant(wood) DIVERGES (FAIL-BY-DESIGN) -------------
+                // ---- (B2) plain Grant(wood) moves BOTH views (single wallet) ------
                 int shopW2 = econ.Wood;
                 int ledgerW2 = DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(
                     DeNelle.Village.Buildings.Progression.HarvestResource.Wood);
@@ -123,7 +124,31 @@ namespace DeNelle.Editor
                 int ledgerDelta = DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(
                     DeNelle.Village.Buildings.Progression.HarvestResource.Wood) - ledgerW2;
                 if (shopDelta != ledgerDelta)
-                    failures.Add($"(B2) DUAL-WALLET DIVERGENCE: a plain Grant(wood:25) moved the shop pool by {shopDelta} but the upgrade ledger by {ledgerDelta} — wood income via Grant is INVISIBLE to the building-upgrade flow (route income through GrantSpendable or unify the pools)");
+                    failures.Add($"(B2) DUAL-WALLET DIVERGENCE: a plain Grant(wood:25) moved the economy view by {shopDelta} but the upgrade ledger by {ledgerDelta} — WO-842 unification regressed (they must be ONE store)");
+
+                // ---- (B3) WO-842: GameState-side riches are SPENDABLE (captured F8) ----
+                // The owner's exact scenario: the wallet was filled GAMESTATE-SIDE (dev tool /
+                // save load), EconomyService's old in-session pool never saw it, and an 800-wood
+                // spend was refused against 985k. Post-unification: CanAfford reads the same
+                // store, TrySpend debits it, and both views agree.
+                state.Wood = 985646;                                       // grant GameState-side only
+                var balB3 = state.Resources; balB3.Food = 988524; state.Resources = balB3;
+                var wo842Cost = new DeNelle.Village.ResourceCost(wood: 800, food: 500);
+                if (econ.Wood != 985646)
+                    failures.Add($"(B3) EconomyService.Wood={econ.Wood} after a GameState-side set of 985646 — not reading through the single wallet");
+                if (!econ.CanAfford(wo842Cost))
+                    failures.Add("(B3) CanAfford(W800/F500) returned FALSE with GameState wallet W985646/F988524 — the WO-842 asymmetry is back");
+                else if (!econ.TrySpend(wo842Cost))
+                    failures.Add("(B3) TrySpend(W800/F500) returned FALSE with GameState wallet W985646/F988524 — afford said yes but the spend refused (mixed authority)");
+                else
+                {
+                    int ledgerW3 = DeNelle.Village.Buildings.Progression.ResourceLedger.Balance(
+                        DeNelle.Village.Buildings.Progression.HarvestResource.Wood);
+                    if (state.Wood != 984846)
+                        failures.Add($"(B3) after TrySpend(W800): GameState.Wood={state.Wood}, expected 984846 (debit did not land on the single wallet)");
+                    if (econ.Wood != state.Wood || ledgerW3 != state.Wood)
+                        failures.Add($"(B3) post-spend views diverged: econ.Wood={econ.Wood} ledger={ledgerW3} GameState={state.Wood} — must be one store");
+                }
             }
             catch (System.Exception ex)
             {
@@ -148,7 +173,7 @@ namespace DeNelle.Editor
 
             if (failures.Count == 0)
             {
-                reason = "VILLAGE ECONOMY OK — crystal single-source across 3 stores + Wood/Iron dual-wallet consistent";
+                reason = "VILLAGE ECONOMY OK — crystal single-source across 3 stores + Wood/Iron single wallet (WO-842: GameState-side grant -> afford -> spend agree)";
                 return true;
             }
             reason = $"VILLAGE ECONOMY FAIL x{failures.Count}: " + string.Join(" | ", failures);

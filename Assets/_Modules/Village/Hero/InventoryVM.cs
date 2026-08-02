@@ -14,6 +14,10 @@
 //     CanUse / CanEquip),
 //   • the commands Select / SelectTab / Use / Drop / Equip / Close.
 //
+// WO-844: Use routes through an injected EFFECT seam (Func<string, InventoryUseResult>,
+// default = BagConsumableUseEffect.Use -> ConsumableUseService.TryUse) so a Bag potion
+// actually heals; the seam owns the decrement, the VM never consume-for-nothing.
+//
 // PURE: NO UnityEngine UI types (no GameObject/Image/Sprite/RectTransform/MonoBehaviour).
 // Icons are carried as KEYS (IconRole = kind, IconName = id) — the View resolves the
 // real Sprite. Rounding uses System.Math, never UnityEngine.Mathf, so the VM is unit-
@@ -26,11 +30,35 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;   // FlowTrace (WO-844: instrument the Use command)
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Village.Crafting;   // VillageInventory (resolved in CreateDefault, the sole site)
 
 namespace DeNelle.Village.Hero
 {
+    /// <summary>
+    /// WO-844: result of routing a consumable through the effect authority (the seam the
+    /// Bag's Use command calls). CONTRACT: when <see cref="Applied"/> is true the seam has
+    /// BOTH applied the effect AND consumed the item from the underlying inventory (the
+    /// way ConsumableUseService.TryUse does) - the VM never decrements on Use itself.
+    /// When refused, nothing was consumed and <see cref="FailReason"/> carries the
+    /// player-facing truth ("Already at full health." etc.).
+    /// </summary>
+    public readonly struct InventoryUseResult
+    {
+        public readonly bool Applied;
+        public readonly string FailReason;
+
+        private InventoryUseResult(bool applied, string failReason)
+        {
+            Applied = applied;
+            FailReason = failReason;
+        }
+
+        public static InventoryUseResult Ok() => new InventoryUseResult(true, null);
+        public static InventoryUseResult Refused(string reason) => new InventoryUseResult(false, reason);
+    }
+
     /// <summary>The four inventory tabs (mirrors HeroInventoryController.Tab).</summary>
     public enum InventoryTabKind { Weapons, Armor, Outfits, Consumables }
 
@@ -94,6 +122,13 @@ namespace DeNelle.Village.Hero
         private readonly IEconomy _economy;          // wallet readout for the footer; may be null (tests)
         private readonly Action _onClose;            // View supplies how to dismiss; may be null
 
+        // WO-844: the consumable EFFECT seam. The Bag's Use routes through THIS (the same
+        // authority the battle potion slots use - ConsumableUseService.TryUse via the
+        // default wiring in CreateDefault), never a bare store decrement. The seam owns
+        // the item decrement on success (see InventoryUseResult contract), keeping the VM
+        // fake-testable: tests inject a lambda, no scene / no static service.
+        private readonly Func<string, InventoryUseResult> _useEffect;   // may be null (tests / no wiring)
+
         private readonly Action _storeHandler;
         private readonly Action _equipHandler;
         private bool _disposed;
@@ -112,7 +147,11 @@ namespace DeNelle.Village.Hero
             // target with VillageInventory so OwnedWeapons/OwnedArmor agree with the Forge on "owned".
             store = new InventoryStore(VillageInventory.Instance,
                 equip != null ? new List<IEquipTarget> { equip } : null);
-            return new InventoryVM(store, equip, onClose, EconomyService.Instance);
+            // WO-844: bind the REAL consumable effect authority (ConsumableUseService.TryUse
+            // behind honest pre-gates) so drinking a potion from the Bag actually heals -
+            // the same path the battle potion slots fire. Tests inject their own lambda.
+            return new InventoryVM(store, equip, onClose, EconomyService.Instance,
+                BagConsumableUseEffect.Use);
         }
 
         // Active list (owned items in the active tab) + per-id detail payload + kind.
@@ -127,12 +166,14 @@ namespace DeNelle.Village.Hero
         public InventoryVM(IInventoryStore store,
                            IEquipTarget equip = null,
                            Action onClose = null,
-                           IEconomy economy = null)
+                           IEconomy economy = null,
+                           Func<string, InventoryUseResult> useEffect = null)
         {
             _store = store;
             _equip = equip;
             _economy = economy;
             _onClose = onClose;
+            _useEffect = useEffect;
 
             if (_store != null)
             {
@@ -237,7 +278,17 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
-        /// <summary>Consume one of the selected consumable through the store (no-op for gear).</summary>
+        /// <summary>
+        /// Use the selected consumable by routing it through the injected EFFECT seam - the
+        /// same authority the battle potion slots fire (ConsumableUseService.TryUse via the
+        /// CreateDefault wiring). WO-844: the old body called ONLY _store.TryRemove, so a
+        /// potion vanished with ZERO effect applied. The seam OWNS the item decrement on
+        /// success (TryUse consumes from the same VillageInventory this VM's store wraps),
+        /// so this command must NOT also TryRemove - that would double-spend one drink.
+        /// "Used X." is reported ONLY when the effect actually applied; a refusal keeps the
+        /// item and surfaces the seam's truthful reason. No seam bound = no effect path =
+        /// refuse honestly (never consume-for-nothing).
+        /// </summary>
         public void Use()
         {
             var sel = Selected;
@@ -245,12 +296,28 @@ namespace DeNelle.Village.Hero
             if (!sel.Value.CanUse) { Status = "That item cannot be used."; Raise(); return; }
             if (_store == null) { Status = "No inventory."; Raise(); return; }
 
-            if (_store.TryRemove(SelectedId, 1))
+            string id = SelectedId;
+            if (_useEffect == null)
+            {
+                // Effect path missing: consuming an item with no effect IS the WO-844 bug.
+                // Keep the item, tell the truth, and flag the wiring gap loudly.
+                FlowTrace.Warn("Inventory", "Use '" + id + "' but NO effect seam bound - item kept, no effect applied.");
+                Status = "Nothing happens.";
+                Raise();
+                return;
+            }
+
+            var result = _useEffect(id);
+            FlowTrace.Step("Inventory", "Use '" + id + "' -> "
+                + (result.Applied ? "APPLIED (seam consumed the item)" : "refused: " + (result.FailReason ?? "(no reason)")));
+
+            if (result.Applied)
                 Status = "Used " + sel.Value.Name + ".";
             else
-                Status = "Nothing to use.";
-            // Rebuild() comes via the store's Changed event; rebuild defensively in case a fake
-            // does not raise it, then Raise so the View re-renders either way.
+                Status = string.IsNullOrEmpty(result.FailReason) ? "That had no effect." : result.FailReason;
+
+            // On success the underlying inventory's Changed event rebuilds us; rebuild
+            // defensively in case a fake seam does not raise it, then Raise either way.
             Rebuild();
             Raise();
         }

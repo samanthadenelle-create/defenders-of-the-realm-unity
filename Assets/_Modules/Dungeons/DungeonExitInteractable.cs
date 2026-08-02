@@ -135,7 +135,11 @@ namespace DeNelle.Dungeons
     public sealed class DungeonExitInteractable : MonoBehaviour
     {
         private const string Sys = "DungeonExit";
-        private const float ActivateRadius = 3.0f;   // shared-button prompt range
+        // WO-797/F8 seq 622: prompt range widened 3.0 -> 4.5 so the Interact button arms
+        // before the hero is standing in the arch (MinTouch-friendly reach; the mob camp
+        // made a tight radius unreachable). Walk-in radius unchanged - enlarging IT would
+        // yank players home by accident.
+        private const float ActivateRadius = 4.5f;   // shared-button prompt range
         private const float TriggerRadius = 2.0f;    // walk-in trigger radius
         private const float CheckInterval = 0.15f;
 
@@ -184,6 +188,66 @@ namespace DeNelle.Dungeons
             AddDecor("Pillar_R", new Vector3(1.1f, 1.3f, 0f), new Vector3(0.35f, 2.6f, 0.35f), frame, false);
             AddDecor("Lintel", new Vector3(0f, 2.75f, 0f), new Vector3(2.7f, 0.35f, 0.35f), frame, false);
             AddDecor("Sheet", new Vector3(0f, 1.3f, 0f), new Vector3(1.9f, 2.5f, 1f), glow, true);
+
+            // WO-797 / F8 seq 622 exit discoverability: the arch alone read as "no way to
+            // exit" once a mob camped it. Add a BEACON per the house checkpoint-crystal
+            // pattern (Checkpoint.cs: point light = the "follow the light" cue from afar,
+            // pulsed while it wants attention) - a pulsing green-gold point light, a tall
+            // glow beam that reads over enemy heads and from the corridor mouth, and a
+            // billboarded ASCII "EXIT" label. All decorative (no colliders).
+            BuildBeacon(glow);
+        }
+
+        // Builds the DungeonExitBeacon child: light + vertical beam + "EXIT" label.
+        private void BuildBeacon(Color glow)
+        {
+            var beaconGo = new GameObject("ExitBeacon");
+            beaconGo.transform.SetParent(transform, false);
+
+            var light = beaconGo.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = glow;
+            light.intensity = 2.4f;   // Checkpoint's unvisited "come here" intensity
+            light.range = 14f;
+            beaconGo.transform.localPosition = new Vector3(0f, 3.2f, 0f);
+
+            // Tall glow beam above the lintel - visible over a mob standing on the exit.
+            AddDecor("Beacon_Beam", new Vector3(0f, 6.2f, 0f), new Vector3(0.28f, 6.4f, 0.28f), glow, false);
+
+            // ASCII label. Legacy TextMesh (code-built UI law - no UXML); billboarded by
+            // the beacon component. Skipped with a Warn if no built-in font resolves.
+            Transform label = null;
+            var font = Guard.Try(Sys, "resolve builtin font",
+                () => Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), null);
+            if (font == null)
+                font = Guard.Try(Sys, "resolve builtin font (Arial fallback)",
+                    () => Resources.GetBuiltinResource<Font>("Arial.ttf"), null);
+            if (font != null)
+            {
+                var labelGo = new GameObject("Beacon_Label");
+                labelGo.transform.SetParent(transform, false);
+                labelGo.transform.localPosition = new Vector3(0f, 3.6f, 0f);
+                var tm = labelGo.AddComponent<TextMesh>();
+                tm.text = "EXIT";
+                tm.font = font;
+                tm.fontSize = 48;
+                tm.characterSize = 0.14f;
+                tm.anchor = TextAnchor.MiddleCenter;
+                tm.alignment = TextAlignment.Center;
+                tm.color = new Color(0.75f, 1f, 0.75f, 1f);
+                var tr = labelGo.GetComponent<MeshRenderer>();
+                if (tr != null && font.material != null) tr.sharedMaterial = font.material;
+                label = labelGo.transform;
+            }
+            else
+            {
+                FlowTrace.Warn(Sys, "no builtin font resolved - exit beacon ships without the EXIT label");
+            }
+
+            var beacon = beaconGo.AddComponent<DungeonExitBeacon>();
+            beacon.Bind(light, label);
+            FlowTrace.Step(Sys, $"exit beacon armed at {transform.position} " +
+                $"(light range {light.range:F0}, beam, label={(label != null ? "yes" : "no")})");
         }
 
         private void AddDecor(string label, Vector3 localPos, Vector3 localScale, Color color, bool asQuad)
@@ -312,6 +376,46 @@ namespace DeNelle.Dungeons
         private void OnDisable()
         {
             MobileInteractButton.Release(this);
+        }
+    }
+
+    /// <summary>
+    /// WO-797 exit-discoverability beacon: pulses the exit's point light (the house
+    /// checkpoint-crystal "follow the light" idiom, Checkpoint.cs) and billboards the
+    /// ASCII "EXIT" label at the camera. Purely presentational - owns no routing logic;
+    /// the regression contract asserts an injected exit carries this component + a Light.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class DungeonExitBeacon : MonoBehaviour
+    {
+        private const float PulseSpeed = 2.6f;        // rad/sec sine input (Checkpoint-like)
+        private const float IntensityBase = 2.4f;
+        private const float IntensityAmp = 0.6f;
+
+        private Light _light;
+        private Transform _label;
+
+        /// <summary>Wire the pulsing light and the (optional) billboard label.</summary>
+        public void Bind(Light light, Transform label)
+        {
+            _light = light;
+            _label = label;
+        }
+
+        private void Update()
+        {
+            if (_light != null)
+                _light.intensity = IntensityBase + Mathf.Sin(Time.time * PulseSpeed) * IntensityAmp;
+
+            if (_label != null)
+            {
+                var cam = Camera.main;
+                if (cam != null)
+                {
+                    // Face the camera (billboard) - flat yaw+pitch, no roll.
+                    _label.rotation = Quaternion.LookRotation(_label.position - cam.transform.position);
+                }
+            }
         }
     }
 }

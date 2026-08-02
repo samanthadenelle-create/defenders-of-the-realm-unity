@@ -84,11 +84,15 @@ namespace DeNelle.Village
         // Enforce, which invalidates the touched id below.
         private static readonly Dictionary<string, (int frame, bool built)> s_builtMemo =
             new Dictionary<string, (int frame, bool built)>();
+        // WO-843: per-frame memo for the PLAYER-built query (the build-card gate).
+        private static readonly Dictionary<string, (int frame, bool built)> s_playerBuiltMemo =
+            new Dictionary<string, (int frame, bool built)>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
         {
             s_builtMemo.Clear();
+            s_playerBuiltMemo.Clear();
             SingletonResolved = null;
             SingletonReleased = null;
         }
@@ -138,8 +142,11 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// <see cref="IsBuilt(string)"/> memoized per-frame per-id - the palette polls this
-        /// per-card per-render (BuildModeController.IsSingletonBuilt delegates here).
+        /// <see cref="IsBuilt(string)"/> memoized per-frame per-id (ENFORCEMENT semantics:
+        /// an active baked twin counts). NOTE (WO-843): the build palette/arm gate does NOT
+        /// use this any more - it uses <see cref="IsPlayerBuilt(CatalogEntry)"/>, because a
+        /// resurfaced baked twin (post-sell / post-destruction stand-in, WO-819) must not
+        /// lock the card as "Built".
         /// </summary>
         public static bool IsBuilt(CatalogEntry entry)
         {
@@ -149,6 +156,36 @@ namespace DeNelle.Village
                 return memo.built;
             bool built = IsBuilt(entry.id);
             s_builtMemo[entry.id] = (frame, built);
+            return built;
+        }
+
+        /// <summary>
+        /// WO-843 - THE build-card / arm-gate query: does a PLAYER-owned representation of
+        /// <paramref name="itemId"/> exist (persisted BaseLayout record, live PlacedStructure,
+        /// or a live non-baked-twin Building)? An ACTIVE BAKED TWIN deliberately does NOT
+        /// count: after a sell or a WO-753 destruction the twin RESURFACES as a visual
+        /// stand-in (WO-819), and the card must read BUILDABLE again - rebuild fresh at full
+        /// cost (free-build flags stay burned). Placing the rebuild stands the twin down via
+        /// NotifyPlaced -> Enforce (placed wins), so only-ever-ONE still holds.
+        /// (The owner F8 this fixes, 2026-08-02: "lumber mill destroyed no option to rebuild
+        /// it" - the card read the resurfaced twin through IsBuilt and rendered "Built".)
+        /// </summary>
+        public static bool IsPlayerBuilt(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return false;
+            return HasPlacedInstance(itemId);
+        }
+
+        /// <summary><see cref="IsPlayerBuilt(string)"/> memoized per-frame per-id - the palette
+        /// polls this per-card per-render (BuildModeController.IsSingletonBuilt delegates here).</summary>
+        public static bool IsPlayerBuilt(CatalogEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.id)) return false;
+            int frame = Time.frameCount;
+            if (s_playerBuiltMemo.TryGetValue(entry.id, out var memo) && memo.frame == frame)
+                return memo.built;
+            bool built = IsPlayerBuilt(entry.id);
+            s_playerBuiltMemo[entry.id] = (frame, built);
             return built;
         }
 
@@ -259,7 +296,8 @@ namespace DeNelle.Village
                     ? EnforceOutcome.Suppressed : EnforceOutcome.None;
             }
 
-            s_builtMemo.Remove(itemId);   // world changed - drop this frame's memo for the id
+            s_builtMemo.Remove(itemId);         // world changed - drop this frame's memo for the id
+            s_playerBuiltMemo.Remove(itemId);   // WO-843 - the card-gate memo too
             return outcome;
         }
 
@@ -517,6 +555,38 @@ namespace DeNelle.Village
         {
             if (mode != LoadSceneMode.Single) return;   // additive streams never re-sweep
             TryArm();
+        }
+
+        /// <summary>
+        /// WO-843 - death-path seam (parity with the sell path's NotifyRemoved): defers the
+        /// removal notify ONE frame, because at the death moment Unity's Destroy(gameObject)
+        /// is still pending end-of-frame - the dying PlacedStructure/Building would still
+        /// count as a placed instance and Enforce would take the stand-down branch instead
+        /// of resurfacing the baked twin. One frame later the object is gone, Enforce
+        /// resurfaces the WO-819 twin (blank-town gate respected) and the memoized card
+        /// state refreshes to BUILDABLE. No runner (raw scene / teardown) degrades to the
+        /// immediate notify - worst case the twin waits for the next hub-load EnforceAll,
+        /// which is the pre-WO-843 behaviour.
+        /// </summary>
+        internal static void NotifyRemovedDeferred(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return;
+            if (s_instance != null && s_instance.isActiveAndEnabled)
+            {
+                s_instance.StartCoroutine(NotifyRemovedNextFrame(itemId));
+                return;
+            }
+            FlowTrace.Warn("Singleton",
+                $"NotifyRemovedDeferred('{itemId}'): no bootstrap runner - notifying immediately " +
+                "(twin resurface may defer to the next hub-load EnforceAll).");
+            StructureSingleton.NotifyRemoved(itemId);
+        }
+
+        private static IEnumerator NotifyRemovedNextFrame(string itemId)
+        {
+            yield return null;   // let the deferred Destroy land so the dead structure no longer counts as placed
+            Guard.Try("Singleton", $"NotifyRemoved('{itemId}') after destruction (WO-843)",
+                () => StructureSingleton.NotifyRemoved(itemId));
         }
 
         private void TryArm()

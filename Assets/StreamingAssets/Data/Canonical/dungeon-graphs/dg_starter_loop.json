@@ -14,7 +14,20 @@
     },
     {
       "id": "junction",
-      "prefab": "Intersection"
+      "prefab": "Intersection",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "id": "stair_up",
@@ -26,7 +39,20 @@
     },
     {
       "id": "loop1",
-      "prefab": "Straight"
+      "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "id": "turn1",
@@ -42,7 +68,20 @@
     },
     {
       "id": "loop3",
-      "prefab": "Straight"
+      "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "id": "turn3",

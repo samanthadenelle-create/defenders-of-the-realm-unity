@@ -244,7 +244,7 @@ namespace DeNelle.Editor.RoomForge
             // (opt-in; only the composed starter-loop passes populateForPlay). Done AFTER the
             // NavMesh bake so both seat on real mesh, and BEFORE SaveScene so it is one bake pass.
             if (populateForPlay)
-                PopulateForPlay(root, instances);
+                PopulateForPlay(root, instances, layout);
 
             // Save scene
             EnsureOutputFolder();
@@ -397,7 +397,8 @@ namespace DeNelle.Editor.RoomForge
         // DeNelle.Village, so the Village MonoBehaviours are attached by REFLECTION
         // (the DungeonChainBuilder idiom).
         // =====================================================================
-        private static void PopulateForPlay(Transform root, Dictionary<string, GameObject> instances)
+        private static void PopulateForPlay(Transform root, Dictionary<string, GameObject> instances,
+                                            DungeonComposeLayout layout)
         {
             // Hero seat = EntryHall (entry node at origin), sampled onto the walkable NavMesh.
             Vector3 entryPos = instances.TryGetValue("entry", out var eGo) && eGo != null
@@ -456,34 +457,114 @@ namespace DeNelle.Editor.RoomForge
                 FlowTrace.Warn(Sys, "HeroBodySwapper type unresolved at bake -- amber stand-in body will persist (re-run after compile).");
             }
 
-            // Enemy spawners: OutpostEnemyGroupSpawner self-spawns 3-7 hero-aggro hollows on
-            // Start (heart=null + SetHeroOnlyTarget -> they chase the hero, BattleLock engages).
-            // Seated DEEP (junction + two loop rooms), NOT at the entry, so the first fight is a
-            // few steps in. Under an "Encounters" root for tidiness (not a hero -> dedup-safe).
+            // Enemy spawners (WO-797 — rooms OWN their enemies): driven by the layout's
+            // per-room encounter blocks, NOT a hardcoded room literal (the old
+            // {junction,loop1,loop3} array is deleted). Each encounter room gets one
+            // OutpostEnemyGroupSpawner seated at its room centre, and the spawner's
+            // room-ownership fields (roomId/areaCenter/areaSize/areaSlack/wakeRadius +
+            // counts) are written via SerializedObject so they LAND IN THE SCENE — the
+            // 2026-07-20 bake predated the leash field entirely and only the C# default
+            // armed it (data-proven cause 4). Under an "Encounters" root (dedup-safe).
             var encRoot = new GameObject("Encounters");
             encRoot.transform.SetParent(root, false);
             var spawnerType = FindType("DeNelle.Village.OutpostEnemyGroupSpawner");
-            string[] rooms = { "junction", "loop1", "loop3" };
-            int placed = 0;
-            foreach (var id in rooms)
+            int placed = 0, specs = 0;
+            foreach (var place in layout.rooms)
             {
-                if (!instances.TryGetValue(id, out var rGo) || rGo == null) continue;
-                Vector3 pos = SampleNav(rGo.transform.position, 6f);
+                if (place == null || place.encounter == null) continue;
+                var enc = place.encounter;
+                if (!string.IsNullOrEmpty(enc.kind) &&
+                    enc.kind.Equals("none", System.StringComparison.OrdinalIgnoreCase)) continue;
+                specs++;
+
+                string id = string.IsNullOrEmpty(place.instanceId) ? place.prefab : place.instanceId;
+                if (!instances.TryGetValue(id, out var rGo) || rGo == null)
+                {
+                    FlowTrace.Warn(Sys, $"encounter room '{id}' has no baked instance - spawner skipped");
+                    continue;
+                }
+
+                // Room AABB via the ONE shared math (DungeonRoomBounds — same code the
+                // runtime binder and the regression oracle use). Seat at the room centre,
+                // nav-sampled, and verify the seat lands inside the room's own footprint
+                // (the WO-797 oracle: a seat outside its room re-creates the drift bug).
+                Bounds roomBounds = DungeonRoomBounds.Compute(rGo);
+                Vector3 seat = new Vector3(roomBounds.center.x, rGo.transform.position.y, roomBounds.center.z);
+                Vector3 pos = SampleNav(seat, 6f);
+                if (!DungeonRoomBounds.ContainsXZ(roomBounds, pos))
+                    FlowTrace.Warn(Sys, $"encounter room '{id}': nav-sampled seat {pos} is OUTSIDE the room " +
+                        $"footprint c{roomBounds.center} s{roomBounds.size} - check the room's NavMesh");
+
                 var marker = new GameObject($"SkeletonGroup_Spawn_{id}");
                 marker.transform.SetParent(encRoot.transform, true);
                 marker.transform.position = pos;
                 if (spawnerType != null)
                 {
-                    marker.AddComponent(spawnerType);
+                    var comp = marker.AddComponent(spawnerType);
+                    WriteEncounterFields(comp, id, roomBounds, enc);
                     placed++;
-                    FlowTrace.Step(Sys, $"SPAWNER '{id}' (OutpostEnemyGroupSpawner) at {pos}");
+                    FlowTrace.Step(Sys, $"SPAWNER '{id}' (OutpostEnemyGroupSpawner) at {pos} - room-bound " +
+                        $"c{roomBounds.center} s{roomBounds.size} count {enc.min}-{enc.max} " +
+                        $"wake {(enc.confine != null ? enc.confine.wakeRadius : 6f):F1} " +
+                        $"slack {(enc.confine != null ? enc.confine.slack : 2f):F1}");
                 }
                 else
                 {
                     FlowTrace.Warn(Sys, $"OutpostEnemyGroupSpawner type unresolved — marker '{id}' placed WITHOUT spawner (re-run after compile).");
                 }
             }
-            FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 spawners={placed} (each spawns 3-7 hero-aggro hollows at runtime)");
+            if (specs == 0)
+                FlowTrace.Warn(Sys, $"layout '{layout.dungeonId}' has NO encounter blocks - 0 spawners placed " +
+                    "(WO-797: author room.encounter blocks in the graph/layout JSON)");
+            FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 encounterRooms={specs} spawners={placed} (room-owned, WO-797)");
+        }
+
+        // WO-797: write the spawner's serialized room-ownership + count fields through
+        // SerializedObject so they persist INTO THE SCENE FILE (an AddComponent field set
+        // via reflection would serialize too, but SerializedObject is the editor-canonical
+        // path and survives FormerlySerializedAs renames). Field names mirror
+        // OutpostEnemyGroupSpawner's [SerializeField] privates.
+        private static void WriteEncounterFields(Component spawner, string roomId, Bounds roomBounds,
+                                                 DeNelle.Dungeons.RoomForge.EncounterSpec enc)
+        {
+            var so = new SerializedObject(spawner);
+            SetString(so, "roomId", roomId);
+            SetVector3(so, "areaCenter", roomBounds.center);
+            SetVector3(so, "areaSize", roomBounds.size);
+            SetFloat(so, "areaSlack", enc.confine != null ? enc.confine.slack : 2f);
+            SetFloat(so, "wakeRadius", enc.confine != null ? enc.confine.wakeRadius : 6f);
+            SetInt(so, "minCount", Mathf.Max(1, enc.min));
+            SetInt(so, "maxCount", Mathf.Max(Mathf.Max(1, enc.min), enc.max));
+            if (enc.formationRadius > 0f) SetFloat(so, "formationRadius", enc.formationRadius);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetString(SerializedObject so, string field, string value)
+        {
+            var p = so.FindProperty(field);
+            if (p != null) p.stringValue = value;
+            else FlowTrace.Warn(Sys, $"spawner field '{field}' not found - SerializedObject write skipped (rename drift?)");
+        }
+
+        private static void SetVector3(SerializedObject so, string field, Vector3 value)
+        {
+            var p = so.FindProperty(field);
+            if (p != null) p.vector3Value = value;
+            else FlowTrace.Warn(Sys, $"spawner field '{field}' not found - SerializedObject write skipped (rename drift?)");
+        }
+
+        private static void SetFloat(SerializedObject so, string field, float value)
+        {
+            var p = so.FindProperty(field);
+            if (p != null) p.floatValue = value;
+            else FlowTrace.Warn(Sys, $"spawner field '{field}' not found - SerializedObject write skipped (rename drift?)");
+        }
+
+        private static void SetInt(SerializedObject so, string field, int value)
+        {
+            var p = so.FindProperty(field);
+            if (p != null) p.intValue = value;
+            else FlowTrace.Warn(Sys, $"spawner field '{field}' not found - SerializedObject write skipped (rename drift?)");
         }
 
         private static Vector3 SampleNav(Vector3 p, float radius)

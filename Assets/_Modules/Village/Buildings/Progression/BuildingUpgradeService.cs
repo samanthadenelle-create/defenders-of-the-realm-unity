@@ -51,7 +51,15 @@ namespace DeNelle.Village.Buildings.Progression
                 // can't be bought until the village reaches it — the WC3 "need a Keep for tier-2" rule.
                 var gateState = GameStateService.Instance != null ? GameStateService.Instance.State : null;
                 int villageTier = gateState != null ? gateState.VillageTier : 0;
-                if (def.RequiresVillageTier > villageTier) return false;
+                if (def.RequiresVillageTier > villageTier)
+                {
+                    // WO-842 no-silent-false: this refusal used to be a bare false — on the Yarn
+                    // path (which has no VM mirror gate) it was indistinguishable from unaffordable.
+                    FlowTrace.Step("Upgrade", id + " tier-" + targetTier
+                        + " REJECTED: village-tier gate (requires " + def.RequiresVillageTier
+                        + ", have " + villageTier + ")");
+                    return false;
+                }
 
                 // ── F8-51 TIMER GATES (before the spend, so a rejection costs nothing) ──
                 // A building with an ACTIVE build/upgrade timer is LOCKED; a full slot set
@@ -119,7 +127,20 @@ namespace DeNelle.Village.Buildings.Progression
                     + ResourceLedger.Balance(HarvestResource.Food) + "/C"
                     + ResourceLedger.Balance(HarvestResource.Crystals)
                     + (state == null ? " (no GameState)" : ""));
+                return false;
             }
+
+            // WO-842 no-silent-false (the captured F8 branch): a null def or a targetTier that is
+            // not current+1 used to fall through to a BARE false, which the VM then misreported as
+            // "can't afford" against a full wallet. Name the real reason so the next capture is
+            // one read.
+            if (def == null)
+                FlowTrace.Fail("Upgrade", id + " tier-" + targetTier
+                    + " REJECTED: no catalog tier def (unknown building/tier)");
+            else
+                FlowTrace.Fail("Upgrade", id + " tier-" + targetTier
+                    + " REJECTED: not the next tier (current=" + current + ", buyable="
+                    + (current + 1) + (targetTier <= current ? "; target already owned" : "") + ")");
             return false;
         }
 

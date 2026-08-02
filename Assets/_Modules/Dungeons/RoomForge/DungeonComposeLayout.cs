@@ -37,6 +37,47 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("yawDeg")] public float yawDeg;
         /// <summary>Optional archetype override for pacing lint.</summary>
         [JsonProperty("archetype")] public string archetype;
+        /// <summary>
+        /// WO-797: optional per-room enemy encounter. Null (the default, and the state of
+        /// every pre-797 layout) = no enemies in this room. Rooms OWN their enemies: the
+        /// baker seats one spawner per encounter room and the confine block pins the
+        /// spawned mobs to the room's AABB.
+        /// </summary>
+        [JsonProperty("encounter")] public EncounterSpec encounter;
+    }
+
+    /// <summary>
+    /// WO-797 per-room encounter block (F8 seq 461/622 "all enemies at the entrance"):
+    /// what spawns in a room and how it is confined to it. Authored in the dungeon-graphs
+    /// node (or directly in a compose layout room); carried verbatim by
+    /// GraphDungeonComposer into the compose layout, consumed by DungeonBaker at bake
+    /// and by DungeonRoomBinder at runtime for already-baked scenes.
+    /// </summary>
+    [Serializable]
+    public sealed class EncounterSpec
+    {
+        /// <summary>Encounter family. "hollow-group" = the weighted skeleton group. "none" disables.</summary>
+        [JsonProperty("kind")] public string kind = "hollow-group";
+        [JsonProperty("min")] public int min = 3;
+        [JsonProperty("max")] public int max = 7;
+        /// <summary>Seating shape inside the room ("ring" = the existing jittered formation ring).</summary>
+        [JsonProperty("seatMode")] public string seatMode = "ring";
+        [JsonProperty("formationRadius")] public float formationRadius = 3.5f;
+        [JsonProperty("confine")] public EncounterConfine confine = new EncounterConfine();
+    }
+
+    /// <summary>WO-797 confinement rules: pin the room's mobs to the room footprint.</summary>
+    [Serializable]
+    public sealed class EncounterConfine
+    {
+        /// <summary>"room" = clamp nav destinations into the room AABB (the only mode v1).</summary>
+        [JsonProperty("mode")] public string mode = "room";
+        /// <summary>Metres a mob may step OUTSIDE the room AABB (through a doorway) while fighting.</summary>
+        [JsonProperty("slack")] public float slack = 2f;
+        /// <summary>When leashed out, walk back to the spawn anchor instead of freezing in place.</summary>
+        [JsonProperty("returnHome")] public bool returnHome = true;
+        /// <summary>Wake distance measured from the ROOM FOOTPRINT (not a ring slot) to the hero.</summary>
+        [JsonProperty("wakeRadius")] public float wakeRadius = 6f;
     }
 
     /// <summary>Mates socket A on room A to socket B on room B.</summary>

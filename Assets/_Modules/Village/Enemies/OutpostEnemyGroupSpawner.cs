@@ -38,12 +38,74 @@ namespace DeNelle.Village
 
         [Tooltip("WO-770.11 dungeon leash: each skeleton stays dormant at its spawn slot " +
                  "until the hero comes within this radius (world units). Prevents the whole " +
-                 "room beelining the entry. ~10m = room-sized. <= 0 disables the leash.")]
+                 "room beelining the entry. ~10m = room-sized. <= 0 disables the leash. " +
+                 "WO-797: superseded by the room wake gate when a room area is configured.")]
         [SerializeField] private float leashRadius = 10f;
+
+        // ── WO-797 room ownership (F8 seq 461/622 "all enemies at the entrance") ──
+        // When areaSize is non-zero this spawner OWNS a room: spawn slots are seated
+        // strictly inside the room AABB, and every spawned brain is bound to it
+        // (EnemyBrain.SetRoomArea) so mobs wake off the ROOM FOOTPRINT and are
+        // confined to the room + slack even while provoked. Fields are serialized so
+        // DungeonBaker can write them into the SCENE via SerializedObject at bake;
+        // DungeonRoomBinder configures them at runtime for already-baked scenes.
+        [Header("Room ownership (WO-797)")]
+        [Tooltip("Owning room's instance id (e.g. 'junction'). Diagnostic + contract only.")]
+        [SerializeField] private string roomId = "";
+        [Tooltip("World-space center of the owning room's AABB.")]
+        [SerializeField] private Vector3 areaCenter;
+        [Tooltip("World-space size of the owning room's AABB. Zero = room ownership OFF.")]
+        [SerializeField] private Vector3 areaSize;
+        [Tooltip("Metres a mob may step outside the room AABB (through a doorway) while fighting.")]
+        [SerializeField] private float areaSlack = 2f;
+        [Tooltip("Wake distance measured from the ROOM FOOTPRINT (not a ring slot) to the hero.")]
+        [SerializeField] private float wakeRadius = 6f;
 
         private Transform _root;
         private int _counter;
         private bool _autoSpawned;
+        // WO-797: brains this spawner created — lets a late ConfigureRoomArea retro-bind
+        // enemies that already spawned (binder-after-Start ordering safety net).
+        private readonly System.Collections.Generic.List<EnemyBrain> _spawnedBrains =
+            new System.Collections.Generic.List<EnemyBrain>();
+
+        /// <summary>True when this spawner owns a room AABB (WO-797).</summary>
+        public bool HasRoomArea => areaSize.sqrMagnitude > 0.01f;
+
+        /// <summary>The owning room's instance id ("" when unbound).</summary>
+        public string RoomId => roomId;
+
+        /// <summary>
+        /// WO-797: bind this spawner to its room. Called by DungeonRoomBinder at scene load
+        /// (before Start's auto-spawn) for already-baked composed scenes; the re-bake path
+        /// writes the same serialized fields via SerializedObject instead. If enemies were
+        /// already spawned (late call), they are retro-bound so no mob is ever ownerless.
+        /// min/max &lt; 0 = keep the serialized counts (no creative re-authoring).
+        /// </summary>
+        public void ConfigureRoomArea(string room, Bounds area, float wake, float slack,
+                                      int min = -1, int max = -1, float formation = -1f)
+        {
+            roomId = room ?? string.Empty;
+            areaCenter = area.center;
+            areaSize = area.size;
+            wakeRadius = Mathf.Max(0f, wake);
+            areaSlack = Mathf.Max(0f, slack);
+            if (min > 0) minCount = min;
+            if (max > 0) maxCount = Mathf.Max(min > 0 ? min : minCount, max);
+            if (formation > 0f) formationRadius = formation;
+            FlowTrace.Step(Sys, $"room area configured: room '{roomId}' center {areaCenter} " +
+                $"size {areaSize} wake {wakeRadius:F1} slack {areaSlack:F1} (spawned so far {_spawnedBrains.Count})");
+
+            // Retro-bind anything already spawned (defensive: the binder normally runs
+            // before Start, so this list is empty on the happy path).
+            for (int i = 0; i < _spawnedBrains.Count; i++)
+            {
+                var brain = _spawnedBrains[i];
+                if (brain == null) continue;
+                brain.SetRoomArea(roomId, area, areaSlack, wakeRadius);
+                FlowTrace.Step(Sys, $"retro-assigned '{brain.gameObject.name}' -> room '{roomId}'");
+            }
+        }
 
         // Tiny runtime bootstrapper: a marker baked into the chain spawns its group once
         // on Start, seeded deterministically from the scene name + its world position so the
@@ -79,6 +141,13 @@ namespace DeNelle.Village
             if (_root == null)
                 _root = new GameObject("[OutpostSkeletonGroup]").transform;
 
+            // WO-797: when this spawner owns a room, seat every slot STRICTLY INSIDE the
+            // room AABB (negative slack shrinks by 0.5m) — the old unclamped ring let
+            // junction slots land in the neighbouring corridor, inside one leash radius
+            // of the entry hero seat (data-proven cause 1 of the entrance camp).
+            bool hasArea = HasRoomArea;
+            Bounds area = new Bounds(areaCenter, areaSize);
+
             int spawned = 0;
             for (int i = 0; i < count; i++)
             {
@@ -86,6 +155,8 @@ namespace DeNelle.Village
                 float ang = (i / (float)count) * Mathf.PI * 2f + (float)(rng.NextDouble() * 0.6 - 0.3);
                 float rad = formationRadius * (0.7f + (float)rng.NextDouble() * 0.6f);
                 Vector3 slot = center + new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
+                if (hasArea)
+                    slot = EnemyBrain.ConfineToArea(slot, area, -0.5f);
 
                 // Snap each slot onto the baked NavMesh so the agent can path.
                 if (NavMesh.SamplePosition(slot, out NavMeshHit hit, 6f, NavMesh.AllAreas))
@@ -112,11 +183,28 @@ namespace DeNelle.Village
                 // distant room's group stays dormant until the hero approaches, instead
                 // of beelining the global hero across the whole dungeon.
                 brain.SetLeash(slot, leashRadius);
+                // WO-797: bind the mob to its OWNING ROOM — wake measured from the room
+                // footprint, every nav destination (incl. provoked chases) confined to
+                // the room AABB + slack. Room-assignment is a captured data line per
+                // enemy (CLAUDE.md sec.12).
+                if (hasArea)
+                {
+                    brain.SetRoomArea(roomId, area, areaSlack, wakeRadius);
+                    FlowTrace.Step(Sys, $"assigned 'outpost-{def.Id}-{_counter}' -> room '{roomId}' " +
+                        $"anchor {slot} (wake {wakeRadius:F1}m from footprint, slack {areaSlack:F1}m)");
+                }
+                else
+                {
+                    FlowTrace.Warn(Sys, $"'outpost-{def.Id}-{_counter}' spawned with NO room ownership " +
+                        $"(anchor-leash only, {leashRadius:F1}m) - WO-797 binder/bake did not configure this spawner");
+                }
+                _spawnedBrains.Add(brain);
 
                 spawned++;
             }
 
-            FlowTrace.Step(Sys, $"spawned {spawned} skeletons @ {center} seed {seed} (rolled count {count})");
+            FlowTrace.Step(Sys, $"spawned {spawned} skeletons @ {center} seed {seed} (rolled count {count}) " +
+                (hasArea ? $"room '{roomId}'" : "NO room area"));
         }
 
         // ── Weighted family pick — mostly walkers, some rogues/warriors, rare acolyte ──

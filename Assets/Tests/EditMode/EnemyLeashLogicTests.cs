@@ -99,5 +99,89 @@ namespace DeNelle.Tests.EditMode
             }
             finally { Object.DestroyImmediate(go); }
         }
+
+        // =====================================================================
+        // WO-797 room ownership (F8 seq 461/622 "all enemies at the entrance"):
+        // the wake decision moves from a ring-slot anchor to the ROOM FOOTPRINT
+        // (ShouldWake) and every destination is confined to the room AABB + slack
+        // (ConfineToArea) — including the provoked retaliation chase.
+        // Starter-loop geometry: junction room 6x6 at z=12 (footprint z 9..15),
+        // entry hero seat at ~(0,0,0.9) => 8.1m from the footprint.
+        // =====================================================================
+
+        private static readonly Bounds JunctionArea =
+            new Bounds(new Vector3(0f, 2f, 12f), new Vector3(6f, 4f, 6f));
+
+        [Test]
+        public void should_confine_hero_at_entry_seat_leaves_room_dormant()
+        {
+            // The frame-one beeline killer: the old anchor leash put junction ring slots
+            // within 10m of the entry seat; footprint distance 8.1m > wake 6 => dormant.
+            Assert.That(EnemyBrain.ShouldWake(JunctionArea, 6f, true, new Vector3(0f, 0f, 0.9f)), Is.False,
+                "a hero at the entry seat must NOT wake the junction room (footprint dist ~8.1m > 6m)");
+        }
+
+        [Test]
+        public void should_confine_hero_near_footprint_wakes_room()
+        {
+            Assert.That(EnemyBrain.ShouldWake(JunctionArea, 6f, true, new Vector3(0f, 0f, 4f)), Is.True,
+                "a hero 5m from the room footprint must wake it (wake 6)");
+            Assert.That(EnemyBrain.ShouldWake(JunctionArea, 6f, true, new Vector3(1f, 0f, 12f)), Is.True,
+                "a hero inside the room footprint must wake it (distance 0)");
+        }
+
+        [Test]
+        public void should_confine_absent_hero_stays_dormant()
+        {
+            Assert.That(EnemyBrain.ShouldWake(JunctionArea, 6f, false, Vector3.zero), Is.False,
+                "with no hero present a room-bound mob must stay dormant");
+        }
+
+        [Test]
+        public void should_confine_provoked_chase_clamps_to_room_edge_plus_slack()
+        {
+            // A provoked mob chasing a hero camping the entrance (z=0) must stop at the
+            // room's south face + slack (z = 9 - 2 = 7) — it fights but never leaves.
+            Vector3 confined = EnemyBrain.ConfineToArea(new Vector3(0f, 0f, 0f), JunctionArea, 2f);
+            Assert.That(confined.z, Is.EqualTo(7f).Within(0.01f),
+                "the retaliation chase must clamp to the room AABB + slack, not tow the mob to the entrance");
+            Assert.That(confined.x, Is.EqualTo(0f).Within(0.01f));
+        }
+
+        [Test]
+        public void should_confine_inside_destination_passes_through()
+        {
+            Vector3 inside = new Vector3(1f, 0f, 12f);
+            Assert.That(EnemyBrain.ConfineToArea(inside, JunctionArea, 2f), Is.EqualTo(inside),
+                "an in-room destination must be untouched (zero behaviour change while fighting at home)");
+        }
+
+        [Test]
+        public void should_confine_negative_slack_seats_strictly_inside()
+        {
+            // Spawn-slot seating uses slack -0.5 so the formation ring can never spill a
+            // slot into the neighbouring corridor (data-proven cause 1 of the camp).
+            Vector3 seat = EnemyBrain.ConfineToArea(new Vector3(0f, 0f, 8.8f), JunctionArea, -0.5f);
+            Assert.That(seat.z, Is.GreaterThanOrEqualTo(9.5f - 0.01f),
+                "negative slack must pull a spilled ring slot back inside the room");
+        }
+
+        [Test]
+        public void set_room_area_stores_and_clears_assignment()
+        {
+            var go = new GameObject("EnemyBrainRoomHost");
+            try
+            {
+                var brain = go.AddComponent<EnemyBrain>();
+                Assert.That(brain.HasRoomArea, Is.False, "default must be unbound (zero village regression)");
+                brain.SetRoomArea("junction", JunctionArea, 2f, 6f);
+                Assert.That(brain.HasRoomArea, Is.True);
+                Assert.That(brain.AreaRoomId, Is.EqualTo("junction"),
+                    "every room-bound enemy must carry its room assignment (WO-797 contract)");
+                brain.SetRoomArea("x", new Bounds(Vector3.zero, Vector3.zero), 2f, 6f);
+                Assert.That(brain.HasRoomArea, Is.False, "a zero-size area must disable room binding");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
     }
 }

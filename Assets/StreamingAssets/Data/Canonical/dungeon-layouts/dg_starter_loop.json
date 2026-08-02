@@ -34,7 +34,20 @@
         12
       ],
       "yawDeg": 0.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "prefab": "StairUp",
@@ -67,7 +80,20 @@
         18
       ],
       "yawDeg": 0.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "prefab": "TurnRight",
@@ -111,7 +137,20 @@
         18
       ],
       "yawDeg": 180.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
     },
     {
       "prefab": "TurnRight",

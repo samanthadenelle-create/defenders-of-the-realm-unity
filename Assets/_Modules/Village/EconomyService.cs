@@ -30,13 +30,24 @@
 //   harvest/upgrade economy never diverge. No "Magic" harvestable exists: Magic is
 //   a building-UPGRADE tech axis only (see ResourceBuildingProgression).
 //
-// PERSISTENCE: Wood/Iron are in-session only (no PlayerPrefs) — they reset on scene
-//   reload intentionally (a run is a single play session; WO-134 owns their
-//   persistence). CRYSTALS and FOOD are the exception: each is a thin facade over
-//   GameState.Resources (Crystals/Food) — the SINGLE source of truth the BuildMenu
-//   and village HUD display and that wave/empower/harvest paths feed. So
-//   EconomyService keeps no divergent in-session crystal/food pool; every
-//   crystal/food read/spend/grant here round-trips through GameStateService and persists.
+// PERSISTENCE (WO-842 — SINGLE WALLET, all five resources): Wood/Iron are now
+//   GameState-backed (GameState.Wood / GameState.Iron — the SAME fields the
+//   building-upgrade flow's ResourceLedger reads and spends), exactly like Food/
+//   Crystals/Coins (GameState.Resources.*). Every read/spend/grant here reads/
+//   writes THROUGH GameStateService, so the wallet the HUD shows, the wallet the
+//   shop charges, and the wallet the upgrade ledger spends are ONE store and can
+//   never diverge again.
+//
+//   THE BUG THIS KILLED (owner F8 2026-08-02, [Flow:Upgrade] "TryUpgrade FALSE
+//   (needed W800..., have W985646...)"): Wood/Iron used to live in a divergent
+//   in-session pool here (starter 200/80, reset every scene load). Grant mirrored
+//   INTO GameState but TrySpend/CanAfford ran against the pool, so wood granted
+//   GameState-side (dev tools, save load, promo) was riches the HUD showed but the
+//   pool-checked paths refused to spend. WO-842 unifies the authority.
+//
+//   The serialized _wood/_iron fields survive ONLY as the no-GameState FALLBACK
+//   pool (EditMode tests / headless boots with no save service) — when
+//   GameStateService.Instance.State exists it is ALWAYS the authority.
 // =============================================================================
 
 using System;
@@ -110,16 +121,38 @@ namespace DeNelle.Village
 
         // ── Starting amounts (Inspector) ──────────────────────────────────────
 
-        [Header("Starting Resources (Wood/Iron — in-session)")]
-        [SerializeField, Min(0)] private int _wood     = 200; // real starter — wave rewards + builds read against this
-        [SerializeField, Min(0)] private int _iron     = 80;  // real starter
-        // NOTE (WO-131 / DEF-121): crystals AND food are NOT in-session fields here.
-        // Both are backed by GameState.Resources — see the Crystals/Food properties.
+        [Header("Starting Resources (Wood/Iron — FALLBACK pool, used only when no GameState exists)")]
+        [SerializeField, Min(0)] private int _wood     = 200; // WO-842: fallback only (EditMode/no-save boots); GameState.Wood is the authority
+        [SerializeField, Min(0)] private int _iron     = 80;  // WO-842: fallback only; GameState.Iron is the authority
+        // NOTE (WO-131 / DEF-121 / WO-842): ALL five resources are GameState-backed
+        // read/write-through when a save service exists — see the properties below.
 
         // ── Public read-only properties ───────────────────────────────────────
 
-        public int Wood     => _wood;
-        public int Iron     => _iron;
+        /// <summary>
+        /// WO-842 — Wood is GameState-backed (GameState.Wood, the SAME field the
+        /// building-upgrade ResourceLedger spends). Reads through GameStateService;
+        /// falls back to the in-session pool only when no save service exists
+        /// (EditMode tests / headless boots).
+        /// </summary>
+        public int Wood
+        {
+            get
+            {
+                var state = GameStateService.Instance?.State;
+                return state != null ? state.Wood : _wood;
+            }
+        }
+
+        /// <summary>WO-842 — Iron is GameState-backed (GameState.Iron). See <see cref="Wood"/>.</summary>
+        public int Iron
+        {
+            get
+            {
+                var state = GameStateService.Instance?.State;
+                return state != null ? state.Iron : _iron;
+            }
+        }
 
         /// <summary>
         /// DEF-121 — Food is GameState-backed (GameState.Resources.Food), the single
@@ -163,7 +196,7 @@ namespace DeNelle.Village
             }
         }
 
-        public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, Food, _iron, Crystals);
+        public ResourceSnapshot Snapshot => new ResourceSnapshot(Wood, Food, Iron, Crystals);
 
         // ── Pet / Outpost territory (WO-106: pet resource farming + outpost system) ──
         // These let the economy be the single source for passive rates, secured count,
@@ -259,27 +292,50 @@ namespace DeNelle.Village
 
         // ── Multi-resource API ────────────────────────────────────────────────
 
-        /// <summary>Returns true when all four resource pools cover <paramref name="cost"/>.</summary>
+        /// <summary>Returns true when the (unified, GameState-backed) wallet covers <paramref name="cost"/>.
+        /// WO-842: every slot reads through the read-through properties, so the check runs against the
+        /// SAME store the spend debits — no more pool-vs-ledger asymmetry.</summary>
         public bool CanAfford(ResourceCost cost)
         {
-            return _wood  >= cost.Wood
-                && Food   >= cost.Food            // DEF-121 — GameState-backed
-                && _iron  >= cost.Iron
-                && Crystals >= cost.Crystals    // WO-131 — GameState-backed
-                && Coins  >= cost.Coins;        // GOLD — GameState.Resources.Coins (shops)
+            return Wood   >= cost.Wood        // WO-842 — GameState-backed (fallback pool when no save service)
+                && Food   >= cost.Food        // DEF-121 — GameState-backed
+                && Iron   >= cost.Iron        // WO-842 — GameState-backed
+                && Crystals >= cost.Crystals  // WO-131 — GameState-backed
+                && Coins  >= cost.Coins;      // GOLD — GameState.Resources.Coins (shops)
         }
 
         /// <summary>
         /// Atomically spends <paramref name="cost"/> if affordable. Returns true on
-        /// success, false (no mutation) when any resource is short. The crystal and
-        /// food slots are deducted from GameState.Resources (persisted), the
-        /// Wood/Iron slots from the in-session pool.
+        /// success, false (no mutation) when any resource is short. WO-842: EVERY slot
+        /// is deducted from the single GameState-backed wallet (Wood/Iron from
+        /// GameState.Wood/Iron — the same fields ResourceLedger spends; Food/Crystals/
+        /// Coins from GameState.Resources). The in-session pool is debited only in the
+        /// no-GameState fallback (EditMode tests / headless boots).
         /// </summary>
         public bool TrySpend(ResourceCost cost)
         {
             if (!CanAfford(cost)) return false;
-            _wood  -= cost.Wood;
-            _iron  -= cost.Iron;
+            if (cost.Wood > 0 || cost.Iron > 0)
+            {
+                var gs = GameStateService.Instance;
+                var state = gs?.State;
+                if (state != null)
+                {
+                    state.Wood = Mathf.Max(0, state.Wood - cost.Wood);
+                    state.Iron = Mathf.Max(0, state.Iron - cost.Iron);
+                    gs.Save();
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                        $"TrySpend debited GameState (single wallet, WO-842) -W{cost.Wood} -I{cost.Iron} -> Wood={state.Wood} Iron={state.Iron}");
+                    gs.ResourcesChanged?.Invoke();   // upgrade panel / HUD readers of the ledger refresh
+                }
+                else
+                {
+                    _wood -= cost.Wood;
+                    _iron -= cost.Iron;
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                        $"TrySpend debited FALLBACK pool (no GameState) -W{cost.Wood} -I{cost.Iron} -> W{_wood} I{_iron}");
+                }
+            }
             if (cost.Food > 0)
                 GameStateService.Instance?.AddFood(-cost.Food);           // DEF-121 — GameState-backed spend
             if (cost.Crystals > 0)
@@ -290,24 +346,16 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>Adds resources — for wave rewards, harvesting, etc. Negative values are clamped to 0.</summary>
+        /// <summary>Adds resources — for wave rewards, harvesting, etc. Negative values are clamped to 0.
+        /// WO-842: Wood/Iron are granted ONCE, directly into the single GameState-backed wallet
+        /// (GameState.Wood/Iron — the store CanAfford/TrySpend and ResourceLedger all read); the old
+        /// pool-plus-mirror double write is gone. Deliberately does NOT Save() on this hot path
+        /// (wave rewards / harvest ticks) — persistence rides the next Save; GrantSpendable is the
+        /// persist-now dev seam. Falls back to the in-session pool when no save service exists.</summary>
         public void Grant(ResourceCost amount)
         {
             int wood = Mathf.Max(0, amount.Wood);
             int iron = Mathf.Max(0, amount.Iron);
-            _wood  += wood;
-            _iron  += iron;
-
-            // B2 DUAL-WALLET CONVERGENCE (regression VillageEconomyRegression (B2)):
-            // Wood/Iron do NOT only live in the in-session pool above -- the building-
-            // UPGRADE flow's ResourceLedger reads/spends GameState.Wood / GameState.Iron.
-            // A plain Grant used to fill ONLY the in-session pool, so wood/iron earned via
-            // the ordinary income path (wave rewards, harvest, pet/outpost ticks) was
-            // INVISIBLE to the upgrade flow. Mirror the grant into the persisted GameState
-            // wallet here so ONE Grant keeps both views in lockstep atomically. Food/
-            // Crystals/Coins are already GameState single-sourced below (AddFood/
-            // AddCrystals/AddCoins), so they need no mirroring. Null-safe: no-op on the
-            // GameState side when no state is present (the in-session pool still moves).
             if (wood > 0 || iron > 0)
             {
                 var gsw = GameStateService.Instance;
@@ -316,12 +364,14 @@ namespace DeNelle.Village
                     if (wood > 0) gsw.State.Wood = Mathf.Max(0, gsw.State.Wood + wood);
                     if (iron > 0) gsw.State.Iron = Mathf.Max(0, gsw.State.Iron + iron);
                     DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
-                        $"Grant mirrored Wood/Iron to GameState (+W{wood} +I{iron}) -> pool W{_wood} I{_iron}, ledger Wood={gsw.State.Wood} Iron={gsw.State.Iron} (dual-wallet in sync)");
+                        $"Grant +W{wood} +I{iron} -> GameState Wood={gsw.State.Wood} Iron={gsw.State.Iron} (single wallet, WO-842)");
                 }
                 else
                 {
+                    _wood += wood;
+                    _iron += iron;
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
-                        $"Grant(+W{wood} +I{iron}) filled in-session pool but GameState absent - upgrade ledger not mirrored this call");
+                        $"Grant(+W{wood} +I{iron}) landed in the FALLBACK pool (no GameState) -> W{_wood} I{_iron}");
                 }
             }
 
@@ -344,33 +394,20 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// DEV grant that lands Wood/Iron in BOTH spendable wallets the game keeps.
+        /// DEV grant with a persist-now guarantee (WO-842: the wallets are UNIFIED, so
+        /// this is no longer a "write both stores" shim).
         /// <para>
-        /// Wood/Iron currently live in two stores that do not sync: this service's
-        /// in-session pool (what ShopPanel + the HUD resource bar read) and
-        /// GameState.Wood / GameState.Iron (what the building-upgrade flow's
-        /// ResourceLedger reads + spends). A plain <see cref="Grant(int,int,int,int)"/>
-        /// only fills the in-session pool, so dev-granted Wood/Iron was invisible to
-        /// the upgrade flow; writing GameState directly only filled the other one, so
-        /// it was invisible to the shop + HUD. This method writes BOTH so one dev
-        /// action yields Wood/Iron the shop AND the structure-upgrade flow can spend,
-        /// and the HUD reflects it. Food/Crystals are already GameState-backed, so the
-        /// normal Grant path keeps them single-sourced.
+        /// <see cref="Grant(ResourceCost)"/> already lands Wood/Iron in the single
+        /// GameState-backed wallet (and Food/Crystals/Coins via AddFood/AddCrystals/
+        /// AddCoins), but on the hot income path it deliberately does not Save() the
+        /// Wood/Iron write. This dev seam adds the stronger guarantee: persist + announce
+        /// immediately so a dev grant survives reload and every GameState-bound listener
+        /// refreshes at once.
         /// </para>
         /// </summary>
         public void GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            // Grant now writes BOTH wallets for Wood/Iron: it fills the in-session pool
-            // (shop + HUD bar) AND mirrors into the persisted GameState.Wood/Iron the
-            // upgrade ledger spends (B2 convergence), and routes Food/Crystals through
-            // GameState (AddFood/AddCrystals -> Save + ResourcesChanged). So the Wood/Iron
-            // mirror is NO LONGER done here -- doing it again would DOUBLE-COUNT Wood/Iron.
             Grant(new ResourceCost(wood, food, iron, crystals));
-
-            // GrantSpendable keeps its stronger DEV-grant guarantee: persist + announce the
-            // GameState Wood/Iron mutation so it survives reload and any GameState-bound
-            // listeners refresh. (Grant mirrored the field + raised OnChanged for the pool,
-            // but on that hot path deliberately does not Save/announce Wood/Iron.)
             var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {
@@ -440,15 +477,16 @@ namespace DeNelle.Village
 
         /// <inheritdoc cref="CanAfford(ResourceCost)"/>
         [Obsolete("Use CanAfford(ResourceCost) for multi-resource checks.")]
-        public bool CanAfford(int woodCost) => _wood >= woodCost;
+        public bool CanAfford(int woodCost) => Wood >= woodCost;   // WO-842: unified wallet
 
         /// <summary>Spends Wood only. Prefer <see cref="TrySpend(ResourceCost)"/>.</summary>
         [Obsolete("Use TrySpend(ResourceCost) for multi-resource spending.")]
         public void Spend(int woodCost)
         {
-            if (_wood < woodCost) return;
-            _wood -= woodCost;
-            NotifyChanged();
+            // WO-842: route through the unified debit (GameState-backed; same
+            // silent-no-op-when-short + NotifyChanged-on-success contract as before).
+            if (woodCost <= 0) return;
+            TrySpend(ResourceCost.WoodOnly(woodCost));
         }
 
         // ── Internal ──────────────────────────────────────────────────────────

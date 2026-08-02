@@ -134,6 +134,33 @@ namespace DeNelle.Tests.EditMode
             Assert.That(_econ.Crystals, Is.EqualTo(crystals0 + 25000), "EconomyService.Crystals mirrors GameState");
         }
 
+        // ── WO-842 — the captured F8 asymmetry, as a test ─────────────────────
+        // [Flow:Upgrade] "TryUpgrade FALSE (needed W800/F500/C0, have W985646/F988524/...)":
+        // riches granted GAMESTATE-SIDE (dev tool / save load writing state.Wood directly)
+        // were invisible to EconomyService's old in-session pool, so CanAfford/TrySpend
+        // refused an 800-wood cost against a 985k wallet. Post-unification the GameState
+        // wallet IS the economy wallet: afford says yes, the spend lands, views agree.
+        [Test]
+        public void gamestate_side_riches_are_spendable_through_the_economy_wo842()
+        {
+            _state.Wood = 985646;                       // GameState-side grant ONLY (no EconomyService call)
+            var bal = _state.Resources; bal.Food = 988524; _state.Resources = bal;
+
+            var cost = new ResourceCost(wood: 800, food: 500);
+            Assert.That(_econ.Wood, Is.EqualTo(985646),
+                "EconomyService.Wood must read through GameState.Wood (single wallet)");
+            Assert.That(_econ.CanAfford(cost), Is.True,
+                "the captured refusal: CanAfford(W800/F500) must be TRUE against GameState W985646/F988524");
+            Assert.That(_econ.TrySpend(cost), Is.True,
+                "TrySpend must succeed against the same wallet CanAfford read");
+            Assert.That(_state.Wood, Is.EqualTo(984846),
+                "the debit must land on GameState.Wood (the ledger the upgrade flow spends)");
+            Assert.That(_econ.Wood, Is.EqualTo(_state.Wood),
+                "post-spend the economy view and GameState must agree (one store)");
+            Assert.That(_state.Resources.Food, Is.EqualTo(988024),
+                "the food slot debits the same single GameState wallet");
+        }
+
         [Test]
         public void full_base_grant_lands_all_four_in_their_spendable_stores()
         {

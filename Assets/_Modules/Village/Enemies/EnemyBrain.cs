@@ -152,6 +152,83 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// ROOM OWNERSHIP (WO-797, F8 seq 461/622 "all enemies at the entrance"): bind this
+        /// brain to its room's world-space AABB. While bound:
+        ///   - the mob wakes only when the hero is within <paramref name="wakeRadius"/> of the
+        ///     ROOM FOOTPRINT (not a ring slot — kills the "junction ring slot inside one leash
+        ///     of the entry seat" frame-one beeline), and
+        ///   - EVERY nav destination (including the retaliation/taunt override chases) is
+        ///     clamped into the AABB expanded by <paramref name="slack"/> — a provoked mob
+        ///     fights back but never leaves its room to camp the entrance.
+        /// Pass a zero-size <paramref name="area"/> to disable. Village/overworld enemies never
+        /// call this, so their behaviour is unchanged (zero regression). Callers should ALSO
+        /// call <see cref="SetLeash"/> so the dormant state walks home to the spawn anchor.
+        /// </summary>
+        public void SetRoomArea(string roomId, Bounds area, float slack, float wakeRadius)
+        {
+            _hasRoomArea = area.size.sqrMagnitude > 0.01f;
+            _roomId      = roomId ?? string.Empty;
+            _roomArea    = area;
+            _roomSlack   = Mathf.Max(0f, slack);
+            _wakeRadius  = Mathf.Max(0f, wakeRadius);
+        }
+
+        /// <summary>True when WO-797 room ownership is active on this brain.</summary>
+        public bool HasRoomArea => _hasRoomArea;
+
+        /// <summary>The owning room's id ("" when unbound) — the WO-797 room-assignment contract.</summary>
+        public string AreaRoomId => _roomId;
+
+        /// <summary>
+        /// WO-797 wake decision (PURE — unit-testable): true when a room-bound mob should be
+        /// AWAKE, i.e. the hero is present and within <paramref name="wakeRadius"/> of the room
+        /// FOOTPRINT (planar XZ distance to the AABB; inside the room counts as distance 0).
+        /// <paramref name="wakeRadius"/> &lt;= 0 = no wake gate (always awake; confinement
+        /// still applies).
+        /// </summary>
+        public static bool ShouldWake(Bounds area, float wakeRadius, bool heroPresent, Vector3 heroPos)
+        {
+            if (!heroPresent) return false;          // no hero — stay dormant
+            if (wakeRadius <= 0f) return true;       // no gate — always awake
+            // Planar distance from the hero to the room footprint (project onto the AABB's Y).
+            Vector3 p = new Vector3(heroPos.x, area.center.y, heroPos.z);
+            Vector3 cp = area.ClosestPoint(p);
+            Vector3 d = p - cp;
+            d.y = 0f;
+            return d.sqrMagnitude <= wakeRadius * wakeRadius;
+        }
+
+        /// <summary>
+        /// WO-797 confinement clamp (PURE — unit-testable): clamp <paramref name="point"/>'s XZ
+        /// into <paramref name="area"/> expanded by <paramref name="slack"/> metres (negative
+        /// slack shrinks — used to seat spawn slots strictly INSIDE the room). Y passes through.
+        /// Extents floor at 0.25 so a degenerate area can never invert.
+        /// </summary>
+        public static Vector3 ConfineToArea(Vector3 point, Bounds area, float slack)
+        {
+            float ex = Mathf.Max(0.25f, area.extents.x + slack);
+            float ez = Mathf.Max(0.25f, area.extents.z + slack);
+            float x = Mathf.Clamp(point.x, area.center.x - ex, area.center.x + ex);
+            float z = Mathf.Clamp(point.z, area.center.z - ez, area.center.z + ez);
+            return new Vector3(x, point.y, z);
+        }
+
+        // Route a chase/tactical destination through the WO-797 room clamp. No-op (identity)
+        // when unbound. Throttled trace on an ACTUAL snap so the confinement is a captured
+        // data line, never a silent behaviour change (CLAUDE.md sec.12).
+        private Vector3 ConfineDestination(Vector3 desired)
+        {
+            if (!_hasRoomArea) return desired;
+            Vector3 confined = ConfineToArea(desired, _roomArea, _roomSlack);
+            if ((confined - desired).sqrMagnitude > 0.04f)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"confine-{GetInstanceID()}", 1f,
+                    $"{name}: confined to room '{_roomId}' - desired {desired} snapped to {confined} (slack {_roomSlack:F1}m)");
+            }
+            return confined;
+        }
+
+        /// <summary>
         /// True when this brain is a HERO-ONLY duelist (set by the isolated BattleArena and
         /// the in-place OutpostEnemyGroupSpawner dungeon/outpost groups). Read by
         /// <see cref="Enemy"/> to raise the in-scene <see cref="DeNelle.Core.Combat.HeroCombatEngagement"/>
@@ -367,6 +444,18 @@ namespace DeNelle.Village
         // Set by OutpostEnemyGroupSpawner (dungeon/outpost groups) via SetLeash().
         private Vector3 _homeAnchor;
         private float   _leashRadius;   // 0 = disabled (default)
+
+        // ROOM OWNERSHIP (WO-797): opt-in room AABB binding. When _hasRoomArea, the wake
+        // gate measures hero distance from the ROOM FOOTPRINT (not the ring-slot anchor)
+        // and every nav destination — including the retaliation/taunt override chases —
+        // is clamped into the AABB + _roomSlack, so a provoked mob fights but never
+        // leaves its room. DEFAULT off => zero effect on village/overworld enemies.
+        // Set by OutpostEnemyGroupSpawner via SetRoomArea().
+        private bool    _hasRoomArea;
+        private string  _roomId = string.Empty;
+        private Bounds  _roomArea;
+        private float   _roomSlack;
+        private float   _wakeRadius;
 
         // WO-147: consolidated perception sensor (auto-added in Awake) + IsAlert drive.
         private AwarenessSensor _sensor;
@@ -610,7 +699,8 @@ namespace DeNelle.Village
             {
                 _currentTarget = _taunter;
                 _enemy.SetBrainTarget(_taunter);
-                _enemy.SetBrainTargetPosition(_taunter.position);
+                // WO-797: a room-bound mob follows the taunt only as far as its room edge.
+                _enemy.SetBrainTargetPosition(ConfineDestination(_taunter.position));
                 TriggerAttack();
                 return;
             }
@@ -635,7 +725,12 @@ namespace DeNelle.Village
             {
                 _currentTarget = _heroTransform;
                 _enemy.SetBrainTarget(_heroTransform);
-                _enemy.SetBrainTargetPosition(_heroTransform.position);
+                // WO-797 (data-proven cause 2, F8 seq 461/622): the retaliation chase used to
+                // run with NO range cap — one hero swing towed a mob across the whole dungeon
+                // to the entrance. The room confinement is hoisted ABOVE this override: a
+                // provoked room-bound mob still fights back, but its chase destination is
+                // clamped to its room AABB + slack, so it can never leave the room.
+                _enemy.SetBrainTargetPosition(ConfineDestination(_heroTransform.position));
                 TriggerAttack();
                 return;
             }
@@ -689,8 +784,15 @@ namespace DeNelle.Village
             // DEFAULT _leashRadius == 0 short-circuits here => zero cost/effect for every
             // unleashed village/overworld enemy.
             bool heroPresent = _heroTransform != null;
-            if (ShouldLeashOut(_homeAnchor, _leashRadius, heroPresent,
-                    heroPresent ? _heroTransform.position : Vector3.zero))
+            Vector3 heroPosNow = heroPresent ? _heroTransform.position : Vector3.zero;
+            // WO-797: a room-bound mob's dormancy is decided from the ROOM FOOTPRINT
+            // (ShouldWake), not the ring-slot anchor — kills the frame-one beeline where a
+            // junction slot landed inside one leash radius of the entry hero seat. Unbound
+            // mobs keep the WO-770.11 anchor leash unchanged.
+            bool leashedOut = _hasRoomArea
+                ? !ShouldWake(_roomArea, _wakeRadius, heroPresent, heroPosNow)
+                : ShouldLeashOut(_homeAnchor, _leashRadius, heroPresent, heroPosNow);
+            if (leashedOut)
             {
                 _currentTarget = null;
                 _enemy.SetBrainTarget(null);
@@ -716,6 +818,9 @@ namespace DeNelle.Village
 
             // Compute the final destination with tactical overlay applied.
             Vector3? dest = ComputeTacticalDestination(target);
+            // WO-797: room-bound mobs never path outside their room AABB + slack.
+            if (dest.HasValue && _hasRoomArea)
+                dest = ConfineDestination(dest.Value);
             _enemy.SetBrainTargetPosition(dest);
 
             // WO-145 (Tactic B): while kiting, fire ranged attacks on cooldown when

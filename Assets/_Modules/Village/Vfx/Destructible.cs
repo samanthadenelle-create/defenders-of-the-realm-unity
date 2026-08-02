@@ -179,6 +179,11 @@ namespace DeNelle.Village
                 BaseLayoutLoader.Instance?.Forget(placed);
                 RemovePersistedLayoutRecord(placed.itemId, placed.gridCell);
                 BurnFreeBuild(placed.itemId);  // WO-753 (owner F8 2026-07-30): rebuild is NEVER free.
+                // WO-843 - destruction now mirrors the SELL path's singleton notify (deferred one
+                // frame so the dying object no longer counts as placed): the WO-819 baked twin
+                // resurfaces immediately (not on the next hub load) and the build card's memoized
+                // "Built" state refreshes to BUILDABLE-at-full-cost.
+                StructureSingletonBootstrap.NotifyRemovedDeferred(placed.itemId);
                 OfferRebuild(placed.itemId);   // Point 4 - prompt to rebuild at full cost.
             }
 
@@ -260,10 +265,23 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(itemId)) return;
             var entry = CatalogRegistry.Get(itemId);
             string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : itemId;
+
+            // WO-843 coherence (owner F8 seq 618: "says destroyed but its clearly still
+            // here"): when a WO-819 baked twin will stand in for the destroyed structure,
+            // SAY SO - the toast used to claim it was simply gone while the old building
+            // visibly stood, which read as a broken destroy. Twin presence = catalog
+            // repo.bakedTwins + the WO-834 surfacing gate.
+            bool twinStandsIn = StructureSingleton.IsSingleton(itemId)
+                && entry?.repo?.bakedTwins != null && entry.repo.bakedTwins.Length > 0
+                && StructureSingleton.MayBakedTwinSurface(itemId);
+
             FlowTrace.Step("Destroy",
-                $"[Flow:Destroy] rebuild-prompt for destroyed '{label}' (id='{itemId}') - rebuild costs full price (no repair).");
+                $"[Flow:Destroy] rebuild-prompt for destroyed '{label}' (id='{itemId}') - rebuild costs full price (no repair)"
+                + (twinStandsIn ? "; the old baked building stands in for it (WO-819)." : "."));
             ElarionUiKit.ShowToast(
-                $"Your {label} was destroyed - rebuild it at full cost from Build mode.",
+                twinStandsIn
+                    ? $"Your {label} was destroyed - the old village {label} stands in for it. Rebuild your own at full cost from Build mode."
+                    : $"Your {label} was destroyed - rebuild it at full cost from Build mode.",
                 ElarionUiKit.ToastTone.Danger);
         }
 

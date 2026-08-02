@@ -9,7 +9,9 @@
 //   • owned-list projection is non-empty + matches the fake store (data gap closed),
 //   • tab filtering swaps Slots + resets the selection,
 //   • Select fills the Selected detail,
-//   • Use / Drop call the store (remove) + raise Changed,
+//   • Use routes through the EFFECT seam (WO-844): applied -> item consumed by the seam
+//     + "Used X."; refused -> item KEPT + the seam's truthful reason; no seam -> item
+//     kept ("Nothing happens."); gear can never be used. Drop calls the store (remove),
 //   • Equip routes a weapon to the equip target + raises Changed,
 //   • Dispose unsubscribes (no callback after dispose).
 //
@@ -197,23 +199,91 @@ namespace DeNelle.Tests.EditMode
             Assert.That(vm.SelectedSlotIndex, Is.EqualTo(0));
         }
 
+        // ── WO-844: Use routes through the EFFECT seam, never a bare store decrement ──
+
+        /// <summary>A fake effect seam honouring the InventoryUseResult contract: on apply
+        /// it consumes the item itself (the way ConsumableUseService.TryUse does).</summary>
+        private static Func<string, InventoryUseResult> ApplyingSeam(FakeStore store, List<string> calls = null) =>
+            id =>
+            {
+                calls?.Add(id);
+                return store.TryRemove(id, 1)
+                    ? InventoryUseResult.Ok()
+                    : InventoryUseResult.Refused("Nothing to use.");
+            };
+
         [Test]
-        public void use_consumable_calls_store_and_raises_changed()
+        public void use_with_effect_applied_consumes_item_and_reports_used()
         {
             var store = SeedStore();
-            using var vm = new InventoryVM(store);
+            var seamCalls = new List<string>();
+            using var vm = new InventoryVM(store, useEffect: ApplyingSeam(store, seamCalls));
             vm.SelectTab((int)InventoryTabKind.Consumables);
             vm.Select(0);
 
             int changed = 0;
             vm.Changed += () => changed++;
-            int before = store.RemoveCalls;
 
             vm.Use();
 
-            Assert.That(store.RemoveCalls, Is.EqualTo(before + 1), "Use must remove one through the store");
+            Assert.That(seamCalls, Is.EqualTo(new List<string> { "heal-potion" }),
+                "Use must route the selected id through the effect seam exactly once");
+            Assert.That(store.OwnedQuantity("heal-potion"), Is.EqualTo(2),
+                "the seam consumed exactly ONE (the VM must not double-decrement)");
+            Assert.That(vm.Status, Does.StartWith("Used "), "an applied effect reports Used X.");
             Assert.That(changed, Is.GreaterThan(0), "Use must raise Changed");
-            Assert.That(store.OwnedQuantity("heal-potion"), Is.EqualTo(2), "one consumable consumed");
+        }
+
+        [Test]
+        public void use_with_effect_refused_keeps_item_and_reports_reason()
+        {
+            var store = SeedStore();
+            using var vm = new InventoryVM(store,
+                useEffect: _ => InventoryUseResult.Refused("Already at full health."));
+            vm.SelectTab((int)InventoryTabKind.Consumables);
+            vm.Select(0);
+
+            vm.Use();
+
+            Assert.That(store.OwnedQuantity("heal-potion"), Is.EqualTo(3),
+                "a refused effect must NOT consume the item");
+            Assert.That(store.RemoveCalls, Is.EqualTo(0), "the store must never see a remove on refusal");
+            Assert.That(vm.Status, Is.EqualTo("Already at full health."),
+                "the seam's truthful reason surfaces as the status");
+            Assert.That(vm.SelectedId, Is.EqualTo("heal-potion"), "the kept item stays selected");
+        }
+
+        [Test]
+        public void use_without_effect_seam_keeps_item_and_never_claims_used()
+        {
+            // No seam bound = no effect path. The OLD bug was consuming anyway with zero
+            // effect ("Used X." lie) - lock the honest refusal.
+            var store = SeedStore();
+            using var vm = new InventoryVM(store);
+            vm.SelectTab((int)InventoryTabKind.Consumables);
+            vm.Select(0);
+
+            vm.Use();
+
+            Assert.That(store.OwnedQuantity("heal-potion"), Is.EqualTo(3),
+                "no effect seam -> the item must be KEPT (never consume-for-nothing)");
+            Assert.That(store.RemoveCalls, Is.EqualTo(0));
+            Assert.That(vm.Status, Is.EqualTo("Nothing happens."));
+        }
+
+        [Test]
+        public void use_on_gear_refuses_and_never_calls_seam_or_store()
+        {
+            var store = SeedStore();
+            var seamCalls = new List<string>();
+            using var vm = new InventoryVM(store, useEffect: ApplyingSeam(store, seamCalls));
+            vm.Select(0);   // a weapon (Weapons tab is active by default)
+
+            vm.Use();
+
+            Assert.That(vm.Status, Is.EqualTo("That item cannot be used."));
+            Assert.That(seamCalls, Is.Empty, "gear must never reach the effect seam");
+            Assert.That(store.RemoveCalls, Is.EqualTo(0), "gear must never be consumed by Use");
         }
 
         [Test]

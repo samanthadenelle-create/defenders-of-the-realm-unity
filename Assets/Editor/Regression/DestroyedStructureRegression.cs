@@ -27,6 +27,12 @@
 //      GameStateService singletons (their Awake only runs in play mode) and a
 //      runtime Destroy (edit-mode Destroy is forbidden). Skipped with a logged
 //      note under an edit-mode batch run — drive it from the AutoPilot/play harness.
+//   D. WO-843 REBUILD-CARD STATE (owner F8 2026-08-02 "lumber mill destroyed no
+//      option to rebuild it") — with ONLY a resurfaced baked twin standing, the
+//      card gate (StructureSingleton.IsPlayerBuilt) reads BUILDABLE while the
+//      enforcement query (IsBuilt) still sees the twin; the free-build burn is
+//      idempotent (full-cost rebuild) and the monotonic ever-built set keeps the
+//      WO-834 resurface gate open.
 // =============================================================================
 using System.Collections.Generic;
 using System.Reflection;
@@ -57,6 +63,7 @@ namespace DeNelle.Editor
                 ProbeRepairNoOp(created, failures, log);
                 ProbeRepairAllExclusion(created, failures, log);
                 ProbeObjectRemoval(created, failures, log);
+                ProbeRebuildCardState(failures, log);
             }
             catch (System.Exception ex)
             {
@@ -226,6 +233,101 @@ namespace DeNelle.Editor
                            "(assert live PlacementGrid.CanPlace + BaseLayout record absence in the play harness).");
         }
 
+        // =====================================================================
+        //  D. WO-843 — destroyed singleton: the build card returns to BUILDABLE
+        //     while the resurfaced baked twin stands (owner F8 2026-08-02
+        //     "lumber mill destroyed no option to rebuild it"). The card gate
+        //     (BuildModeController.IsSingletonBuilt -> StructureSingleton.
+        //     IsPlayerBuilt) must ignore the WO-819 twin; the ENFORCEMENT query
+        //     (IsBuilt) must still see it; the free-build burn stays idempotent
+        //     (rebuild at full cost, never free); the monotonic ever-built set
+        //     keeps the resurface gate open (WO-834).
+        // =====================================================================
+        private static void ProbeRebuildCardState(List<string> failures, StringBuilder log)
+        {
+            const string Id = "collector_lumbermill";
+            const string TwinName = "Lumbermill_Wood_Storefront";
+
+            var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(Id);
+            if (entry == null || entry.repo == null || !entry.repo.singleton)
+            { failures.Add($"WO-843: catalog row '{Id}' missing or not repo.singleton - the rebuild-card probe lost its subject"); return; }
+            bool twinAuthored = false;
+            if (entry.repo.bakedTwins != null)
+                foreach (var t in entry.repo.bakedTwins) if (t == TwinName) { twinAuthored = true; break; }
+            if (!twinAuthored)
+            { failures.Add($"WO-843: catalog row '{Id}' no longer names baked twin '{TwinName}' - re-point this probe"); return; }
+
+            // Headless GameStateService install (the VillageEconomyRegression pattern -
+            // editmode batch never runs Awake, so seat the singleton + state by reflection).
+            var instField = typeof(DeNelle.Core.State.GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            var stateField = typeof(DeNelle.Core.State.GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (instField == null || stateField == null)
+            { log.AppendLine("  RebuildCard (WO-843): SKIPPED - GameStateService reflection seams moved (see VillageEconomyRegression)"); return; }
+
+            var prior = DeNelle.Core.State.GameStateService.Instance;
+            GameObject gssGo = null, twinGo = null;
+            DeNelle.Core.State.GameState throwaway = null;
+            try
+            {
+                throwaway = ScriptableObject.CreateInstance<DeNelle.Core.State.GameState>();
+                gssGo = new GameObject("GameStateService (rebuild-card oracle)");
+                var gss = gssGo.AddComponent<DeNelle.Core.State.GameStateService>();
+                stateField.SetValue(gss, throwaway);
+                instField.SetValue(null, gss);
+                var state = gss.State;
+
+                // (1) PLACED: a persisted record -> both queries read built (card correctly "Built").
+                state.BaseLayout.Add(new DeNelle.Core.State.PlacedStructureData(Id, 2, 2, 0, 1));
+                if (!StructureSingleton.IsPlayerBuilt(Id))
+                    failures.Add("WO-843 (1): a persisted BaseLayout record did not read as player-built - the palette would offer a duplicate of a placed singleton");
+                if (!StructureSingleton.IsBuilt(Id))
+                    failures.Add("WO-843 (1): a persisted BaseLayout record did not read as built on the enforcement query");
+
+                // (2) DESTROYED: record dropped (the WO-753 death path) + twin RESURFACED
+                //     (WO-819) - the exact captured F8 state. Enforcement still sees the twin;
+                //     the CARD must read BUILDABLE.
+                state.BaseLayout.Clear();
+                twinGo = new GameObject(TwinName);   // active = the resurfaced baked twin
+                if (!StructureSingleton.IsBuilt(Id))
+                    failures.Add("WO-843 (2): an ACTIVE baked twin did not register on the enforcement query (IsBuilt) - stand-down/resurface would misfire");
+                if (StructureSingleton.IsPlayerBuilt(Id))
+                    failures.Add("WO-843 (2): THE CAPTURED BUG - with only the resurfaced baked twin standing, IsPlayerBuilt read true, so the build card locks as 'Built' and the destroyed structure can never be rebuilt");
+
+                // (3) NO FREEBIE: destruction burns the free-build flag (WO-753), idempotently.
+                var burn = typeof(Destructible).GetMethod("BurnFreeBuild", BindingFlags.NonPublic | BindingFlags.Static);
+                if (burn == null)
+                { failures.Add("WO-843 (3): Destructible.BurnFreeBuild seam moved - re-point this probe"); }
+                else
+                {
+                    burn.Invoke(null, new object[] { Id });
+                    burn.Invoke(null, new object[] { Id });   // second burn must not double-record
+                    int count = 0;
+                    if (state.FreeBuildsUsed != null)
+                        foreach (var f in state.FreeBuildsUsed)
+                            if (string.Equals(f, Id, System.StringComparison.OrdinalIgnoreCase)) count++;
+                    if (count != 1)
+                        failures.Add($"WO-843 (3): FreeBuildsUsed holds '{Id}' x{count} after a double burn - expected exactly 1 (rebuild charges full cost; once burned stays burned)");
+                }
+
+                // (4) The MONOTONIC ever-built set keeps the WO-834 resurface gate open - the
+                //     card fix must never be "solved" by clearing it (WO-819 contract).
+                if (state.EverBuiltStructureIds == null)
+                    state.EverBuiltStructureIds = new List<string>();
+                state.EverBuiltStructureIds.Add(Id);
+                if (!StructureSingleton.MayBakedTwinSurface(Id, state.EverBuiltStructureIds, true))
+                    failures.Add("WO-843 (4): MayBakedTwinSurface false for an ever-built id on a migrated save - the WO-819 resurface contract broke");
+
+                log.AppendLine("  RebuildCard (WO-843): record => built on both queries; twin-only => enforcement built, CARD buildable; free-build burn idempotent; ever-built resurface gate intact.");
+            }
+            finally
+            {
+                if (twinGo != null) Object.DestroyImmediate(twinGo);
+                if (gssGo != null) Object.DestroyImmediate(gssGo);
+                if (throwaway != null) Object.DestroyImmediate(throwaway);
+                instField.SetValue(null, prior);
+            }
+        }
+
         // Editor-test seeding: set a private serialized float when Awake/Configure did not run.
         private static void SeedPrivateFloat(object target, string field, float value)
         {
@@ -247,8 +349,9 @@ namespace DeNelle.Editor
         {
             if (failures.Count == 0)
             {
-                reason = "DESTROYED STRUCTURE OK — Repair() no-ops on every destroyed tower/spire/collector/wall, and " +
-                         "the Repair-All exclusion predicates (IsBroken / DamageFraction>=DestroyedFraction) fire on destroyed structures";
+                reason = "DESTROYED STRUCTURE OK — Repair() no-ops on every destroyed tower/spire/collector/wall, " +
+                         "the Repair-All exclusion predicates (IsBroken / DamageFraction>=DestroyedFraction) fire on destroyed structures, " +
+                         "and the WO-843 rebuild-card state holds (twin-only => card buildable at full cost)";
                 Debug.Log("DESTROYED_STRUCTURE_OK\n" + log);
                 return true;
             }
