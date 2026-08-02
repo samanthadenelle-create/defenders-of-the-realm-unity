@@ -103,6 +103,46 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
+        /// Deposits an AUTHORED, fixed bundle into the larder - no loot table, no roll.
+        /// The WO-850 deepest-dungeon cache pays a supply, not a slot machine, so the
+        /// caller hands over exactly what it advertised on screen and this deposits
+        /// exactly that. Same seam laws as <see cref="GrantTable"/>: canonicalized ids,
+        /// per-line FlowTrace, and a null larder WARNS (never silently eats the loot).
+        /// <paramref name="sourceLabel"/> is trace context (e.g. "cache:dg_starter_loop").
+        /// Returns the total item count granted.
+        /// </summary>
+        public static int GrantFixed(IReadOnlyList<(string Id, int Count)> bundle, string sourceLabel)
+        {
+            string src = string.IsNullOrEmpty(sourceLabel) ? "fixed" : sourceLabel;
+            if (bundle == null || bundle.Count == 0)
+            {
+                FlowTrace.Warn(Sys, $"GrantFixed('{src}') got an EMPTY bundle - nothing to deposit.");
+                return 0;
+            }
+            int granted = 0;
+            Guard.Try(Sys, $"grant fixed bundle '{src}'", () =>
+            {
+                var inv = VillageInventory.Instance;
+                if (inv == null)
+                {
+                    FlowTrace.Warn(Sys,
+                        $"VillageInventory.Instance null - {bundle.Count} fixed line(s) from '{src}' LOST.");
+                    return;
+                }
+                for (int i = 0; i < bundle.Count; i++)
+                {
+                    var entry = bundle[i];
+                    if (string.IsNullOrEmpty(entry.Id) || entry.Count <= 0) continue;
+                    string id = CanonicalLarderId(entry.Id);
+                    inv.Add(id, entry.Count);
+                    granted += entry.Count;
+                    FlowTrace.Step(Sys, $"deposited '{id}' x{entry.Count} to larder (fixed '{src}').");
+                }
+            });
+            return granted;
+        }
+
+        /// <summary>
         /// Resolves a treasure-chest <paramref name="rewardKey"/> to its table and
         /// grants it to the larder (chests may contain gems/legendaries, so the
         /// boss-only lines are opened).
