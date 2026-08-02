@@ -38,6 +38,55 @@ using UnityEngine.Networking;
 namespace DeNelle.Core.State
 {
     /// <summary>
+    /// WO-860 Part A - the PlayerPrefs key contract for the per-class equipped-gear
+    /// slots. These live OUTSIDE the save envelope (they are PlayerPrefs, not
+    /// GameState fields), which is exactly why New Game used to inherit them: the
+    /// owner's "I keep getting this axe I tried one time" is a once-equipped
+    /// <c>dotr-equip-weapon-knight</c> that no reset ever deleted.
+    ///
+    /// The prefixes live HERE in Core (not in DeNelle.Village.GearLoadout, which
+    /// WRITES them) so the writer and the New-Game eraser share ONE definition -
+    /// Village references Core, so GearLoadout consumes these consts directly.
+    /// Duplicating the literals is how they would silently drift apart again.
+    ///
+    /// Key shape: <c>&lt;prefix&gt;&lt;lowercase class key&gt;</c>, e.g.
+    /// "dotr-equip-weapon-knight". The class key is the HeroClass enum name
+    /// lowercased (StoryCompanionInjector binds companion loadouts the same way),
+    /// so <see cref="PlayableHeroes.AllKnownJobKeys"/> enumerates every key a
+    /// reset must clear.
+    /// </summary>
+    public static class EquipPrefKeys
+    {
+        /// <summary>MAIN-hand weapon, per class.</summary>
+        public const string Weapon = "dotr-equip-weapon-";
+        /// <summary>Body armor, per class.</summary>
+        public const string Armor = "dotr-equip-armor-";
+        /// <summary>OFF-hand item / shield, per class.</summary>
+        public const string OffHand = "dotr-equip-offhand-";
+        /// <summary>Ring accessory, per class (WO-543).</summary>
+        public const string Ring = "dotr-equip-ring-";
+        /// <summary>Amulet accessory, per class (WO-543).</summary>
+        public const string Amulet = "dotr-equip-amulet-";
+
+        /// <summary>
+        /// The per-class W/E/R ability-bar loadout key (WO-861 Phase 0 made it per-class).
+        /// Shape: "dotr-loadout-&lt;class&gt;-v1". The knight's key is byte-identical to the
+        /// pre-861 GLOBAL key "dotr-loadout-knight-v1", so no migration is needed.
+        /// </summary>
+        public const string LoadoutPrefix = "dotr-loadout-";
+        /// <summary>Suffix half of <see cref="LoadoutPrefix"/> (the schema version tag).</summary>
+        public const string LoadoutSuffix = "-v1";
+
+        /// <summary>Every equip-slot prefix, so a reset can loop instead of listing them.</summary>
+        public static readonly string[] AllSlotPrefixes = { Weapon, Armor, OffHand, Ring, Amulet };
+
+        /// <summary>The W/E/R loadout key for a lowercase class key.</summary>
+        public static string LoadoutKeyFor(string classKey) =>
+            LoadoutPrefix + (string.IsNullOrEmpty(classKey) ? "knight" : classKey.Trim().ToLowerInvariant()) +
+            LoadoutSuffix;
+    }
+
+    /// <summary>
     /// The live-state behaviour layer — load, save, typed mutators and
     /// per-domain change events over the <see cref="GameState"/> SO.
     /// </summary>
@@ -667,10 +716,19 @@ namespace DeNelle.Core.State
         /// <summary>playerSlice <c>chooseHero</c> — lock in the hero class. Idempotent.</summary>
         public void ChooseHero(HeroClass cls)
         {
-            // PIVOT (owner 2026-06-22): lock to ONE polished hero (Knight) for now; fold in other
-            // classes once it's done well. ff.knightonly forces any selection to Knight (flag OFF
-            // restores free class choice).
-            if (DeNelle.Core.FeatureFlags.KnightOnly) cls = HeroClass.Knight;
+            // WO-861 Phase 0: the Knight force is no longer HARDCODED here. The single
+            // roster truth is PlayableHeroes (which still resolves to { Knight } while
+            // ff.knightonly is ON, so today's behaviour is unchanged) — a selection is
+            // coerced ONLY when it is not in the playable set, and the whole game widens
+            // together the moment that set does. Never silently swallow the coercion:
+            // "I picked Sylas and got Grom" must be readable in the trace.
+            if (!PlayableHeroes.IsPlayable(cls))
+            {
+                FlowTrace.Warn("Save",
+                    $"ChooseHero({cls}) is NOT in the playable set [{PlayableHeroes.Describe()}] - " +
+                    $"coerced to {PlayableHeroes.Default}.");
+                cls = PlayableHeroes.Default;
+            }
             var opt = ((HeroClass?)cls).ToOpt();
             if (_state.HeroClass == opt) return;
             _state.HeroClass = opt;
@@ -690,9 +748,10 @@ namespace DeNelle.Core.State
         {
             if (_state != null && _state.HeroClass.ToNullable().HasValue) return; // already picked — leave it
             FlowTrace.Warn("Save",
-                "EnsureHeroClassPersisted: HeroClass was UNSET after load — persisting V1 default (Knight) at " +
-                "the session/load source so no bypass entry path reaches body-build with HeroClass None.");
-            ChooseHero(HeroClass.Knight); // applies KnightOnly force + Save()
+                $"EnsureHeroClassPersisted: HeroClass was UNSET after load - persisting the default " +
+                $"({PlayableHeroes.Default}) at the session/load source so no bypass entry path reaches " +
+                "body-build with HeroClass None.");
+            ChooseHero(PlayableHeroes.Default); // playable-set checked + Save()
         }
 
         /// <summary>settingsSlice <c>setMuted</c> — toggle global audio mute.</summary>
@@ -896,12 +955,52 @@ namespace DeNelle.Core.State
             s.Arena = ArenaProgress.Empty;                    // ARENA MVP (v34) — New Game: zeroed W/L ledger.
             s.PetActiveSlots = new List<string>();            // flag_17 (v34) — New Game: no pet slotted (no pet owned on a fresh save).
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
+            ClearEquipPrefs();                                // WO-860 Part A1 — see below.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
 
             StateReplaced.Invoke();
             Save();
+        }
+
+        /// <summary>
+        /// WO-860 Part A1 — New Game must not inherit an old EQUIP.
+        ///
+        /// THE BUG THIS FIXES (owner felt-test 2026-08-02, "on new I keep getting this axe
+        /// I tried one time"): the equipped weapon / off-hand / armor / ring / amulet are
+        /// persisted OUTSIDE the save envelope, in per-class PlayerPrefs
+        /// (<see cref="EquipPrefKeys"/>) that GearLoadout.EquipWeaponById &amp;c. write.
+        /// ResetToNewGame wiped ~40 GameState fields but never touched those keys, so
+        /// GearLoadout.ApplyPersistedEquip restored the axe over the auto/starter pick on
+        /// every single New Game — deterministically, forever.
+        ///
+        /// PlayerPrefs has no key enumeration, so we delete an explicit key set: every
+        /// slot prefix x every known class key (the HeroClass enum lowercased — the same
+        /// key a COMPANION loadout binds via GearLoadout.BindOwnerClass, so companion
+        /// gear is cleared too). Also clears the per-class W/E/R ability-bar loadout
+        /// (dotr-loadout-&lt;class&gt;-v1): it is the identical "stale PlayerPrefs survives
+        /// New Game" defect, and a fresh hero must start on his class's stock Q/W/E/R.
+        ///
+        /// DeleteKey on an absent key is a documented no-op, so this is safe + idempotent.
+        /// </summary>
+        private static void ClearEquipPrefs()
+        {
+            int deleted = 0;
+            foreach (var classKey in PlayableHeroes.AllKnownJobKeys())
+            {
+                foreach (var prefix in EquipPrefKeys.AllSlotPrefixes)
+                {
+                    string key = prefix + classKey;
+                    if (PlayerPrefs.HasKey(key)) { PlayerPrefs.DeleteKey(key); deleted++; }
+                }
+                string loadoutKey = EquipPrefKeys.LoadoutKeyFor(classKey);
+                if (PlayerPrefs.HasKey(loadoutKey)) { PlayerPrefs.DeleteKey(loadoutKey); deleted++; }
+            }
+            PlayerPrefs.Save();
+            FlowTrace.Step("Save",
+                $"ResetToNewGame: cleared {deleted} stale equip/loadout PlayerPrefs key(s) " +
+                "(dotr-equip-* + dotr-loadout-*) - a new game starts on the class STARTER loadout, never an old equip.");
         }
 
         // =====================================================================

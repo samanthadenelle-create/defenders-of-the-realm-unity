@@ -124,6 +124,25 @@ namespace DeNelle.Village
         public ItemCapability Capabilities =>
             capabilities ?? (ItemCapability.Carriable | ItemCapability.Equippable);
 
+        // ── WO-861 ARROW RIDERS (Sylas's ammo-as-weapon) ────────────────────────────
+        // The Ranger's "weapon" is the ARROW, so an equipped arrow carries an on-hit rider
+        // its basic attack applies. Read by HeroAbilities.TryResolveAmmoRider and applied
+        // ONLY on the Ranger's locked-Q basic (gated by IsArrowRiderEligible) -- Knight and
+        // Mage basics are provably unaffected.
+        // THIS FILE WAS ORPHANED: the effects lane and the data lane EACH believed the other
+        // owned GearCatalog.cs, so these fields were never added and every rider sat inert
+        // behind a hard `return false`. Both halves shipped correct and the SEAM between them
+        // was empty -- the classic file-fence gap. Added by the orchestrator, who owns the seams.
+        // Absent in JSON => null/0 => no rider, so every existing weapon row is unchanged.
+        /// <summary>On-hit rider an equipped arrow applies: "burn" | "poison" | "slow". Empty/null = none.</summary>
+        public string ammoEffect;
+        /// <summary>Damage-per-second for a burn/poison rider.</summary>
+        public float ammoDps;
+        /// <summary>Duration (seconds) of the rider.</summary>
+        public float ammoSeconds;
+        /// <summary>Slow magnitude 0..1 for a "slow" rider (0.35 = -35% move speed).</summary>
+        public float ammoSlowPct;
+
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>
             !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);

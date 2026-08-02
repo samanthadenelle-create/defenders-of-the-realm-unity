@@ -493,6 +493,30 @@ namespace DeNelle.Village
             if (_gear != null && _gear.ArmorDefense > 0f)
                 amount *= (1f - _gear.ArmorDefense);
 
+            // WO-861: the ABILITY-DRIVEN timed damage shield (Thrain's Arcane Shell -40%/4s AND
+            // the Knight's Warden's Grace -20%). THIS LINE IS THE CONSUMER, and until it existed
+            // BOTH were INERT.
+            // Found 2026-08-02 while building Arcane Shell: WO-750 declared
+            // GraceDamageReduction = 0.20f but only ever used the const inside a LOG STRING that
+            // read "-20% DR PENDING HeroHealth seam" - so Warden's Grace has reduced exactly
+            // nothing since it shipped, while both the log and the tooltip claimed otherwise.
+            // HeroAbilities now owns ONE timed-mitigation store (ApplyDamageShield) that Grace and
+            // Arcane Shell both write, so there is one producer and one reader rather than two
+            // mitigation systems. Seated AFTER gear armor and BEFORE the talent block/DR chain so
+            // it composes multiplicatively with armor exactly as the talent DR below does.
+            // Identity (1f) whenever no shield is active, so baseline combat is unchanged.
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities != null)
+            {
+                float shieldMult = _abilities.DamageTakenMultiplier;
+                if (shieldMult < 1f)
+                {
+                    amount *= shieldMult;
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroTalents", "dmg-shield", 1f,
+                        $"damage shield active: incoming x{shieldMult:0.##} (ability timed mitigation).");
+                }
+            }
+
             // v2 talents (Knight V1): Guardian Stance can fully BLOCK a hit; Iron Resolve /
             // Resilience / defense nodes reduce the rest. Identity (no block, 0 DR) until a
             // defensive node is learned, so combat is unchanged at baseline.

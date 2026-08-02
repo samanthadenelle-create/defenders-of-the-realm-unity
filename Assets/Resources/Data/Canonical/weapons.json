@@ -2,25 +2,12 @@
   "version": 1,
   "_note": "Gear v1 weapon catalog (data-driven, same pattern as abilities.json). damageMult joins the hero's damage chain (base x talent x level x timing x WEAPON). reach = MELEE hitbox radius in metres for MELEE jobs (knight) — overrides PlayerAttackController's fixed AttackRange (3.2) when >0; a heavier/longer blade outreaches a lighter one. Ranged jobs (mage/ranger) attack via AbilityDef.Range and leave reach 0 (unset) so their range is unchanged. req starts level-gated; add dex/arcane/might keys later. icon = emoji placeholder until real art ships (swap the field, zero code change). PRICING (buyWood/buyFood/buyIron/buyCrystals): tiered by rarity (common floor -> legendary sink, ~2.5x/tier); CRYSTALS gate rare+ (the aether/crystal arc); resource mix reflects the weapon's nature (knight=iron blade, ranger=wood bow, mage=wood staff + crystal head). Lean economy by design.",
   "weapons": [
-    {
-      "id": "mage_starter",
-      "name": "Apprentice Wand",
-      "icon": "🪄",
-      "job": "mage",
-      "rarity": "common",
-      "damageMult": 1.0,
-      "req": {
-        "level": 1
-      },
-      "buyWood": 25,
-      "buyCrystals": 3,
-      "flavor": "A smooth willow rod — what the tutors hand out when they are not yet sure you are worth the crystal."
-    },
-    {
+        {
       "id": "mage_oak",
       "name": "Oakheart Staff",
       "icon": "🪄",
       "job": "mage",
+      "category": "staff",
       "rarity": "uncommon",
       "damageMult": 1.25,
       "req": {
@@ -35,6 +22,7 @@
       "name": "Arcane Scepter",
       "icon": "🔮",
       "job": "mage",
+      "category": "staff",
       "rarity": "rare",
       "damageMult": 1.6,
       "req": {
@@ -51,6 +39,7 @@
       "name": "Voidcaller Staff",
       "icon": "🔮",
       "job": "mage",
+      "category": "staff",
       "rarity": "epic",
       "damageMult": 2.1,
       "req": {
@@ -155,52 +144,86 @@
       "flavor": "Field-strung and field-forgotten; the kind of bow found in a dead man's pack with no name on it."
     },
     {
-      "id": "ranger_yew",
-      "name": "Yewwood Longbow",
+      "id": "ranger_arrow_plain",
+      "name": "Field Arrows",
       "icon": "🏹",
       "job": "ranger",
+      "category": "arrow",
+      "hand": "1h",
+      "damageType": "ranged",
+      "rarity": "common",
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "manual": true,
+      "flavor": "Straight ash, grey goose fletching, no cleverness at all. What every quiver holds before it holds anything better."
+    },
+    {
+      "id": "ranger_arrow_fire",
+      "name": "Emberhead",
+      "icon": "🏹",
+      "job": "ranger",
+      "category": "arrow",
+      "hand": "1h",
+      "damageType": "ranged",
       "rarity": "uncommon",
-      "damageMult": 1.25,
+      "damageMult": 1.0,
+      "ammoEffect": "burn",
+      "ammoDps": 6,
+      "ammoSeconds": 4,
       "req": {
-        "level": 3
+        "level": 1
       },
-      "buyWood": 150,
-      "buyIron": 40,
-      "flavor": "Yew bends where others break — the old foresters knew that before anyone thought to guild it."
+      "buyWood": 60,
+      "buyIron": 10,
+      "manual": true,
+      "flavor": "A pitch-soaked head that takes light off the draw. The wound keeps burning after the arrow is pulled."
     },
     {
-      "id": "ranger_storm",
-      "name": "Stormrender Bow",
-      "icon": "🎯",
+      "id": "ranger_arrow_poison",
+      "name": "Venomtip",
+      "icon": "🏹",
       "job": "ranger",
-      "rarity": "rare",
-      "damageMult": 1.6,
+      "category": "arrow",
+      "hand": "1h",
+      "damageType": "ranged",
+      "rarity": "uncommon",
+      "damageMult": 1.0,
+      "ammoEffect": "poison",
+      "ammoDps": 5,
+      "ammoSeconds": 6,
       "req": {
-        "level": 6
+        "level": 1
       },
-      "buyWood": 350,
-      "buyIron": 80,
-      "buyCrystals": 10,
-      "flavor": "Its limbs were grown, not cut — living wood from the Lumbermill that never wearied the arm.",
-      "makersMark": "Heartwood"
+      "buyWood": 60,
+      "buyFood": 20,
+      "manual": true,
+      "flavor": "Drawn from the green lanes and left to dry on the head. Two in the same target is twice the walk to the ground."
     },
     {
-      "id": "ranger_eclipse",
-      "name": "Eclipse Recurve",
-      "icon": "🎯",
+      "id": "ranger_arrow_frost",
+      "name": "Rimeshot",
+      "icon": "🏹",
       "job": "ranger",
-      "rarity": "epic",
-      "damageMult": 2.1,
+      "category": "arrow",
+      "hand": "1h",
+      "damageType": "ranged",
+      "rarity": "uncommon",
+      "damageMult": 1.0,
+      "ammoEffect": "slow",
+      "ammoSeconds": 2.5,
+      "ammoSlowPct": 0.35,
       "req": {
-        "level": 10
+        "level": 1
       },
-      "buyWood": 700,
-      "buyIron": 150,
-      "buyCrystals": 40,
-      "flavor": "A true Heartwood-marked bow. Merchants who could say 'this is Elarion-marked' had already named their price.",
-      "makersMark": "Heartwood"
+      "buyWood": 60,
+      "buyCrystals": 6,
+      "manual": true,
+      "flavor": "A crystal head cut cold and kept cold. What it strikes forgets how to hurry."
     },
-    {
+                {
       "id": "cleric_starter",
       "name": "Acolyte's Mace",
       "icon": "🔨",
@@ -255,6 +278,7 @@
       "name": "Aetherstaff",
       "icon": "🔮",
       "job": "mage",
+      "category": "staff",
       "rarity": "legendary",
       "damageMult": 2.4,
       "req": {
@@ -308,80 +332,7 @@
       "buyCrystals": 0,
       "flavor": "Small enough to throw, heavy enough to mean it — the hatchet that ended arguments before they became sieges."
     },
-    {
-      "id": "tripo_bow_a",
-      "name": "Greenwarden Bow",
-      "icon": "🏹",
-      "kind": "Weapon",
-      "category": "bow",
-      "job": "ranger",
-      "hand": "2h",
-      "damageType": "ranged",
-      "rarity": "common",
-      "prefabPath": "Heroes/Props/Weapons/bow_A",
-      "generated": true,
-      "manual": true,
-      "damageMult": 1.0,
-      "req": {
-        "level": 1
-      },
-      "buyWood": 40,
-      "buyIron": 15,
-      "buyCrystals": 0,
-      "iconPath": "ItemIcons/tripo_bow_a",
-      "reach": 0.0,
-      "flavor": "Grown-wood and gut-string, no guild's hand in it — honest work for honest range."
-    },
-    {
-      "id": "tripo_bow_b",
-      "name": "Forester's Recurve",
-      "icon": "🏹",
-      "kind": "Weapon",
-      "category": "bow",
-      "job": "ranger",
-      "hand": "2h",
-      "damageType": "ranged",
-      "rarity": "uncommon",
-      "prefabPath": "Heroes/Props/Weapons/bow_B",
-      "generated": true,
-      "manual": true,
-      "damageMult": 1.25,
-      "req": {
-        "level": 3
-      },
-      "buyWood": 150,
-      "buyIron": 40,
-      "buyCrystals": 0,
-      "iconPath": "ItemIcons/tripo_bow_b",
-      "reach": 0.0,
-      "flavor": "The recurve's curve was learned from coastal hunters who shot from saddle and never missed a moving thing."
-    },
-    {
-      "id": "tripo_bow_c",
-      "name": "Glade Longbow",
-      "icon": "🏹",
-      "kind": "Weapon",
-      "category": "bow",
-      "job": "ranger",
-      "hand": "2h",
-      "damageType": "ranged",
-      "rarity": "rare",
-      "prefabPath": "Heroes/Props/Weapons/bow_C",
-      "generated": true,
-      "manual": true,
-      "damageMult": 1.6,
-      "req": {
-        "level": 6
-      },
-      "buyWood": 350,
-      "buyIron": 80,
-      "buyCrystals": 10,
-      "iconPath": "ItemIcons/tripo_bow_c",
-      "reach": 0.0,
-      "makersMark": "Heartwood",
-      "flavor": "Heartwood-grown limbs; arrows trail living leaves."
-    },
-    {
+                {
       "id": "tripo_dagger_a",
       "name": "Bramblefang",
       "icon": "🔪",
@@ -646,30 +597,7 @@
       "makersMark": "Emberhand",
       "flavor": "Emberhand steel of the dawn watch; a crit ignites the strike."
     },
-    {
-      "id": "tripo_wand_a",
-      "name": "Acolyte's Wand",
-      "icon": "🪄",
-      "kind": "Weapon",
-      "category": "wand",
-      "job": "mage",
-      "hand": "1h",
-      "damageType": "magic",
-      "rarity": "common",
-      "prefabPath": "Heroes/Props/Weapons/wand_A",
-      "generated": true,
-      "manual": true,
-      "damageMult": 1.0,
-      "req": {
-        "level": 1
-      },
-      "buyWood": 20,
-      "buyCrystals": 3,
-      "iconPath": "ItemIcons/tripo_wand_a",
-      "reach": 0.0,
-      "flavor": "The smallest form the craft takes; what a student carries before anyone trusts them with something that could burn a room."
-    },
-    {
+        {
       "id": "blink_axe1h_12",
       "name": "Axe1h 12 (Blink)",
       "icon": "🪓",

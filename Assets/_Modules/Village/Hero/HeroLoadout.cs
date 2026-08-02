@@ -24,6 +24,7 @@ using UnityEngine;
 using DeNelle.Core;               // CoreServices (battle-context lock signal)
 using DeNelle.Core.HudModel;      // HudContext
 using DeNelle.Core.Diagnostics;   // FlowTrace (§12 instrument-first)
+using DeNelle.Core.State;         // GameStateService + HeroClassOpt.ToNullable (per-class key fallback)
 
 namespace DeNelle.Village
 {
@@ -35,8 +36,87 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class HeroLoadout : MonoBehaviour
     {
-        /// <summary>PlayerPrefs key for the Knight v1 loadout (slot=id;slot=id…).</summary>
-        public const string PrefsKey = "dotr-loadout-knight-v1";
+        // ── PER-CLASS PERSISTENCE (WO-861 Phase 0) ───────────────────────────
+        // This used to be ONE global const "dotr-loadout-knight-v1". With more than one
+        // playable hero that is a bug with a name: every hero would load, and overwrite,
+        // the KNIGHT's W/E/R bar — Sylas would spawn holding Grom's melee kit and saving
+        // over it. The key is now derived from the wearer's class.
+        //
+        // MIGRATION — deliberately a NO-OP, by construction. The new shape is
+        // "dotr-loadout-" + <class> + "-v1", so the Knight's key resolves to
+        // "dotr-loadout-knight-v1" — BYTE-IDENTICAL to the old global key. An existing
+        // save's Knight bar is therefore read back unchanged with no copy step, no
+        // version bump and no window in which a mid-upgrade crash could lose it. Other
+        // classes start empty, which is correct: the old value was never theirs (it was
+        // the Knight's melee kit), and an empty slot falls back to that class's own stock
+        // Q/W/E/R def — exactly the behaviour WO-861 wants.
+        //
+        // CLERIC NOTE: HeroAbilities aliases Cleric -> the "mage" loadout, so a Cleric
+        // shares the Mage's bar key. That mirrors the ability system and is intended.
+
+        /// <summary>
+        /// The PlayerPrefs key for a class's W/E/R loadout ("dotr-loadout-knight-v1").
+        /// Single-sourced from <see cref="DeNelle.Core.State.EquipPrefKeys"/> so the New
+        /// Game reset erases the same keys this component writes.
+        /// </summary>
+        public static string PrefsKeyFor(string heroClass) =>
+            DeNelle.Core.State.EquipPrefKeys.LoadoutKeyFor(heroClass);
+
+        /// <summary>The key THIS hero persists under, resolved live from its class.</summary>
+        private string PrefsKey => PrefsKeyFor(ResolveClass());
+
+        // The key the currently-held _slots were read from. HeroAbilities resolves its
+        // class in ITS Awake and HeroBodySwapper.SetHeroClass can land later still, so a
+        // component that loaded in an undefined Awake order may have read the wrong key.
+        // EnsureCurrentKey re-reads (once) the moment the resolved key disagrees.
+        private string _loadedKey;
+
+        private HeroAbilities _abilities;
+
+        /// <summary>
+        /// The wearer's lowercase class key. HeroAbilities is the authority; when it is absent
+        /// (the HeroControlEnsurer EMERGENCY stand-in hero adds HeroLoadout on its own) or has
+        /// not resolved yet, fall back to the SAME source HeroAbilities' own Awake backstop
+        /// reads - GameState.HeroClass - so the two can never key off different classes. Only
+        /// a save with no class at all lands on the catalog default.
+        /// </summary>
+        private string ResolveClass()
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            string cls = _abilities != null ? _abilities.HeroClass : null;
+            if (!string.IsNullOrEmpty(cls)) return cls;
+
+            var svc = GameStateService.Instance;
+            var opt = (svc != null && svc.State != null) ? svc.State.HeroClass.ToNullable() : null;
+            if (opt.HasValue)
+            {
+                // Fully qualified: unqualified 'HeroClass' shadows to a string in this scope
+                // (same note HeroAbilities.Awake carries).
+                switch (opt.Value)
+                {
+                    case DeNelle.Core.State.HeroClass.Knight: return "knight";
+                    case DeNelle.Core.State.HeroClass.Ranger: return "ranger";
+                    case DeNelle.Core.State.HeroClass.Mage:   return "mage";
+                    // WO-226: the Cleric is a caster and reuses the Mage ability loadout,
+                    // so she shares the Mage's bar key too.
+                    case DeNelle.Core.State.HeroClass.Cleric: return "mage";
+                }
+            }
+            return AbilityCatalog.DefaultClass;
+        }
+
+        // Re-read from PlayerPrefs when the resolved class key has changed since the last
+        // load (Awake-order race, or a hot-swap to another hero on the same rig). Raising
+        // Changed here is safe: a handler that calls back in sees the keys now MATCHING,
+        // so the guard short-circuits and cannot recurse.
+        private void EnsureCurrentKey()
+        {
+            string key = PrefsKey;
+            if (string.Equals(_loadedKey, key, StringComparison.Ordinal)) return;
+            FlowTrace.Step("Loadout",
+                "class key changed '" + (_loadedKey ?? "<none>") + "' -> '" + key + "' - re-reading the bar.");
+            Load();
+        }
 
         // slot -> equipped abilityId. Q is never a key (it's the locked basic attack).
         private readonly Dictionary<AbilitySlot, string> _slots = new Dictionary<AbilitySlot, string>();
@@ -88,6 +168,7 @@ namespace DeNelle.Village
         public string AbilityIdForSlot(AbilitySlot slot)
         {
             if (slot == AbilitySlot.Q) return null;
+            EnsureCurrentKey();   // WO-861 Phase 0: self-heal an Awake-order class mis-read
             return _slots.TryGetValue(slot, out var id) ? id : null;
         }
 
@@ -101,6 +182,7 @@ namespace DeNelle.Village
         {
             if (slot == AbilitySlot.Q) return false;            // Q is the locked basic attack
             if (string.IsNullOrEmpty(abilityId)) return false;
+            EnsureCurrentKey();   // never write this hero's pick into another class's bar
 
             // §12 instrument-first: prove each step. Battle-lock is the single invariant the
             // model owns (every assign path funnels through Equip), so no UI/path can bypass it.
@@ -206,14 +288,18 @@ namespace DeNelle.Village
                 sb.Append(SlotKey(kvp.Key)).Append('=').Append(kvp.Value);
                 first = false;
             }
-            PlayerPrefs.SetString(PrefsKey, sb.ToString());
+            string key = PrefsKey;
+            _loadedKey = key;
+            PlayerPrefs.SetString(key, sb.ToString());
             PlayerPrefs.Save();
         }
 
         private void Load()
         {
             _slots.Clear();
-            string raw = PlayerPrefs.GetString(PrefsKey, string.Empty);
+            string key = PrefsKey;
+            _loadedKey = key;
+            string raw = PlayerPrefs.GetString(key, string.Empty);
             if (!string.IsNullOrEmpty(raw))
             {
                 foreach (var pair in raw.Split(';'))

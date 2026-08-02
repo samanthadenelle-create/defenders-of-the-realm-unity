@@ -26,11 +26,16 @@
 1. **Clear the `dotr-equip-*` PlayerPrefs keys in `ResetToNewGame()`** (`GameStateService.cs:802`) — weapon + off-hand
    + armor, per class (the keys `EquipWeaponById`/off-hand/armor write). A new game must not inherit an old equip.
 2. **Set the explicit class STARTER on new game, not auto-best.** The Knight starts with `knight_starter`
-   (Squire's Blade) + `knight_shield_starter` (Squire's Heater) — the intended sword+shield. Prefer a small
-   per-class "starter loadout" (id pair) applied on new game over `BestWeapon` (which picks Flameblade). This also
-   sets up the per-class starter for the new characters (WO set for Thrain/Sylas — ranger starter = Hunter's Shortbow).
+   (Squire's Blade) + `knight_shield_starter` (Squire's Heater) — the intended sword+shield, applied on new game
+   INSTEAD of `BestWeapon` (which picks Flameblade).
+   - **Formalize a per-class STARTER LOADOUT data structure (review-mandated)** — a small dictionary
+     `class → {mainHand, offHand}`, not an ad-hoc "if Knight then …". Seed Knight now; **this is the SHARED source of
+     truth WO-861 reuses** for Ranger (Hunter's Shortbow + offhand dagger) and Mage (starter staff). Leaving it
+     ad-hoc creates debt the moment the other two heroes land.
 3. **Guarantee the shield seed fires** on a fresh Knight (not skipped by `usePackage`/persisted off-hand when the
-   off-hand was just cleared in step 1).
+   off-hand was just cleared in step 1). **Review-flagged failure mode:** the classic "I cleared the prefs but the
+   seed is still skipped" — after the prefs clear, explicitly re-verify the `HeroBodySwapper.cs:629` seed path
+   actually runs (its `usePackage` / `EquippedOffHand == null` guards must still evaluate true on a fresh Knight).
 
 ### Part A acceptance
 - [ ] New Game (after having equipped an axe) starts the Knight with **Squire's Blade + Squire's Heater**, never the
@@ -57,13 +62,17 @@ and an eligibility FLAG (`classOk && levelOk`) that only locks, never hides.
 2. **Exclude the `blink_*` placeholders** from the shelf (they're the overload; `ff.blinkarmor` OFF already
    display-suppresses them in `PartyShopVM.cs:432` but the resolver still LISTS them — drop them in the resolver).
 3. **Cap to 2 per level** — new `vendors.json` field `"perLevelCap": 2` (mirror the `MaxReqLevel` plumbing
-   `:214`); after the eligible loop, bucket by `req.level` and keep the top 2 (by damageMult / defense). "Isolate to
-   only those" = also drop items far below the hero's level so the shelf shows the CURRENT tier's 2 picks, not a
-   history.
+   `:214`); after the eligible loop, bucket by `req.level` and keep the top 2. **Sort rule (review-flagged, document
+   it):** primary = `damageMult` (weapons) / `defense` (armor), with a **stable secondary sort** (e.g. by `id`) so the
+   pick is deterministic — raw `damageMult` alone can surface a thematically-odd weapon. A `starterPriority`/
+   `shelfPriority` field is a later refinement; for V1, damageMult + stable tiebreak, documented. "Isolate to only
+   those" = also drop items far below the hero's level so the shelf shows the CURRENT tier's 2 picks, not a history.
 4. **"Come back after leveling for new stock"** — the per-vendor `emptyLine` already exists (`vendors.json:34,45` →
    `EmptyLineFor` `:147` → rendered `PartyShopPanelMvvm.cs:750`); reword it for the "nothing new until you level"
    case. For a footer UNDER a non-empty capped list, add a `"footerLine"` to `VendorDef` + a `FooterLine` on
-   `PartyShopVM` (parallel to `EmptyLine`, `PartyShopVM.cs:338`) rendered by the panel.
+   `PartyShopVM` (parallel to `EmptyLine`, `PartyShopVM.cs:338`) rendered by the panel. **Review note:** the
+   footer-under-a-non-empty-list case is the one players see MOST after the cap (they have items, better ones unlock
+   later) — verify the panel actually RENDERS `footerLine` there, not just the empty-state line.
 5. **Same for armor** (armorer): identical cap/only-equippable/footer — the resolver's armor branch (`:237-251`) and
    the `armorer` vendor row. (Reminder from WO-840: the Armorer must be reachable; the armor category filter is
    already correct.)
@@ -74,6 +83,17 @@ and an eligibility FLAG (`classOk && levelOk`) that only locks, never hides.
 - [ ] A "return after leveling for new stock" line shows when appropriate (empty or footer).
 - [ ] The `perLevelCap`/`onlyEquippable`/`footerLine` are `vendors.json` data (tunable, no recompile to retune).
 - [ ] `CompileGate` + `DataRegression` green; a resolver EditMode case asserts ≤2 equippable rows per level.
+
+## Implementation order & WO-861 cross-check (review-mandated 2026-08-02)
+1. **Part A FIRST** — pure correctness; it unblocks clean new-game testing for everything else (incl. WO-861).
+2. **Write the regression BEFORE the fix (red→green):** the headless "equip an axe → ResetToNewGame → assert
+   equipped == Squire's Blade + Heater, and `dotr-equip-*` keys absent" case must FAIL red on today's code, then go
+   green after the fix. Make it a permanent DataRegression/EditMode test.
+3. **Shared starter loadout** (Part A2) is the source of truth WO-861 reuses — implement it as the dictionary, not ad-hoc.
+4. **Cross-check with WO-861 Phase 0** (once the roster un-gates): the thinned store must show only the SELECTED
+   class's equippable gear. Add an acceptance case: **"With Sylas (Ranger) selected, the Forge shows only ranger
+   arrows + the offhand dagger, ≤2 per level"** (and the Armorer only ranger-weight armor). The resolver already
+   roster/job-filters, so this should hold once 861 Phase 0 lands — verify it does.
 
 ## Files to edit
 - `Assets/_Modules/Core/State/GameStateService.cs` — `ResetToNewGame` clears `dotr-equip-*` (Part A1).

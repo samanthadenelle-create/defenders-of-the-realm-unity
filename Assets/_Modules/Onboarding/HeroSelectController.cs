@@ -103,8 +103,16 @@ namespace DeNelle.Onboarding
         // Which catalog slot is on screen (index into HeroCatalog.Heroes).
         private int _shownIndex;
 
-        // The single playable hero in V1 — Grom == HeroClass.Knight (KnightOnly ON).
-        private const HeroClass PlayableHero = HeroClass.Knight;
+        // WO-861 Phase 0: the playable set is no longer hardcoded HERE. It comes from the
+        // ONE roster truth, DeNelle.Core.State.PlayableHeroes, which the save service and
+        // the vendor shelf also read — so a hero cannot be selectable on this screen while
+        // the store still thinks he does not exist. Today that set is still { Knight }
+        // (ff.knightonly ON), so the screen looks and behaves exactly as before; when the
+        // flag opens, this screen widens with it and no layout code changes (the locked
+        // tag / stage scrim / CTA state all derive from IsPlayable).
+        //
+        // The screen OPENS on, and pre-persists, PlayableHeroes.Default (Grom == Knight).
+        private static HeroClass DefaultHero => PlayableHeroes.Default;
 
         // =====================================================================
         //  Lifecycle
@@ -248,11 +256,11 @@ namespace DeNelle.Onboarding
 
             // Open ON the playable hero so the screen starts on the selectable,
             // pre-selected Grom (not a locked class).
-            _shownIndex = IndexOf(PlayableHero);
+            _shownIndex = IndexOf(DefaultHero);
 
-            // Pre-persist the playable hero so GameState always has a valid class even
-            // if the player confirms without navigating (KnightOnly-forced; idempotent).
-            GameStateService.Instance?.ChooseHero(PlayableHero);
+            // Pre-persist the default playable hero so GameState always has a valid class
+            // even if the player confirms without navigating (playable-set checked; idempotent).
+            GameStateService.Instance?.ChooseHero(DefaultHero);
 
             // Paint the opening hero into the stage (sets selection + CTA state).
             PopulateStage(_shownIndex);
@@ -723,8 +731,10 @@ namespace DeNelle.Onboarding
         //  Small helpers
         // =====================================================================
 
-        /// <summary>True when a hero class is selectable in V1 (only the playable hero).</summary>
-        private static bool IsPlayable(HeroClass hero) => hero == PlayableHero;
+        /// <summary>True when a hero class is selectable — delegated to the ONE roster truth
+        /// (<see cref="PlayableHeroes"/>), which GameStateService.ChooseHero and the vendor
+        /// shelf read as well, so the three can never disagree about who exists.</summary>
+        private static bool IsPlayable(HeroClass hero) => PlayableHeroes.IsPlayable(hero);
 
         /// <summary>Catalog index for a hero class, or 0 when absent (never out of range).</summary>
         private static int IndexOf(HeroClass hero)
@@ -849,8 +859,9 @@ namespace DeNelle.Onboarding
 //      enters HeroSelect cold, the controller logs a warning and still routes on
 //      (the choice just is not saved).
 //
-//   4. CLASS COLUMN: every catalog hero is tappable for a stage preview; only the
-//      playable hero (Grom == Knight, FeatureFlags.KnightOnly) is confirmable. To
-//      unlock more heroes later, widen IsPlayable(HeroClass) — no layout change
-//      needed; the locked tag/scrim/CTA state all derive from it.
+//   4. CLASS COLUMN: every catalog hero is tappable for a stage preview; only a
+//      PLAYABLE hero is confirmable. WO-861 Phase 0: the playable set is
+//      DeNelle.Core.State.PlayableHeroes (still { Knight } while ff.knightonly is
+//      ON). To unlock more heroes, edit that ONE registry (or flip ff.knightonly) —
+//      no change here; the locked tag/scrim/CTA state all derive from IsPlayable.
 // =============================================================================

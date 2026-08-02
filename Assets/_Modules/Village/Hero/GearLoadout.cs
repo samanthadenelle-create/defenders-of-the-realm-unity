@@ -20,11 +20,86 @@
 // adds this component, so it works on every hero with no builder/scene change.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+// NOTE: DeNelle.Core.State is referenced FULLY QUALIFIED below (EquipPrefKeys) rather than
+// imported, so pulling in that namespace can never shadow a DeNelle.Village type here.
 
 namespace DeNelle.Village
 {
+    /// <summary>
+    /// One class's authored STARTING kit — the two hand slots a brand-new hero of that
+    /// class begins with. Pure data (ids into weapons.json); no behaviour.
+    /// </summary>
+    public sealed class StarterKit
+    {
+        /// <summary>MAIN-hand weapon id (weapons.json). Never null on an authored kit.</summary>
+        public readonly string MainHand;
+        /// <summary>OFF-hand / shield id (weapons.json), or null when the class starts one-handed-empty.</summary>
+        public readonly string OffHand;
+        /// <summary>
+        /// The highest hero level at which the STARTER main hand still wins over
+        /// <see cref="GearCatalog.BestWeapon"/>. Above it the auto-best power curve resumes,
+        /// so levelling still upgrades the hero's weapon exactly as before.
+        /// </summary>
+        public readonly int MainHandUpToLevel;
+
+        public StarterKit(string mainHand, string offHand, int mainHandUpToLevel = 1)
+        {
+            MainHand = mainHand;
+            OffHand = offHand;
+            MainHandUpToLevel = mainHandUpToLevel;
+        }
+    }
+
+    /// <summary>
+    /// WO-860 Part A2 — the per-class STARTER LOADOUT: the ONE source of truth for
+    /// "what does a brand-new &lt;class&gt; hold in each hand".
+    ///
+    /// WHY A TABLE AND NOT AN "if (Knight)" BRANCH (review-mandated): before this, a new
+    /// game's weapon came from <see cref="GearCatalog.BestWeapon"/>, i.e. the highest
+    /// damageMult the class qualifies for at that level — which at level 1 is
+    /// `knight_flameblade` (1.2), NOT the intended `knight_starter` "Squire's Blade" (1.0).
+    /// The intended opening kit is a DESIGN statement, not a stat maximum, so it has to be
+    /// authored. WO-861 then adds Ranger + Mage rows HERE and nothing else changes.
+    ///
+    /// SCOPE: this is the DEFAULT, not a choice. It is applied only when the player has
+    /// never persisted an equip for that slot (see GearLoadout.Refresh); the moment they
+    /// equip anything, their persisted pick wins forever after.
+    ///
+    /// WO-861 TODO (deliberately NOT pre-seeded): Ranger and Mage rows go here once their
+    /// gear ids EXIST in weapons.json — `ranger_arrow_plain` + `tripo_dagger_a` for Sylas,
+    /// a `mage_*` staff for Thrain (WO-861 Appendix A2/A1). Seeding ids that do not resolve
+    /// would turn a hard failure into a silent Warn-and-no-weapon, so they land WITH the data.
+    /// </summary>
+    public static class StarterLoadout
+    {
+        private static readonly Dictionary<string, StarterKit> Kits =
+            new Dictionary<string, StarterKit>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                // Grom the Knight — Squire's Blade + Squire's Heater (the owner's
+                // "on start should be a sword and shield"). Both ids verified present in
+                // weapons.json; knight_starter is also the ONE weapon EquipmentController
+                // maps natively to the sword_A prop, so the mesh attach is the proven path.
+                { "knight", new StarterKit("knight_starter", "knight_shield_starter") },
+            };
+
+        /// <summary>The authored starter kit for a class key ("knight"), or null when unauthored.</summary>
+        public static StarterKit For(string job)
+        {
+            if (string.IsNullOrEmpty(job)) return null;
+            return Kits.TryGetValue(job.Trim(), out var kit) ? kit : null;
+        }
+
+        /// <summary>The authored starter OFF-HAND id for a class, or null. Used by the body seed.</summary>
+        public static string OffHandFor(string job)
+        {
+            var kit = For(job);
+            return kit != null ? kit.OffHand : null;
+        }
+    }
+
     [DisallowMultipleComponent]
     public sealed class GearLoadout : MonoBehaviour
     {
@@ -106,11 +181,14 @@ namespace DeNelle.Village
         // Per-class PERSISTED equip (owner 2026-06-16): a manual equip from the equip UI
         // is saved under the wearer's class so it sticks across loads — for the hero AND
         // each companion. Keyed by class name so every party member keeps its own loadout.
-        private const string PrefWeaponKey  = "dotr-equip-weapon-";   // + <class>  (main hand)
-        private const string PrefArmorKey   = "dotr-equip-armor-";    // + <class>
-        private const string PrefOffHandKey = "dotr-equip-offhand-";  // + <class>  (off hand / shield)
-        private const string PrefRingKey    = "dotr-equip-ring-";     // + <class>  (WO-543 accessory)
-        private const string PrefAmuletKey  = "dotr-equip-amulet-";   // + <class>  (WO-543 accessory)
+        // WO-860 Part A1: the literals moved to DeNelle.Core.State.EquipPrefKeys so the
+        // WRITER (here) and the New-Game ERASER (GameStateService.ClearEquipPrefs) can never
+        // drift apart — a reset that misses a prefix is exactly how the stale axe survived.
+        private const string PrefWeaponKey  = DeNelle.Core.State.EquipPrefKeys.Weapon;    // + <class>  (main hand)
+        private const string PrefArmorKey   = DeNelle.Core.State.EquipPrefKeys.Armor;     // + <class>
+        private const string PrefOffHandKey = DeNelle.Core.State.EquipPrefKeys.OffHand;   // + <class>  (off hand / shield)
+        private const string PrefRingKey    = DeNelle.Core.State.EquipPrefKeys.Ring;      // + <class>  (WO-543 accessory)
+        private const string PrefAmuletKey  = DeNelle.Core.State.EquipPrefKeys.Amulet;    // + <class>  (WO-543 accessory)
 
         // WO-434: explicit "player removed this slot" sentinel. Written to the SAME per-class
         // PlayerPrefs key the Equip methods use, so a later Refresh/level-up honours the empty
@@ -162,7 +240,14 @@ namespace DeNelle.Village
             string job = CurrentJob();
             int level  = _progression != null ? _progression.Level : 1;
 
-            EquippedWeapon = GearCatalog.BestWeapon(job, level);
+            // WO-860 Part A2 — the class STARTER wins over auto-best on a FRESH hero.
+            // Precedence (highest first): persisted player choice > authored starter > auto-best.
+            // The starter only applies while the hero is at/below its authored level AND the
+            // player has never persisted a main-hand choice for this class, so:
+            //   * a new game opens on Squire's Blade, not Flameblade (auto-best's damageMult pick);
+            //   * levelling still auto-upgrades exactly as before (the starter stops applying);
+            //   * anything the player equips or explicitly un-equips still wins (ApplyPersistedEquip).
+            EquippedWeapon = ResolveStarterMainHand(job, level) ?? GearCatalog.BestWeapon(job, level);
             EquippedArmor  = GearCatalog.BestArmor(job, level);
 
             // A PERSISTED manual choice (from the equip UI) wins over auto-best, so gear
@@ -184,6 +269,45 @@ namespace DeNelle.Village
 
             ApplyStats(job);
             OnGearChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// WO-860 Part A2 — the authored STARTER main hand for this class, or null when it
+        /// does not apply (no authored kit / hero has out-levelled it / the player already
+        /// has a persisted choice / the id does not resolve or does not fit the class).
+        ///
+        /// The "no persisted choice" test is <see cref="PlayerPrefs.HasKey"/>, NOT a
+        /// non-empty value: an explicit un-equip persists the "__none__" sentinel, and a
+        /// player who deliberately fought bare-handed must not have a sword handed back.
+        /// </summary>
+        private static WeaponDef ResolveStarterMainHand(string job, int level)
+        {
+            var kit = StarterLoadout.For(job);
+            if (kit == null || string.IsNullOrEmpty(kit.MainHand)) return null;
+            if (level > kit.MainHandUpToLevel) return null;              // auto-best power curve resumes
+
+            string key = (job ?? string.Empty).ToLowerInvariant();
+            if (PlayerPrefs.HasKey(PrefWeaponKey + key)) return null;    // the player has chosen — never override
+
+            var w = GearCatalog.FindWeapon(kit.MainHand);
+            if (w == null)
+            {
+                FlowTrace.Warn("Gear",
+                    $"StarterLoadout['{job}'].MainHand = '{kit.MainHand}' is NOT in weapons.json - " +
+                    "falling back to auto-best. Author the row or fix the id.");
+                return null;
+            }
+            if (!GearCatalog.WeaponFitsClass(w, job))
+            {
+                FlowTrace.Warn("Gear",
+                    $"StarterLoadout['{job}'].MainHand = '{kit.MainHand}' does not fit class '{job}' " +
+                    "(job gate) - falling back to auto-best.");
+                return null;
+            }
+            FlowTrace.Step("Gear",
+                $"StarterLoadout applied: class='{job}' level={level} mainHand='{w.id}' " +
+                "(authored starter beats auto-best on a fresh hero).");
+            return w;
         }
 
         // Restore a per-class persisted manual equip over the auto-best pick. Validated:

@@ -626,9 +626,31 @@ namespace DeNelle.Village
             // separate shield prop is NOT seeded (baked wins — item e). Legacy Tripo Knight AND the
             // bare KnightV3 body (WEAPONS-IN-HANDS 2026-07-04) both get it — KnightV3 carries no baked
             // shield, so EquipmentController attaches shield_A to CC_Base_L_Hand from this seed.
-            if (cls == HeroClass.Knight && !usePackage && equipLoadout.EquippedOffHand == null)
-                Guard.Try("HeroBody", "seed knight default shield",
-                    () => equipLoadout.EquipOffHandById("knight_shield_starter"));
+            // WO-860 Part A3 — the seed is now DATA-DRIVEN off the shared per-class starter
+            // loadout (StarterLoadout.OffHandFor) instead of a hardcoded "if Knight then
+            // knight_shield_starter", so WO-861's Ranger (offhand dagger) inherits it with a
+            // data row and no code change. Same three guards, same order, unchanged semantics:
+            //   * an AUTHORED off-hand must exist for the class (Knight today; null = no seed);
+            //   * !usePackage — the Paladin package BAKES its shield into the mesh (a seeded
+            //     prop would be a second, wrongly-oriented shield). NOTE the LIVE Knight path
+            //     is BuildKnightV3Body -> WireHeroBody(usePackage:false), so this guard PASSES
+            //     on the shipped build (ff.knightv3 defaults ON and is checked BEFORE
+            //     ff.heropackage in Start()); only a V3 load-miss with ff.heropackage ON reaches
+            //     the baked-shield body, where skipping the seed is the correct behaviour;
+            //   * EquippedOffHand == null — never override a player's persisted choice. After
+            //     WO-860 A1's New-Game prefs clear this is TRUE on a fresh Knight:
+            //     GearLoadout.ApplyPersistedEquip reads dotr-equip-offhand-knight, the key was
+            //     just deleted so GetString returns null, neither restore branch runs, and the
+            //     field is left at its freshly-constructed null. (A2's starter deliberately
+            //     seeds only the MAIN hand, so it cannot pre-fill this slot and skip the seed.)
+            string starterOffHand = StarterLoadout.OffHandFor(PlayableHeroes.JobKey(cls));
+            if (!string.IsNullOrEmpty(starterOffHand) && !usePackage && equipLoadout.EquippedOffHand == null)
+                Guard.Try("HeroBody", "seed class default off-hand",
+                    () => equipLoadout.EquipOffHandById(starterOffHand));
+            else if (!string.IsNullOrEmpty(starterOffHand) && !usePackage)
+                FlowTrace.Step("HeroBody",
+                    $"off-hand seed SKIPPED - '{equipLoadout.EquippedOffHand.id}' already equipped " +
+                    "(persisted player choice wins).");
             // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping
             // in the full-body armored skinned-mesh and humanoid-retargeting it to THIS hero's
             // animator (hiding the base "HeroBody" while armored, restoring it on unequip). It

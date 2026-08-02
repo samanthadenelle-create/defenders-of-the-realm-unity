@@ -299,17 +299,11 @@ namespace DeNelle.Village
             _mana = Mathf.Min(_maxMana,
                 _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier * (1f + talentManaRegen));
 
-            // WO3: Mana Draught — drip the over-time mana restore while the window is open.
-            if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
-            {
-                _mana = Mathf.Min(_maxMana, _mana + _manaOverTimeRate * dt);
-                if (_mana >= _maxMana)
-                {
-                    _manaOverTimeRate = 0f;
-                    _manaOverTimeUntil = 0f;
-                    HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
-                }
-            }
+            // WO3: Mana Draught / WO-861 Manaweave — drip the over-time mana restore while the
+            // window is open. Extracted to TickManaOverTime so the drip is unit-testable with an
+            // explicit clock (EditMode never runs Update). Math is byte-identical to the inline
+            // block it replaced.
+            TickManaOverTime(Time.time, dt);
 
             // WO-614 hook 2: Oathmend HP-over-time drip. RegenTick is silent (no per-frame heal
             // VFX) and no-ops when full/dead, so the drip is safe to run every frame.
@@ -342,6 +336,44 @@ namespace DeNelle.Village
         {
             return !string.IsNullOrEmpty(abilityId) && _extraCooldown.TryGetValue(abilityId, out var v) ? v : 0f;
         }
+
+        // ── WO-861: the mana-over-time drip, factored out of Update ─────────────────────
+        // The drip is the SINGLE mana-over-time mechanism in the game (WO3 Mana Draught and
+        // WO-861 Manaweave both feed it through RestoreManaOverTime). Splitting the per-frame
+        // step out of Update() lets EditMode drive it with an explicit clock — Update never
+        // runs in an EditMode test, so an in-Update drip is untestable by construction.
+
+        /// <summary>Mana-per-second the over-time drip is currently delivering (0 = no drip).</summary>
+        public float ManaOverTimeRate => _manaOverTimeRate;
+
+        /// <summary><see cref="Time.time"/> at which the over-time drip window closes.</summary>
+        public float ManaOverTimeUntil => _manaOverTimeUntil;
+
+        /// <summary>
+        /// One frame of the mana-over-time drip at <paramref name="now"/> with step
+        /// <paramref name="dt"/>. Called every frame by <see cref="Update"/> with
+        /// (Time.time, Time.deltaTime); called directly by unit tests with a deterministic clock.
+        /// Closes the window (and clears the HUD marker) the moment mana reaches the cap.
+        /// </summary>
+        public void TickManaOverTime(float now, float dt)
+        {
+            if (now >= _manaOverTimeUntil || _manaOverTimeRate <= 0f || dt <= 0f) return;
+            _mana = StepManaOverTime(_mana, _maxMana, _manaOverTimeRate, dt);
+            if (_mana >= _maxMana)
+            {
+                _manaOverTimeRate = 0f;
+                _manaOverTimeUntil = 0f;
+                HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
+            }
+        }
+
+        /// <summary>
+        /// PURE per-frame step of the mana drip: mana + rate*dt, HARD-CAPPED at
+        /// <paramref name="maxMana"/>. The cap lives here so every caller (Update, tests,
+        /// any future drip source) is provably unable to overfill the pool.
+        /// </summary>
+        public static float StepManaOverTime(float mana, float maxMana, float ratePerSecond, float dt)
+            => Mathf.Min(maxMana, mana + ratePerSecond * dt);
 
         /// <summary>
         /// WO3 (Mana Draught): restore mana GRADUALLY — <paramref name="totalPct"/> percent
@@ -606,7 +638,11 @@ namespace DeNelle.Village
             string fxRaw = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
             // WO-750: gracebuff (Warden's Grace) is a support cast — like a heal, it must NOT
             // drive the melee attack trigger (F8-48: a support cast can't read as a sword swing).
-            bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime" || fxRaw == "gracebuff";
+            // WO-861: shield (Arcane Shell) + manaweave are SELF-CAST support, same rule as
+            // gracebuff — they must not drive the melee attack trigger. drainshot is offensive
+            // and deliberately stays out of this list (it swings/shoots).
+            bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime" || fxRaw == "gracebuff"
+                              || fxRaw == "shield" || fxRaw == "manaweave";
             if (!isHealCast) actor?.PlayAttack(0);
             // PER-ABILITY CAST ANIMATION (fix "swapped/equipped ability plays the wrong cast clip"):
             // the animation was selected by the pressed SLOT (castVariant == slot+1), so an ability
@@ -696,7 +732,15 @@ namespace DeNelle.Village
         {
             if (def.EffectEnum == AbilityEffect.Heal) return;   // self/non-targeted — don't turn
             // WO-750: Warden's Grace (gracebuff) is self-cast support — don't yaw toward a foe.
-            if ((def.Effect ?? string.Empty).Trim().ToLowerInvariant() == "gracebuff") return;
+            // WO-861: shield + manaweave are self-cast too (they parse to EffectEnum.Strike by
+            // default, so without this they would have yawed the hero at a random foe).
+            switch ((def.Effect ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "gracebuff":
+                case "shield":
+                case "manaweave":
+                    return;
+            }
 
             if (_loco == null) _loco = GetComponent<HeroLocomotion>();
             if (_loco == null) return;
@@ -758,6 +802,14 @@ namespace DeNelle.Village
                 case "healovertime": ResolveHealOverTime(def, origin); return;   // WO-614 hook 2
                 case "invuln":       ResolveInvuln(def, origin);       return;   // WO-614 hook 3
                 case "gracebuff":    ResolveWardensGrace(def, origin); return;   // WO-750 Warden's Grace
+                // ── WO-861 (Sylas + Thrain) — the ONLY new combat code in that program. Each of
+                //    the three routes through an EXISTING mechanism, never a parallel one:
+                //      shield    -> the Warden's Grace timed mitigation window (ApplyDamageShield)
+                //      manaweave -> the WO3 mana-over-time drip (RestoreManaOverTime)
+                //      drainshot -> the Strike branch (ResolveStrikeLike) + heal == damage DEALT
+                case "shield":       ResolveShield(def, origin);       return;   // WO-861 A4
+                case "manaweave":    ResolveManaweave(def, origin);    return;   // WO-861 A4
+                case "drainshot":    ResolveDrainshot(def, origin);    return;   // WO-861 A4 (PINNED)
             }
 
             DamageElement element = ElementOf(def);
@@ -818,7 +870,75 @@ namespace DeNelle.Village
 
                 case AbilityEffect.Strike:
                 case AbilityEffect.Snare:
+                    // WO-861: the body moved VERBATIM into ResolveStrikeLike so `drainshot` can run
+                    // the SAME strike (no copy of the targeting/projectile/damage path) and receive
+                    // the damage ACTUALLY dealt through the onDealt callback. onDealt == null here,
+                    // so the stock Strike/Snare behaviour is unchanged.
+                    ResolveStrikeLike(def, origin, atk, dmg, element, null);
+                    break;
+
+                case AbilityEffect.Aoe:
+                case AbilityEffect.Cleave:
                 {
+                    // WO-398 follow-up: cap the blast CENTRE to the caster's cast reach so a
+                    // melee class (knight Bulwark Slam / Lantern Charge) can't centre its slam
+                    // on the 45m auto-reticle target — it now lands on a nearby foe / itself.
+                    // Ranged classes have a 45m reach so this is a no-op for them (aim in range).
+                    Vector3 centre = ResolveBlastCentre(atk, origin);
+                    Blast(centre, def.Range, dmg, element, def.Freeze);
+                    SpawnVfx(centre, def, def.Range);
+                    // WO-VFX-003: Hovl impact/slam at the blast centre (Cleave/Aoe land instantly).
+                    PlayImpactVfxKey(def, centre);
+                    break;
+                }
+
+                case AbilityEffect.Meteor:
+                {
+                    // blast centred on the nearest enemy cluster to the aim point — WO-398
+                    // follow-up: bounded by the caster's cast reach (no-op at 45m for ranged
+                    // casters like the Mage; caps any melee meteor to its short reach).
+                    var foe = NearestHostile(atk, CastReach());
+                    // WO-125 Bug 1: Meteor's 1000u sweep already encloses the orbiting
+                    // dragon (it's a layer-8 IDamageable with a collider), so this is a
+                    // belt-and-braces fallback for the rare case the sweep misses it.
+                    if (foe == null && AimPointOverride == null)
+                        foe = LiveBoss();
+                    // WO-398 follow-up: when no foe is in reach, fall back to the reach-capped
+                    // centre (self for melee, the in-reach aim for ranged) — never the raw 45m aim.
+                    Vector3 target = foe != null ? foe.WorldPosition : ResolveBlastCentre(atk, origin);
+                    // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
+                    // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
+                    // landing rather than an instant area-pop. Same proven projectile pattern as
+                    // Strike/Snare; the RangedAttackVFX cast-burst covers the cast beat.
+                    var meteorDef = def;   // WO-VFX-003: capture for the impact-key play on landing
+                    LaunchProjectile(target, () =>
+                    {
+                        Blast(target, def.Range, dmg, element, 0f);
+                        SpawnVfx(target, def, def.Range);
+                        // WO-VFX-003: Hovl impact/explosion where the meteor lands.
+                        PlayImpactVfxKey(meteorDef, target);
+                    }, def.VfxProjectile, def.UnityColor);
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The single-target STRIKE/SNARE resolution — target acquisition, the visible projectile,
+        /// the landing damage + status/venom riders + juice. Extracted VERBATIM from
+        /// <see cref="ResolveEffect"/>'s Strike/Snare case (WO-861) so the new <c>drainshot</c>
+        /// effect runs the EXACT same strike instead of a second copy of it.
+        /// <para>
+        /// <paramref name="onDealt"/> (WO-861, PINNED) is invoked on the projectile's ARRIVAL with
+        /// the damage ACTUALLY dealt — <c>hpBefore - hpAfter</c> measured across the target's own
+        /// <c>TakeDamage</c>, i.e. AFTER the target's resists/mitigation and CLAMPED by its
+        /// remaining HP. It is not the nominal <c>def.Damage</c> and not the pre-mitigation
+        /// computed <paramref name="dmg"/>. Null (the stock Strike/Snare path) = no callback.
+        /// </para>
+        /// </summary>
+        private void ResolveStrikeLike(AbilityDef def, Vector3 origin, Vector3 atk, float dmg,
+                                       DamageElement element, System.Action<float> onDealt)
+        {
                     // Prefer the reticle's locked target (registry — exactly what the ring
                     // shows + companions hit); fall back to the OverlapSphere search. This
                     // fixes "ring locks but my hits do 0" — the physics sweep was finding a
@@ -884,6 +1004,16 @@ namespace DeNelle.Village
                         bool venom = HeroTalentModifiers.TryGetAbilityDotRider(
                             _heroClass, def.Id, "poison",
                             out float venomDps, out float venomSecs, out int venomStacks);
+                        // WO-861 A4 ARROW RIDER — resolved ONCE at cast, and ONLY when this cast is
+                        // the Ranger's arrow-using basic (see IsArrowRiderEligible). Captured into
+                        // the arrival closure so the rider lands with the arrow, not at cast time.
+                        // (declared up front, not as inline `out var`s — the closure below captures
+                        // them, and an out-variable born inside a short-circuited && is not
+                        // definitely assigned at the point the lambda is created.)
+                        string ammoFx = null;
+                        float ammoDps = 0f, ammoSecs = 0f, ammoSlowPct = 0f;
+                        bool arrowRider = IsArrowRiderEligible(def)
+                            && TryResolveAmmoRider(out ammoFx, out ammoDps, out ammoSecs, out ammoSlowPct);
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
@@ -893,66 +1023,320 @@ namespace DeNelle.Village
                             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
                                 $"ability hit '{(hitFoe as MonoBehaviour)?.name}' faction={hitFoe.Faction} " +
                                 $"dealtByHero=True amount={hitDmg:F1}.");
-                            hitFoe.TakeDamage(hitDmg, hitEl);
+                            // WO-861 (PINNED): measure the damage ACTUALLY dealt across the target's
+                            // own TakeDamage (post-resist, clamped by its remaining HP) so drainshot
+                            // can heal that exact number. Identity for every other caller.
+                            float dealt = ApplyMeasuredDamage(hitFoe, hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                             // WO-676 Venombrand: venom in the wound — stack-capped poison DoT.
                             if (venom) ApplyPoisonRider(hitFoe, venomDps, venomSecs, venomStacks);
+                            // WO-861 A4: the equipped arrow's on-hit rider (Ranger basic only).
+                            if (arrowRider) ApplyAmmoRider(hitFoe, ammoFx, ammoDps, ammoSecs, ammoSlowPct);
                             ReportRumble(hitDmg);   // WO-497: rumble on the projectile CONNECTING
                             // WO-VFX-003: Hovl impact key at the connection point (element-tinted).
                             PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
+                            onDealt?.Invoke(dealt);   // WO-861 drainshot: heal == damage DEALT
                         }, def.VfxProjectile, def.UnityColor);
+                    }
+                    else
+                    {
+                        // No target in reach — the strike deals nothing, so a drainshot heals
+                        // nothing. Report 0 rather than leaving the caller hanging (a silent
+                        // no-callback would read as "the heal never ran", §12 no-silent-failures).
+                        onDealt?.Invoke(0f);
                     }
                     // Cast beat only (origin SFX/VFX). Impact juice now comes from the projectile
                     // ARRIVAL (enemy TakeDamage), so no target hint -> no premature impact flash.
                     SpawnVfx(atk, def, 1.6f, null);
-                    break;
-                }
+        }
 
-                case AbilityEffect.Aoe:
-                case AbilityEffect.Cleave:
-                {
-                    // WO-398 follow-up: cap the blast CENTRE to the caster's cast reach so a
-                    // melee class (knight Bulwark Slam / Lantern Charge) can't centre its slam
-                    // on the 45m auto-reticle target — it now lands on a nearby foe / itself.
-                    // Ranged classes have a 45m reach so this is a no-op for them (aim in range).
-                    Vector3 centre = ResolveBlastCentre(atk, origin);
-                    Blast(centre, def.Range, dmg, element, def.Freeze);
-                    SpawnVfx(centre, def, def.Range);
-                    // WO-VFX-003: Hovl impact/slam at the blast centre (Cleave/Aoe land instantly).
-                    PlayImpactVfxKey(def, centre);
-                    break;
-                }
+        // =====================================================================
+        //  WO-861 — Sylas + Thrain: shield / manaweave / drainshot + the arrow rider.
+        //  These are the ONLY new combat effects in the WO-861 program. Every one of
+        //  them is a THIN wrapper over an existing mechanism:
+        //    • shield    -> the timed damage-mitigation window Warden's Grace declared
+        //                   (ApplyDamageShield) — one store, one reader, no second system.
+        //    • manaweave -> RestoreManaOverTime, the WO3 Mana Draught drip.
+        //    • drainshot -> ResolveStrikeLike (the real Strike branch) + a heal equal to
+        //                   the damage ACTUALLY dealt (post-mitigation, HP-clamped).
+        // =====================================================================
 
-                case AbilityEffect.Meteor:
-                {
-                    // blast centred on the nearest enemy cluster to the aim point — WO-398
-                    // follow-up: bounded by the caster's cast reach (no-op at 45m for ranged
-                    // casters like the Mage; caps any melee meteor to its short reach).
-                    var foe = NearestHostile(atk, CastReach());
-                    // WO-125 Bug 1: Meteor's 1000u sweep already encloses the orbiting
-                    // dragon (it's a layer-8 IDamageable with a collider), so this is a
-                    // belt-and-braces fallback for the rare case the sweep misses it.
-                    if (foe == null && AimPointOverride == null)
-                        foe = LiveBoss();
-                    // WO-398 follow-up: when no foe is in reach, fall back to the reach-capped
-                    // centre (self for melee, the in-reach aim for ranged) — never the raw 45m aim.
-                    Vector3 target = foe != null ? foe.WorldPosition : ResolveBlastCentre(atk, origin);
-                    // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
-                    // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
-                    // landing rather than an instant area-pop. Same proven projectile pattern as
-                    // Strike/Snare; the RangedAttackVFX cast-burst covers the cast beat.
-                    var meteorDef = def;   // WO-VFX-003: capture for the impact-key play on landing
-                    LaunchProjectile(target, () =>
-                    {
-                        Blast(target, def.Range, dmg, element, 0f);
-                        SpawnVfx(target, def, def.Range);
-                        // WO-VFX-003: Hovl impact/explosion where the meteor lands.
-                        PlayImpactVfxKey(meteorDef, target);
-                    }, def.VfxProjectile, def.UnityColor);
-                    break;
-                }
+        // ── The ONE timed incoming-damage mitigation window ────────────────────────────
+        // Written by BOTH Warden's Grace (WO-750, whose -20% DR was authored but never had a
+        // store) and the mage's Arcane Shell (`shield`). Read through DamageTakenMultiplier.
+        //
+        // ⚠ CONSUMER GAP (blunt, WO-861): HeroHealth.TakeDamage does NOT read this yet — its
+        // mitigation chain is gear armor -> talent block -> talent DR (+ Last Stand) -> invuln,
+        // none of which an ability can write. Until ONE line lands in HeroHealth.TakeDamage
+        //   `amount *= _abilities != null ? _abilities.DamageTakenMultiplier : 1f;`
+        // BOTH Warden's Grace's -20% and Arcane Shell's -40% are INERT in game. That file is
+        // another lane's; this is the producer half only. Do not mark `shield` shipped without it.
+        private float _damageTakenMult = 1f;   // 0..1 incoming-damage multiplier while the window is open
+        private float _damageShieldUntil;      // Time.time at which the mitigation window closes
+
+        /// <summary>
+        /// The incoming-damage MULTIPLIER the hero should currently take (1 = unmitigated,
+        /// 0.6 = -40%). Single public read of the one timed mitigation window; a damage
+        /// consumer multiplies incoming damage by this.
+        /// </summary>
+        public float DamageTakenMultiplier => DamageTakenMultiplierAt(Time.time);
+
+        /// <summary>Deterministic form of <see cref="DamageTakenMultiplier"/> — the multiplier
+        /// at an explicit clock value. Used by unit tests (EditMode has no advancing clock).</summary>
+        public float DamageTakenMultiplierAt(float now)
+            => now < _damageShieldUntil ? Mathf.Clamp(_damageTakenMult, MinDamageTakenMult, 1f) : 1f;
+
+        /// <summary><see cref="Time.time"/> at which the mitigation window expires (0 = none).</summary>
+        public float DamageShieldUntil => _damageShieldUntil;
+
+        private const float MinDamageTakenMult = 0.05f;   // never mitigate more than 95%
+        private const float ShieldDefaultReductionPct = 40f;  // A1 Arcane Shell: -40% (fallback if def.Damage is 0)
+        private const float ShieldDefaultSeconds      = 4f;   // A1 Arcane Shell: 4s     (fallback if def.Seconds is 0)
+
+        /// <summary>
+        /// Open (or refresh) the timed incoming-damage mitigation window by
+        /// <paramref name="reductionPct"/> percent for <paramref name="seconds"/>.
+        /// REFRESH SEMANTICS mirror Warden's Grace's shared HoT window: keep the STRONGER
+        /// mitigation and the LATER expiry, so a weak re-cast can never shorten or weaken a
+        /// stronger shield already up.
+        /// </summary>
+        public void ApplyDamageShield(float reductionPct, float seconds,
+                                      string statusId = "damage-shield", string statusLabel = "Ward")
+        {
+            if (reductionPct <= 0f || seconds <= 0f)
+            {
+                FlowTrace.Warn("HeroAbility",
+                    $"ApplyDamageShield ignored (pct={reductionPct}, secs={seconds}).");
+                return;
             }
+            float mult = Mathf.Clamp(1f - reductionPct / 100f, MinDamageTakenMult, 1f);
+            if (Time.time < _damageShieldUntil) mult = Mathf.Min(mult, _damageTakenMult);  // stronger wins
+            _damageTakenMult   = mult;
+            _damageShieldUntil = Mathf.Max(_damageShieldUntil, Time.time + seconds);
+            HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed(statusId, statusLabel, seconds, isBuff: true);
+            FlowTrace.Step("HeroAbility",
+                $"damage shield '{statusId}': incoming x{_damageTakenMult:0.00} (-{(1f - _damageTakenMult):P0}) " +
+                $"for {seconds:0.#}s. NOTE: inert until HeroHealth.TakeDamage reads DamageTakenMultiplier.");
+        }
+
+        /// <summary>
+        /// WO-861 — "shield" (Thrain's Arcane Shell): reduce incoming damage by
+        /// <c>def.damage</c> PERCENT for <c>def.seconds</c>. Routes through
+        /// <see cref="ApplyDamageShield"/>, the SAME window Warden's Grace writes — this is
+        /// Warden's Grace's mitigation minus the heal, not a second mitigation system.
+        /// (def.Damage is read as a PERCENT here, the same convention Warden's Grace uses for
+        /// its heal percent — see <see cref="ResolveWardensGrace"/>.)
+        /// </summary>
+        private void ResolveShield(AbilityDef def, Vector3 origin)
+        {
+            float pct  = def.Damage  > 0f ? def.Damage  : ShieldDefaultReductionPct;
+            float secs = def.Seconds > 0f ? def.Seconds : ShieldDefaultSeconds;
+            ApplyDamageShield(pct, secs, "arcane-shell", "Shell");
+            // Support cast beat: the class heal sting (no NEW VFX key — owner tags ability VFX
+            // and CLI maps key->hook verbatim; this hook is deliberately left untagged).
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
+            FlowTrace.Step("HeroAbility",
+                $"shield '{def.Id ?? def.Name}': -{pct:0}% incoming for {secs:0.#}s (Warden's Grace mitigation path).");
+        }
+
+        // ── Manaweave: the EXISTING WO3 mana drip, nothing else ───────────────────────
+        private const float ManaweaveDefaultMana    = 5f;   // A4: "restore ~5 mana over 3s"
+        private const float ManaweaveDefaultSeconds = 3f;
+
+        /// <summary>
+        /// WO-861 — restore <paramref name="manaAmount"/> ABSOLUTE mana over
+        /// <paramref name="seconds"/>. Converts to the percent-of-max the existing WO3 drip
+        /// speaks and calls <see cref="RestoreManaOverTime"/> — the one and only mana-over-time
+        /// mechanism (<c>_manaOverTimeRate</c> / <c>_manaOverTimeUntil</c>, ticked in
+        /// <see cref="TickManaOverTime"/>). No second drip is introduced.
+        /// </summary>
+        public void ApplyManaweave(float manaAmount, float seconds)
+        {
+            if (manaAmount <= 0f || seconds <= 0f)
+            {
+                FlowTrace.Warn("HeroAbility", $"ApplyManaweave ignored (mana={manaAmount}, secs={seconds}).");
+                return;
+            }
+            float pct = _maxMana > 0f ? 100f * manaAmount / _maxMana : 0f;
+            RestoreManaOverTime(pct, seconds);   // <- the EXISTING drip; re-entrancy/carry handled there
+            FlowTrace.Step("HeroAbility",
+                $"manaweave: +{manaAmount:0.0} mana over {seconds:0.#}s (= {pct:0}% of a {_maxMana:0} pool) " +
+                "via the existing mana-over-time drip.");
+        }
+
+        /// <summary>
+        /// WO-861 — "manaweave" (Thrain's mana-recovery active). <c>def.damage</c> carries the
+        /// ABSOLUTE mana restored, <c>def.seconds</c> the window.
+        /// </summary>
+        private void ResolveManaweave(AbilityDef def, Vector3 origin)
+        {
+            float mana = def.Damage  > 0f ? def.Damage  : ManaweaveDefaultMana;
+            float secs = def.Seconds > 0f ? def.Seconds : ManaweaveDefaultSeconds;
+            ApplyManaweave(mana, secs);
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
+        }
+
+        // ── Drainshot: heal == damage DEALT (PINNED) ──────────────────────────────────
+
+        /// <summary>
+        /// Deals <paramref name="amount"/> to <paramref name="foe"/> and returns the damage
+        /// ACTUALLY DEALT — <c>Hp</c> before minus <c>Hp</c> after, measured across the target's
+        /// own <see cref="IDamageable.TakeDamage"/>. That value is post-resist / post-mitigation
+        /// AND clamped by the target's remaining HP (a 34-damage hit on a 10 HP foe deals 10),
+        /// which is exactly the number WO-861 pins the drainshot heal to. Returns 0 for a null
+        /// or dead target. Never negative (a target that HEALS on hit cannot feed the drain).
+        /// </summary>
+        public static float ApplyMeasuredDamage(IDamageable foe, float amount, DamageElement element)
+        {
+            if (foe == null || !foe.IsAlive || amount <= 0f) return 0f;
+            float before = foe.Hp;
+            foe.TakeDamage(amount, element);
+            return Mathf.Max(0f, before - foe.Hp);
+        }
+
+        /// <summary>
+        /// WO-861 drainshot core (also the unit-test entry): deal <paramref name="amount"/> to
+        /// <paramref name="foe"/>, capture the damage ACTUALLY dealt, and heal the caster by
+        /// EXACTLY that. Returns the amount healed (== the damage dealt).
+        /// </summary>
+        public float ApplyDrainshot(IDamageable foe, float amount, DamageElement element)
+        {
+            float dealt = ApplyMeasuredDamage(foe, amount, element);
+            HealFromDrain(null, dealt, amount);
+            return dealt;
+        }
+
+        /// <summary>
+        /// The drain heal. <paramref name="dealt"/> is the damage ACTUALLY dealt;
+        /// <paramref name="nominal"/> is only logged so a mis-capture is one grep away.
+        /// The heal is deliberately NOT scaled by <c>HealAmountMultiplier</c>: WO-861 pins
+        /// "heal = damage dealt", and a class-wide heal talent would break that identity.
+        /// </summary>
+        private void HealFromDrain(AbilityDef def, float dealt, float nominal)
+        {
+            string id = def != null ? (def.Id ?? def.Name ?? "drainshot") : "drainshot";
+            if (dealt <= 0f)
+            {
+                FlowTrace.Step("HeroAbility",
+                    $"drainshot '{id}': 0 damage dealt (no target / already dead) -> no heal.");
+                return;
+            }
+            if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
+            _heroHealth?.Heal(dealt);
+            FlowTrace.Step("HeroAbility",
+                $"drainshot '{id}': dealt {dealt:0.0} (nominal {nominal:0.0}) -> healed caster {dealt:0.0} " +
+                "(heal == damage DEALT, post-mitigation + HP-clamped).");
+        }
+
+        /// <summary>
+        /// WO-861 — "drainshot" (Sylas's Healing Shot): runs the EXISTING Strike resolution
+        /// (<see cref="ResolveStrikeLike"/> — same targeting, same projectile, same damage
+        /// chain) and heals the caster for the damage that shot actually landed.
+        /// </summary>
+        private void ResolveDrainshot(AbilityDef def, Vector3 origin)
+        {
+            float dmg = DamageFor(def);
+            ResolveStrikeLike(def, origin, AimPointOverride ?? origin, dmg, ElementOf(def),
+                              dealt => HealFromDrain(def, dealt, dmg));
+        }
+
+        // ── WO-861 A4 — the ARROW RIDER (`ammoEffect`) hook ───────────────────────────
+
+        /// <summary>
+        /// SCOPING GATE (WO-861 acceptance: "arrow riders affect ONLY the Ranger's shot").
+        /// True only when (a) this hero's class is the RANGER and (b) the ability being resolved
+        /// is the class's LOCKED Q basic attack. The Knight's and Mage's basic attacks fail (a),
+        /// and the Ranger's own W/E/R fail (b), so an arrow rider provably cannot ride anything
+        /// but the arrow-using basic. Q is never loadout-swappable (see <see cref="Resolve"/>),
+        /// so the identity/id comparison against the class Q def is exact.
+        /// </summary>
+        public bool IsArrowRiderEligible(AbilityDef def)
+        {
+            if (def == null) return false;
+            if (!string.Equals(_heroClass, "ranger", System.StringComparison.OrdinalIgnoreCase)) return false;
+            var q = AbilityCatalog.Find(_heroClass, AbilitySlot.Q);
+            if (q == null) return false;
+            if (ReferenceEquals(q, def)) return true;
+            return !string.IsNullOrEmpty(def.Id) &&
+                   string.Equals(def.Id, q.Id, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Applies ONE equipped-arrow on-hit rider to a struck foe, reusing the EXISTING
+        /// primitives only — <see cref="BurnDoT"/> + <see cref="StatusEffect.Burn"/> for burn,
+        /// <see cref="ApplyPoisonRider"/> (stack-capped) for poison, <see cref="StatusEffect.Slow"/>
+        /// for frost. No new status system.
+        /// <para>
+        /// KNOWN LIMIT: <paramref name="slowPct"/> has NO consumer — <c>StatusEffect.Slow</c>
+        /// carries a duration but no magnitude, so Rimeshot's authored "-35%" cannot be honoured
+        /// without an enemy-side change. It is logged, not silently dropped.
+        /// </para>
+        /// </summary>
+        public void ApplyAmmoRider(IDamageable foe, string ammoEffect, float dps, float seconds, float slowPct)
+        {
+            if (foe == null || !foe.IsAlive || string.IsNullOrEmpty(ammoEffect)) return;
+            bool applied = false;
+            switch (ammoEffect.Trim().ToLowerInvariant())
+            {
+                case "burn":
+                case "fire":
+                    if (dps <= 0f || seconds <= 0f) return;
+                    foe.ApplyStatus(StatusEffect.Burn, seconds);
+                    StartCoroutine(BurnDoT(foe, dps, seconds));
+                    applied = true;
+                    break;
+                case "poison":
+                case "venom":
+                    ApplyPoisonRider(foe, dps, seconds, AmmoPoisonStacks);
+                    applied = true;
+                    break;
+                case "slow":
+                case "frost":
+                case "snare":
+                    if (seconds <= 0f) return;
+                    foe.ApplyStatus(StatusEffect.Slow, seconds);
+                    applied = true;
+                    if (slowPct > 0f)
+                        FlowTrace.Once("HeroAbility", "ammo-slowpct",
+                            $"arrow rider slow magnitude ({slowPct:0}%) has NO consumer - StatusEffect.Slow " +
+                            "is duration-only. Honouring duration; magnitude needs an enemy-side seam.");
+                    break;
+                default:
+                    FlowTrace.Once("HeroAbility", "ammo-unknown:" + ammoEffect,
+                        $"arrow rider '{ammoEffect}' is not a known ammoEffect (burn|poison|slow) - ignored.");
+                    break;
+            }
+            if (applied)
+                FlowTrace.Step("HeroAbility",
+                    $"arrow rider '{ammoEffect}' applied ({dps:0.#} dps / {seconds:0.#}s) to " +
+                    $"'{(foe as MonoBehaviour)?.name}'.");
+        }
+
+        private const int AmmoPoisonStacks = 2;   // A2 Venomtip: "poison (dot x2)"
+
+        /// <summary>
+        /// Resolves the EQUIPPED arrow's on-hit rider. This is the SINGLE reader of the
+        /// <c>ammoEffect</c> / <c>ammoDps</c> / <c>ammoSeconds</c> / <c>ammoSlowPct</c> weapon
+        /// fields WO-861 A4 specifies.
+        /// <para>
+        /// ⚠ DATA GAP (WO-861, blunt): <see cref="WeaponDef"/> does NOT declare those four fields
+        /// yet, and both <c>GearCatalog.cs</c> (where WeaponDef lives) and <c>weapons.json</c> are
+        /// owned by another lane. Until they land this returns false and NO rider is ever applied —
+        /// the hook, the scoping gate and the appliers above are complete and tested, the data is
+        /// not. See the WO-861 report for the exact remaining data work.
+        /// </para>
+        /// </summary>
+        private bool TryResolveAmmoRider(out string effect, out float dps, out float seconds, out float slowPct)
+        {
+            effect = null; dps = 0f; seconds = 0f; slowPct = 0f;
+            if (_gear == null) TryGetComponent(out _gear);
+            var w = _gear != null ? _gear.EquippedWeapon : null;
+            if (w == null) return false;
+            FlowTrace.Once("HeroAbility", "ammo-fields-missing",
+                $"arrow rider: equipped '{w.id}' carries no ammoEffect/ammoDps/ammoSeconds/ammoSlowPct " +
+                "(WeaponDef does not declare them yet) - no rider applied. WO-861 A4 data work is OWED.");
+            return false;
         }
 
         // =====================================================================
@@ -1330,9 +1714,12 @@ namespace DeNelle.Village
             _hpOverTimeRate  = Mathf.Max(_hpOverTimeRate, hotPerSec);
             _hpOverTimeUntil = Mathf.Max(_hpOverTimeUntil, Time.time + secs);
 
-            // HUD buff marker for the Grace Shield window (the -20% DR reads this once the
-            // HeroHealth mitigation seam lands; until then the marker still shows the shield is up).
-            HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed("grace-shield", "Grace", secs, isBuff: true);
+            // WO-861: the -GraceDamageReduction incoming-damage half of the Grace Shield now
+            // WRITES the one timed mitigation window (ApplyDamageShield) — the SAME store the
+            // mage's `shield` effect uses. This is what makes `shield` "Warden's Grace minus the
+            // heal" rather than a second mitigation system. ApplyDamageShield also raises the
+            // HUD buff marker for the window (it replaced the standalone ApplyNamed call here).
+            ApplyDamageShield(GraceDamageReduction * 100f, secs, "grace-shield", "Grace");
 
             // Soft heal chime + the FULL-PREFAB Hovl heal read (owner 2026-07-24: use the full
             // multi-layer prefabs, not flattened keys). Heal_Cast = a radiant cast burst at chest
@@ -1349,7 +1736,8 @@ namespace DeNelle.Village
             ReportRumble(heal);
             FlowTrace.Step("HeroAbility",
                 $"Warden's Grace {def.Id}: heal {heal:0} ({baseHeal:0}+{bonusHeal:0} def={defense:P0}) + " +
-                $"Grace Shield {secs:0}s (HoT {hotPerSec:0.0}/s; -{GraceDamageReduction:P0} DR PENDING HeroHealth seam).");
+                $"Grace Shield {secs:0}s (HoT {hotPerSec:0.0}/s; -{GraceDamageReduction:P0} DR now stored in the " +
+                "shared mitigation window - still INERT until HeroHealth.TakeDamage reads DamageTakenMultiplier).");
         }
 
         /// <summary>WO-494: the full damage chain (talent x level x timing x weapon) for a def's base damage.</summary>
@@ -1478,6 +1866,12 @@ namespace DeNelle.Village
                 case "meteor":       return "skill2";                 // area/sweep -> Cast_w
                 case "dot":
                 case "healovertime": return "cast";                  // channel -> generic Cast
+                // WO-861: the three new shapes reuse the EXISTING baked cast variants —
+                // self-buff/support reads as the heal cast; the drain shot is a single-target
+                // strike, so it reads as skill1 (the same clip Quick Shot plays).
+                case "shield":
+                case "manaweave":    return "castHeal";              // self-cast support -> Cast_e
+                case "drainshot":    return "skill1";                // single-target strike -> Cast_q
                 // Shapes with no dedicated clip yet (content/mocap WO): intent keywords that
                 // fall through VariantForAnimKey to the slot-clip fallback.
                 case "dash":         return "leap";

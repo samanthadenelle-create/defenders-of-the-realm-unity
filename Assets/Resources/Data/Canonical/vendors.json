@@ -1,12 +1,16 @@
 {
-  "_comment": "WO-598 vendor/shops REGISTRY - the per-vendor STOCK QUERY (the honest shelf). Loaded by DeNelle.Village.VendorRegistry via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). Each vendor's shelf is a QUERY over the item catalogs (weapons/armor/accessories/consumables/materials), never a hardcoded list: 'categories' names which catalog bands the vendor stocks, 'classFilter':'roster' drops items no CURRENTLY-PLAYABLE class can use (Knight-only V1 via ff.knightonly -> no Mage wands at the Forge), 'maxReqLevel' (0 = uncapped) tier-gates the shelf, and 'emptyLine' is the AUTHORED never-raw empty-state line. VendorStockContract.AllowedFor consults this registry FIRST (categories -> GearKind flags) so the legacy shop, the MVVM PartyShop, ShopCatalog and the AutoPilot oracle all read ONE truth.",
+  "_comment": "WO-598 vendor/shops REGISTRY - the per-vendor STOCK QUERY (the honest shelf). Loaded by DeNelle.Village.VendorRegistry via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). Each vendor's shelf is a QUERY over the item catalogs (weapons/armor/accessories/consumables/materials), never a hardcoded list: 'categories' names which catalog bands the vendor stocks, 'classFilter':'roster' drops items no CURRENTLY-PLAYABLE class can use (the playable set is DeNelle.Core.State.PlayableHeroes -> no Mage wands at the Forge while ff.knightonly is ON), 'maxReqLevel' (0 = uncapped) tier-gates the shelf, and 'emptyLine' is the AUTHORED never-raw empty-state line. WO-860 adds the THINNED-shelf knobs (onlyEquippable / perLevelCap / excludeIdPrefixes / footerLine) so the store retunes as DATA with no recompile. VendorStockContract.AllowedFor consults this registry FIRST (categories -> GearKind flags) so the legacy shop, the MVVM PartyShop, ShopCatalog and the AutoPilot oracle all read ONE truth.",
   "_schemaNotes": {
     "id": "vendor/structure id (buildings.json isShoppable id, the vendorContext DialogueService.PlayStructure routes). Matched exact first, then substring (so 'blacksmith_forge' finds 'forge').",
     "layout": "gear | goods | jeweler - which shelf PRESENTATION the shop binds (gear = weapons/armor + party fit; goods = flat consumables/materials list, no equip context; jeweler = rings/amulets/gems).",
     "categories": "weapon | armor | consumable | material | ring | amulet | accessory | gem | craftable - the catalog bands this vendor's query pulls.",
     "classFilter": "roster (default: only items obtainable by the current playable roster - Knight-only under ff.knightonly) | none.",
-    "maxReqLevel": "0 = uncapped; N = don't stock items requiring level > N (tier gate). Level-locked rows still SHOW as 'Requires Lv N'.",
-    "emptyLine": "authored 'come back later' line shown when the query resolves 0 items - a vendor never renders a raw empty grid."
+    "maxReqLevel": "0 = uncapped; N = don't stock items requiring level > N (tier gate). Level-locked rows still SHOW as 'Requires Lv N' unless onlyEquippable is true.",
+    "emptyLine": "authored 'come back later' line shown when the query resolves 0 items - a vendor never renders a raw empty grid.",
+    "onlyEquippable": "WO-860. true = HIDE rows the shopper cannot equip right now (wrong class / under-level) instead of listing them LOCKED. false/absent = the pre-860 aspiration shelf. Reuses the EXISTING equip gate (WeaponFitsClass / ArmorFitsClass / req.level) as the show-filter - the gate is correct, only its consequence changes.",
+    "perLevelCap": "WO-860. Max weapon/armor rows stocked PER REQUIRED LEVEL (owner: 'only 2 options on each new level'). 0/absent = uncapped. WHICH rows survive is a documented deterministic sort in VendorStockResolver.EmitCapped: bucket by req.level, then power DESCENDING (damageMult for weapons, defense for armor), tie-broken by id ORDINAL ASCENDING so the pick never depends on catalog row order, locale or device.",
+    "excludeIdPrefixes": "WO-860. Item-id prefixes this vendor never stocks (case-insensitive). 'blink_' keeps the ~65 art-pack placeholder rows off the player-facing shelf WITHOUT editing the catalogs (they stay ownable/equippable). Empty/absent = stock everything.",
+    "footerLine": "WO-860. The 'come back after leveling for new stock' line rendered UNDER a NON-EMPTY capped list - the case a player hits most once perLevelCap is on (they have wares; better ones unlock later). Distinct from emptyLine, which covers 0 results. Absent = render no footer."
   },
   "version": 1,
   "vendors": [
@@ -31,7 +35,13 @@
       ],
       "classFilter": "roster",
       "maxReqLevel": 0,
-      "emptyLine": "The coals are hot but the racks are bare - come back once I've hammered out the next batch."
+      "onlyEquippable": true,
+      "perLevelCap": 2,
+      "excludeIdPrefixes": [
+        "blink_"
+      ],
+      "emptyLine": "Nothing on the rack fits your hand yet - come back after you level up and I'll have new stock.",
+      "footerLine": "That's all I can offer at your level - come back after you level up for new stock."
     },
     {
       "id": "armorer",
@@ -42,7 +52,13 @@
       ],
       "classFilter": "roster",
       "maxReqLevel": 0,
-      "emptyLine": "Nothing on the racks would fit you today - come back after the next fitting."
+      "onlyEquippable": true,
+      "perLevelCap": 2,
+      "excludeIdPrefixes": [
+        "blink_"
+      ],
+      "emptyLine": "Nothing on the racks would fit you today - come back after you level up and I'll have new stock.",
+      "footerLine": "That's every fit I have at your level - come back after you level up for new stock."
     },
     {
       "id": "jeweler",

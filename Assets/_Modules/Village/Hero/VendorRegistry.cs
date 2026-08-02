@@ -47,6 +47,39 @@ namespace DeNelle.Village
         [JsonProperty("classFilter")] public string ClassFilter;    // "roster" (default) | "none"
         [JsonProperty("maxReqLevel")] public int MaxReqLevel;       // 0 = uncapped
         [JsonProperty("emptyLine")] public string EmptyLine;
+
+        // ── WO-860 Part B — the THINNED shelf (all four are DATA, not constants, so the
+        //    owner can retune the store without a recompile). Every one defaults to the
+        //    pre-860 behaviour when absent, so an unmigrated/3rd-party vendor row is unchanged.
+
+        /// <summary>
+        /// true = HIDE rows the shopper cannot equip right now (wrong class / under-level)
+        /// instead of listing them LOCKED. Default false = the pre-860 "aspiration" shelf.
+        /// </summary>
+        [JsonProperty("onlyEquippable")] public bool OnlyEquippable;
+
+        /// <summary>
+        /// Max weapon/armor rows to stock PER REQUIRED LEVEL (owner: "only 2 options on each
+        /// new level"). 0 = uncapped (pre-860). See VendorStockResolver.ApplyPerLevelCap for
+        /// the documented sort that decides WHICH survive.
+        /// </summary>
+        [JsonProperty("perLevelCap")] public int PerLevelCap;
+
+        /// <summary>
+        /// Item-id prefixes this vendor never stocks (case-insensitive). Used to keep the
+        /// ~65 "blink_*" placeholder rows — art-pack filler that is real in the catalog but
+        /// not authored content — off the player-facing shelf without editing the catalogs
+        /// (WO-860 "do NOT edit the weapon/armor catalogs to fix the overload").
+        /// Empty/absent = stock everything, exactly as before.
+        /// </summary>
+        [JsonProperty("excludeIdPrefixes")] public List<string> ExcludeIdPrefixes = new List<string>();
+
+        /// <summary>
+        /// The "come back after levelling for new stock" line shown UNDER a NON-EMPTY capped
+        /// list (the case a player hits most once the cap is on: they have wares, better ones
+        /// unlock later). Distinct from <see cref="EmptyLine"/>, which covers 0 results.
+        /// </summary>
+        [JsonProperty("footerLine")] public string FooterLine;
     }
 
     [Serializable]
@@ -95,6 +128,14 @@ namespace DeNelle.Village
         {
             var v = Find(vendorContext);
             return v != null && !string.IsNullOrEmpty(v.EmptyLine) ? v.EmptyLine : null;
+        }
+
+        /// <summary>WO-860: the authored under-a-non-empty-list footer ("come back after you
+        /// level"), or null when unregistered/unauthored. Null means "render no footer".</summary>
+        public static string FooterLineFor(string vendorContext)
+        {
+            var v = Find(vendorContext);
+            return v != null && !string.IsNullOrEmpty(v.FooterLine) ? v.FooterLine : null;
         }
 
         private static void EnsureLoaded()

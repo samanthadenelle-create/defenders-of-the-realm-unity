@@ -15,8 +15,18 @@
 // emptyLine + layout) from VendorRegistry and resolves it against:
 //   • weapons/armor  — GearCatalog, ROSTER-FILTERED: an item no currently-playable
 //     class can use (Mage wands under ff.knightonly) is EXCLUDED, never listed.
-//     Level-gated rows are still returned locked ("Requires Lv N" — aspiration is
-//     fine, wrong-class is not; owner rule).
+//     Level-gated rows are returned locked ("Requires Lv N" — aspiration is fine,
+//     wrong-class is not; owner rule) UNLESS the vendor opts into WO-860's
+//     "onlyEquippable", which hides them as well.
+//
+// WO-860 — THE THINNED SHELF (owner felt-test 2026-08-02: "look at all the options
+// in store for weapons and thin it out so there are only 2 options on each new
+// level, isolate to only those, only show ones they can equip"). Four DATA knobs on
+// the vendors.json row drive it, all inert at their defaults:
+//   onlyEquippable    — hide, don't lock, what the shopper can't equip now.
+//   perLevelCap       — at most N rows per REQUIRED LEVEL (see EmitCapped's sort).
+//   excludeIdPrefixes — drop placeholder bands ("blink_") without touching catalogs.
+//   footerLine        — the "come back after you level" cue under a capped list.
 //   • consumables    — ConsumableCatalog (Market's potions/food/tents).
 //   • materials/gems — MaterialCatalog (gems = the crystal band, Jeweler stock).
 //   • rings/amulets  — GearCatalog.Accessories by slot (the v26 equip slots).
@@ -96,15 +106,22 @@ namespace DeNelle.Village.Hero
     public static class VendorStockResolver
     {
         // ── Roster (which classes the player can CURRENTLY play) ────────────────
-        // V1 canon = Knight-only (ff.knightonly, default ON). Flipping the flag restores
-        // the full roster with zero data changes — the shelf follows the roster.
-
-        private static readonly string[] KnightOnlyRoster = { "knight" };
-        private static readonly string[] FullRoster = { "knight", "mage", "ranger", "cleric" };
+        // WO-861 Phase 0: the roster is no longer this file's own copy of the rule
+        // ("KnightOnly ? {knight} : {knight,mage,ranger,cleric}"). It is delegated to the
+        // ONE roster truth, DeNelle.Core.State.PlayableHeroes, which the hero-select screen
+        // and GameStateService.ChooseHero also read — so the shelf can never stock gear for
+        // a hero the select screen says does not exist (or hide gear for one it offers).
+        //
+        // BEHAVIOUR TODAY IS IDENTICAL: ff.knightonly defaults ON => { "knight" }.
+        // When the flag opens, the set becomes { knight, ranger, mage }. That is one row
+        // NARROWER than this file's old FullRoster, which also listed "cleric" — deliberate:
+        // the Cleric has no authored kit and is not playable, so cleric-ONLY weapons are
+        // noise on the shelf (armor is unaffected — it gates by WEIGHT, and the Cleric
+        // shares the Knight's "heavy"). See PlayableHeroes' header note.
 
         /// <summary>The classes the current build's player can play (lowercase job keys).</summary>
         public static IReadOnlyList<string> RosterClasses() =>
-            DeNelle.Core.FeatureFlags.KnightOnly ? KnightOnlyRoster : FullRoster;
+            DeNelle.Core.State.PlayableHeroes.JobKeys();
 
         /// <summary>True when SOME roster class may wield this weapon ("any"/empty job always fits).</summary>
         public static bool WeaponRosterObtainable(WeaponDef w, IReadOnlyList<string> roster)
@@ -152,6 +169,20 @@ namespace DeNelle.Village.Hero
                 : "Nothing in stock right now - come back after the next delivery.";
         }
 
+        /// <summary>
+        /// WO-860 Part B4 — the vendor's authored "come back after levelling for new stock"
+        /// line, shown UNDER a NON-EMPTY (capped) list. Null when unauthored/unregistered,
+        /// which means "render no footer" — this is deliberately NOT defaulted, because a
+        /// vendor whose shelf is not capped has nothing to promise.
+        ///
+        /// PRESENTATION NOTE (outstanding, other lane): PartyShopVM/PartyShopPanelMvvm must
+        /// bind this the way they already bind <see cref="EmptyLineFor"/> (PartyShopVM.cs
+        /// EmptyLine property + the Status line / an extra row in the panel's list builder).
+        /// The DATA + this accessor are complete; the render wire is a two-line VM/View change.
+        /// </summary>
+        public static string FooterLineFor(string vendorContext) =>
+            VendorRegistry.FooterLineFor(vendorContext);
+
         /// <summary>The registry displayName (panel header), or null when unregistered.</summary>
         public static string DisplayNameFor(string vendorContext)
         {
@@ -197,7 +228,11 @@ namespace DeNelle.Village.Hero
         /// <summary>
         /// Resolve the vendor's stock query for the given shopper (<paramref name="job"/> at
         /// <paramref name="level"/>). Roster-unobtainable gear is EXCLUDED; level-gated gear is
-        /// returned locked ("Requires Lv N"). Never null, never throws (Guard.TryEach per loop).
+        /// returned locked ("Requires Lv N") UNLESS the vendor sets <c>onlyEquippable</c>, in
+        /// which case it is hidden too (WO-860 B1). The gear bands are additionally filtered by
+        /// <c>excludeIdPrefixes</c> and thinned to <c>perLevelCap</c> rows per required level
+        /// (see <see cref="EmitCapped"/> for the documented sort). Never null, never throws
+        /// (Guard.TryEach per loop).
         /// <paramref name="rosterOverride"/> lets the regression pin a deterministic roster.
         /// </summary>
         public static IReadOnlyList<VendorWare> Resolve(string vendorContext, string job, int level,
@@ -213,6 +248,13 @@ namespace DeNelle.Village.Hero
                 !string.Equals(vendor.ClassFilter, "none", StringComparison.OrdinalIgnoreCase);
             int levelCap = vendor != null ? vendor.MaxReqLevel : 0;   // 0 = uncapped
 
+            // ── WO-860 Part B: the THINNED shelf knobs, all read from vendors.json ──
+            // Every one is inert at its default, so an unregistered vendor (vendor == null)
+            // and any row that has not opted in keep the exact pre-860 shelf.
+            bool onlyEquippable = vendor != null && vendor.OnlyEquippable;
+            int perLevelCap = vendor != null ? vendor.PerLevelCap : 0;                 // 0 = uncapped
+            var excludePrefixes = vendor != null ? vendor.ExcludeIdPrefixes : null;    // e.g. ["blink_"]
+
             foreach (var rawCat in categories)
             {
                 string cat = (rawCat ?? string.Empty).Trim().ToLowerInvariant();
@@ -220,6 +262,10 @@ namespace DeNelle.Village.Hero
                 {
                     case "weapon":
                     case "weapons":
+                    {
+                        // Collect first, THEN cap: the per-level cap has to see the whole
+                        // eligible set for a level before it can keep the top N of it.
+                        var picked = new List<ShelfPick>();
                         Guard.TryEach("Vendor", "stock weapon", GearCatalog.AllWeapons(), w =>
                         {
                             if (w == null) return;
@@ -227,28 +273,42 @@ namespace DeNelle.Village.Hero
                             // aspiration, it's noise — excluded, never a locked row.
                             if (rosterFilter && !WeaponRosterObtainable(w, roster)) return;
                             if (OverLevelCap(w.req, levelCap)) return;
+                            // WO-860 B2: authored-content filter (drops the blink_* placeholders).
+                            if (IsExcludedId(w.id, excludePrefixes)) return;
                             bool classOk = string.IsNullOrEmpty(job) || GearCatalog.WeaponFitsClass(w, job);
                             bool levelOk = MeetsLevel(w.req, level);
-                            result.Add(new VendorWare(VendorWareKind.Weapon, w.id,
+                            // WO-860 B1: HIDE what the shopper cannot equip, instead of a locked row.
+                            // Reuses the EXISTING equip gate (WeaponFitsClass/MeetsLevel) as the
+                            // show-filter — the gate is correct; only its consequence changes.
+                            if (onlyEquippable && !(classOk && levelOk)) return;
+                            picked.Add(new ShelfPick(w.id, ReqLevel(w.req), w.damageMult,
                                 classOk && levelOk, LockReason(classOk, levelOk, Cap(w.job), w.req)));
                         });
+                        EmitCapped(result, VendorWareKind.Weapon, picked, perLevelCap, "weapon");
                         break;
+                    }
 
                     case "armor":
                     case "armors":
+                    {
+                        var picked = new List<ShelfPick>();
                         Guard.TryEach("Vendor", "stock armor", GearCatalog.AllArmors(), a =>
                         {
                             if (a == null) return;
                             if (rosterFilter && !ArmorRosterObtainable(a, roster)) return;
                             if (OverLevelCap(a.req, levelCap)) return;
+                            if (IsExcludedId(a.id, excludePrefixes)) return;
                             bool classOk = GearCatalog.ArmorFitsClass(a, job);
                             bool levelOk = MeetsLevel(a.req, level);
+                            if (onlyEquippable && !(classOk && levelOk)) return;
                             string wt = (a.weight ?? string.Empty).Trim();
-                            result.Add(new VendorWare(VendorWareKind.Armor, a.id,
+                            picked.Add(new ShelfPick(a.id, ReqLevel(a.req), a.defense,
                                 classOk && levelOk,
                                 LockReason(classOk, levelOk, wt.Length == 0 ? "other heroes" : Cap(wt) + " armor", a.req)));
                         });
+                        EmitCapped(result, VendorWareKind.Armor, picked, perLevelCap, "armor");
                         break;
+                    }
 
                     case "consumable":
                     case "consumables":
@@ -315,6 +375,8 @@ namespace DeNelle.Village.Hero
             string vendorId = vendor != null ? vendor.Id : (vendorContext ?? "<none>");
             string queryStr = $"cats=[{string.Join(",", categories)}] roster=[{string.Join(",", roster)}]" +
                               $" classFilter={(rosterFilter ? "roster" : "none")} maxReqLevel={levelCap}" +
+                              $" onlyEquippable={onlyEquippable} perLevelCap={perLevelCap}" +
+                              $" exclude=[{(excludePrefixes != null ? string.Join(",", excludePrefixes) : string.Empty)}]" +
                               $" job='{job}' lvl={level} layout={LayoutFor(vendorContext)}";
             FlowTrace.Step("Vendor", $"{vendorId} resolved {result.Count} items (query: {queryStr})");
             if (result.Count == 0)
@@ -322,6 +384,124 @@ namespace DeNelle.Village.Hero
                     $"{vendorId} resolved EMPTY - authored emptyLine shown: \"{EmptyLineFor(vendorContext)}\"");
 
             return result;
+        }
+
+        // ── WO-860 Part B3: the per-level cap ────────────────────────────────────
+
+        /// <summary>One candidate shelf row, carrying the two keys the cap sorts on.</summary>
+        private readonly struct ShelfPick
+        {
+            public readonly string Id;
+            /// <summary>The row's REQUIRED level — the bucket key ("2 options on each new level").</summary>
+            public readonly int ReqLevel;
+            /// <summary>The ranking stat: damageMult for weapons, defense for armor.</summary>
+            public readonly float Power;
+            public readonly bool Eligible;
+            public readonly string LockReason;
+
+            public ShelfPick(string id, int reqLevel, float power, bool eligible, string lockReason)
+            {
+                Id = id;
+                ReqLevel = reqLevel;
+                Power = power;
+                Eligible = eligible;
+                LockReason = lockReason;
+            }
+        }
+
+        /// <summary>
+        /// Buckets the candidates by REQUIRED LEVEL, keeps the top <paramref name="perLevelCap"/>
+        /// of each bucket, and emits them into <paramref name="result"/>.
+        ///
+        /// THE SORT RULE (documented because it decides what the player sees, and an
+        /// unspecified one silently changes with catalog/enumeration order):
+        ///   1. BUCKET by <c>req.level</c> — the owner's ask is "2 options on each new level",
+        ///      so the cap is per tier, not per shelf.
+        ///   2. WITHIN a bucket, rank by POWER DESCENDING — damageMult (weapons) / defense
+        ///      (armor). The tier's strongest picks are what a shopper is there for.
+        ///   3. TIE-BREAK on ID, ORDINAL ASCENDING (StringComparer.Ordinal, culture- and
+        ///      catalog-order-INDEPENDENT). Raw power alone is not a total order — at Lv1 five
+        ///      knight weapons share damageMult 1.0 — so without this the surviving two would
+        ///      depend on JSON row order and could change on any catalog re-export. Ordinal
+        ///      (not OrdinalIgnoreCase, not the current culture) so the answer is identical on
+        ///      every device and locale.
+        ///   4. EMIT in bucket order ASCENDING, so the shelf reads low tier -> high tier.
+        /// The whole thing is a no-op when <paramref name="perLevelCap"/> &lt;= 0.
+        ///
+        /// KNOWN CONSEQUENCE (flagged, not hidden): shields/off-hands rank by damageMult like
+        /// everything else, and starter shields carry little or none — so with a cap of 2 the
+        /// Forge will usually surface two MAIN-hand weapons. That is acceptable in V1 because
+        /// every class is SEEDED its starter off-hand (WO-860 A3), but if the owner wants a
+        /// shield always purchasable, the fix is a per-slot bucket key here, not a sort tweak.
+        /// </summary>
+        private static void EmitCapped(List<VendorWare> result, VendorWareKind kind,
+                                       List<ShelfPick> picked, int perLevelCap, string label)
+        {
+            if (picked == null || picked.Count == 0) return;
+
+            if (perLevelCap <= 0)
+            {
+                // Uncapped (pre-860 behaviour): emit in catalog order, untouched.
+                foreach (var p in picked)
+                    result.Add(new VendorWare(kind, p.Id, p.Eligible, p.LockReason));
+                return;
+            }
+
+            var byLevel = new Dictionary<int, List<ShelfPick>>();
+            foreach (var p in picked)
+            {
+                if (!byLevel.TryGetValue(p.ReqLevel, out var bucket))
+                {
+                    bucket = new List<ShelfPick>();
+                    byLevel[p.ReqLevel] = bucket;
+                }
+                bucket.Add(p);
+            }
+
+            var levels = new List<int>(byLevel.Keys);
+            levels.Sort();
+
+            int dropped = 0;
+            foreach (int lvl in levels)
+            {
+                var bucket = byLevel[lvl];
+                bucket.Sort(ComparePicks);
+                int keep = Math.Min(perLevelCap, bucket.Count);
+                dropped += bucket.Count - keep;
+                for (int i = 0; i < keep; i++)
+                    result.Add(new VendorWare(kind, bucket[i].Id, bucket[i].Eligible, bucket[i].LockReason));
+            }
+
+            if (dropped > 0)
+                FlowTrace.Step("Vendor",
+                    $"perLevelCap={perLevelCap} on {label}: kept {picked.Count - dropped}/{picked.Count} " +
+                    $"row(s) across {levels.Count} level bucket(s) (power desc, id ordinal asc).");
+        }
+
+        /// <summary>The rank comparison of rule 2+3 above (power DESC, then id ORDINAL ASC).</summary>
+        private static int ComparePicks(ShelfPick a, ShelfPick b)
+        {
+            int byPower = b.Power.CompareTo(a.Power);          // descending
+            if (byPower != 0) return byPower;
+            return string.CompareOrdinal(a.Id ?? string.Empty, b.Id ?? string.Empty);
+        }
+
+        /// <summary>
+        /// WO-860 B2 — true when this id starts with any authored exclusion prefix
+        /// (case-insensitive). Data-driven so the ~65 "blink_*" placeholder rows leave the
+        /// SHELF without leaving the CATALOG (they stay equippable/ownable, and the WO
+        /// explicitly forbids editing weapons.json/armor.json to fix the overload).
+        /// </summary>
+        private static bool IsExcludedId(string id, IReadOnlyList<string> prefixes)
+        {
+            if (string.IsNullOrEmpty(id) || prefixes == null || prefixes.Count == 0) return false;
+            for (int i = 0; i < prefixes.Count; i++)
+            {
+                string p = prefixes[i];
+                if (!string.IsNullOrEmpty(p) && id.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────

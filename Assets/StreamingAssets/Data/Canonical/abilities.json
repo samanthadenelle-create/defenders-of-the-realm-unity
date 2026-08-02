@@ -1,80 +1,20 @@
 {
   "version": 2,
-  "_comment": "Hero ability defs — Q/W/E/R per class. v2 foundation reads Mage (Blaise) only; Knight/Ranger ship in v2.1 per port spec Part 3. Mage values sourced VERBATIM from the React v1 repo: src/modules/village/hero/abilities/mage.ts (MAGE_ABILITIES). Field map: cd -> cooldown, mana -> manaCost, power -> damage, reach -> radius/range (strike/snare = acquire range, aoe/cleave/meteor = blast radius). The 'description' field is a concise 1-line effect blurb for the HUD ability-bar tooltip (WO-36 visual) — NOT canon React data; safe to re-author. Knight + Ranger sets are authored defensible placeholders — NOT yet in the React repo — and must be re-synced when v1 publishes data/abilities.json (port spec Part 8). OPTIONAL 'castAnim' (any ability): names the cast-ANIMATION keyword the ability plays regardless of which Q/W/E/R slot it is equipped in (cast|skill1|skill2|castHeal, or a q/w/e/r slot letter); empty/absent (the default) = derive the cast animation from the effect shape via HeroAbilities.ResolveAnimVariant — fixes a swapped/equipped ability playing the wrong slot's stock cast clip.",
+  "_comment": "Hero ability defs — Q/W/E/R per class. v2 foundation reads Mage (Blaise) only; Knight/Ranger ship in v2.1 per port spec Part 3. Mage values sourced VERBATIM from the React v1 repo: src/modules/village/hero/abilities/mage.ts (MAGE_ABILITIES). Field map: cd -> cooldown, mana -> manaCost, power -> damage, reach -> radius/range (strike/snare = acquire range, aoe/cleave/meteor = blast radius). The 'description' field is a concise 1-line effect blurb for the HUD ability-bar tooltip (WO-36 visual) — NOT canon React data; safe to re-author. Knight + Ranger sets are authored defensible placeholders — NOT yet in the React repo — and must be re-synced when v1 publishes data/abilities.json (port spec Part 8). OPTIONAL 'castAnim' (any ability): names the cast-ANIMATION keyword the ability plays regardless of which Q/W/E/R slot it is equipped in (cast|skill1|skill2|castHeal, or a q/w/e/r slot letter); empty/absent (the default) = derive the cast animation from the effect shape via HeroAbilities.ResolveAnimVariant — fixes a swapped/equipped ability playing the wrong slot's stock cast clip. WO-861 (2026-08-02): the mage + ranger blocks are re-authored to the owner-approved Appendix A1/A2 (Thrain + Sylas); the mage-skills / ranger-skills pools carry the learnable-spell defs their talent trees + the Cathedral of Magic reference. Knight is UNCHANGED.",
   "classes": {
     "mage": {
       "displayName": "Mage",
+      "_comment": "WO-861 A1 (owner-approved 2026-08-02) — Thrain, the RANGED glass cannon. Q Fireball (free, spammable poke) / W Arcane Shell (NEW 'shield' effect) / E Mend (self-heal) / R Meteor Strike (RETUNED 600 -> 260 per A0). All four carry an 'id' (A4) so hot-swap + the Cathedral unlock path can address them. Mana pool 10, regen 0.9/s — mana IS the survival lifeline; out of mana and engaged = death. 'shield' reads 'damage' as a PERCENT of incoming damage removed and 'seconds' as the duration, exactly the way 'gracebuff' (Warden's Grace) already does — A4 pins it to mirror that mitigation path, NOT a second system. VERIFIED 2026-08-02 against the live code lane: HeroAbilities.ResolveShield reads def.damage as the percent and def.seconds as the window, and HeroHealth.TakeDamage now multiplies by HeroAbilities.DamageTakenMultiplier - the shell is live end to end.",
       "abilities": {
-        "q": {
-          "slot": "q",
-          "key": "Q",
-          "name": "Arcane Bolt",
-          "description": "Snap bolt at the nearest foe — 26 dmg, near-instant (0.5s).",
-          "icon": "✦",
-          "color": "#b388ff",
-          "effect": "strike",
-          "cooldown": 0.5,
-          "manaCost": 0,
-          "damage": 26,
-          "range": 13,
-          "vfxCast": "SimpleCast_Cast",
-          "vfxProjectile": "SimpleCast_Projectile",
-          "vfxImpact": "FireImpact_Impact"
-        },
-        "w": {
-          "slot": "w",
-          "key": "F",
-          "name": "Frost Nova",
-          "description": "Freezing burst — 26 dmg + 1.4s freeze in a 5m ring (12s cd).",
-          "icon": "❄",
-          "color": "#7dd3fc",
-          "effect": "aoe",
-          "cooldown": 12,
-          "manaCost": 3,
-          "damage": 26,
-          "range": 5.2,
-          "freeze": 1.4,
-          "castSeconds": 0.4,
-          "vfxCast": "Freezing_Projectile",
-          "vfxImpact": "Freezing_Impact"
-        },
-        "e": {
-          "slot": "e",
-          "key": "E",
-          "name": "Healing Beacon",
-          "description": "Heals the Heart for 48 in a 5m ring (16s cd).",
-          "icon": "✚",
-          "color": "#ffd27a",
-          "effect": "heal",
-          "cooldown": 16,
-          "manaCost": 4,
-          "damage": 48,
-          "range": 5,
-          "castSeconds": 0.4,
-          "vfxCast": "NoneMageHealingCast_Cast",
-          "vfxResidual": "softhealingaura_Aura"
-        },
-        "r": {
-          "slot": "r",
-          "key": "R",
-          "name": "Meteor Strike",
-          "description": "Ultimate — 600 dmg meteor over a 9m blast (45s cd).",
-          "icon": "☄",
-          "color": "#ff7043",
-          "effect": "meteor",
-          "cooldown": 45,
-          "manaCost": 7,
-          "damage": 600,
-          "range": 9,
-          "castSeconds": 0.5,
-          "vfxCast": "MageMeoteorAOE_Cast",
-          "vfxImpact": "FireballImpact_Impact"
-        }
+        "q": { "id": "mage.fireball", "slot": "q", "key": "Q", "name": "Fireball", "description": "A snap ember at the nearest foe — 30 dmg at 14m, free and near-instant (0.6s cd).", "icon": "✹", "color": "#ff7043", "effect": "strike", "cooldown": 0.6, "manaCost": 0, "damage": 30, "range": 14, "vfxCast": "Fire_Cast", "vfxProjectile": "FireballTower_Projectile", "vfxImpact": "FireImpact_Impact" },
+        "w": { "id": "mage.shell", "slot": "w", "key": "W", "name": "Arcane Shell", "description": "Ward yourself — take 40% less damage for 4s (16s cd).", "icon": "✷", "color": "#b388ff", "effect": "shield", "cooldown": 16, "manaCost": 3, "damage": 40, "range": 0, "seconds": 4 },
+        "e": { "id": "mage.heal", "slot": "e", "key": "E", "name": "Mend", "description": "Knit your own wounds — heals 45 HP (14s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 14, "manaCost": 3, "damage": 45, "range": 5, "castSeconds": 0.4, "vfxCast": "NoneMageHealingCast_Cast", "vfxResidual": "softhealingaura_Aura" },
+        "r": { "id": "mage.meteor", "slot": "r", "key": "R", "name": "Meteor Strike", "description": "Ultimate — 260 dmg meteor over a 9m blast (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "meteor", "cooldown": 42, "manaCost": 6, "damage": 260, "range": 9, "castSeconds": 0.5, "vfxCast": "MageMeoteorAOE_Cast", "vfxImpact": "FireballImpact_Impact" }
       }
     },
     "knight": {
       "displayName": "Knight",
-      "_comment": "WO-750 Right ActionBar canon (owner rulings 2026-07-19). Kit: Q Sword Heroic (dash) / W Shield Charge (knockback) / E Warden's Grace (gracebuff — hybrid support REDESIGN, was the taunt 'Defender's Call') / R Radiant Strike (meteor ult). W/E/R now carry ids (knight.w/e/r) so hot-swap can address them. Effects dash|knockback|gracebuff are shapes resolved by HeroAbilities.ResolveEffect (raw-string branch): gracebuff = ResolveWardensGrace (heal 25% max HP read from 'damage' as a percent + Defense-scaled bonus, then Grace Shield for 'seconds': HoT 5% max HP/2s + -20% incoming dmg pending a HeroHealth mitigation seam). Anim: E castAnim 'castHeal' -> knight castHeal clip (Mage Spell Cast 5); R castAnim 'r' -> CastVariant 4 (its own Cast_r state, de-dups the whirlwind it shared with W). Cooldowns Leap 6 / Charge 9 / Grace 20 / Radiant 40. Re-sync on v1 data/abilities.json publish.",
+      "_comment": "WO-750 Right ActionBar canon (owner rulings 2026-07-19). Kit: Q Sword Heroic (dash) / W Shield Charge (knockback) / E Warden's Grace (gracebuff — hybrid support REDESIGN, was the taunt 'Defender's Call') / R Radiant Strike (meteor ult). W/E/R now carry ids (knight.w/e/r) so hot-swap can address them. Effects dash|knockback|gracebuff are shapes resolved by HeroAbilities.ResolveEffect (raw-string branch): gracebuff = ResolveWardensGrace (heal 25% max HP read from 'damage' as a percent + Defense-scaled bonus, then Grace Shield for 'seconds': HoT 5% max HP/2s + -20% incoming dmg pending a HeroHealth mitigation seam). Anim: E castAnim 'castHeal' -> knight castHeal clip (Mage Spell Cast 5); R castAnim 'r' -> CastVariant 4 (its own Cast_r state, de-dups the whirlwind it shared with W). Cooldowns Leap 6 / Charge 9 / Grace 20 / Radiant 40. Re-sync on v1 data/abilities.json publish. WO-861: DELIBERATELY UNCHANGED (acceptance requires 'Knight abilities are UNCHANGED'); the only Grom rename touches hero-talents.json + canon-strings.json copy, never this kit.",
       "abilities": {
         "q": { "id": "knight.q", "slot": "q", "key": "Q", "name": "Sword Heroic", "description": "Leap to a foe with a heroic strike — 30 dmg, +bonus & stun onto a Healer/Wizard (6s cd).", "icon": "➹", "color": "#ffd27a", "effect": "dash", "cooldown": 6, "manaCost": 0, "damage": 30, "range": 10, "vfxCast": "Dash_Blink", "vfxImpact": "Weaponskillsword_Impact" },
         "w": { "id": "knight.w", "slot": "w", "key": "W", "name": "Shield Charge", "description": "Charge behind your shield — 26 dmg cone + slow; breaks a Tank's guard, interrupts a Wizard (9s cd).", "icon": "✦", "color": "#facc15", "effect": "knockback", "cooldown": 9, "manaCost": 2, "damage": 26, "range": 4.5, "vfxCast": "KnightThrust_Impact", "vfxImpact": "Weaponskillsword_Impact" },
@@ -84,12 +24,12 @@
     },
     "ranger": {
       "displayName": "Ranger",
-      "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
+      "_comment": "WO-861 A2 (owner-approved 2026-08-02) — Sylas, the archer / sustain-DPS kiter. Q Quick Shot (fires the EQUIPPED arrow — the ammoEffect rider from weapons.json rides THIS ability only, per the implementation-order guard: Knight + Mage basics must be unaffected) / W Snare Trap / E Healing Shot (NEW 'drainshot' effect: run the strike, then heal the caster for the damage actually dealt — PINNED by A4) / R Storm of Arrows. All four carry an 'id' (A4). VERIFIED 2026-08-02 against the live code lane: HeroAbilities.ResolveDrainshot runs the real strike branch and heals the caster by the damage ACTUALLY dealt (post-mitigation, HP-clamped).",
       "abilities": {
-        "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 25 dmg at long range (0.45s).", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 25, "range": 15, "vfxCast": "PP_MuzzleFlash", "vfxProjectile": "RangerTowerBaseProjectile_Projectile", "vfxImpact": "Spear_Impact" },
-        "w": { "slot": "w", "key": "F", "name": "Snare Trap", "description": "Snares + 18 dmg at range (12m, 11s cd).", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12, "castSeconds": 0.35, "vfxCast": "Freezing_Projectile", "vfxProjectile": "ArcherTower-Ice_Projectile", "vfxImpact": "Freezing_Impact" },
-        "e": { "slot": "e", "key": "E", "name": "Mending Salve", "description": "Heals the Heart for 44 in a 5m ring (15s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5, "castSeconds": 0.4, "vfxCast": "NoneMageHealingCast_Cast", "vfxResidual": "softhealingaura_Aura" },
-        "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0, "castSeconds": 0.5, "vfxCast": "RangerTowerUpgraded_Projectile", "vfxImpact": "Cleave_Impact" }
+        "q": { "id": "ranger.q", "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 25 dmg at 15m; carries the equipped arrow's effect (0.45s cd).", "icon": "➹", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 25, "range": 15, "vfxCast": "PP_MuzzleFlash", "vfxProjectile": "RangerTowerBaseProjectile_Projectile", "vfxImpact": "Spear_Impact" },
+        "w": { "id": "ranger.w", "slot": "w", "key": "W", "name": "Snare Trap", "description": "Roots and slows a foe — 18 dmg at 12m (11s cd).", "icon": "❄", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12, "castSeconds": 0.35, "vfxCast": "Freezing_Projectile", "vfxProjectile": "ArcherTower-Ice_Projectile", "vfxImpact": "Freezing_Impact" },
+        "e": { "id": "ranger.healing-shot", "slot": "e", "key": "E", "name": "Healing Shot", "description": "A life-drinking arrow — 34 dmg at 15m and heals you for the damage dealt (12s cd).", "icon": "✚", "color": "#86efac", "effect": "drainshot", "cooldown": 12, "manaCost": 4, "damage": 34, "range": 15, "castSeconds": 0.35 },
+        "r": { "id": "ranger.r", "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0, "castSeconds": 0.5, "vfxCast": "RangerTowerUpgraded_Projectile", "vfxImpact": "Cleave_Impact" }
       }
     },
     "knight-skills": {
@@ -109,6 +49,29 @@
         "eternal-aegis":     { "id": "knight.eternal-aegis",     "slot": "r", "key": "R", "name": "Eternal Aegis",     "description": "Raise an unbreakable ward — 8s of full invulnerability (90s cd).",          "icon": "✷", "color": "#fde68a", "effect": "invuln", "cooldown": 90,  "manaCost": 6, "damage": 0,  "range": 0, "seconds": 8, "vfxCast": "DefenseUp-Offhand(Shield)_Aura", "vfxResidual": "Aegis_Shield" },
         "second-wind":       { "id": "knight.second-wind", "castSeconds": 0.4,       "slot": "e", "key": "E", "name": "Second Wind",       "description": "Catch your breath — heals 35 HP (45s cd).",                                 "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 45,  "manaCost": 4, "damage": 35, "range": 5, "vfxCast": "NoneMageHealingCast_Cast", "vfxResidual": "softhealingaura_Aura" },
         "champions-combo":   { "id": "knight.champions-combo",   "slot": "r", "key": "R", "name": "Champion's Combo",  "description": "A three-hit flurry — 120 dmg (3x40) to foes in front (30s cd).",            "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 30,  "manaCost": 5, "damage": 120, "range": 4, "vfxCast": "KnightWeaponskill_Impact", "vfxImpact": "Cleave_Impact" }
+      }
+    },
+    "mage-skills": {
+      "displayName": "Mage Skills",
+      "_comment": "WO-861 A1/A3/A4 — FLAT pool of LEARNABLE mage spells (the 'mage.*' ids that trees.mage nodes and the Cathedral of Magic tier unlocks reference by abilityId / unlockSpell). Same contract as knight-skills: a unique 'id' resolved by AbilityCatalog.FindById; 'slot' is only the chooser's SUGGESTED slot. mage.frost-nova and mage.arcane-bolt are PORTED VERBATIM from the mage Q/W that A1 retired (same tuning + same VFX keys) so no shipped balance is silently lost. mage.manaweave uses the NEW 'manaweave' effect (A4: restore ~5 mana over 3s through the existing _manaOverTimeRate/Until drip) — 'damage' carries the MANA amount and 'seconds' the drip window; it costs no mana by design (it is the mana-recovery button). VFX: only the four owner-tagged hooks (FireImpact_Impact / Fire_Cast / FireballTower_Projectile / NoneMageHealingCast_Cast) plus keys carried over from a ported def are wired here; every other new spell deliberately HOLDS its VFX fields empty pending an owner tag (VFX-tagging workflow: CLI never creative-picks a key).",
+      "abilities": {
+        "frost-nova":  { "id": "mage.frost-nova",  "castSeconds": 0.4, "slot": "w", "key": "F", "name": "Frost Nova",     "description": "Freezing burst — 26 dmg + 1.4s freeze in a 5m ring (12s cd).",               "icon": "❄", "color": "#7dd3fc", "effect": "aoe",       "cooldown": 12, "manaCost": 3, "damage": 26,  "range": 5.2, "freeze": 1.4, "vfxCast": "Freezing_Projectile", "vfxImpact": "Freezing_Impact" },
+        "arcane-bolt": { "id": "mage.arcane-bolt", "castSeconds": 0,   "slot": "q", "key": "Q", "name": "Arcane Bolt",    "description": "Snap bolt at the nearest foe — 26 dmg, near-instant (0.5s cd).",             "icon": "✦", "color": "#b388ff", "effect": "strike",    "cooldown": 0.5, "manaCost": 0, "damage": 26, "range": 13,  "vfxCast": "SimpleCast_Cast", "vfxProjectile": "SimpleCast_Projectile", "vfxImpact": "FireImpact_Impact" },
+        "manaweave":   { "id": "mage.manaweave",   "castSeconds": 0.4, "slot": "e", "key": "E", "name": "Manaweave",      "description": "Draw the weave in — restores 5 mana over 3s (30s cd).",                     "icon": "✦", "color": "#7dd3fc", "effect": "manaweave", "cooldown": 30, "manaCost": 0, "damage": 5,   "range": 0,   "seconds": 3 },
+        "void-rift":   { "id": "mage.void-rift",   "castSeconds": 0.4, "slot": "w", "key": "F", "name": "Void Rift",      "description": "Tears a rift open — 40 dmg + a 1.5s hold in a 5m ring (18s cd).",            "icon": "✦", "color": "#b388ff", "effect": "aoe",       "cooldown": 18, "manaCost": 4, "damage": 40,  "range": 5,   "freeze": 1.5 },
+        "blink":       { "id": "mage.blink",       "slot": "w", "key": "F", "name": "Blink",          "description": "Step 6m through the weave — a quick escape (8s cd).",                       "icon": "➾", "color": "#7dd3fc", "effect": "blink",     "cooldown": 8,  "manaCost": 2, "damage": 0,   "range": 6,   "vfxCast": "Dash_Blink" },
+        "cataclysm":   { "id": "mage.cataclysm",   "castSeconds": 0.5, "slot": "r", "key": "R", "name": "Cataclysm",      "description": "Ultimate — 600 dmg over a 9m blast (50s cd).",                              "icon": "☄", "color": "#ff7043", "effect": "meteor",    "cooldown": 50, "manaCost": 8, "damage": 600, "range": 9 }
+      }
+    },
+    "ranger-skills": {
+      "displayName": "Ranger Skills",
+      "_comment": "WO-861 A2/A4 — FLAT pool of LEARNABLE ranger abilities (the 'ranger.*' ids that trees.ranger SKILL nodes reference by abilityId). Same contract as knight-skills. ranger.storm-of-arrows is the TIER-4 CAPSTONE upgrade of the R-slot 'ranger.r' (a bigger, longer-cooldown rain) — the two are deliberately separate ids so the capstone can be equipped over the default. ranger.hunters-mark is authored as a plain 'strike': there is NO 'mark' shape in HeroAbilities.ResolveEffect, so its +20%-damage debuff is NOT expressed here and will need either a 'mark' effect case or a talent-side rider (flagged to the implementer). VFX fields are deliberately HELD empty on every new def pending an owner VFX tag; Dash_Blink is carried over as the shape-default for the blink effect.",
+      "abilities": {
+        "hunters-mark":     { "id": "ranger.hunters-mark",     "castSeconds": 0.3, "slot": "w", "key": "F", "name": "Hunter's Mark",     "description": "Marks a foe — 10 dmg at 16m; the mark makes it take more damage for 6s (10s cd).", "icon": "➹", "color": "#fbbf24", "effect": "strike", "cooldown": 10, "manaCost": 2, "damage": 10, "range": 16 },
+        "tumble-step":      { "id": "ranger.tumble-step",      "slot": "w", "key": "F", "name": "Tumble Step",      "description": "Roll 6m clear of danger — a quick dodge (8s cd).",                                  "icon": "➾", "color": "#9ae6b4", "effect": "blink",  "cooldown": 8,  "manaCost": 1, "damage": 0,  "range": 6, "vfxCast": "Dash_Blink" },
+        "multishot":        { "id": "ranger.multishot",        "castSeconds": 0.35, "slot": "w", "key": "F", "name": "Multishot",        "description": "Looses three arrows at once — 18 dmg to each foe in an 8m spread (9s cd).",         "icon": "➹", "color": "#9ae6b4", "effect": "cleave", "cooldown": 9,  "manaCost": 3, "damage": 18, "range": 8 },
+        "precision-strike": { "id": "ranger.precision-strike", "castSeconds": 0.4, "slot": "w", "key": "F", "name": "Precision Strike", "description": "A patient aimed shot — 90 dmg at 18m (12s cd).",                                    "icon": "➹", "color": "#fbbf24", "effect": "strike", "cooldown": 12, "manaCost": 4, "damage": 90, "range": 18 },
+        "storm-of-arrows":  { "id": "ranger.storm-of-arrows",  "castSeconds": 0.5, "slot": "r", "key": "R", "name": "Storm of Arrows",  "description": "Capstone rain — 120 dmg over an 8m fall of arrows (60s cd).",                       "icon": "☄", "color": "#ff7043", "effect": "aoe",    "cooldown": 60, "manaCost": 7, "damage": 120, "range": 8, "freeze": 0 }
       }
     },
     "universal-skills": {

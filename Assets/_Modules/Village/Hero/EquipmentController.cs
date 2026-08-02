@@ -1951,7 +1951,20 @@ namespace DeNelle.Village
                 if (r == null) continue;
                 if (!hasB) { wb = r.bounds; hasB = true; } else wb.Encapsulate(r.bounds);
             }
-            FlowTrace.Step("Equip",
+            // THROTTLED (owner F8 seq 637, "cannot move" in the Healer's Cottage): this line was
+            // FlowTrace.Step, and it fires EVERY FRAME. Chain: HeroLocomotion.Update:1076 calls
+            // EquipmentController.SetCombatActive unconditionally each frame; SetCombatActive's
+            // no-change path (:1725) still calls ApplyHoldPose(), which reaches this solve. The
+            // result flooded break-log.jsonl and Player.log at frame rate, and the F8 harness
+            // harvests only the LAST 60 signal lines - so EVERY line of that capture was this one
+            // message, evicting the movement/lock traces needed to diagnose the actual report.
+            // A diagnostic that blinds the diagnostics is worse than no diagnostic. One line per
+            // second per hero keeps the signal and restores the capture. The per-frame WORK
+            // (GetComponentsInChildren<Renderer> above + the pose re-solve) is a separate,
+            // deeper defect - the comment at :1738 claims "the pose only re-applies on a state
+            // change", which the :1725 early-return contradicts. Ticketed, not silently changed
+            // here: altering the re-assert could regress the WO "sword stays drawn" fixes.
+            FlowTrace.Throttle("Equip", "parent-scale-compensate-" + p.GetInstanceID(), 1f,
                 $"parent-scale compensate: parent='{p.name}' lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) " +
                 $"authored={authoredScale:0.###} " +
                 $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +

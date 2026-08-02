@@ -375,6 +375,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
             // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
+            // --- WO-860 starter loadout + shelf: new game clears dotr-equip-*, Knight starts sword+shield (not the stale axe / not auto-best Flameblade), shelf capped + equippable-only + no blink_* ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-loadout suite", () => { if (!DeNelle.Editor.Regression.StarterLoadoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-loadout] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

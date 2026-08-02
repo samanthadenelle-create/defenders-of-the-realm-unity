@@ -13,6 +13,18 @@
 > - **⚠ FIVE collisions on 2026-08-02 alone.** The banner is only an authority if it is bumped in
 >   the SAME edit as the mint — including by the CLI. Owner ratification of a reserved UI block
 >   (860–899) is now overdue.
+>
+> ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
+> | Block | Owner | Next free |
+> |---|---|---|
+> | **main line** | CLI | **853** (782–852 consumed) |
+> | **860–899 reserved** | UI seat | **863** (860/861/862 consumed) |
+>
+> - **860** = start loadout (sword+shield, not the stale axe) + weapon/armor shelf thinning. UI seat. IMPLEMENTED (lane agent), pending gate.
+> - **861** = Sylas + Thrain playable (re-enable, not build-new; appendix carries the approved kits/trees/Cathedral map). UI seat. IN FLIGHT.
+> - **862** = UI-seat fix WO (minted 2026-08-02 evening from the reserved block).
+> - The blocks are DISJOINT, so both seats can mint in parallel without reading each other's state.
+>   Each seat bumps ITS OWN row in the SAME edit as the mint. This is the rule that was broken 5x today.
 > - **848** = RESTORE Android managed stripping Medium (lowered to Low 2026-08-02 because the
 >   WO-766 Solana SDK's BouncyCastle.Cryptography fails the CIL-linker resolve at Medium;
 >   captured in Builds/android-build.log + MobileSettings.cs comment). APK-size follow-up, OPEN.
