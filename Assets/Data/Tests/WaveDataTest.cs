@@ -44,20 +44,27 @@ namespace DeNelle.Data.Tests
         }
 
         [Test]
-        public void wave_one_is_the_authored_first_light_wave()
+        public void wave_one_carries_the_smart_composition_contract()
         {
+            // OWNER RULING 2026-07-30 (7f1f1e6a, WAVE_AUTHORING_REFERENCE_2026-07-30):
+            // smart composition is the wave authority — the authored enemies[] batches
+            // were STRIPPED from waves.json (WaveManager generates every roster); only
+            // countdownSeconds / boss / apexBoss survive as authored data. The old
+            // assert (TotalEnemyCount > 0) pinned the RETIRED authored model and sat
+            // red for weeks. The WAVE_AUTHORING_OK oracle guards against batch re-adds.
             var schedule = Await(WaveDataLoader.LoadWavesAsync());
             var w1 = schedule.Find(1);
             Assert.That(w1, Is.Not.Null, "waves.json must contain wave 1.");
             Assert.That(w1.WaveId, Is.EqualTo(1));
-            Assert.That(w1.TotalEnemyCount, Is.GreaterThan(0),
-                "wave 1 must release at least one enemy.");
+            Assert.That(w1.Enemies == null || w1.Enemies.Count == 0, Is.True,
+                "wave 1 must carry NO authored batches (smart composition is the " +
+                "authority — owner ruling 2026-07-30; re-adds are a regression).");
             Assert.That(w1.CountdownSeconds, Is.GreaterThan(0f),
                 "wave 1 must have a Prepare-Phase countdown.");
         }
 
         [Test]
-        public void every_wave_has_a_unique_ascending_id_and_at_least_one_batch()
+        public void every_wave_has_a_unique_ascending_id_and_no_authored_batches()
         {
             var schedule = Await(WaveDataLoader.LoadWavesAsync());
             int prevId = 0;
@@ -70,16 +77,12 @@ namespace DeNelle.Data.Tests
                 Assert.That(wave.WaveId, Is.GreaterThan(prevId),
                     "wave ids must be authored in ascending order.");
                 prevId = wave.WaveId;
-                // A wave is valid if it spawns a normal-enemy batch OR is a
-                // boss-only wave (e.g. wave 4 is the apex-dragon BOSS wave with
-                // enemies: [] by design — the dragon spawns from the boss/apexBoss
-                // block, see waves.json _comment). Mirrors the sibling cross-ref
-                // test that tolerates boss-only waves via wave.Boss.
-                bool hasBatch = wave.Enemies != null && wave.Enemies.Count > 0;
-                bool hasBoss = !string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave;
-                Assert.That(hasBatch || hasBoss, Is.True,
-                    $"wave {wave.WaveId} must have at least one spawn batch " +
-                    "or a boss/apexBoss block.");
+                // Owner ruling 2026-07-30: no wave carries authored enemies[] batches
+                // any more (smart composition generates rosters). Boss/apexBoss blocks
+                // remain the only authored spawns.
+                Assert.That(wave.Enemies == null || wave.Enemies.Count == 0, Is.True,
+                    $"wave {wave.WaveId} carries authored batches — the stripped " +
+                    "smart-composition contract (2026-07-30) forbids re-adds.");
             }
         }
 

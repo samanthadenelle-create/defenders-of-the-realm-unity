@@ -173,6 +173,28 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
+        public void daily_label_resolver_substitutes_target_and_falls_back()
+        {
+            // WO-810 follow-up: the shared DailyQuestCatalog.ResolveLabel the live backend's
+            // DailyToday now routes through (mirrors DailyQuestVMTests' substitution lock).
+            var q = new DailyQuestInstance
+            { Id = "q1", TemplateId = "combat.a", Slot = "combat", Target = 5, Label = "Clear {target} waves" };
+            Assert.That(DailyQuestCatalog.ResolveLabel(q), Is.EqualTo("Clear 5 waves"),
+                "{target} must be substituted in the daily title");
+
+            q.Label = null;
+            Assert.That(DailyQuestCatalog.ResolveLabel(q), Is.EqualTo("combat.a"),
+                "empty label falls back to TemplateId");
+
+            q.TemplateId = null;
+            Assert.That(DailyQuestCatalog.ResolveLabel(q), Is.EqualTo("combat"),
+                "then to Slot");
+
+            Assert.That(DailyQuestCatalog.ResolveLabel(null), Is.EqualTo(""),
+                "null instance resolves to empty, never throws");
+        }
+
+        [Test]
         public void dispose_unsubscribes_from_backend_changed()
         {
             var b = Seed();

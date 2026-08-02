@@ -101,6 +101,22 @@ namespace DeNelle.Core.Quests
             return null;
         }
 
+        /// <summary>
+        /// WO-810 follow-up (2026-08-02): the ONE display-label resolution site for a rolled
+        /// daily quest — "{target}" substituted with the instance's Target; a null/empty
+        /// Label falls back to TemplateId, then Slot. Pure (never touches the catalog data,
+        /// so it is EditMode-testable with no StreamingAssets). Both consumers route here
+        /// (DailyQuestVM + RumorBoardLiveBackend — the rumor board previously skipped
+        /// substitution and showed raw "{target}" titles). The save payload keeps the RAW
+        /// template Label (MakeInstance) — never persist a substituted string.
+        /// </summary>
+        public static string ResolveLabel(DailyQuestInstance q)
+        {
+            if (q == null) return "";
+            if (string.IsNullOrEmpty(q.Label)) return q.TemplateId ?? q.Slot;
+            return q.Label.Replace("{target}", q.Target.ToString());
+        }
+
         public static void Reload() { _data = null; EnsureLoaded(); }
 
         private static void EnsureLoaded()
@@ -151,7 +167,9 @@ namespace DeNelle.Core.Quests
         public int Progress;
         public bool Completed;
         public long ClaimedAtUnix;   // 0 = not yet claimed
-        public string Label;         // resolved at roll time
+        public string Label;         // RAW template label — "{target}" is NOT substituted here
+                                     // (save-serialized as authored; DailyQuestCatalog.ResolveLabel
+                                     // is the display-time substitution site — WO-810 follow-up)
 
         public float ProgressFraction => Target > 0 ? Mathf.Clamp01((float)Progress / Target) : 0f;
     }

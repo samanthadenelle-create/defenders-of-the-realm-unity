@@ -55,6 +55,13 @@ namespace DeNelle.Village
         // ── Tuning ────────────────────────────────────────────────────────────
         private const float SettleSeconds = 1.25f;      // scene settle (hero/NavMesh/HUD) — same as legacy
         private const float WatchdogSeconds = 120f;     // generous in-step bound → STEP-STUCK oracle
+        // F8 seq 603 (STEP-STUCK :: founding_hollow, 2026-08-02): on a blank Build-Your-Own
+        // town, PLACEMENT steps (completion "build.structure_placed:<id>") are legitimately
+        // slow — the player browses the carousel, pans, and places into an empty field. Those
+        // steps get this longer bound (per-kind const, matching the house style of the other
+        // tuning consts above); the watchdog ALSO pauses outright while the builder is open
+        // (TickWatchdog), so only truly-idle time counts against either bound.
+        private const float PlacementWatchdogSeconds = 300f;
         private const float ReachedRadius = 6f;         // hero.reached:<anchor> proximity (m)
         private const float ContextualAutoCloseSeconds = 10f; // hint without dialogue: auto-dismiss
 
@@ -502,6 +509,18 @@ namespace DeNelle.Village
                     (Action)SkipAll);   // persistent whole-FTUE skip (confirmed in the banner)
             if (step.Highlight != null && step.Highlight.Count > 0)
                 UiSpotlight.Show(step.Highlight[0]);
+            else if (IsPlacementStep())
+            {
+                // F8 seq 603 (2026-08-02): a PLACEMENT step always lights the Build-button
+                // coach highlight so the player is pointed at the door into the builder even
+                // when the step data authors no highlight. Same registry path every authored
+                // highlight takes (UiSpotlight -> TutorialHighlightRegistry; "hud.build_button"
+                // is registered by HudKitController). founding_hollow authors it already —
+                // this is the code-level guarantee against data drift.
+                UiSpotlight.Show("hud.build_button");
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' placement step with no authored highlight — " +
+                    "defaulting the coach highlight to 'hud.build_button' (F8 seq 603 rule).");
+            }
             else
                 UiSpotlight.Hide();
 
@@ -1194,11 +1213,40 @@ namespace DeNelle.Village
         //  Watchdog — STEP-STUCK oracle (bot verifiability)
         // =====================================================================
 
+        /// <summary>True when the CURRENT awaited completion is a specific-structure
+        /// placement ("build.structure_placed:&lt;id&gt;" — founding_hollow / founding_stores).
+        /// Drives the longer placement watchdog bound + the Build-button default highlight
+        /// (F8 seq 603, 2026-08-02).</summary>
+        private bool IsPlacementStep() =>
+            !string.IsNullOrEmpty(_awaitSignal) &&
+            _awaitSignal.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The STEP-STUCK bound for the current step: placement-completion steps get
+        /// <see cref="PlacementWatchdogSeconds"/> (300s), everything else the default 120s.</summary>
+        private float WatchdogSecondsForCurrentStep() =>
+            IsPlacementStep() ? PlacementWatchdogSeconds : WatchdogSeconds;
+
         private void TickWatchdog()
         {
             if (_step == null) return;
             if (_phase != Phase.AwaitCompletion) return;   // only a live, awaiting step can strand
-            if (Time.unscaledTime - _watchdogAt < WatchdogSeconds) return;
+
+            // F8 seq 603 (2026-08-02): the watchdog PAUSES while build mode is active — the
+            // player is DOING the asked thing (browsing/placing in the builder), so builder
+            // time never counts against the bound. Same build-mode seam the deferred-intro
+            // truce already reads (BuildModeState.IsActive, fed by the build.mode_entered/
+            // exited flow); a TRUE pause (deadline shifts by the paused frame), not a reset,
+            // so pre-builder idle time is kept.
+            if (DeNelle.Core.BuildModeState.IsActive)
+            {
+                _watchdogAt += Time.unscaledDeltaTime;
+                FlowTrace.Once("Tutorial", "watchdog-builder-pause",
+                    "STEP-STUCK watchdog PAUSED while the builder is open (build-mode time never counts — F8 seq 603 rule, 2026-08-02).");
+                return;
+            }
+
+            float bound = WatchdogSecondsForCurrentStep();
+            if (Time.unscaledTime - _watchdogAt < bound) return;
 
             // Owner ruling 2026-07-08 ("auto-advance the watchdog"): a step whose combat/
             // completion driver can never settle (e.g. town_wave's scripted spawner) must not
@@ -1215,7 +1263,9 @@ namespace DeNelle.Village
             _watchdogAt = Time.unscaledTime;   // re-arm guard (belt-and-suspenders alongside the advance)
 
             FlowTrace.Fail("Tutorial", $"STEP-STUCK :: {stuckId} — no '{awaited}' after " +
-                $"{idle:0}s in-step (ff.tutorialv2 on); AUTO-ADVANCED via watchdog.");
+                $"{idle:0}s in-step (bound {bound:0}s" +
+                (IsPlacementStep() ? ", placement 300s rule, builder time excluded" : ", builder time excluded") +
+                "; ff.tutorialv2 on); AUTO-ADVANCED via watchdog.");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_drop", new
             {
                 stepId = stuckId,

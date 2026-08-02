@@ -210,11 +210,10 @@ namespace DeNelle.HUD
         private static string KeyFor(DailyQuestInstance q)
             => q.Id ?? q.TemplateId ?? q.Slot ?? "";
 
+        // WO-810 follow-up: the substitution now lives on DailyQuestCatalog.ResolveLabel —
+        // the ONE shared site — so the rumor board's daily rows resolve identically.
         private static string ResolveLabel(DailyQuestInstance q)
-        {
-            if (string.IsNullOrEmpty(q.Label)) return q.TemplateId;
-            return q.Label.Replace("{target}", q.Target.ToString());
-        }
+            => DailyQuestCatalog.ResolveLabel(q);
 
         private static string SlotFlavor(string slot)
         {

@@ -1,7 +1,53 @@
 # WO-810 — Brom's Rumor Board layout rework (crowded → scannable)
 
-**Status:** SHIPPED 2026-07-31 (74612a25 — Rumor Board master-detail rebuild to the owner-signed wireframe).  
+**Status:** SHIPPED 2026-07-31 (74612a25) + **FOLLOW-UP CONFORMANCE PASS 2026-08-02** (owner F8 *"this board does not look like mock up"* — see addendum below; pending gate + owner felt-verify).  
 **Minted:** 2026-07-30  
+
+---
+
+## ⚠ 2026-08-02 FOLLOW-UP ADDENDUM — mockup-conformance pass (owner F8)
+
+Owner F8: *"this board does not look like mock up."* A pixel-verified RCA against the signed
+wireframe found six conformance defects in the shipped panel; all fixed in this pass.
+
+### Defects found (pixel-proven)
+
+| # | Defect | Root cause |
+|---|--------|-----------|
+| D1 | Daily tab titles show raw `{target}` ("Clear {target} waves") | `RumorBoardLiveBackend.DailyToday` skipped the substitution `DailyQuestVM` performs |
+| D2 | Detail plate reads KHAKI, not obsidian | 0.92-alpha dark plate LINEAR-space blends with the tan parchment art beneath |
+| D3 | Panes hand-anchored to panel fractions; Accept CTA sat in the shared Close band | Detail pane ignored the kit's measured `FrameQuest` `bodyLeft`/`bodyRight` drop-zones |
+| D4 | Signed detail sections missing (tag chips, bullet objectives, reward chips, secondary Track) | View rendered plain text lines only, though the VM data (`TypeFor`/`RewardFor`) existed |
+| D5 | Tab strip scaled with body height (chips under the touch floor on short screens) | 0.87–0.95 fraction band instead of a fixed-height strip |
+| D6 | CSS-px font literals (11–18) all over the View | Never migrated to the `ElarionUi` kit constants |
+
+### Edits applied (this pass)
+
+- **E1 (VM/one resolver):** `DailyQuestCatalog.ResolveLabel(DailyQuestInstance)` minted in
+  `DailyQuests.cs` — the ONE `{target}` substitution site; `DailyQuestVM` delegates to it and
+  `RumorBoardLiveBackend.DailyToday` now routes through it (D1). Save payload keeps the RAW label
+  (`MakeInstance` untouched); the "resolved at roll time" comment lie on `Label` fixed. EditMode
+  lock added in `RumorBoardVMTests.daily_label_resolver_substitutes_target_and_falls_back`.
+- **E2 (View/detail):** plate alpha 0.92 → 1.0 (D2); DetailPane parented to
+  `chrome.layout.bodyRight` at 0..1 anchors (fallback panel fractions with the floor raised to
+  0.30 so Accept clears Close) (D3); signed sections added from existing VM data — bordered tag
+  chips (type + state), ASCII-bullet objectives, reward chips, and **Track secondary beside
+  Accept** (D4).
+- **E3 (View/tabs):** fixed-height tab strip — `sizeDelta.y = MinTouchPx + 24`, pivot-top hung at
+  y 0.95 (D5); fallback list ceiling dropped to 0.70 to clear it.
+- **E4 (View/zones):** list viewport parented to `chrome.layout.bodyLeft` (0..1); status line
+  into `chrome.layout.footer` (fallbacks preserved).
+- **E5 (View/type):** every font literal → kit constants (card title `FontBody`;
+  hook/pip/flavor/tag/reward `FontMicro`; section/status/body `FontLabel`; detail title
+  `FontHead`); card height 96 → `MinTouchPx`; section 40 → 56; flavor 34 → 48;
+  `FitBlock(FontFloorMobile, FontLabel)`.
+- **Capture:** `UICaptureLaunch.WorstCaseRumorBackend` now serves 3 daily rows with raw
+  `{target}` authored labels resolved through `ResolveLabel`, and the capture adds a
+  `SetTab("daily")` shot → `RumorBoard_daily_1920x1080.png` (pixel-proof of D1). Panel repaint
+  made edit-safe (`SafeDestroy` picks `DestroyImmediate` outside Play).
+
+---
+
 **Lane:** UI / Quests (single lane — owns RumorBoard panel)  
 **Origin:** owner screenshot 2026-07-30 — *"too crowded and needs better organized"* → owner review: *"I love it!"*  
 **Capture:** `C:\Users\Elden\OneDrive\Pictures\Screenshots\Screenshot 2026-07-30 204153.png` (session asset also under Grok attachments)  

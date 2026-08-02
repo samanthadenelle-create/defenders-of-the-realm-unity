@@ -563,34 +563,21 @@ namespace DeNelle.Village
                 anyHit = true;
                 lastHitDamage = damage;
 
-                // Owner VfxManualPicks: elemental sword on-hit (Weaponskillsword_Impact —
-                // "elemental Sword - New" roster). Layered on TakeDamage's central feedback;
-                // null-safe no-op if the catalog row is missing. Perfect hits also get the
-                // heavier Knight weaponskill burst so a timed connect reads bigger.
-                Guard.Try("Combat", "melee sword impact vfx", () =>
+                // Owner ruling 2026-08-02 (F8): the BASIC melee hit carries NO impact burst —
+                // the generic green "Weaponskillsword_Impact" pop and the perfect-hit
+                // "KnightWeaponskill_Impact" burst are DELETED from this path (both keys stay
+                // owner-tagged in VfxManualPicks.json for their ability-level uses). A
+                // perfect-timed connect is announced by the gold PERFECT stamp instead
+                // (TriggerPerfectHitFeedback below). ONLY an element-branded weapon still
+                // bursts on hit, so an elemental blade keeps its visual read in combat.
+                Guard.Try("Combat", "melee elemental on-hit vfx", () =>
                 {
                     // ELEMENTAL brand on-hit (data-driven via WeaponDef.element; WeaponVfxMap is
-                    // the ONE reader). A weapon carrying element:"<elem>" shows a full multi-layer
-                    // elemental impact burst at the hit point — so an elemental blade is VISUALLY
-                    // read in combat. Reuses the shared VFXManager pool (no raw Instantiate). Every
-                    // resolved key is owner-tagged in VfxManualPicks.json. No element -> null key ->
-                    // unchanged behavior. Not hardcoded to one weapon id: any element-branded weapon lights up.
+                    // the ONE reader). Reuses the shared VFXManager pool (no raw Instantiate);
+                    // every resolved key is owner-tagged in VfxManualPicks.json. No element ->
+                    // null key -> nothing plays. Not hardcoded to one weapon id.
                     string elementKey = WeaponVfxMap.ElementalOnHitKey(_gear != null ? _gear.EquippedWeapon : null);
-                    bool hasElement = !string.IsNullOrEmpty(elementKey);
-
-                    // The generic GREEN weaponskill burst plays ONLY for a non-elemental weapon.
-                    // When an element resolves we SUPPRESS it so the element's own color dominates
-                    // the hit read instead of being swamped green (owner: "every elemental weapon
-                    // should read visually"). Non-elemental weapons are unchanged.
-                    if (!hasElement)
-                        VFXManager.PlayKey("Weaponskillsword_Impact", hitPos, Quaternion.identity, null, null);
-
-                    // Perfect-hit emphasis burst (element-neutral energy pop) still fires on a timed
-                    // connect for both paths so a perfect hit always reads bigger.
-                    if (isPerfect)
-                        VFXManager.PlayKey("KnightWeaponskill_Impact", hitPos, Quaternion.identity, null, null, 1.15f);
-
-                    if (hasElement)
+                    if (!string.IsNullOrEmpty(elementKey))
                         VFXManager.PlayKey(elementKey, hitPos, Quaternion.identity, null, null,
                                            isPerfect ? 1.25f : 0f);
                 });
@@ -673,9 +660,16 @@ namespace DeNelle.Village
             if (_perfectHitSound != null)
                 _audioSource.PlayOneShot(_perfectHitSound, 1.0f);
 
-            // "PERFECT!" label above the hit — uses the project's DamageNumberSpawner.
-            DamageNumberSpawner.SpawnLabel("PERFECT!", hitPos + Vector3.up * 1.2f,
-                new Color(1f, 0.93f, 0.2f), 1.5f);
+            // Owner ruling 2026-08-02: a perfect-timed hit shows a floating GOLD ASCII
+            // "PERFECT" stamp (action-game style) through the SS1.8 pooled CombatText layer
+            // (capped, per-kind deduped -> "PERFECT x3", rises + fades ~0.9s, raycast-off).
+            // The WORD carries the meaning (colourblind law). Replaces both the old
+            // world-space DamageNumberSpawner label (uncapped/stacking) and the deleted
+            // KnightWeaponskill impact burst as the perfect-hit read.
+            FlowTrace.Once("Combat", "perfect-stamp",
+                "PERFECT stamp armed: perfect-timed melee hits route CombatText(Perfect) — no impact burst on basic hits (owner 2026-08-02).");
+            Guard.Try("Combat", "perfect-hit stamp", () =>
+                CombatText.Show(CombatTextKind.Perfect, "PERFECT", hitPos + Vector3.up * 1.2f));
         }
 
         // ── Audio ─────────────────────────────────────────────────────────────

@@ -312,7 +312,10 @@ namespace DeNelle.Village.Hero
                 foreach (var q in set.Quests)
                 {
                     if (q == null) continue;
-                    string title = q.Label ?? q.TemplateId ?? q.Slot;
+                    // WO-810 follow-up (owner F8 "board does not look like mock up"): route
+                    // through the shared resolver so "{target}" is substituted — the raw
+                    // "Clear {target} waves" titles were this exact skipped call.
+                    string title = DailyQuestCatalog.ResolveLabel(q);
                     rows.Add(new RumorBoardVM.DailyRow(q.Id, title, q.Progress, q.Target, q.Completed));
                 }
                 return rows;

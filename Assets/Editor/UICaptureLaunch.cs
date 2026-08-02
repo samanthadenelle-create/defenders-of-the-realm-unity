@@ -907,6 +907,20 @@ namespace DeNelle.Editor
                 if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_1920x1080.png", 1920, 1080)) saved++;
                 if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_2340x1080.png", 2340, 1080)) saved++;
 
+                // WO-810 follow-up: the DAILY tab — its rows carry raw "{target}" authored
+                // labels resolved via DailyQuestCatalog.ResolveLabel, so this shot pixel-
+                // proves the substitution the F8 flagged. Repaint is edit-safe now
+                // (RumorBoardPanel.SafeDestroy picks DestroyImmediate outside Play), so no
+                // extra pre-clear pass is needed for these repaints.
+                worstVm.SetTab("daily");
+                InvokePrivate(panel, "Repaint");
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_daily_1920x1080.png", 1920, 1080)) saved++;
+
+                // Restore the worst-case All-tab selection for the portrait shot below.
+                worstVm.SetTab("all");
+                SetPrivateField(panel, "_selectedId", WorstCaseRumorBackend.LongestBodyId);
+                InvokePrivate(panel, "Repaint");
+
                 // Portrait: apply the authored portrait anchors (the ONLY delta of the
                 // portrait branch in Open) to the same hosts, then shoot 1080x2340.
                 RectTransform listViewport = null;
@@ -1119,7 +1133,36 @@ namespace DeNelle.Editor
             public string TrackedId => "uicap_rumor_active1";
             public void StartQuest(string id) { }
             public void SetTracked(string id) { }
-            public IReadOnlyList<RumorBoardVM.DailyRow> DailyToday => Array.Empty<RumorBoardVM.DailyRow>();
+
+            // WO-810 follow-up (2026-08-02): three daily rows whose AUTHORED labels carry the
+            // raw "{target}" token, resolved through the SAME DailyQuestCatalog.ResolveLabel
+            // path the live backend now uses — the daily shot pixel-proves the substitution
+            // (the F8 defect was raw "Clear {target} waves" titles on the Daily tab).
+            private static readonly IReadOnlyList<RumorBoardVM.DailyRow> DailyRows = BuildDailyRows();
+
+            private static IReadOnlyList<RumorBoardVM.DailyRow> BuildDailyRows()
+            {
+                var instances = new[]
+                {
+                    new DeNelle.Core.Quests.DailyQuestInstance
+                    { Id = "uicap_daily1", TemplateId = "combat.clear-waves", Slot = "combat",
+                      Target = 5, Progress = 2, Completed = false, Label = "Clear {target} waves" },
+                    new DeNelle.Core.Quests.DailyQuestInstance
+                    { Id = "uicap_daily2", TemplateId = "exploration.visit-regions", Slot = "exploration",
+                      Target = 3, Progress = 3, Completed = true, Label = "Visit {target} regions beyond the walls" },
+                    new DeNelle.Core.Quests.DailyQuestInstance
+                    { Id = "uicap_daily3", TemplateId = "wildcard.raise-towers", Slot = "wildcard",
+                      Target = 4, Progress = 0, Completed = false, Label = null },   // fallback: TemplateId
+                };
+                var rows = new List<RumorBoardVM.DailyRow>(instances.Length);
+                foreach (var q in instances)
+                    rows.Add(new RumorBoardVM.DailyRow(q.Id,
+                        DeNelle.Core.Quests.DailyQuestCatalog.ResolveLabel(q),
+                        q.Progress, q.Target, q.Completed));
+                return rows;
+            }
+
+            public IReadOnlyList<RumorBoardVM.DailyRow> DailyToday => DailyRows;
             public event Action Changed { add { } remove { } }
         }
 
