@@ -217,11 +217,16 @@ namespace DeNelle.Village
                 0.08f, 0.92f, bold: false);
             ElarionUiKit.FitSingleLine(line);
 
-            // -- the advance (bottom-RIGHT, flanking the shared bottom-center Close;
-            //    same bottom-row budget as the card state -- y[0.05-0.245] x[0.64-0.955],
-            //    ~118px tall, above MinTouchPx=112; the intro line (0.27+) clears it) ---
+            // -- the advance (bottom-CENTER). It used to sit bottom-RIGHT at x[0.64-0.955]
+            //    because it FLANKED the shared bottom-centre Close; owner F8 seq 628 retired
+            //    that Close, so a lone button hugging the right edge just read as misaligned
+            //    (owner 2026-08-02: "move the continue button on pet screen to center width
+            //    still on bottom of box"). SAME WIDTH (0.315 of the content) and the SAME
+            //    bottom-row budget y[0.05-0.245] (~118px tall, above MinTouchPx=112) --
+            //    only the x band is re-centred on 0.5, so nothing about the touch target or
+            //    the intro line's clearance (0.27+) changes. ---
             ElarionUiKit.Button(content, "Continue", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.64f, 0.05f), new Vector2(0.955f, 0.245f), OnEmergenceContinue);
+                new Vector2(0.3425f, 0.05f), new Vector2(0.6575f, 0.245f), OnEmergenceContinue);
 
             // -- WO-831 polish: soft fade/scale-in so the spirit "emerges" (CanvasGroup
             //    coroutine on unscaled time -- no tween lib, no Timeline, no video). ---

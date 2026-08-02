@@ -16,7 +16,8 @@
 //      HarvestResource kept for the 3 classic resources, EmergeLine present (WO-831).
 //   2. Balance load       — EchoBalanceCatalog loads via CanonicalJson; the
 //      Resources/StreamingAssets dual-copy is byte-identical; the WO-830 tunables
-//      (0.40 / 0.15 / 0.20 / 0.05 / hiddenTri 0.25), the 3 crossBonuses pairs, and
+//      (0.03 / 0.02 / 0.20 / 0.01 / hiddenTri 0.25 -- owner "+5% not 55%" ruling
+//      2026-08-02, was 0.40 / 0.15 / 0.20 / 0.05), the 3 crossBonuses pairs, and
 //      the crystals-slowest rate law (Bran+Maren combined < every other single rate).
 //   3. Token grammar      — AssignHarvest+SetLevel produce a "resource:level" token that
 //      round-trips; legacy "wood,iron,food,idle" reads Harvest with the RESOURCE
@@ -233,11 +234,20 @@ namespace DeNelle.Editor
             if (data.Version != 1) Fail($"echoes-balance.json version {data.Version} (expected 1)");
             if (EchoBalanceCatalog.MaxLevel != 8) Fail($"echoes-balance MaxLevel {EchoBalanceCatalog.MaxLevel} (expected 8)");
 
-            // The key tunables must be the WO-830 re-tune (the balance the math below assumes).
-            AssertClose(Fail, EchoBalanceCatalog.PreferredLaneMatchBonus, 0.40f, "preferredLaneMatchBonus (WO-830 re-tune)");
-            AssertClose(Fail, EchoBalanceCatalog.BaseContributionPerEcho, 0.15f, "baseContributionPerEcho");
+            // The key tunables must be the CURRENT owner-ruled balance (the math below assumes it).
+            // RE-PINNED 2026-08-02 after the owner's F8 on the Echo card ("should be +5% not 55%"):
+            // the card prints base+match, which was 0.15+0.40 = +55%. Now 0.02+0.03 = +5% matched,
+            // +2% unmatched (matching still pays 2.5x). perLevelBonus fell 0.05 -> 0.01 in the same
+            // breath because at the old value ONE level-up outweighed the entire matched bonus,
+            // which would have made the affinity pick cosmetic. Lv8 matched now reads +12%.
+            // This canary FIRED on the change (REGRESSION_FAIL x3) and was reviewed, not
+            // reflexively repinned - the set/tri knobs below are deliberately UNCHANGED, which is
+            // why team composition now outweighs individual assignment (flagged to the owner,
+            // see docs/design/ECONOMY_PROGRESSION_THESIS_2026-08-02.md).
+            AssertClose(Fail, EchoBalanceCatalog.PreferredLaneMatchBonus, 0.03f, "preferredLaneMatchBonus (owner +5% ruling)");
+            AssertClose(Fail, EchoBalanceCatalog.BaseContributionPerEcho, 0.02f, "baseContributionPerEcho (owner +5% ruling)");
             AssertClose(Fail, EchoBalanceCatalog.SixSetBonusGlobalHarvest, 0.20f, "sixSetBonusGlobalHarvest");
-            AssertClose(Fail, EchoBalanceCatalog.PerLevelBonus, 0.05f, "perLevelBonus");
+            AssertClose(Fail, EchoBalanceCatalog.PerLevelBonus, 0.01f, "perLevelBonus (owner +5% ruling)");
             AssertClose(Fail, EchoBalanceCatalog.HiddenTriSynergyBonus, 0.25f, "hiddenTriSynergyBonus (WO-830 Sec.3d)");
 
             // The 3 disclosed pair synergies (Provisions / Forge / Fortune) with positive bonuses.

@@ -215,22 +215,25 @@ namespace DeNelle.Dungeons
         ///
         /// Every id here MUST be a row in materials.json (both dual copies) - that is the
         /// larder's catalog, and an id outside it deposits a key with no display name and
-        /// no icon. These are the ingredients of "Brew Mending Salve"
-        /// (consumable-recipes.json, craft-cons_mending_salve = ing_moonbloom x2 +
-        /// ing_spring_water x1), granted at double so a clear brews TWO salves.
+        /// no icon.
         ///
-        /// NOT HERE (deliberate): the torch recipe's own mats. The recipe unlocked below
-        /// consumes dry-reed / oil-soaked-cloth / ember-resin, which are defined ONLY in
-        /// crafting-recipes.json and consumed from the per-run DungeonInventory by
-        /// CraftingPedestal. They are NOT materials.json rows, so the larder cannot name
-        /// or icon them and the regression would reject them. Routing torch mats to the
-        /// player is an open design question, not something to paper over with ing_*
-        /// look-alikes (ing_cloth_scrap is not oil-soaked-cloth).
+        /// THE CACHE PAYS THE TORCH'S OWN MATS. Owner ruling 2026-08-02: dry-reed /
+        /// oil-soaked-cloth / ember-resin were PROMOTED into materials.json (both copies,
+        /// version 3) precisely so the larder can hold them and this cache can pay the
+        /// recipe it unlocks below. Two of each = TWO torches. (They have no ItemIcons art
+        /// yet, so they ride the glyph fallback like the other icon-less rows.)
+        ///
+        /// The potion pair stays so the cache still reads as a general crafting supply:
+        /// ing_moonbloom x2 + ing_spring_water x1 is exactly "Brew Mending Salve"
+        /// (consumable-recipes.json, craft-cons_mending_salve) - one salve.
         /// </summary>
         internal static readonly (string Id, int Count)[] FixedBundle =
         {
-            ("ing_moonbloom", 4),
-            ("ing_spring_water", 2),
+            ("dry-reed", 2),
+            ("oil-soaked-cloth", 2),
+            ("ember-resin", 2),
+            ("ing_moonbloom", 2),
+            ("ing_spring_water", 1),
         };
 
         /// <summary>

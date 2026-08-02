@@ -1,6 +1,18 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (evening — F8 felt wave): next free WO = **851**. **782–850 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (evening — 5th collision resolved): next free WO = **853**. **782–852 CONSUMED.**
+> - **851** = every-4th-wave BOSS encounters + statistical adaptation (owner rulings: statistics not
+>   AI, every 4th wave, boss enemies at boss scale, Syndrath's flair — JSON-driven HP bar + boss
+>   music reusing the least-used clip). File `WORK_ORDER_851_every_fourth_wave_adaptation.md`.
+>   **SHIPPED as spec in `0bb46258` — keeps 851 (first-on-disk-and-referenced).**
+> - **852** = Echo card fixed-band layout (UI-seat RCA: the WO-830 resource picker's 1/n fraction
+>   slices collapse below MinTouchPx and the buttons stack up into the info block; same class as
+>   WO-832 §4 / WO-841 fraction-band culling). **Renumbered from a collided 851 mint — the CLI's
+>   851 was already committed. THE COLLISION WAS THE CLI'S FAULT: it wrote 851 to disk without
+>   bumping this banner, so the UI seat correctly read "next free = 851".** READY.
+> - **⚠ FIVE collisions on 2026-08-02 alone.** The banner is only an authority if it is bumped in
+>   the SAME edit as the mint — including by the CLI. Owner ratification of a reserved UI block
+>   (860–899) is now overdue.
 > - **848** = RESTORE Android managed stripping Medium (lowered to Low 2026-08-02 because the
 >   WO-766 Solana SDK's BouncyCastle.Cryptography fails the CIL-linker resolve at Medium;
 >   captured in Builds/android-build.log + MobileSettings.cs comment). APK-size follow-up, OPEN.

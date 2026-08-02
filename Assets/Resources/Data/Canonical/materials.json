@@ -1,5 +1,5 @@
 {
-  "_comment": "Crafting INGREDIENT / material definitions for the item-drops + crafting lane. Loaded by DeNelle.Village.Items.MaterialCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). A material's 'id' is its VillageInventory larder key AND a loot-tables.json drop materialId AND a consumable-recipes.json ingredient id. These are the 12 ingredients we have ART for (iconPath -> Resources/ItemIcons/<id>, ItemIconImporter; glyph fallback until sliced). Added by WO Consumable-Crafting-V1. The legacy scaffolding mats (monster-hide / wild-herb / tattered-cloth / ember-resin / rare-essence) are NOT listed here - they have no recipes and resolve to the glyph fallback in the crafting UI.",
+  "_comment": "Crafting INGREDIENT / material definitions for the item-drops + crafting lane. Loaded by DeNelle.Village.Items.MaterialCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). A material's 'id' is its VillageInventory larder key AND a loot-tables.json drop materialId AND a consumable-recipes.json ingredient id. These are the 12 ingredients we have ART for (iconPath -> Resources/ItemIcons/<id>, ItemIconImporter; glyph fallback until sliced). Added by WO Consumable-Crafting-V1. WO-850 owner ruling (2026-08-02): the torch recipe's three mats (dry-reed / oil-soaked-cloth / ember-resin) were PROMOTED into this catalog so the larder can name + icon them and the deepest-dungeon treasure cache can pay them; they have NO ItemIcons art yet, so iconPath is empty and the glyph is the fallback (same as the PascalCase rows). displayName/glyph are copied WORD-FOR-WORD from crafting-recipes.json's ingredients block so the two catalogs agree. The remaining legacy scaffolding mats (monster-hide / wild-herb / tattered-cloth / rare-essence) are NOT listed here - they have no recipes and resolve to the glyph fallback in the crafting UI.",
   "_schemaNotes": {
     "kind": "material (a crafting ingredient; UI bucket).",
     "category": "herb | crystal | fungus | liquid | cloth | stone | petal - documentation + a hint for the glyph/icon fallback.",
@@ -7,7 +7,7 @@
     "glyph": "ASCII fallback shown when the icon sprite is not yet sliced.",
     "price": "gold BUY price at goods/jeweler vendors (Market materials, Jeweler gems). WO-598: shelf price is CONTENT, not code."
   },
-  "version": 2,
+  "version": 3,
   "materials": [
     {
       "id": "ing_moonbloom",
@@ -224,6 +224,33 @@
       "glyph": "+",
       "iconPath": "",
       "price": 60
+    },
+    {
+      "id": "dry-reed",
+      "displayName": "Dry Reed",
+      "kind": "material",
+      "category": "wood",
+      "glyph": "|",
+      "iconPath": "",
+      "price": 3
+    },
+    {
+      "id": "oil-soaked-cloth",
+      "displayName": "Oil-Soaked Cloth",
+      "kind": "material",
+      "category": "cloth",
+      "glyph": "~",
+      "iconPath": "",
+      "price": 4
+    },
+    {
+      "id": "ember-resin",
+      "displayName": "Ember Resin",
+      "kind": "material",
+      "category": "resin",
+      "glyph": "*",
+      "iconPath": "",
+      "price": 5
     }
   ]
 }

@@ -1,6 +1,6 @@
 // =============================================================================
 // EchoCardView -- the Echo select card (dumb skin; MVVM strict; WO-681 card,
-// WO-830 per-Echo harvest RESOURCE PICKER).
+// WO-830 per-Echo harvest RESOURCE PICKER, WO-852 fixed-band layout).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
@@ -16,11 +16,50 @@
 // the only outbound call is vm.AssignResource on a chip tap. PanelManager-registered
 // (one modal at a time; battle-lock respected -- a rejected open never shows a half-card).
 //
-// Layout mirrors EchoWorkforceHud's fraction-in-content approach (same kit, same
-// chrome family, code-built uGUI -- NO UXML, PIPELINE_STATE S8). The vertical
-// resource picker keeps its bottom edge above the shared Close band (the WO-555
-// clearance lesson documented in EchoWorkforceHud.Build). With FIVE chips offered
-// the modal is TALLER than the old two-lane card (0.10-0.90 vs 0.30-0.80).
+// ---------------------------------------------------------------------------
+// WO-852 LAYOUT LAW (this is the whole point of the rewrite -- do not regress it)
+// ---------------------------------------------------------------------------
+// The pre-WO-852 card stacked SIX fraction-anchored text bands plus a picker that
+// sliced its host into 1/n equal fractions. Two compounding failures, both proven
+// by arithmetic against the real FrameCore zones:
+//
+//  (1) TOUCH-FLOOR OVERFLOW. Each 1/n picker slice resolved to ~34 ref px. The kit
+//      touch floor (ElarionUiKit.ClampMinTouch / UiKitMinTouchGuard) then grows a
+//      sub-floor button SYMMETRICALLY ABOUT ITS CENTRE to MinTouchPx (112) -- i.e.
+//      ~39 px UP and ~39 px DOWN, past the slice on BOTH sides. Every chip therefore
+//      overlapped its neighbours AND the top chip climbed into the info text. The
+//      LAST-built chip ("Crystals") is the last sibling, so it won every overlapping
+//      raycast -- exactly the owner's "only the bottom chip is tappable".
+//  (2) FRACTION TEXT BANDS. A fraction band scales with the pane and under-heights
+//      the TMP line box, which silently culls/collides glyphs (WO-832 Sec.4 /
+//      WO-841 / RumorBoard; CANON_GROUND_TRUTH 2026-08-02: "text bands must be
+//      sized in fixed pixels >= the font's line height, never as a fraction of a
+//      parent").
+//
+// THE FIX: every band below is a FIXED REFERENCE-PIXEL band derived from the kit
+// constants (never a literal, never a parent fraction), and the picker is a kit
+// scroll well (ElarionUiKit.MakeScrollZone) whose rows carry their own pixel height.
+//
+// WHY A SCROLL WELL AND NOT "just fit five chips": the modal cannot hold them.
+// FrameCore's body zone, after the factory close-band reservation, resolves to
+// ~475 ref px at 1920x1080 and ~418 ref px at 2340x1080 (the tighter aspect --
+// CanvasScaler 1080x1920 @ match 0.5). Five chips at the MinTouchPx=112 floor need
+// 560 px BEFORE gaps, info lines or the affinity note. 560 > 418. Shrinking below
+// the touch floor is not an option (mobile-first), so the picker scrolls and ~3
+// chips are visible at rest. To buy back every pixel available the modal was also
+// raised 0.10-0.90 -> 0.05-0.95.
+//
+// The info block was moved OUT of the body well into the frame's OWN designed
+// zones, which is what they exist for:
+//   name    -> chrome.title      (the header plate)
+//   portrait-> layout.medallion  (the circular socket; was an empty crest)
+//   what    -> layout.subHeader  (WO-839 meta band)
+//   state   -> layout.footer     (line 1)  -- the status strip, seated by the
+//   synergy -> layout.footer     (line 2)  -- factory above the shared Close
+//   ask + picker -> layout.body
+// Each host is null-guarded: on the PROCEDURAL path (frame art absent) subHeader and
+// medallion do not exist, so those lines fall back into the body's fixed-pixel stack
+// and the picker well simply starts lower. Never a fraction, either way.
 //
 // Reached via a TAP on an OWNED roster card (EchoRosterView) -> EchoCard.Open(echoIndex).
 // Singleton view host on a DDOL GameObject.
@@ -61,21 +100,53 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class EchoCardView : MonoBehaviour
     {
+        // -- WO-852 FIXED REF-PIXEL LAYOUT CONSTANTS ---------------------------
+        // Every value derives from a KIT constant so a kit change moves the card with
+        // it and a sub-floor literal can never creep back in. `public const` so the
+        // EchoCardLayoutRegression oracle can pin them without reflection.
+        //
+        // WHY FIXED PIXELS: WO-832 Sec.4 / WO-841 -- a fraction band scales with the
+        // pane and under-heights the font's line box, and TMP then culls/clips the
+        // glyphs with no error. A band sized as a whole TMP line box (~1.25em + 2px
+        // slack) at the kit's readable floor always seats its text.
+
+        /// <summary>One TMP line box at the kit's auto-size floor (ElarionUiKit.FontFloor).</summary>
+        public const float FloorLinePx = ElarionUiKit.FontFloor * 1.25f + 2f;   // 39.5
+        /// <summary>The "What should X gather?" ask -- one FontLabel line box.</summary>
+        public const float AskBandPx = ElarionUi.FontLabel * 1.25f + 2f;        // 52
+        /// <summary>Every picker chip button is EXACTLY the kit touch floor tall -- never less
+        /// (mobile-first) and never a fraction (that is what let ClampMinTouch overflow).</summary>
+        public const float ChipButtonPx = ElarionUiKit.MinTouchPx;              // 112
+        /// <summary>The affinity note UNDER a chip -- its own floor line box, so it can never
+        /// eat into the button's touch height.</summary>
+        public const float ChipNotePx = FloorLinePx;                            // 39.5
+        /// <summary>Gap between picker rows (kit scroll-zone spacing).</summary>
+        public const float RowGapPx = 8f;
+        /// <summary>Gap between stacked fixed bands.</summary>
+        public const float BandGapPx = 8f;
+        /// <summary>Inset from the body well's top/bottom edge.</summary>
+        public const float BodyPadPx = 6f;
+        /// <summary>Inset inside the kit scroll well.</summary>
+        public const int ScrollPadPx = 4;
+
         private GameObject _modal;
-        private TextMeshProUGUI _nameLabel;
+        private TextMeshProUGUI _titleLabel;    // the frame's header plate carries the Echo NAME
         private TextMeshProUGUI _whatLabel;
         private TextMeshProUGUI _stateLabel;
         private TextMeshProUGUI _synergyLabel;
         private TextMeshProUGUI _askLabel;
-        private Transform _chipRow;
+        private Transform _chipRow;             // the kit scroll-well CONTENT column
         private Image _portrait;
         private readonly List<GameObject> _chips = new List<GameObject>();
+        // Hash of the RENDERED chip state -- the picker rebuilds only when this moves
+        // (EchoService raises Changed every frame while the silo fills; see RebuildChips).
+        private string _lastChipSig;
 
         private EchoCardVM _vm;
         private PanelHandle _panelHandle;
         private bool _open;
 
-        // ── open / close ──────────────────────────────────────────────────────
+        // -- open / close ------------------------------------------------------
 
         /// <summary>Open (or re-target) the card for one Echo.</summary>
         public void OpenFor(int echoIndex)
@@ -86,6 +157,7 @@ namespace DeNelle.Village
             if (_vm != null) { _vm.Changed -= Refresh; _vm.Dispose(); }
             _vm = new EchoCardVM(echoIndex);
             _vm.Changed += Refresh;
+            _lastChipSig = null;   // re-targeted card: force one picker rebuild
 
             if (_modal == null) Build();
             if (_modal == null)
@@ -124,121 +196,183 @@ namespace DeNelle.Village
             if (_vm != null) { _vm.Changed -= Refresh; _vm.Dispose(); _vm = null; }
         }
 
-        // ── build (master factory; no per-screen chrome) ──────────────────────
+        // -- fixed-pixel band pins (the WO-832 Sec.4 / WO-841 pattern) ---------
+        // Re-hang a control on its parent's TOP or BOTTOM edge with a FIXED ref-pixel
+        // band. X anchors/offsets are preserved; only the vertical seat changes, so a
+        // band never scales with the pane and never under-heights its line box again.
+
+        private static void PinBandFromTop(RectTransform rt, float topPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 1f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, -(topPx + heightPx));
+            rt.offsetMax = new Vector2(rt.offsetMax.x, -topPx);
+        }
+
+        private static void PinBandFromBottom(RectTransform rt, float bottomPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 0f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 0f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, bottomPx);
+            rt.offsetMax = new Vector2(rt.offsetMax.x, bottomPx + heightPx);
+        }
+
+        // -- build (master factory; no per-screen chrome) ----------------------
 
         private void Build()
         {
-            // Same law as EchoRosterView (owner F8 2026-07-24): parent into layout.body so
-            // labels never paint over the FrameCore title plate or the shared Close.
-            // Centred; MODAL band above the roster (31000). WO-830: taller than the old
-            // two-lane card -- the five-resource picker needs the vertical room while every
-            // chip stays >= the mobile touch floor.
+            // Same law as EchoRosterView (owner F8 2026-07-24): parent into the frame's
+            // drop-zones so labels never paint over the FrameCore title plate or the
+            // shared Close. Centred; MODAL band above the roster (31000).
+            // WO-852: raised 0.10-0.90 -> 0.05-0.95. The body well is the binding
+            // constraint for a five-chip picker at MinTouchPx, so the card takes every
+            // vertical pixel the frame will give it (the factory close-band reservation
+            // still keeps the body above the shared Close).
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoCard", "ECHO",
-                new Vector2(0.22f, 0.10f), new Vector2(0.78f, 0.90f),
+                new Vector2(0.18f, 0.05f), new Vector2(0.82f, 0.95f),
                 onClose: Close, sortingOrder: 31010,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
 
-            if (built.chrome.title != null)
-            {
-                built.chrome.title.text = "ECHO";
-                ElarionUiKit.FitSingleLine(built.chrome.title);
-            }
+            var layout = built.chrome.layout;
 
-            Transform body = built.chrome.layout != null && built.chrome.layout.body != null
-                ? built.chrome.layout.body
+            // NAME -> the frame's HEADER PLATE. WO-852: this used to be an 82px
+            // FontHead band inside the body well; the plate is the designed home for a
+            // card's identity and reclaiming those pixels is what let the picker reach
+            // the touch floor. FitSingleLine keeps it from clipping at any aspect.
+            _titleLabel = built.chrome.title;
+
+            Transform body = layout != null && layout.body != null
+                ? (Transform)layout.body
                 : built.chrome.content.transform;
 
-            // Body bands (0..1 of body well only -- no cross-stack, every band DISJOINT):
-            //   portrait + name   0.86-0.98
-            //   what (element+affinity) 0.79-0.85   single short line
-            //   state             0.72-0.78   single line
-            //   synergy status    0.65-0.71   single line (WO-830 disclosed pair line)
-            //   ask               0.59-0.64   single line
-            //   resource picker   0.05-0.57   five chips, above Close (body already reserved)
+            // PORTRAIT -> the medallion socket (it otherwise renders the generic crest).
+            // Null on the PROCEDURAL path (frame art absent) -- then the card simply has
+            // no portrait rather than stealing body pixels from the picker.
             var portraitSprite = Guard.Try("Echo", "load echo portrait",
                 () => _vm != null ? _vm.Portrait : null, fallback: null);
-            if (portraitSprite != null)
+            if (portraitSprite != null && layout != null && layout.medallion != null)
             {
-                var pg = new GameObject("EchoPortrait", typeof(Image));
-                pg.transform.SetParent(body, false);
-                var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.04f, 0.86f);
-                prt.anchorMax = new Vector2(0.20f, 0.98f);
-                prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+                var pg = ElarionUiKit.AddImage(layout.medallion, "EchoPortrait",
+                    new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), Color.white, rounded: false);
                 _portrait = pg.GetComponent<Image>();
                 _portrait.sprite = portraitSprite;
                 _portrait.preserveAspect = true;
                 _portrait.raycastTarget = false;
             }
 
-            _nameLabel = ElarionUiKit.Label(body, "", 0.87f, 0.97f,
-                ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
-                0.22f, 0.96f, bold: true);
-            ElarionUiKit.FitSingleLine(_nameLabel);
+            // Running FIXED-PIXEL cursor down the body well. It only advances when a
+            // line has no designed zone to live in (procedural fallback) -- never a
+            // fraction, so the picker's start is deterministic at every aspect.
+            float bodyTopPx = BodyPadPx;
 
-            // Element + "Favors: <resource>" -- the affinity disclosed in TEXT (WO-830).
-            _whatLabel = ElarionUiKit.Label(body, "", 0.79f, 0.85f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                0.06f, 0.94f, bold: false);
+            // WHAT (element + "Favors: <resource>") -> the WO-839 SUB-HEADER meta band.
+            // FIXED FloorLinePx band at the kit's readable floor size: the subHeader zone
+            // resolves to ~45-50 ref px, which seats one floor line box (39.5) but NOT a
+            // FontLabel one (52) -- sizing the band in pixels is what makes that safe
+            // instead of silently clipped (WO-832 Sec.4 lesson).
+            Transform whatHost = (layout != null && layout.subHeader != null)
+                ? (Transform)layout.subHeader : body;
+            _whatLabel = ElarionUiKit.Label(whatHost, "", 0f, 1f,
+                ElarionUi.Parchment, (int)ElarionUi.FontFloorMobile, TextAlignmentOptions.Center,
+                0.02f, 0.98f, bold: false);
             ElarionUiKit.FitSingleLine(_whatLabel);
+            if (whatHost == body)
+            {
+                PinBandFromTop(_whatLabel.rectTransform, bodyTopPx, FloorLinePx);
+                bodyTopPx += FloorLinePx + BandGapPx;
+            }
+            else PinBandFromTop(_whatLabel.rectTransform, 0f, FloorLinePx);
 
-            _stateLabel = ElarionUiKit.Label(body, "", 0.72f, 0.78f,
-                new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
-                0.06f, 0.94f, bold: true);
+            // STATE + SYNERGY -> the frame's FOOTER strip (a status bar, seated above the
+            // shared Close by the factory's sweep-9413 relocation). Two FIXED floor line
+            // boxes: 39.5 + 6 + 39.5 = 85 px inside a ~115-126 px band.
+            Transform statusHost = (layout != null && layout.footer != null)
+                ? (Transform)layout.footer : body;
+
+            _stateLabel = ElarionUiKit.Label(statusHost, "", 0f, 1f,
+                new Color(0.85f, 0.85f, 0.9f, 1f), (int)ElarionUi.FontFloorMobile,
+                TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(_stateLabel);
 
             // WO-830: the DISCLOSED pair-synergy status ("Provisions synergy ... ACTIVE").
-            _synergyLabel = ElarionUiKit.Label(body, "", 0.65f, 0.71f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                0.06f, 0.94f, bold: false);
+            _synergyLabel = ElarionUiKit.Label(statusHost, "", 0f, 1f,
+                ElarionUi.Gilt, (int)ElarionUi.FontFloorMobile,
+                TextAlignmentOptions.Center, 0.02f, 0.98f, bold: false);
             ElarionUiKit.FitSingleLine(_synergyLabel);
 
-            _askLabel = ElarionUiKit.Label(body, "", 0.59f, 0.64f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                0.06f, 0.94f, bold: false);
-            ElarionUiKit.FitSingleLine(_askLabel);
+            if (statusHost == body)
+            {
+                PinBandFromTop(_stateLabel.rectTransform, bodyTopPx, FloorLinePx);
+                bodyTopPx += FloorLinePx + BandGapPx;
+                PinBandFromTop(_synergyLabel.rectTransform, bodyTopPx, FloorLinePx);
+                bodyTopPx += FloorLinePx + BandGapPx;
+            }
+            else
+            {
+                // Bottom-pinned inside the footer band so the pair reads as one status
+                // strip regardless of how tall the frame's footer resolves.
+                PinBandFromBottom(_synergyLabel.rectTransform, 4f, FloorLinePx);
+                PinBandFromBottom(_stateLabel.rectTransform, 4f + FloorLinePx + 6f, FloorLinePx);
+            }
 
-            var rowGo = new GameObject("ResourcePicker", typeof(RectTransform));
-            rowGo.transform.SetParent(body, false);
-            var rowRt = rowGo.GetComponent<RectTransform>();
-            rowRt.anchorMin = new Vector2(0.06f, 0.05f);
-            rowRt.anchorMax = new Vector2(0.94f, 0.57f);
-            rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
-            _chipRow = rowGo.transform;
+            // ASK -> the picker's own label, pinned at the top of the body well in a
+            // FIXED FontLabel line box (52 px). It must NOT scroll away with the chips.
+            _askLabel = ElarionUiKit.Label(body, "", 0f, 1f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                0.03f, 0.97f, bold: false);
+            ElarionUiKit.FitSingleLine(_askLabel);
+            PinBandFromTop(_askLabel.rectTransform, bodyTopPx, AskBandPx);
+            bodyTopPx += AskBandPx + BandGapPx;
+
+            // PICKER -> a kit scroll well filling the REST of the body. The well is
+            // pinned in pixels at the top (below the ask) and at the bottom (body pad),
+            // so it never overlaps the info block no matter how the pane resolves.
+            // Rows inside carry their own pixel height (MakeScrollZone runs
+            // childControlHeight:false), which is what guarantees ChipButtonPx.
+            var pickerGo = new GameObject("ResourcePicker", typeof(RectTransform));
+            pickerGo.transform.SetParent(body, false);
+            var pickerRt = pickerGo.GetComponent<RectTransform>();
+            pickerRt.anchorMin = new Vector2(0.03f, 0f);
+            pickerRt.anchorMax = new Vector2(0.97f, 1f);
+            pickerRt.offsetMin = new Vector2(0f, BodyPadPx);
+            pickerRt.offsetMax = new Vector2(0f, -bodyTopPx);
+
+            var scroll = ElarionUiKit.MakeScrollZone(pickerGo.transform, RowGapPx, ScrollPadPx);
+            _chipRow = scroll != null && scroll.content != null
+                ? (Transform)scroll.content
+                : pickerGo.transform;
+            if (scroll == null || scroll.content == null)
+                FlowTrace.Warn("Echo", "Card: MakeScrollZone returned no content -- chips parented flat.");
         }
 
-        // ── refresh (VM -> View, one direction) ───────────────────────────────
+        // -- refresh (VM -> View, one direction) -------------------------------
+
+        // Set a fitted label ONLY when the string actually moved. EchoService raises
+        // Changed EVERY FRAME while the silo fills (AddToSilo -> "notify the HUD every
+        // tick for a live fill bar"), so an unconditional assign + FitSingleLine re-armed
+        // the kit's one-shot UiKitTextFitGuard on every label every frame -- the same
+        // per-tick churn BuildingUpgradePanelMvvm had to signature-gate.
+        private static void SetIfChanged(TextMeshProUGUI label, string text)
+        {
+            if (label == null) return;
+            text ??= "";
+            if (label.text == text) return;
+            label.text = text;
+            ElarionUiKit.FitSingleLine(label);
+        }
 
         private void Refresh()
         {
             if (_vm == null || _modal == null || !_open) return;
-            if (_nameLabel != null)
-            {
-                _nameLabel.text = _vm.NameText;
-                ElarionUiKit.FitSingleLine(_nameLabel);
-            }
-            if (_whatLabel != null)
-            {
-                _whatLabel.text = _vm.WhatText;
-                ElarionUiKit.FitSingleLine(_whatLabel);
-            }
-            if (_stateLabel != null)
-            {
-                _stateLabel.text = _vm.StateText;
-                ElarionUiKit.FitSingleLine(_stateLabel);
-            }
-            if (_synergyLabel != null)
-            {
-                _synergyLabel.text = _vm.SynergyText;
-                ElarionUiKit.FitSingleLine(_synergyLabel);
-            }
-            if (_askLabel != null)
-            {
-                _askLabel.text = _vm.AskText;
-                ElarionUiKit.FitSingleLine(_askLabel);
-            }
+            SetIfChanged(_titleLabel, _vm.NameText);
+            SetIfChanged(_whatLabel, _vm.WhatText);
+            SetIfChanged(_stateLabel, _vm.StateText);
+            SetIfChanged(_synergyLabel, _vm.SynergyText);
+            SetIfChanged(_askLabel, _vm.AskText);
             // Portrait can change if the card is re-opened for another Echo.
             if (_portrait != null && _vm.Portrait != null)
                 _portrait.sprite = _vm.Portrait;
@@ -248,52 +382,97 @@ namespace DeNelle.Village
         private void RebuildChips()
         {
             if (_chipRow == null) return;
-            for (int i = _chips.Count - 1; i >= 0; i--)
-                if (_chips[i] != null) Destroy(_chips[i]);
-            _chips.Clear();
 
             var chips = _vm.ResourceChips();
-            int n = Mathf.Max(1, chips.Length);
-            int index = 0;
+
+            // WO-852 CHURN GATE (a hard prerequisite for the scroll well, not an
+            // optimisation): EchoService.AddToSilo fires Changed once per FRAME while
+            // harvesting. The old card destroyed + rebuilt all five chip rows on every
+            // one of those ticks. Inside a kit scroll well that also resets the scroll
+            // position every frame -- the owner could never scroll to Crystals. Rebuild
+            // ONLY when the RENDERED chip state moves (label / selection / note), the
+            // BuildingUpgradePanelMvvm _lastContentSig pattern.
+            var sig = new System.Text.StringBuilder();
+            for (int i = 0; i < chips.Length; i++)
+                sig.Append(chips[i].Id).Append('|').Append(chips[i].Label).Append('|')
+                   .Append(chips[i].Selected ? '1' : '0').Append('|')
+                   .Append(chips[i].Note).Append(';');
+            string chipSig = sig.ToString();
+            if (_chips.Count > 0 && chipSig == _lastChipSig) return;
+            _lastChipSig = chipSig;
+
+            for (int i = _chips.Count - 1; i >= 0; i--)
+            {
+                if (_chips[i] == null) continue;
+                // Detach BEFORE Destroy: Destroy is deferred to end-of-frame, and a stale
+                // row left parented under the scroll column's VerticalLayoutGroup would be
+                // measured for one frame and double the column height.
+                _chips[i].transform.SetParent(null, false);
+                Destroy(_chips[i]);
+            }
+            _chips.Clear();
+
             // Guard.TryEach: one bad chip logs + skips, never blanks the picker (SS12.2).
             Guard.TryEach("Echo", "build resource chip", chips, chip =>
             {
-                int i = index++;
-                // Vertical stack: row 0 at the top, each row a full-width slice of the host.
-                float rowH = 1f / n;
-                float gap = 0.015f;
-                float y1 = 1f - i * rowH;
-                float y0 = y1 - rowH + gap;
+                bool hasNote = !string.IsNullOrEmpty(chip.Note);
 
-                // Row container holds the tappable resource button + an affinity note under it.
+                // WO-852: the row's height is a FIXED PIXEL SUM, never 1/n of the host.
+                // The old 1/n slice resolved to ~34 px, and ClampMinTouch then grew the
+                // button symmetrically about its centre to 112 -- overflowing ~39 px above
+                // AND below the slice, which is what stacked the chips on each other and
+                // pushed the top one into the info text.
+                float rowPx = hasNote ? ChipButtonPx + ChipNotePx : ChipButtonPx;
+
+                // Row container: sized by sizeDelta, per the kit scroll-column row law
+                // (MakeScrollZone runs childControlHeight:false, so a row keeps its own
+                // height; a LayoutElement would be read as preferred-height 0).
                 var rowGo = new GameObject("ResourceRow_" + chip.Id, typeof(RectTransform));
                 rowGo.transform.SetParent(_chipRow, false);
                 var rrt = rowGo.GetComponent<RectTransform>();
-                rrt.anchorMin = new Vector2(0f, y0);
-                rrt.anchorMax = new Vector2(1f, y1);
-                rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+                rrt.sizeDelta = new Vector2(0f, rowPx);
                 _chips.Add(rowGo);
 
-                string resId = chip.Id;   // capture for the closure
-                bool hasNote = !string.IsNullOrEmpty(chip.Note);
-                // Button fills the top band (whole row when there is no note).
-                float btnBottom = hasNote ? 0.42f : 0f;
+                // Button CELL: exactly ChipButtonPx (== ElarionUiKit.MinTouchPx) tall,
+                // pinned to the row's top edge in pixels. Because the cell already meets
+                // the floor, ClampMinTouch's guard is a no-op and can no longer grow the
+                // button past its row into a neighbour.
+                var cellGo = new GameObject("ChipCell", typeof(RectTransform));
+                cellGo.transform.SetParent(rowGo.transform, false);
+                var crt = cellGo.GetComponent<RectTransform>();
+                crt.anchorMin = new Vector2(0f, 0f);
+                crt.anchorMax = new Vector2(1f, 1f);
+                crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+                PinBandFromTop(crt, 0f, ChipButtonPx);
 
+                string resId = chip.Id;   // capture for the closure
                 // Selected resource = Gold face (plus the "(now)" TEXT cue -- never hue alone).
                 var kind = chip.Selected ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
-                var btn = ElarionUiKit.Button(rowGo.transform, chip.Label, kind,
-                    new Vector2(0f, btnBottom), new Vector2(1f, 1f),
-                    () => OnChipTapped(resId));
+                ElarionUiKit.Button(cellGo.transform, chip.Label, kind,
+                    Vector2.zero, Vector2.one, () => OnChipTapped(resId));
 
-                // Affinity note UNDER the button -- single line (never wraps into Close).
+                // Affinity note UNDER the button -- its OWN fixed floor line box, pinned
+                // to the row's bottom edge, so it can never borrow the button's touch
+                // height (the old 0.42 fraction split did exactly that).
                 if (hasNote)
                 {
-                    var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 0.38f,
+                    var note = ElarionUiKit.Label(rowGo.transform, chip.Note, 0f, 1f,
                         chip.Preferred ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
-                        ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: false);
+                        (int)ElarionUi.FontFloorMobile, TextAlignmentOptions.Center,
+                        0.03f, 0.97f, bold: false);
                     ElarionUiKit.FitSingleLine(note);
+                    note.raycastTarget = false;
+                    PinBandFromBottom(note.rectTransform, 0f, ChipNotePx);
                 }
             });
+
+            // The kit column only measures after a layout pass; force it so the first
+            // frame already scrolls correctly (the RaidDeployScreen FinalizeScroll idiom).
+            if (_chipRow is RectTransform contentRt)
+            {
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+            }
         }
 
         private void OnChipTapped(string resourceId)

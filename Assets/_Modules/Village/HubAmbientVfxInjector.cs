@@ -63,7 +63,17 @@ namespace DeNelle.Village
         // =====================================================================
 
         // ---- Master per-zone toggles (cheap kill switches alongside the flag) ----
-        private const bool EnableTreeAura    = true;   // (1) glow around the Tree of Life
+        // OWNER RULING 2026-08-02, asked repeatedly and missed every previous time:
+        // "i have asked many times to make this green vfx on empty village go away, but its
+        // still there". THIS is that green: TreeAuraColor below is a teal-green (0.58, 1.20,
+        // 0.90) column ~9m tall x 3.2m radius rising off the Tree of Life at the hub centre,
+        // so on an EMPTY village it is the dominant thing on screen. It kept surviving because
+        // (a) it lives in _Modules/Village/, NOT the Vfx/ folder anyone greps for VFX,
+        // (b) it is a hardcoded const rather than data, so no catalog/json edit could reach it,
+        // and (c) it is "working as designed" ambience, so nothing ever flagged it as broken.
+        // Turned OFF. The tower accents are a warm gold/ember read and are NOT what she means,
+        // so they stay. Flip back to true if the aura is ever wanted (e.g. re-tinted).
+        private const bool EnableTreeAura    = false;  // (1) glow around the Tree of Life -- OFF (owner, green-on-empty-village)
         private const bool EnableTowerAccents = true;  // (2) flame/glow at each corner tower top
 
         // ---- (1) TREE AURA ---------------------------------------------------

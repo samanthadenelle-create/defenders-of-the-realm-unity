@@ -373,6 +373,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-room-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonRoomOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-room-ownership] " + r); });
             // --- WO-850 dungeon treasure cache: fixed-bundle validity against materials.json, deepest-room BFS (undirected + ordinal tie-break), per-dungeon first-clear one-shot, panel single-exit ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
+            // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
@@ -1785,9 +1787,14 @@ namespace DeNelle.Editor
             // Documented legacy scaffolding ids: referenced by the 4 pre-existing
             // recipes + the default loot tables, intentionally have NO MaterialDef
             // (glyph fallback). Must not fail the gate.
+            // WO-850 (2026-08-02): "ember-resin" REMOVED from this set - the owner ruled the
+            // torch ingredients be promoted into materials.json so the larder can hold them, so
+            // it now has a real MaterialDef and no longer needs the exception. Leaving it here
+            // would have been a comment that lies ("intentionally have NO MaterialDef") and
+            // would mask a genuine future regression if the row were ever deleted.
             var legacy = new HashSet<string>
             {
-                "wild-herb", "rare-essence", "monster-hide", "tattered-cloth", "ember-resin"
+                "wild-herb", "rare-essence", "monster-hide", "tattered-cloth"
             };
 
             MaterialCatalog.Reload();

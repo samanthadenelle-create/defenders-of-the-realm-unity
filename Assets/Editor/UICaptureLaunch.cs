@@ -100,6 +100,7 @@ namespace DeNelle.Editor
                 count += CaptureFoundingEchoCard();
                 count += CapturePauseMenu();
                 count += CaptureEchoRoster();
+                count += CaptureEchoCard();          // WO-852: the resource-picker layout
                 count += CaptureHelpMenu();
                 count += CaptureDailyQuestHud();
                 count += CaptureLoreReadingModal();
@@ -1211,6 +1212,74 @@ namespace DeNelle.Editor
             foreach (var t in towers)
                 if (t != null) UnityEngine.Object.DestroyImmediate(t);
         }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the ECHO SELECT CARD (EchoCardView) -- the WO-830 resource picker.
+        //  WO-852: this card had NO capture coverage, which is exactly why its
+        //  fraction-band / sub-touch-floor overlap ("only the bottom chip is
+        //  tappable") reached the owner. The card must show its info block AND
+        //  touch-floor chips with no overlap at BOTH mobile-landscape aspects.
+        //
+        //  Driven WITHOUT OpenFor on purpose: OpenFor registers a PanelHandle with
+        //  the static PanelManager whose Close callback would outlive this
+        //  DestroyImmediate'd host and poison later captures. We seed the VM +
+        //  open flag and call the view's own private Build/Refresh instead, so the
+        //  REAL layout code runs against no global state.
+        // ---------------------------------------------------------------------
+        private static int CaptureEchoCard()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject modal = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapEchoCard");
+                var view = hostGo.AddComponent<EchoCardView>();
+
+                // Echo index 0 = the founding spirit (longest name + the affinity note row,
+                // i.e. the WORST-case row budget the picker has to seat).
+                SetPrivateField(view, "_vm", new EchoCardVM(0));
+                SetPrivateField(view, "_open", true);
+                InvokePrivate(view, "Build");
+
+                modal = GetPrivateGameObject(view, "_modal");
+                if (modal == null)
+                {
+                    Debug.LogWarning("[UICap-HL] EchoCardView._modal null after Build -- echo card capture skipped.");
+                    return 0;
+                }
+                modal.SetActive(true);
+                InvokePrivate(view, "Refresh");
+
+                if (RenderCanvasToPng(modal, OutDir + "EchoCard_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(modal, OutDir + "EchoCard_2340x1080.png", 2340, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] echo card capture threw: " + e);
+            }
+            finally
+            {
+                // Edit-mode teardown MUST be DestroyImmediate (same contract as the other shots).
+                if (modal != null) UnityEngine.Object.DestroyImmediate(modal);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // NOTE: SetPrivateField already exists further down this file (the SettingsController
+        // fixture helper) - the WO-852 capture reuses it rather than declaring a second copy
+        // (CS0111 duplicate-member, caught by the compile gate 2026-08-02).
 
         // ---------------------------------------------------------------------
         //  Render a uGUI canvas subtree to a PNG in EDIT mode (no Play).
