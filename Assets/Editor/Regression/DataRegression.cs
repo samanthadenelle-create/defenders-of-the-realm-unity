@@ -127,6 +127,15 @@ namespace DeNelle.Editor
             // exists and BarracksNpcInjector carries no bespoke standdown seam.
             CheckSingletons(failures, log);
 
+            // --- BLANK-TOWN BAKED-TWIN GATE (WO-834) -------------------------------
+            // Owner F8 seq 592: a "Build Your Own" founding loaded FULL of baked
+            // default-town structures. Gates: (a) the pure surfacing rule's truth
+            // table (blank+migrated suppresses; pre-migration and ever-built surface);
+            // (b) the v35->v36 migrator seed (blank save seeds EMPTY; established save
+            // gets BaseLayout + FreeBuildsUsed + the template grant); (c) source-lint
+            // that every surfacing path carries the gate.
+            CheckBlankTownGate(failures, log);
+
             // --- NPC MODEL BINDING (WO-818: repo.npcModel -> KayKit body) ----------
             // Owner mapping table 2026-08-01: 12 structure rows author repo.npcModel
             // (a KayKit slug) that the NPC injectors resolve as Resources/NPCs/KayKit/
@@ -1155,6 +1164,107 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  BLANK-TOWN BAKED-TWIN GATE - WO-834 (owner F8 seq 592): a baked twin
+        //  may only surface for an id the player has EVER built (or while the
+        //  WO-673 marker is unset - the bake still owns the town). Pins the pure
+        //  rule, the v35->v36 seed, and the gate's presence at every surfacing seam.
+        // =====================================================================
+        private static void CheckBlankTownGate(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+            log.AppendLine("[blankTown] WO-834 baked-twin surface gate:");
+
+            // (a) The pure rule's truth table (StructureSingleton.MayBakedTwinSurface).
+            var none = new List<string>();
+            var farmOnly = new List<string> { "collector_farm" };
+            if (StructureSingleton.MayBakedTwinSurface("collector_farm", none, true))
+                failures.Add("[blankTown] migrated save + empty everBuilt must SUPPRESS the baked twin (the seq-592 fix)");
+            if (StructureSingleton.MayBakedTwinSurface("collector_farm", null, true))
+                failures.Add("[blankTown] migrated save + NULL everBuilt must suppress (null-tolerant blank town)");
+            if (!StructureSingleton.MayBakedTwinSurface("collector_farm", none, false))
+                failures.Add("[blankTown] marker-false save must SURFACE (legacy pre-migration + Default-Town founding load)");
+            if (!StructureSingleton.MayBakedTwinSurface("collector_farm", farmOnly, true))
+                failures.Add("[blankTown] ever-built id must SURFACE on a migrated save (WO-819 sell-resurface leg)");
+            if (!StructureSingleton.MayBakedTwinSurface("COLLECTOR_FARM", farmOnly, true))
+                failures.Add("[blankTown] ever-built compare must be OrdinalIgnoreCase (catalog-id convention)");
+
+            // (b) The v35->v36 migrator seed (SaveMigrator.MigrateToV36 via the chain).
+            //     BLANK save (the owner's seq-592 shape: empty layout, no freebies burned)
+            //     must seed an EMPTY list - present-but-empty is the fix.
+            var blank = new SaveSchema.PersistedState
+            {
+                BaseLayout = new List<PlacedStructureData>(),
+                FreeBuildsUsed = new List<string>(),
+            };
+            blank = SaveMigrator.Migrate(blank, 35);
+            if (blank.EverBuiltStructureIds == null)
+                failures.Add("[blankTown] MigrateToV36 left everBuiltStructureIds NULL on a blank save (must seed empty list)");
+            else if (blank.EverBuiltStructureIds.Count != 0)
+                failures.Add($"[blankTown] MigrateToV36 seeded {blank.EverBuiltStructureIds.Count} id(s) on a BLANK save (must be 0 - blank founding stays blank)");
+
+            //     ESTABLISHED save: BaseLayout + FreeBuildsUsed union + the frozen
+            //     default-town template grant (incl. 'barracks' - the WO-724 unlock right).
+            var estab = new SaveSchema.PersistedState
+            {
+                BaseLayout = new List<PlacedStructureData>
+                {
+                    new PlacedStructureData("collector_farm", 1, 1, 0, level: 1,
+                        yawOffset: 0f, worldY: 0f, wallMounted: false),
+                },
+                FreeBuildsUsed = new List<string> { "workshop" },
+            };
+            estab = SaveMigrator.Migrate(estab, 35);
+            foreach (var id in new[] { "collector_farm", "workshop", "barracks", "pet-house" })
+                if (estab.EverBuiltStructureIds == null || !estab.EverBuiltStructureIds.Contains(id))
+                    failures.Add($"[blankTown] MigrateToV36 established-save seed missing '{id}' (existing towns must keep today's baked twins)");
+
+            //     SOLD-SINGLETON save: empty layout but a burned freebie - the id must
+            //     survive (WO-819 sell-resurface) WITHOUT dragging the template grant in.
+            var sold = new SaveSchema.PersistedState
+            {
+                BaseLayout = new List<PlacedStructureData>(),
+                FreeBuildsUsed = new List<string> { "pet-house" },
+            };
+            sold = SaveMigrator.Migrate(sold, 35);
+            if (sold.EverBuiltStructureIds == null || !sold.EverBuiltStructureIds.Contains("pet-house"))
+                failures.Add("[blankTown] MigrateToV36 dropped a FreeBuildsUsed id (placed-then-sold twin would stop resurfacing)");
+            else if (sold.EverBuiltStructureIds.Contains("barracks"))
+                failures.Add("[blankTown] MigrateToV36 granted the template to an EMPTY-BaseLayout save (blank founding must stay blank)");
+
+            // (c) Source-lint: every surfacing seam carries the gate (reflection cannot
+            //     see method bodies - same contract as the CheckSingletons seam lint).
+            void Lint(string relPath, string needle, string why)
+            {
+                string path = System.IO.Path.Combine(Application.dataPath, relPath);
+                if (!System.IO.File.Exists(path))
+                {
+                    failures.Add($"[blankTown] {relPath} not found (gate lint skipped = FAIL)");
+                    return;
+                }
+                if (!System.IO.File.ReadAllText(path).Contains(needle))
+                    failures.Add($"[blankTown] {relPath} no longer references '{needle}' - {why}");
+            }
+            Lint("_Modules/Village/BuildMode/StructureSingleton.cs", "MayBakedTwinSurface",
+                "the Enforce resurface branch must be gated (WO-834)");
+            Lint("_Modules/Village/BuildMode/StrategicPlacementMigration.cs", "MayBakedTwinSurface",
+                "StanddownActiveForBaked must stand never-built bakes down at scene load");
+            Lint("_Modules/Village/BuildMode/StrategicPlacementMigration.cs", "MarkEverBuilt",
+                "the migration writer must grant the default-town template ids");
+            Lint("_Modules/Village/NPCs/CastleVendorNpcInjector.cs", "MayBakedTwinSurface",
+                "the Lever-1 baked-anchor fallback must not resurface/staff a suppressed store");
+            Lint("_Modules/Village/NPCs/BarracksNpcInjector.cs", "MayBakedTwinSurface",
+                "the WO-724 unlock poll must not resurface the barracks on a blank town");
+            Lint("_Modules/Village/HubStructureVisualInjector.cs", "MayBakedTwinSurface",
+                "EnsureBarracksSurfaced must respect the blank-town gate");
+            Lint("_Modules/Village/BuildMode/BuildModeController.cs", "MarkEverBuilt",
+                "the placement commit seam must grow the ever-built ledger");
+
+            log.AppendLine(failures.Count == before
+                ? "  BLANK_TOWN_GATE_OK"
+                : $"  BLANK_TOWN_GATE_FAIL ({failures.Count - before} failure(s))");
+        }
+
+        // =====================================================================
         //  NPC MODEL BINDING - WO-818 (owner mapping table 2026-08-01): mapped
         //  structure rows author repo.npcModel (a KayKit slug) that the Village
         //  NPC injectors resolve as Resources/NPCs/KayKit/<slug>. The DATA must
@@ -1258,6 +1368,32 @@ namespace DeNelle.Editor
             if (authored != expected.Count)
                 failures.Add($"[npcModel] {authored} row(s) author npcModel but the WO-818 owner table maps exactly {expected.Count} " +
                              "- an extra/missing binding is not an owner-approved pick");
+
+            // (d) WO-833: the shared idle controller the runtime arms on every staged
+            //     KayKit body (KayKitNpcBody.ArmIdle) must EXIST under Resources and
+            //     reference >=1 clip - a missing/empty controller means all 12 NPCs
+            //     render the FBX bind pose (owner F8 "NPC Stuck in T Pose"). Catch it
+            //     at the gate, not the felt-test.
+            const string idleCtrlPath = "Assets/Resources/NPCs/KayKit/KayKitNpcIdle.controller";
+            var idleCtrl = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(idleCtrlPath);
+            if (idleCtrl == null)
+                failures.Add($"[npcModel] WO-833 idle controller MISSING at '{idleCtrlPath}' - staged KayKit NPCs " +
+                             "would T-pose; run Defenders/Art/Build KayKit NPC Idle Controller " +
+                             "(DeNelle.Editor.KayKitNpcAnimatorSetup.Build)");
+            else
+            {
+                int clipCount = 0;
+                string firstClip = null;
+                var clips = idleCtrl.animationClips;
+                if (clips != null)
+                    foreach (var c in clips)
+                        if (c != null) { clipCount++; if (firstClip == null) firstClip = c.name; }
+                if (clipCount == 0)
+                    failures.Add($"[npcModel] WO-833 idle controller at '{idleCtrlPath}' references NO animation clip - " +
+                                 "the Idle state is motion-less, NPCs would still T-pose (rebuild via KayKitNpcAnimatorSetup.Build)");
+                else
+                    log.AppendLine($"  NM idle controller OK ({clipCount} clip(s), first '{firstClip}')");
+            }
 
             log.AppendLine(failures.Count == before
                 ? $"  NPC_MODELS_OK ({authored} bound row(s))"

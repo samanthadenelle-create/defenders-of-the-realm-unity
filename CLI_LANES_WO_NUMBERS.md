@@ -1,6 +1,19 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-01 (evening, CLI reconcile of the UI-seat Echo mints): next free WO = **832**. **782–831 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (second two-seat collision resolved by CLI): next free WO = **836**. **782–835 CONSUMED.**
+> - **835** = HUD action bar: show only APPLICABLE buttons, re-packed (UI-seat spec; renumbered from a
+>   collided 833 mint — KayKit idle keeps 833). Two OWNER CONFIRM defaults inside (hide Raids until
+>   discovery; constant-width vs stretch). File `WORK_ORDER_835_hud_action_bar_applicability_repack.md`, READY.
+> - **834** = Blank-founding towns: baked default-town structures stand DOWN until first player build
+>   (everBuiltStructureIds, save v36, blank-town gate on every surfacing path — 4 seams). File
+>   `WORK_ORDER_834_blank_town_baked_standdown.md`, IMPLEMENTED pending gates. *(Renumbered from a
+>   collided 832 mint — the UI seat's 832 below keeps the number.)*
+> - **833** = KayKit NPC idle animation (T-pose F8 fix: shared KayKitNpcIdle.controller retargeting the
+>   Knight mocap m-standby-idle onto the 12 Humanoid bodies; oracle-gated). File
+>   `WORK_ORDER_833_kaykit_npc_idle_animation.md`, IMPLEMENTED pending gates.
+> - **832** = Building-upgrade panel: ONE true gold Upgrade button (tab demoted to underline-tab,
+>   in-card gold button removed; UI-seat spec). File `WORK_ORDER_832_building_upgrade_one_true_button.md`,
+>   IMPLEMENTED pending gates.
 > - **830** = Echo harvest affinity + synergy (all 6 echoes -> unique harvest affinities Wood/Iron/Food/Gold/Crystals/Repairs, 3 disclosed pair-synergies, 1 hidden tri-synergy; UI-seat minted). **831** = Echo emergence 2D sprite beat (new sprite + dialogue advance at unlock, no 3D). Files `WORK_ORDER_830/831_*.md`, READY.
 > - **825–829** = **IMMERSIVE WORLD / REALM MAP** program. Master **825**; children:
 >   **826** parchment Realm Map UI (`realm-map.json`), **827** discovery+travel+ZoneManager identity,

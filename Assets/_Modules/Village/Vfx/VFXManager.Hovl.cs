@@ -214,6 +214,13 @@ namespace DeNelle.Village
                 return null;
             }
 
+            // Success trace (owner F8 class "which VFX drew THAT?" — e.g. rocks on a basic
+            // swing, 2026-08-02): every successful play names key -> prefab, throttled per
+            // key so hot loops stay ~1/sec. Failures were already loud above; successes
+            // were invisible, which made mis-tagged keys undiagnosable from a log.
+            FlowTrace.Throttle("VFXManager", $"hovl-play:{key}", 1f,
+                $"PlayKey('{key}') -> prefab '{row.Prefab.name}'");
+
             // Shared caps with the VFXType path (mobile budget). Loop vs oneshot bucket.
             if (row.IsLoop)
             {
