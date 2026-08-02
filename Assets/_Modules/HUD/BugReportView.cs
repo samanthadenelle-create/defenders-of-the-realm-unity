@@ -9,7 +9,8 @@
 //   [body]    screenshot thumbnail (captured on open, clean frame, fades in)
 //             "Include screenshot" untickable toggle (default ON)
 //             note field — "What went wrong?"
-//             disclosure: "Includes recent game logs to help us fix it."
+//             disclosure: "Includes recent game logs and your player id to help
+//             us fix it."  (WO-846: reports carry the save's player id)
 //   [footer]  Send report  (single CTA — the submit IS the consent)
 // Confirmation = toast ("Report sent — thank you, defender."), no modal.
 //
@@ -171,8 +172,10 @@ namespace DeNelle.HUD
             // translucent well so the input is visible; content, not chrome.
             BuildNoteInput(body, new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.55f));
 
-            // The one quiet disclosure line — the honesty (logs always go; not a checkbox).
-            ElarionUiKit.Label(body, "Includes recent game logs to help us fix it.",
+            // The one quiet disclosure line — the honesty (logs + the save's player id
+            // always go; not a checkbox). WO-846: names the player id too, since the
+            // report is now account-attributable (same key every save sync uses).
+            ElarionUiKit.Label(body, "Includes recent game logs and your player id to help us fix it.",
                 0.235f, 0.285f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.08f, 0.92f);
 

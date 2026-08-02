@@ -11,6 +11,14 @@
 //   * Auto-attached on submit: recent FlowTrace tail, scene, session id, app
 //     version, platform, Pi uid IF signed in — as a SALTED HASH (a raw uid
 //     never leaves the client in a bug report; username is never sent).
+//   * WO-846 (owner ruling 2026-08-02: "when they submit a bug from settings it
+//     calls something to save stack trace to the db and lets us know to review
+//     it"): the report also carries playerId = the bound identity SAVE KEY
+//     (GameState.BoundWallet - wallet address when bound, else the firebase/
+//     guest-local key; the EXACT id every save sync already posts), so a
+//     tester's report is attributable in bug_reports.player_id. No new PII -
+//     the same opaque id the save pipe ships. Failures to read it never block
+//     the submit (Guard.Try, null => key omitted).
 //   * Screenshot is untickable (default ON) and already privacy-scrubbed at
 //     capture time (PrivacySensitiveUi hid identity UI for the frame).
 //
@@ -105,7 +113,8 @@ namespace DeNelle.HUD
             bool withShot = IncludeScreenshot && ScreenshotJpg != null;
             FlowTrace.Step("BugReport",
                 $"submit — note={Note.Length}ch tail={TraceTail.Length} screenshot={(withShot ? ScreenshotJpg.Length + "B" : "none")} " +
-                $"scene='{SceneName}' session={s_sessionId} piHash={(PiUidHash() != null ? "yes" : "no")}");
+                $"scene='{SceneName}' session={s_sessionId} piHash={(PiUidHash() != null ? "yes" : "no")} " +
+                $"player={DescribeId(PlayerIdKey())}");
 
             if (body == null)
             {
@@ -144,36 +153,103 @@ namespace DeNelle.HUD
         // Endpoint contract (api/bug-report.js):
         //   { note, sceneName, sessionId, version, platform,
         //     piUid?          (SALTED SHA-256 HASH, never the raw uid),
+        //     playerId?       (WO-846: the bound identity SAVE KEY - the server
+        //                      stores piUid ?? playerId into bug_reports.player_id,
+        //                      api/bug-report.js line 81-82),
         //     traceTail[]     (recent [Flow:*]/error lines, oldest first),
         //     screenshotB64?  (JPEG ≤ 300KB, base64; omitted when toggled off/absent) }
+        // Server caps mirrored client-side (api/bug-report.js): note 4000 chars,
+        // traceTail 120 lines x 500 chars (an over-cap tail drops OLDEST lines
+        // first), screenshot ~300KB (already enforced by EncodeReportJpg).
+
+        /// <summary>Endpoint cap mirror (api/bug-report.js MAX_TAIL_LINES).</summary>
+        public const int MaxTailLines = 120;
+        /// <summary>Endpoint cap mirror (api/bug-report.js MAX_TAIL_CHARS).</summary>
+        public const int MaxTailLineChars = 500;
 
         private byte[] BuildPayload()
         {
-            var sb = new StringBuilder(1024 + (IncludeScreenshot && ScreenshotJpg != null ? (ScreenshotJpg.Length * 4) / 3 : 0));
-            sb.Append("{\"note\":").Append(Q(Note))
-              .Append(",\"sceneName\":").Append(Q(SceneName))
-              .Append(",\"sessionId\":").Append(Q(s_sessionId))
-              .Append(",\"version\":").Append(Q(Application.version ?? "unknown"))
-              .Append(",\"platform\":").Append(Q(Application.platform.ToString()));
+            string json = BuildPayloadJson(
+                Note, SceneName, s_sessionId,
+                Application.version ?? "unknown",
+                Application.platform.ToString(),
+                PiUidHash(), PlayerIdKey(), TraceTail,
+                IncludeScreenshot && ScreenshotJpg != null
+                    ? Convert.ToBase64String(ScreenshotJpg) : null);
+            return Encoding.UTF8.GetBytes(json);
+        }
 
-            string piHash = PiUidHash();
-            if (piHash != null)
-                sb.Append(",\"piUid\":").Append(Q(piHash));
+        /// <summary>
+        /// WO-846 - PURE payload assembly (no Unity/service reads) so the EditMode
+        /// regression (BugReportPayloadTest) proves fields + bounds without a scene.
+        /// Bounds enforced here: traceTail keeps the NEWEST <see cref="MaxTailLines"/>
+        /// lines (truncates oldest-first; surviving lines stay in oldest-first order)
+        /// and clamps each line to <see cref="MaxTailLineChars"/> chars. A null or
+        /// empty piUidHash / playerId omits its key entirely (server reads absent as
+        /// null). Null note/scene/session/version/platform degrade to safe defaults -
+        /// the builder never throws on missing inputs.
+        /// </summary>
+        public static string BuildPayloadJson(
+            string note, string sceneName, string sessionId, string version,
+            string platform, string piUidHash, string playerId,
+            string[] traceTail, string screenshotB64)
+        {
+            var sb = new StringBuilder(1024 + (screenshotB64 != null ? screenshotB64.Length : 0));
+            sb.Append("{\"note\":").Append(Q(note ?? ""))
+              .Append(",\"sceneName\":").Append(Q(sceneName ?? "?"))
+              .Append(",\"sessionId\":").Append(Q(sessionId ?? "br-anon"))
+              .Append(",\"version\":").Append(Q(version ?? "unknown"))
+              .Append(",\"platform\":").Append(Q(platform ?? "unknown"));
+
+            if (!string.IsNullOrEmpty(piUidHash))
+                sb.Append(",\"piUid\":").Append(Q(piUidHash));
+            if (!string.IsNullOrEmpty(playerId))
+                sb.Append(",\"playerId\":").Append(Q(playerId));
 
             sb.Append(",\"traceTail\":[");
-            for (int i = 0; i < TraceTail.Length; i++)
+            if (traceTail != null)
             {
-                if (i > 0) sb.Append(',');
-                sb.Append(Q(TraceTail[i]));
+                int start = traceTail.Length > MaxTailLines ? traceTail.Length - MaxTailLines : 0;
+                for (int i = start; i < traceTail.Length; i++)
+                {
+                    if (i > start) sb.Append(',');
+                    string line = traceTail[i] ?? "";
+                    if (line.Length > MaxTailLineChars) line = line.Substring(0, MaxTailLineChars);
+                    sb.Append(Q(line));
+                }
             }
             sb.Append(']');
 
-            if (IncludeScreenshot && ScreenshotJpg != null)
-                sb.Append(",\"screenshotB64\":").Append(Q(Convert.ToBase64String(ScreenshotJpg)));
+            if (screenshotB64 != null)
+                sb.Append(",\"screenshotB64\":").Append(Q(screenshotB64));
 
             sb.Append('}');
-            return Encoding.UTF8.GetBytes(sb.ToString());
+            return sb.ToString();
         }
+
+        /// <summary>
+        /// WO-846 - the bound identity SAVE KEY: <c>GameState.BoundWallet</c>, the EXACT
+        /// id the save/load pipe posts as playerId on every sync (wallet address when a
+        /// real wallet is bound, else the firebase/guest-local key, e.g.
+        /// "guest-local-&lt;device hash&gt;"). READ-only view of GameStateService state -
+        /// never creates an account, never blocks a submit (null when no state is loaded
+        /// or the key is empty; the key is then omitted from the payload). No PII beyond
+        /// what the save already ships.
+        /// </summary>
+        private static string PlayerIdKey()
+        {
+            return Guard.Try("BugReport", "player id key", () =>
+            {
+                string id = DeNelle.Core.State.GameStateService.Instance?.State?.BoundWallet;
+                return string.IsNullOrEmpty(id) ? null : id;
+            }, fallback: null);
+        }
+
+        /// <summary>Trace-safe classification of the id - the full key never rides a log
+        /// line (log lines feed future traceTails; keep them id-free).</summary>
+        private static string DescribeId(string id)
+            => string.IsNullOrEmpty(id) ? "none"
+             : id.StartsWith("guest-local-", StringComparison.Ordinal) ? "guest" : "bound";
 
         /// <summary>Salted SHA-256 hex of the signed-in Pi uid, or null when not signed in.
         /// READ-only view of PiSignInController state — this VM never touches sign-in.</summary>

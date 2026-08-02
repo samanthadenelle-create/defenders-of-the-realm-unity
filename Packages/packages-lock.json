@@ -1,11 +1,14 @@
 {
   "dependencies": {
-    "com.cysharp.unitask": {
-      "version": "2.5.10",
+    "com.solana.unity_sdk": {
+      "version": "https://github.com/magicblock-labs/Solana.Unity-SDK.git#v1.2.9",
       "depth": 0,
-      "source": "registry",
-      "dependencies": {},
-      "url": "https://package.openupm.com"
+      "source": "git",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.0.2",
+        "com.unity.textmeshpro": "3.0.6"
+      },
+      "hash": "3d139411ef2b0b0cad451dd97e63c609fad63ea0"
     },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
@@ -271,6 +274,14 @@
         "com.unity.modules.jsonserialize": "1.0.0"
       },
       "url": "https://packages.unity.com"
+    },
+    "com.unity.textmeshpro": {
+      "version": "5.0.0",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.ugui": "2.0.0"
+      }
     },
     "com.unity.timeline": {
       "version": "1.8.12",

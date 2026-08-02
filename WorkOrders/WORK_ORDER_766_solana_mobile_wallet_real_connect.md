@@ -1,6 +1,18 @@
 # WORK ORDER 766 — Real Seeker/Android wallet connect (Solana Mobile SDK)
 
-**Status:** SPEC — READY (owner-requested 2026-07-24). Unlocks real-wallet TESTING on Seeker/Android.
+**Status:** IMPLEMENTED PENDING GATES (2026-08-02, WO-766 lane agent). SDK pinned in manifest
+(`com.solana.unity_sdk` @ git tag v1.2.9) + `SOLANA_SDK` set for the ANDROID define group only
+(Standalone/desktop deliberately keeps the stub) + full `SDK-VERIFY` sweep against the v1.2.9 sources
+(drift fixed: no `LoginPhantom` in v1.2.9; `Logout()` is sync void; `Web3` MonoBehaviour host now
+lazily created; Tx build moved to the documented Transaction-model pattern) + MWA `<queries>`
+manifest via `Assets/Plugins/Android/MobileWalletAdapter.androidlib` + sibling
+`WalletProviderSelectionRegression`. REMAINING AT GATE: orchestrator resolves the UPM package
+(first compile may surface residual SDK-VERIFY signatures + a possible `com.unity.textmeshpro`
+dependency conflict on Unity 6), enables **Custom Main Gradle Template** (SDK injects its
+AndroidX/Guava fixes there, per its install docs), wires `[wallet-provider]` into
+`DataRegression.RunAll`, commits generated `.meta` files, rebuilds the APK. OWNER'S HANDS REQUIRED
+ON-DEVICE: the first MWA approval flow on the Seeker (tap Connect Wallet -> approve in Seed
+Vault/Phantom; then the save-auth message-sign prompt).
 **Lane:** Wallet / Web3 / Android. Scope: **MODERATE-LARGE** (SDK install + define + verify unverified calls + MWA Android bits + rebuild). Integration work, not greenfield — the provider is written.
 **Owner intent:** connect a REAL Seeker/Android wallet (owner's + a tester friend's) to test the wallet integration. Confirmed SAFE (no money risk) because purchases are disabled — see §3.
 

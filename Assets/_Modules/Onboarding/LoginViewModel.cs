@@ -14,6 +14,7 @@ using System;
 using System.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Platform;
 using DeNelle.Core.State;
 #if UNITY_ANDROID || UNITY_EDITOR
 // GoogleSignIn is an ANDROID NATIVE plugin. Its asmdef is scoped includePlatforms:
@@ -30,6 +31,30 @@ namespace DeNelle.Onboarding
         /// <summary>Factory the View binds to (the VM-routing seam the MVVM gate looks for).</summary>
         public static LoginViewModel CreateDefault() => new LoginViewModel();
 
+        /// <summary>
+        /// Which login surface this platform presents (WO-847, owner ruling 2026-08-02):
+        /// wallet-first ("connect wallet or play as guest") on Android/Seeker, the
+        /// WO-787/845 email form everywhere else. Pure-testable via
+        /// <see cref="LoginSurfacePlatform.LayoutOverride"/>.
+        /// </summary>
+        public LoginSurfaceLayout Layout => LoginSurfacePlatform.Resolve();
+
+        /// <summary>
+        /// Connect a wallet as the sign-in identity (WO-847, the Android wallet-first
+        /// primary). Routes through the EXISTING wallet stack via LoginWalletBridge
+        /// (WalletSkinBootstrap -> WalletService.Connect); the Wallet-side handler
+        /// binds the connected address explicitly (never skin-gated). The idempotent
+        /// re-bind here mirrors the email paths (BindWallet early-outs on an unchanged
+        /// key) so a success can never continue unbound.
+        /// </summary>
+        public async Task<AuthOutcome> ConnectWalletAsync()
+        {
+            FlowTrace.Step("Auth", "wallet connect requested from the login surface.");
+            AuthOutcome outcome = await LoginWalletBridge.ConnectAsync();
+            if (outcome.Success && !string.IsNullOrEmpty(outcome.UserId)) BindPlayer(outcome.UserId);
+            return outcome;
+        }
+
         /// <summary>Sign in with email/password; on success bind the UID as the save player-id.</summary>
         public async Task<AuthOutcome> SignInAsync(string email, string password)
         {
@@ -44,6 +69,17 @@ namespace DeNelle.Onboarding
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignUpAsync(email, password);
             if (outcome.Success) BindPlayer(outcome.UserId);
             return outcome;
+        }
+
+        /// <summary>
+        /// Email a password-reset link (WO-845). Nothing to bind — success just means the
+        /// send was accepted; the player finishes recovery out-of-band, then signs in.
+        /// Failures arrive pre-mapped to player strings by FirebaseAuthService.Explain.
+        /// </summary>
+        public async Task<AuthOutcome> SendPasswordResetAsync(string email)
+        {
+            FlowTrace.Step("Auth", "password reset requested.");
+            return await FirebaseAuthService.Instance.SendPasswordResetEmailAsync(email);
         }
 
         // The OAuth 2.0 WEB client id (google-services.json oauth_client type 3). Google Sign-In

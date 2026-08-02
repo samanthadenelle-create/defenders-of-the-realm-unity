@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ===========================================================================
+  WO-766 - Mobile Wallet Adapter (MWA) manifest additions for the dapp side.
+
+  WHY A .androidlib: this folder is an Android Library Project; its manifest
+  MERGES additively into the final app manifest at gradle build time. That
+  avoids hand-authoring a custom main AndroidManifest.xml, which would replace
+  Unity 6's generated activity/launcher manifests (entry-point dependent -
+  Activity vs GameActivity) and is the risky path.
+
+  NOTE (AGP 8 / Unity 6): no `package=` attribute here - AGP 8 rejects it.
+  The module namespace lives in the sibling build.gradle instead.
+
+  Every addition below is required by the Solana Mobile MWA client spec for
+  dapps and is documented inline.
+============================================================================ -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Networking for Solana RPC + the MWA websocket association channel.
+         Unity normally injects INTERNET when code references the network, but
+         the wallet flow must never depend on that heuristic - declare it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Android 11+ package visibility (REQUIRED for MWA):
+         the MWA client discovers on-device wallet endpoints (Seeker Seed
+         Vault, Phantom, Solflare) by resolving an intent for the
+         `solana-wallet://` association scheme. Without this <queries> block,
+         that resolution silently returns NO wallets on API 30+ and the
+         connect flow dies with "no wallet app found". This is the standard
+         dapp-side requirement from the Solana Mobile MWA integration docs. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="solana-wallet" />
+        </intent>
+    </queries>
+
+    <!-- NO deep-link/intent-filter is needed on the dapp side for MWA: the
+         dapp initiates the association; only WALLET apps declare the
+         solana-wallet scheme filter. The app therefore claims no scheme. -->
+</manifest>

@@ -250,7 +250,38 @@ module.exports = async (req, res) => {
             return res.status(200).json({ view: 'traces', sessions: rows, limit: limit });
         }
 
-        return res.status(400).json({ error: 'Unknown view. Use: overview | players | metrics | traces' });
+        // ------------------------------------------------------------- bugreports
+        // WO-846: newest bug reports for the bugreport-watch daemon. after_id => the
+        // incremental cursor (rows STRICTLY newer, ascending); without it => latest
+        // rows descending (baseline read). screenshotB64 is returned as a presence
+        // flag only - the blob can be ~420K chars and never belongs in a poll.
+        if (view === 'bugreports') {
+            const limit = clampLimit(q.limit, 20, 100);
+            const afterId = parseInt(q.after_id, 10);
+            const rows = (Number.isFinite(afterId) && afterId > 0)
+                ? await sql`
+                    SELECT report_id, created_at, description, route, app_version, player_id,
+                           context->>'platform'  AS platform,
+                           context->>'sessionId' AS session_id,
+                           context->'traceTail'  AS trace_tail,
+                           (context ? 'screenshotB64' AND context->>'screenshotB64' IS NOT NULL) AS has_screenshot
+                    FROM bug_reports
+                    WHERE report_id > ${afterId}
+                    ORDER BY report_id ASC
+                    LIMIT ${limit}`
+                : await sql`
+                    SELECT report_id, created_at, description, route, app_version, player_id,
+                           context->>'platform'  AS platform,
+                           context->>'sessionId' AS session_id,
+                           context->'traceTail'  AS trace_tail,
+                           (context ? 'screenshotB64' AND context->>'screenshotB64' IS NOT NULL) AS has_screenshot
+                    FROM bug_reports
+                    ORDER BY report_id DESC
+                    LIMIT ${limit}`;
+            return res.status(200).json({ view: 'bugreports', rows: rows });
+        }
+
+        return res.status(400).json({ error: 'Unknown view. Use: overview | players | metrics | traces | bugreports' });
     } catch (err) {
         console.error('[admin/db] error:', err);
         return res.status(500).json({ error: 'Internal server error' });

@@ -1,0 +1,15 @@
+// =============================================================================
+// WO-766 - build.gradle for the MobileWalletAdapter.androidlib module.
+// Minimal library module whose only job is merging AndroidManifest.xml
+// (INTERNET + the MWA solana-wallet <queries> block) into the app manifest.
+// AGP 8 (Unity 6) requires the namespace HERE instead of a manifest
+// `package=` attribute. No sources, no resources, no dependencies.
+// compileSdk is intentionally modest (34 >= queries support, <= the app's
+// target); a manifest-only module never compiles against newer APIs.
+// =============================================================================
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.denelle.defenders.mwa"
+    compileSdk 34
+}

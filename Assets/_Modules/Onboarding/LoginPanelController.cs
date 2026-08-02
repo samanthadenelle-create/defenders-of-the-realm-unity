@@ -2,6 +2,13 @@
 // LoginPanelController (WO-769) — the email/password sign-in surface, plus a
 // "Play as Guest" escape so the build always lets a player in (owner's clean-build
 // guarantee). Presented at boot before the hub, modeled on FoundingChoiceController.
+// WO-847 (owner ruling 2026-08-02): the surface is PLATFORM-CONDITIONAL - on
+// Android/Seeker it is WALLET-FIRST ("connect wallet or play as guest": gold
+// Connect Wallet primary + Play as Guest, NO email form, NO forgot-password);
+// desktop/WebGL keep the WO-787/845 email layout. Split resolved by
+// LoginSurfacePlatform (testable static override); wallet connect routes through
+// LoginWalletBridge -> WalletSkinBootstrap -> WalletService.Connect with an
+// EXPLICIT GameStateService.BindWallet (never skin-config-gated on this path).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Onboarding   Namespace: DeNelle.Onboarding (references DeNelle.Core only).
 // UI: code-built uGUI on the Obsidian kit (ElarionUiKit) — its own overlay canvas,
@@ -18,6 +25,7 @@
 using System;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Platform;
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
@@ -46,6 +54,8 @@ namespace DeNelle.Onboarding
         private Button _createAccount;
         private Button _google;
         private Button _guest;
+        private Button _forgot;
+        private Button _connectWallet;
         private bool _busy;
 
         /// <summary>
@@ -60,7 +70,7 @@ namespace DeNelle.Onboarding
             var ctrl = host.AddComponent<LoginPanelController>();
             ctrl._onContinue = onContinue;
             ctrl.Build();
-            FlowTrace.Step("Auth", "login panel presented (email/password + guest).");
+            FlowTrace.Step("Auth", "login panel presented (layout=" + ctrl._vm.Layout + ").");
         }
 
         /// <summary>
@@ -122,6 +132,55 @@ namespace DeNelle.Onboarding
             // apart on the shortest live canvas, so ClampMinTouch can grow rows collision-free.
             Transform body = chrome.content.transform;
 
+            // WO-847 (owner ruling 2026-08-02): on Android/Seeker the login surface is
+            // WALLET-FIRST - "connect wallet or play as guest" - no email form, no
+            // forgot-password (the wallet is its own recovery). Desktop/WebGL keep the
+            // WO-787/845 email layout untouched. Resolved through the platform seam
+            // (LoginSurfacePlatform) so tests and headless captures can pin either.
+            if (_vm.Layout == LoginSurfaceLayout.WalletFirst) BuildWalletFirst(body);
+            else BuildEmailForm(body);
+
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Login", Continue, () => !_routed && _canvas != null);
+            PanelManager.NotifyOpened(_panelHandle);
+        }
+
+        // =====================================================================
+        //  WO-847 wallet-first layout (Android/Seeker): Connect Wallet + Guest
+        // =====================================================================
+        private void BuildWalletFirst(Transform body)
+        {
+            // ONE gold button on the surface (kit law): Connect Wallet is THE primary
+            // CTA. Two rows only - button centers sit 0.25 apart, far above the ~0.131
+            // MinTouch clamp floor from the WO-787 geometry analysis, so ClampMinTouch
+            // can grow both rows collision-free on every live canvas.
+            var intro = ElarionUiKit.Label(body,
+                "Your wallet is your save. Guest progress stays on this device until you connect.",
+                0.78f, 0.92f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TextAlignmentOptions.Center, 0.06f, 0.94f);
+            intro.textWrappingMode = TextWrappingModes.Normal;
+            intro.raycastTarget = false;
+            ElarionUiKit.FitBlock(intro);
+
+            _status = ElarionUiKit.Label(body, "", 0.62f, 0.68f,
+                ElarionUi.Parchment, ElarionUi.FontMicro,
+                TextAlignmentOptions.Center, 0.06f, 0.94f);
+            _status.raycastTarget = false;
+
+            _connectWallet = ElarionUiKit.BuildObsidianButton(body, "Connect Wallet",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.56f), OnConnectWallet);
+
+            _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.08f, 0.14f), new Vector2(0.92f, 0.30f), OnPlayAsGuest);
+        }
+
+        // =====================================================================
+        //  WO-787/845 email layout (desktop / WebGL) - preserved verbatim
+        // =====================================================================
+        private void BuildEmailForm(Transform body)
+        {
             // WO-787 Part B: Google sign-in is APK-only (owner ruling + owner F8 on the exe).
             // The GoogleSignIn native plugin's asmdef is scoped [Android, Editor] and
             // LoginViewModel.SignInWithGoogleAsync already fails cleanly elsewhere -- the
@@ -171,14 +230,22 @@ namespace DeNelle.Onboarding
                 new Vector2(0.08f, 0.205f), new Vector2(0.92f, 0.285f), OnGoogleSignIn);
 #endif
 
+            // WO-845: password recovery. GEOMETRY LAW (WO-787): the stack sits at its
+            // MinTouch capacity on the shortest live canvas — googleRow button centers are
+            // only 0.135 apart vs the ~0.131 clamp floor, so a NEW row cannot fit. The
+            // "Forgot password?" control therefore SPLITS the bottom band with Play as
+            // Guest: identical y fractions to the shipped layout, so ClampMinTouch's
+            // vertical growth profile is unchanged — zero new collision risk. Both halves
+            // stay far above the 112px touch floor horizontally on any landscape canvas.
             _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.08f, googleRow ? 0.07f : 0.12f),
-                new Vector2(0.92f, googleRow ? 0.15f : 0.21f), OnPlayAsGuest);
+                new Vector2(0.55f, googleRow ? 0.15f : 0.21f), OnPlayAsGuest);
 
-            if (_panelHandle == null)
-                _panelHandle = PanelManager.Register("Login", Continue, () => !_routed && _canvas != null);
-            PanelManager.NotifyOpened(_panelHandle);
+            _forgot = ElarionUiKit.BuildObsidianButton(body, "Forgot password?",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.58f, googleRow ? 0.07f : 0.12f),
+                new Vector2(0.92f, googleRow ? 0.15f : 0.21f), OnForgotPassword);
         }
 
         // =====================================================================
@@ -200,6 +267,18 @@ namespace DeNelle.Onboarding
             HandleOutcome(outcome);
         }
 
+        // WO-847: the wallet-first primary. Honest statuses on every branch; a success
+        // resolves the same AuthOutcome shape as email sign-in (UserId = wallet address),
+        // so HandleOutcome -> Continue is byte-identical downstream.
+        private async void OnConnectWallet()
+        {
+            if (_busy || _routed) return;
+            SetBusy(true);
+            SetStatus("Opening your wallet...", info: true);
+            AuthOutcome outcome = await _vm.ConnectWalletAsync();
+            HandleOutcome(outcome);
+        }
+
         private async void OnGoogleSignIn()
         {
             if (_busy || _routed) return;
@@ -207,6 +286,38 @@ namespace DeNelle.Onboarding
             SetStatus("Opening Google sign-in...", info: true);
             AuthOutcome outcome = await _vm.SignInWithGoogleAsync();
             HandleOutcome(outcome);
+        }
+
+        // WO-845: password recovery — uses whatever is in the email field; honest statuses
+        // for every branch (empty field / accepted send / mapped failure). The VM owns the
+        // auth call; this is presentation + validation only.
+        private async void OnForgotPassword()
+        {
+            if (_busy || _routed) return;
+            string email = _email != null ? _email.text.Trim() : "";
+            if (string.IsNullOrEmpty(email))
+            {
+                SetStatus("Enter your email first.", info: false);
+                return;
+            }
+            FlowTrace.Step("Auth", "forgot password tapped.");
+            SetBusy(true);
+            SetStatus("Sending reset email...", info: true);
+            AuthOutcome outcome = await _vm.SendPasswordResetAsync(email);
+            if (_routed) return;
+            SetBusy(false);
+            if (outcome.Success)
+                SetStatus("Reset email sent to " + MaskEmail(email) + ". Check your inbox.", info: true);
+            else
+                SetStatus(outcome.Error, info: false);
+        }
+
+        // Presentation-only mask for the status line (mirrors the service's log mask —
+        // never paint the full address on a possibly-shared screen).
+        private static string MaskEmail(string email)
+        {
+            int at = email.IndexOf('@');
+            return at <= 1 ? "*" + (at >= 0 ? email.Substring(at) : "") : email[0] + "***" + email.Substring(at);
         }
 
         private void OnPlayAsGuest()
@@ -253,6 +364,8 @@ namespace DeNelle.Onboarding
             if (_createAccount != null) _createAccount.interactable = !busy;
             if (_google != null) _google.interactable = !busy;
             if (_guest != null) _guest.interactable = !busy;
+            if (_forgot != null) _forgot.interactable = !busy;
+            if (_connectWallet != null) _connectWallet.interactable = !busy;
         }
 
         private void SetStatus(string msg, bool info)

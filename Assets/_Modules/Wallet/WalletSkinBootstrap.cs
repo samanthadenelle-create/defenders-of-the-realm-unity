@@ -17,25 +17,37 @@
 // =============================================================================
 
 using System;
+using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;
 using DeNelle.Core.State;
 
 namespace DeNelle.Wallet
 {
-    /// <summary>Wallet-side subscriber for the SKR skin's Connect Wallet button (WO-603).</summary>
+    /// <summary>Wallet-side subscriber for the SKR skin's Connect Wallet button (WO-603)
+    /// + the skin-independent login-surface connect handler (WO-847).</summary>
     public static class WalletSkinBootstrap
     {
         private static WalletService _wallet;
         private static bool _connecting;
 
-        /// <summary>Installs the wallet-connect handler at boot — ONLY under the SKR skin.</summary>
+        /// <summary>Installs the wallet-connect handlers at boot. The LOGIN-surface
+        /// handler registers under EVERY skin (WO-847); the corner-button event
+        /// subscriber stays SKR-only (WO-603, zero Pi regression).</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            // Pi skin (the live default): leave the wallet path entirely unwired.
+            // WO-847: the Android wallet-first LOGIN surface must connect+bind under
+            // every skin - identity binding on the login path is never left to the
+            // optional skin config (skin.json bindIdentityOnAuth). Registered BEFORE
+            // the skin gate so the bridge always has a handler.
+            LoginWalletBridge.ConnectHandler = ConnectForLoginAsync;
+            FlowTrace.Step("Wallet", "login wallet-connect handler registered (LoginWalletBridge, skin-independent).");
+
+            // Pi skin (the live default): leave the corner-button wallet path entirely unwired.
             if (!CurrencySkinResolver.IsSkr) return;
 
             CurrencySkinResolver.WalletConnectRequested -= OnConnectRequested; // idempotent
@@ -78,6 +90,59 @@ namespace DeNelle.Wallet
                 }
             }
             catch (Exception e) { FlowTrace.Fail("Wallet", $"SKR wallet connect threw: {e.Message}"); }
+            finally { _connecting = false; }
+        }
+
+        // =====================================================================
+        //  WO-847 — the login surface's Connect Wallet (Android wallet-first)
+        // =====================================================================
+
+        /// <summary>
+        /// Connect flow for the LOGIN surface (LoginWalletBridge). Same stack as the
+        /// corner-button path (WalletService.Connect - MWA on device, stub in editor)
+        /// but the identity bind is EXPLICIT and unconditional: the connected address
+        /// keys the save via GameStateService.BindWallet (the :71 precedent), never
+        /// gated behind the skin's BindIdentityOnAuth. Resolves the email-path
+        /// AuthOutcome shape (UserId = wallet address) so the panel continues
+        /// identically to a successful email sign-in.
+        /// </summary>
+        private static async Task<AuthOutcome> ConnectForLoginAsync()
+        {
+            if (_connecting)
+            {
+                FlowTrace.Step("Wallet", "Login connect requested while a connect is in progress - ignoring duplicate.");
+                return AuthOutcome.Fail("A wallet connect is already in progress.");
+            }
+            _connecting = true;
+            try
+            {
+                if (_wallet == null) _wallet = new WalletService();
+
+                var account = await _wallet.Connect();
+                if (!account.IsValid)
+                {
+                    FlowTrace.Warn("Wallet", "Login wallet connect cancelled/failed - no identity bound.");
+                    return AuthOutcome.Fail("Connect cancelled.");
+                }
+
+                var svc = GameStateService.Instance;
+                if (svc == null)
+                {
+                    FlowTrace.Warn("Wallet", "Login connect: GameStateService null - save not re-keyed.");
+                }
+                else
+                {
+                    Guard.Try("Wallet", "BindWallet(wallet address, login path)", () => svc.BindWallet(account.Address));
+                    FlowTrace.Step("Wallet", $"Login connect bound save identity to wallet {account.ShortAddress}.");
+                }
+
+                return new AuthOutcome { Success = true, UserId = account.Address, Email = string.Empty, Error = string.Empty };
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("Wallet", $"Login wallet connect threw: {e.Message}");
+                return AuthOutcome.Fail("Wallet connect failed. Please try again.");
+            }
             finally { _connecting = false; }
         }
     }
