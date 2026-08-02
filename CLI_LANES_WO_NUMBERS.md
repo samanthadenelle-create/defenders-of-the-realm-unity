@@ -1,6 +1,11 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (second two-seat collision resolved by CLI): next free WO = **836**. **782–835 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-02 (midday): next free WO = **838**. **782–837 CONSUMED.**
+> - **837** = Stockpiles cap resource capacity (owner ruling: lumberyard/foundry/silo(="Quarry"?) are
+>   the stockpiles — OUT of the FoundingKit array; their storageCapacity becomes the live wallet-cap
+>   mechanic; founding_stores tutorial re-spec). File `WORK_ORDER_837_stockpiles_cap_capacity.md`, READY.
+> - **836** = MASTER_CATALOG full SME refresh (owner-ordered 14-agent fleet, docs-only). File
+>   `WORK_ORDER_836_master_catalog_sme_refresh.md`, IN FLIGHT.
 > - **835** = HUD action bar: show only APPLICABLE buttons, re-packed (UI-seat spec; renumbered from a
 >   collided 833 mint — KayKit idle keeps 833). Two OWNER CONFIRM defaults inside (hide Raids until
 >   discovery; constant-width vs stretch). File `WORK_ORDER_835_hud_action_bar_applicability_repack.md`, READY.

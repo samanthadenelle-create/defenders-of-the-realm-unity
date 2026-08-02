@@ -8,9 +8,12 @@
 > REALM_MAP oracle; travel stubbed to 827), **owner ruling: bar Queues button RETIRED** (right-column
 > Builders chip = the one Queues entry, 6-face bar, oracle-enforced), **ProjectSettings batching RCA
 > CLOSED** (DesktopBuild post-build re-assert), dungeon log test all-7-proving-lines green. Release
-> train: desktop exe + Seeker APK (installed + Firebase testers) + WebGL→Vercel preview. **WO next-free
-> = 832** (banner is authority). Queue: 822 → 817 ph1-2 → 821 → 827/828/829 (+830/831 Echo affinity
-> program, owner-sequenced). **The 07-26 thread below is SUPERSEDED.**
+> train: desktop exe + Seeker APK (installed + Firebase testers) + WebGL→Vercel preview. **WO next-free:
+> read the `CLI_LANES_WO_NUMBERS.md` banner — NEVER trust a copied number here** (by 2026-08-02 midday it
+> had already moved 832→838: 832 one-true-button · 833 KayKit idle · 834 blank-town save v36 · 835
+> action-bar repack · 836 catalog SME fleet · 837 stockpile capacity caps). Save is **v36** as of
+> 2026-08-02 (WO-834). Queue: 822 → 817 ph1-2 → 821 → 827/828/829 (+830/831 Echo affinity program,
+> owner-sequenced; 837 stockpiles). **The 07-26 thread below is SUPERSEDED.**
 >
 > ## ▶ LIVE THREAD (2026-07-26) — READ BEFORE WORKING — SUPERSEDED (see 08-01 above)
 > **Current reality anchor = `CANON_GROUND_TRUTH_2026-07-26.md`** (supersedes 07-22). A large **dungeon+raid
