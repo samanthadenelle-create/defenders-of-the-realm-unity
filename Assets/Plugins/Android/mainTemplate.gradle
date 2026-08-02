@@ -4,7 +4,19 @@ apply from: '../shared/common.gradle'
 **APPLY_PLUGINS**
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    // WO-766 (captured: Builds/android-build2.log) — the Gradle step died with
+    //   CheckDuplicatesRunnable: Duplicate class androidx.concurrent.futures.*
+    //   found in modules androidx.concurrent.concurrent-futures-1.1.0.jar
+    //   and concurrent-futures-1.1.0.jar (androidx.concurrent:concurrent-futures:1.1.0)
+    // The Solana SDK ships a LOOSE copy at Runtime/Plugins/Web3AuthSDK/Android/, which
+    // Unity copies into unityLibrary/libs and this fileTree sweeps up — while the SAME
+    // library also resolves from Maven through the Firebase/AndroidX graph above.
+    // Same version, two sources, so D8 sees every class twice.
+    // FIX: drop the LOOSE jar, keep MAVEN. Deliberate direction — Maven keeps the
+    // artifact under Gradle's version resolution, so if Firebase (or a future AndroidX
+    // dep) needs a different concurrent-futures, resolution still applies. Excluding the
+    // Maven module instead would pin us to the SDK's vendored copy and defeat that.
+    implementation fileTree(dir: 'libs', include: ['*.jar'], exclude: ['androidx.concurrent.concurrent-futures-*.jar'])
 // Android Resolver Dependencies Start
     implementation 'com.google.android.gms:play-services-auth:16+' // Assets/GoogleSignIn/Editor/GoogleSignInDependencies.xml:10
     implementation 'com.google.android.gms:play-services-base:18.10.0' // Assets/Firebase/Editor/AppDependencies.xml:20
