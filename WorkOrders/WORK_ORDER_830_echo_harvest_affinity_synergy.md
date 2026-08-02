@@ -1,6 +1,13 @@
 # WORK ORDER 830 — Echo Harvest Affinity + Synergy System
 
 **Status:** READY TO IMPLEMENT (design owner-approved 2026-08-01; three soft spots flagged `OWNER CONFIRM` inline)
+
+> ⚠ **OWNER RULING 2026-08-02: the Repairs affinity is REMOVED — Maren harvests CRYSTALS instead.**
+> Crystals is the one deliberately DOUBLED affinity (Bran + Maren both credit crystals; each trickle
+> stays slow — the combined faucet must still respect §7). The affinity model simplifies to
+> resource-only (no utility sentinel, no WallRepairController hook). The third synergy pair re-derives
+> as **Forge = Iron + Crystals (Doran + Maren)**. Sections below are edited to match; any surviving
+> "Repairs" mention is superseded by this banner.
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** Combat/Economy data + Harvest (single silo; §9). Does NOT touch VillageSceneBuilder or scene files.
 **Supersedes/extends:** WO-738 (per-echo agency + specialization). This is the "make every Echo actually work" pass.
@@ -53,27 +60,25 @@ utility. Map all 6, lore-grounded:
 | Aldwin | Frost | **Food** | founding card: "tend the fields… wood, iron, or grain"; winter stores |
 | Corvin | Shadow | **Gold (Coins)** | scout "carrying spoils across the void" = treasure |
 | Bran | Storm | **Crystals (Aether)** | storm-charged aether |
-| Maren | Fire | **Repairs** | forge that kept "a mended blade" — mends walls/structures |
+| Maren | Fire | **Crystals (Aether)** | forge-fire that anneals raw aether into crystal *(owner 2026-08-02: was Repairs)* |
 
 All six: set `PreferredLane = Harvest` so every Echo's affinity is reachable and flags `(best)` on assignment.
+Crystals is the one deliberately doubled affinity (5 resource types across 6 Echoes).
 
-**Data-model change:** introduce `EchoAffinityTarget { Wood, Iron, Food, Gold, Crystals, Repairs }` (or reuse
-`ResourceType` + a `Repairs` sentinel — implementer's call, but Repairs is NOT a `ResourceType`). Keep the old
+**Data-model change (simplified per the 2026-08-02 ruling):** the affinity target is resource-only —
+`{ Wood, Iron, Food, Gold, Crystals }` (reuse/extend `ResourceType`; no utility sentinel needed). Keep the old
 `HarvestResource` populated for the 3 that map to a real `ResourceType` (Wood/Iron/Food) so the existing
 `HarvestResourceWeights()` split keeps working unchanged for them.
 
 ### 3b. Where each affinity's yield goes (`EchoService.DumpSilos` + `EchoBonusCalculator.HarvestResourceWeights`)
-Five affinities credit the silo→wallet on Dump; one is a utility:
+All five affinity types credit the silo→wallet on Dump *(2026-08-02: Repairs removed — everything is a wallet credit)*:
 - **Wood / Iron / Food** — unchanged (existing `GrantSpendable(wood, food, iron)` path).
 - **Gold (Corvin)** — extend the Dump to credit Coins via `EconomyService.AddCoins` (`EconomyService.cs:463`).
-- **Crystals (Bran)** — credit `EconomyService.AddCrystals` / `Grant(..., crystals)`.
+- **Crystals (Bran + Maren)** — credit `EconomyService.AddCrystals` / `Grant(..., crystals)`.
   `OWNER CONFIRM`: crystals is an EARNABLE soft currency (upgrades/respec "300c"), real money = SKR/Solana, so a
-  free Echo trickle is safe — **spec it SLOW** (default `perEchoBaseRate` for Bran the lowest of the six). Flagged.
-- **Repairs (Maren)** — NOT a wallet credit. Maren's "harvest" accrues a **repair charge** that auto-mends the
-  lowest-HP `WallSegment` / `IDamageableStructure` over time (hook the existing `WallRepairController` /
-  `WallSegment.cs` / `Destructible.cs`). `OWNER CONFIRM`: auto-repair-over-time vs. "reduce repair cost" — default =
-  auto-repair-over-time (feels alive; matches "comes to life"). If no structure is damaged, the charge banks/caps
-  (no waste-feel) or converts to a token Food credit — implementer default: bank to a small cap, do nothing if full.
+  free Echo trickle is safe — **spec it SLOW**, and note there are now TWO crystal harvesters: set
+  `perEchoBaseRate` for Bran AND Maren such that their COMBINED crystal trickle stays the slowest income of
+  the six affinity types. Flagged.
 
 ### 3c. Synergies — the three pairs (`echoes-balance.json` `crossBonuses`, currently empty)
 Group the 6 into 3 thematic synergy pairs. A pair "runs" when **both** its Echoes are owned AND assigned to Harvest:
@@ -81,7 +86,7 @@ Group the 6 into 3 thematic synergy pairs. A pair "runs" when **both** its Echoe
 | Synergy | Pair | Members |
 |---|---|---|
 | **Provisions** | Wood + Food | Elowen + Aldwin |
-| **Forge** | Iron + Repairs | Doran + Maren |
+| **Forge** | Iron + Crystals | Doran + Maren *(2026-08-02: was Iron + Repairs — fire-forged aether)* |
 | **Fortune** | Gold + Crystals | Corvin + Bran |
 
 Each running pair grants a small **DISCLOSED** bonus (populate the 3 `crossBonuses` entries; surfaced in the UI per
@@ -124,17 +129,18 @@ Making all 6 Harvest-matched inflates `AggregateHarvestMultiplier` (every Echo n
 - `Assets/_Modules/Village/Harvest/EchoRosterCatalog.cs` — 6 affinities + all `PreferredLane = Harvest` + affinity-target model.
 - `Assets/_Modules/Village/Harvest/EchoBonusCalculator.cs` — hidden tri-synergy in applied path (excluded from readout); pair-synergy math.
 - `Assets/_Modules/Village/Harvest/EchoBalanceCatalog.cs` — parse `hiddenTriSynergyBonus`; `crossBonuses` already modeled.
-- `Assets/_Modules/Village/Harvest/EchoService.cs` — Dump credits Gold + Crystals; Repairs charge → WallRepair; capacity fix.
+- `Assets/_Modules/Village/Harvest/EchoService.cs` — Dump credits Gold + Crystals (Bran AND Maren); capacity fix.
 - `Assets/_Modules/Village/Harvest/EchoAssignments.cs` — `PickableLanes` → Harvest-only (per §3e OWNER CONFIRM).
 - `Assets/_Modules/Village/Harvest/EchoCardVM.cs` / `EchoCardView.cs` / `EchoRosterVM.cs` — affinity + synergy display.
 - `Assets/Resources/Data/Canonical/echoes-balance.json` + `Assets/StreamingAssets/Data/Canonical/echoes-balance.json` — tunables (byte-identical).
-- `Assets/_Modules/Village/Walls/WallRepairController.cs` (+ `WallSegment.cs`) — expose an auto-repair entry for the Repairs affinity (read the file first; reuse, don't reinvent).
+- ~~`WallRepairController.cs` / `WallSegment.cs`~~ — *(2026-08-02: NOT touched — the Repairs affinity was removed; do not edit the walls module in this WO).*
 
 ## 5. MUST update in the SAME commit (canon + tests — else the gate/regression fails)
 - `Assets/Editor/Regression/EchoSpecializationRegression.cs` — it ASSERTS the old identity table (stag→Wood,
   bear→Iron, phoenix→Crafting/null) and "every spirit non-Idle preferred lane." Update to the new 6-affinity table;
-  add assertions for: each Echo matched on Harvest, Gold/Crystals dump credit, Repairs charge, the 3 pair-synergies,
-  and the hidden tri-synergy (assert it IS applied to income but NOT present in `ReadoutFor().BonusPct`).
+  add assertions for: each Echo matched on Harvest, Gold/Crystals dump credit (crystals moved by BOTH Bran and
+  Maren), the 3 pair-synergies, and the hidden tri-synergy (assert it IS applied to income but NOT present in
+  `ReadoutFor().BonusPct`).
 - `WorkOrders/WORK_ORDER_738_echo_per_echo_agency_specialization.md` — mark superseded-by-830 for the affinity table;
   fix the STALE dialogue copy "Frosthowl (Ice | prefers Harvest)" (already contradicts shipped data).
 - `Assets/_Modules/Core/State/EchoLaneBonuses.cs` — header comment "HarvestBonusMult → CONSUMED: EchoService.RatePerSecond"
@@ -144,9 +150,10 @@ Making all 6 Harvest-matched inflates `AggregateHarvestMultiplier` (every Echo n
 
 ## 6. Acceptance criteria (headless-verifiable — CLI proves with DATA, §12)
 - [ ] All 6 Echoes have a distinct affinity target; all `PreferredLane == Harvest`; each flags `(best)` when assigned.
-- [ ] Dump credits the right wallet per affinity: Wood/Iron/Food (unchanged) + **Gold** (Corvin) + **Crystals** (Bran),
-      verified by a `DataRegression`/`EchoSpecializationRegression` run asserting each wallet field moved.
-- [ ] Repairs affinity (Maren) mends a damaged `WallSegment`/structure over time (assert HP rises with Maren assigned).
+- [ ] Dump credits the right wallet per affinity: Wood/Iron/Food (unchanged) + **Gold** (Corvin) + **Crystals**
+      (Bran AND Maren — assert crystals move with EITHER assigned, and the combined double-crystal rate stays the
+      slowest income of the six), verified by a `DataRegression`/`EchoSpecializationRegression` run asserting each
+      wallet field moved.
 - [ ] Each of the 3 pair-synergies grants its disclosed bonus when both members harvest; SHOWN in the card text.
 - [ ] Hidden tri-synergy: with all 3 pairs harvesting, realized income rises by `hiddenTriSynergyBonus`, AND the
       displayed `+%`/readout does NOT include it (assert applied ≠ displayed; `FlowTrace` fires).
@@ -162,6 +169,7 @@ Making all 6 Harvest-matched inflates `AggregateHarvestMultiplier` (every Echo n
 - Do NOT credit AetherCrystal via the old `GrantSpendable(wood,food,iron)` overload without the crystals param.
 
 ## 8. OWNER CONFIRM (defaults chosen; veto any — non-blocking)
-1. **Repairs behavior:** auto-repair-over-time (default) vs. reduce repair cost.
+1. ~~Repairs behavior~~ — *RESOLVED 2026-08-02: Repairs affinity removed; Maren harvests Crystals.*
 2. **Crafting chip:** remove entirely (default) vs. hide like Defense/Exploration.
-3. **Crystals trickle rate:** slowest of the six (default) — confirm crystals may be Echo-farmed at all.
+3. **Crystals trickle rate:** COMBINED Bran+Maren crystal income stays the slowest of the six affinity types
+   (default) — confirm crystals may be Echo-farmed at all.
