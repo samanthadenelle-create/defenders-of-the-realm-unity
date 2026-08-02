@@ -842,6 +842,40 @@ namespace DeNelle.Village
                 if (heart != null)
                     target = heart.transform.position + heart.transform.forward * 4f;
             }
+
+            // ── OWNER F8 seq 638/640: "dead in air" + "on death respawned where i died not
+            //    back at town". PROVEN from the capture, not inferred:
+            //      [Flow:DeathTrace] HERO MOVED: (-24.26, 0.13, 105.65) -> (-24.26, 0.13, 105.65)
+            //                        (0.0m) by HeroHealth.Respawn reason=in-place respawn at spawn anchor
+            //    A respawn that relocates the hero ZERO METRES. _spawnPosition is captured ONCE in
+            //    Awake on the DDOL hero, so in any scene the hub branch above does not claim it can
+            //    already equal where the hero is standing when they die - and then "respawning"
+            //    puts them straight back on their own corpse. The death freeze pins the body at
+            //    pinPos, so the player also just watches themselves lie there: the "dead in air"
+            //    half of the same report.
+            //    NOTE which branch this is: the capture had NO "TOWN respawn" line, so
+            //    HubScenes.IsHub was FALSE - the arena (and any scene not in HubScenes.Names)
+            //    falls through to here. Modes that own their own recovery (the arena's
+            //    loss-return) DEFER long before this point, so widening the fallback here cannot
+            //    fight them.
+            //    THE RULE: a respawn must MOVE you. If the resolved target is essentially where
+            //    we died, it is not a spawn point - resolve a real one instead of no-oping.
+            const float MinRespawnMoveM = 1.5f;
+            if ((target - transform.position).sqrMagnitude < MinRespawnMoveM * MinRespawnMoveM)
+            {
+                Vector3 fallback = ResolveTownSpawn();
+                var heart = FindAnyObjectByType<HeartController>();
+                if ((fallback - transform.position).sqrMagnitude < MinRespawnMoveM * MinRespawnMoveM && heart != null)
+                    fallback = heart.transform.position + heart.transform.forward * 4f;
+
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Respawn",
+                    "in-place respawn target " + target + " is within " + MinRespawnMoveM + "m of the death spot " +
+                    transform.position + " (scene '" + activeScene + "', isHub=" +
+                    DeNelle.Core.HubScenes.IsHub(activeScene) + ") - that is a respawn ON THE CORPSE. " +
+                    "Falling back to " + fallback + ".");
+                target = fallback;
+            }
+
             Respawn(target);
         }
 
