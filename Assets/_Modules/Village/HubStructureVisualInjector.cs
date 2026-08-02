@@ -165,6 +165,11 @@ namespace DeNelle.Village
         public static void EnsureBarracksSurfaced()
         {
             if (!BarracksUnlock.IsUnlocked) return;
+            // WO-834 blank-town gate: on a Build-Your-Own (migrated, never-built) save the
+            // baked CastleBarracks may NOT surface at unlock — the player builds their own
+            // from the palette (first is free, WO-812). Default-Town/legacy saves carry the
+            // template grant ('barracks' in EverBuiltStructureIds), so this is a no-op for them.
+            if (!StructureSingleton.MayBakedTwinSurface("barracks")) return;
 
             Transform barracks = null;
             foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))

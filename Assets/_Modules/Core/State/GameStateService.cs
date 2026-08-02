@@ -444,6 +444,7 @@ namespace DeNelle.Core.State
                 BarracksLevel = s.BarracksLevel,   // WO-771.9 — barracks level (additive default-on-read; NO schema bump)
                 TroopLevels = s.TroopLevels != null ? new Dictionary<string, int>(s.TroopLevels) : null,   // WO-771.9 — per-troop upgrade levels (additive default-on-read)
                 GearLevels = s.GearLevels != null ? new Dictionary<string, int>(s.GearLevels) : null,   // WO-808 — per-instance gear power levels (additive default-on-read)
+                EverBuiltStructureIds = s.EverBuiltStructureIds != null ? new List<string>(s.EverBuiltStructureIds) : null,   // WO-834 — ever-player-built ledger (v36; monotonic — the blank-town baked-twin gate input)
             };
         }
 
@@ -534,6 +535,7 @@ namespace DeNelle.Core.State
             if (p.BarracksLevel.HasValue) s.BarracksLevel = p.BarracksLevel.Value < 1 ? 1 : p.BarracksLevel.Value;   // WO-771.9 — barracks level; absent → keep the SO's default (1)
             if (p.TroopLevels != null) s.TroopLevels = p.TroopLevels;   // WO-771.9 — per-troop upgrade levels; absent → keep the fresh empty dict (all baseline)
             if (p.GearLevels != null) s.GearLevels = p.GearLevels;   // WO-808 — per-instance gear levels; absent → keep the fresh empty dict (all baseline)
+            if (p.EverBuiltStructureIds != null) s.EverBuiltStructureIds = p.EverBuiltStructureIds;   // WO-834 — ever-built ledger (v36); absent → keep the fresh empty list (MigrateToV36 seeds real pre-v36 saves before this runs)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -888,6 +890,7 @@ namespace DeNelle.Core.State
             s.EchoLanes = "harvest:1";                        // WO-738 — New Game: the starter Echo (Frosthowl, index 0) is assigned to the Harvest lane at level 1, so it visibly gathers from turn one (its PREFERRED lane is the stubbed Exploration, but the owner ruling is the first echo must gather). Later Echoes idle until assigned. Richer "lane:level" token grammar.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             s.FreeBuildsUsed = new List<string>();            // v32 — New Game: every catalog id's one-time FREE first build is live again (per-save flags; they replace the retired wood/iron founding seed).
+            s.EverBuiltStructureIds = new List<string>();     // WO-834 (v36) — New Game: nothing ever built. With StrategicPlacementMigrated=true (above) this makes every baked twin's surface gate CLOSED = the truly blank Build-Your-Own town; choosing Default Town clears the marker and the migration writer then grants the template ids.
             s.Tribes = new List<DeNelle.Core.World.TribeState>();          // WO-160 (v34) — New Game: no claimed tribe progress (managers re-seed from defs).
             s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).
             s.Arena = ArenaProgress.Empty;                    // ARENA MVP (v34) — New Game: zeroed W/L ledger.

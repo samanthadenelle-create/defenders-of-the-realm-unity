@@ -28,7 +28,11 @@
 //                         -> RESURFACE the baked twins (found INCLUDING inactive,
 //                         re-skinned via HubStructureVisualInjector; the barracks
 //                         twin routes through EnsureBarracksSurfaced so the
-//                         WO-724 unlock gate is respected).
+//                         WO-724 unlock gate is respected) — UNLESS the WO-834
+//                         blank-town gate is closed (MayBakedTwinSurface: on a
+//                         migrated save a twin surfaces only for ids in
+//                         GameState.EverBuiltStructureIds), in which case the
+//                         twins are actively stood DOWN (blank founding = blank).
 //                         MIGRATION LATCH: a StrategicPlacementMigration-managed
 //                         id SKIPS the standdown while StanddownActive is false -
 //                         the bake owns that structure for this session and the
@@ -148,18 +152,76 @@ namespace DeNelle.Village
             return built;
         }
 
+        // =====================================================================
+        //  WO-834 — the blank-town baked-twin surface gate
+        // =====================================================================
+
+        /// <summary>
+        /// WO-834 — THE pure surfacing rule: may a BAKED TWIN of <paramref name="itemId"/>
+        /// stand/surface on a save with the given ever-built set + WO-673 migration marker?
+        /// <list type="bullet">
+        /// <item><c>strategicPlacementMigrated == false</c> → TRUE. The bake owns the town:
+        /// a legacy pre-v30 save awaiting its one-shot migration, and the Default-Town
+        /// FOUNDING load (WO-748 arms Default Town by CLEARING the marker so the migration
+        /// writer converts the live ring — no separate founding flag exists or is needed).</item>
+        /// <item>else → TRUE iff <paramref name="everBuilt"/> contains the id
+        /// (OrdinalIgnoreCase). The set is MONOTONIC (selling never removes an id), which
+        /// preserves the WO-819 sell→resurface contract; Default-Town/legacy saves keep
+        /// surfacing because the migration writer / MigrateToV36 granted their template
+        /// ids into the set.</item>
+        /// </list>
+        /// Pure static (no Unity/service reads) so the rule is unit-testable
+        /// (BlankTownGateTests) and oracle-pinned (DataRegression.CheckBlankTownGate).
+        /// </summary>
+        public static bool MayBakedTwinSurface(string itemId,
+            IReadOnlyList<string> everBuilt, bool strategicPlacementMigrated)
+        {
+            if (string.IsNullOrEmpty(itemId)) return false;
+            if (!strategicPlacementMigrated) return true;   // bake owns the town (pre-handover / Default-Town founding load)
+            if (everBuilt == null) return false;            // migrated save with nothing ever built = blank town
+            for (int i = 0; i < everBuilt.Count; i++)
+                if (string.Equals(everBuilt[i], itemId, System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// <see cref="MayBakedTwinSurface(string, IReadOnlyList{string}, bool)"/> against the
+        /// LIVE save. No save service (raw scene open / editor tools) → TRUE, preserving
+        /// pre-WO-834 behaviour where no gate can be evaluated.
+        /// </summary>
+        public static bool MayBakedTwinSurface(string itemId)
+        {
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (st == null) return true;
+            return MayBakedTwinSurface(itemId, st.EverBuiltStructureIds, st.StrategicPlacementMigrated);
+        }
+
+        // Per-id outcome of one Enforce pass — tallied by EnforceAll for the WO-834
+        // summary trace line (surfaced=N suppressed=M).
+        private enum EnforceOutcome { None, StoodDown, LatchSkipped, Surfaced, Suppressed }
+
         /// <summary>
         /// THE enforcement verb for one singleton id.
         /// A placed/recorded instance exists -> stand down every ACTIVE baked twin
         /// (placed wins - the vendor-eviction rule generalized), UNLESS the WO-673
         /// migration latch says the bake still owns this structure for the session.
-        /// NO representation remains (post-sell) -> resurface the baked twins.
+        /// NO representation remains -> resurface the baked twins (post-sell), UNLESS the
+        /// WO-834 blank-town gate is closed (id never player-built on a migrated save) —
+        /// then the twins are actively STOOD DOWN instead (they arrive ACTIVE from the
+        /// scene bake, so skipping the resurface alone would leave the town furnished).
         /// Idempotent, traced, safe to call on non-singleton ids (no-op).
         /// </summary>
         public static void Enforce(string itemId)
         {
-            if (!IsSingleton(itemId)) return;
+            EnforceInternal(itemId);
+        }
 
+        private static EnforceOutcome EnforceInternal(string itemId)
+        {
+            if (!IsSingleton(itemId)) return EnforceOutcome.None;
+
+            EnforceOutcome outcome;
             if (HasPlacedInstance(itemId))
             {
                 // MIGRATION LATCH (WO-673 contract): during the very load the migration
@@ -172,18 +234,33 @@ namespace DeNelle.Village
                     FlowTrace.Step("Singleton",
                         $"'{itemId}': baked-twin standdown SKIPPED - migration-managed id with StanddownActive=false " +
                         "(the bake owns this structure this session; handover is atomic on next hub load, WO-673).");
+                    outcome = EnforceOutcome.LatchSkipped;
                 }
                 else
                 {
-                    StandDownBakedTwins(itemId);
+                    StandDownBakedTwins(itemId,
+                        $"a PLACED '{itemId}' owns the singleton (only ever ONE)");
+                    outcome = EnforceOutcome.StoodDown;
                 }
+            }
+            else if (MayBakedTwinSurface(itemId))
+            {
+                ResurfaceBakedTwins(itemId);
+                outcome = EnforceOutcome.Surfaced;
             }
             else
             {
-                ResurfaceBakedTwins(itemId);
+                // WO-834 blank-town gate: never player-built on this (migrated) save —
+                // the baked twin may NOT stand in for it. Actively deactivate (the bake
+                // ships ACTIVE), so a Build-Your-Own founding is truly blank.
+                int stood = StandDownBakedTwins(itemId,
+                    $"'{itemId}' never player-built on this save (blank-town gate, WO-834)");
+                outcome = stood > 0 || BakedTwinsOf(itemId).Count > 0
+                    ? EnforceOutcome.Suppressed : EnforceOutcome.None;
             }
 
             s_builtMemo.Remove(itemId);   // world changed - drop this frame's memo for the id
+            return outcome;
         }
 
         /// <summary>
@@ -193,14 +270,17 @@ namespace DeNelle.Village
         /// </summary>
         public static void EnforceAll()
         {
-            int rows = 0;
+            int rows = 0, surfaced = 0, suppressed = 0;
             foreach (var entry in CatalogRegistry.All())
             {
                 if (entry?.repo == null || !entry.repo.singleton) continue;
                 rows++;
-                Enforce(entry.id);
+                var outcome = EnforceInternal(entry.id);
+                if (outcome == EnforceOutcome.Surfaced) surfaced++;
+                else if (outcome == EnforceOutcome.Suppressed) suppressed++;
             }
-            FlowTrace.Step("Singleton", $"EnforceAll: swept {rows} singleton catalog row(s).");
+            FlowTrace.Step("Singleton",
+                $"EnforceAll: swept {rows} singleton catalog row(s) - surfaced={surfaced} suppressed={suppressed} (blank-town gate).");
         }
 
         /// <summary>
@@ -239,10 +319,11 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Deactivates every ACTIVE baked twin of <paramref name="itemId"/> (the
-        /// storefront-standdown pattern - never a scene edit). Returns how many
-        /// twins stood down. Idempotent, traced.
+        /// storefront-standdown pattern - never a scene edit). <paramref name="reason"/>
+        /// names WHY in the trace (placed-wins vs the WO-834 blank-town gate). Returns
+        /// how many twins stood down. Idempotent, traced.
         /// </summary>
-        private static int StandDownBakedTwins(string itemId)
+        private static int StandDownBakedTwins(string itemId, string reason)
         {
             int stood = 0;
             foreach (var bakedName in BakedTwinsOf(itemId))
@@ -252,7 +333,7 @@ namespace DeNelle.Village
                 baked.SetActive(false);
                 stood++;
                 FlowTrace.Step("Singleton",
-                    $"baked twin '{bakedName}' stood down - a PLACED '{itemId}' owns the singleton (only ever ONE).");
+                    $"baked twin '{bakedName}' stood down - {reason}.");
             }
             return stood;
         }

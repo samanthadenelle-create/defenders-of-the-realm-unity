@@ -117,6 +117,11 @@ namespace DeNelle.Village
             if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) return;
             if (!DeNelle.Village.BarracksUnlock.IsUnlocked) return;
             if (GameObject.Find(HolderName) != null) return;   // already surfaced this scene
+            // WO-834 blank-town gate: on a Build-Your-Own (migrated, never-built) save the
+            // baked barracks stays down at unlock — the drillmaster arrives when the player
+            // PLACES a barracks (SingletonResolved reseat below). Without this early-return
+            // the poll would re-surface the bake + log every second on a blank town.
+            if (!StructureSingleton.MayBakedTwinSurface(StructureId)) return;
 
             FlowTrace.Step("Barracks",
                 "unlock flipped true in-hub (ff.barracks + founding-complete) - surfacing the Barracks live (1 Hz poll).");
@@ -282,6 +287,11 @@ namespace DeNelle.Village
                 Destroy(go);
                 return SpawnPlaceholder(pos, rot, hero, parent);
             }
+
+            // WO-833: a KayKit body ships an Animator + Humanoid avatar but NO controller,
+            // so it renders its bind pose (owner F8 "NPC Stuck in T Pose") - arm the shared
+            // retargeted idle. People-chain bodies (kayKitRes null) keep their own animator.
+            if (kayKitRes != null) KayKitNpcBody.ArmIdle(go, kayKitRes, "Village");
 
             NormalizeToHeroHeight(go);
             NpcGroundSeat.Seat(go, pos.y);

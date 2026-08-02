@@ -1,5 +1,5 @@
 // =============================================================================
-// SaveMigrator — the persisted-save migration chain v1 → v34 (spec §2.4)
+// SaveMigrator — the persisted-save migration chain v1 → v36 (spec §2.4)
 // -----------------------------------------------------------------------------
 // C# port of `migratePersistedState` from src/state/gameStore.ts. One shared
 // entry point used by BOTH the boot loader AND a future Save-Import path.
@@ -8,7 +8,7 @@
 // Dictionary<int,Func<...>> entry keyed by its TARGET version; Migrate() applies
 // every entry from fromVersion+1..CurrentVersion in ascending order. Behaviour
 // is identical to the original React stacked-`if` cascade, but each step is
-// independently unit-testable. (Steps now run to v33; the chain has grown well
+// independently unit-testable. (Steps now run to v36; the chain has grown well
 // past the original nine — many later versions are additive-default-on-read.)
 //
 // Every step is ADDITIVE — it seeds new fields with empty defaults and never
@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
 {
     using PersistedState = SaveSchema.PersistedState;
 
-    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v34).</summary>
+    /// <summary>Registry-based port of <c>migratePersistedState</c> (v1 → v36).</summary>
     public static class SaveMigrator
     {
         /// <summary>
@@ -74,6 +74,7 @@ namespace DeNelle.Core.State
                 { 33, MigrateToV33 },
                 { 34, MigrateToV34 },
                 { 35, MigrateToV35 },
+                { 36, MigrateToV36 },
             };
 
         /// <summary>
@@ -591,6 +592,61 @@ namespace DeNelle.Core.State
             q.Channel(ChannelId.Train);
             q.Channel(ChannelId.Research);
             s.ObsidianQueue = q;
+            return s;
+        }
+
+        // v36 (WO-834) — everBuiltStructureIds: the blank-founding baked-standdown ledger.
+        // Seed rule (each leg verified against the live code paths, not comments):
+        //   1. BaseLayout itemIds — every persisted record is a committed placement.
+        //   2. UNION FreeBuildsUsed — the free-first-build flag burns AT the committed
+        //      placement and never resets (BuildModeController.Place), so an id there was
+        //      placed at least once. Covers the placed-then-SOLD singleton: its record is
+        //      gone but its WO-819 sell-resurfaced baked twin must keep surfacing.
+        //   3. UNION the frozen DEFAULT-TOWN TEMPLATE SNAPSHOT, only when BaseLayout is
+        //      NON-EMPTY: an established pre-v36 town (Default-Town migrated ring, or any
+        //      save with placements) keeps today's Lever-1 storefront pre-stand + WO-724
+        //      baked-barracks-at-unlock VERBATIM. An EMPTY BaseLayout is exactly the
+        //      blank-founding save WO-834 fixes (owner F8 seq 592: persisted=0) — it seeds
+        //      only legs 1+2 (typically nothing) and the town goes truly blank.
+        // The snapshot is HARDCODED here on purpose: a migration is a point-in-time
+        // transform and must not drift with future census edits (the v8 gate-0→gate-2
+        // precedent). Source at freeze time: StrategicPlacementMigration.BakedRows +
+        // StationRows itemIds, plus "barracks" (the WO-724 unlock-surface right).
+        // Legacy pre-v30 saves (marker false) need no grant here — the gate is OPEN while
+        // StrategicPlacementMigrated is false, and their one-shot migration writer grants
+        // the template at run time (StrategicPlacementMigration.RunIfNeeded, WO-834).
+        // Additive + idempotent (only seeds when the field is null).
+        private static readonly string[] DefaultTownTemplateIdsV36 =
+        {
+            "workshop", "collector_lumbermill", "collector_farm", "pet-house", "forge",
+            "arcane-tower", "market", "jeweler", "apothecary", "jewelers-bench", "barracks",
+        };
+
+        private static PersistedState MigrateToV36(PersistedState s)
+        {
+            if (s.EverBuiltStructureIds != null) return s;   // already seeded — never clobber
+
+            var built = new List<string>();
+            void Add(string id)
+            {
+                if (string.IsNullOrEmpty(id)) return;
+                for (int i = 0; i < built.Count; i++)
+                    if (string.Equals(built[i], id, StringComparison.OrdinalIgnoreCase)) return;
+                built.Add(id);
+            }
+
+            bool established = s.BaseLayout != null && s.BaseLayout.Count > 0;
+            if (s.BaseLayout != null)
+                for (int i = 0; i < s.BaseLayout.Count; i++)
+                    Add(s.BaseLayout[i].itemId);
+            if (s.FreeBuildsUsed != null)
+                for (int i = 0; i < s.FreeBuildsUsed.Count; i++)
+                    Add(s.FreeBuildsUsed[i]);
+            if (established)
+                for (int i = 0; i < DefaultTownTemplateIdsV36.Length; i++)
+                    Add(DefaultTownTemplateIdsV36[i]);
+
+            s.EverBuiltStructureIds = built;
             return s;
         }
 

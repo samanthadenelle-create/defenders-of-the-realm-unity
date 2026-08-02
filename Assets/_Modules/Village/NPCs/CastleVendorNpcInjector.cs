@@ -435,6 +435,21 @@ namespace DeNelle.Village
         //     replayed jeweler (closes gap #2b). OWNER-TUNABLE position.
         private (Transform tf, bool temp) ResolveBakedOrStationAnchor(string role, string buildingId)
         {
+            // WO-834 blank-town gate: the Lever-1 fallback below RESURFACES the baked
+            // storefront (ResurfaceStorefront) and seats a vendor at it — on a
+            // Build-Your-Own (migrated, never-built) save that would refurnish the blank
+            // town every poll pass. Gate the WHOLE fallback (stations + baked stores +
+            // the jeweler temp anchor): vendors come online as buildings are placed
+            // (NotifyBuildingPlaced — the WO-707 ruling). Default-Town/legacy saves carry
+            // the template grant, so their pre-stand staffing is unchanged.
+            if (!StructureSingleton.MayBakedTwinSurface(buildingId))
+            {
+                FlowTrace.Once("Vendor", $"blank-gate-{buildingId}",
+                    $"{role}: Lever-1 baked/station fallback withheld for '{buildingId}' - never player-built " +
+                    "on this save (blank-town gate, WO-834); vendor seats when the building is placed.");
+                return (null, false);
+            }
+
             // Runtime crafting stations first (matched by catalog id).
             foreach (var (holderName, itemId, fallbackPos) in StrategicPlacementMigration.StationAnchors())
             {
@@ -702,10 +717,11 @@ namespace DeNelle.Village
             // placement hook); rows with no npcModel (and null catalogId) fall straight
             // through to the legacy People chain — a bad slug warns ONCE in the resolver.
             string bodyRes = v.BodyRes;
+            string kayKitRes = null;   // WO-833: non-null marks a KayKit body -> arm the shared idle below
             GameObject prefab = null;
             if (!string.IsNullOrEmpty(catalogId))
             {
-                prefab = KayKitNpcBody.Load(catalogId, "Village", out string kayKitRes);
+                prefab = KayKitNpcBody.Load(catalogId, "Village", out kayKitRes);
                 if (prefab != null) bodyRes = kayKitRes;
             }
             if (prefab == null)
@@ -784,6 +800,11 @@ namespace DeNelle.Village
                 Destroy(go);
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }
+
+            // WO-833: a KayKit body ships an Animator + Humanoid avatar but NO controller,
+            // so it renders its bind pose (owner F8 "NPC Stuck in T Pose") - arm the shared
+            // retargeted idle. People-chain bodies (kayKitRes null) keep their own animator.
+            if (kayKitRes != null) KayKitNpcBody.ArmIdle(go, kayKitRes, "Village");
 
             NormalizeToHeroHeight(go);
             // T-033 ("NPCs floating"): scaling about a non-feet pivot lifts the model's

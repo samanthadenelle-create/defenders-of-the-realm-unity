@@ -29,6 +29,10 @@ namespace DeNelle.Village
         /// <summary>Resources folder the staged KayKit bodies live under (tracked, WO-818 phase 1).</summary>
         internal const string ResourcesRoot = "NPCs/KayKit/";
 
+        /// <summary>Resources path (no extension) of the WO-833 shared idle controller
+        /// (built by DeNelle.Editor.KayKitNpcAnimatorSetup.Build).</summary>
+        internal const string IdleControllerRes = "NPCs/KayKit/KayKitNpcIdle";
+
         /// <summary>
         /// Load the KayKit body the catalog authors for <paramref name="catalogId"/>
         /// (repo.npcModel). Null when the row/slug is absent (quiet — People chain is the
@@ -67,6 +71,66 @@ namespace DeNelle.Village
             }
             resolvedRes = res;
             return body;
+        }
+
+        /// <summary>
+        /// WO-833 - make the INSTANTIATED KayKit body's Animator live so it plays the
+        /// shared retargeted humanoid idle instead of rendering the FBX bind pose
+        /// (owner F8 2026-08-02 "NPC Stuck in T Pose"). The staged FBXs import as
+        /// Humanoid, so Unity's model prefab root ALREADY carries an Animator with the
+        /// imported avatar but NO controller (verified: KayKitNpcImporter's avatar
+        /// verdict reads exactly that Animator, OK 12/12) - the normal path here is
+        /// ONLY assigning runtimeAnimatorController. Defensive fallback: if the
+        /// Animator is somehow absent, add one and recover the Humanoid avatar from
+        /// the staged FBX's sub-assets (Resources.LoadAll&lt;Avatar&gt; on
+        /// <paramref name="resolvedRes"/> - the Avatar is a sub-asset of the FBX, so
+        /// LoadAll on the FBX path returns it at runtime). Missing controller asset
+        /// => exactly ONE Warn and the NPC stays VISIBLE in bind pose - never blank.
+        /// Callers pass the <c>resolvedRes</c> that <see cref="Load"/> returned; the
+        /// People-chain bodies (resolvedRes null at the call sites) are never armed -
+        /// they ship their own Animator + controller.
+        /// </summary>
+        internal static void ArmIdle(GameObject bodyInstance, string resolvedRes, string system)
+        {
+            if (bodyInstance == null) return;
+            Guard.Try(system, $"arm KayKit npc idle '{bodyInstance.name}' (WO-833)", () =>
+            {
+                var controller = Resources.Load<RuntimeAnimatorController>(IdleControllerRes);
+                if (controller == null)
+                {
+                    FlowTrace.Warn(system,
+                        $"KayKit idle controller MISSING at Resources/{IdleControllerRes} - body " +
+                        $"'{bodyInstance.name}' stays visible in bind pose. Rebuild it: " +
+                        "Defenders/Art/Build KayKit NPC Idle Controller (KayKitNpcAnimatorSetup.Build).");
+                    return;
+                }
+
+                var animator = bodyInstance.GetComponentInChildren<Animator>(true);
+                if (animator == null)
+                {
+                    // NOT the verified import case (Humanoid model prefabs carry an
+                    // Animator) - self-heal: add one + recover the avatar from the FBX.
+                    animator = bodyInstance.AddComponent<Animator>();
+                    Avatar avatar = null;
+                    if (!string.IsNullOrEmpty(resolvedRes))
+                    {
+                        var avatars = Resources.LoadAll<Avatar>(resolvedRes);
+                        if (avatars != null && avatars.Length > 0) avatar = avatars[0];
+                    }
+                    if (avatar != null)
+                        animator.avatar = avatar;
+                    else
+                        FlowTrace.Warn(system,
+                            $"KayKit body '{bodyInstance.name}' had NO Animator and NO Avatar sub-asset at " +
+                            $"Resources/{resolvedRes ?? "<null>"} - controller assigned but the humanoid idle " +
+                            "cannot retarget (no avatar).");
+                }
+
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;   // NPCs are ground-seated in place - the idle must not drift them
+                FlowTrace.Once(system, "kaykit-idle-armed",
+                    "KayKit idle armed (controller=KayKitNpcIdle, retargeted humanoid clip).");
+            });
         }
     }
 }

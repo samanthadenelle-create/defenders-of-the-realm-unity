@@ -1816,6 +1816,10 @@ namespace DeNelle.Village
             {
                 if (state.BaseLayout == null) state.BaseLayout = new List<PlacedStructureData>();
                 state.BaseLayout.Add(data);
+                // WO-834: the ever-built ledger grows at the SAME commit seam (idempotent
+                // set-add; monotonic — selling never removes it, preserving WO-819
+                // sell->baked-twin-resurface). Rides the same Save() as the append above.
+                state.MarkEverBuilt(_armed.id);
             }
 
             // Committed placement — announce it (tutorial build.tower_placed rides this; guarded so

@@ -194,8 +194,17 @@ namespace DeNelle.Village
         /// </summary>
         public static bool StanddownActiveForBaked(string bakedName, out string itemId)
         {
+            // WO-834 blank-town gate (second clause): on a migrated save whose player has
+            // NEVER built this id (StructureSingleton.MayBakedTwinSurface reads
+            // GameState.EverBuiltStructureIds), the bake stands down even with no record —
+            // a Build-Your-Own founding must load truly BLANK, at scene load (no furnished
+            // flash before the deferred EnforceAll sweep). Default-Town/legacy saves are
+            // unaffected: their founding load has the marker false (StanddownActive false)
+            // and post-migration their template grant keeps MayBakedTwinSurface true, so
+            // for them this remains exactly the Lever-1 HasRecord-only rule.
             itemId = ItemIdForBaked(bakedName);
-            return itemId != null && StanddownActive && HasRecord(itemId);
+            return itemId != null && StanddownActive &&
+                   (HasRecord(itemId) || !StructureSingleton.MayBakedTwinSurface(itemId));
         }
 
         /// <summary>
@@ -315,6 +324,26 @@ namespace DeNelle.Village
                 if (TryWriteRecord(state, grid, row.itemId, pos, yaw)) migrated++;
                 else skippedNoRow++;
             }
+
+            // WO-834 TEMPLATE GRANT: this save was granted the prebuilt town (a WO-748
+            // Default-Town founding, or a legacy pre-v30 save migrating its auto-placed
+            // town) — mark the WHOLE template as ever-built so the blank-town surface
+            // gate (StructureSingleton.MayBakedTwinSurface) stays OPEN for it once the
+            // marker below flips true. Deliberately includes rows the loops above
+            // SKIPPED (no catalog row / absent in scene): the grant is a right of the
+            // TEMPLATE, not of one bake — a skipped station's Lever-1 speaker and a
+            // later-added catalog row must keep behaving as today. Plus 'barracks': the
+            // WO-724 baked-barracks-at-unlock surface is part of the prebuilt town
+            // (a Build-Your-Own player builds theirs from the palette instead).
+            int granted = 0;
+            for (int i = 0; i < BakedRows.Length; i++)
+                if (state.MarkEverBuilt(BakedRows[i].itemId)) granted++;
+            for (int i = 0; i < StationRows.Length; i++)
+                if (state.MarkEverBuilt(StationRows[i].itemId)) granted++;
+            if (state.MarkEverBuilt("barracks")) granted++;
+            FlowTrace.Step("Placement",
+                $"migration: default-town template grant -> {granted} id(s) marked ever-built " +
+                "(WO-834 blank-town gate stays open for this save's baked pieces).");
 
             // Set the one-shot marker + latch this scene load (standdown flips on the
             // NEXT home-hub load — the atomic bake→BaseLayout ownership handover), then

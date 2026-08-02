@@ -30,7 +30,7 @@ namespace DeNelle.Core.State
     [CreateAssetMenu(menuName = "Defenders/Core/Game State", fileName = "GameState")]
     public sealed class GameState : ScriptableObject
     {
-        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (35).</summary>
+        /// <summary>Persisted-save schema version. = SaveSchema.CurrentVersion (36).</summary>
         public int SchemaVersion = SaveSchema.CurrentVersion;
 
         // ── Player (playerSlice) ─────────────────────────────────────────────
@@ -511,6 +511,50 @@ namespace DeNelle.Core.State
         /// </summary>
         public System.Collections.Generic.Dictionary<string, int> GearLevels
             = new System.Collections.Generic.Dictionary<string, int>();
+
+        // ── WO-834 — blank-founding baked standdown (v36) ────────────────────
+        /// <summary>
+        /// Catalog itemIds the player has EVER committed a placement of (WO-834).
+        /// MONOTONIC — written via <see cref="MarkEverBuilt"/> at the BaseLayout commit
+        /// seams (BuildModeController.Place; the StrategicPlacementMigration template
+        /// grant for Default-Town/legacy saves) and NEVER removed: selling keeps the id,
+        /// which is what keeps the WO-819 sell→baked-twin-resurface contract alive.
+        /// The persisted input to <c>StructureSingleton.MayBakedTwinSurface</c>: on a
+        /// <see cref="StrategicPlacementMigrated"/> save, a baked twin may surface only
+        /// for ids in this set — so a Build-Your-Own founding (marker true + empty set)
+        /// shows a truly BLANK town. Round-trips through SaveSchema v36 (MigrateToV36
+        /// seeds existing saves: BaseLayout ∪ FreeBuildsUsed ∪ template-if-established).
+        /// Additive default-on-read (nullable on the wire; absent → this initializer).
+        /// Append-only field at the END.
+        /// </summary>
+        public List<string> EverBuiltStructureIds = new List<string>();
+
+        /// <summary>
+        /// WO-834 — record that <paramref name="itemId"/> has been player-built at least
+        /// once (idempotent set-add, OrdinalIgnoreCase — catalog-id convention). Returns
+        /// true when the id was newly added. Caller owns persistence (the same Save()
+        /// that commits the BaseLayout append carries this).
+        /// </summary>
+        public bool MarkEverBuilt(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return false;
+            if (EverBuiltStructureIds == null) EverBuiltStructureIds = new List<string>();
+            for (int i = 0; i < EverBuiltStructureIds.Count; i++)
+                if (string.Equals(EverBuiltStructureIds[i], itemId, System.StringComparison.OrdinalIgnoreCase))
+                    return false;
+            EverBuiltStructureIds.Add(itemId);
+            return true;
+        }
+
+        /// <summary>WO-834 — true when <paramref name="itemId"/> has ever been player-built on this save.</summary>
+        public bool HasEverBuilt(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId) || EverBuiltStructureIds == null) return false;
+            for (int i = 0; i < EverBuiltStructureIds.Count; i++)
+                if (string.Equals(EverBuiltStructureIds[i], itemId, System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
 
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
