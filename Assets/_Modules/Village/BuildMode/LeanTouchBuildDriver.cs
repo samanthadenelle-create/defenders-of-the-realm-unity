@@ -165,7 +165,12 @@ namespace DeNelle.Village
         {
             if (finger == null || finger.Index < 0) return;   // skip simulated mouse
             FlowTrace.Step("Build", $"finger tap idx={finger.Index} overGui={finger.IsOverGui} screen={finger.ScreenPosition}");
-            if (finger.IsOverGui) return;                      // don't place through the verb bar
+            // IsOverGui only counts raycast hits on LeanTouch.CurrentGuiLayers (default layer 5);
+            // every canvas this project code-builds sits on layer 0, so it reads FALSE over the
+            // PLACE button on device. Also run the controller's EventSystem probe, which is
+            // layer-agnostic. Tested at the RAW finger point — the +90px thumb lift lands in the
+            // deliberately raycast-transparent band above the button and would pass the probe.
+            if (finger.IsOverGui || BuildModeController.IsPointOverUi(finger.ScreenPosition)) return;
             if (LeanTouch.Fingers.Count >= 2) return;          // 2-finger = camera gesture
 
             _screenPoint = LiftAboveThumb(finger.ScreenPosition);
@@ -180,7 +185,9 @@ namespace DeNelle.Village
         private void HandleFingerUpdate(LeanFinger finger)
         {
             if (finger == null || finger.Index < 0) return;    // skip simulated mouse
-            if (finger.IsOverGui) return;
+            // Same layer-0 blind spot as the tap handler: pair IsOverGui with the
+            // layer-agnostic EventSystem probe, at the RAW finger point.
+            if (finger.IsOverGui || BuildModeController.IsPointOverUi(finger.ScreenPosition)) return;
             if (LeanTouch.Fingers.Count >= 2) return;          // camera gesture owns 2 fingers
 
             _screenPoint = LiftAboveThumb(finger.ScreenPosition);

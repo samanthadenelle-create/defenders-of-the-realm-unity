@@ -768,8 +768,14 @@ namespace DeNelle.Village
             {
                 var h = hits[i];
                 if (h.normal.y < 0.85f) continue;   // skip steep faces (wall sides, slopes)
-                if (h.collider != null &&
-                    (h.collider.CompareTag("Tower") || h.collider.CompareTag("Building"))) continue;
+                if (h.collider == null) continue;
+                if (h.collider.CompareTag("Tower") || h.collider.CompareTag("Building")) continue;
+                // Never seat a move on its OWN body. OverlapsExistingStructure already excludes
+                // _selected from the overlap gate; this closes the matching hole in the HEIGHT
+                // probe. Without it the probe lands on the structure's own 4m root box
+                // (BaseLayoutLoader) and seats it +4m -- compounding on every commit.
+                if (_movingSelected && _selected != null &&
+                    h.collider.GetComponentInParent<PlacedStructure>() == _selected) continue;
                 if (h.point.y > best) { best = h.point.y; found = true; }
             }
             if (found) { groundY = best; return true; }
@@ -800,8 +806,12 @@ namespace DeNelle.Village
         /// touch that already ended this frame still resolves (IsPointerOverGameObject is
         /// unreliable after the finger lifts). No EventSystem in the scene => false
         /// (desktop editor edge — never blocks placement).
+        /// INTERNAL (not private) so LeanTouchBuildDriver's finger handlers call this same
+        /// EventSystem probe instead of trusting LeanFinger.IsOverGui, which only counts hits
+        /// on LeanTouch.CurrentGuiLayers (default layer 5) and so misses every code-built
+        /// canvas in this project (all layer 0).
         /// </summary>
-        private static bool IsPointOverUi(Vector2 screenPoint)
+        internal static bool IsPointOverUi(Vector2 screenPoint)
         {
             var es = UnityEngine.EventSystems.EventSystem.current;
             if (es == null) return false;
@@ -828,7 +838,14 @@ namespace DeNelle.Village
             if (_uiPlaceLatch)
             {
                 _uiPlaceLatch = false;
-                FlowTrace.Step("Build", "PlaceConfirm: UI PLACE button latch consumed (zone suppression bypassed).");
+                // The touch driver's PlaceOrSelect is a STICKY latch (LeanTouchBuildDriver:128
+                // holds it until read), not a per-frame edge like the desktop input. Returning
+                // here without reading it leaves the tap that pressed PLACE latched, and the
+                // NEXT frame's ConfirmIntentThisFrame reads it as a WorldTap — which re-drops
+                // the pending ghost under the PLACE label. Read it here so the consume-once
+                // rule this method documents above holds on BOTH exits.
+                _ = _input.PlaceOrSelect;
+                FlowTrace.Step("Build", "PlaceConfirm: UI PLACE button latch consumed (zone suppression bypassed; touch latch drained).");
                 return ConfirmKind.UiPlace;
             }
             bool confirmed = _input.PlaceOrSelect;   // consumes the latch (touch driver)
@@ -1400,11 +1417,18 @@ namespace DeNelle.Village
             _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
 
-            if (PlaceConfirmedThisFrame())
+            // Read the confirm intent ONCE this frame (consume-once latch rule) and act on the
+            // KIND, exactly like UpdatePlaceLoop. Only the UI PLACE latch commits.
+            ConfirmKind confirm = ConfirmIntentThisFrame();
+            if (confirm == ConfirmKind.UiPlace)
             {
                 if (valid) CommitMove(cell, footprint, seatSnapped, wallMounted);
                 else BuildFeedbackToast.Show(reason);   // WO-394 — say why the move can't land
             }
+            // A WorldTap only RE-AIMS (_moveWorldPoint already tracks the finger above). The
+            // PLACE latch is the only commit -- same ruling as UpdatePlaceLoop
+            // (instant-place-on-tap is dead). Before this, any tap meant to aim COMMITTED the
+            // move, which is why Cancel appeared to do nothing: the move had already landed.
         }
 
         /// <summary>
@@ -1503,9 +1527,29 @@ namespace DeNelle.Village
             if (!_grid.InBounds(cell, footprint)) { reason = BuildRejectReason.OutOfBounds; return false; }
             if (!wallMounted && !_grid.CanPlace(cell, footprint))
             {
+                // CanPlace scans the WHOLE footprint, so the blocker is often not the origin
+                // cell. Walk the same dx/dz range CanPlace walks and name the FIRST occupied
+                // cell + its occupant id, so the trace points at the cell that actually
+                // rejected instead of reading the origin (usually free) and printing nothing.
+                int fw = Mathf.Max(1, footprint.x);
+                int fh = Mathf.Max(1, footprint.y);
+                string occupant = null;
+                Vector2Int occupantCell = cell;
+                for (int dx = 0; dx < fw && occupant == null; dx++)
+                {
+                    for (int dz = 0; dz < fh; dz++)
+                    {
+                        var probe = new Vector2Int(cell.x + dx, cell.y + dz);
+                        string id = _grid.OccupantAt(probe);
+                        if (string.IsNullOrEmpty(id)) continue;
+                        occupant = id;
+                        occupantCell = probe;
+                        break;
+                    }
+                }
                 FlowTrace.Warn("Build",
                     $"REJECT Occupied cell=({cell.x},{cell.y}) fp=({footprint.x}x{footprint.y}) gate=CellGrid " +
-                    $"occupant='{_grid.OccupantAt(cell) ?? "<adjacent footprint cell>"}'.");
+                    $"occupantCell=({occupantCell.x},{occupantCell.y}) occupant='{occupant ?? "<none>"}'.");
                 reason = BuildRejectReason.Occupied; return false;
             }
 
@@ -2455,6 +2499,7 @@ namespace DeNelle.Village
         /// </summary>
         private void CommitMove(Vector2Int cell, Vector2Int footprint, Vector3 snapped, bool wallMounted = false)
         {
+            if (!_movingSelected) return;   // one commit per BeginMoveSelected gesture (WO-F8 move fix)
             if (_selected == null) { CancelMove(); return; }
 
             _grid?.Occupy(cell, footprint, _selected.itemId);
