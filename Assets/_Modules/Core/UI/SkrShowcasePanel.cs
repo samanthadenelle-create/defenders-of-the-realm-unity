@@ -47,6 +47,23 @@ namespace DeNelle.Core.UI
         private float _toastUntil;
         private static SkrShowcasePanel _open;   // single live instance guard
 
+        // ── MODAL ARBITER (DEF-212 / audit 2026-08-01 F3) ────────────────────────────
+        // This panel builds a 31000-band modal WITH a scrim (BuildObsidianModal default
+        // sortingOrder). Before this it held ZERO PanelManager references, so
+        // PanelManager.AnyOpen stayed FALSE while the panel covered the screen: the shared
+        // world interact button stayed live UNDERNEATH it, the Android back button had
+        // nothing to close, and BattleLock could not reject it. ONE handle per panel
+        // lifetime (created in Awake, passed to NotifyOpened / NotifyClosed).
+        private PanelHandle _panelHandle;
+
+        private void Awake()
+        {
+            _panelHandle = PanelManager.Register("SKR Showcase", Close, IsShowing);
+        }
+
+        /// <summary>Arbiter visibility probe (NotifyOpened verifies with it -- WO-465).</summary>
+        private bool IsShowing() => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy;
+
         // The honest value-prop copy (docs/PI_PITCH.md + skr-separate-ingame-currency canon).
         private const string ValueRealToken =
             "SKR is a REAL Solana / Seeker token — not an in-game balance we mint or hold.";
@@ -66,7 +83,8 @@ namespace DeNelle.Core.UI
         // =====================================================================
 
         /// <summary>Build + show the panel. Idempotent: a second call replaces the open one so we
-        /// never stack duplicates. Returns the live instance.</summary>
+        /// never stack duplicates. Returns the live instance, or NULL when the modal arbiter
+        /// rejected the open (battle-lock) -- callers must not assume a non-null result.</summary>
         public static SkrShowcasePanel Open()
         {
             using var _ = FlowTrace.Enter("Skr", "SkrShowcasePanel.Open");
@@ -78,8 +96,19 @@ namespace DeNelle.Core.UI
 
             var host = new GameObject("SkrShowcasePanel");
             UnityEngine.Object.DontDestroyOnLoad(host);   // survive a scene load during the capture
-            var panel = host.AddComponent<SkrShowcasePanel>();
+            var panel = host.AddComponent<SkrShowcasePanel>();   // Awake registers the arbiter handle
             panel.Build();
+
+            // Announce to the arbiter. It CAN REJECT (battle-lock) -- and on rejection it has
+            // already invoked our Close hook, tearing this panel down. Report the honest result
+            // instead of assuming the open succeeded; never force-show over a rejection.
+            if (!PanelManager.NotifyOpened(panel._panelHandle))
+            {
+                FlowTrace.Warn("Skr",
+                    "SkrShowcasePanel.Open: arbiter REJECTED the open (battle-lock) -- panel torn down, returning null.");
+                return null;
+            }
+
             _open = panel;
             return panel;
         }
@@ -87,6 +116,7 @@ namespace DeNelle.Core.UI
         private void Close()
         {
             if (_open == this) _open = null;
+            PanelManager.NotifyClosed(_panelHandle);   // no-op if the arbiter already swapped us out
             if (_modal != null && _modal.canvas != null) UnityEngine.Object.Destroy(_modal.canvas);
             UnityEngine.Object.Destroy(gameObject);
         }
@@ -94,6 +124,9 @@ namespace DeNelle.Core.UI
         private void OnDestroy()
         {
             if (_open == this) _open = null;
+            // Destroyed without a Close (scene teardown / replaced instance): never leak the
+            // arbiter slot. NotifyClosed only clears when THIS handle is the one on record.
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void Update()
@@ -194,6 +227,11 @@ namespace DeNelle.Core.UI
             // Seed a real-looking active native stake (Genesis holder ~1M SKR) so the perk list
             // renders populated. READ-ONLY mock — no wallet, no funds move, nothing is custodied.
             StakeRewardsResolver.Query = new StakeRewardsResolver.MockStakeQuery(StakeRewardsResolver.DemoMockStakeSkr);
+            // ARBITER NOTE (audit 2026-08-01 F3): both panels are now registered, and the
+            // PanelManager law is ONE panel at a time -- so opening Stake Rewards CLOSES this
+            // showcase behind it (previously the two stacked). Closing Stake Rewards therefore
+            // returns to the world, not to this panel. That is the arbiter law, not a bug; if
+            // the grant capture needs the stacked look, the showcase must re-Open() on dismiss.
             StakeRewardsPanel.Open();
         }
 

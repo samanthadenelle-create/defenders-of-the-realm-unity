@@ -110,6 +110,12 @@ namespace DeNelle.Village.World
 
                 t.targetSceneName = NewTarget;
                 t.targetPosition = EntryPos;
+                // ff.raidwalk ON = the walk-up entry is LIVE again, so the "sealed" notice must
+                // not linger (only reachable if the flag flipped inside a live session; a fresh
+                // boot never installs it on this branch). DISABLE it -- same never-destroy
+                // discipline as the neutralize path; its OnDisable drops any showing prompt.
+                var staleNotice = t.GetComponent<RetiredSeamNotice>();
+                if (staleNotice != null) staleNotice.enabled = false;
                 repointed++;
                 FlowTrace.Step("Seam",
                     $"CavePortal '{t.name}' repointed '{OldTarget}' -> '{NewTarget}' @ {EntryPos} (injector, no rebake)");
@@ -127,6 +133,8 @@ namespace DeNelle.Village.World
         /// target). We only DISABLE the trigger component + its collider — we NEVER destroy the
         /// GameObject and NEVER hand-edit the .unity scene (CLAUDE.md §3), so flipping
         /// ff.raidwalk ON and reloading restores the walk-up entry cleanly. Idempotent + null-safe.
+        /// Every seam we shut off also gets a <see cref="RetiredSeamNotice"/> so walking up to it
+        /// TELLS the player it is sealed and reopens in a future update, instead of nothing at all.
         /// </summary>
         private static void NeutralizeOutpostTriggers()
         {
@@ -139,6 +147,16 @@ namespace DeNelle.Village.World
                 var t = triggers[i];
                 if (t == null) continue;
                 if (!IsRetiredOutpostSeam(t)) continue;
+
+                // F8 seq 645 (owner 2026-08-02): "this is deactivated (outpost) as it is still
+                // broken (we could add something about update coming)". A neutralized seam used
+                // to be SILENT — the player walks up to the baked cave and gets nothing, which
+                // reads as a bug. Hang the honest affordance here, where we already know exactly
+                // which objects we disabled. Runtime-only + idempotent (AddComponent-if-missing),
+                // and installed OUTSIDE the already-disabled early-out below so a seam
+                // neutralized on an earlier pass still gets its notice on a later scene load.
+                RetiredSeamNotice.Install(t.gameObject, t.ProximityRadius, t.targetSceneName);
+
                 if (!t.enabled) continue; // already neutralized — idempotent
 
                 t.enabled = false;                       // stop the proximity crossing behaviour

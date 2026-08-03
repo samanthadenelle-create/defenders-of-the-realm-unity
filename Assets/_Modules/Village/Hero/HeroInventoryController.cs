@@ -463,10 +463,25 @@ namespace DeNelle.Village
         // null falls through to the TYPE GLYPH in AddIcon. WebGL-safe (RpgUiCatalog
         // loads from Resources only). The pack potions are the cohesive upgrade for the
         // larder cells which otherwise show a bare "+"/"*" glyph.
+        //
+        // F8-641 ROOT FIX ("shows as poition but says iron scrap"): the pack-potion
+        // fallbacks below are only HONEST for an id consumables.json actually owns. They
+        // used to run for ANY id, ending in an unconditional health bottle - so an owned
+        // crafting material ("IronScrap" -> displayed "Iron Scrap") matched no keyword and
+        // was painted as a potion. A row whose catalog does not call it a consumable now
+        // returns null and the caller shows THAT row's own glyph.
         private static Sprite ConsumableIcon(string id, string name)
         {
             var art = ItemIconCatalog.ForConsumable(id, name);
             if (art != null) return art;
+
+            if (!ItemIdentity.IsConsumable(id))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("ItemIcon",
+                    "ConsumableIcon '" + (id ?? "<null>") + "' is not a consumables.json row (kind="
+                    + ItemIdentity.KindOf(id) + ") -> no potion fallback; caller shows the row glyph.");
+                return null;
+            }
 
             string k = ((id ?? "") + " " + (name ?? "")).ToLowerInvariant();
             if (Has(k, "mana", "aether", "ether", "arcane"))

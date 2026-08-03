@@ -36,6 +36,23 @@ namespace DeNelle.Core.UI
         private ElarionUiKit.ObsidianModal _modal;
         private static StakeRewardsPanel _open;   // single live instance guard
 
+        // ── MODAL ARBITER (DEF-212 / audit 2026-08-01 F3) ────────────────────────────
+        // This panel builds a 31000-band modal WITH a scrim (BuildObsidianModal default
+        // sortingOrder). Before this it held ZERO PanelManager references, so
+        // PanelManager.AnyOpen stayed FALSE while the panel covered the screen: the shared
+        // world interact button stayed live UNDERNEATH it, the Android back button had
+        // nothing to close, and BattleLock could not reject it. ONE handle per panel
+        // lifetime (created in Awake, passed to NotifyOpened / NotifyClosed).
+        private PanelHandle _panelHandle;
+
+        private void Awake()
+        {
+            _panelHandle = PanelManager.Register("Stake Rewards", Close, IsShowing);
+        }
+
+        /// <summary>Arbiter visibility probe (NotifyOpened verifies with it -- WO-465).</summary>
+        private bool IsShowing() => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy;
+
         // Copy that carries the non-custodial / native-staking message, reused for the capture.
         private const string StakeNativeLine =
             "Stake natively at Stake.solanamobile - rewards apply automatically. We never hold your SKR.";
@@ -47,7 +64,8 @@ namespace DeNelle.Core.UI
         // =====================================================================
 
         /// <summary>Build + show the panel for the CURRENT resolver query (reads it once via the VM).
-        /// Idempotent: a second call re-opens a fresh panel. Returns the live instance.</summary>
+        /// Idempotent: a second call re-opens a fresh panel. Returns the live instance, or NULL
+        /// when the modal arbiter rejected the open (battle-lock).</summary>
         public static StakeRewardsPanel Open()
         {
             return OpenWith(StakeRewardsVM.CreateDefault());
@@ -71,8 +89,19 @@ namespace DeNelle.Core.UI
 
             var host = new GameObject("StakeRewardsPanel");
             Object.DontDestroyOnLoad(host);   // survive the boot->hub scene load for the capture
-            var panel = host.AddComponent<StakeRewardsPanel>();
+            var panel = host.AddComponent<StakeRewardsPanel>();   // Awake registers the arbiter handle
             panel.Build(vm);
+
+            // Announce to the arbiter. It CAN REJECT (battle-lock) -- and on rejection it has
+            // already invoked our Close hook, tearing this panel down. Report the honest result
+            // instead of assuming the open succeeded; never force-show over a rejection.
+            if (!PanelManager.NotifyOpened(panel._panelHandle))
+            {
+                FlowTrace.Warn("Stake",
+                    "StakeRewardsPanel.Open: arbiter REJECTED the open (battle-lock) -- panel torn down, returning null.");
+                return null;
+            }
+
             _open = panel;
             return panel;
         }
@@ -80,6 +109,7 @@ namespace DeNelle.Core.UI
         private void Close()
         {
             if (_open == this) _open = null;
+            PanelManager.NotifyClosed(_panelHandle);   // no-op if the arbiter already swapped us out
             if (_modal != null && _modal.canvas != null) Object.Destroy(_modal.canvas);
             Object.Destroy(gameObject);
         }
@@ -87,6 +117,9 @@ namespace DeNelle.Core.UI
         private void OnDestroy()
         {
             if (_open == this) _open = null;
+            // Destroyed without a Close (scene teardown / replaced instance): never leak the
+            // arbiter slot. NotifyClosed only clears when THIS handle is the one on record.
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         // =====================================================================

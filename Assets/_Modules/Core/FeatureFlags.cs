@@ -656,6 +656,18 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.dungeoniso" = 1 to restore the top-down rig.</summary>
         public static bool DungeonCameraIso => Get("dungeoniso", defaultOn: false);
 
+        /// <summary>HUB NATURAL DRESSING (owner 2026-08-02: "can we add more trees and natural items in
+        /// world? Feels very empty and boring."). When ON (default), the
+        /// <see cref="DeNelle.Village.World.HubFoliageInjector"/> scatters trees / rocks / bushes around the
+        /// castle hub at RUNTIME -- deterministically (fixed seed), capped at a mobile instance budget,
+        /// colliders stripped, and WITHOUT ever hand-editing Main_Castle_Overworld.unity (CLAUDE.md SS3)
+        /// or invalidating the baked navmesh. Props come from the git-tracked Resources nature set
+        /// (Arena/Tree_*, Arena/Rock_*, Hedges/Fence_Shrub); a missing prop warns and is skipped
+        /// (CLAUDE.md SS4). Keep-out zones protect the Heart plaza, every existing structure and the
+        /// walked gate routes. Default ON so the owner SEES the draft; PlayerPrefs "ff.hubfoliage" = 0
+        /// turns it off with NO rebuild (per-tier const toggles live in the injector).</summary>
+        public static bool HubFoliage => Get("hubfoliage", defaultOn: true);
+
         /// <summary>SECURITY (store-hardening Path A): TRUE in the Editor or any Development build,
         /// FALSE in a release/store build (BuildOptions.None → Debug.isDebugBuild is false). Dev-only
         /// tooling uses this as its <c>defaultOn</c> so the owner keeps the tool while developing but it

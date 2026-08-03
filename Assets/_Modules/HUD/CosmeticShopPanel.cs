@@ -269,26 +269,55 @@ namespace DeNelle.HUD
             // centered plates with side margins on a phone.
             const float BandMin = 0.10f, BandMax = 0.90f;
 
+            // ── PX BAND LADDER (UI audit 2026-08-01, F1) ────────────────────────────
+            // WAS: every band was a FRACTION of the body (Glimmer 0.955-0.995, TabRail
+            // 0.875-0.945, CardScroll 0.09-0.865, footer 0.01-0.07) with the tab buttons
+            // anchored 0.05-0.95 INSIDE the 0.07-tall rail. Worked arithmetic:
+            //   panel = StorePanelAnchor (0.035 -> 0.965) = 0.93 of the modal canvas height
+            //   FrameMerchant body, after the WO-714 P6 close-band reservation (which also
+            //   relocates the merchant footer band), resolves to ~496 canvas-local px on the
+            //   landscape Seeker canvas (~1118 px portrait)
+            //   rail       = 0.07 x 496  ~= 35 px
+            //   tab button = 0.90 x 35   ~= 31 px
+            // BuildObsidianButton ends in ClampMinTouch (ElarionUiKitObsidian.cs:650,:685),
+            // which grows a sub-floor button to MinTouchPx = 112 px (ElarionUiKit.cs:317)
+            // SYMMETRICALLY ABOUT ITS CENTRE (ElarionUiKit.cs:979-988) -- ~+40 px ABOVE and
+            // ~+40 px BELOW the rail, so the tabs overran the Glimmer balance line above and
+            // the card list below. Identical geometry, identical bug, as LeaderboardPanel.
+            //
+            // NOW: fixed REFERENCE-PIXEL rungs (offsetMin/offsetMax on a CanvasScaler'd canvas
+            // are canvas-local units == reference px, the same unit MinTouchPx is measured in).
+            // Ladder (top -> bottom of the body):
+            //   Glimmer 40 | gap 8 | TabRail 120 | gap 8 | CardScroll (flex) | gap 8 | Footer 32
+            //   fixed total = 40+8+120+8+8+32 = 216 px; the card list takes the remainder
+            //   (~280 px landscape = ~3 of the 92 px cards / ~900 px portrait) and scrolls.
+            // The 120 px rail is >= the 112 px floor, so ClampMinTouch is a NO-OP on the tabs.
+            const float GlimmerH = 40f, TabRailH = 120f, FooterH = 32f, Gap = 8f;
+            const float TabRailTop = GlimmerH + Gap;                 // 48
+            const float ListTop    = TabRailTop + TabRailH + Gap;    // 176
+            const float ListBottom = FooterH + Gap;                  // 40
+
             // Glimmer balance — its OWN band at the top of the body well. EYES-SWEEP 2026-07-06
             // (#6): the chip lived in the frame's HEADER zone (0.70–0.99) where the centered
             // "Cosmetic Shop" title painted straight over it on the narrow portrait frame. The
             // title keeps the header; the balance gets the first body band, right-aligned + fitted.
-            _glimmerLabel = MakeText(body, "0", 16, ElarionUi.Gold, FontStyles.Bold,
-                TextAlignmentOptions.Right, new Vector2(BandMin, 0.955f), new Vector2(BandMax, 0.995f));
+            var glimmerHost = PxBandFromTop(body, "GlimmerBand", BandMin, BandMax, 0f, GlimmerH);
+            _glimmerLabel = MakeText(glimmerHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
+                TextAlignmentOptions.Right, Vector2.zero, Vector2.one);
             ElarionUiKit.FitSingleLine(_glimmerLabel);
 
-            // Category tabs — shifted down one band to make room for the balance line.
-            _tabHost = ZoneRect(body, "TabRail", new Vector2(BandMin, 0.875f), new Vector2(BandMax, 0.945f));
+            // Category tabs — one 120 px rung below the balance line.
+            _tabHost = PxBandFromTop(body, "TabRail", BandMin, BandMax, TabRailTop, TabRailH);
             BuildTabs();
 
-            // Scrollable card list.
-            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(BandMin, 0.09f), new Vector2(BandMax, 0.865f));
+            // Scrollable card list — absorbs the remainder between the rail and the footer.
+            var scrollHost = PxStretchBand(body, "CardScroll", BandMin, BandMax, ListTop, ListBottom);
             _listContent = BuildScrollColumn(scrollHost);
 
             // Anti-FOMO footer (spec Section 9).
-            MakeText(body, "Beauty is earned, never required.", 12, ElarionUi.ParchmentDim,
-                FontStyles.Italic, TextAlignmentOptions.Center,
-                new Vector2(0.10f, 0.01f), new Vector2(0.90f, 0.07f));
+            var footHost = PxBandFromBottom(body, "FooterBand", BandMin, BandMax, 0f, FooterH);
+            MakeText(footHost, "Beauty is earned, never required.", 12, ElarionUi.ParchmentDim,
+                FontStyles.Italic, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
 
             // Toast — low center of the modal canvas.
             _toast = ElarionUiKit.ToastCard(_modal.canvas.transform,
@@ -315,11 +344,14 @@ namespace DeNelle.HUD
         {
             float x0 = 0.005f + index * (1f / 3f);
             float x1 = x0 + (1f / 3f) - 0.01f;
+            // FULL rail height (0..1 = the 120 px rung), NOT the old 0.05-0.95 inset: 120 px is
+            // already above MinTouchPx (112), so ClampMinTouch never inflates the button out of
+            // its band into the balance line above or the card list below.
             ElarionUiKit.BuildObsidianButton(_tabHost, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 category == _activeCategory ? ElarionUiKit.ObsidianButtonColor.Yellow
                                             : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                new Vector2(x0, 0f), new Vector2(x1, 1f),
                 () => { _activeCategory = category; BuildTabs(); Repaint(); });
         }
 
@@ -540,14 +572,61 @@ namespace DeNelle.HUD
 
         // ─── uGUI helpers (same shapes as LeaderboardPanel) ──────────────────
 
-        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        // ── FIXED-REFERENCE-PIXEL BANDS (UI audit 2026-08-01, F1) ────────────────────
+        // Same primitive (and same wording) as LeaderboardPanel: a band's HEIGHT is set in
+        // canvas-local units via offsetMin/offsetMax, and on a CanvasScaler'd canvas those
+        // units ARE reference px -- the unit ElarionUiKit.MinTouchPx (112) is expressed in.
+        // A 120 px rung is therefore provably above the touch floor at every resolution, so
+        // ClampMinTouch can never grow a button out of its band into a neighbouring one.
+        // (The old fraction-anchored ZoneRect helper is gone -- it WAS the bug.)
+
+        /// <summary>Band pinned to the TOP of <paramref name="parent"/>: <paramref name="topPx"/>
+        /// down from the top edge, <paramref name="heightPx"/> tall (reference px).</summary>
+        private static Transform PxBandFromTop(Transform parent, string name,
+            float xMin, float xMax, float topPx, float heightPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 1f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMax = new Vector2(0f, -topPx);
+            rt.offsetMin = new Vector2(0f, -(topPx + heightPx));
+            return rt.transform;
+        }
+
+        /// <summary>Band pinned to the BOTTOM of <paramref name="parent"/>: <paramref name="bottomPx"/>
+        /// up from the bottom edge, <paramref name="heightPx"/> tall (reference px).</summary>
+        private static Transform PxBandFromBottom(Transform parent, string name,
+            float xMin, float xMax, float bottomPx, float heightPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 0f);
+            rt.anchorMax = new Vector2(xMax, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.offsetMin = new Vector2(0f, bottomPx);
+            rt.offsetMax = new Vector2(0f, bottomPx + heightPx);
+            return rt.transform;
+        }
+
+        /// <summary>Band that STRETCHES the parent's full height minus fixed px insets top and
+        /// bottom -- it absorbs whatever the fixed rungs leave over.</summary>
+        private static Transform PxStretchBand(Transform parent, string name,
+            float xMin, float xMax, float topInsetPx, float bottomInsetPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 0f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(0f, bottomInsetPx);
+            rt.offsetMax = new Vector2(0f, -topInsetPx);
+            return rt.transform;
+        }
+
+        private static RectTransform NewBand(Transform parent, string name)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return go.transform;
+            return go.GetComponent<RectTransform>();
         }
 
         private static Transform BuildScrollColumn(Transform host)

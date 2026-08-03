@@ -32,6 +32,21 @@
 //   • DebuggingController.Instance?.FindFrame("title-connect-wallet", ScreenLocation.Middle)
 //                                          → targeted report for a named button at an anchor.
 //
+// RELEASE SAFETY (UI audit 2026-08-01, F6 -- WO-839 §3 precedent, BreakCaptureHarness.cs:95,:531):
+//   Two regression suites allow-list this file as "dev debug overlay - not shipped player UI"
+//   (UiObsidianConformanceRegression.cs:126, UiMvvmConformanceRegression.cs:92). The SOURCE used
+//   to contradict that claim: the [RuntimeInitializeOnLoadMethod] bootstrap ran in a RELEASE
+//   player, spawning a DontDestroyOnLoad host whose Update() polled Input.GetKeyDown(F9) every
+//   frame -- one stray F9 on a Bluetooth/OTG keyboard and a sortingOrder = int.MaxValue canvas
+//   painted a red DBG button over the shipped game.
+//   The three behaviour seams -- Bootstrap, the F9/next-click poll in Update, and the overlay
+//   construction in EnsureOverlay -- are now compiled out with #if UNITY_EDITOR ||
+//   DEVELOPMENT_BUILD, exactly as WO-839 §3 did to the harness's note-entry flow. In a release
+//   player nothing installs, nothing polls, nothing renders, so the allow-list claim is TRUE.
+//   The TYPE and its public API (Capture / FindFrame / Instance / Enabled) stay compiled: an
+//   unguarded caller exists (OwnerDevToolsOverlay.cs:260) and Capture() already no-ops when
+//   Instance is null -- which, in release, it always is.
+//
 // Every dump is tagged [DBG] so it lands in Player.log + the F8 break recorder.
 // ASMDEF: DeNelle.HUD (Unity UI + UIElements are auto-referenced). No game deps.
 // =============================================================================
@@ -76,12 +91,18 @@ namespace DeNelle.HUD
 
         private GameObject _canvasGo;
         private Text _readout;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // Armed-capture state: written by Capture()/the DBG button, read by the guarded
+        // Update() poll. Declared inside the guard so a release build has neither the field
+        // nor an assigned-but-never-read warning for it.
         private bool _captureNextClick;
+#endif
         private int _dumpN;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (Instance != null) return;
             try
             {
@@ -96,6 +117,9 @@ namespace DeNelle.HUD
             {
                 Debug.LogWarning("[DBG] Bootstrap failed: " + e.Message);
             }
+#endif
+            // RELEASE: no host is created, so Instance stays null for the process lifetime and
+            // Update() below can never run. Capture()/FindFrame() degrade to safe no-ops.
         }
 
         // ------------------------------------------------------------------
@@ -108,8 +132,11 @@ namespace DeNelle.HUD
         /// </summary>
         public static void Capture(string label)
         {
+            // RELEASE: Instance is always null (Bootstrap is dev-gated), so this is a no-op.
             if (Instance == null) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             Instance._captureNextClick = true;
+#endif
             Instance.DumpAll($"{label} (capture-next-action ARMED)");
         }
 
@@ -145,6 +172,7 @@ namespace DeNelle.HUD
         // ------------------------------------------------------------------
         private void Update()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (Input.GetKeyDown(ToggleKey)) ToggleOverlay();
 
             // capture-next-click runs whenever armed (by the DBG button OR Capture()),
@@ -160,6 +188,9 @@ namespace DeNelle.HUD
             _captureNextClick = false;
             Vector2 p = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
             DumpPoint($"captured next-action click @ {p}", p);
+#endif
+            // RELEASE: no F9 poll, no armed-click poll. This component is never instantiated
+            // there anyway (see Bootstrap) -- this guard is the second lock on the door.
         }
 
         private void ToggleOverlay()
@@ -171,13 +202,19 @@ namespace DeNelle.HUD
 
         private void EnsureOverlay(bool visible)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (visible && _canvasGo == null) BuildOverlay();
             if (_canvasGo != null) _canvasGo.SetActive(visible);
+#endif
+            // RELEASE: the sortingOrder = int.MaxValue overlay canvas is never constructed --
+            // even if something flips Enabled or calls ToggleOverlay by reflection.
         }
 
         private void OnDbgButton()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             _captureNextClick = true;   // arm: next click anywhere is dumped
+#endif
             DumpAll("DBG button (capture-next-click ARMED — now click a dead element)");
         }
 

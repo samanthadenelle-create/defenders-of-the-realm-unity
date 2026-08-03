@@ -75,7 +75,17 @@ namespace DeNelle.Village
 
             // The CTA: Equip for gear, Use for a consumable. The action lives HERE (not on the
             // grid tap) — so it always fires on an explicit press and always surfaces vm.Status.
+            // F8-641: a crafting MATERIAL is neither usable nor equippable. It used to be typed
+            // as a consumable and got a live "Use" button that could only ever fail; now the
+            // strip simply states what the row is instead of offering a verb it does not have.
             bool isConsumable = d.CanUse && !d.CanEquip;
+            if (!d.CanUse && !d.CanEquip)
+            {
+                var noteLbl = AddLabel(bar.transform, "Crafting material", 0f, 1f, InkDim,
+                         ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineRight, 0.76f, 0.97f);
+                ElarionUiKit.FitSingleLine(noteLbl, 0f, ElarionUi.FontMicro);
+                return;
+            }
             string ctaLabel = isConsumable ? "Use" : "Equip";
             bool ctaEnabled = isConsumable ? d.CanUse : d.CanEquip;
             var cta = AddButton(bar.transform, ctaLabel,

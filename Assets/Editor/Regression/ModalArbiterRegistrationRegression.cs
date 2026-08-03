@@ -11,6 +11,11 @@
 // canvas.sortingOrder) must reference PanelManager.Register + NotifyOpened +
 // NotifyClosed.
 //
+// NOTE (audit 2026-08-01): the LAW above always said "BuildObsidianModal", but until now the
+// DETECTOR only matched numeric literals -- and BuildObsidianModal takes sortingOrder=31000 as a
+// DEFAULT PARAMETER, so 13 call sites had no literal and never reached the check. The suite was
+// green because it was blind. BuildsTopBandModal now resolves the default (see below).
+//
 // It ALSO hard-checks the two named fixes -- TowerSwapMenu + WelcomeBackPopup (UIDocument
 // panels that set a dynamic top sort) -- register through the arbiter.
 //
@@ -37,6 +42,25 @@ namespace DeNelle.Editor
         // Detect a top-band modal build: BuildModalCanvas(name, NNN) OR any sortingOrder: / = NNN.
         private static readonly Regex ModalCanvas = new Regex(@"BuildModalCanvas\s*\(\s*[^,]+,\s*(\d{4,6})", RegexOptions.Compiled);
         private static readonly Regex SortingOrder = new Regex(@"sortingOrder\s*[:=]\s*(\d{4,6})", RegexOptions.Compiled);
+
+        // ── BLIND-SPOT FIX (UI audit 2026-08-01, F2) ─────────────────────────────────
+        // The two regexes above only see a NUMERIC LITERAL. But the kit's one-call modal
+        // builder takes the band as a DEFAULT PARAMETER:
+        //     ElarionUiKit.BuildObsidianModal(name, title, min, max, onClose,
+        //                                     int sortingOrder = 31000, ...)   [ElarionUiKit.cs]
+        // so a call site that does NOT pass sortingOrder carries NO literal and was
+        // INVISIBLE to this suite -- it reported MODAL_REGISTRATION_OK while unregistered
+        // 31000-band modals shipped (SkrShowcasePanel + StakeRewardsPanel: scrim over the
+        // world, PanelManager.AnyOpen still false, so the world interact button stayed live
+        // UNDER the modal, the Android back button could not close them and BattleLock could
+        // not reject them). 13 files were in that blind spot.
+        //
+        // THE LAW NOW: a BuildObsidianModal( call IS a top-band modal build UNLESS that same
+        // call statement explicitly passes a sortingOrder BELOW the band. (Two panels do
+        // exactly that today -- RealmMapPanel + RumorBoardPanel pass sortingOrder: 1000 --
+        // so a naive "any BuildObsidianModal( is top-band" widening would mis-classify them.)
+        private static readonly Regex ObsidianModalCall = new Regex(@"BuildObsidianModal\s*\(", RegexOptions.Compiled);
+        private static readonly Regex ExplicitSortArg = new Regex(@"sortingOrder\s*:\s*(\d{1,6})", RegexOptions.Compiled);
 
         // The kit builders themselves DEFINE these APIs (default sortingOrder = 31000) -- not consumers.
         private static readonly HashSet<string> AllowList = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -134,7 +158,27 @@ namespace DeNelle.Editor
                 if (int.TryParse(m.Groups[1].Value, out int n) && n >= TopBand) return true;
             foreach (Match m in SortingOrder.Matches(text))
                 if (int.TryParse(m.Groups[1].Value, out int n) && n >= TopBand) return true;
+            // Default-parameter path: a bare BuildObsidianModal( defaults INTO the band.
+            foreach (Match m in ObsidianModalCall.Matches(text))
+                if (CallDefaultsIntoTopBand(text, m.Index)) return true;
             return false;
+        }
+
+        /// <summary>
+        /// True when the BuildObsidianModal call starting at <paramref name="callIndex"/> lands in
+        /// the top band. The call statement is the text from the call up to its terminating ';'
+        /// (a C# argument list contains no ';'). If that statement names sortingOrder explicitly we
+        /// honour the value; otherwise the kit's default (31000 = TopBand) applies.
+        /// </summary>
+        private static bool CallDefaultsIntoTopBand(string text, int callIndex)
+        {
+            int end = text.IndexOf(';', callIndex);
+            if (end < 0) end = text.Length;
+            string statement = text.Substring(callIndex, end - callIndex);
+            var explicitSort = ExplicitSortArg.Match(statement);
+            if (explicitSort.Success && int.TryParse(explicitSort.Groups[1].Value, out int n))
+                return n >= TopBand;
+            return true;   // no explicit argument -> the 31000 default
         }
 
         private static bool RegistersWithArbiter(string text)

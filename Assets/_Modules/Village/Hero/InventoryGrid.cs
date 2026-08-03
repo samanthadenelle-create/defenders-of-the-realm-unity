@@ -206,11 +206,29 @@ namespace DeNelle.Village
                 }
                 case InventoryVM.IconRolePotion:
                 {
-                    var name = ConsumableNameFor(id);
-                    return ConsumableIcon(id, name);
+                    // Authored icon on the row wins (same row the name came from); the keyword
+                    // sheet + pack-potion fallbacks only apply to a real consumable.
+                    var authored = LoadRowIcon(id);
+                    if (authored != null) return authored;
+                    return ConsumableIcon(id, ItemIdentity.DisplayName(id));
+                }
+                case InventoryVM.IconRoleMaterial:
+                {
+                    // F8-641: a MATERIAL resolves art from its OWN row only (authored iconPath,
+                    // then a mat_* sheet by its authored category) and never from the potion
+                    // fallbacks. Null here means the cell shows this row's authored glyph.
+                    var row = ItemIdentity.Resolve(id);
+                    return ItemIconCatalog.ForMaterial(id, row.IconPath, row.Category);
                 }
             }
             return null;
+        }
+
+        // The row's own authored Resources sprite (catalog iconPath), or null.
+        private static Sprite LoadRowIcon(string id)
+        {
+            string path = ItemIdentity.IconPathOf(id);
+            return string.IsNullOrEmpty(path) ? null : Resources.Load<Sprite>(path);
         }
 
         // The at-a-glance type glyph fallback (when no icon art) keyed off the VM role.
@@ -222,15 +240,18 @@ namespace DeNelle.Village
                 // does the GearCatalog.Find* + type-glyph internally) so the View drops GearCatalog.
                 case InventoryVM.IconRoleWeapon: return GearIconCatalog.Glyph(InventoryVM.IconRoleWeapon, id);
                 case InventoryVM.IconRoleArmor:  return GearIconCatalog.Glyph(InventoryVM.IconRoleArmor, id);
-                case InventoryVM.IconRolePotion: return ConsumableTypeGlyph(id, ConsumableNameFor(id));
+                case InventoryVM.IconRolePotion:
+                case InventoryVM.IconRoleMaterial:
+                {
+                    // The row's AUTHORED glyph is the truth (materials.json / consumables.json
+                    // both carry one); the keyword derivation is only the last resort for an id
+                    // no catalog owns.
+                    var row = ItemIdentity.Resolve(id);
+                    if (!string.IsNullOrEmpty(row.Glyph)) return row.Glyph;
+                    return ConsumableTypeGlyph(id, row.DisplayName);
+                }
             }
             return "?";
-        }
-
-        private static string ConsumableNameFor(string id)
-        {
-            var def = ConsumableCatalog.Find(id);
-            return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id;
         }
 
         // The empty-tab copy per category. Weapons/Armor point the player at the Gear Preview —

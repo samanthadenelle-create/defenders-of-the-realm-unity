@@ -197,6 +197,54 @@ namespace DeNelle.Village
             return null; // -> glyph fallback
         }
 
+        /// <summary>
+        /// F8-641 - art for a CRAFTING MATERIAL row, resolved ONLY from that row's own
+        /// authored fields: the catalog iconPath first, then a mat_* sheet sprite chosen by
+        /// the row's authored CATEGORY. It deliberately does NOT run the potion keyword
+        /// mapper: "HealthHerb"/"Iron Scrap"/"Oil Flask" all keyword-match potion rows, which
+        /// is exactly how a material came to render a health bottle under its own name. When
+        /// nothing resolves it returns null so the caller paints the row's authored GLYPH -
+        /// an honest blank beats another item's art.
+        /// </summary>
+        public static Sprite ForMaterial(string id, string iconPath, string category)
+        {
+            FlowTrace.Step("ItemIcon", $"ForMaterial id='{id}' iconPath='{iconPath}' category='{category}'");
+            var authored = LoadAuthoredIcon(iconPath);
+            if (authored != null)
+            {
+                FlowTrace.Step("ItemIcon", $"ForMaterial '{id}' -> authored icon '{iconPath}'");
+                return authored;
+            }
+
+            EnsureLoaded();
+            switch ((category ?? "").ToLowerInvariant())
+            {
+                case "herb":
+                case "fungus":
+                case "petal":
+                case "plant":
+                case "flora":   return First("mat_herb", "mat_herb_b", "mat_herb_c");
+                case "crystal":
+                case "gem":     return First("mat_crystal_a", "mat_crystal_b", "mat_crystal_g");
+                case "metal":
+                case "ore":
+                case "ingot":   return First("mat_ore", "mat_ingot_a", "mat_ingot_b");
+                case "stone":
+                case "rune":    return First("mat_rune_a", "mat_rune_b", "mat_rune_e");
+                case "scroll":
+                case "parchment": return First("mat_scroll_a", "mat_scroll_b");
+                // A pouch reads as "some raw stuff" - correct for powders/fibres/saps and,
+                // crucially, unmistakable for a potion.
+                case "dust":
+                case "resin":
+                case "cloth":   return First("mat_pouch_a", "mat_pouch_b", "mat_pouch_c");
+            }
+
+            FlowTrace.Warn("ItemIcon", $"ForMaterial '{id}' has no authored icon and category '{category}' " +
+                "maps to no mat_* sheet -> null (caller shows the row's own glyph)");
+            return null;
+        }
+
         // Resources-relative path from catalog (e.g. "ItemIcons/tripo_sword_a") — no extension.
         private static Sprite LoadAuthoredIcon(string iconPath)
         {
