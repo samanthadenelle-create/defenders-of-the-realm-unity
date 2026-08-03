@@ -2768,18 +2768,24 @@ namespace DeNelle.Village
         // so resolve once (mirrors MagentaGuard._lit). Null on a broken build => recovery no-ops loudly.
         private static Shader _urpLit;
 
-        // A shader that renders MAGENTA (or nothing) under URP, or is missing/stripped in the build.
-        // Same predicate MagentaGuard.IsBrokenShader uses — kept local so this silo never edits MagentaGuard.
-        private static bool IsBrokenPropShader(Shader sh)
-        {
-            if (sh == null) return true;
-            string sn = sh.name;
-            if (string.IsNullOrEmpty(sn)) return true;
-            return sn == "Standard"
-                || sn == "Standard (Specular setup)"
-                || sn.StartsWith("Legacy Shaders/")
-                || sn.IndexOf("InternalError", System.StringComparison.Ordinal) >= 0;
-        }
+        // SINGLE AUTHORITY (2026-08-02): the local IsBrokenPropShader predicate was DELETED. Its
+        // header used to read "kept local so this silo never edits MagentaGuard" - and that is exactly
+        // how the copy was allowed to DRIFT: it never got MagentaGuard's `!sh.isSupported` branch. That
+        // branch is the ANDROID/ON-DEVICE case - a shader that compiles in the editor and on desktop but
+        // fails against the device's graphics API keeps its NAME, so every name-only test passes it as
+        // "fine" while it renders MAGENTA. An equipped weapon prop on the Seeker was therefore
+        // structurally undetectable AND unrecoverable. There is now exactly ONE definition of "would
+        // this render magenta" in the runtime tree: DeNelle.Core.MagentaGuard.IsBrokenShader.
+        //
+        // WHY THE RECOVERY LOOP BELOW IS *NOT* REPLACED BY MagentaGuard.SweepGameObject: the shared
+        // sweep emits FlowTrace.Fail (MagentaProbe.ProbeFail) per recovered material. This path was
+        // DELIBERATELY demoted to Step (see the block comment inside RecoverWeaponMaterialsToUrp) because
+        // a re-imported gitignored weapon pack is a KNOWN, FULLY-HANDLED condition and Fail-logging it
+        // floods the errors-only F8 break-log with a false live-break on the owner's device tests. The
+        // shared sweep also recovers NULL material slots, which this path intentionally skips. Swapping
+        // the whole loop would change both behaviours; swapping only the predicate changes NOTHING except
+        // adding the missing on-device case. Consolidating the recovery machinery too is a separate,
+        // owner-visible decision.
 
         // Recover every broken-shader material on the just-attached weapon prop to a FRESH URP/Lit
         // (carrying colour + albedo + emission), assigned back into the renderer's sharedMaterials so
@@ -2808,7 +2814,7 @@ namespace DeNelle.Village
                     var m = work[i];
                     if (m == null) continue;
                     scanned++;
-                    if (!IsBrokenPropShader(m.shader)) continue;   // valid URP/Unlit -> leave it alone
+                    if (!MagentaGuard.IsBrokenShader(m.shader)) continue;   // valid URP/Unlit -> leave it alone
                     string dead = m.shader != null ? m.shader.name : "<null>";
                     if (!freshFor.TryGetValue(m, out var fresh))
                     {
@@ -2818,7 +2824,7 @@ namespace DeNelle.Village
                         // ROOT FIX 2026-07-19 (device: knight_starter magenta): the source .mat
                         // (Blink MegaWeaponPack1/LowPolyWeaponMegaPack) is now re-authored to ship URP/Lit,
                         // so on a correctly-imported build this recovery does NOT fire at all (the shader
-                        // reads URP/Lit -> IsBrokenPropShader false -> skipped). It STILL fires as a backstop
+                        // reads URP/Lit -> MagentaGuard.IsBrokenShader false -> skipped). It STILL fires as a backstop
                         // only when a gitignored pack is re-imported fresh and its .mat reverts to Built-in
                         // Standard. That is a KNOWN, FULLY-HANDLED condition — the fresh URP/Lit carries the
                         // authored albedo/colour, so the weapon renders correctly. It is therefore NOT a live

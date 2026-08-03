@@ -204,6 +204,26 @@ namespace DeNelle.Village
                     FlowTrace.Step("EnemyVisual", $"Material on {prefab.name}: {renderer.sharedMaterial.name}");
             });
 
+            // MAGENTA RECOVERY AT THE SPAWN SEAM (owner defect 2026-08-02: "raid troops are magenta").
+            // PROVEN CAUSE (not a theory): MagentaGuard.Init is [RuntimeInitializeOnLoadMethod(
+            // AfterSceneLoad)] + SceneManager.sceneLoaded, and its Sweep takes a ONE-TIME
+            // Object.FindObjectsByType<Renderer>() SNAPSHOT. It has no Update and had no per-object
+            // entry point. A raid troop is built MID-RAID (TroopDeployer.SpawnFromArmy ->
+            // TroopFactory.Build -> here), i.e. after every sceneLoaded has already fired, so the
+            // guard was structurally BLIND to it and the body stayed magenta forever.
+            //
+            // THIS overload is the choke point: the (Transform, string, SkinOptions) overload above
+            // resolves the prefab then calls straight into this one (:95), and every runtime factory
+            // — TroopFactory, EnemyFactory, StructureFactory, GhostPreview, HubStructureVisualInjector,
+            // MineNodeVisual, HarvestSite, the station injectors, BuildPreviewModal,
+            // StoryCompanionInjector — enters through one of those two. One hook covers them all.
+            //
+            // Placed AFTER VerifyRenders + the wardrobe dress so it sees the FINAL renderer set
+            // (BlinkWardrobe toggles outfit renderers), and it is the last thing before the body is
+            // handed back. SweepGameObject never throws and warns-not-errors on a missing art pack.
+            FlowTrace.Try("VisualFactory", "magenta sweep (runtime spawn seam)",
+                () => DeNelle.Core.MagentaGuard.SweepGameObject(go, "VisualFactory.Skin"));
+
             return go;
         }
 

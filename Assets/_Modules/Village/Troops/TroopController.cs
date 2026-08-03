@@ -27,6 +27,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;   // FlowTrace - [Flow:TroopVisual]
 using DeNelle.BattleATB.Engine;   // StatusKind (unlocked special-ability vocabulary)
 using UnityEngine;
 using UnityEngine.AI;
@@ -121,6 +122,12 @@ namespace DeNelle.Village
         private static readonly int AnimHit    = Animator.StringToHash("Hit");
         private static readonly int AnimDead   = Animator.StringToHash("Dead");
         private bool _hasSpeed, _hasAttack, _hasHit, _hasDead;
+
+        // §12 instrumentation (owner defect 2026-08-02 "troops slide / T-pose"): the LAST step of the
+        // chain — proof that a parameter was actually written to a live Animator. One line per troop,
+        // then never again (no per-frame log spam). If [Flow:TroopVisual] shows the controller was
+        // assigned but this line never appears, the dead step is HERE (the param cache), not the rig.
+        private bool _tracedFirstParamWrite;
 
         // How long the corpse lingers after death before it's destroyed (lets the
         // Dead anim play). EXPENDABLE — no pool / respawn.
@@ -288,6 +295,13 @@ namespace DeNelle.Village
         private void Awake()
         {
             // The Animator sits on the skinned mesh child the factory seats.
+            //
+            // ORDER IS LOAD-BEARING (owner defect 2026-08-02): this Awake runs SYNCHRONOUSLY inside
+            // TroopFactory's AddComponent<TroopController>(), so whatever controller is bound at this
+            // instant decides — for the whole life of the troop — which params are ever written.
+            // TroopFactory.ApplyTroopAnimator therefore binds BEFORE that AddComponent. If that ever
+            // gets reordered, every flag below stays false and the troop silently slides again, which
+            // is exactly what the trace lines here exist to catch.
             _animator = GetComponentInChildren<Animator>();
             if (_animator != null && _animator.runtimeAnimatorController != null)
             {
@@ -299,6 +313,37 @@ namespace DeNelle.Village
                     if (p.nameHash == AnimDead)   _hasDead   = true;
                 }
             }
+
+            // §12: split "no animator" vs "no controller" vs "controller speaks a different
+            // vocabulary" — the three distinct ways this troop ends up frozen. One line per spawn.
+            if (_animator == null)
+            {
+                FlowTrace.Fail("TroopVisual",
+                    $"id={_troopId}: NO Animator anywhere under the troop root - the body cannot animate at all " +
+                    "(model missing -> tinted-capsule fallback, or a rig-less prop was skinned).");
+            }
+            else if (_animator.runtimeAnimatorController == null)
+            {
+                FlowTrace.Fail("TroopVisual",
+                    $"id={_troopId}: Animator on '{_animator.gameObject.name}' has NO runtimeAnimatorController at " +
+                    "Awake - every parameter write is skipped for this troop's whole life; it will slide/T-pose. " +
+                    "TroopFactory.ApplyTroopAnimator must bind BEFORE AddComponent<TroopController>().");
+            }
+            else if (!_hasSpeed)
+            {
+                FlowTrace.Fail("TroopVisual",
+                    $"id={_troopId}: controller '{_animator.runtimeAnimatorController.name}' declares NO '" +
+                    AnimParams.Speed + "' parameter (params=" + DescribeParams(_animator) + ") - this troop " +
+                    "will slide/T-pose. A vendor-pack controller (e.g. Supercyan StrafeMovement) speaks a " +
+                    "different vocabulary; bind a controller built to AnimParams instead.");
+            }
+            else
+            {
+                FlowTrace.Step("TroopVisual",
+                    $"id={_troopId}: driver armed on controller '{_animator.runtimeAnimatorController.name}' " +
+                    $"- Speed={_hasSpeed} Attack={_hasAttack} Hit={_hasHit} Dead={_hasDead}.");
+            }
+
             _lastPosition = transform.position;
 
             // Mirror Pet's NavMeshAgent setup: drive it via Move() from our own eased
@@ -331,6 +376,14 @@ namespace DeNelle.Village
             {
                 float moved = (transform.position - _lastPosition).magnitude / dt;
                 _animator.SetFloat(AnimSpeed, moved);
+                if (!_tracedFirstParamWrite)
+                {
+                    // FIRST PARAM WRITTEN — the last step of the chain, proven once per troop.
+                    _tracedFirstParamWrite = true;
+                    FlowTrace.Step("TroopVisual",
+                        $"id={_troopId}: FIRST param write - SetFloat('{AnimParams.Speed}', {moved:F2}) on " +
+                        $"'{_animator.runtimeAnimatorController.name}'. The animation chain is live end to end.");
+                }
             }
             _lastPosition = transform.position;
 
@@ -502,6 +555,28 @@ namespace DeNelle.Village
             if (dir.sqrMagnitude > 0.0001f)
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, Quaternion.LookRotation(dir), 12f * Time.deltaTime);
+        }
+
+        /// <summary>
+        /// The parameter names a bound controller actually declares, for the §12 trace. Naming them
+        /// is what turns "the troop does not animate" into "this controller speaks MoveVertical/
+        /// Grounded/MoveState, not Speed/Attack/Hit/Dead" in a single captured line. Capped so a
+        /// 32-parameter vendor controller cannot flood the log.
+        /// </summary>
+        private static string DescribeParams(Animator anim)
+        {
+            if (anim == null || anim.runtimeAnimatorController == null) return "<no controller>";
+            var ps = anim.parameters;
+            if (ps == null || ps.Length == 0) return "<none>";
+            var sb = new System.Text.StringBuilder();
+            int max = ps.Length < 12 ? ps.Length : 12;
+            for (int i = 0; i < max; i++)
+            {
+                if (i > 0) sb.Append('/');
+                sb.Append(ps[i] != null ? ps[i].name : "<null>");
+            }
+            if (ps.Length > max) sb.Append("/... (+").Append(ps.Length - max).Append(" more)");
+            return sb.ToString();
         }
 
         private static DamageElement ParseElement(string element)

@@ -44,6 +44,31 @@ namespace DeNelle.Core
         private static bool _hooked;
         private static readonly HashSet<string> _floorSeen = new HashSet<string>();
 
+        // ── RUNTIME-SPAWN SEAM (magenta raid troops, owner 2026-08-02) ───────────────
+        // PROVEN CAUSE: Init is [RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + sceneLoaded,
+        // and Sweep takes a ONE-TIME snapshot via Object.FindObjectsByType<Renderer>(). There is
+        // no Update, no re-arm and (until now) no per-object entry point. A raid troop is built
+        // MID-RAID - TroopDeployer.SpawnFromArmy -> SpawnTroop -> TroopFactory.Build ->
+        // VisualFactory.Skin - i.e. AFTER every sceneLoaded has fired, so the guard was
+        // structurally BLIND to it and the body stayed magenta forever. SweepGameObject is the
+        // missing per-object entry point; VisualFactory.Skin (the one choke point every runtime
+        // body funnels through) calls it.
+        //
+        // The recovered-material cache is STATIC (was a per-sweep local) so a repeated troop
+        // model - 8 footmen off one tap, all sharing one broken source material - is recovered
+        // ONCE and every later body just re-uses that instance. Per-spawn Material allocation
+        // would leak one material per troop and break SRP batching.
+        //
+        // _floorSeen is deliberately NOT reachable from this path: it is ground-only and
+        // process-static, and that exact dedup already caused a silent miss (see the RCA at the
+        // colorless-floor branch below). The ground/floor fix stays in the scene Sweep.
+        private static readonly Dictionary<Material, Material> _freshFor = new Dictionary<Material, Material>();
+
+        // One probe line per OFFENDER, not per slot-visit: a null material slot is keyed by
+        // "<path>#<slot>" so the same body re-skinned 20x names itself once.
+        private static readonly HashSet<string> _nullSlotSeen = new HashSet<string>();
+        private static Material _nullSlotFresh;
+
         // A large, flat, ground-like renderer (by name or by footprint) — the candidates for a
         // "pink floor". Used only to NAME them in the diagnostic, never to auto-mutate (a terrain
         // shader is valid; we fix the named cause, not blindly swap the floor).
@@ -85,14 +110,11 @@ namespace DeNelle.Core
                 var renderers = Object.FindObjectsByType<Renderer>();
                 if (renderers == null || renderers.Length == 0) return;
 
-                // ARCANE-WHITE FIX (owner 2026-07-15, mirrors the FLOOR fix's hard-won lesson at :142):
-                // recover each unique broken SOURCE material to a FRESH URP/Lit instance ONCE, then assign
-                // that same fresh instance into every renderer slot that referenced it. A FRESH material
-                // assigned to the renderer STICKS in the built player (in-place `m.shader=...` mutation of an
-                // embedded/shared material did NOT - the exact reason the baked arcane tower recovered to
-                // white). One fresh per source preserves SRP batching + logs once per unique material.
-                var freshFor = new Dictionary<Material, Material>();
-                int recovered = 0, hiddenStray = 0;
+                // GROUND/FLOOR pass — scene-only. It owns the process-static `_floorSeen` dedup and is
+                // deliberately NOT part of SweepRenderers (the shared per-renderer recovery the runtime
+                // spawn seam also calls): a spawned troop is never "ground-like", and letting a name
+                // dedup that spans the whole process anywhere near the spawn path is exactly the silent
+                // miss the RCA below documents.
                 foreach (var r in renderers)
                 {
                     if (r == null) continue;
@@ -167,58 +189,11 @@ namespace DeNelle.Core
                             }
                         }
                     }
-
-                    // First broken material on this renderer (and its dead shader name for the log).
-                    Material brokenMat = null;
-                    foreach (var m in mats)
-                        if (m != null && IsBrokenShader(m.shader)) { brokenMat = m; break; }
-                    if (brokenMat == null) continue;
-                    string deadShader = brokenMat.shader != null ? brokenMat.shader.name : "<null>";
-
-                    // A magenta BUILT-IN PRIMITIVE (Capsule/Cube/Sphere…) is never intended art — it is a
-                    // stray placeholder pill (CastleSpawnMarkerHider exists for exactly these). Real art
-                    // would carry a valid URP material. So HIDE the primitive (matches the hider's intent)
-                    // rather than recolour it to a grey pill that still litters the scene.
-                    if (IsPrimitivePlaceholder(r))
-                    {
-                        r.enabled = false;
-                        hiddenStray++;
-                        FlowTrace.Fail("MagentaGuard",
-                            $"hid stray MAGENTA placeholder '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
-                            $"mesh='{MeshName(r)}' material '{brokenMat.name}' dead-shader '{deadShader}' — built-in primitive, not real art.");
-                        continue;
-                    }
-
-                    // Real art that merely lost its shader in the build: recover each unique broken
-                    // material to a FRESH URP/Lit (carrying colour/albedo/emission) and ASSIGN it into
-                    // the renderer's shared-materials array so it STICKS in the built player (the in-place
-                    // mutation the old path used did not stick — the arcane-tower white symptom).
-                    var work = r.sharedMaterials;   // mutable copy of this renderer's slots
-                    bool changed = false;
-                    for (int mi = 0; mi < work.Length; mi++)
-                    {
-                        var m = work[mi];
-                        if (m == null || !IsBrokenShader(m.shader)) continue;
-                        string dead = m.shader != null ? m.shader.name : "<null>";
-                        if (!freshFor.TryGetValue(m, out var fresh))
-                        {
-                            fresh = BuildRecoveredMaterial(m);   // fresh URP/Lit, once per unique source
-                            freshFor[m] = fresh;
-                            recovered++;
-                            // WARN (not Fail): this line is a RECOVERY (the material was fixed in place), not a
-                            // failure, and it fired ~8x per castle load — flooding the errors-only break-log and
-                            // masking the owner's real F8 flags. Demoted to Warn so it stays in Player.log for
-                            // diagnosis (with the EXACT object, so the source can still be fixed at root) but no
-                            // longer trips the F8 error capture. Recovery behavior unchanged.
-                            FlowTrace.Warn("MagentaGuard",
-                                $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
-                                $"material '{m.name}' dead-shader '{dead}' -> FRESH URP/Lit (assigned to renderer so it sticks; fix at source).");
-                        }
-                        work[mi] = fresh;
-                        changed = true;
-                    }
-                    if (changed) r.sharedMaterials = work;   // assignment is what makes the recovery stick
                 }
+
+                // BROKEN-MATERIAL pass — shared with the runtime spawn seam (SweepGameObject).
+                SweepRenderers(renderers, sceneName, hideStrayPrimitives: true,
+                               out int recovered, out int hiddenStray);
 
                 // TERRAIN PASS (owner F8 2026-06-21 "Pink Floor", ran-from-exe): MainCastle_Hall's VISIBLE
                 // floor is the Terrain in the merged world (the wood courtyard tiles are dropped to
@@ -330,9 +305,227 @@ namespace DeNelle.Core
             }
         }
 
-        // A shader that renders MAGENTA (or grey/wrong) under URP, or is missing entirely. Valid
-        // URP / Unlit / Particles / UI / Skybox shaders are NOT broken and are left untouched.
-        private static bool IsBrokenShader(Shader sh)
+        // =====================================================================
+        //  PER-OBJECT ENTRY POINT — the runtime-spawn seam (magenta raid troops)
+        // =====================================================================
+
+        /// <summary>
+        /// Recovers every magenta renderer under <paramref name="root"/> RIGHT NOW, without waiting
+        /// for a scene load. This is the entry point the scene-load-only guard never had: a raid
+        /// troop is instantiated mid-raid (TroopDeployer.SpawnFromArmy -> TroopFactory.Build ->
+        /// VisualFactory.Skin), long after the last sceneLoaded, so the snapshot sweep could never
+        /// see it. Includes INACTIVE children (a body can be dressed/enabled a frame later).
+        /// <para/>
+        /// NEVER THROWS and never logs at error severity for a merely-absent art pack: this runs
+        /// inside the shared skinning choke point, and an uncaught exception here halts the WebGL
+        /// player (see the header note on the sceneLoaded lifecycle).
+        /// </summary>
+        /// <param name="root">The freshly built body (or any subtree). Null = no-op.</param>
+        /// <param name="cause">The calling seam, e.g. "VisualFactory.Skin" — printed as cause= on
+        /// every probe line so a capture says WHICH path produced the offender.</param>
+        public static void SweepGameObject(GameObject root, string cause)
+        {
+            try
+            {
+                if (root == null) return;
+
+                // Resolve URP/Lit through the ROBUST path (Shader.Find can return null in a stripped
+                // player build; ResolveUrpLitShader then borrows a live one out of the loaded scene).
+                if (ResolveUrpLitShader() == null)
+                {
+                    // A gitignored art pack that was never imported lands here. WARN + continue —
+                    // never an error, never a throw: the caller still gets its (unrecovered) body.
+                    FlowTrace.Warn("MagentaProbe",
+                        $"cause={cause} obj='{root.name}': no URP/Lit shader resolvable - cannot recover " +
+                        "magenta materials on this body (art pack not imported / shader stripped). Skipped.");
+                    return;
+                }
+
+                var rends = root.GetComponentsInChildren<Renderer>(true);
+                if (rends == null || rends.Length == 0) return;
+
+                // hideStrayPrimitives:false — TroopFactory's model-missing fallback IS a deliberate
+                // tinted primitive capsule; disabling it would make the troop invisible-but-alive.
+                SweepRenderers(rends, cause, hideStrayPrimitives: false, out int recovered, out int hiddenStray);
+                if (recovered > 0 || hiddenStray > 0)
+                    FlowTrace.Step("MagentaProbe",
+                        $"cause={cause} obj='{root.name}': recovered {recovered} magenta material(s), " +
+                        $"hid {hiddenStray} stray placeholder(s) across {rends.Length} renderer(s).");
+            }
+            catch (System.Exception e)
+            {
+                // A magenta body is a cosmetic defect; a throw out of the skinner is a dead player.
+                FlowTrace.Fail("MagentaProbe",
+                    $"cause={cause} obj='{(root != null ? root.name : "<null>")}': sweep threw " +
+                    $"{e.GetType().Name}: {e.Message} - swallowed (body kept as-is).");
+            }
+        }
+
+        /// <summary>
+        /// The shared per-renderer magenta recovery. Called by the scene <see cref="Sweep"/> with the
+        /// scene-wide snapshot AND by <see cref="SweepGameObject"/> with one freshly spawned body, so
+        /// both seams recover identically instead of drifting apart.
+        /// <para/>
+        /// Deliberately does NOT contain the ground/floor fix — that owns the process-static
+        /// <c>_floorSeen</c> name dedup and stays in <see cref="Sweep"/>.
+        /// </summary>
+        public static void SweepRenderers(IList<Renderer> renderers, string context)
+            => SweepRenderers(renderers, context, hideStrayPrimitives: true, out _, out _);
+
+        private static void SweepRenderers(IList<Renderer> renderers, string context,
+                                           bool hideStrayPrimitives,
+                                           out int recovered, out int hiddenStray)
+        {
+            recovered = 0;
+            hiddenStray = 0;
+            if (renderers == null || renderers.Count == 0) return;
+            if (_lit == null && ResolveUrpLitShader() == null) return;
+
+            for (int ri = 0; ri < renderers.Count; ri++)
+            {
+                var r = renderers[ri];
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+
+                // Is ANY slot an offender? A NULL slot counts: under URP an unassigned submesh
+                // material draws with the engine default = MAGENTA (the same visible defect as a
+                // stripped shader), so the old `m != null &&` detection silently skipped the very
+                // case it was written to catch.
+                Material brokenMat = null;
+                bool anyOffender = false;
+                foreach (var m in mats)
+                {
+                    if (m == null) { anyOffender = true; continue; }
+                    if (IsBrokenShader(m.shader)) { brokenMat = m; anyOffender = true; break; }
+                }
+                if (!anyOffender) continue;
+                string deadShader = brokenMat != null && brokenMat.shader != null ? brokenMat.shader.name : "<null>";
+
+                // A magenta BUILT-IN PRIMITIVE (Capsule/Cube/Sphere...) is never intended art — it is a
+                // stray placeholder pill (CastleSpawnMarkerHider exists for exactly these). Real art
+                // would carry a valid URP material. So HIDE the primitive (matches the hider's intent)
+                // rather than recolour it to a grey pill that still litters the scene.
+                //
+                // NOT on the runtime-spawn path: TroopFactory's model-missing FALLBACK is a deliberate
+                // tinted CreatePrimitive capsule (TroopFactory.cs ~:96) — hiding it would turn "troop
+                // rendered as a blue pill" into "troop is invisible but still fights", a strictly worse
+                // bug. The scene sweep keeps the hide; a spawn-seam primitive is recovered instead.
+                if (brokenMat != null && hideStrayPrimitives && IsPrimitivePlaceholder(r))
+                {
+                    r.enabled = false;
+                    hiddenStray++;
+                    FlowTrace.Fail("MagentaGuard",
+                        $"hid stray MAGENTA placeholder '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
+                        $"mesh='{MeshName(r)}' material '{brokenMat.name}' dead-shader '{deadShader}' - built-in primitive, not real art.");
+                    continue;
+                }
+
+                // Real art that merely lost its shader (or its whole material): recover each unique
+                // broken source to a FRESH URP/Lit (carrying colour/albedo/emission) and ASSIGN it into
+                // the renderer's shared-materials array so it STICKS in the built player (the in-place
+                // mutation the old path used did not stick — the arcane-tower white symptom).
+                var work = r.sharedMaterials;   // mutable copy of this renderer's slots
+                bool changed = false;
+                for (int mi = 0; mi < work.Length; mi++)
+                {
+                    var m = work[mi];
+                    bool nullSlot = m == null;
+                    if (!nullSlot && !IsBrokenShader(m.shader)) continue;
+
+                    Material fresh;
+                    if (nullSlot)
+                    {
+                        // One shared white URP/Lit for every empty slot in the process. Re-created if a
+                        // previous scene unload destroyed it (Unity fake-null).
+                        if (_nullSlotFresh == null)
+                            _nullSlotFresh = new Material(_lit) { name = "NullSlot_MagentaFix" };
+                        fresh = _nullSlotFresh;
+                        if (_nullSlotSeen.Add(HierarchyPath(r.transform) + "#" + mi))
+                        {
+                            recovered++;
+                            ProbeFail(context, r, mi, null);
+                        }
+                    }
+                    else if (!_freshFor.TryGetValue(m, out fresh) || fresh == null)
+                    {
+                        // STATIC cache: a repeated troop model is recovered ONCE for the whole process,
+                        // not once per spawned body (which would leak a Material per troop and break
+                        // SRP batching). `fresh == null` re-builds after a scene unload destroyed it.
+                        fresh = BuildRecoveredMaterial(m);   // fresh URP/Lit, once per unique source
+                        _freshFor[m] = fresh;
+                        recovered++;
+                        ProbeFail(context, r, mi, m);
+                        // WARN (not Fail): this line is a RECOVERY (the material was fixed in place), not a
+                        // failure, and it fired ~8x per castle load — flooding the errors-only break-log and
+                        // masking the owner's real F8 flags. Demoted to Warn so it stays in Player.log for
+                        // diagnosis (with the EXACT object, so the source can still be fixed at root) but no
+                        // longer trips the F8 error capture. Recovery behavior unchanged.
+                        FlowTrace.Warn("MagentaGuard",
+                            $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
+                            $"material '{m.name}' dead-shader '{(m.shader != null ? m.shader.name : "<null>")}' " +
+                            "-> FRESH URP/Lit (assigned to renderer so it sticks; fix at source).");
+                    }
+                    work[mi] = fresh;
+                    changed = true;
+                }
+                if (changed) r.sharedMaterials = work;   // assignment is what makes the recovery stick
+            }
+        }
+
+        /// <summary>
+        /// The ONE diagnosable line per offender — never a silent repaint. Emitted once per unique
+        /// source material (or per null slot), so a body respawned 20x names itself once and the
+        /// errors-only break-log is not flooded.
+        /// <para/>
+        /// class= splits the five magenta causes so a capture says WHICH one to fix at source:
+        ///   M1 shader stripped from the build (null / Hidden/InternalErrorShader)
+        ///   M2 material slot is NULL (dangling GUID / never assigned)
+        ///   M3 Built-in pipeline shader (Standard / Specular setup / Legacy) under URP
+        ///   M5 shader present + named but !isSupported (failed to compile on-device)
+        /// </summary>
+        private static void ProbeFail(string cause, Renderer r, int slot, Material m)
+        {
+            var sh = m != null ? m.shader : null;
+            string matName = m != null ? m.name : "NULL";
+            string shName = sh != null ? sh.name : "NULL";
+            string supported = sh != null ? sh.isSupported.ToString() : "false";
+            FlowTrace.Fail("MagentaProbe",
+                $"FAIL cause={cause} obj='{HierarchyPath(r.transform)}' slot={slot} " +
+                $"material='{matName}' shader='{shName}' supported={supported} class={ClassifyMagenta(m)}");
+        }
+
+        /// <summary>Which of the five magenta classes this material is (see <see cref="ProbeFail"/>).</summary>
+        private static string ClassifyMagenta(Material m)
+        {
+            if (m == null) return "M2";
+            var sh = m.shader;
+            if (sh == null) return "M1";
+            string sn = sh.name;
+            if (string.IsNullOrEmpty(sn) || sn.Contains("InternalError")) return "M1";
+            if (sn == "Standard" || sn == "Standard (Specular setup)" || sn.StartsWith("Legacy Shaders/")) return "M3";
+            if (!sh.isSupported) return "M5";
+            return "OK";
+        }
+
+        /// <summary>
+        /// THE single authority for "would this shader render MAGENTA (or grey/wrong) under URP, or is
+        /// it missing entirely". Valid URP / Unlit / Particles / UI / Skybox shaders are NOT broken and
+        /// are left untouched.
+        /// <para/>
+        /// PUBLIC ON PURPOSE (2026-08-02). GhostPreview and EquipmentController each carried a LOCAL
+        /// copy of this predicate and BOTH had DRIFTED: neither had the <c>!sh.isSupported</c> branch,
+        /// i.e. both were structurally blind to the ANDROID / on-device case. A shader that compiles in
+        /// the editor and fails against the device graphics API KEEPS ITS NAME, so every name-only test
+        /// below waves it through while it renders magenta on the phone. Both copies are now deleted and
+        /// call this.
+        /// <para/>
+        /// Do NOT re-privatise. An unreachable authority is exactly WHY the copies were written in the
+        /// first place ("kept local so this silo never edits MagentaGuard") - and that reasoning is how
+        /// the drift got sanctioned in review. ShaderPredicateSingleAuthorityRegression fails if this
+        /// stops being public, stops testing isSupported, or if a second definition reappears anywhere.
+        /// </summary>
+        public static bool IsBrokenShader(Shader sh)
         {
             if (sh == null) return true;
             string sn = sh.name;

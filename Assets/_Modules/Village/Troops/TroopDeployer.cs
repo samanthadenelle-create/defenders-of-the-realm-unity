@@ -13,6 +13,7 @@
 
 using UnityEngine;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // FlowTrace - [Flow:TroopVisual]
 
 namespace DeNelle.Village
 {
@@ -36,6 +37,14 @@ namespace DeNelle.Village
                 Debug.LogWarning($"[TroopDeployer] unknown troop id '{troopId}' — not spawned.");
                 return null;
             }
+
+            // §12 spawn seam (owner defect 2026-08-02): this is the MID-RAID entry point — it runs
+            // long after the last SceneManager.sceneLoaded, which is precisely why the scene-load-only
+            // MagentaGuard sweep never saw these bodies. One line per deploy so a headless raid run
+            // ties every [Flow:TroopVisual] / [Flow:MagentaProbe] line below back to its deploy.
+            FlowTrace.Step("TroopVisual",
+                $"deploy id='{troopId}' model='{def.Model ?? "<none>"}' role='{def.Role ?? "<none>"}' at {pos} " +
+                "(runtime spawn, post-sceneLoaded).");
 
             var troop = TroopFactory.Build(def, pos, Quaternion.identity, null);
             if (troop != null)

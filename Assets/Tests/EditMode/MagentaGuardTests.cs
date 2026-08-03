@@ -30,8 +30,14 @@ namespace DeNelle.Tests.EditMode
     {
         private static bool IsBroken(Shader sh)
         {
+            // Public|NonPublic on purpose: IsBrokenShader was PRIVATE until 2026-08-02, when it was
+            // promoted to public so GhostPreview and EquipmentController could delete their drifted
+            // local copies (both were missing the !isSupported / Android branch). This lookup must
+            // not care which it is - the accessibility is guarded by
+            // ShaderPredicateSingleAuthorityRegression, and pinning it here would just mean this
+            // test fails every time that decision is revisited.
             var mi = typeof(MagentaGuard).GetMethod(
-                "IsBrokenShader", BindingFlags.NonPublic | BindingFlags.Static);
+                "IsBrokenShader", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(mi, Is.Not.Null,
                 "MagentaGuard.IsBrokenShader(Shader) must exist — it is the magenta-recovery gate");
             return (bool)mi.Invoke(null, new object[] { sh });

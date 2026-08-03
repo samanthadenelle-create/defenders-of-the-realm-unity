@@ -361,8 +361,20 @@ namespace DeNelle.Village
                 // _Surface, so the transparency block below was skipped → an OPAQUE pink ghost.
                 // Treat a null/broken/Standard/Legacy/error source shader as "unusable" and build the
                 // ghost on URP/Lit so it renders translucent, never magenta.
+                //
+                // SINGLE AUTHORITY (2026-08-02): this used to carry a LOCAL copy of the predicate
+                // (IsBrokenGhostShader). The copy had already DRIFTED - it was missing MagentaGuard's
+                // `!sh.isSupported` branch, which is the ANDROID/ON-DEVICE case: a shader that compiles
+                // in the editor and on desktop but fails to compile against the device's graphics API
+                // keeps its NAME (so every name-only test below passes it as "fine") and renders MAGENTA.
+                // A build ghost on the Seeker was therefore structurally undetectable. Route through
+                // MagentaGuard.IsBrokenShader so there is exactly ONE definition of "would this render
+                // magenta" in the runtime tree. DETECT ONLY - the ghost does not want MagentaGuard's
+                // recovery sweep (that assigns FRESH OPAQUE URP/Lit materials into the renderer, which
+                // is the exact opposite of a translucent preview, and would also disable a primitive
+                // placeholder mesh). We only need the verdict; the transparent material is built below.
                 Shader srcShader = src != null ? src.shader : null;
-                bool broken = srcShader == null || IsBrokenGhostShader(srcShader);
+                bool broken = DeNelle.Core.MagentaGuard.IsBrokenShader(srcShader);
                 if (broken) FlowTrace.Warn("Ghost", $"source shader '{(srcShader != null ? srcShader.name : "<null>")}' is broken/stripped for URP — rebuilding ghost on URP/Lit (pink-ghost guard)");
                 Shader shader = !broken
                                 ? srcShader
@@ -385,18 +397,9 @@ namespace DeNelle.Village
             SetValid(true);
         }
 
-        // A source shader that renders MAGENTA / wrong under URP (or was stripped from the build).
-        // Mirrors MagentaGuard.IsBrokenShader — a ghost must never inherit one of these, or it draws
-        // as an opaque pink block instead of a translucent placement preview.
-        private static bool IsBrokenGhostShader(Shader sh)
-        {
-            if (sh == null) return true;
-            string sn = sh.name;
-            if (string.IsNullOrEmpty(sn)) return true;
-            return sn == "Standard"
-                || sn == "Standard (Specular setup)"
-                || sn.StartsWith("Legacy Shaders/")
-                || sn.Contains("InternalError");
-        }
+        // NOTE: the local IsBrokenGhostShader predicate was DELETED (2026-08-02) in favour of the
+        // single authority DeNelle.Core.MagentaGuard.IsBrokenShader (see the call site above). Do not
+        // re-add a local copy here - ShaderPredicateSingleAuthorityRegression FAILS the build gate if
+        // a second broken-shader predicate reappears anywhere in the runtime tree.
     }
 }
