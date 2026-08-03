@@ -308,6 +308,26 @@ namespace DeNelle.Village
         [JsonProperty("name")] public string Name;
         /// <summary>Seconds of calm Prepare Phase BEFORE this wave spawns.</summary>
         [JsonProperty("countdownSeconds")] public float CountdownSeconds = 45f;
+
+        /// <summary>
+        /// The COMBAT budget for this wave, in seconds: roughly how long the fight itself is
+        /// designed to take, measured from the first spawn to the last enemy down. Feeds
+        /// <c>EncounterSample.ExpectedDurationSeconds</c>, i.e. the dynamic-difficulty clear-time
+        /// signal (actualDuration / expectedDuration vs the authored par).
+        /// <para>
+        /// THIS IS DELIBERATELY NOT DERIVED FROM <see cref="CountdownSeconds"/>. That field is the
+        /// BUILD WINDOW between waves, not a combat budget, and DifficultyTuning's Easy/Normal/Hard
+        /// CountdownMultiplier scales it -- so deriving from it would feed the player's chosen
+        /// difficulty SETTING into the adaptive system and couple two difficulty authorities that
+        /// were deliberately kept disjoint (see DifficultyProfile's header).
+        /// </para>
+        /// <para>
+        /// 0 / absent means NO CLEAR-TIME SAMPLE: WaveManager still records the encounter (its
+        /// death and damage signals count) but neutralises the clear ratio onto the authored pivot
+        /// so an unauthored wave contributes nothing to the time signal instead of a garbage ratio.
+        /// </para>
+        /// </summary>
+        [JsonProperty("expectedCombatSeconds")] public float ExpectedCombatSeconds;
         /// <summary>The ordered spawn batches that make up the wave.</summary>
         [JsonProperty("enemies")] public List<WaveBatch> Enemies = new List<WaveBatch>();
         /// <summary>Optional boss enemy id released alongside the wave (null = no boss).</summary>

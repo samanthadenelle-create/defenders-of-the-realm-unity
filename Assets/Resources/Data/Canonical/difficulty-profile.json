@@ -1,0 +1,49 @@
+{
+  "version": 1,
+
+  "sampleWindow": 10,
+  "minSamples": 3,
+
+  "targetDeathRate": 0.22,
+  "deathMasteryBound": 0.08,
+  "deathStruggleBound": 0.40,
+
+  "targetClearRatio": 0.65,
+  "fastClearRatio": 0.40,
+  "slowClearRatio": 1.10,
+
+  "deathWeight": 0.55,
+  "timeWeight": 0.45,
+  "scoreSmoothing": 1.0,
+
+  "minMultiplier": 0.75,
+  "maxMultiplier": 1.45,
+  "maxMultiplierWithSpike": 1.60,
+
+  "bossExcessRetained": 0.55,
+  "bossReliefRetained": 1.00,
+
+  "scaleEnemyHp": true,
+  "scaleEnemyDamage": true,
+  "enemyDamageDownOnly": true,
+  "scaleEnemyCount": true,
+  "countScale": 0.50,
+  "scaleBossHp": true,
+  "scaleBossDamage": true,
+  "bossDamageDownOnly": true,
+
+  "pressureEnabled": true,
+  "pressureBuildRate": 0.08,
+  "pressureDecayRate": 0.04,
+  "strugglingDecayFactor": 2.0,
+  "spikeThreshold": 0.75,
+  "spikeMultiplier": 1.18,
+  "spikeDurationSeconds": 45.0,
+  "spikeResetPressure": 0.35,
+
+  "dominatingDeathRate": 0.12,
+  "dominatingClearRatio": 0.55,
+  "dominatingMaxDamageTakenRatio": 0.35,
+  "strugglingDeathRate": 0.35,
+  "strugglingClearRatio": 0.95
+}

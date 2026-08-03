@@ -8,6 +8,7 @@
   },
   "_schemaNotes": {
     "countdownSeconds": "Seconds of calm Prepare Phase BEFORE this wave spawns. Wave 1 = 45s (React PREPARE_SECONDS) so a new player isn't staring at a multi-minute timer; later waves = 300s (React LATER_PREPARE_SECONDS) build window.",
+    "expectedCombatSeconds": "The COMBAT budget for the wave in seconds - roughly how long the FIGHT is designed to take, from the first spawn to the last enemy down. This is the expected duration the dynamic-difficulty clear-time signal divides the real clear time by (actual/expected vs the authored par of 0.65 in difficulty-profile.json). It is DELIBERATELY a separate key from countdownSeconds: countdownSeconds is the BUILD WINDOW between waves and is scaled by the player's chosen Easy/Normal/Hard setting (DifficultyTuning.CountdownMultiplier), so deriving a combat budget from it would feed the difficulty SETTING into the adaptive system and couple two authorities that are deliberately disjoint. AUTHORED FORMULA (retune freely, no code change): base = 40 + 6*(waveId-1) seconds, rounded to the nearest 5 - the generated roster grows ~0.9 enemies per wave (WaveCompositionBuilder) and WaveScalingCurve grows HP to 2.5x by wave 20, so the fight lengthens roughly linearly. Boss waves add a flat block for the pinned boss HP on top: +40 for the wave-5 Cave Troll (1050 HP), +55 for each Necromancer walk (waves 6/12/18), +130 for the apex dragon Syndrath (4200 HP, wave 20). A wave with this key ABSENT or 0 is still recorded as an encounter (its death and damage signals count) but its clear ratio is neutralised onto the authored pivot, so it contributes NOTHING to the time signal rather than a garbage ratio.",
     "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — in the 20-wave schedule the Necromancer of the Wound walks with waves 6, 12, and 18.",
     "apexBoss": "Optional object — declares the APEX flying boss for the wave (the Black Dragon, 'Syndrath the Devourer'). DISTINCT from 'boss' above: 'boss' names a ground NavMesh enemy from enemies.json, whereas apexBoss is the kinematic-flight DragonBoss prefab (Boss_Dragon.prefab) — it is NOT in enemies.json and does not path a NavMesh. Fields: { id (stable per-instance boss id), hp (max HP override; <=0 keeps the prefab's 4200 default), nameKey (canon-strings.json key for the display name) }. The apex wave sits ABOVE the canon Necromancer cadence — see docs/port-notes/dragon-boss.md §2 + dragon-wave-wiring.md.",
     "_RETIRED_batchFields": "STRIPPED 2026-07-30 (owner ruling, WO-783 D1). The per-wave 'enemies' batch list and its type/count/spawnPoint/delay/interval fields are GONE because they were INERT: WaveManager.StartWave runs the WO-362 smart-composition path first (_smartComposition is serialized 1 in both live hubs), so it GENERATES each wave's roster from WaveCompositionBuilder and the authored batches were never released. They were authored 2026-07-11, ~4 weeks after they went inert, and nothing said so. Smart composition is the AUTHORITY. Do NOT re-add an 'enemies' array here: the [wave-authoring] regression FAILS the gate if live-looking batches reappear while smart composition is on. The authored schedule is preserved as design intent in docs/design/WAVE_AUTHORING_REFERENCE_2026-07-30.md."
@@ -23,31 +24,36 @@
       "_comment": "WO-316 FAMILY COMPOSITION: each wave is authored as ONE Hollow squad with a ROLE MIX (tank + healer + a few DPS), not a clone-swarm. WaveManager.SpawnComposedFamilyGroups buckets these batches by enemies.json 'family', stamps each member's EnemyRole from its 'role' (brute->Tank, caster->Healer, skirmisher->Ranged, grunt->DPS), and releases the whole squad as ONE coordinated group (formation spread + 'hold then charge together'). Keep all batches in a wave on the SAME family + SAME spawnPoint so they compose into a single cohesive squad. Counts scale up per wave.",
       "waveId": 1,
       "name": "First Light",
-      "countdownSeconds": 45
+      "countdownSeconds": 45,
+      "expectedCombatSeconds": 40
     },
     {
       "_comment": "WAVE 2 = ORC WARBAND (enemy-variety 2026-06-13). A cohesive greenskin squad — berserker brutes + a shaman caster + a necromancer elite — so wave 2 is a DISTINCT faction, not another Hollow clone-swarm. All 'orc' family → composes as one orc squad.",
       "waveId": 2,
       "name": "The Warband Comes",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 45
     },
     {
       "_comment": "WAVE 3 = BRUTE BAND (enemy-variety 2026-06-13). Cave Trolls + an Ogre (the 'troll' brute family — big slow silhouettes) with a pair of orc-berserkers for front-line pressure. The heavy payoff wave of the opening act (the apex dragon now closes the schedule at wave 20, F8-44).",
       "waveId": 3,
       "name": "The Deep Ones",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 50
     },
     {
       "_comment": "WAVES 4-19 (F8-44, owner 2026-07-11): the escalating mid-schedule. Families rotate orc → troll → hollow so factions alternate; spawn gates rotate spawn-1 → spawn-2 → spawn-3 → spawn-0 so the siege shifts around the compass; counts grow gradually (~wave-3 weight at 4, ~2.5-3x by 19 — WaveScalingCurve handles stat escalation by wave number). Necromancer of the Wound boss cadence at 6/12/18.",
       "waveId": 4,
       "name": "The Green Tide",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 60
     },
     {
       "_comment": "BOSS WAVE (WO-789, owner ruling 2026-07-30): the Cave Troll walks with wave 5 as a mid-tier GROUND boss, pinned to exactly 1050 HP (1/4 of Syndrath's 4200) via bossHp. bossHp mirrors apexBoss.hp: a deliberate, visible wave-level exception to the enemies.json stat SSOT — it REPLACES the scaled value AFTER WaveScalingCurve, so the troll lands 1050 flat, not 320*curve. Replaces the TEST-ONLY apex-dragon block bolted on 2026-07-24; the real apex wave is 20 (untouched). Ground bosses use the normal floating enemy bar, not the apex BossHealthBar.",
       "waveId": 5,
       "name": "Stonebreakers",
       "countdownSeconds": 300,
+      "expectedCombatSeconds": 105,
       "boss": "troll",
       "bossHp": 1050
     },
@@ -56,82 +62,97 @@
       "waveId": 6,
       "name": "The Wound Speaks",
       "countdownSeconds": 300,
+      "expectedCombatSeconds": 125,
       "boss": "necromancer"
     },
     {
       "waveId": 7,
       "name": "The Deathspeaker's Levy",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 75
     },
     {
       "waveId": 8,
       "name": "The Warrens Empty",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 80
     },
     {
       "waveId": 9,
       "name": "March of the Forgotten",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 90
     },
     {
       "waveId": 10,
       "name": "Warband Ascendant",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 95
     },
     {
       "waveId": 11,
       "name": "Oak and Stone",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 100
     },
     {
       "_comment": "BOSS WAVE (cadence 12): the Necromancer returns at the head of a full Hollow column.",
       "waveId": 12,
       "name": "The Second Dirge",
       "countdownSeconds": 300,
+      "expectedCombatSeconds": 160,
       "boss": "necromancer"
     },
     {
       "waveId": 13,
       "name": "The Red Banner",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 110
     },
     {
       "waveId": 14,
       "name": "Giants at the Gate",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 120
     },
     {
       "waveId": 15,
       "name": "The Hollowed Hundred",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 125
     },
     {
       "waveId": 16,
       "name": "The Last Levy",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 130
     },
     {
       "waveId": 17,
       "name": "The Mountain Moves",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 135
     },
     {
       "_comment": "BOSS WAVE (cadence 18): the Necromancer's final walk — the heaviest Hollow column before the sky itself turns.",
       "waveId": 18,
       "name": "The Third Dirge",
       "countdownSeconds": 300,
+      "expectedCombatSeconds": 195,
       "boss": "necromancer"
     },
     {
       "waveId": 19,
       "name": "Eve of the Wing",
-      "countdownSeconds": 300
+      "countdownSeconds": 300,
+      "expectedCombatSeconds": 150
     },
     {
       "_comment": "APEX WAVE — the Black Dragon, 'Syndrath the Devourer'. The terminal wave of the schedule and the realm's register breaking under the Withering (dragon-boss.md §2): a rare set-piece sky-boss ABOVE the canon Necromancer of the Wound. No ground enemy batches — the dragon IS the wave; it circles the Heart on its own kinematic flight and dives to strike. 'enemies' is left empty intentionally; WaveManager spawns the Boss_Dragon prefab from the 'apexBoss' block and calls DragonBoss.Configure(id, Heart, hp). hp 4200 mirrors the DragonBoss inspector default (well above the Necromancer's 1700). countdownSeconds 300 = the React LATER_PREPARE_SECONDS build window.",
       "waveId": 20,
       "name": "The Last Wing",
       "countdownSeconds": 300,
+      "expectedCombatSeconds": 285,
       "apexBoss": {
         "id": "boss-dragon-syndrath",
         "hp": 4200,

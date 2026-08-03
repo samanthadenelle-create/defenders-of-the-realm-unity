@@ -39,6 +39,7 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;   // FlowTrace — wave-start flow instrumentation (§12)
+using DeNelle.Core.Adaptive;    // DynamicDifficulty — encounter telemetry + spawn-time multipliers
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
@@ -331,6 +332,48 @@ namespace DeNelle.Village
         private bool _breachArmed;
         private int _spawnInstanceCounter;
 
+        // =====================================================================
+        //  ENCOUNTER TELEMETRY — the INPUT to Dynamic Difficulty (Task A)
+        // ---------------------------------------------------------------------
+        //  DynamicDifficulty's math was oracle-proven but INERT because nothing in
+        //  the game ever called RecordEncounter: not one of the six fields
+        //  EncounterSample needs was measured anywhere, so the multiplier returned
+        //  exactly 1.0 forever. These four measurements are that missing input.
+        //
+        //  WAVE-START TIME IS COMBAT-START, NOT COUNTDOWN-START. The build-window
+        //  countdown (45s first wave, 300s later, further scaled by the player's
+        //  Easy/Normal/Hard setting) is not part of the fight. Stamping the clock at
+        //  EnterCountdown instead of StartWave would inflate every clear time by up
+        //  to five minutes and corrupt the clear-time ratio outright.
+        //
+        //  All four are reset in BeginEncounterTelemetry, which StartWave calls the
+        //  moment the phase turns Active.
+        // =====================================================================
+
+        /// <summary>Time.time when COMBAT began for the live wave (-1 = no encounter armed).</summary>
+        private float _encounterStartTime = -1f;
+
+        /// <summary>Latched by <see cref="HandleTelemetryHeroDied"/> off HeroHealth.OnDied.</summary>
+        private bool _encounterHeroDied;
+
+        /// <summary>Running sum of HP the hero LOST during this encounter (post-mitigation).</summary>
+        private float _encounterDamageTaken;
+
+        /// <summary>Snapshot of <see cref="Enemy.HeroDamageDealtTotal"/> at combat start; the
+        /// encounter's damage dealt is the delta against it.</summary>
+        private double _encounterDamageDealtBase;
+
+        /// <summary>The HeroHealth instance the telemetry is currently bound to (re-bound if the
+        /// hero instance is ever swapped mid-encounter).</summary>
+        private HeroHealth _telemetryHero;
+
+        /// <summary>Previous sampled hero HP; a NEGATIVE delta is damage taken. -1 = no baseline
+        /// yet. A respawn / heal / gear top-up moves this UP, which is ignored by design.</summary>
+        private float _telemetryLastHeroHp = -1f;
+
+        /// <summary>True once this manager has subscribed to GameStateService.StateReplaced.</summary>
+        private bool _newGameHookArmed;
+
         // WO-579 (#5 "resets to wave 1") — cross-reload wave RESUME. The WaveManager is rebuilt on
         // every hub (re)load (it is NOT DontDestroyOnLoad), so without a resume point BeginLoop always
         // restarts at _startWave (=1). This static survives a scene reload WITHIN a play session, and is
@@ -339,10 +382,23 @@ namespace DeNelle.Village
         // reset re-seeds from the (possibly reset) BestWave instead of carrying a stale wave number.
         private static int s_resumeWaveId = 0;   // 0 = unseeded
 
+        // DYNAMIC DIFFICULTY: false until this play session has cleared the encounter history
+        // once. See EnsureDifficultySessionReset — the per-session half of "one player's history
+        // never scales another's run" (the other half is the StateReplaced hook below).
+        private static bool s_difficultySessionReset;
+
         // WO-139 #12 pattern: with domain reload disabled, statics persist across Play sessions. Reset
         // the resume seed at each play start so it re-derives from the save (handles new game / reload).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetResumeStatic() => s_resumeWaveId = 0;
+        private static void ResetResumeStatic()
+        {
+            s_resumeWaveId = 0;
+            // Only ARM the reset here; do not perform it. DynamicDifficulty.State lazily loads the
+            // profile through DifficultyProfileCatalog (Resources/StreamingAssets), which has no
+            // business running at SubsystemRegistration. The reset itself happens on the first wave
+            // kickoff of the session (EnsureDifficultySessionReset).
+            s_difficultySessionReset = false;
+        }
 
         /// <summary>The phase the wave loop is in.</summary>
         public WavePhase Phase => _phase;
@@ -594,6 +650,12 @@ namespace DeNelle.Village
             // ENDLESS: drop the awaiting-player latch — a re-enabled/reloaded manager
             // re-derives it from the resume seed via BeginLoop -> EnterCountdown.
             _awaitingPlayerStart = false;
+
+            // Encounter telemetry: drop the HeroHealth.OnDied + GameState.StateReplaced
+            // subscriptions so a torn-down manager can never be called into (same rule as the
+            // enemy/boss/Heart unsubscribes above). The in-flight encounter is abandoned.
+            UnbindEncounterTelemetry();
+            _encounterStartTime = -1f;
         }
 
         private void Update()
@@ -938,6 +1000,12 @@ namespace DeNelle.Village
             }
 
             if (_enemyRoot == null) _enemyRoot = transform;
+
+            // Dynamic difficulty: arm the once-per-session history clear and subscribe to the
+            // new-game signal. Both are idempotent and both retry on the next BeginLoop if Core
+            // has not bootstrapped yet, so a late GameStateService is never missed.
+            EnsureDifficultySessionReset();
+            HookNewGameReset();
         }
 
         // =====================================================================
@@ -1236,6 +1304,13 @@ namespace DeNelle.Village
 
             _phase = WavePhase.Active;
             FlowTrace.Step("Wave", $"StartWave({waveId}) -> phase=Active (spawning begins)");
+
+            // ENCOUNTER TELEMETRY: stamp COMBAT start + reset the four measurements HERE — the
+            // frame the phase turns Active — NOT at EnterCountdown. The countdown is the build
+            // window; conflating the two would add up to 300s (further scaled by the player's
+            // difficulty SETTING) to every measured clear time.
+            BeginEncounterTelemetry(waveId);
+
             _breachArmed = false;
             _breachArmTimer = 0f;
             _breachRoster.Clear();
@@ -1476,6 +1551,13 @@ namespace DeNelle.Village
                         composedCurve.SpeedMultiplier(_currentWaveId),
                         composedCurve.DamageMultiplier(_currentWaveId));
 
+                    // PATCH 2 — DYNAMIC DIFFICULTY, applied as base*mult on a base captured
+                    // FRESH for this spawn. The body is pooled: `stat *= mult` here would
+                    // compound exponentially across reuses (see Enemy's base-stat block).
+                    e.SetBaseStats(e.MaxHp, e.ContactDamage);
+                    e.ApplyDifficulty(DynamicDifficulty.EnemyHpMultiplier,
+                                      DynamicDifficulty.EnemyDamageMultiplier);
+
                     e.Died         += HandleEnemyDied;
                     e.ReachedHeart += HandleEnemyReachedHeart;
                     _liveEnemies.Add(e);
@@ -1584,6 +1666,12 @@ namespace DeNelle.Village
                     smartCurve.HpMultiplier(_currentWaveId),
                     smartCurve.SpeedMultiplier(_currentWaveId),
                     smartCurve.DamageMultiplier(_currentWaveId));
+
+                // PATCH 2 — DYNAMIC DIFFICULTY (base*mult on a freshly captured base; the
+                // body is pooled, so an in-place multiply would compound across reuses).
+                e.SetBaseStats(e.MaxHp, e.ContactDamage);
+                e.ApplyDifficulty(DynamicDifficulty.EnemyHpMultiplier,
+                                  DynamicDifficulty.EnemyDamageMultiplier);
 
                 e.Died         += HandleEnemyDied;
                 e.ReachedHeart += HandleEnemyReachedHeart;
@@ -1934,6 +2022,11 @@ namespace DeNelle.Village
         /// </summary>
         private void TickActiveWave()
         {
+            // ENCOUNTER TELEMETRY: sample the hero's HP delta for this frame (damage taken).
+            // Only runs while a wave is ACTUALLY fighting, which is exactly the window the
+            // difficulty sample is supposed to cover.
+            TickEncounterTelemetry();
+
             // Arm breach detection a beat after the wave starts.
             if (!_breachArmed)
             {
@@ -2015,6 +2108,229 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
+        //  Encounter telemetry — the four measurements DynamicDifficulty consumes
+        // =====================================================================
+
+        /// <summary>
+        /// Resets all four encounter measurements and stamps COMBAT start. Called by
+        /// <see cref="StartWave"/> the instant the phase turns Active — deliberately NOT at
+        /// EnterCountdown (see the field block: the build window is not part of the fight).
+        /// </summary>
+        private void BeginEncounterTelemetry(int waveId)
+        {
+            EnsureDifficultySessionReset();
+
+            _encounterStartTime       = Time.time;
+            _encounterHeroDied        = false;
+            _encounterDamageTaken     = 0f;
+            _encounterDamageDealtBase = Enemy.HeroDamageDealtTotal;
+
+            BindTelemetryHero(HeroHealth.Instance, resetHpBaseline: true);
+
+            FlowTrace.Step("Difficulty",
+                $"encounter ARMED for wave {waveId} at t={_encounterStartTime:F2}s " +
+                $"(hero bound={(_telemetryHero != null)}) — {DynamicDifficulty.Describe()}");
+        }
+
+        /// <summary>
+        /// Binds the death + damage-taken measurements to a HeroHealth instance. The hero can be
+        /// rebuilt (DDOL swap / scene reload) mid-run, so the bind is re-checked every active
+        /// frame rather than assumed for the life of the wave.
+        /// </summary>
+        private void BindTelemetryHero(HeroHealth hero, bool resetHpBaseline)
+        {
+            if (_telemetryHero == hero)
+            {
+                if (resetHpBaseline) _telemetryLastHeroHp = hero != null ? hero.Hp : -1f;
+                return;
+            }
+
+            if (_telemetryHero != null) _telemetryHero.OnDied -= HandleTelemetryHeroDied;
+            _telemetryHero = hero;
+            if (_telemetryHero != null)
+            {
+                // HeroHealth's EXISTING death signal (public event Action OnDied, raised once in
+                // TakeDamage the frame HP reaches zero, alongside OnDeath). No new plumbing.
+                _telemetryHero.OnDied += HandleTelemetryHeroDied;
+                _telemetryLastHeroHp = _telemetryHero.Hp;
+            }
+            else _telemetryLastHeroHp = -1f;
+        }
+
+        /// <summary>Latches "the player died during this encounter". Only a death while the wave is
+        /// ACTUALLY fighting counts — a death in the calm build window is not this encounter's.</summary>
+        private void HandleTelemetryHeroDied()
+        {
+            if (_phase != WavePhase.Active || _encounterStartTime < 0f) return;
+            if (_encounterHeroDied) return;
+            _encounterHeroDied = true;
+            FlowTrace.Step("Difficulty", $"encounter telemetry: hero DIED during wave {_currentWaveId}.");
+        }
+
+        /// <summary>
+        /// Per-frame half of the telemetry: accumulates damage TAKEN as the negative deltas of the
+        /// hero's HP. Sampled off HeroHealth's existing public Hp rather than a new event, so it
+        /// captures the POST-mitigation number the player actually felt (armor, shields, talent DR,
+        /// parry and blocks have all already been applied by the time Hp changes) and cannot be
+        /// desynced by a missed subscription. Upward moves (respawn, heal, gear top-up) are ignored.
+        /// </summary>
+        private void TickEncounterTelemetry()
+        {
+            HeroHealth hero = HeroHealth.Instance;
+            if (hero != _telemetryHero)
+            {
+                // Instance swapped (or appeared for the first time) — rebind and restart the
+                // baseline. Never charge the delta between two DIFFERENT bodies as damage.
+                BindTelemetryHero(hero, resetHpBaseline: true);
+                return;
+            }
+            if (hero == null) return;
+
+            float hp = hero.Hp;
+            if (_telemetryLastHeroHp >= 0f && hp < _telemetryLastHeroHp)
+                _encounterDamageTaken += _telemetryLastHeroHp - hp;
+            _telemetryLastHeroHp = hp;
+        }
+
+        /// <summary>
+        /// PATCH 5 — hands the finished encounter to DynamicDifficulty. Called from
+        /// <see cref="CompleteWave"/> right after OnWaveCleared so a listener that mutates state
+        /// cannot change what was measured.
+        /// </summary>
+        private void RecordEncounterSample(int clearedWaveId)
+        {
+            if (_encounterStartTime < 0f)
+            {
+                FlowTrace.Warn("Difficulty",
+                    $"wave {clearedWaveId} cleared with NO armed encounter (telemetry never began) — not recorded.");
+                return;
+            }
+
+            float duration = Time.time - _encounterStartTime;
+            _encounterStartTime = -1f;   // consume — a wave is recorded exactly once
+
+            // A wave that "clears" in under a second never happened: it is the no-spawn-points
+            // self-clear StartWave already warns about. Recording it would read as a flawless
+            // instant victory (fast clear, zero damage taken) and shove difficulty upward off a
+            // scene misconfiguration.
+            if (duration < 1f)
+            {
+                FlowTrace.Warn("Difficulty",
+                    $"wave {clearedWaveId} cleared in {duration:F2}s — degenerate self-clear " +
+                    "(no enemies ever fought); NOT recorded, so a missing spawn point cannot scale difficulty.");
+                return;
+            }
+
+            WaveDef def = ResolveWaveDefForTelemetry(clearedWaveId);
+            bool wasBoss = def != null && (!string.IsNullOrEmpty(def.Boss) || def.IsApexBossWave);
+
+            float expected = def != null ? def.ExpectedCombatSeconds : 0f;
+            bool expectedAuthored = expected > 0f && !float.IsNaN(expected) && !float.IsInfinity(expected);
+            if (!expectedAuthored)
+            {
+                // "NO SAMPLE" for the clear-time signal, expressed the only way the immutable
+                // EncounterSample contract allows: hand it the expected duration that makes
+                // ClearRatio land EXACTLY on the profile's authored pivot (TargetClearRatio), so
+                // DifficultyMath scores this encounter's time component at precisely 0 — neutral,
+                // contributing nothing. Passing 0 instead would NOT be neutral: ClearRatio falls
+                // back to 1.0, and 1.0 against a 0.65 par reads as a STRUGGLING clear. The death
+                // and damage signals of the encounter still count in full.
+                float pivot = DynamicDifficulty.State.Profile.TargetClearRatio;
+                expected = pivot > 0f ? duration / pivot : 0f;
+                FlowTrace.Warn("Difficulty",
+                    $"wave {clearedWaveId} has no authored expectedCombatSeconds in waves.json — " +
+                    $"clear-time signal NEUTRALISED (pivot {pivot:0.###}); death + damage still count. " +
+                    "Author expectedCombatSeconds for this wave to make its clear time real.");
+            }
+
+            float dealt = (float)(Enemy.HeroDamageDealtTotal - _encounterDamageDealtBase);
+            if (dealt < 0f) dealt = 0f;
+
+            var sample = new EncounterSample(
+                durationSeconds:         duration,
+                expectedDurationSeconds: expected,
+                playerDied:              _encounterHeroDied,
+                damageTaken:             _encounterDamageTaken,
+                damageDealt:             dealt,
+                wasBoss:                 wasBoss);
+
+            FlowTrace.Step("Difficulty",
+                $"wave {clearedWaveId} encounter: dur={duration:F1}s exp={expected:F1}s" +
+                (expectedAuthored ? "" : " (neutralised)") +
+                $" died={_encounterHeroDied} taken={_encounterDamageTaken:F0} dealt={dealt:F0} boss={wasBoss}");
+
+            DynamicDifficulty.RecordEncounter(sample);
+        }
+
+        /// <summary>
+        /// The authored WaveDef for a cleared wave ordinal — the schedule entry, or the cycled
+        /// endless source def past the authored schedule (so an endless boss capstone is still
+        /// sampled as a boss and still carries its authored combat budget).
+        /// </summary>
+        private WaveDef ResolveWaveDefForTelemetry(int waveId)
+        {
+            if (_schedule == null) return null;
+            WaveDef w = _schedule.Find(waveId);
+            if (w != null) return w;
+            return ResolveEndlessWaveDef(waveId, out _);
+        }
+
+        /// <summary>
+        /// Clears the encounter history ONCE per play session, and brings the telemetry host
+        /// online. This is half of "one player's history never scales another's run"; the other
+        /// half is <see cref="HookNewGameReset"/>, which catches a New Game made mid-session.
+        /// Deferred out of the RuntimeInitializeOnLoadMethod because the first touch of
+        /// DynamicDifficulty.State loads the profile JSON.
+        /// </summary>
+        private static void EnsureDifficultySessionReset()
+        {
+            if (s_difficultySessionReset) return;
+            s_difficultySessionReset = true;
+            DynamicDifficulty.ResetForNewGame();
+            DynamicDifficultyHost.Bootstrap();
+        }
+
+        /// <summary>
+        /// PATCH 5 (new-game half). GameStateService raises <c>StateReplaced</c> after a full
+        /// <c>ResetToNewGame()</c> or <c>Load()</c> — that IS where a new game is signalled, and it
+        /// is a read-only seam (GameStateService itself is untouched). Clearing on a Load too is
+        /// deliberate and harmless: the difficulty history is in-memory only and is never persisted,
+        /// so a load always begins a fresh run's worth of history.
+        /// </summary>
+        private void HookNewGameReset()
+        {
+            if (_newGameHookArmed) return;
+            var svc = GameStateService.Instance;
+            if (svc == null) return;   // Core not bootstrapped yet — retried on the next BeginLoop
+            svc.StateReplaced.AddListener(HandleStateReplacedForDifficulty);
+            _newGameHookArmed = true;
+        }
+
+        private void HandleStateReplacedForDifficulty()
+        {
+            DynamicDifficulty.ResetForNewGame();
+            s_difficultySessionReset = true;   // the session reset is now satisfied
+            FlowTrace.Step("Difficulty",
+                "GameState replaced (new game / load) — encounter history cleared so the previous " +
+                "run's performance cannot scale this one.");
+        }
+
+        /// <summary>Drops the telemetry subscriptions (mirrors OnDisable's other unsubscribes).</summary>
+        private void UnbindEncounterTelemetry()
+        {
+            if (_telemetryHero != null) _telemetryHero.OnDied -= HandleTelemetryHeroDied;
+            _telemetryHero = null;
+            _telemetryLastHeroHp = -1f;
+
+            if (_newGameHookArmed)
+            {
+                var svc = GameStateService.Instance;
+                svc?.StateReplaced.RemoveListener(HandleStateReplacedForDifficulty);
+                _newGameHookArmed = false;
+            }
+        }
+
+        // =====================================================================
         //  Wave clear
         // =====================================================================
 
@@ -2040,6 +2356,11 @@ namespace DeNelle.Village
             AwardWaveCrystals(cleared);
 
             OnWaveCleared.Invoke(cleared);
+
+            // PATCH 5 — the RECORDING SITE. Everything above this line is what the encounter
+            // WAS; this is where it becomes the input DynamicDifficulty adapts on. Seated after
+            // OnWaveCleared so a listener cannot alter what was measured.
+            RecordEncounterSample(cleared);
 
             // WO2: analytics.
             DeNelle.Core.Analytics.EventTracker.Track("wave_completed", new
