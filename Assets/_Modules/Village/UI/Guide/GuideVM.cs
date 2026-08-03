@@ -8,6 +8,13 @@
 // title / status / body paragraphs / tips. The View raises SelectTab(index); the
 // VM mutates SelectedIndex and fires Changed so the View repaints (ui-mvvm-binding-
 // seam rule — all state/logic here, never in the View).
+//
+// GLOSSARY (owner request 2026-08-02): the guide rail is also where the glossary
+// lives. After the authored guide sections, this VM appends ONE synthesized
+// section per GlossaryCatalog group ("Glossary: World", "Glossary: Village", ...)
+// whose body lines are "Term -- definition". That is deliberately a projection,
+// not a second panel: no new uGUI is hand-rolled, the View is unchanged, and
+// adding a term stays a pure DATA change in glossary.json.
 // =============================================================================
 
 using System;
@@ -40,7 +47,58 @@ namespace DeNelle.Village
                     _tabs.Add(s.Tab);
                 }
             }
+
+            foreach (var g in BuildGlossarySections())
+            {
+                _sections.Add(g);
+                _tabs.Add(g.Tab);
+            }
+
             _selected = _sections.Count > 0 ? 0 : -1;
+        }
+
+        /// <summary>
+        /// Projects glossary.json into guide sections appended after the authored ones —
+        /// one tab per group, one body line per term ("Term -- definition", ASCII dashes:
+        /// the build TMP font tofus non-ASCII). A group with no terms is skipped rather
+        /// than rendering an empty tab; an absent/empty glossary simply adds no tabs, so
+        /// the guide degrades to exactly what it was before.
+        /// </summary>
+        private static List<GuideSection> BuildGlossarySections()
+        {
+            var built = new List<GuideSection>();
+
+            var groups = GlossaryCatalog.Groups;
+            if (groups == null) return built;
+
+            foreach (var g in groups)
+            {
+                if (g == null || string.IsNullOrEmpty(g.Tab)) continue;
+
+                var terms = GlossaryCatalog.TermsIn(g.Id);
+                if (terms.Count == 0) continue;
+
+                var body = new List<string>();
+                if (!string.IsNullOrEmpty(g.Intro)) body.Add(g.Intro);
+                foreach (var t in terms)
+                {
+                    if (t == null || string.IsNullOrEmpty(t.Term) || string.IsNullOrEmpty(t.Definition)) continue;
+                    body.Add(t.Term + "  --  " + t.Definition);
+                }
+                if (body.Count == 0) continue;
+
+                built.Add(new GuideSection
+                {
+                    Id = "glossary_" + (string.IsNullOrEmpty(g.Id) ? built.Count.ToString() : g.Id),
+                    Tab = g.Tab,
+                    Title = string.IsNullOrEmpty(g.Title) ? g.Tab : g.Title,
+                    Status = "live",
+                    Body = body,
+                    Tips = new List<string>()
+                });
+            }
+
+            return built;
         }
 
         /// <summary>The ordered tab labels (one per section).</summary>

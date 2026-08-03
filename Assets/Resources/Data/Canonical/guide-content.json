@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Game Guide content for Defenders of the Realm: Echoes of Elarion. Authored content for the in-game opt-in help codex (WO-588). The guide panel (GuideVM + View) renders whatever sections this file declares: tabs down the left, body + tips on the right. Adding or editing a section is a DATA change, no code. Each section is grounded in the SHIPPED game; any not-yet-built system is marked status 'coming' rather than described as live. Building entries are enumerated one-per-real-building from Assets/Resources/Data/Canonical/buildings.json (plus the Heart of Elarion, the village's central structure). Display names follow canon-strings.json. Tone: warm, concise, encouraging.",
+  "_comment": "Canonical Game Guide content for Defenders of the Realm: Echoes of Elarion. Authored content for the in-game opt-in help codex (WO-588). The guide panel (GuideVM + View) renders whatever sections this file declares: tabs down the left, body + tips on the right. Adding or editing a section is a DATA change, no code. Each section is grounded in the SHIPPED game; any not-yet-built system is marked status 'coming' rather than described as live. Building entries are enumerated one-per-real-building from Assets/Resources/Data/Canonical/buildings.json (plus the Heart of Elarion, the village's central structure). Display names follow canon-strings.json. Tone: warm, concise, encouraging. FRESHNESS PASS 2026-08-02: corrected the Echo roster cap (6, not 4), dropped the unbuilt silo-upgrade promise, retired the old 'hold the last light' tagline line, and added echo_affinity / echo_synergy / work_queue / raids / dungeons / saves_signin. Player-facing naming law: the timed-work system is called the Work Queue with Builders / Training / Research channels -- never 'Obsidian' (ObsidianQueueHud.cs). The GLOSSARY tabs are NOT in this file: they are appended by GuideVM from glossary.json (same Canonical folder).",
   "version": 1,
   "sections": [
     {
@@ -9,7 +9,7 @@
       "status": "live",
       "body": [
         "You play one hero, the Keeper of Elarion, and you control only the Keeper. Everything else in the realm acts on its own, so you are never juggling a squad. Walk with WASD, the arrow keys, a gamepad stick, or the on-screen joystick on touch and web builds. The camera follows you while you explore.",
-        "The loop is simple and it always comes home: leave the hub to explore and fight, win resources and gear, then return to grow the village and your hero. Hold the last light, push the dark back, and the realm heals a little more each time.",
+        "The loop is simple and it always comes home: leave the hub to explore and fight, win resources and gear, then return to grow the village and your hero. Push the dark back and the realm heals a little more each time.",
         "Approach a person, gate, building, or glowing object and an interact prompt appears. That single button opens dialogue, shops, the build menu, or a region crossing depending on what you are facing."
       ],
       "tips": [
@@ -108,12 +108,15 @@
       "body": [
         "Every weapon, armor set, and accessory carries a rarity, from Common and Uncommon up through Rare, Epic, and Legendary, and rarity scales the item's power. Weapons raise your damage, armor adds defense and bonus health, and accessories (rings and amulets) round out your build.",
         "Many pieces have a level requirement and a class fit, so a weapon meant for one hero will not slot onto another. Gear is bought with the realm's resources, Wood, Iron, Food, and Crystals, so your economy directly feeds your power.",
-        "The Off-Hand slot is reserved for shields, keeping sword-and-board distinct from a heavier weapon. Use the Gear Preview to see and compare a loadout on your hero before you commit."
+        "The Off-Hand slot is reserved for shields, keeping sword-and-board distinct from a heavier weapon. A shield is real armor, not decoration: every one carries a defense value, and the stronger shields ask for a higher hero level. Your total damage reduction from all your gear is capped, so a balanced set beats stacking a single slot.",
+        "The shops do not waste your time. The Forge and the Armorer show only what you can equip right now, for your class and at your level, a couple of choices per level, so the shelf grows as you do. The Jeweler shows accessories you have not reached yet, marked 'Requires Lv N'. Use the Gear Preview to see and compare a loadout on your hero before you commit."
       ],
       "tips": [
         "Check an item's level and class requirement before you save up for it.",
         "Rarer is stronger, but a well-matched lower-rarity piece can beat an off-class higher one.",
-        "Defense reduces damage taken; bonus health gives you a bigger margin to heal through."
+        "Defense reduces damage taken; bonus health gives you a bigger margin to heal through.",
+        "A shield adds real defense; the better ones need a higher level.",
+        "If the Forge shelf looks thin, level up -- it only stocks what you can wear."
       ]
     },
     {
@@ -180,7 +183,8 @@
         "Three stars rewards the fastest clears; speed is paid in loot.",
         "Keep moving; standing still in a real-time fight gets you hit.",
         "Save a heal or a control skill for when a foe winds up a big hit.",
-        "Losing returns you to a safe spot, so a tough fight is never the end."
+        "Losing returns you to a safe spot, so a tough fight is never the end.",
+        "An Arena battle is your hero alone; Raids are where your trained troops fight."
       ]
     },
     {
@@ -206,15 +210,115 @@
       "title": "Echoes",
       "status": "live",
       "body": [
-        "Echoes are spirits released by the world tree, the Heart of Elarion, that gather resources for you on their own. They are the realm's passive economy: you set them to work and they keep harvesting whether you are playing or away.",
-        "You start with a single Echo and earn more by defending home, one additional Echo for every five waves you clear, up to a workforce of four. More Echoes means more harvest, so offense and defense both feed your gathering.",
-        "Echoes pour their take into a shared silo that holds a set number of hours, filling while you play and while you are offline, up to its cap. When you come back, tap Dump to bank the silo into your main resources and reset the clock. The come-back-and-claim rhythm is the loop; upgrading the silo lets it hold more before it tops out."
+        "An Echo is the awakened essence of one of the people the Heart of Elarion guards. The world tree remembers every soul it has kept, and when a new defender rises it wakes them to work beside you. They are not elementals and not pets -- they are the realm's remembered, lending a hand.",
+        "There are six in all: Aldwin, Elowen, Corvin, Bran, Doran and Maren. You begin with one, and every five waves you clear wakes another, up to the full roster of six. More Echoes means more gathered, so defending home directly feeds your economy.",
+        "Echoes gather whether you are playing or away. Their take pools in a shared silo that fills for a set number of hours and then stops. Tap Collect All when you return to bank it and restart the clock. That come-back-and-claim rhythm is the loop."
       ],
       "tips": [
-        "Dump the silo when you return so it does not sit full and waste harvest.",
-        "Clear waves to grow your workforce; five waves per new Echo, up to four.",
-        "Harvest keeps running while you are away, capped at the silo's hours.",
+        "You start with one Echo; clear five waves to wake the next.",
+        "Open an Echo's card to read who they were and what they favor.",
+        "Collect All banks the silo and any waiting building collectors together.",
+        "The silo stops once it is full, so come back before it tops out.",
         "A stronger, healthier world tree means faster gathering, so keep pushing the dark back."
+      ]
+    },
+    {
+      "id": "echo_affinity",
+      "tab": "Echo Affinity",
+      "title": "Echoes: Affinity and Assignment",
+      "status": "live",
+      "body": [
+        "Every Echo has an affinity, the one resource they favor. Their card names it on the Favors line, and the matching chip in the picker is labelled 'best -- this Echo's calling'.",
+        "Affinity is a bonus, never a lock. You choose what each Echo gathers from the five chips on their card -- Wood, Iron, Food, Gold or Crystals -- and every chip is always tappable. Assign whatever your village is short of.",
+        "Set an Echo to the resource they favor and they bring in noticeably more of it. Set them anywhere else and they still work, just without the match bonus. Reassigning is free and takes effect at once."
+      ],
+      "tips": [
+        "The picker lives on the Echo card: tap a resource chip to assign it.",
+        "The chip you are on now reads '(now)'; the favored one reads 'best'.",
+        "Affinity is spelled out in words, not signalled by color alone.",
+        "Chase what you are short of; the match bonus is a nudge, not a rule."
+      ]
+    },
+    {
+      "id": "echo_synergy",
+      "tab": "Echo Synergy",
+      "title": "Echoes: Synergy",
+      "status": "live",
+      "body": [
+        "Echoes work better in the right company. Three named pairs each lift ALL of your harvest while they are running: Provisions (Elowen and Aldwin), Forge (Doran and Maren), and Fortune (Corvin and Bran).",
+        "A pair only counts when you own both Echoes and both are assigned to the resource they favor. Each Echo card carries its pair line: either the synergy is ACTIVE, or it names the partner you still need.",
+        "Completing the roster pays again. Once all six Echoes are awake, everything they gather is lifted. Recruiting is the biggest single jump in your economy, bigger than levelling any one Echo."
+      ],
+      "tips": [
+        "A pair needs BOTH members on their own favored resource.",
+        "Read the synergy line on the Echo card to see what is missing.",
+        "Owning more Echoes beats levelling one; recruit first."
+      ]
+    },
+    {
+      "id": "work_queue",
+      "tab": "Work Queue",
+      "title": "The Work Queue",
+      "status": "live",
+      "body": [
+        "Everything that takes time runs through one place: the Work Queue. Building and upgrading, training troops, and researching upgrades each get their own channel -- Builders, Training and Research -- and the channels never take slots from one another.",
+        "Each channel runs two jobs at once on a new village. Anything beyond that waits in line and starts on its own the moment a slot frees, so queueing more than you can run costs you nothing.",
+        "The Builders chip on the right of the screen is your at-a-glance readout: how many slots are busy and how long until the next one frees. Tap it to open the queue and see every running and waiting job."
+      ],
+      "tips": [
+        "Builders, Training and Research are separate lines; a busy builder never blocks research.",
+        "Queued jobs start automatically -- you do not have to come back and press anything.",
+        "In the queue panel, '>' marks a running job and '-' marks a free slot."
+      ]
+    },
+    {
+      "id": "raids",
+      "tab": "Raids",
+      "title": "Raids",
+      "status": "live",
+      "body": [
+        "Raids are where your trained troops earn their keep. Open Raids from the HUD, pick a target camp from the list, and you are taken straight there. There is no march; you arrive at the edge of the enemy camp.",
+        "On the field you deploy. Tap a troop tile to pick a unit, then tap the ground to drop one. Set a rally point to pull your troops toward a spot, or call a Retreat to pull the survivors out. Your hero fights alongside them.",
+        "A raid runs on a clock. When it ends you are scored up to three stars on how far you broke the camp, and paid resources to match. Raids stay closed until you have a Barracks and at least one trained troop."
+      ],
+      "tips": [
+        "Train troops at the Barracks first; the Raids button stays shut without them.",
+        "Retreat saves the survivors -- a bad raid does not have to be a total loss.",
+        "Raids are your troops; Arena battles are your hero alone."
+      ]
+    },
+    {
+      "id": "dungeons",
+      "tab": "Dungeons",
+      "title": "Dungeons",
+      "status": "live",
+      "body": [
+        "Dungeons are built room by room and entered from the world. The starter run is a loop: a corridor into a four-way junction, then a ring of rooms that bends back around to where you branched off.",
+        "Enemies belong to their rooms. They wake when you step into their space and settle back home if you leave, so you meet them a room at a time instead of dragging the whole floor behind you.",
+        "You can always leave. The way out is marked by a lit EXIT beacon: a beam of light and a plain EXIT sign you can pick out from across the room. Walk back to it whenever you have had enough.",
+        "Push to the deepest room and you will find a treasure cache. It asks before it opens and it pays once per run: torch materials, plus herbs for a Mending Salve. Clearing it the first time also teaches you the torch recipe."
+      ],
+      "tips": [
+        "Follow the beam -- the EXIT beacon is always lit.",
+        "Fight room by room; enemies will not chain-pull across the floor.",
+        "The deepest room holds the cache, and it is worth the walk.",
+        "The torch itself is bound at the Healer's Cottage crafting pedestal."
+      ]
+    },
+    {
+      "id": "saves_signin",
+      "tab": "Saves and Sign-In",
+      "title": "Saves and Sign-In",
+      "status": "live",
+      "body": [
+        "On Android the game opens on one simple choice: connect a wallet, or play as guest. Both take you straight in, and Play as Guest always works.",
+        "Your wallet is your save. Connect one and your progress is kept against it, so the same wallet on another device picks up where you left off. Guest progress stays on this device until you connect.",
+        "The wallet is used to sign in and nothing else: this build makes no purchases and moves no funds. You can start as a guest and connect later, and your progress comes with you."
+      ],
+      "tips": [
+        "Play as Guest is never a dead end; you can connect a wallet afterwards.",
+        "Connect the SAME wallet on a second device to carry your village across.",
+        "Guest saves live on this device only -- connect before you change phones."
       ]
     },
     {

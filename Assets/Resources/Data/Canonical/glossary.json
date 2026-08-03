@@ -1,0 +1,172 @@
+{
+  "_comment": "Canonical in-game GLOSSARY for Defenders of the Realm: Echoes of Elarion (owner request 2026-08-02, 'make sure the full glossary and help guide is in settings'). Surfaced through the EXISTING Game Guide codex: GlossaryCatalog loads this file and GuideVM appends one guide section per group, so the glossary is extra TABS on the guide's left rail (Settings -> Game Guide) rather than a second panel. Adding or editing a term is a DATA change, no code. AUTHORING LAW: (1) every definition is sourced from real canon -- canon-strings.json, docs/narrative-bible.md, docs/ECHOES_OF_ELARION_NARRATIVE.md, docs/enemy-codex.md, the shipped code/data -- never invented; (2) nothing here describes an unshipped feature; (3) ASCII only (the build TMP font renders non-ASCII as tofu, so '--' not an em dash); (4) player-facing naming: the timed-work system is the WORK QUEUE with Builders / Training / Research channels -- the internal code name 'Obsidian' must never appear in player copy; the village is Elarion (never Avalon) and the Knight is Grom (never Garran). Display order is file order; terms are alphabetical within each group. This file has a byte-identical twin under Assets/StreamingAssets/Data/Canonical/ (asserted by GlossaryRegression).",
+  "version": 1,
+  "groups": [
+    {
+      "id": "world",
+      "tab": "Glossary: World",
+      "title": "Glossary -- The World",
+      "intro": "The realm, the Heart, and the people in it."
+    },
+    {
+      "id": "village",
+      "tab": "Glossary: Village",
+      "title": "Glossary -- Your Village",
+      "intro": "Your economy, your workforce, and the work that takes time."
+    },
+    {
+      "id": "battle",
+      "tab": "Glossary: Battle",
+      "title": "Glossary -- Battle and Delving",
+      "intro": "Fighting, raiding, delving, and the numbers behind them."
+    },
+    {
+      "id": "account",
+      "tab": "Glossary: Account",
+      "title": "Glossary -- Account and Saves",
+      "intro": "How the game knows who you are."
+    }
+  ],
+  "terms": [
+    {
+      "term": "Echo",
+      "group": "world",
+      "definition": "The awakened essence of one of the people the Heart of Elarion guards. The world tree remembers every soul it has kept, and wakes one to work beside you. There are six -- Aldwin, Elowen, Corvin, Bran, Doran and Maren -- and they gather for you whether you are playing or away."
+    },
+    {
+      "term": "Elarion",
+      "group": "world",
+      "definition": "The realm you defend. Its village is built around the Heart of Elarion, the world tree that gives the realm its name."
+    },
+    {
+      "term": "Grom",
+      "group": "world",
+      "definition": "The Knight -- the hero you play. He fights with a weapon in the main hand and a shield in the off-hand."
+    },
+    {
+      "term": "Heart of Elarion",
+      "group": "world",
+      "definition": "The world tree and stone reliquary at the centre of the village: the living core of Elarion. If it falls, the village falls. It wakes the Echoes, and its tier gates how far your other buildings can be upgraded."
+    },
+    {
+      "term": "Hollow Ones",
+      "group": "world",
+      "definition": "The undead that come in the waves. They are risen Folk, not monsters -- grief that walks. Older lines in the game also call them the Hollowed."
+    },
+    {
+      "term": "Keeper",
+      "group": "world",
+      "definition": "You. The Keeper is bound to the Heart by inheritance and by song, draws mana from its wellsprings, and feels its wounds as their own."
+    },
+    {
+      "term": "Withering",
+      "group": "world",
+      "definition": "The slow cold rot that seeps from the Wound and takes from living things until they are hollow, hungry, and remembering what they used to be. Holding it back is the whole of your work."
+    },
+    {
+      "term": "Affinity",
+      "group": "village",
+      "definition": "The one resource an Echo favors, named on the Favors line of their card and marked 'best' in the resource picker. An Echo set to its affinity gathers noticeably more. Affinity is a bonus, never a lock -- every resource chip is always tappable."
+    },
+    {
+      "term": "Builders channel",
+      "group": "village",
+      "definition": "The Work Queue line that runs building and upgrading. It has its own slots and never competes with Training or Research."
+    },
+    {
+      "term": "Garrison",
+      "group": "village",
+      "definition": "The enemy defenders holding a camp or base. They stay and hold rather than marching on your Heart; clear them and the base is yours to claim."
+    },
+    {
+      "term": "Outpost",
+      "group": "village",
+      "definition": "An enemy holding out in the world. Closing on one starts a fight, and clearing it pushes the dark back, which strengthens the world tree."
+    },
+    {
+      "term": "Research channel",
+      "group": "village",
+      "definition": "The Work Queue line that runs researched upgrades. It has its own slots, so research never waits on a builder."
+    },
+    {
+      "term": "Silo",
+      "group": "village",
+      "definition": "The shared pool your Echoes fill, online and offline. It holds a set number of hours of gathering and then stops, so it can sit full and waste harvest. Collect All banks it into your resources and restarts the clock."
+    },
+    {
+      "term": "Synergy",
+      "group": "village",
+      "definition": "A bonus that runs while both members of a named Echo pair are assigned to the resource each of them favors. The pairs are Provisions (Elowen and Aldwin), Forge (Doran and Maren) and Fortune (Corvin and Bran), and each one lifts all of your harvest."
+    },
+    {
+      "term": "Training channel",
+      "group": "village",
+      "definition": "The Work Queue line that trains troops for raids. It has its own slots, separate from Builders and Research."
+    },
+    {
+      "term": "Work Queue",
+      "group": "village",
+      "definition": "The single home for everything that takes time, split into three independent channels -- Builders, Training and Research. Each channel runs two jobs at once on a new village and the rest wait in line, starting on their own as slots free. The Builders chip on the right of the screen opens it."
+    },
+    {
+      "term": "Arena",
+      "group": "battle",
+      "definition": "The isolated battle space you are pulled into when you engage an enemy out in the world: your hero against a small family of foes, with no buildings in the way. Win and you are rated up to three stars, then warped back to where you were."
+    },
+    {
+      "term": "Boss wave",
+      "group": "battle",
+      "definition": "A wave that releases a named boss alongside its enemies. The last authored wave is the apex fight, a dragon."
+    },
+    {
+      "term": "Dungeon",
+      "group": "battle",
+      "definition": "A crawl built room by room and entered from the world. Enemies belong to their rooms and settle back home if you leave, the way out is marked by a lit EXIT beacon, and the deepest room holds a treasure cache."
+    },
+    {
+      "term": "Mana",
+      "group": "battle",
+      "definition": "The pool your abilities spend. It does not refill on its own once a fight ends -- a consumable restores it."
+    },
+    {
+      "term": "Raid",
+      "group": "battle",
+      "definition": "Sending your trained troops against an enemy camp. You pick a target from the raid list, deploy troops by tapping the ground, and fight alongside them against a clock. Raids need a Barracks and at least one trained troop."
+    },
+    {
+      "term": "Rarity",
+      "group": "battle",
+      "definition": "The band an item belongs to: Common, Uncommon, Rare, Epic or Legendary. Rarity is the item's identity and sets how far its upgrades can take it."
+    },
+    {
+      "term": "Skill Tree",
+      "group": "battle",
+      "definition": "Where you spend Wisdom to unlock nodes across four tiers. Skill nodes give you a new ability to slot on the hot-swap bar; stat nodes give permanent passive boosts."
+    },
+    {
+      "term": "Torch",
+      "group": "battle",
+      "definition": "A hand-held torch bound from dry reed, oil-soaked cloth and ember resin at the Healer's Cottage crafting pedestal. The dungeon treasure cache stocks the materials for two of them and teaches you the recipe."
+    },
+    {
+      "term": "Wave",
+      "group": "battle",
+      "definition": "An attack on the village. Each wave opens with a prepare countdown, then enemies march in from the gates toward the Heart of Elarion. Clear the wave to win; let the Heart fall and the run ends. Every five waves you clear wakes another Echo."
+    },
+    {
+      "term": "Wisdom",
+      "group": "battle",
+      "definition": "Your skill-point currency. Levelling grants it, and you spend it in the Skill Tree."
+    },
+    {
+      "term": "Guest play",
+      "group": "account",
+      "definition": "Playing without connecting a wallet. Play as Guest always works and is never a dead end, but guest progress stays on this device until you connect."
+    },
+    {
+      "term": "Wallet",
+      "group": "account",
+      "definition": "Your save identity. Connect one and your progress is kept against it, so the same wallet on another device picks up where you left off. It is used to sign in only -- this build makes no purchases and moves no funds."
+    }
+  ]
+}
