@@ -504,6 +504,28 @@ CREATE TABLE IF NOT EXISTS bug_reports (
 -- returned 500 and was never stored. Same class of drift as player_data above.
 -- CREATE TABLE ... IF NOT EXISTS does NOT alter an existing table, so every
 -- column has to be added explicitly. Additive + idempotent (no data touched):
+--
+-- ROUND 2 (2026-08-03) — this block forgot its own lesson and omitted the PK.
+-- Captured from production runtime logs, request 22:51:45 UTC 2026-08-03, on the
+-- deploy that promoted this file's round-1 fix:
+--     NeonDbError: column "report_id" does not exist
+--     SQLSTATE 42703, position 29, api/admin/db.js:288
+-- Round 1 added the five columns named below, so the error simply MOVED to the
+-- next missing column — report_id, which every read AND write path leads with:
+--   * api/admin/db.js:289/295 (view=bugreports) and :313/320/326 (view=bugreport)
+--     -> HTTP 500, which is why the admin view broke the moment it went live.
+--   * api/bug-report.js:169/178/188/200 -- all four RETURNING report_id clauses
+--     raise 42703, so the :217-234 cascade burns attempts 1-4 and lands on
+--     attempt 5 (description_only_no_returning). A report DOES store, but as one
+--     flat text blob with reportId null and an EMPTY context -- no screenshot,
+--     no trace tail, no player attribution. The endpoint still returns 200, so
+--     the loss is invisible except for the console.warn at :222.
+-- Identity WITHOUT the PRIMARY KEY clause on purpose: the live table may already
+-- carry a PK under another name, and ADD PRIMARY KEY would hard-fail the whole
+-- script. Identity alone is all the after_id cursor needs. The table has 0 rows,
+-- so the backfill touches nothing.
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS report_id   BIGINT      GENERATED ALWAYS AS IDENTITY;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bug_reports_report_id ON bug_reports (report_id);
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS route       TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS app_version TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS player_id   TEXT;
