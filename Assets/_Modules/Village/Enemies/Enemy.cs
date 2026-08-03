@@ -2281,6 +2281,26 @@ namespace DeNelle.Village
             //    that NOTHING reset — a body that once served as a caster kept KiterTactics
             //    forever and, reused as a Tank, stood off at 10 m and refused to close.
             ResolveBrain()?.ResetForPool();
+
+            // 7. F8 seq 652: drop the world-space FX ribbons on the RELEASE side too, so a body
+            //    parked in the pool carries no vertices from its previous life even if it is later
+            //    re-homed by a path that does not run PrepareForReuse.
+            ClearFxTrails();
+        }
+
+        /// <summary>
+        /// F8 seq 652 (giant pale "rod"): wipes the world-space vertex history of every
+        /// <see cref="TrailRenderer"/> under this body. TrailRenderer records in WORLD space, so a
+        /// pooled body that teleports to a new spawn point draws one continuous ribbon spanning the
+        /// jump. Called from BOTH pool sides (release <see cref="ResetForPool"/> and acquire
+        /// <see cref="PrepareForReuse"/>, after the Warp) — one method, both callers, matching the
+        /// ClearPooledLatches doctrine so the two lists cannot drift apart.
+        /// </summary>
+        private void ClearFxTrails()
+        {
+            var trails = GetComponentsInChildren<TrailRenderer>(true);
+            if (trails == null) return;
+            for (int i = 0; i < trails.Length; i++) trails[i]?.Clear();
         }
 
         /// <summary>
@@ -2420,6 +2440,15 @@ namespace DeNelle.Village
                 _agent.Warp(pos);
                 if (_agent.isOnNavMesh) _agent.isStopped = false;
             }
+
+            // 4b. F8 seq 652 (giant pale "rod" on ArenaEnemy_orc-shaman_1): a TrailRenderer stores
+            //     its vertices in WORLD space, so the Warp above (or the pool's own re-place on an
+            //     agent-less body) leaves the previous life's vertices behind and the ribbon draws
+            //     across the whole teleport — the captured footGap oscillated 47->95 m frame to
+            //     frame, which no static mesh can do. Clear AFTER the re-home so the next recorded
+            //     vertex starts at the new position. Runs outside the _agent block because the pool
+            //     re-places agent-less bodies too. Same release contract MoverProjectilePool applies.
+            ClearFxTrails();
 
             // 5. Status timers (freeze/slow/burn) live on EnemyDamageable and key off
             //    Time.time + seconds; by the time a body is reused, Time.time has long
@@ -2721,7 +2750,7 @@ namespace DeNelle.Village
                 // VISIBLE BOTTOM (combined renderer bounds.min.y), not the pivot: measure how far the
                 // pivot rides above the lowest rendered point (footGap) and snap so that bottom lands
                 // on the surface. footGap==0 (pivot already at the feet) degrades to the old behaviour.
-                float footGap = PivotToVisibleBottomGap();
+                float footGap = PivotToVisibleBottomGap(out Renderer lowestRend);
 
                 // F8 2026-07-11 sky corpse (proof: 'SnapBodyToGround(ArenaEnemy_orc-shaman_0)
                 // ground=0.00 footGap=53.58 -> pivotY=53.58'): a corrupt child-renderer bound
@@ -2732,9 +2761,16 @@ namespace DeNelle.Village
                 const float MaxSettleLift = 1.5f;
                 if (footGap > MaxFootGap)
                 {
+                    // F8 seq 652: the old line printed the gap but NOT which renderer produced it,
+                    // which turned a one-grep diagnosis into a full trace walk. Name the culprit
+                    // renderer, its type and its bounds.min.y. The '[Flow:Enemy] SnapBodyToGround('
+                    // prefix and the 'footGap' token are unchanged — watchers grep on those.
+                    string culprit = lowestRend != null
+                        ? $"{lowestRend.name} ({lowestRend.GetType().Name}) bounds.min.y={lowestRend.bounds.min.y:0.00}"
+                        : "no renderer captured";
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy",
                         $"SnapBodyToGround({gameObject.name}): footGap {footGap:0.00}m is absurd " +
-                        $"(corrupt renderer bounds?) — capped to {MaxFootGap}m.");
+                        $"(corrupt renderer bounds?) — lowest={culprit}, pivotY={pos.y:0.00} — capped to {MaxFootGap}m.");
                     footGap = MaxFootGap;
                 }
 
@@ -2785,8 +2821,14 @@ namespace DeNelle.Village
         /// the pivot was grounded. Returns 0 when no renderers exist or the pivot is already at/below
         /// the visible bottom (so the snap degrades to grounding the pivot — never lifts the body).
         /// </summary>
-        private float PivotToVisibleBottomGap()
+        /// <param name="lowest">
+        /// F8 seq 652: the renderer that actually defined the visible bottom, so an absurd footGap
+        /// names its culprit in the Warn instead of costing a full trace walk. Null when no renderer
+        /// qualified.
+        /// </param>
+        private float PivotToVisibleBottomGap(out Renderer lowest)
         {
+            lowest = null;
             var rends = GetComponentsInChildren<Renderer>();
             if (rends == null || rends.Length == 0) return 0f;
             float bottom = float.PositiveInfinity;
@@ -2795,9 +2837,13 @@ namespace DeNelle.Village
                 var r = rends[i];
                 if (r == null || !r.enabled) continue;
                 // Skip non-body renderers (VFX/particles/UI) that would skew the floor.
-                if (r is ParticleSystemRenderer) continue;
+                // F8 seq 652: TrailRenderer/LineRenderer join ParticleSystemRenderer here. Both
+                // hold WORLD-space vertices, so a pooled body's leftover ribbon reported a
+                // bounds.min.y tens of metres away and defined the "visible bottom" — the shaman's
+                // 36.56 m footGap. FX ribbons are not body geometry.
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
                 float min = r.bounds.min.y;
-                if (min < bottom) bottom = min;
+                if (min < bottom) { bottom = min; lowest = r; }
             }
             if (float.IsInfinity(bottom)) return 0f;
             float gap = transform.position.y - bottom;

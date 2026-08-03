@@ -101,8 +101,8 @@ namespace DeNelle.Village
         /// </summary>
         private void OnAttackStarted(int code)
         {
-            Transform origin = ResolveBladeOrigin();
-            EnsureTrail(origin);
+            Transform origin = ResolveBladeOrigin(out bool isGripRootAnchor);
+            EnsureTrail(origin, isGripRootAnchor);
             ApplyWeaponTrailVfx();
 
             if (_trail != null)
@@ -131,14 +131,22 @@ namespace DeNelle.Village
         /// Blade anchor, re-resolved each fire (fallback ladder — mirrors the retired
         /// PlayerAttackController.EnsureSwingTrail): explicit override -> the equipped weapon's
         /// grip root -> the Humanoid RightHand bone -> a synthetic child at the attack origin.
+        /// <paramref name="isGripRootAnchor"/> reports WHICH rung answered, because the grip-root
+        /// rung is scale-normalized by EquipmentController and the others are not — see EnsureTrail.
         /// </summary>
-        private Transform ResolveBladeOrigin()
+        private Transform ResolveBladeOrigin(out bool isGripRootAnchor)
         {
+            isGripRootAnchor = false;
+
             if (_explicitOrigin != null) return _explicitOrigin;
 
             // The actual held-weapon prop — best anchor so the trail rides the blade tip.
             if (_equipment == null) _equipment = GetComponent<EquipmentController>();
-            if (_equipment != null && _equipment.GripRoot != null) return _equipment.GripRoot;
+            if (_equipment != null && _equipment.GripRoot != null)
+            {
+                isGripRootAnchor = true;
+                return _equipment.GripRoot;
+            }
 
             // Humanoid RightHand bone.
             if (_animator == null) _animator = GetComponentInChildren<Animator>(true);
@@ -165,7 +173,7 @@ namespace DeNelle.Village
         /// the origin changed (a weapon swap destroys the old grip root, so the cached trail becomes
         /// null and we build afresh on the new prop). Cheap, asset-free, URP-safe.
         /// </summary>
-        private void EnsureTrail(Transform origin)
+        private void EnsureTrail(Transform origin, bool isGripRootAnchor)
         {
             if (origin == null) return;
             if (_trail != null && _trailOrigin == origin) return;   // still valid on the same anchor
@@ -175,6 +183,22 @@ namespace DeNelle.Village
             var go = new GameObject("WeaponTrail");
             go.transform.SetParent(origin, false);
             go.transform.localPosition = Vector3.zero;
+            // TrailRenderer width is multiplied by the transform's lossyScale, so the anchor's scale
+            // leaks into the trail. The two rungs of the ladder need OPPOSITE treatment — the
+            // asymmetry is deliberate, not an oversight:
+            //
+            //   NOT the grip root (enemy / explicit override / synthetic child): the anchor is a raw
+            //   bone, whose lossyScale carries VisualFactory's spawn Fit factor undivided — 1.887x on
+            //   the orc shaman, which rendered its trail ~1.9x too wide (owner F8 seq=652). That
+            //   factor is body normalization, nothing an author chose, so divide it out.
+            //
+            //   THE GRIP ROOT (hero): EquipmentController.CompensateParentScale already divided the
+            //   bone's Fit factor out, and deliberately LEAVES the grip root at the owner-dialled
+            //   offsets.json scale (the 2026-07-07 scale-parity fix). Compensating here would divide
+            //   out that authored value — sword_D at 0.47 would render its trail 2.13x too wide. So
+            //   the hero keeps Unity's default localScale of one and is untouched by this fix.
+            if (!isGripRootAnchor)
+                go.transform.localScale = EquipmentController.ParentScaleCompensation(origin);
 
             _trail = go.AddComponent<TrailRenderer>();
             _trail.time = _trailTime;
@@ -239,8 +263,8 @@ namespace DeNelle.Village
         // ---------------------------------------------------------------------
         public Color ApplyWeaponTrailVfxForTest()
         {
-            Transform origin = ResolveBladeOrigin();
-            EnsureTrail(origin);       // real lazy build + first ApplyWeaponTrailVfx
+            Transform origin = ResolveBladeOrigin(out bool isGripRootAnchor);
+            EnsureTrail(origin, isGripRootAnchor);   // real lazy build + first ApplyWeaponTrailVfx
             ApplyWeaponTrailVfx();     // re-apply against the now-current equipped weapon
             return _trailColor;
         }

@@ -1919,12 +1919,17 @@ namespace DeNelle.Village
         // Skipped for owner-dialed fullOverride scales (those were tuned by eye under the bone).
         private bool _weaponParentCompensate, _offHandParentCompensate;
 
-        // ONE SOURCE OF TRUTH for the parent-scale factor (2026-07-07): used by both the runtime
-        // CompensateParentScale below AND ApplySeatingPreview, so the Seating Editor renders the
-        // exact scale composition every subsequent boot renders.
+        // ONE SOURCE OF TRUTH for the parent-scale factor (2026-07-07): used by the runtime
+        // CompensateParentScale below, by ApplySeatingPreview (so the Seating Editor renders the
+        // exact scale composition every subsequent boot renders), and — since 2026-08-03 — by
+        // WeaponTrailController.EnsureTrail, but there ONLY when its anchor is NOT a grip root (a
+        // raw bone still carries the Fit factor; a grip root is already compensated by the code
+        // below, so re-compensating would divide out the owner-dialled authored scale).
+        // `internal`, not public, for that third caller: it lives in the same DeNelle.Village
+        // asmdef and namespace, so the surface stays closed to other assemblies.
         // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
         // owner-dialed 0.46 rendered 0.276 at boot.
-        private static Vector3 ParentScaleCompensation(Transform parent)
+        internal static Vector3 ParentScaleCompensation(Transform parent)
         {
             if (parent == null) return Vector3.one;
             Vector3 ls = parent.lossyScale;
