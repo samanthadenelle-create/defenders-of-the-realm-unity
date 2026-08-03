@@ -1,6 +1,17 @@
 # CANON GROUND TRUTH — 2026-08-01 (post-reboot ship wave: Realm Map + KayKit NPCs + Queues ruling + release train)
 
-> **LIVE ANCHOR (2026-08-01).** Records reality after the post-reboot wave on `wip/village2-and-f8-tickets`.
+> # ⚠ SUPERSEDED 2026-08-02 by `CANON_GROUND_TRUTH_2026-08-02.md`
+> **THIS IS NO LONGER THE LIVE ANCHOR.** It is a frozen point-in-time record (CLAUDE.md §15) — do
+> not rewrite the body below, and do not treat its facts as current. Read the 08-02 anchor first;
+> this file remains useful only as the delta it describes.
+>
+> *Why this banner matters:* the Sunday sweep found this file still declaring itself LIVE while the
+> 08-02 anchor also declared itself LIVE. **Two files both claiming to be the single source of truth
+> is what let five boot documents keep pointing at 08-01** — the whole staleness cascade traced back
+> to this one missing banner.
+>
+> **Historical header follows.**
+> **LIVE ANCHOR (2026-08-01) — SUPERSEDED.** Records reality after the post-reboot wave on `wip/village2-and-f8-tickets`.
 > **Supersedes `CANON_GROUND_TRUTH_2026-07-26.md`** (bannered). If a doc contradicts a line here, the doc is stale.
 >
 > **This anchor is a DELTA over the 07-26 anchor**, which itself deltas the deep `2026-07-22` module anchor.

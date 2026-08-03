@@ -54,12 +54,22 @@
 - **UI seat reconciled:** WO-830 (Echo harvest affinity+synergy: 6 unique affinities
   Wood/Iron/Food/Gold/Crystals/Repairs, 3 disclosed pairs, 1 HIDDEN tri-synergy) + WO-831 (2D emergence
   sprite beat) minted; `docs/qa/UI_REVIEW_2026-08-01.md` (20-panel real-pixel review) banked.
-  **WO next-free = 832** (banner is sole authority — never copy the number into docs, point at it).
-- **Verified inventories (cite these):** regression gate = **103 checks (26 inline + 77 suites)**;
-  FeatureFlags = 62 (⚠ XML summaries LIE on 12 defaults — trailing `//` comment is truth); save **v35**;
-  EditMode reds live in `Assets/Data/Tests/WaveDataTest.cs` (wave-1 ruling open), not Tests/EditMode.
-- **Queue ahead:** 822 → 817 ph1-2 → 821 → 827/828/829 (+830/831 owner-sequenced). Felt-verify list:
-  Realm Map, 6-face bar + Builders chip, KayKit NPCs, 819/820/810/808/812/813, WO-825 R1-R4.
+  **WO next-free: see the banner** (`CLI_LANES_WO_NUMBERS.md` is the SOLE authority — never copy the
+  number into docs, point at it. As of 2026-08-02 two DISJOINT blocks are in use: the CLI mints the
+  main line, the UI seat mints only from a reserved 860–899 block. Five collisions happened on
+  2026-08-02 alone, every one caused by a mint that did not bump the banner in the SAME edit.)
+- **Verified inventories (cite these):** FeatureFlags = 62 (⚠ XML summaries LIE on 12 defaults —
+  trailing `//` comment is truth); save **v36** (`SaveSchema.cs:36`, WO-834 `everBuiltStructureIds`).
+- **⚠ CORRECTED 2026-08-02 — the WaveDataTest line that used to sit here was FALSE and dangerous.**
+  It read "EditMode reds live in `Assets/Data/Tests/WaveDataTest.cs` (wave-1 ruling open)". There are
+  **NO EditMode reds** — the full suite is **884/884 green**. Those two tests were **STALE TESTS**,
+  not an open question: the owner ruled smart-composition on 2026-07-30 (`_smartComposition:1`, so
+  `waves.json` `enemies[]` batches are inert), and both tests were rewritten to assert the batches
+  are EMPTY — a re-add now FAILS the gate. Leaving the old line here invited a session to re-open a
+  ruling the owner had already closed, which is the exact failure §15 exists to prevent.
+- **Queue ahead:** 827/828/829 (travel/minimap/biomes) · 821 timed research · 837 stockpile caps ·
+  838 magenta troops (Phase-A probe first) · 848 restore Android stripping · 851 every-4th-wave boss
+  waves · 861 remaining phases. **830/831/835/839/840/841/850/852/860 all SHIPPED 2026-08-02.**
 
 ## Latest (2026-07-30) — 12-agent SME fan-out + check-in sweep + WO-783 fix wave
 - **Operating model (owner directive):** CLI = **GATEKEEPER**. Dedicated agents write requirements, write

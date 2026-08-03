@@ -13,7 +13,7 @@ ANYTHING until the boot sequence below is complete and reported.**
 |---|------|-----|
 | 0 | `KEY_FACTS.md` (repo root) | The LIVING fact sheet + ⭐ NORTH STAR state. Always current; update in place. |
 | 0b | `docs/GROK_MEMORY.md` | Grok session fast path — program WOs, overnight orders, distance snapshot. |
-| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — take the newest; today: `CANON_GROUND_TRUTH_2026-08-01.md`, a delta over 07-26 → the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. |
+| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — **take the NEWEST by date, always; as of 2026-08-02 that is `CANON_GROUND_TRUTH_2026-08-02.md`**, a delta over 08-01 → 07-26 → the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. **Sort the anchors by date and open the newest — do not trust this line's example to be current.** |
 | 2 | `SESSION_CANON_LOADER.md` | The SME primer: live thread, core rules, current state, key files. |
 | 3 | `SAMANTHA.md` | The boot-confirmation gate: verify state with evidence → report → WAIT for the owner's go. |
 | 4 | `PREFLIGHT_GATE.md` | Gate A before ANY code, Gate B before ANY debugging, Gate C before "done". Answer YES + proof, out loud. |
@@ -43,7 +43,9 @@ ANYTHING until the boot sequence below is complete and reported.**
   (`.claude/skills/run-defenders/f8-watch-start.ps1`) auto-harvests to `logs/f8-inbox/` — read
   `LATEST_CAPTURE.md` FIRST, before any code-read or theory.
 - **Headless:** gate → capture → build → fleet → observe. `run-unity-method.ps1` (CompileGate →
-  `COMPILE_GATE_OK`; DataRegression.RunAll → `REGRESSION_OK` — 103 checks, 0 reds, re-certified 2026-08-01;
+  `COMPILE_GATE_OK`; DataRegression.RunAll → `REGRESSION_OK <n>/<n> suites` (the count is printed by the
+  marker — do NOT restate it here, it goes stale; 101 registered suites as of 2026-08-02). ⚠ Each entry
+  point now emits a DISTINCT marker (`CHECKIN_SUITE_OK`, `SESSION_GUARDS_OK`) — they used to share one;
   `UICaptureLaunch.RunCaptureHeadless` → `UI_CAPTURE_OK` + PNGs you must OPEN — standing pre-ship rule) →
   `build-windows.ps1` → `run-autopilot-fleet.ps1` → `harvest.sh`. Full SOP: the `run-defenders`
   skill + `docs/INSTRUMENTATION_STANDARD.md` (FlowTrace/Guard authoring law).

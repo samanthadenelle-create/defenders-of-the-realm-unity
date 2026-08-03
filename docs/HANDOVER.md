@@ -1,7 +1,8 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
 > **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
-> 2026-08-01) → this sheet → `../CANON_GROUND_TRUTH_2026-08-01.md` (the live reality anchor) →
+> 2026-08-02) → this sheet → `../CANON_GROUND_TRUTH_2026-08-02.md` (the live reality anchor; it deltas
+> 08-01 → 07-26 → 07-22) →
 > `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
 > `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
 > `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
@@ -15,6 +16,56 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-08-02 (marathon day 2: Echo program · tester wallet · dungeon+gear evening) ★★
+
+**Anchor:** `../CANON_GROUND_TRUTH_2026-08-02.md` (NEW — supersedes 08-01, bannered). Branch
+`wip/village2-and-f8-tickets`, **HEAD `e60b19e5`, local==origin, pushed.** Prod untouched.
+Save **v36** (`v35→v36` added `everBuiltStructureIds`; Echo lane tokens moved to a `<resource>:<level>`
+grammar and are read-migrated — no further bump). **WO numbering: point at the
+`CLI_LANES_WO_NUMBERS.md` banner, never copy a number — TWO blocks are live: main line (CLI) next free
+853, reserved 860–899 (UI seat) next free 863.** Gates: `COMPILE_GATE_OK` + `REGRESSION_OK` +
+**EditMode 884/884, zero reds** + **`UI_CAPTURE_OK 28`** (pixels opened).
+⚠ The working tree is **NOT clean** — an in-flight item-identity lane is uncommitted.
+
+**Shipped this session (each gated before commit — 21 commits dated 08-02):**
+- **WO-830/831 the Echo harvest program.** Six Echoes, each with a harvest **affinity** — but
+  **affinity is a MATCH BONUS, never a lock**: the player picks each Echo's harvest resource from a
+  picker and matching the affinity **doubles** the yield. **Maren harvests Crystals, not Repairs.**
+  Token grammar `<resource>:<level>`. 3 disclosed pair synergies + 1 hidden tri-synergy.
+- **WO-835 action bar** — `HudActionBarModel` (Core) is the single enum-ordered authority; the View
+  renders from the array and re-packs centered, so **holes are impossible by construction**.
+- **WO-839 raid deploy · WO-840 armorer (`"Forge"`→`"Blacksmith"` anchor fix) · WO-841 upgrade countdown.**
+- **WO-842/843/844 felt fixes** — GameState is the single Wood/Iron authority; destroyed/sold singleton
+  buildings are rebuildable again (`IsPlayerBuilt` split from `IsBuilt`); Bag potions apply real effects.
+- **WO-797 + WO-849 dungeons:** rooms OWN their enemies (wake-from-footprint + confine-above-retaliation),
+  the exit carries a discoverability beacon, and pursuit now clamps to `max(slack, wakeRadius)` —
+  "a mob may pursue as far as it can perceive". **WO-850** put a treasure cache in the deepest room
+  (torch recipe unlock + fixed crafting supply).
+- **WO-766 the tester program is real** — Solana wallet connect live (see the anchor §3), wallet-first
+  Android login, bug-report attribution keyed to the bound wallet.
+- **WO-836 MASTER_CATALOG full SME refresh** (`1812f3f8`, 14-agent fleet): **all 19
+  `MASTER_CATALOG/<area>.md` sections rewritten from the actual code. They are no longer 06-12-stale.**
+- **Evening gear/balance lane:** **WO-852** Echo card fixed-band layout · **WO-860** starter loadout is
+  **sword + shield** (not the stale axe) + shelf thinning · **WO-861** Phase 0 (Sylas + Thrain) ·
+  the global **tower research ladder** restored · **shields actually defend** (defense ladder + level
+  gating) · **a respawn now MOVES you** — no more waking up on your own corpse.
+- **Ten new oracles today**: raid-deploy-ui, wallet-provider, hud-actionbar, echo-picker,
+  dungeon-room-ownership, realm-map + dungeon-treasure, echo-card-layout, starter-loadout, shield-defense.
+
+**OPEN:** (1) owner felt-verify the evening lane (shields, starter loadout, respawn, treasure cache,
+Echo picker). (2) **WO-848** restore Android managed stripping Medium (lowered to Low for the Solana
+SDK's BouncyCastle CIL-linker resolve). (3) **WO-851** spec on disk, not implemented; **WO-861** in
+flight; **WO-862** minted, not implemented. (4) **WO-774.0** raid spectator model + **WO-838** magenta
+troops + **WO-837** stockpile caps — owner rulings captured, nothing built. (5) `auth_nonces` table does
+not exist in Neon → wallet-auth stays permissive. (6) Owner ratification of the 860–899 UI-seat block
+(the allocation is already operational). (7) The 6 Echo emergence PNGs (owner-owed art).
+
+**⚠ APK PRECONDITION:** the Solana SDK is a **git-URL** package that re-resolves into
+`Library/PackageCache` — run `tools/android/patch-solana-sdk.ps1` (idempotent) after packages resolve
+and **before** any APK build, or the Android build fails.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-08-01 (post-reboot ship wave + release train + canon refresh) ★★
 
 **Anchor:** `CANON_GROUND_TRUTH_2026-08-01.md` (NEW — supersedes 07-26, bannered). Branch
@@ -22,6 +73,10 @@
 pushed.** Prod untouched. Save **v35** (no new fields today). **WO next-free = 832** (banner is the sole
 authority — point at it, never copy the number). Gates: `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks:
 26 inline + 77 suites) + `UI_CAPTURE_OK 23` (pixels eyeballed; archive `Builds\ui-capture-archive\2026-08-01\`).
+
+> ⚠ **SUPERSEDED 2026-08-02 — frozen ledger, true as of 08-01 only.** Current: save **v36**, gates
+> **EditMode 884/884** + **`UI_CAPTURE_OK 28`**, and WO numbering now runs **two blocks** (main line
+> next free 853 / reserved 860–899 UI seat next free 863). See the 08-02 block above.
 
 **Shipped this session (each gated before commit):**
 - **WO-818 ALL PHASES** (`e8bd17b0` + `777dd9ff`): 12 KayKit NPC bodies tracked (`KAYKIT_STAGE_OK 12/12`,
@@ -46,10 +101,15 @@ authority — point at it, never copy the number). Gates: `COMPILE_GATE_OK` + `R
   added for 818/826); flag XML-summary lies documented (12 flags — trailing `//` comment is truth).
 
 **OPEN:** (1) owner felt-verify: Realm Map, 6-face bar + Builders chip, KayKit NPCs, 819/820/810/808/
-812/813, WO-825 R1-R4 rulings, wave-1 zero-enemy data ruling (2 reds in `Assets/Data/Tests/WaveDataTest.cs`).
+812/813, WO-825 R1-R4 rulings, ~~wave-1 zero-enemy data ruling (2 reds in
+`Assets/Data/Tests/WaveDataTest.cs`)~~ **← CLOSED: there is NO open ruling. The owner ruled
+smart-composition on 07-30; both tests were rewritten to assert the batches are EMPTY and the reds are
+gone (EditMode 884/884 at 08-02). A re-add now FAILS.**
 (2) Queue: 822 → 817 ph1-2 (phase 0 needs owner image-pair sign-off) → 821 → 827/828/829; 830/831
-owner-sequenced. (3) 823 Phase E soft gate — owner ruling. (4) MASTER_CATALOG `<area>` files remain
-2026-06-12-stale (07-22 §6/§7 ledgers = fix list; housekeeping WO still unminted). (5) CS-1 ring/amulet
+owner-sequenced **← 830/831 SHIPPED 08-02.** (3) 823 Phase E soft gate — owner ruling. (4)
+~~MASTER_CATALOG `<area>` files remain 2026-06-12-stale (07-22 §6/§7 ledgers = fix list; housekeeping WO
+still unminted)~~ **← DONE: WO-836 (`1812f3f8`, 2026-08-02) rewrote ALL 19 `<area>` sections from the
+actual code. Not stale.** (5) CS-1 ring/amulet
 non-persist. (6) PIPELINE_STATE deep-history sections still carry dragon-license trap rows (L203/L226 —
 assets git-rm'd in WO-760; do not act on them).
 

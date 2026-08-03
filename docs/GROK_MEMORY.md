@@ -13,7 +13,19 @@
 | **Primary (prefer)** | `D:\EoA` | Branch `wip/village2-and-f8-tickets` — **Grok-03 pack copied here 2026-07-14 (uncommitted until sole committer stages)** |
 | Grok worktree | `C:\Users\Elden\.grok\worktrees\eoa\defenders` | Detached HEAD; safe to `git worktree remove` **after** verify files on `D:\EoA` |
 
-**Next free WO: 754** (banner `CLI_LANES_WO_NUMBERS.md` + `KEY_FACTS.md`). *(was 723; bumped 2026-07-19 evening — 738-753 consumed.)*
+**Next free WO: ⛔ DO NOT COPY A NUMBER FROM THIS FILE.** Open the **`CLI_LANES_WO_NUMBERS.md` banner**
+— it is the SOLE authority and it moves several times a day. *(This line used to read "754", which by
+2026-08-02 was ~99 numbers short — a fresh Grok session minting from it would collide immediately.)*
+As of **2026-08-02** two **disjoint** blocks are in use, and each seat bumps ITS OWN banner row in the
+SAME edit as the mint:
+
+| Block | Owner | Read the banner for the live number |
+|---|---|---|
+| **main line** | CLI | 782–852 consumed as of 08-02 evening |
+| **860–899 reserved** | UI seat (Grok/UI mints here) | 860/861/862 consumed as of 08-02 evening |
+
+Five two-seat collisions struck on 2026-08-02 alone, all caused by minting without bumping the banner.
+Collisions resolve **first-on-disk-and-referenced-wins**.
 
 ---
 

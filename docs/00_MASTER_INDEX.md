@@ -1,6 +1,14 @@
 # 00 – MASTER INDEX
 
-> **Single Source of Truth** for Defenders of the Realm
+> ## ⛔ STALE 2026-08-02 — NOT the single source of truth. Do not navigate from this file.
+> It was auto-generated **2026-07-12** and is **3+ weeks behind** (426 `.md` under `docs/` today vs the
+> 287 it indexed; it predates the WO-836 catalog refresh, the 08-01 and 08-02 anchors, and save v36).
+> **Live canon:** `../CANON_GROUND_TRUTH_2026-08-02.md` (anchor) → `README.md` (this folder's real index)
+> → `../PROJECT_INDEX.md` (root files) → `MASTER_CATALOG.md` (SME catalog).
+> Kept only because it is script-owned — **regenerate it, never hand-edit it** (this banner is the
+> deliberate exception).
+>
+> ~~**Single Source of Truth** for Defenders of the Realm~~
 >
 > Auto-generated on **2026-07-12 08:44** · 287 documents indexed
 >

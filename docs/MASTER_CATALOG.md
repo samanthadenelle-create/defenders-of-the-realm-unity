@@ -8,8 +8,9 @@ under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comme
 > **ALL 19 section catalogs under `docs/MASTER_CATALOG/` were REWRITTEN 2026-08-02, verified from code
 > at HEAD `b77a178e`+** (file:line cites; comments-lie law applied; per-file inventory + seams + risk
 > ledger each). The 07-22 §6 catalog-drift ledger is PAID for every area. Read the section files
-> directly — they are current. Live anchor = `CANON_GROUND_TRUTH_2026-08-01.md` (+ the 08-02 delta).
-> Fleet risk roll-up: see the 08-02 session HANDOVER block.
+> directly — they are current. **Live anchor = `CANON_GROUND_TRUTH_2026-08-02.md`** (a delta over 08-01).
+> Fleet risk roll-up: see the **★★ SESSION HANDOVER — 2026-08-02** block, the newest in `docs/HANDOVER.md`.
+> **Any banner below that calls the `<area>` files "2026-06-12-stale" is SUPERSEDED by this line.**
 
 Section catalogs compiled **2026-08-02** (previously 2026-06-12; the stale-framing banner below is
 retained for history only — the section files no longer carry the pre-pivot framing).
@@ -22,21 +23,27 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 > `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`. The per-area code mechanics below
 > remain trustworthy; the hero-identity / party / Defend-the-Tower framing does not.
 
-> STALE: 2026-07-26 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor); HEAD is `7dec0e07`, local==origin. The `docs/MASTER_CATALOG/<area>.md` section files below are still dated **2026-06-12** — their "how it works" mechanics are largely accurate but their COUNTS + STATE facts are weeks stale (fix-list = the 07-22 anchor §6 catalog-drift ledger + §7 comment-lie registry). **`misc-modules.md` (Dungeons) is doubly stale** — it predates the RoomForge pipeline AND the 07-26 dungeon functional-loop wave (WO-770.1/.2/.3/.3b/.4/.7/.9: exits, correct-return, real win/loss, real-time settle, readable lore, toasts, live Bryn). Trust the 07-26 anchor for live dungeon/raid state.
+> ⚠ **SUPERSEDED 2026-08-02 by the WO-836 refresh banner at the top of this file — the two notes below
+> are kept for history ONLY. The `<area>` files are NOT 06-12-stale and `misc-modules.md` is NOT
+> "doubly stale"; all 19 were rewritten from code on 2026-08-02. Do not act on the fix-lists below.**
 >
-> STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 06-26 anchor below is superseded), and HEAD is `f123859d`, not `8aa24c32` (see CANON_GROUND_TRUTH_2026-07-12.md)
+> ~~STALE: 2026-07-26 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-26.md` (delta over the deep `2026-07-22` module anchor); HEAD is `7dec0e07`, local==origin. The `docs/MASTER_CATALOG/<area>.md` section files below are still dated **2026-06-12** — their "how it works" mechanics are largely accurate but their COUNTS + STATE facts are weeks stale (fix-list = the 07-22 anchor §6 catalog-drift ledger + §7 comment-lie registry). **`misc-modules.md` (Dungeons) is doubly stale** — it predates the RoomForge pipeline AND the 07-26 dungeon functional-loop wave (WO-770.1/.2/.3/.3b/.4/.7/.9: exits, correct-return, real win/loss, real-time settle, readable lore, toasts, live Bryn). Trust the 07-26 anchor for live dungeon/raid state.~~
+>
+> ~~STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 06-26 anchor below is superseded), and HEAD is `f123859d`, not `8aa24c32` (see CANON_GROUND_TRUTH_2026-07-12.md)~~
 
-> READ ORDER for a cold start: `CANON_GROUND_TRUTH_2026-06-26.md` (live anchor) → this file → the relevant
-> section file → `CLAUDE.md` (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture law) →
-> `docs/HANDOVER.md` (newest 2026-06-26 block). Trust the ground-truth anchor + newest handover for live
-> state; trust the section files for "how it actually works."
+> READ ORDER for a cold start: **`CANON_GROUND_TRUTH_2026-08-02.md`** (live anchor) → this file → the
+> relevant section file → `CLAUDE.md` (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture
+> law) → `docs/HANDOVER.md` (**newest = the 2026-08-02 block**). Trust the ground-truth anchor + newest
+> handover for live state; trust the section files for "how it actually works."
 
 ---
 
 ## 1b. NEW SYSTEMS SHIPPED SINCE THE 06-12 CATALOG (added 2026-07-26 — not yet folded into the area files)
 
 > These systems postdate the 2026-06-12 section-file compile. Catalogued here (from code, at HEAD) so the
-> index stays green (§15); the area-file bodies below are still 06-12 and do not mention them. State legend:
+> index stays green (§15). **⚠ The "the area-file bodies are still 06-12 and do not mention them" caveat
+> this section was written under is SUPERSEDED — WO-836 (2026-08-02) rewrote all 19 area files from code,
+> so they DO cover these systems now; this section is a summary, no longer the only record.** State legend:
 > **SHIPPED** = present + wired · **IN FLIGHT** = present but not asserted done.
 
 **Raid V1 spine — SHIPPED, reachable end-to-end** (CoC deploy-and-watch; `ff.raidwalk` OFF, `ff.barracks` +
@@ -48,7 +55,7 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 - `RaidDeployController` + `TroopDeployer.SpawnFromArmy(...)` + `TroopController` (`Assets/_Modules/Village/Troops/`) — tap-deploy tray + spawn + auto-fight.
 - `RaidScoring` + `RaidHudController` (`Assets/_Modules/Village/Troops/`; oracle `Assets/Editor/Regression/RaidScoringRegression.cs`) — 180s clock, stars, loot.
 
-**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, save schema v35).** `Assets/_Modules/Core/Jobs/`:
+**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, landed at save schema v35; live schema is now **v36**).** `Assets/_Modules/Core/Jobs/`:
 - `JobKind.cs` (Build/Upgrade/TowerBuild/TrainTroop/Research/…), `IJobEffect.cs` (per-job apply hook),
   `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`), `ObsidianQueueEngine.cs` (offline-fair resolve).
 - Persistence: `SaveSchema.CurrentVersion = 35`; `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds

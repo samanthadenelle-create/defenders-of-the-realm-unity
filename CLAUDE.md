@@ -111,7 +111,10 @@ NULs that poison a commit and break compilation.
 - Save to `WorkOrders/WORK_ORDER_NNN_short_name.md` (moved out of root 2026-06-22 to declutter; the numbering authority `CLI_LANES_WO_NUMBERS.md` + `WO_AUDIT_*.md` stay at root)
 - Mark **Status: READY TO IMPLEMENT** when spec is complete
 - Include files to edit, acceptance criteria, and what NOT to touch
-- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **WO specs now run through 584** (the WO-560→584 arc = UI Blink master-frame template, title rebrand WO-570, dungeon/outpost/arena consolidation WO-584, wave-loop-in-hub; the old "next free = 430" is STALE by ~150 WOs). Always slot a new WO into a lane in the master doc.
+- **WO-numbering authority = the `CLI_LANES_WO_NUMBERS.md` banner. SOLE authority — nothing else.** Not the filesystem max, not `MASTER_PIPELINES_BACKLOG_2026-06-06.md` (that is a lane/backlog doc, NOT a number source — treating it as a second authority is how numbers collide), and **never a number copied into any other doc** (every copy goes stale; point at the banner instead).
+  - **TWO DISJOINT BLOCKS are in use** (2026-08-02, after FIVE two-seat collisions in one day): **main line → CLI** and **860–899 reserved → the UI seat**. The blocks are disjoint so both seats mint in parallel without reading each other's state.
+  - **THE RULE: each seat bumps ITS OWN banner row in the SAME edit as the mint.** A mint written to disk without bumping the banner is the collision — that is what broke 5× on 08-02, including by the CLI. Collisions resolve **first-on-disk-and-referenced-wins**.
+  - Still slot every new WO into a lane in the master backlog doc — but take the NUMBER from the banner.
 - **LIVE BOARD (source of truth mirror) = Notion "Work Orders" DB** in *Defenders of the Realm — Pipelines*: https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f (data source `5f66b263-c732-4075-b94a-f5f4de9f8087`). The git docs + Notion are kept in sync; full WO spec files stay in the repo. We migrated off Linear (free-tier 250-issue cap). See `NOTION_SOURCE_OF_TRUTH.md`.
 
 ### Completing work orders
@@ -182,18 +185,30 @@ Use `CoreServices.Hud` and `CoreServices.Audio` for cross-module calls.
   (retired "Hold the last light", 2026-07-24); HUD "Pets" → **"Echoes"**; HUD "Work" → **"Queues"** —
   and (owner 2026-08-01) the bar Queues BUTTON is RETIRED: the right-column Builders chip
   (QueueStatus band) is the one Queues entry; calm(town) bar = 6 faces.
+- **Echo harvest affinity is a MATCH BONUS, NEVER a lock** (owner ruling WO-830, 2026-08-02): each of the
+  six Echoes carries a unique affinity, but **the player picks each Echo's harvest resource** from a
+  picker — matching that Echo's affinity **doubles** the yield. Never gate an Echo to one resource.
+  **Maren harvests Crystals, not Repairs.** Persisted token grammar = **`<resource>:<level>`**
+  (e.g. `harvest:3` → `wood:3`); read-migrated, no schema bump.
 
 ---
 
 ## 8. Pipeline State Quick Reference
 
-See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (PIPELINE_STATE.md lags). Key facts *(refreshed 2026-08-01)*:
+See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (PIPELINE_STATE.md lags). Key facts *(refreshed 2026-08-02)*:
 - Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only `Resources/PatriciaLight/tower2` kept
 - Home hub: **`Main_Castle_Overworld`** (merged world, one navmesh); **Village2** = raid target; `Village.unity`/`OuterWorld.unity` DELETED
-- Village wave loop: WIRED — but **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters; owner ruling WO-783 D1 open)
-- Save schema **v35**; the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work; Realm Map (WO-826) shipped
+- Village wave loop: WIRED — **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters). **The WO-783 D1 ruling is CLOSED** (owner, 2026-07-30): both `WaveDataTest` cases were rewritten to assert the batches are EMPTY, so a re-add now FAILS. Any doc calling this "open" is stale.
+- Save schema **v36** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work; Realm Map (WO-826) shipped
 - Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
-- Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks) + `UI_CAPTURE_OK` (open the PNGs)
+- Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs).
+  **The markers are now DISTINCT per entry point (2026-08-02)** — `DataRegression.RunAll` emits
+  `REGRESSION_OK <n>/<n> suites` (101 registered suites + 26 inline groups), `RegressionSuite.RunAll`
+  emits `CHECKIN_SUITE_OK`, `SessionRegression.RunAll` emits `SESSION_GUARDS_OK`. Until today all three
+  printed the identical `REGRESSION_OK`, so a 22-case suite's pass read as the full suite's pass — which
+  is exactly how the check-in gate ran the wrong one unnoticed. **Never restate the count here**; read it
+  off the marker. (Also fixed today: `tools/regression/checkin_gate.ps1` did not PARSE under PowerShell
+  5.1, so no stage of it had been running at all.)
 - UXML in builds: does NOT work — always use code-built UI (learned the hard way)
 
 ---

@@ -10,10 +10,37 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-08-01 (supersedes ALL blocks below; anchor = `CANON_GROUND_TRUTH_2026-08-01.md`)
+## CURRENT STATE — 2026-08-02 (supersedes ALL blocks below; anchor = `CANON_GROUND_TRUTH_2026-08-02.md`)
 
-> The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
-> Live anchor of current reality = `CANON_GROUND_TRUTH_2026-08-01.md` (delta over the deep `2026-07-22` module anchor).
+> The 2026-08-01, 2026-07-26, 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they
+> conflict, **the newest block wins.** Live anchor of current reality =
+> `CANON_GROUND_TRUTH_2026-08-02.md` (delta over 08-01 → 07-26 → the deep `2026-07-22` module anchor).
+
+- **2026-08-02 delta — marathon day 2 (HEAD `e60b19e5`, local==origin, pushed; 21 commits dated 08-02):**
+  - **Gates:** `COMPILE_GATE_OK` + `REGRESSION_OK` + **EditMode 884/884, zero reds** + **`UI_CAPTURE_OK 28`**.
+    **Ten new oracles** today: raid-deploy-ui, wallet-provider, hud-actionbar, echo-picker,
+    dungeon-room-ownership, realm-map, dungeon-treasure, echo-card-layout, starter-loadout, shield-defense.
+  - **Save schema = `v36`** (WO-834 `everBuiltStructureIds`, the blank-town baked standdown). Echo lane
+    tokens moved to a `<resource>:<level>` grammar and are **read-migrated — no further bump.**
+  - **SHIPPED:** WO-830/831 Echo harvest program (**affinity = a MATCH BONUS, never a lock** — the player
+    picks each Echo's resource, a match doubles yield; **Maren harvests Crystals, not Repairs**) ·
+    WO-835 action bar (`HudActionBarModel` = single enum-ordered authority, holes impossible by
+    construction) · WO-839 raid deploy · WO-840 armorer anchor fix · WO-841 upgrade countdown ·
+    WO-842/843/844 felt fixes · WO-797 + **WO-849** dungeon room-ownership + pursuit bound + exit beacon ·
+    **WO-850** deepest-room treasure cache · **WO-766 real Solana wallet + the tester program** ·
+    **WO-836 MASTER_CATALOG all 19 area files rewritten from code** · WO-852 Echo card fixed bands ·
+    **WO-860** starter loadout = sword+shield · WO-861 Phase 0 · tower research ladder restored ·
+    shields actually defend (defense ladder + level gating) · respawn now MOVES you.
+  - **OPEN:** **WO-848** restore Android managed stripping Medium (at **Low** for the Solana SDK's
+    BouncyCastle CIL-linker resolve) · WO-851 spec-only · WO-861 in flight · WO-862 minted ·
+    WO-774.0 / WO-838 / WO-837 rulings captured, nothing built · `auth_nonces` table missing in Neon.
+  - **⚠ APK precondition:** the Solana SDK is a **git-URL** package that re-resolves into
+    `Library/PackageCache` — run `tools/android/patch-solana-sdk.ps1` (idempotent) before ANY APK build.
+  - **`waves.json` D1 ruling is CLOSED** (owner 07-30): batches are inert, both `WaveDataTest` cases now
+    assert EMPTY and a re-add FAILS.
+  - **WO numbering: read the `CLI_LANES_WO_NUMBERS.md` banner.** TWO disjoint blocks in use — main line
+    (CLI) and **860–899 reserved** (UI seat); each seat bumps its own row in the same edit as the mint.
+  - ⚠ The working tree is **NOT clean** — an in-flight item-identity lane is uncommitted.
 
 - **2026-08-01 delta:** WO-818 KayKit NPC bodies (all phases) + WO-826 Realm Map SHIPPED; owner ruling —
   bar Queues button RETIRED (Builders chip = the one entry, 6-face bar); ProjectSettings batching RCA
@@ -98,8 +125,11 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   (Blink = UI re-skin only). Roster = Tripo only; V1 = Knight + ORCS.
 - **World:** home hub **`Main_Castle_Overworld`** (merged world, one navmesh); `Village2` = raid target;
   `Village.unity` + `OuterWorld.unity` DELETED from the tree.
-- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, save **v35**); village-tier upgrade
+- **Economy:** Echo workforce wired (offline real-clock, save **v36**); village-tier upgrade
   unlocks the WO-432 building-upgrade tree; store redesign (WO-501) + gear balance (WO-500).
+  **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830, 2026-08-02): the player picks each
+  Echo's harvest resource; matching its affinity doubles the yield. Token grammar `<resource>:<level>`.
+  Maren harvests **Crystals**, not Repairs.
 - **Dialogue:** Yarn being DROPPED for custom MVVM dialogue (WO-455).
 - **Distribution (updated 2026-07-03):** itch web build LIVE; **game IS live on Vercel** — production = the 07-16
   six-fix build `q2v5vj86g` (promoted 2026-07-16); WebGL preview refreshed 2026-08-01; promotion

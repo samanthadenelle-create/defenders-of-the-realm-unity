@@ -1,6 +1,36 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-01) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-02) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-02.md`** (supersedes 08-01, bannered). Branch
+> `wip/village2-and-f8-tickets`, **HEAD `e60b19e5`, local==origin, PUSHED** (21 commits dated 08-02).
+> ⚠ working tree NOT clean — an in-flight item-identity lane is uncommitted.
+> Gates `COMPILE_GATE_OK` + `REGRESSION_OK` + **EditMode 884/884, zero reds** + **`UI_CAPTURE_OK 28`**.
+> **Save schema = `v36`** (`everBuiltStructureIds`; Echo lane tokens read-migrated to `<resource>:<level>`).
+>
+> **WO numbering — NEVER copy a number from any doc; read the `CLI_LANES_WO_NUMBERS.md` banner.**
+> **TWO DISJOINT BLOCKS are in use** (the fix for 5 two-seat collisions on 08-02 alone):
+> **main line (CLI) next free 853** · **reserved 860–899 (UI seat) next free 863**. Each seat bumps ITS
+> OWN banner row in the SAME edit as the mint — that is the rule that keeps getting broken.
+>
+> **Shipped 08-02:** WO-830/831 **Echo harvest program** (affinity is a **MATCH BONUS, never a lock** —
+> the player picks each Echo's resource, a match doubles yield; **Maren harvests Crystals**) · WO-835
+> action bar (holes impossible by construction) · WO-839 raid deploy · WO-840 armorer · WO-841 countdown ·
+> WO-842/843/844 felt fixes (single Wood/Iron authority; singleton rebuild; potions really apply) ·
+> WO-797/849 dungeon room-ownership + pursuit bound + exit beacon · WO-850 deepest-room treasure ·
+> WO-766 **real Solana wallet + the tester program** · **WO-836 MASTER_CATALOG all 19 areas rewritten
+> from code** · WO-852 Echo card bands · WO-860 starter loadout = **sword+shield** · WO-861 Phase 0 ·
+> tower research ladder restored · shields actually defend · respawn now MOVES you.
+> **Ten new oracles** (incl. dungeon-treasure, echo-card-layout, starter-loadout, shield-defense).
+>
+> **⚠ APK precondition:** the Solana SDK is a **git-URL** package (re-resolves into `Library/PackageCache`)
+> — run `tools/android/patch-solana-sdk.ps1` before ANY APK build. Android stripping is at **Low**;
+> **WO-848 open** to restore Medium.
+>
+> **`WaveDataTest` has NO open ruling** — the owner closed it 07-30 (smart composition); both tests now
+> assert EMPTY batches and a re-add FAILS. Any doc calling it "an open owner ruling" is stale.
+> **The 08-01 thread below is SUPERSEDED.**
+>
+> ## ▶ LIVE THREAD (2026-08-01) — SUPERSEDED (see 08-02 above)
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-01.md`** (supersedes 07-26, bannered). HEAD `ac0a52e3`+,
 > local==origin, PUSHED. Gates `COMPILE_GATE_OK` + `REGRESSION_OK` (103 checks) + `UI_CAPTURE_OK 23`.
 > Save **v35**. Shipped today: **WO-818 all phases** (12 KayKit NPC bodies + `repo.npcModel` catalog v6 +
@@ -125,18 +155,18 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-01.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-02.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
 
 > **Fast reconciliation (07-22/07-26 corrections — trust these over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
 > DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale). Save schema =
-> **v35** (WO-773 Obsidian queue). Dungeon real-time gate is `ff.dungeonrealtime` (there is no
+> **v36** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`). Dungeon real-time gate is `ff.dungeonrealtime` (there is no
 > `ff.atbdungeon`). Raid loop = COC Teleport/Deploy (WO-771). Dungeons are a functional end-to-end loop.
 - **Strategic placement = ALWAYS ON (2026-07-13, WO-695 ex-682):** `ff.strategicplacement` is REMOVED —
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = the 2026-08-01 arc (`ac0a52e3`: WO-818 KayKit NPC bodies + WO-826 Realm Map + Queues retirement + batching guard), pushed, local==origin.** Save schema **v35**. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = `e60b19e5` (the 2026-08-02 marathon-day-2 arc: Echo program + tester wallet + dungeon/gear evening), pushed, local==origin.** Save schema **v36**. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon.
@@ -153,9 +183,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   `OuterWorld.unity` DELETED — `MainCastle_Hall.unity` exists on disk but is NOT the hub); `Village2` =
   raid target. Castle↔outer world is one merged scene; moat + drawbridges (`ff.castlemoat`); tree aura +
   tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v35**); gold on kills; research costs.
+- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v36**); gold on kills; research costs. **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830: the player picks each Echo's resource; matching its affinity doubles the yield; token grammar `<resource>:<level>`; Maren = Crystals).
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-08-01.md` (the single live anchor of current reality — read FIRST; a delta over the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `CANON_GROUND_TRUTH_2026-08-02.md` (the single live anchor of current reality — read FIRST; a delta over 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
 - `docs/qa/UI_REVIEW_2026-08-01.md` (frozen 20-panel real-pixel readability review) · `docs/GROK_MEMORY.md` (Grok fast path)
 - `docs/qa/SUNDAY_STATUS_2026-07-26.md` (current WO/ticket status table) + `docs/qa/dungeon-raid-validation-2026-07-26.md` (dungeon/raid sign-off)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)

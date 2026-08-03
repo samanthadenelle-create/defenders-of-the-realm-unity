@@ -1,11 +1,12 @@
-> **Live reality anchor = `../CANON_GROUND_TRUTH_2026-07-26.md`** (a delta over the deep
+> **Live reality anchor = `../CANON_GROUND_TRUTH_2026-08-02.md`** (a delta over 08-01 → 07-26 → the deep
 > `../CANON_GROUND_TRUTH_2026-07-22.md` module anchor). Branch = `wip/village2-and-f8-tickets`;
 > board = Notion. If any doc below reads as pre-pivot (branch `feat/tower-core-loop`, Linear board,
 > or a tower-defense + Solana framing), the anchor wins.
 
 # docs/ — Index
 
-~100 files. Find your category, don't grep blind. Root-level project files are
+**167 files at `docs/` top level** (426 including the subfolders — `MASTER_CATALOG/`, `design/`, `qa/`,
+`_archive/`, …). Find your category, don't grep blind. Root-level project files (100 `.md`) are
 indexed separately in `../PROJECT_INDEX.md`.
 
 ## Start here / canon
@@ -57,7 +58,7 @@ indexed separately in `../PROJECT_INDEX.md`.
   `world-construction-plan.md`, `elemental-codex.md`
 - Dungeons: `DUNGEON_DESIGNS.md`, `dungeon-3d-healers-cottage-design.md`,
   `dungeons-3d-unity-layout-spec.md`. **Current end-to-end state:** `qa/dungeon-raid-validation-2026-07-26.md` + `qa/dungeon-regression-2026-07-26.md` (dungeons are a functional enter → explore → fight-with-real-win/loss → settle → leave loop; code in `Assets/_Modules/Dungeons/`)
-- Raid / troops / work queue (current V1 spine — code in `Assets/_Modules/Village/Troops/` + `Assets/_Modules/Core/Jobs/`): the raid loop is LOCKED to the COC **Teleport/Deploy** model (WO-771); shared enemy classes/families + `EnemyResolver` (WO-772); the common multi-channel "Obsidian" work queue — Builder/Train/Research (WO-773, save v35). Firmed-WO set + status: `qa/SUNDAY_STATUS_2026-07-26.md`; validation: `qa/dungeon-raid-validation-2026-07-26.md`.
+- Raid / troops / work queue (current V1 spine — code in `Assets/_Modules/Village/Troops/` + `Assets/_Modules/Core/Jobs/`): the raid loop is LOCKED to the COC **Teleport/Deploy** model (WO-771); shared enemy classes/families + `EnemyResolver` (WO-772); the common multi-channel "Obsidian" work queue — Builder/Train/Research (WO-773, landed at save v35; live schema is now **v36**). Firmed-WO set + status: `qa/SUNDAY_STATUS_2026-07-26.md`; validation: `qa/dungeon-raid-validation-2026-07-26.md`.
 - Other: `CAMERA_INPUT_OVERHAUL.md`, `CHARACTER_CREATOR.md`, `CHARACTER_REFACTOR_PLAN.md`,
   `audio-mix-spec.md`
 - `TUTORIAL_V2_SPEC_2026-07-02.md` — **Tutorial V2** (7 owner-ratified steps, tutorial-steps.json + interpreter; BUILT behind `ff.tutorialv2`, default OFF)

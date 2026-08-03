@@ -1,71 +1,97 @@
-# SESSION BOOT CONFIRMATION — hand this to the CLI before ANY work (owner: paste this first)
+# ⛔ SESSION BOOT GATE — paste this first. Nothing happens until it is answered.
 
-> ⚠ **This file's STEP-1/STEP-2 specifics are a FROZEN 2026-07-03 snapshot** (wave-1 commits, the
-> Fable exe, "Paladin hero body"). The *process* (verify state with evidence, then wait) is binding;
-> the literal commits/files/decisions are STALE — verify against the newest `CANON_GROUND_TRUTH_<date>.md`
-> + newest `docs/HANDOVER.md` block, which are authoritative. Do NOT treat the 07-03 literals as current.
+**You are a fresh CLI session inheriting a live, mid-flight operation.**
+**Do NOT write, edit, build, commit, spawn an agent, or "just check one thing" until you have
+pasted the RECEIPTS below.** Skipping ahead is not a shortcut — it IS the failure being measured.
 
-You are a fresh CLI session inheriting a live, mid-flight operation. **Do NOT write, edit,
-build, assign, or fix ANYTHING until you have completed every item below and reported the
-results to the owner in the format at the bottom.** The owner is explicitly measuring
-whether you confirm state before acting — skipping ahead IS the failure being tested.
+---
 
-## STEP 1 — READ, in this order (no skimming; you will be quizzed by reality)
-1. `CLAUDE.md` (repo root) — the non-negotiable rules. Note §11 orchestration, §12
-   instrument-don't-guess, §15 canon maintenance, the preflight gate.
-2. `SESSION_CANON_LOADER.md` — the SME primer.
-3. Your auto-memory index — especially `pm-sme-pipeline-org-model` (the owner's org model:
-   PM assigns/QA-checks, 6+ SMEs parallel, CLI = sole gate/fleet/commit hands, image-pair
-   sign-off) and `follow-canon-orchestrate-not-solo-guess`.
-4. `RESUME_2026-07-03_pipeline-handoff.md` — the live state of everything (wave 1 committed,
-   in-flight lanes, landmines, next steps, the Fable benchmark you are being compared against).
-5. `docs/UI_COVERAGE_MATRIX_2026-07-03.md` — the definition of done (76 rows × 4 cells).
-6. `docs/PM_BOARD_2026-07-03.md` — the job board (NW-7..NW-18 briefs, risk register).
+## WHY THIS FILE CHANGED (read once — it is the whole point)
 
-## STEP 2 — VERIFY the handoff's claims against reality (run these; paste the evidence)
-- [ ] `git log --oneline -15` shows the wave-1 lane commits `e37c16d2..a97dc4d8` (PackStore,
-      build-mode, Title/StoryIntro, HeroSelect, EndState, deletions) + the handoff/benchmark
-      docs commits. Branch = `wip/village2-and-f8-tickets`, ahead of origin, PUSH HELD.
-- [ ] `git status --porcelain` shows ONLY the deliberate leftovers (~14 paths: link.xml
-      deletion, QA_F8_ARCHIVE/, _opener_frames/, docs zips, open-wos.txt, rename_armor_images.py,
-      tools/AudioGen/, ProjectSettings/Packages/, Action/Economy metas) — PLUS possibly the
-      tutorial-gap fixer's edits (Tutorial/V2, TutorialWaveSpawner, FeatureFlags,
-      TutorialSignalAdapters) if that agent's work landed before the session ended. Anything
-      ELSE dirty = investigate before touching.
-- [ ] `Builds/Windows/DefendersOfTheRealm.exe` exists (BUILD_OK 15:48 2026-07-03) — the
-      owner's Fable-end-state benchmark exe. Do not overwrite it until she has felt-tested,
-      or copy it aside first.
-- [ ] `Builds/compile-gate.log` tail contains `COMPILE_GATE_OK` (the committed tree compiles).
-- [ ] `Assets/HeroPackages/Knight/Animations/Extracted/` contains ~61 `.anim` files (the
-      Knight package — assets committed but NOT wired into the runtime hero; 3 owner
-      decisions gate integration, listed in the handoff).
-- [ ] The tutorial-gap fixer status: check whether `Assets/_Modules/Core/FeatureFlags.cs`
-      ff.tutorialv2 default is ON or OFF, and whether TutorialFlow.cs implements the
-      prepaidTower grant (vs the old no-op FlowTrace note at ~:221). If the fixes are absent,
-      that agent died with the old session — re-brief it from the handoff's in-flight section
-      + `docs/ONBOARDING_FLOW_AUDIT_2026-07-03.md`. If present but uncommitted: gate → commit.
+The owner has had to repeat *"did you actually read it?"* **every single session.** Telling a
+session to "read carefully" has never worked, because skimming is invisible from the outside: a
+session that read nothing and a session that read everything open with the same confident message.
 
-## STEP 3 — CONFIRM the operating rules you are bound by (answer YES + one line each)
-1. You only surface to the owner at 100% of the matrix or for owner-only decisions.
-2. Nothing reaches her without the IMAGE PAIR (runtime bot capture + Blink reference).
-3. You are the ONLY hands on batchmode + git; agents are edit-only, briefed with the
-   landmine list (ASCII-only TMP glyphs; asmdef needs UnityEngine.UI + Unity.TextMeshPro
-   when a module gains uGUI/TMP; no UIDocument/PanelSettings; arbiter battle-lock revert
-   pattern; verify-before-delete with ref-grep).
-4. Batchmode refuses while ANY Unity.exe runs (even her other project) — if the editor is
-   open, arm an editor-close watcher; never collide.
-5. Pipeline, not batch-and-wait: next wave implements WHILE bots verify the last.
-6. §12: no fix without captured data; the preflight gate fires on every .cs edit — answer it
-   honestly every time.
-7. Her open decisions (defeat-screen secondary button; Knight gap-fill + package-shape
-   — the hero BODY = a single Tripo self-rigged Knight "Grom", NO mesh-swap (Blink/Paladin JUNKED 06-22; the newest CANON_GROUND_TRUTH is authoritative, NOT this frozen 07-03 line);
-   water taste slices; death-clip direction mapping) are HERS — do not decide them.
+Worse, the previous version of this file was a **frozen 2026-07-03 snapshot** that asked you to
+verify commits which no longer exist. So the gate *trained* skimming — you'd check a dead sha, find
+it missing, and learn the gate was noise. That is fixed: this file now contains **no literals that
+can rot**.
 
-## STEP 4 — REPORT BACK, then WAIT
-Post to the owner: (a) each STEP 2 checkbox with its actual evidence line, (b) any mismatch
-between the handoff and reality (a mismatch is a finding, not a blocker — name it), (c) the
-next mechanical step you propose (should be: verify/land the tutorial fixes, then run the
-conveyor — proof-chain build → fleet → captures → image pairs → commit → next wave from the
-PM board). **Then wait for her go.** Her first reply may just be "go" — but the confirmation
-report must exist first. That report is also her Fable-vs-Opus comparison datum: make it
-exact, make it honest, and do not pad it.
+This gate no longer asks you to *confirm* you read. It asks you to **quote facts you could only know
+by opening the file** — and those facts change every day. You cannot answer them from memory, from a
+previous session, from this file's own text, or by pattern-matching.
+
+> **Any example value written anywhere in this repo's routers is DELIBERATELY treated as stale.**
+> If you paste a number that you found printed in a doc rather than looked up at its source, you
+> have proven you did not look it up.
+
+---
+
+## THE RECEIPTS — paste all 8. Value + where you got it. One line each.
+
+| # | Question | Where the answer actually lives |
+|---|---|---|
+| 1 | The **newest** `CANON_GROUND_TRUTH_<date>.md`, and the **HEAD sha it claims** | repo root — **sort by date, open the newest.** Never trust a date printed in another doc |
+| 2 | The **actual** HEAD sha now — and does it MATCH #1? | `git log -1 --oneline`. If it does not match, the anchor is behind and you say so |
+| 3 | The current **save schema version** | `Assets/_Modules/Core/State/SaveSchema.cs` — quote the line, not a doc's claim about it |
+| 4 | The **next free WO number**, and which block | `CLI_LANES_WO_NUMBERS.md` banner — the SOLE authority. Two disjoint blocks are in use |
+| 5 | The **EditMode test count**, and whether ANY are red | `Builds/test-results-EditMode.xml` (`total=` / `failed=`) or the newest run log |
+| 6 | **One open item** from the newest `docs/HANDOVER.md` ★★ block | that block only |
+| 7 | **One thing specced but NOT built** | the newest anchor's OPEN section, or a WO whose Status is READY |
+| 8 | The **F8 inbox state** — any unacknowledged capture? | `.claude/skills/run-defenders/f8-check-inbox.ps1` |
+
+**Then** state in ONE sentence what you believe the next priority is — and **WAIT** for the owner
+to confirm before touching anything.
+
+---
+
+## THE FOUR WAYS SESSIONS ACTUALLY BREEZE (all four have happened here)
+
+1. **Reading the index instead of the file.** `PROJECT_INDEX.md` naming a doc is not the doc.
+   If you did not open it, you did not read it.
+2. **Trusting a version/date printed in a router.** `START_HERE.md` once hard-named an anchor that
+   was a day stale and **five downstream docs inherited the error**. Sort by date; open the newest.
+   A doc naming a specific version is a hint, never a source.
+3. **Copying a WO number into a doc.** The banner is the only authority. Copying the number caused
+   **five numbering collisions in one day (2026-08-02)**. Point at the banner; never restate it.
+   If you mint, bump the banner **in the same edit** — that is the rule that was broken all five times.
+4. **Believing a confident claim.** Docs rot between commits; **two files both declared themselves
+   the "live anchor" for a full day.** When a doc and the tree disagree, **the tree wins** — and you
+   fix the doc in the same breath (CLAUDE.md §15).
+
+---
+
+## THE RULES YOU ARE BOUND BY (answer YES + one line of proof each)
+
+1. **§12 instrument-don't-guess.** No code edit on a non-trivial bug until you can cite a CAPTURED
+   line proving the cause. Static reading LOCATES; it never CONCLUDES. No data line = no edit.
+2. **§14 F8 first.** While the owner tests, read `logs/f8-inbox/LATEST_CAPTURE.md` BEFORE any
+   code-read, agent, or theory. Spawning a code-reading agent before reading the harvested trace is
+   the banned failure.
+3. **§11 orchestrate, don't solo.** You are the ORCHESTRATOR: fan out file-disjoint agents, then
+   batch-gate ONCE and commit by explicit path. You are the SOLE committer and SOLE batchmode hands.
+   Agents never gate, never commit.
+4. **Gates are MARKERS, not exit codes.** `run-unity-method.ps1` exits 0 on refusals and FAILs.
+   Judge by `COMPILE_GATE_OK` / `REGRESSION_OK` / `TESTS_OK` / `UI_CAPTURE_OK` + log freshness.
+5. **Open the PNGs.** `UI_CAPTURE_OK` proves a panel RENDERED, never that it looks right. Two broken
+   panels reached the owner this week behind green markers.
+6. **Never hand-edit a `.unity` scene** (resave-corruption history). Use runtime injectors.
+7. **Push only on the owner's word.** She felt-verifies and CLOSES tickets. You do not close them.
+8. **Creative picks are HERS.** Names, art, music, balance intent, which recipe/loot/story. You may
+   implement a ruling; you may not invent one and bury it in a commit.
+
+---
+
+## WHEN YOU FINISH A PIECE OF WORK
+
+- Update canon **in the same breath** as the change (§15). A state change with no canon update is an
+  incomplete change.
+- Write `WorkOrders/WORK_ORDER_NNN_*.RESULT.md`. This protocol **collapsed on 2026-08-02** — 31 WOs
+  sat marked IMPLEMENTED with no RESULT file. Do not add to that debt.
+- Report honestly: a red gate is reported with its output; a skipped step is named. "Done" means
+  gated and verified, not "the edit compiled".
+
+---
+
+*This gate is deliberately short — a long gate gets skimmed, which is the problem it exists to solve.
+If you are reading this line, answer the 8 receipts NOW. Do not start work and answer later.*
