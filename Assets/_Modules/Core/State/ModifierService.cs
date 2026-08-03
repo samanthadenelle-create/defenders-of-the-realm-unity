@@ -156,6 +156,34 @@ namespace DeNelle.Core.State
             r.Forgefire      |= m.Forgefire;
             r.EternalGrove   |= m.EternalGrove;
             r.WindsOfPlenty  |= m.WindsOfPlenty;
+
+            // WO-861 Phase 3 - Cathedral of Magic MAGE perks. Each aggregates by its KIND:
+            //   * the four multipliers COMPOUND (tier x owned perks), like every other mult;
+            //   * mageManaMax + mageHpBonusPct ADD (the building-tiers _comment pins mageManaMax
+            //     as "ADDITIVE integer, not a mult"), like ArmyCapBonus;
+            //   * unlockSpell UNIONS its comma list (never overwrites) - a later tier/perk must
+            //     never revoke a spell an earlier one granted.
+            // MulSafe: a 0/negative authored mult is treated as IDENTITY rather than wiping the
+            // stat (a fat-fingered 0 would otherwise silently zero the mage's damage).
+            r.MageSpellPowerMult    = MulSafe(r.MageSpellPowerMult,    m.MageSpellPowerMult);
+            r.MageManaRegenMult     = MulSafe(r.MageManaRegenMult,     m.MageManaRegenMult);
+            r.MageManaCostMult      = MulSafe(r.MageManaCostMult,      m.MageManaCostMult);
+            r.MageShellStrengthMult = MulSafe(r.MageShellStrengthMult, m.MageShellStrengthMult);
+            r.MageManaMax    += m.MageManaMax;
+            r.MageHpBonusPct += m.MageHpBonusPct;
+            r.UnlockSpell = GameModifiers.MergeSpellList(r.UnlockSpell, m.UnlockSpell);
+        }
+
+        /// <summary>Compound a multiplier, treating a non-positive (unauthored-as-0 / fat-fingered)
+        /// factor as IDENTITY so bad data degrades to "no perk" instead of "stat wiped".</summary>
+        private static float MulSafe(float acc, float factor)
+        {
+            if (factor <= 0f)
+            {
+                if (factor < 0f) Debug.LogWarning($"[ModifierService] negative modifier factor {factor} ignored (treated as identity).");
+                return acc;
+            }
+            return acc * factor;
         }
     }
 }

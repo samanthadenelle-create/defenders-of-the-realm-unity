@@ -139,8 +139,34 @@ namespace DeNelle.Village
         /// <summary>Current mana, 0..<see cref="MaxMana"/>.</summary>
         public float Mana => _mana;
 
-        /// <summary>Max mana pool.</summary>
-        public float MaxMana => _maxMana;
+        /// <summary>Max mana pool, INCLUDING the Cathedral of Magic's additive bonus (WO-861 Phase 3).</summary>
+        public float MaxMana => EffectiveMaxMana;
+
+        // ── WO-861 Phase 3: Cathedral of Magic (building-tiers arcane-tower) folds ───────
+        // Every read below routes through HeroTalentModifiers, whose accessors early-out to
+        // the IDENTITY for any non-mage class - so the Knight and the Ranger are provably
+        // untouched by this block, and so is the mage until the Cathedral is actually built.
+
+        /// <summary>Serialized base pool + the Cathedral's ADDITIVE max-mana bonus (mageManaMax).
+        /// Identical to <c>_maxMana</c> for a non-mage / unbuilt Cathedral.</summary>
+        private float EffectiveMaxMana
+        {
+            get
+            {
+                float bonus = HeroTalentModifiers.MageManaMaxBonus(_heroClass);
+                return bonus > 0f ? _maxMana + bonus : _maxMana;
+            }
+        }
+
+        /// <summary>The mana an ability actually costs THIS hero: the authored cost scaled by the
+        /// Cathedral's mageManaCostMult. One reader so the charge, the gate and the interrupt REFUND
+        /// can never disagree. Identity (authored cost) for a non-mage / unbuilt Cathedral.</summary>
+        private float ManaCostOf(AbilityDef def)
+            => def == null ? 0f : def.ManaCost * HeroTalentModifiers.MageManaCostMultiplier(_heroClass);
+
+        /// <summary>The Cathedral's spell-power multiplier for THIS hero (mageSpellPowerMult).
+        /// 1.0 for a non-mage / unbuilt Cathedral, so the damage chain is unchanged.</summary>
+        private float SpellPowerMult() => HeroTalentModifiers.MageSpellPowerMultiplier(_heroClass);
 
         /// <summary>Hero class id (drives the abilities.json lookup).</summary>
         public string HeroClass => _heroClass;
@@ -210,7 +236,7 @@ namespace DeNelle.Village
         {
             var def = Resolve(slot);
             if (def == null) return false;
-            return _cooldownRemaining[(int)slot] <= 0f && _mana >= def.ManaCost;
+            return _cooldownRemaining[(int)slot] <= 0f && _mana >= ManaCostOf(def);
         }
 
         /// <summary>Wires the Heart reference (the integrator calls this from VillageController).</summary>
@@ -251,7 +277,9 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            _mana = _maxMana;
+            // NOTE: the pool is seeded at the END of Awake, AFTER the hero class is resolved -
+            // EffectiveMaxMana is class-gated, so seeding here would use the serialized default
+            // class and could start the mage 1 mana short of its Cathedral-boosted pool.
             // The Animator sits on the KayKit hero mesh child of the hero rig.
             _animator = GetComponentInChildren<Animator>();
 
@@ -279,6 +307,10 @@ namespace DeNelle.Village
                     Debug.Log($"[HeroAbilities] Awake backstop: resolved class '{ _heroClass}' from GameState.");
                 }
             }
+
+            // Seed the pool LAST so the mage starts full on its Cathedral-boosted max
+            // (identical to the old `_mana = _maxMana` for every other class / unbuilt Cathedral).
+            _mana = EffectiveMaxMana;
         }
 
         private void Update()
@@ -296,8 +328,12 @@ namespace DeNelle.Village
             if (talentManaRegen > 0f)
                 DeNelle.Core.Diagnostics.FlowTrace.Once("HeroTalents", "manaRegen",
                     $"Aether Bond applied: +{talentManaRegen:P0} mana regen (shared.n5).");
-            _mana = Mathf.Min(_maxMana,
-                _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier * (1f + talentManaRegen));
+            // WO-861 Phase 3: the Cathedral's mageManaRegenMult stacks MULTIPLICATIVELY on top of
+            // the Aether Sprite perk and the Aether Bond talent (same convention as gear x talent).
+            // 1.0 for a non-mage / unbuilt Cathedral, so this line is unchanged for them.
+            _mana = Mathf.Min(EffectiveMaxMana,
+                _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier * (1f + talentManaRegen)
+                      * HeroTalentModifiers.MageManaRegenMultiplier(_heroClass));
 
             // WO3: Mana Draught / WO-861 Manaweave — drip the over-time mana restore while the
             // window is open. Extracted to TickManaOverTime so the drip is unit-testable with an
@@ -358,8 +394,9 @@ namespace DeNelle.Village
         public void TickManaOverTime(float now, float dt)
         {
             if (now >= _manaOverTimeUntil || _manaOverTimeRate <= 0f || dt <= 0f) return;
-            _mana = StepManaOverTime(_mana, _maxMana, _manaOverTimeRate, dt);
-            if (_mana >= _maxMana)
+            float cap = EffectiveMaxMana;
+            _mana = StepManaOverTime(_mana, cap, _manaOverTimeRate, dt);
+            if (_mana >= cap)
             {
                 _manaOverTimeRate = 0f;
                 _manaOverTimeUntil = 0f;
@@ -398,13 +435,14 @@ namespace DeNelle.Village
                 if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
                     carry = _manaOverTimeRate * (_manaOverTimeUntil - Time.time);
 
-                float target = _maxMana * (totalPct / 100f) + carry;
+                float cap = EffectiveMaxMana;
+                float target = cap * (totalPct / 100f) + carry;
                 _manaOverTimeRate  = target / seconds;
                 _manaOverTimeUntil = Time.time + seconds;
                 HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed("mana-draught", "Mana", seconds, isBuff: true);
 
                 FlowTrace.Step("HeroAbilities",
-                    $"Mana Draught: +{totalPct}% ({target:0.0} mana) over {seconds}s -> {_manaOverTimeRate:0.00}/s (mana {_mana:0.0}/{_maxMana:0.0}).");
+                    $"Mana Draught: +{totalPct}% ({target:0.0} mana) over {seconds}s -> {_manaOverTimeRate:0.00}/s (mana {_mana:0.0}/{cap:0.0}).");
             });
         }
 
@@ -416,11 +454,11 @@ namespace DeNelle.Village
         /// </summary>
         public void RestoreManaToFull()
         {
-            _mana = _maxMana;
+            _mana = EffectiveMaxMana;
             _manaOverTimeRate  = 0f;   // a full restore ends any in-flight draught drip
             _manaOverTimeUntil = 0f;
             HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
-            FlowTrace.Step("HeroAbilities", $"SAFE-ZONE mana restore: mana -> FULL ({_maxMana:0.0}).");
+            FlowTrace.Step("HeroAbilities", $"SAFE-ZONE mana restore: mana -> FULL ({_mana:0.0}).");
         }
 
         /// <summary>
@@ -444,7 +482,9 @@ namespace DeNelle.Village
                 return false;
 
             // castAbility.ts: `if (combat.cd[kind] > 0 || combat.mana < def.mana) return null;`
-            if (_cooldownRemaining[(int)slot] > 0f || _mana < def.ManaCost)
+            // WO-861 Phase 3: the cost is the Cathedral-scaled cost (identity for non-mage).
+            float manaCost = ManaCostOf(def);
+            if (_cooldownRemaining[(int)slot] > 0f || _mana < manaCost)
                 return false;
 
             // WO-36 (talent -> stat): unlocked skill-tree talents shave cooldowns
@@ -452,7 +492,7 @@ namespace DeNelle.Village
             // hero has no cooldown talents unlocked, preserving the JSON baseline.
             float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _cooldownRemaining[(int)slot] = scaledCooldown;
-            _mana -= def.ManaCost;
+            _mana -= manaCost;
 
             // WO-97 Bug 3: drive the per-slot cooldown fill overlay on the ability
             // button. AbilityCooldownUI lives on the button GameObject; the ability
@@ -470,7 +510,7 @@ namespace DeNelle.Village
                 _casting = true;
                 FlowTrace.Step("HeroAbility",
                     $"cast-start slot={slot} '{def.Name}' windup={def.CastSeconds:0.00}s (interruptible).");
-                _castRoutine = StartCoroutine(CastRoutine(def, (int)slot + 1, (int)slot, null, scaledCooldown));
+                _castRoutine = StartCoroutine(CastRoutine(def, (int)slot + 1, (int)slot, null, scaledCooldown, manaCost));
             }
             else
             {
@@ -499,11 +539,12 @@ namespace DeNelle.Village
             }
             // F8 wind-up: ignore a new cast while one is winding up + during the anti-flicker lockout.
             if (_casting || Time.time < _castLockoutUntil) return false;
-            if (ExtraCooldownRemaining(abilityId) > 0f || _mana < def.ManaCost) return false;
+            float manaCost = ManaCostOf(def);   // WO-861 Phase 3: Cathedral-scaled (identity for non-mage)
+            if (ExtraCooldownRemaining(abilityId) > 0f || _mana < manaCost) return false;
 
             float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _extraCooldown[abilityId] = scaledCooldown;
-            _mana -= def.ManaCost;
+            _mana -= manaCost;
 
             // F8 "movement interrupts casting": route spells with a wind-up (CastSeconds > 0) through the
             // interruptible routine; instant skills (CastSeconds <= 0) commit immediately as before.
@@ -517,7 +558,7 @@ namespace DeNelle.Village
                 _casting = true;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
                     $"cast-start extra '{abilityId}' windup={def.CastSeconds:0.00}s variant={extraVariant} (interruptible).");
-                _castRoutine = StartCoroutine(CastRoutine(def, extraVariant, -1, abilityId, scaledCooldown));
+                _castRoutine = StartCoroutine(CastRoutine(def, extraVariant, -1, abilityId, scaledCooldown, manaCost));
             }
             else
             {
@@ -540,7 +581,9 @@ namespace DeNelle.Village
         /// <param name="slot">Q/W/E/R slot index whose cooldown to refund on cancel; -1 for extra-bar casts.</param>
         /// <param name="extraId">Extra-bar ability id whose cooldown to remove on cancel; null for slot casts.</param>
         /// <param name="chargedCooldown">The cooldown value charged up front (unused on commit; documents intent).</param>
-        private System.Collections.IEnumerator CastRoutine(AbilityDef def, int castVariant, int slot, string extraId, float chargedCooldown)
+        /// <param name="chargedMana">The mana ACTUALLY charged up front (WO-861 Phase 3: the Cathedral's
+        /// mageManaCostMult scales it, so the refund must return the charged value, not the authored one).</param>
+        private System.Collections.IEnumerator CastRoutine(AbilityDef def, int castVariant, int slot, string extraId, float chargedCooldown, float chargedMana)
         {
             float elapsed = 0f;
             while (elapsed < def.CastSeconds)
@@ -548,7 +591,7 @@ namespace DeNelle.Village
                 if (HeroLocomotion.WantsToMove)
                 {
                     // CANCEL — refund mana + reset the just-charged cooldown, apply the anti-flicker lockout.
-                    _mana = Mathf.Min(_maxMana, _mana + def.ManaCost);
+                    _mana = Mathf.Min(EffectiveMaxMana, _mana + chargedMana);
                     if (extraId != null) _extraCooldown.Remove(extraId);
                     else if (slot >= 0 && slot < _cooldownRemaining.Length) _cooldownRemaining[slot] = 0f;
                     _casting = false;
@@ -825,7 +868,9 @@ namespace DeNelle.Village
             // DEF-47: apply the chain timing bonus captured in TryCast.
             // _pendingTimingBonus is 1.00× when no chain is active, up to 1.50×
             // at chain 4+. Reset to 1f so a missed follow-up can't carry over.
-            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult();
+            // WO-861 Phase 3: SpellPowerMult() is the Cathedral of Magic's mageSpellPowerMult and is
+            // 1.0 for every non-mage class / an unbuilt Cathedral, so the chain is unchanged for them.
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult() * SpellPowerMult();
             _pendingTimingBonus = 1f;
 
             // DTT: offensive abilities resolve from the player's aim point (crosshair
@@ -1130,14 +1175,21 @@ namespace DeNelle.Village
         /// </summary>
         private void ResolveShield(AbilityDef def, Vector3 origin)
         {
-            float pct  = def.Damage  > 0f ? def.Damage  : ShieldDefaultReductionPct;
-            float secs = def.Seconds > 0f ? def.Seconds : ShieldDefaultSeconds;
+            float basePct = def.Damage  > 0f ? def.Damage  : ShieldDefaultReductionPct;
+            float secs    = def.Seconds > 0f ? def.Seconds : ShieldDefaultSeconds;
+            // WO-861 Phase 3: the Cathedral of Magic's mageShellStrengthMult scales the REDUCTION
+            // PERCENT (tier 3 "Arcane Shell +25% stronger" + the Warding Runes perk's +15%).
+            // 1.0 for a non-mage caster / an unbuilt Cathedral, so an equipped-elsewhere shield is
+            // unchanged. ApplyDamageShield still clamps the resulting multiplier at 95% mitigation.
+            float shellMult = HeroTalentModifiers.MageShellStrengthMultiplier(_heroClass);
+            float pct = basePct * shellMult;
             ApplyDamageShield(pct, secs, "arcane-shell", "Shell");
             // Support cast beat: the class heal sting (no NEW VFX key — owner tags ability VFX
             // and CLI maps key->hook verbatim; this hook is deliberately left untagged).
             AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
             FlowTrace.Step("HeroAbility",
-                $"shield '{def.Id ?? def.Name}': -{pct:0}% incoming for {secs:0.#}s (Warden's Grace mitigation path).");
+                $"shield '{def.Id ?? def.Name}': -{pct:0}% incoming for {secs:0.#}s " +
+                $"(base {basePct:0}% x cathedral {shellMult:0.00}) (Warden's Grace mitigation path).");
         }
 
         // ── Manaweave: the EXISTING WO3 mana drip, nothing else ───────────────────────
@@ -1158,10 +1210,11 @@ namespace DeNelle.Village
                 FlowTrace.Warn("HeroAbility", $"ApplyManaweave ignored (mana={manaAmount}, secs={seconds}).");
                 return;
             }
-            float pct = _maxMana > 0f ? 100f * manaAmount / _maxMana : 0f;
+            float cap = EffectiveMaxMana;   // WO-861 Phase 3: pool INCLUDES the Cathedral's mageManaMax
+            float pct = cap > 0f ? 100f * manaAmount / cap : 0f;
             RestoreManaOverTime(pct, seconds);   // <- the EXISTING drip; re-entrancy/carry handled there
             FlowTrace.Step("HeroAbility",
-                $"manaweave: +{manaAmount:0.0} mana over {seconds:0.#}s (= {pct:0}% of a {_maxMana:0} pool) " +
+                $"manaweave: +{manaAmount:0.0} mana over {seconds:0.#}s (= {pct:0}% of a {cap:0} pool) " +
                 "via the existing mana-over-time drip.");
         }
 
@@ -1745,7 +1798,8 @@ namespace DeNelle.Village
         {
             if (_progression == null) _progression = GetComponent<HeroProgression>();
             float levelMult = _progression != null ? _progression.DamageMultiplier : 1f;
-            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult();
+            // WO-861 Phase 3: * SpellPowerMult() (Cathedral mageSpellPowerMult; 1.0 for non-mage).
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult() * SpellPowerMult();
             _pendingTimingBonus = 1f;
             return dmg;
         }

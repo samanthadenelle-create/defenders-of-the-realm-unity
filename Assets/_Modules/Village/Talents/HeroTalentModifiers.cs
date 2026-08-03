@@ -201,6 +201,175 @@ namespace DeNelle.Village.Talents
             return Mathf.Clamp(sum, 0f, MaxStructureToughness);
         }
 
+        // =====================================================================
+        //  CATHEDRAL OF MAGIC - building-tier MAGE modifiers (WO-861 Phase 3)
+        // ---------------------------------------------------------------------
+        //  NOT talents: these come from the CITY (building-tiers.json arcane-tower ->
+        //  ModifierService.Active). They live here because this class is already THE
+        //  hero-stat bridge every combat consumer reads, and because the MAGE-ONLY
+        //  gate must exist in exactly ONE place.
+        //
+        //  KNIGHT / RANGER ARE PROVABLY UNAFFECTED: every accessor below returns the
+        //  identity unless IsMage(heroClass) - a single early-out in ActiveMageMods -
+        //  and every consumer reads the modifier ONLY through these accessors (nothing
+        //  in the hero path touches GameModifiers.Mage* directly). The Cleric already
+        //  resolves to the "mage" slug in HeroAbilities.Awake (it is a caster and casts
+        //  the mage kit), so it is deliberately included.
+        //
+        //  IDENTITY WHEN UNBUILT: a Cathedral at tier 0 contributes nothing, so Active
+        //  carries the defaults (mults 1, bonuses 0, unlockSpell "") and every accessor
+        //  returns 1f / 0f / "" - byte-identical behaviour to before Phase 3.
+        // =====================================================================
+
+        private const string MageSlug = "mage";
+
+        // Sanity bands (same spirit as the talent clamps above): the city can buff the
+        // mage hard, but a mis-authored tier can never produce an absurd stat.
+        private const float MaxMageSpellPower   = 3f;    // +200% spell damage ceiling
+        private const float MaxMageManaRegen    = 3f;    // +200% mana regen ceiling
+        private const float MinMageManaCost     = 0.25f; // costs never fall below 25% of authored
+        private const float MaxMageManaCost     = 2f;    // and a "penalty" tier can never double past 2x
+        private const float MaxMageShell        = 3f;    // Arcane Shell never more than 3x its authored pct
+        private const float MaxMageManaMaxBonus = 50f;   // absolute mana added on top of the ~10 pool
+        private const float MaxMageHpBonusPct   = 2f;    // +200% max-HP ceiling
+
+        private static bool s_mageModsWarned;
+
+        // PER-FRAME CACHE. ModifierService.Active deliberately has no cache of its own - it
+        // RECOMPUTES (and allocates a fresh GameModifiers) on every read so it can never be
+        // stale. The mage folds read it several times per frame (mana cap, regen, cost, spell
+        // power), so cache the result for the current frame and drop it the instant the service
+        // signals a change (tier bought / override set or cleared). Worst case staleness is one
+        // frame, and only for a mutation that bypasses ModifierService.Recompute.
+        private static DeNelle.Core.State.GameModifiers s_mageModsCache;
+        private static int s_mageModsFrame = int.MinValue;
+        private static bool s_modifierHookAttached;
+
+        private static void InvalidateMageMods()
+        {
+            s_mageModsCache = null;
+            s_mageModsFrame = int.MinValue;
+        }
+
+        /// <summary>True when <paramref name="heroClass"/> is the MAGE (Thrain). The Cleric already
+        /// normalises to the "mage" slug upstream, so it is covered. Knight/Ranger are false.</summary>
+        public static bool IsMage(string heroClass)
+            => !string.IsNullOrEmpty(heroClass)
+               && heroClass.Trim().Equals(MageSlug, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The active city modifier contract, but ONLY for the mage - null for every other
+        /// class (the single gate) and null if the service is unavailable. One try/catch choke point
+        /// so a catalog/state fault degrades to identity with a logged warning, never a thrown cast.</summary>
+        private static DeNelle.Core.State.GameModifiers ActiveMageMods(string heroClass)
+        {
+            if (!IsMage(heroClass)) return null;   // <- the ONE gate: Knight/Ranger never get past here
+            int frame = Time.frameCount;
+            if (s_mageModsCache != null && s_mageModsFrame == frame) return s_mageModsCache;
+            try
+            {
+                if (!s_modifierHookAttached)
+                {
+                    s_modifierHookAttached = true;
+                    DeNelle.Core.State.ModifierService.Changed += InvalidateMageMods;
+                }
+                s_mageModsCache = DeNelle.Core.State.ModifierService.Active;
+                s_mageModsFrame = frame;
+                return s_mageModsCache;
+            }
+            catch (Exception ex)
+            {
+                InvalidateMageMods();
+                if (!s_mageModsWarned)
+                {
+                    s_mageModsWarned = true;
+                    Debug.LogWarning("[HeroTalentModifiers] Cathedral modifiers unavailable, using identity: "
+                                     + ex.GetType().Name + ": " + ex.Message);
+                }
+                return null;
+            }
+        }
+
+        /// <summary>A multiplier read guarded so a missing/zero value is IDENTITY.</summary>
+        private static float Mult(float raw, float min, float max)
+            => raw > 0f ? Mathf.Clamp(raw, min, max) : 1f;
+
+        /// <summary>Cathedral spell-power multiplier applied to MAGE outgoing ability damage. 1 baseline.</summary>
+        public static float MageSpellPowerMultiplier(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 1f : Mult(m.MageSpellPowerMult, 1f / MaxMageSpellPower, MaxMageSpellPower);
+        }
+
+        /// <summary>Cathedral mana-regen multiplier (stacks multiplicatively with the Aether Sprite
+        /// perk and the Aether Bond talent). 1 baseline.</summary>
+        public static float MageManaRegenMultiplier(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 1f : Mult(m.MageManaRegenMult, 1f / MaxMageManaRegen, MaxMageManaRegen);
+        }
+
+        /// <summary>Cathedral mana-COST multiplier (0.85 = costs 15% less). 1 baseline.</summary>
+        public static float MageManaCostMultiplier(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 1f : Mult(m.MageManaCostMult, MinMageManaCost, MaxMageManaCost);
+        }
+
+        /// <summary>Cathedral Arcane Shell strength multiplier, applied to the shield's REDUCTION
+        /// PERCENT before it opens the mitigation window. 1 baseline.</summary>
+        public static float MageShellStrengthMultiplier(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 1f : Mult(m.MageShellStrengthMult, 1f / MaxMageShell, MaxMageShell);
+        }
+
+        /// <summary>ADDITIVE max-mana the Cathedral grants the mage (absolute units, not a fraction).
+        /// 0 baseline. Negative authored values are floored at 0 so a bad tier can never shrink the pool.</summary>
+        public static float MageManaMaxBonus(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 0f : Mathf.Clamp(m.MageManaMax, 0f, MaxMageManaMaxBonus);
+        }
+
+        /// <summary>ADDITIVE fraction of the mage's BASE max HP the Cathedral grants (0.10 = +10%).
+        /// 0 baseline. Consumed by HeroHealth's effective-max composition.</summary>
+        public static float MageMaxHpBonusPct(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null ? 0f : Mathf.Clamp(m.MageHpBonusPct, 0f, MaxMageHpBonusPct);
+        }
+
+        /// <summary>The raw comma-separated abilities.json ids the Cathedral has made learnable for
+        /// the mage (union across tiers/perks, built by ModifierService.Apply). "" baseline.</summary>
+        public static string MageUnlockedSpellsCsv(string heroClass)
+        {
+            var m = ActiveMageMods(heroClass);
+            return m == null || string.IsNullOrWhiteSpace(m.UnlockSpell) ? string.Empty : m.UnlockSpell;
+        }
+
+        /// <summary>True when the Cathedral of Magic has unlocked <paramref name="abilityId"/> for this
+        /// hero. Reuses <see cref="AbilityListContains"/> - the SAME comma-separated-ids parser the
+        /// talent modifyAbility riders use. False for every non-mage class and for an unbuilt Cathedral.</summary>
+        public static bool IsSpellUnlockedByBuilding(string heroClass, string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return false;
+            return AbilityListContains(MageUnlockedSpellsCsv(heroClass), abilityId);
+        }
+
+        /// <summary>Visits every ability id the Cathedral has unlocked for this hero (trimmed, in
+        /// authored order). No-op for a non-mage / unbuilt Cathedral, so callers need no class check.</summary>
+        public static void ForEachBuildingUnlockedSpell(string heroClass, Action<string> visit)
+        {
+            if (visit == null) return;
+            string csv = MageUnlockedSpellsCsv(heroClass);
+            if (string.IsNullOrEmpty(csv)) return;
+            foreach (var raw in csv.Split(','))
+            {
+                string id = raw.Trim();
+                if (id.Length > 0) visit(id);
+            }
+        }
+
         // ── Generic stat accessor (also exposes not-yet-wired stats: critChance,
         //    attackSpeed, manaRegen, manaCostReduction, healthRegen, moveSpeed,
         //    range, dodge, shieldStrength, wisdomPerLevel) for future consumers. ─────
@@ -348,8 +517,10 @@ namespace DeNelle.Village.Talents
             return true;
         }
 
-        /// <summary>True when the comma-separated <paramref name="csv"/> ability list contains <paramref name="abilityId"/>.</summary>
-        private static bool AbilityListContains(string csv, string abilityId)
+        /// <summary>True when the comma-separated <paramref name="csv"/> ability list contains <paramref name="abilityId"/>.
+        /// PUBLIC since WO-861 Phase 3: the Cathedral of Magic's <c>unlockSpell</c> uses the SAME
+        /// comma-separated-ids convention, and it reuses this parser rather than inventing a second one.</summary>
+        public static bool AbilityListContains(string csv, string abilityId)
         {
             if (string.IsNullOrEmpty(csv)) return false;
             foreach (var part in csv.Split(','))
