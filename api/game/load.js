@@ -1,30 +1,50 @@
 // =============================================================================
 // api/game/load.js — Vercel Serverless Function
 // -----------------------------------------------------------------------------
-// Returns the stored game_state JSONB for a player. The Unity client calls this
-// on scene enter (especially the TowerDefense scene) to merge the authoritative
-// server record onto the local GameState ScriptableObject.
+// Returns the stored game_state for a player. The Unity client calls this on
+// scene enter and merges the server record onto the local GameState SO.
 //
-// AUTH (WO-120 §D): like /api/game/save, load now requires a wallet-signed nonce
-// (X-Wallet / X-Nonce / X-Signature) so a public address alone can't read another
-// player's save. The signed message for a load (no body) is over the literal
-// "load" payload tag — see _lib/wallet-auth.buildSignedMessage.
+// WHAT CHANGED 2026-08-02:
+//   • Same two-rail auth as save.js (_lib/wallet-auth.authenticate): a base58
+//     wallet id still requires a signed, single-use nonce; a "guest-local-<hex>"
+//     id takes the rate-limited guest rail. There was no guest path before, so
+//     no guest could ever read their own row back.
+//   • Structured, quiet failure codes + an audit row per refusal.
+//   • THE FULL STATE IS RETURNED. The old handler hand-listed 13 keys, so even a
+//     complete server record came back as a husk — no base layout, no queue, no
+//     army, no hero level. The client deserialises `data` straight into
+//     SaveSchema.PersistedState, so the whole stored object IS the right shape;
+//     the 13 keys are still emitted explicitly for older clients.
+//   • CORS + preflight (a cross-origin GET carrying X-Wallet preflights, and this
+//     function never answered OPTIONS — the web build could not load at all).
 //
-// Driver: @neondatabase/serverless
 // Status codes: 200 | 400 | 401 | 404 | 500
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { verifyAndConsume } = require('../_lib/wallet-auth');
+const { AuthCode, authenticate } = require('../_lib/wallet-auth');
+const { applyCors, newRef, quietFail } = require('../_lib/http');
+const { logAuthReject } = require('../_lib/audit');
+
+// Kept explicit so a client older than this deploy still finds every key it
+// expects even if the stored row predates a field.
+const LEGACY_KEYS = [
+    'bestWave', 'crystals', 'food', 'coins', 'voidshards', 'stone', 'iron', 'wood',
+    'towers', 'towerAbilities', 'pets', 'ownedPets', 'starterPetId',
+];
 
 module.exports = async (req, res) => {
+    if (applyCors(req, res, 'GET, OPTIONS')) return;
+
+    const ref = newRef();
+
     if (req.method !== 'GET') {
-        return res.status(400).json({ error: 'Method not allowed' });
+        return quietFail(res, 400, AuthCode.METHOD_NOT_ALLOWED, ref);
     }
 
-    const { playerId } = req.query;
+    const { playerId } = req.query || {};
     if (!playerId) {
-        return res.status(400).json({ error: 'Missing playerId' });
+        return quietFail(res, 400, AuthCode.PLAYER_ID_MISSING, ref);
     }
 
     let sql;
@@ -32,19 +52,24 @@ module.exports = async (req, res) => {
         sql = neon(process.env.DATABASE_URL);
     } catch (err) {
         console.error('[load] DB init error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 
-    // ── AUTH GATE — verify + burn nonce (no body → "load" payload tag) ──────
+    // ── AUTH GATE — no body, so the wallet rail signs the literal "load" tag ──
     let auth;
     try {
-        auth = await verifyAndConsume(sql, req.headers, null, playerId);
+        auth = await authenticate(sql, req, null, playerId);
     } catch (err) {
         console.error('[load] Auth check error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
     if (!auth.ok) {
-        return res.status(401).json({ error: 'Unauthorized', reason: auth.reason });
+        await logAuthReject(sql, req, {
+            code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
+        });
+        const status = (auth.code === AuthCode.PLAYER_ID_BAD_SHAPE ||
+                        auth.code === AuthCode.WALLET_MALFORMED) ? 400 : 401;
+        return quietFail(res, status, auth.code, ref);
     }
 
     try {
@@ -56,39 +81,36 @@ module.exports = async (req, res) => {
         `;
 
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Player not found' });
+            // Not an error — a first-run player simply has no row yet. Kept at 404
+            // because the client already treats a non-2xx here as "keep local".
+            return res.status(404).json({ ok: false, code: 'NO_SAVE', ref: ref });
         }
 
         const row = rows[0];
-
-        // Map JSONB column field names back to C# SaveSchema.PersistedState keys.
-        // The Unity client's BackendLoadResponse.Data is deserialized with
-        // Newtonsoft.Json using [JsonProperty] attributes, so we emit camelCase
-        // to match those attributes.
         const state = row.game_state ?? {};
 
+        // Return the stored state VERBATIM (it is already the client's
+        // PersistedState shape), then backfill the legacy keys as explicit nulls
+        // so an older client never trips over a missing member.
+        const data = Object.assign({}, state);
+        for (const k of LEGACY_KEYS) {
+            if (data[k] === undefined) data[k] = null;
+        }
+
         return res.status(200).json({
+            ok: true,
             success: true,
+            mode: auth.mode,
             schemaVersion: row.schema_version,
             updatedAt: row.updated_at,
-            data: {
-                bestWave:        state.bestWave      ?? null,
-                crystals:        state.crystals      ?? null,
-                food:            state.food          ?? null,
-                coins:           state.coins         ?? null,
-                voidshards:      state.voidshards    ?? null,
-                stone:           state.stone         ?? null,
-                iron:            state.iron          ?? null,
-                wood:            state.wood          ?? null,
-                towers:          state.towers        ?? null,
-                towerAbilities:  state.towerAbilities ?? null,
-                pets:            state.pets          ?? null,
-                ownedPets:       state.ownedPets     ?? null,
-                starterPetId:    state.starterPetId  ?? null,
-            }
+            data: data,
         });
     } catch (err) {
         console.error('[load] DB error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
+        await logAuthReject(sql, req, {
+            code: AuthCode.SERVER_ERROR, ref, identity: auth.identity, mode: auth.mode,
+            detail: { stage: 'select', message: String(err.message || err).slice(0, 300) },
+        });
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 };

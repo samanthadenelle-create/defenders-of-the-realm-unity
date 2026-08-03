@@ -93,12 +93,48 @@ module.exports = async (req, res) => {
             RETURNING nonce
         `;
 
+        // 3) guest_rate_limit sweep (2026-08-02, added with the guest save rail).
+        //    A row exists purely to hold a 60-second counter; one untouched for 30
+        //    days is a device that is gone. Dropping it only resets that guest's
+        //    window — it can NEVER lose a save (the save lives in player_data and
+        //    is keyed by the id, not by this row). Wrapped so a deployment that
+        //    has not applied the new schema yet still runs the other two sweeps.
+        let guestPurged = null;
+        try {
+            const guestPurge = await sql`
+                DELETE FROM guest_rate_limit
+                WHERE last_seen < NOW() - INTERVAL '30 days'
+                RETURNING guest_id
+            `;
+            guestPurged = guestPurge.length;
+        } catch (e) {
+            console.warn('[admin/cleanup] guest_rate_limit sweep skipped:', e.message);
+        }
+
+        // 4) auth-reject audit retention. api_auth_reject rows are diagnostics, not
+        //    history — the same 7-day window as web_trace keeps the table from
+        //    becoming a landfill if something starts 401-looping.
+        let rejectsPurged = null;
+        try {
+            const rejectPurge = await sql`
+                DELETE FROM analytics_events
+                WHERE event_name = 'api_auth_reject'
+                  AND received_at < NOW() - (${RETENTION_DAYS} * INTERVAL '1 day')
+                RETURNING event_id
+            `;
+            rejectsPurged = rejectPurge.length;
+        } catch (e) {
+            console.warn('[admin/cleanup] auth-reject sweep skipped:', e.message);
+        }
+
         const result = {
             success: true,
             ran_at: new Date().toISOString(),
             retention_days: RETENTION_DAYS,
             deleted_web_trace_rows: tracePurge.length,
             deleted_auth_nonces: noncePurge.length,
+            deleted_guest_rate_rows: guestPurged,
+            deleted_auth_reject_rows: rejectsPurged,
         };
         console.log('[admin/cleanup] ' + JSON.stringify(result));
         return res.status(200).json(result);

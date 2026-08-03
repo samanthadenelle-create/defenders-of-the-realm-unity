@@ -120,21 +120,118 @@ module.exports = async (req, res) => {
         } catch (e) { /* logging must never break the sink */ }
 
         const sql = neon(process.env.DATABASE_URL);
-        // ::jsonb cast — the Neon HTTP driver sends params as strings (same as trace.js).
-        await sql`
-            INSERT INTO bug_reports (description, route, app_version, player_id, context)
-            VALUES (
-                ${note},
-                ${sceneName},
-                ${version},
-                ${piUidHash},
-                ${JSON.stringify(context)}::jsonb
-            )
-        `;
+        const stored = await insertReport(sql, { note, sceneName, version, piUidHash, context });
+        try {
+            console.log(`[bug_report] STORED report_id=${stored.reportId} via=${stored.shape} ` +
+                        `identity=${piUidHash ? String(piUidHash).slice(0, 16) : 'none'}`);
+        } catch (e) { /* logging must never break the sink */ }
 
-        return res.status(200).json({ success: true });
+        return res.status(200).json({ success: true, reportId: stored.reportId, shape: stored.shape });
     } catch (err) {
         console.error('[bug-report] DB error:', err);
         return res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// =============================================================================
+//  DRIFT-TOLERANT INSERT (2026-08-02 — this endpoint was 500-ing on EVERY report)
+// -----------------------------------------------------------------------------
+//  CAPTURED PROOF, live production, request 02:25:43 UTC 2026-08-03:
+//      [bug-report] DB error: NeonDbError:
+//      column "player_id" of relation "bug_reports" does not exist   (SQLSTATE 42703)
+//  The live bug_reports table predates api/schema.sql's definition and is missing
+//  columns the INSERT names — the SAME schema drift already documented for
+//  player_data (schema.sql §1). Result: bug_reports has 0 rows, and every bug a
+//  tester has ever submitted from Settings died as a 500. The player saw a
+//  failure toast and their capture went to a local file nobody reads.
+//
+//  Two fixes, both needed:
+//    • api/schema.sql now carries idempotent ALTER ... ADD COLUMN IF NOT EXISTS
+//      statements for every column this file writes. That is the REAL fix and it
+//      requires the owner to run schema.sql against Neon.
+//    • This cascade is the BELT: it retries with progressively fewer columns,
+//      folding whatever it had to drop into the payload it can still write, so a
+//      report lands even on a drifted table. A bug report is the one thing we
+//      cannot afford to lose to a missing column — it is the tester's only voice.
+//
+//  Each attempt reports WHICH shape succeeded (`via=` in the log, `shape` in the
+//  response), so drift stays visible instead of being silently papered over.
+// =============================================================================
+async function insertReport(sql, r) {
+    const ctxFull = JSON.stringify(r.context);
+    const attempts = [
+        // 1. The intended shape.
+        {
+            shape: 'full',
+            run: () => sql`
+                INSERT INTO bug_reports (description, route, app_version, player_id, context)
+                VALUES (${r.note}, ${r.sceneName}, ${r.version}, ${r.piUidHash}, ${ctxFull}::jsonb)
+                RETURNING report_id`,
+        },
+        // 2. No player_id column — fold the identity into context so it is not lost.
+        {
+            shape: 'no_player_id',
+            run: () => sql`
+                INSERT INTO bug_reports (description, route, app_version, context)
+                VALUES (${r.note}, ${r.sceneName}, ${r.version},
+                        ${JSON.stringify(Object.assign({}, r.context, { playerId: r.piUidHash }))}::jsonb)
+                RETURNING report_id`,
+        },
+        // 3. Only description + context survive — fold route/version/identity in.
+        {
+            shape: 'description_context',
+            run: () => sql`
+                INSERT INTO bug_reports (description, context)
+                VALUES (${r.note},
+                        ${JSON.stringify(Object.assign({}, r.context, {
+                            playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                        }))}::jsonb)
+                RETURNING report_id`,
+        },
+        // 4. Last resort — a single text column. Everything becomes the description.
+        //    Ugly and greppable beats lost.
+        {
+            shape: 'description_only',
+            run: () => sql`
+                INSERT INTO bug_reports (description)
+                VALUES (${r.note + '\n\n[context] ' + JSON.stringify(Object.assign({}, r.context, {
+                    playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                }))})
+                RETURNING report_id`,
+        },
+        // 5. Even `report_id` may not be the PK's name on a drifted table, and a
+        //    bad RETURNING raises the same 42703 as a bad column. Drop RETURNING
+        //    entirely: we lose the id (reportId comes back null) and still keep
+        //    the report, which is the trade that matters.
+        {
+            shape: 'description_only_no_returning',
+            run: () => sql`
+                INSERT INTO bug_reports (description)
+                VALUES (${r.note + '\n\n[context] ' + JSON.stringify(Object.assign({}, r.context, {
+                    playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                }))})`,
+        },
+    ];
+
+    let lastErr = null;
+    for (const attempt of attempts) {
+        try {
+            const rows = await attempt.run();
+            const reportId = rows && rows[0] ? Number(rows[0].report_id) : null;
+            if (attempt.shape !== 'full') {
+                console.warn(`[bug-report] SCHEMA DRIFT: fell back to shape "${attempt.shape}" — ` +
+                             `run api/schema.sql against Neon to restore the full column set. ` +
+                             `Last error: ${lastErr ? lastErr.message : 'n/a'}`);
+            }
+            return { reportId: reportId, shape: attempt.shape };
+        } catch (err) {
+            lastErr = err;
+            // Only a missing-column / undefined-table error is worth retrying with a
+            // narrower shape. Anything else (connection, permission) will fail the
+            // same way every time — rethrow immediately rather than hammering.
+            const code = err && err.code;
+            if (code !== '42703' && code !== '42P01' && code !== '42804') throw err;
+        }
+    }
+    throw lastErr || new Error('bug_reports insert failed with every shape');
+}

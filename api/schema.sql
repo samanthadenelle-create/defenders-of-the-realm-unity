@@ -72,6 +72,18 @@ CREATE TABLE IF NOT EXISTS player_data (
 ALTER TABLE player_data ADD COLUMN IF NOT EXISTS schema_version INTEGER     NOT NULL DEFAULT 10;
 ALTER TABLE player_data ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- TRUST TIER (2026-08-02, the guest rail). Which auth rail last wrote this row:
+--   'wallet' — an ed25519 signature over a single-use nonce proved key ownership.
+--   'guest'  — an unverified device-hash bearer id (see guest_rate_limit's header
+--              for exactly how little that is worth).
+-- Recorded so the distinction is VISIBLE in one column instead of inferred from
+-- the id's shape, and so any future real-value feature can filter on it rather
+-- than trusting every row equally. Written by api/game/save.js on every upsert.
+-- The DEFAULT is 'legacy', never 'wallet': any row that predates this column was
+-- written before the two rails existed, and back-filling it as wallet-proven
+-- would be a lie told by a schema migration.
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS trust          TEXT        NOT NULL DEFAULT 'legacy';
+
 -- Index for frequent sorted queries (leaderboard, etc.)
 CREATE INDEX IF NOT EXISTS idx_player_data_best_wave
     ON player_data ((game_state->>'bestWave') DESC NULLS LAST);
@@ -160,6 +172,51 @@ CREATE INDEX IF NOT EXISTS idx_auth_nonces_wallet
 --   DELETE FROM auth_nonces WHERE expires_at < NOW() OR used = TRUE;).
 CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires
     ON auth_nonces (expires_at);
+
+
+-- =============================================================================
+-- 1c. guest_rate_limit  — the GUEST rail's only defence (2026-08-02).
+-- -----------------------------------------------------------------------------
+-- Endpoint : POST /api/game/save, GET /api/game/load (both via
+--            api/_lib/wallet-auth.verifyGuest → touchGuestRate)
+-- Client   : Assets/_Modules/Core/State/GameStateService.cs — the id this table
+--            keys on is EXACTLY the one EnsureAccount already mints:
+--              "guest-local-" + sha256(SystemInfo.deviceUniqueIdentifier + salt)
+--
+-- WHY A GUEST RAIL EXISTS AT ALL: the APK front door is "Connect Wallet OR Play
+-- as Guest", and testers are being recruited now. Before this, save/load required
+-- a wallet signature UNCONDITIONALLY, so every guest tester was structurally
+-- unable to reach the database — their progress lived and died in PlayerPrefs on
+-- one device, and the owner could see nothing of what they played.
+--
+-- WHAT A GUEST IDENTITY IS WORTH — stated plainly so nobody later mistakes it for
+-- authentication: it is a BEARER TOKEN. The only secret is the 256-bit device
+-- hash itself; whoever presents it gets that row, like an unguessable URL. It
+-- cannot be revoked and cannot move to a new device. That is an honest trade for
+-- a throwaway tester save and is NEVER acceptable for real value — which is
+-- enforced structurally, not by policy: a guest id is 76 chars containing '-' and
+-- hex '0', so it can never satisfy the base58 wallet regex, and therefore can
+-- never key a wallet row or reach a wallet-gated feature.
+--
+-- The budget below is per guest id and SHARED by save+load (one bounded total,
+-- not two). At 30/60s it is ~4x the client's own maximum sync rate (its
+-- MinSyncDelay is 8s), so an honest tester never sees it.
+--
+--   hits / window_started_at — the sliding window, advanced in one atomic UPSERT.
+--   total_hits              — lifetime counter, purely for "is this id abusive".
+--   last_seen               — drives the cleanup sweep.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS guest_rate_limit (
+    guest_id          TEXT        PRIMARY KEY,             -- "guest-local-<64 lowercase hex>"
+    window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- start of the current 60s window
+    hits              INTEGER     NOT NULL DEFAULT 0,      -- requests inside the current window
+    total_hits        BIGINT      NOT NULL DEFAULT 0,      -- lifetime requests (abuse signal)
+    last_seen         TIMESTAMPTZ NOT NULL DEFAULT NOW()   -- last request from this id
+);
+
+-- Sweep idle guests (api/admin/cleanup.js drops rows untouched for 30 days).
+CREATE INDEX IF NOT EXISTS idx_guest_rate_limit_last_seen
+    ON guest_rate_limit (last_seen);
 
 
 -- =============================================================================
@@ -437,6 +494,21 @@ CREATE TABLE IF NOT EXISTS bug_reports (
     context      JSONB       NOT NULL DEFAULT '{}',  -- full "context" object, future-proofed
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- DRIFT RECONCILE (2026-08-02) — THE REASON bug_reports HAS 0 ROWS.
+-- Captured from production, request 02:25:43 UTC 2026-08-03:
+--     NeonDbError: column "player_id" of relation "bug_reports" does not exist
+--     SQLSTATE 42703, api/bug-report.js:124
+-- The LIVE table was created before this file's definition and is missing columns
+-- api/bug-report.js writes, so EVERY report a tester has submitted from Settings
+-- returned 500 and was never stored. Same class of drift as player_data above.
+-- CREATE TABLE ... IF NOT EXISTS does NOT alter an existing table, so every
+-- column has to be added explicitly. Additive + idempotent (no data touched):
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS route       TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS app_version TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS player_id   TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS context     JSONB       NOT NULL DEFAULT '{}';
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Recent reports first (triage view).
 CREATE INDEX IF NOT EXISTS idx_bug_reports_created

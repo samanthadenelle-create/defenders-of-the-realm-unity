@@ -23,6 +23,15 @@
 //   GET /api/admin/db?view=traces[&session=<id>][&limit=N]
 //       with session: latest N web_trace rows for that session, with lines;
 //       without: latest web_trace sessions (summary) so the owner can pick one
+//   GET /api/admin/db?view=bugreports[&limit=N][&after_id=N]
+//       newest player bug reports (screenshot as a presence flag only)
+//   GET /api/admin/db?view=bugreport&id=<report_id>[&shot=1]
+//       ONE report in full — the entire traceTail, and the screenshot base64
+//       only when shot=1 (the blob can be ~420K chars)
+//   GET /api/admin/db?view=authrejects[&code=<CODE>][&ref=<ref>][&since_hours=N]
+//       the structured save/load auth failures (2026-08-02): a summary by
+//       code+path, or the rows for one code, or the single row behind one
+//       player-reported ref
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
@@ -89,6 +98,7 @@ module.exports = async (req, res) => {
                 ['analytics_events',   'received_at', () => sql`SELECT COUNT(*)::bigint AS rows, MAX(received_at) AS latest FROM analytics_events`],
                 ['bug_reports',        'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM bug_reports`],
                 ['auth_nonces',        'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM auth_nonces`],
+                ['guest_rate_limit',   'last_seen',   () => sql`SELECT COUNT(*)::bigint AS rows, MAX(last_seen)   AS latest FROM guest_rate_limit`],
                 ['promo_codes',        'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM promo_codes`],
                 ['promo_redemptions',  'redeemed_at', () => sql`SELECT COUNT(*)::bigint AS rows, MAX(redeemed_at) AS latest FROM promo_redemptions`],
                 ['referrals',          'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM referrals`],
@@ -116,8 +126,10 @@ module.exports = async (req, res) => {
                 // One explicit player → the full record (the ONLY path that
                 // returns a save blob).
                 const rows = await sql`
-                    SELECT player_id, schema_version, created_at, updated_at,
-                           pg_column_size(game_state) AS payload_bytes, game_state
+                    SELECT player_id, schema_version, trust, created_at, updated_at,
+                           pg_column_size(game_state) AS payload_bytes,
+                           (SELECT COUNT(*) FROM jsonb_object_keys(game_state)) AS state_keys,
+                           game_state
                     FROM player_data
                     WHERE player_id = ${String(q.player)}
                     LIMIT 1`;
@@ -125,9 +137,13 @@ module.exports = async (req, res) => {
             }
             const limit = clampLimit(q.limit, 25, 100);
             // List view: payload SIZE only — never dump save blobs in bulk.
+            // state_keys is the fast "is this a real save or a husk" tell: the
+            // client's full snapshot is ~60 keys, and the pre-2026-08-02 save.js
+            // whitelist could only ever write 13.
             const rows = await sql`
-                SELECT player_id, schema_version, created_at, updated_at,
-                       pg_column_size(game_state) AS payload_bytes
+                SELECT player_id, schema_version, trust, created_at, updated_at,
+                       pg_column_size(game_state) AS payload_bytes,
+                       (SELECT COUNT(*) FROM jsonb_object_keys(game_state)) AS state_keys
                 FROM player_data
                 ORDER BY updated_at DESC
                 LIMIT ${limit}`;
@@ -281,7 +297,131 @@ module.exports = async (req, res) => {
             return res.status(200).json({ view: 'bugreports', rows: rows });
         }
 
-        return res.status(400).json({ error: 'Unknown view. Use: overview | players | metrics | traces | bugreports' });
+        // -------------------------------------------------------------- bugreport
+        // ONE full report by id — the read path for "a tester submitted a bug from
+        // Settings; where is the stack trace?". Unlike the list view this returns
+        // the ENTIRE traceTail and the screenshot length (the base64 blob itself is
+        // returned only with shot=1, because it can be ~420K chars and will wreck a
+        // terminal that was not asking for it).
+        if (view === 'bugreport') {
+            const id = parseInt(q.id, 10);
+            if (!Number.isFinite(id) || id <= 0) {
+                return res.status(400).json({ error: 'bugreport view requires ?id=<report_id>' });
+            }
+            const wantShot = String(q.shot || '') === '1';
+            const rows = await sql`
+                SELECT report_id, created_at, description, route, app_version, player_id,
+                       context->>'platform'  AS platform,
+                       context->>'sessionId' AS session_id,
+                       context->'traceTail'  AS trace_tail,
+                       COALESCE(length(context->>'screenshotB64'), 0) AS screenshot_b64_len,
+                       context->>'screenshotDropped' AS screenshot_dropped
+                FROM bug_reports
+                WHERE report_id = ${id}
+                LIMIT 1`;
+            if (rows.length === 0) return res.status(200).json({ view: 'bugreport', id: id, rows: [] });
+            if (wantShot) {
+                const shot = await sql`
+                    SELECT context->>'screenshotB64' AS screenshot_b64
+                    FROM bug_reports WHERE report_id = ${id} LIMIT 1`;
+                rows[0].screenshot_b64 = shot && shot[0] ? shot[0].screenshot_b64 : null;
+            }
+            return res.status(200).json({ view: 'bugreport', id: id, rows: rows });
+        }
+
+        // ------------------------------------------------------------ authrejects
+        // THE READ PATH FOR THE STRUCTURED AUTH ERRORS (2026-08-02).
+        // Every refusal from /api/game/save, /api/game/load and /api/auth/nonce
+        // writes an 'api_auth_reject' row (api/_lib/audit.js) carrying the stable
+        // code, the correlation ref echoed to the client, the rail, and non-secret
+        // detail. This is what turns "cloud save is broken" into "17 x
+        // AUTH_HEADERS_MISSING on /api/game/save in the last hour".
+        //
+        // It ALSO reads the LEGACY 'auth_failed' rows the old save.js wrote
+        // (properties.reason instead of properties.code). There were 1039 of them
+        // on 2026-08-02 alone — the already-captured proof that the client was
+        // reaching /api/game/save and being refused — and nothing could read them,
+        // because the only event view here was web_trace. COALESCE maps the old
+        // `reason` onto `code` so both eras answer one query.
+        //   ?code=<CODE>  filter to one failure class
+        //   ?ref=<ref>    resolve one player-reported ref to its row
+        //   ?since_hours=N  (default 24, max 168)
+        if (view === 'authrejects') {
+            const limit = clampLimit(q.limit, 50, 200);
+            const hours = clampLimit(q.since_hours, 24, 168);
+
+            if (q.ref) {
+                const rows = await sql`
+                    SELECT event_id, received_at, player_id,
+                           COALESCE(properties->>'code', properties->>'reason') AS code,
+                           properties->>'ref'    AS ref,
+                           properties->>'mode'   AS mode,
+                           properties->>'path'   AS path,
+                           properties->>'method' AS method,
+                           properties->>'ipHash' AS ip_hash,
+                           properties->'detail'  AS detail
+                    FROM analytics_events
+                    WHERE event_name IN ('api_auth_reject', 'auth_failed')
+                      AND properties->>'ref' = ${String(q.ref)}
+                    ORDER BY received_at DESC
+                    LIMIT 20`;
+                return res.status(200).json({ view: 'authrejects', ref: String(q.ref), rows: rows });
+            }
+
+            // Summary first — the shape of the failure is usually the whole answer.
+            const summary = await sql`
+                SELECT COALESCE(properties->>'code', properties->>'reason')  AS code,
+                       COALESCE(properties->>'path', '(legacy auth_failed)') AS path,
+                       COALESCE(properties->>'mode', 'legacy')               AS mode,
+                       COUNT(*)::bigint AS hits,
+                       COUNT(DISTINCT player_id)::bigint AS distinct_ids,
+                       MAX(received_at) AS latest
+                FROM analytics_events
+                WHERE event_name IN ('api_auth_reject', 'auth_failed')
+                  AND received_at > NOW() - (${hours} * INTERVAL '1 hour')
+                GROUP BY 1, 2, 3
+                ORDER BY 4 DESC
+                LIMIT 50`;
+
+            const rows = q.code
+                ? await sql`
+                    SELECT event_id, received_at, player_id,
+                           COALESCE(properties->>'code', properties->>'reason') AS code,
+                           properties->>'ref'    AS ref,
+                           properties->>'mode'   AS mode,
+                           properties->>'path'   AS path,
+                           properties->>'ipHash' AS ip_hash,
+                           properties->'detail'  AS detail
+                    FROM analytics_events
+                    WHERE event_name IN ('api_auth_reject', 'auth_failed')
+                      AND COALESCE(properties->>'code', properties->>'reason') = ${String(q.code)}
+                      AND received_at > NOW() - (${hours} * INTERVAL '1 hour')
+                    ORDER BY received_at DESC
+                    LIMIT ${limit}`
+                : await sql`
+                    SELECT event_id, received_at, player_id,
+                           COALESCE(properties->>'code', properties->>'reason') AS code,
+                           properties->>'ref'    AS ref,
+                           properties->>'mode'   AS mode,
+                           properties->>'path'   AS path,
+                           properties->>'ipHash' AS ip_hash,
+                           properties->'detail'  AS detail
+                    FROM analytics_events
+                    WHERE event_name IN ('api_auth_reject', 'auth_failed')
+                      AND received_at > NOW() - (${hours} * INTERVAL '1 hour')
+                    ORDER BY received_at DESC
+                    LIMIT ${limit}`;
+
+            return res.status(200).json({
+                view: 'authrejects', window_hours: hours,
+                code: q.code ? String(q.code) : null,
+                summary: summary, rows: rows,
+            });
+        }
+
+        return res.status(400).json({
+            error: 'Unknown view. Use: overview | players | metrics | traces | bugreports | bugreport | authrejects',
+        });
     } catch (err) {
         console.error('[admin/db] error:', err);
         return res.status(500).json({ error: 'Internal server error' });

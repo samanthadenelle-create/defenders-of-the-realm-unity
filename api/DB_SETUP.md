@@ -371,3 +371,95 @@ These extend §6's table-layer assumptions with function-behaviour decisions:
     deduped. A swap logged without a signature always inserts a new row (no dedup
     possible). The current client always sends `result.TxSignature`, so null is an
     edge case only.
+
+---
+
+## 16. 2026-08-02 — cloud save was DEAD; what has to be run
+
+Verified against **live production**, not inferred. Four independent breaks were
+sitting on top of each other; fixing any one alone changes nothing.
+
+### What the live database actually said (2026-08-03 02:23 UTC)
+
+`GET /api/admin/db?view=overview` with `X-Admin-Key`:
+
+| table | rows | latest |
+|---|---|---|
+| `player_data` | **2** (`Test123`, `test-wallet-0001`) | **2026-05-31** |
+| `analytics_events` | 80,748 | 2026-08-02 21:26 |
+| `bug_reports` | **0** | never |
+| `auth_nonces` | **MISSING TABLE** | — |
+| `player_profiles`, `leaderboard_scores`, `achievement_grants` | **MISSING TABLE** | — |
+
+No real player's progress has ever reached Neon. No bug report ever has either.
+`analytics_events` proves the DB and the connection are fine — it is specifically
+save / load / nonce / bug-report that were broken.
+
+### The four breaks
+
+1. **`auth_nonces` does not exist on the live database.**
+   `GET /api/auth/nonce?wallet=<valid base58>` → **HTTP 500**. `issueNonce`
+   INSERTs into a table that is not there, so the client can never obtain a
+   nonce, so it can never sign, so the wallet rail is unreachable **no matter
+   what the client does**. A nonce table nobody can get a nonce from.
+
+2. **The client sends no auth headers.** `POST /api/game/save` unauthenticated
+   → `401 {"reason":"missing_auth_headers"}` — which is exactly the client's
+   behaviour, and exactly the **1,039 `auth_failed` rows recorded on 2026-08-02
+   alone**. `BackendAuthConfig.Enforced` defaults false and the
+   `BACKEND_AUTH_ENFORCED` scripting define is set on **no** platform.
+
+3. **There was no guest path at all.** The APK front door is "Connect Wallet OR
+   Play as Guest"; the server required a wallet signature unconditionally. Fixed
+   — see `guest_rate_limit` in `schema.sql` and `_lib/wallet-auth.verifyGuest`.
+
+4. **`bug_reports` is missing columns.** Captured from production:
+   `NeonDbError: column "player_id" of relation "bug_reports" does not exist`
+   (SQLSTATE 42703, `api/bug-report.js:124`). Every bug report a tester has ever
+   submitted from Settings returned 500 and was thrown away.
+
+### What the owner must run
+
+1. **Apply `api/schema.sql` against Neon** (idempotent — safe to re-run):
+   ```bash
+   psql "$DATABASE_URL" -f api/schema.sql
+   ```
+   This creates `auth_nonces`, `guest_rate_limit`, `player_profiles`,
+   `leaderboard_scores`, `achievement_grants`, and adds the missing
+   `bug_reports` / `player_data` columns. **Nothing works until this is run.**
+2. **Deploy `api/`.** The live deployment is STALE — it does not even have the
+   `view=bugreports` added by WO-846, so repo-side fixes are not live.
+3. Optional env: `GUEST_SAVE_ENABLED=false` kills the guest rail with no code
+   change. Absent/empty = ON.
+
+### Reading the failures (the new read paths)
+
+Every auth refusal now returns a **stable code + a `ref`** to the player and
+writes a full row to the db under the same `ref`.
+
+```bash
+KEY=$(cat .admin-dash-key)
+BASE=https://defenders-of-the-realm-v2.vercel.app
+
+# what is failing, and how much of it — also reads the LEGACY auth_failed rows
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=authrejects&since_hours=24"
+
+# every instance of one failure class
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=authrejects&code=AUTH_NONCE_REPLAYED"
+
+# a player quoted a ref from their screen -> the exact row
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=authrejects&ref=3f9a21c8"
+
+# did a save land, and is it a real save or a husk? (state_keys ~60 = full)
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=players&limit=10"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=players&player=<playerId>"
+
+# bug reports: list, then ONE in full (traceTail + optional screenshot)
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=bugreports&limit=20"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=bugreport&id=42"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=bugreport&id=42&shot=1"
+```
+
+Failure codes are listed in `api/_lib/wallet-auth.js` (`AuthCode`). The response
+body a player's client receives is only `{ok:false, code, ref}` — quiet on the
+screen, loud in the database.
