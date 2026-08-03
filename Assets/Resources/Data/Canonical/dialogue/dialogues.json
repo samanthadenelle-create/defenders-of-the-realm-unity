@@ -1,13 +1,13 @@
 {
- "version": 2,
+ "version": 3,
  "speakers": [
   {
-   "name": "Miller",
+   "name": "Mother Wren",
    "affiliation": "Windmill",
    "portrait": "Portraits/farm"
   },
   {
-   "name": "Woodcutter",
+   "name": "Old Pell",
    "affiliation": "Lumbermill",
    "portrait": "Portraits/lumbermill"
   },
@@ -42,12 +42,12 @@
    "portrait": "Portraits/market"
   },
   {
-   "name": "Blacksmith",
+   "name": "Borin Emberhand",
    "affiliation": "Forge",
    "portrait": "Portraits/forge"
   },
   {
-   "name": "Armorer",
+   "name": "Halvard",
    "affiliation": "Armorer's Hall",
    "portrait": "Portraits/armorer"
   },
@@ -70,6 +70,16 @@
    "name": "Bryn",
    "affiliation": "The Wanderer",
    "portrait": "Portraits/apothecary"
+  },
+  {
+   "name": "Village Elder",
+   "affiliation": "Heart of Elarion",
+   "portrait": "Portraits/arcane-tower"
+  },
+  {
+   "name": "Fenn Wildmane",
+   "affiliation": "Echo Hollow",
+   "portrait": "Portraits/pet-house"
   }
  ],
  "dialogues": [
@@ -551,11 +561,11 @@
      "id": "talk",
      "lines": [
       {
-       "speaker": "Miller",
+       "speaker": "Mother Wren",
        "text": "The grain comes slow in the Dimming, Keeper - but it comes. Drive the dark back and the fields will answer."
       },
       {
-       "speaker": "Miller",
+       "speaker": "Mother Wren",
        "text": "Stop by the build menu when you've crystal to spare and we'll raise what this mill can yield."
       }
      ]
@@ -582,11 +592,11 @@
      "id": "talk",
      "lines": [
       {
-       "speaker": "Woodcutter",
+       "speaker": "Old Pell",
        "text": "Timber for the walls, timber for the fires. The forest gives what the Heart can spare, and no more."
       },
       {
-       "speaker": "Woodcutter",
+       "speaker": "Old Pell",
        "text": "Care to grow the cut? The upgrade's yours to call when the coin's in hand."
       }
      ]
@@ -733,11 +743,11 @@
      "id": "talk",
      "lines": [
       {
-       "speaker": "Blacksmith",
+       "speaker": "Borin Emberhand",
        "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do."
       },
       {
-       "speaker": "Blacksmith",
+       "speaker": "Borin Emberhand",
        "text": "Take up what the line needs."
       }
      ],
@@ -790,11 +800,11 @@
      "id": "talk",
      "lines": [
       {
-       "speaker": "Armorer",
+       "speaker": "Halvard",
        "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not."
       },
       {
-       "speaker": "Armorer",
+       "speaker": "Halvard",
        "text": "Step in and let's fit you proper."
       }
      ],
@@ -1391,6 +1401,38 @@
       {
        "speaker": "Bryn",
        "text": "The deep rooms eat the unlit. Come back to me if your light dies."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "village_elder",
+   "_note": "Quest cast (2026-08-03). Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. TEXT IS A PLACEHOLDER - swap in the owner-approved voice lines from docs/narrative/QUEST_CAST_VOICES_2026-08-03.md.",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Village Elder",
+       "text": "PLACEHOLDER LINE - awaiting owner-approved copy. Quest elarion.welcome, stage meet-elder."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "fenn_wildmane",
+   "_note": "Quest cast (2026-08-03). Seated at the pet-house by QuestCastNpcInjector. Addressed by quests.json vendor.stable / stage train-ability. TEXT IS A PLACEHOLDER - swap in the owner-approved voice lines from docs/narrative/QUEST_CAST_VOICES_2026-08-03.md.",
+   "startNode": "talk",
+   "nodes": [
+    {
+     "id": "talk",
+     "lines": [
+      {
+       "speaker": "Fenn Wildmane",
+       "text": "PLACEHOLDER LINE - awaiting owner-approved copy. Quest vendor.stable, stage train-ability."
       }
      ]
     }
