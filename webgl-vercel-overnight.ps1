@@ -1,7 +1,7 @@
 # Overnight: build WebGL, then deploy Vercel PREVIEW. Run DETACHED (Start-Process)
 # so it survives the agent-harness reaping of background batchmode Unity.
 # Writes progress markers to Builds\webgl-chain-status.txt for the agent to poll.
-Set-Location C:\eoa
+Set-Location $PSScriptRoot
 $status = 'Builds\webgl-chain-status.txt'
 "CHAIN_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
 

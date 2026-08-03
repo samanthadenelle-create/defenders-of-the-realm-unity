@@ -5,7 +5,7 @@
 param([string]$Label = "")
 
 $ErrorActionPreference = "Stop"
-$repo    = "C:\eoa"
+$repo    = (Resolve-Path "$PSScriptRoot\..\..\..").Path
 $ll      = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Defenders of the Realm"
 $archive = "$repo\logs\archive"
 $ledger  = "$repo\logs\RECURRING_ISSUES.md"
