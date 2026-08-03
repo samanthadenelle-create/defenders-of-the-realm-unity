@@ -82,6 +82,40 @@ namespace DeNelle.Village
         /// single hardcoded flat value — turns the authored contactDamage column live for hero combat.</summary>
         public float ContactDamage => _contactDamage;
 
+        // =====================================================================
+        //  DYNAMIC-DIFFICULTY BASE STATS -- READ THIS BEFORE TOUCHING THE SPAWN PATH
+        // ---------------------------------------------------------------------
+        //  *** THIS BODY IS POOLED AND ITS STATE SURVIVES Release/Get. ***
+        //  EnemyPool.Get hands the SAME Enemy component out over and over;
+        //  PrepareForReuse revives it, it does NOT rebuild it. Every field on this
+        //  class therefore carries over from the previous life unless something
+        //  explicitly clears it.
+        //
+        //  THAT IS WHY DIFFICULTY SCALING IS NEVER APPLIED IN PLACE. A line like
+        //  `_maxHp *= mult` on a body that has been reused five times applies the
+        //  multiplier FIVE TIMES -- mult^5, exponential, and invisible, because each
+        //  individual application looks perfectly correct in isolation.
+        //  <see cref="ApplyDifficulty"/> always computes base * mult from a base that
+        //  was CAPTURED FRESH for THIS spawn (<see cref="SetBaseStats"/>) and never
+        //  reads the current value.
+        //
+        //  -1 means "uncaptured": ApplyDifficulty is a NO-OP until the spawner has
+        //  called SetBaseStats for this spawn, so a body can never be scaled off a
+        //  stale base. Both fields are cleared on BOTH pool-reset sides through
+        //  ClearPooledLatches (called by ResetForPool AND PrepareForReuse).
+        // =====================================================================
+        private float _baseMaxHp = -1f;
+        private float _baseContactDamage = -1f;
+
+        /// <summary>The contact damage captured by <see cref="SetBaseStats"/> for this spawn
+        /// (-1 = uncaptured). Exposed so the boss-HP-pin site can RE-base on the pinned HP
+        /// while keeping the ORIGINAL damage base -- re-basing on the live
+        /// <see cref="ContactDamage"/> after a difficulty pass would compound it.</summary>
+        public float BaseContactDamage => _baseContactDamage;
+
+        /// <summary>The max HP captured by <see cref="SetBaseStats"/> for this spawn (-1 = uncaptured).</summary>
+        public float BaseMaxHp => _baseMaxHp;
+
         [Tooltip("Seconds between melee hits while in contact.")]
         [SerializeField] private float _attackInterval = 1.3f;
 
@@ -188,6 +222,21 @@ namespace DeNelle.Village
 
         /// <summary>Stamps the pool key (called by <see cref="EnemyPool"/> on first build).</summary>
         public void SetPoolKey(string key) => _poolKey = key;
+
+        // POOL-RESET AUDIT (2026-08-02): the sibling EnemyBrain carries its OWN latch set
+        // (tactics / role / leash / room / flank / provoke) that Enemy's reset never touched,
+        // so a pooled body kept the previous life's brain state forever. Cached once so the
+        // reset path does not GetComponent on every release/acquire.
+        private EnemyBrain _brain;
+        private bool       _brainResolved;
+
+        // POOL-RESET AUDIT: Configure only OVERWRITES _heroAggroRadius when the incoming def
+        // authors AggroRadius > 0. A body that once carried a 14 m outpost-guard def and is
+        // then reused for a def with no authored radius would keep 14 m for the rest of the
+        // session. Captured at Awake (the prefab/inspector-authored value) and restored on
+        // every pool reset so the dial can never ratchet across reuses.
+        private float _authoredHeroAggroRadius = -1f;
+
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
 
@@ -667,6 +716,49 @@ namespace DeNelle.Village
             _hp    = _maxHp;
         }
 
+        /// <summary>
+        /// Captures the stats <see cref="ApplyDifficulty"/> multiplies FROM, for THIS spawn.
+        /// Called by the spawner immediately after <see cref="ApplyWaveScaling"/> (and again,
+        /// with the pinned HP, at the boss-HP-pin site) so the dynamic-difficulty multiplier
+        /// always lands on a freshly captured base rather than on an already-scaled value.
+        /// See the pooling warning block above the base fields -- this method is the whole
+        /// reason the multiplier cannot compound across pooled reuses.
+        /// </summary>
+        /// <param name="maxHp">The base max HP (&lt;= 0 leaves the HP base uncaptured).</param>
+        /// <param name="contactDamage">The base contact damage (&lt; 0 leaves it uncaptured; 0 is valid).</param>
+        public void SetBaseStats(float maxHp, float contactDamage)
+        {
+            _baseMaxHp         = maxHp > 0f && !float.IsNaN(maxHp) && !float.IsInfinity(maxHp) ? maxHp : -1f;
+            _baseContactDamage = contactDamage >= 0f && !float.IsNaN(contactDamage) && !float.IsInfinity(contactDamage)
+                               ? contactDamage : -1f;
+        }
+
+        /// <summary>
+        /// Applies the dynamic-difficulty multipliers as <c>base * mult</c> -- NEVER
+        /// <c>current *= mult</c>. No-op for a stat whose base was not captured this spawn.
+        /// <para>
+        /// DELIBERATELY UNGATED. <see cref="ApplyWaveScaling"/> gates on
+        /// <c>if (hpMult &gt; 1f)</c> / <c>if (damageMult &gt; 1f)</c>, which silently discards
+        /// every multiplier BELOW 1.0 -- if dynamic difficulty were routed through that method
+        /// the entire "make it easier for a struggling player" half of the feature would be
+        /// dead code. This method has no such gate: a multiplier of 0.80 makes the enemy
+        /// weaker, exactly as authored.
+        /// </para>
+        /// </summary>
+        public void ApplyDifficulty(float hpMult, float damageMult)
+        {
+            if (_baseMaxHp > 0f && hpMult > 0f && !float.IsNaN(hpMult) && !float.IsInfinity(hpMult))
+            {
+                _maxHp = Mathf.Max(1f, _baseMaxHp * hpMult);
+                _hp    = _maxHp;
+            }
+
+            if (_baseContactDamage >= 0f && damageMult >= 0f && !float.IsNaN(damageMult) && !float.IsInfinity(damageMult))
+            {
+                _contactDamage = Mathf.Max(0f, _baseContactDamage * damageMult);
+            }
+        }
+
         private void Awake()
         {
             EnsureAgent();
@@ -674,6 +766,25 @@ namespace DeNelle.Village
             EnsureAudio();
             EnsureHitReaction();
             EnsureHealthBar();
+            // POOL-RESET AUDIT: snapshot the authored hero-aggro radius BEFORE any def
+            // overlay runs, so ResetForPool can restore it (see the field comment).
+            if (_authoredHeroAggroRadius < 0f) _authoredHeroAggroRadius = _heroAggroRadius;
+        }
+
+        /// <summary>
+        /// Cached sibling <see cref="EnemyBrain"/> (may legitimately be null — plain wave
+        /// roamers carry none). Resolved once; the pool reset path calls this every
+        /// release/acquire, so it must not GetComponent per call.
+        /// </summary>
+        private EnemyBrain ResolveBrain()
+        {
+            // Only LATCH once a brain is actually found: SmartEnemySpawner/WaveManager add the
+            // EnemyBrain AFTER Configure, so a latch-on-null would blind this body to a brain
+            // that appears later in the same spawn.
+            if (_brainResolved && _brain != null) return _brain;
+            _brain = GetComponent<EnemyBrain>();
+            _brainResolved = _brain != null;
+            return _brain;
         }
 
         // Registry membership (TargetManager): every enemy — wave, roamer, tribe,
@@ -1912,6 +2023,30 @@ namespace DeNelle.Village
         /// feedback fires. Set by EnemyDamageable.MarkNextHitFromHero (hero paths only).</summary>
         public void SetNextDealtByHero(bool value) => _nextDealtByHero = value;
 
+        /// <summary>
+        /// MONOTONIC running total of damage the HERO has dealt to enemies this play session.
+        /// <para>
+        /// There was no aggregate anywhere for "damage the player dealt" -- DamageAttribution
+        /// only sees the ability paths that call Record() (basic melee never does) and is
+        /// drained per-target on death, so it can never answer "how much did the player deal
+        /// during THIS wave". The one seam that already knows a hit came from the hero, on
+        /// every hero path (HeroAbilities AND PlayerAttackController, both via
+        /// EnemyDamageable.MarkNextHitFromHero), is the <c>_nextDealtByHero</c> stamp consumed
+        /// one line into TakeDamageFrom. This counter hangs off that existing stamp; no new
+        /// event plumbing, no per-hit allocation.
+        /// </para>
+        /// Consumers take a SNAPSHOT and subtract (WaveManager's per-wave encounter sample),
+        /// so the absolute value never matters -- only the delta. double, not float, so a long
+        /// session cannot lose precision in the low bits. Damage dealt to the apex DragonBoss
+        /// is NOT counted (it is not an Enemy and has no hero stamp).
+        /// </summary>
+        public static double HeroDamageDealtTotal { get; private set; }
+
+        // Domain reload may be disabled (WO-139 #12): statics survive Play sessions. Zero the
+        // counter at each play start so a fresh session starts from a clean absolute value.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetHeroDamageDealtTotal() => HeroDamageDealtTotal = 0d;
+
         public void TakeDamage(float amount)
         {
             // No source position — default flinch direction is Front (attacker
@@ -1935,6 +2070,16 @@ namespace DeNelle.Village
             // RAMPAGE feedback below (and the kill feedback inside Die) to hero strikes only.
             bool dealtByHero = _nextDealtByHero;
             _nextDealtByHero = false;
+
+            // ENCOUNTER TELEMETRY (dynamic difficulty): accumulate the damage the HERO
+            // actually landed. Clamped to the HP that was really there, so overkill on the
+            // killing blow cannot inflate the player's "dominating" reading. Reads the same
+            // stamp the combo gate above consumes -- one seam, two consumers.
+            if (dealtByHero)
+            {
+                float applied = amount < _hp ? amount : _hp;
+                if (applied > 0f) HeroDamageDealtTotal += applied;
+            }
 
             // Floating combat text — pop the damage number at the enemy's head so
             // the player can see the hit (and watch it rise after a damage talent).
@@ -2100,6 +2245,13 @@ namespace DeNelle.Village
             //    death burst, hit-flash is owned by EnemyHitReaction's OnDisable).
             StopAllCoroutines();
             _telegraphing = false;
+            // POOL-RESET AUDIT (2026-08-02, P0-1): StopAllCoroutines KILLS RootedCast before its
+            // last line (_casting = false) ever runs, so a caster killed mid-wind-up (>= 1.0s, the
+            // common case) was pooled with _casting == true. On reuse DriveNav's `if (_casting)
+            // { isStopped = true; return; }` fired EVERY frame FOREVER -> a permanent statue that
+            // never moved or sieged, and RangedAttack's `&& !_casting` silently reverted it to the
+            // un-telegraphed instant hit. Clear it here (and in Die + PrepareForReuse).
+            _casting = false;
 
             // 2. Leave the targeting registry so the reticle/towers/pets can't pick a
             //    pooled body. (Die already unregistered on death; idempotent here.)
@@ -2113,22 +2265,97 @@ namespace DeNelle.Village
             var dmg = GetComponent<EnemyDamageable>();
             if (dmg != null) DeNelle.Core.Combat.DamageAttribution.Forget(dmg);
 
-            // 4. Clear AI / nav overrides so the reused body re-acquires from scratch
-            //    (brain re-scores on its own interval; these clear the Enemy-side seam).
-            _brainTarget = null;
-            _brainPositionOverride = null;
-            _currentTarget = null;
-            _heroAggroEngaged = false;
-            _heroTransform = null;
-            _heroResolveTimer = 0f;
-
-            // 5. Halt + detach the agent so a dormant body never paths.
+            // 4. Halt + detach the agent so a dormant body never paths.
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
 
-            // 6. Clear the next-hit VFX/tint stamps so a reused body starts neutral.
-            _nextNumberTint = null;
-            _nextImpactElement = null;
-            _nextDealtByHero = false;   // ticket #61: don't leak a hero stamp across pooling
+            // 5. POOL-RESET AUDIT (2026-08-02): EVERY per-life latch/cache on this class —
+            //    the AI/nav overrides, the hero-aggro seam, the next-hit VFX/tint stamps and
+            //    the motion latches — in ONE place. They used to be spelled out separately here
+            //    AND again in PrepareForReuse, and that duplicated-list-that-drifts is EXACTLY
+            //    the defect that produced P0-1 (_casting was added to the class and to neither
+            //    list). One method, both callers, one thing for the oracle to pin.
+            ClearPooledLatches();
+
+            // 6. POOL-RESET AUDIT (P0-2): the sibling EnemyBrain owns its own latch set
+            //    (tactics / role / leash / room AABB / coordinated flank / provoke / taunt)
+            //    that NOTHING reset — a body that once served as a caster kept KiterTactics
+            //    forever and, reused as a Tank, stood off at 10 m and refused to close.
+            ResolveBrain()?.ResetForPool();
+        }
+
+        /// <summary>
+        /// POOL-RESET AUDIT (2026-08-02): the latches shared by BOTH pool-reset sides. Every
+        /// field here is state that a body accumulated during its previous life and that the
+        /// spawner does NOT re-stamp on reuse, so leaving any of them set is a live bug:
+        ///   • <c>_casting</c>            — permanent statue (see ResetForPool step 1).
+        ///   • <c>_telegraphing</c>       — blocks every future melee wind-up (double-trigger guard).
+        ///   • <c>_stopTightenedForHero</c> — Configure re-writes agent.stoppingDistance to the 2.5 m
+        ///     siege radius but this latch stayed TRUE, so the "chasingHero != latch" edge in
+        ///     DriveNav never fired again: the reused body halted 2.5 m from the hero, OUTSIDE
+        ///     HeroHealth's 1.5 m engage ring, and never landed a hit ("enemies just mill around").
+        ///   • <c>_presentationCombat</c> — an overworld rep's braced combat locomotion leaking
+        ///     into a calm village marcher.
+        ///   • <c>_hasFaceTarget</c>      — a stale facing request from the previous life.
+        ///   • <c>_hasLastAnimPos</c>     — the anim speed feed differencing against a position on
+        ///     the OTHER side of the map produces a one-frame sprint spike on every reuse.
+        ///   • <c>_heroAggroRadius</c>    — see <see cref="_authoredHeroAggroRadius"/>.
+        ///   • the AI/nav seam, hero-aggro seam and next-hit stamps, which used to be spelled
+        ///     out separately in ResetForPool AND PrepareForReuse (two lists, drifting apart).
+        /// NOT reset here, deliberately: <c>_poolKey</c> (the queue identity — clearing it is the
+        /// P1-7 leak), <c>_authoredHeroAggroRadius</c> (the snapshot itself), <c>_hp</c>/<c>_maxHp</c>
+        /// (PrepareForReuse revives to full, then Configure re-seeds from the def), and the
+        /// same-GameObject component caches (_agent/_animator/_actor/_brain/... — they survive
+        /// pooling by design, which is the whole point of pooling the body).
+        /// </summary>
+        private void ClearPooledLatches()
+        {
+            // Combat / motion latches.
+            _casting               = false;
+            _telegraphing          = false;
+            _stopTightenedForHero  = false;
+            _presentationCombat    = false;
+            _hasFaceTarget         = false;
+            _faceTargetDir         = Vector3.forward;
+            _hasLastAnimPos        = false;
+            _lastAnimPos           = Vector3.zero;
+            _animSpeedSmoothed     = 0f;
+            _navWarned             = false;
+            _attackCooldown        = 0f;
+
+            // AI / nav seam — the reused body re-acquires from scratch (the brain re-scores
+            // on its own interval; these clear the Enemy-side half of that seam).
+            _brainTarget           = null;
+            _brainPositionOverride = null;
+            _currentTarget         = null;
+
+            // Hero-aggro seam + the hero-only-duel battle-lock membership. _engagedLatched is
+            // primarily released by OnDisable (which the pool triggers via SetActive(false)),
+            // but a Release that never deactivates would otherwise wedge BattleLock true.
+            _heroTransform         = null;
+            _heroAggroEngaged      = false;
+            _heroResolveTimer      = 0f;
+            _engageBrainResolved   = false;
+            _engageBrain           = null;
+            _engagedLatched        = false;
+            if (_authoredHeroAggroRadius >= 0f) _heroAggroRadius = _authoredHeroAggroRadius;
+
+            // Next-hit VFX / tint stamps — a reused body starts neutral.
+            _nextNumberTint        = null;
+            _nextImpactElement     = null;
+            _nextDealtByHero       = false;   // ticket #61: don't leak a hero stamp across pooling
+
+            // Path throttle — the first live frame re-paths immediately.
+            _pathRefreshTimer      = 0f;
+            _lastPathedDestination = Vector3.zero;
+
+            // Dynamic-difficulty base capture — the single most important thing on this
+            // list. A base left set from the PREVIOUS life would be multiplied again on
+            // the next spawn, which is the compounding bug the base+apply contract exists
+            // to prevent. -1 = uncaptured, so ApplyDifficulty no-ops until the spawner
+            // re-captures for the new spawn. Cleared on BOTH pool-reset sides because both
+            // ResetForPool (release) and PrepareForReuse (acquire) call this method.
+            _baseMaxHp             = -1f;
+            _baseContactDamage     = -1f;
         }
 
         /// <summary>
@@ -2152,18 +2379,13 @@ namespace DeNelle.Village
 
             // 1. Clear the dead latch FIRST so Update()/targeting see a live enemy.
             _dead = false;
-            _telegraphing = false;
-            _navWarned = false;
-            _attackCooldown = 0f;
-            _currentTarget = null;
-            _brainTarget = null;
-            _brainPositionOverride = null;
-            _heroAggroEngaged = false;
-            _heroTransform = null;
-            _heroResolveTimer = 0f;
-            _nextNumberTint = null;
-            _nextImpactElement = null;
-            _nextDealtByHero = false;   // ticket #61
+            // POOL-RESET AUDIT (2026-08-02): the ACQUIRE side must clear the same latch set as the
+            // release side. A body can reach the pool without ResetForPool having taken (a forced
+            // removal, a Release from a future call site, an editor-time re-Get), and this is the
+            // side a spawner re-stamps immediately after — so it is the one the oracle pins.
+            // Covers _casting (the permanent-statue latch), _telegraphing, _stopTightenedForHero,
+            // _presentationCombat, the anim-feed and face-target caches, and the hero-aggro radius.
+            ClearPooledLatches();
 
             // 2. Restore HP to full so the body isn't handed out at 0 HP / instantly
             //    re-dead. Configure() re-seeds _maxHp from the def right after this;
@@ -2211,9 +2433,14 @@ namespace DeNelle.Village
             //    this belt-and-braces a body whose OnEnable ran before _dead cleared.
             TargetManager.Register(this);
 
-            // 7. Reset the path throttle so the first reuse frame re-paths immediately.
-            _pathRefreshTimer = 0f;
-            _lastPathedDestination = Vector3.zero;
+            // 7. (The path throttle is reset by ClearPooledLatches above — single authority.)
+
+            // 8. POOL-RESET AUDIT (P0-2): wipe the sibling EnemyBrain's per-life state too. Done
+            //    on the ACQUIRE side (as well as release) because this runs BEFORE the spawner's
+            //    Configure + Role/tactics stamp, so the spawner's stamp always lands on a clean
+            //    brain — a body that once carried a dungeon leash or arena hero-only flag can
+            //    never drag it into a village wave.
+            ResolveBrain()?.ResetForPool();
         }
 
         /// <param name="killed">
@@ -2230,6 +2457,13 @@ namespace DeNelle.Village
         {
             _dead = true;
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
+            // POOL-RESET AUDIT (2026-08-02, P0-1): the 2026-05-30 audit cleared the wind-up latch
+            // here but MISSED its twin. _casting is set by RootedCast and cleared ONLY on that
+            // coroutine's last line — so a caster killed mid-wind-up died with _casting still true,
+            // and the DEATH-HOLD frames (up to DeathHoldSeconds) then ran DriveNav's
+            // `if (_casting) { isStopped = true; return; }` on a corpse. Cleared here as well as in
+            // ResetForPool so the latch is dead the instant HP hits zero, not a second later.
+            _casting = false;
             // HUD posture (owner 2026-07-09): drop THIS enemy's pursuit pulse immediately so
             // town/overworld chrome returns as soon as the last threat dies — not after PursuitTtl.
             // Other live pursuers keep hostile(prebattle) up via their own pulses.

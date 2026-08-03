@@ -193,7 +193,48 @@ namespace DeNelle.Village
         private void ReleaseInternal(Enemy enemy)
         {
             string poolKey = enemy.PoolKey;
-            if (string.IsNullOrEmpty(poolKey)) poolKey = "_default";
+
+            // P1-7 (2026-08-02) — THE POOL USED TO LEAK EVERY BODY IT DID NOT CREATE.
+            // SetPoolKey is stamped in exactly ONE place: the fresh-build branch of GetInternal.
+            // But Enemy.Die calls EnemyPool.Release for EVERY enemy, and roughly a dozen systems
+            // build bodies straight through EnemyFactory.Build without ever going near the pool
+            // (RaidGarrisonSpawner, EnemyOutpost, GarrisonController, CampGuards, CampDefenseWave,
+            // OutpostEnemyGroupSpawner, OverworldEncounterSpawner, BattleArena, RegionMobSpawner,
+            // TribeManager, WardTetherService, TutorialFlow, the family test spawners). Those all
+            // arrived here with PoolKey == null and were filed under "_default" — and NO caller
+            // anywhere asks Get() for "_default" (every call site passes "model:"/"prefab:" + a
+            // name). So that queue was WRITE-ONLY: every dungeon / outpost / overworld / arena /
+            // raid kill parked a full skinned-mesh + Animator + NavMeshAgent under DontDestroyOnLoad
+            // forever. Unbounded growth across a session — the exact OOM path on mobile that this
+            // pool exists to prevent.
+            //
+            // DECISION: an unkeyed body is DESTROYED, not queued.
+            //   * It is CORRECT-by-construction: the pool's contract is "Get(key) only ever returns
+            //     a body built for that exact key". A body with no key can never satisfy any Get,
+            //     so retaining it has zero upside and unbounded cost.
+            //   * It LOSES NOTHING: those bodies were never re-served before today either. Reuse
+            //     goes from zero to zero; only the leak goes away. Destroy is also exactly what
+            //     these bodies did pre-pooling (Destroy after the death hold), and it is already
+            //     this class's own shutdown fallback (Release when Instance == null).
+            //   * REJECTED alternative — stamping factory-built bodies with a synthetic
+            //     "model:<id>" key so they join the wave queues. That would let a raid-garrison /
+            //     arena / dungeon body, carrying that lane's spawner-specific setup, be handed to a
+            //     village wave. The P0-2 brain reset now scrubs the brain, but the other lanes also
+            //     attach their own components/anchors/hierarchy that no reset contract covers, so
+            //     cross-lane reuse is a NEW bug class traded for a fixed one. If cross-lane reuse
+            //     is ever wanted it needs those spawners to route through EnemyPool.Get (which
+            //     stamps the key properly) — not a key invented at release time.
+            if (string.IsNullOrEmpty(poolKey))
+            {
+                FlowTrace.Throttle("EnemyPool", "release-unkeyed", 5f,
+                    $"Return body='{enemy.name}': NO pool key (built outside EnemyPool.Get, e.g. direct " +
+                    "EnemyFactory.Build) - DESTROYED rather than queued. No spawner ever requests the " +
+                    "keyless queue, so queueing it would leak the body under DontDestroyOnLoad forever. " +
+                    "Route this spawner through EnemyPool.Get if its bodies should be reused.");
+                Destroy(enemy.gameObject);
+                return;
+            }
+
             using var _ = FlowTrace.Enter("EnemyPool", $"Return key='{poolKey}' body='{enemy.name}'");
 
             // Enemy.Die already invoked ResetForPool (events/registry/ledger/coroutines

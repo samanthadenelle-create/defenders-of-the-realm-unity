@@ -114,6 +114,17 @@ namespace DeNelle.Village
         /// </summary>
         public void SetTactics(TacticalData t) { if (t != null) _tactics = t; }
 
+        // POOL-RESET AUDIT (2026-08-02, P0-2): SetTactics is deliberately null-IGNORING, so
+        // tactics could only ever be UPGRADED, never cleared. Across a pool Release/Get that
+        // meant a body that once served as a Ranged caster kept KiterTactics forever — reused
+        // as a Tank it held its 10 m standoff and refused to close on the wall. The authored
+        // (prefab/inspector) values are snapshotted at Awake so ResetForPool can restore the
+        // body to what it was BUILT as, not to a blanket null that would wipe a prefab enemy's
+        // designer-assigned overlay.
+        private TacticalData _authoredTactics;
+        private EnemyRole    _authoredRole = EnemyRole.DPS;
+        private bool         _authoredCaptured;
+
         /// <summary>
         /// WO-482 (arena): mark this brain as a HERO-ONLY duelist (isolated BattleArena).
         /// Target selection then always picks the hero and never falls back to the far-off
@@ -422,6 +433,17 @@ namespace DeNelle.Village
         private float _targetEvalTimer;
         private const float TargetEvalInterval = 2f;
 
+        // P0-4 (2026-08-02): the NO-TACTICS legacy chain (FindNearbyHero ?? FindNearestTower ??
+        // FindClosestTarget) ran with NO throttle at all — a 20 m OverlapSphere plus a full-scene
+        // FindAnyObjectByType<HeroLocomotion>, PER ENEMY PER FRAME, whenever the hero was outside
+        // the 11 m engage ring and no tower was near (i.e. the normal state at wave start). At the
+        // 22-enemy wave cap that is 22 whole-scene scans every frame. Throttled here on its own,
+        // TIGHTER interval than the scored path (the legacy chain is a cheap nearest-ish pick, so
+        // it can stay responsive) and the hero now comes from the cached, already-1s-throttled
+        // _heroTransform instead of a fresh scene scan.
+        private float _legacyEvalTimer;
+        private const float LegacyEvalInterval = 0.25f;
+
         // WO-145 (Tactic C): a signed flank bearing assigned by EnemyGroupCoordinator
         // for a coordinated pincer; overrides the per-enemy FlankAngleOffset when set.
         private bool  _coordinatedFlankSet;
@@ -591,6 +613,17 @@ namespace DeNelle.Village
 
         private void Awake()
         {
+            // POOL-RESET AUDIT (P0-2): snapshot what this body was AUTHORED as, BEFORE any
+            // spawner stamps a role/overlay on it. ResetForPool restores exactly this, so a
+            // prefab enemy with a designer-assigned TacticalData keeps it across pooling while
+            // a runtime-stamped body drops back to "unstamped" and must be re-stamped.
+            if (!_authoredCaptured)
+            {
+                _authoredCaptured = true;
+                _authoredTactics  = _tactics;
+                _authoredRole     = Role;
+            }
+
             _enemy = GetComponent<Enemy>();
             _enemy.Died += e => Died?.Invoke(e);
             _enemy.Damaged += OnEnemyDamaged;   // retaliate when struck
@@ -867,6 +900,94 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             _enemy?.SetBrainTargetPosition(null);
+        }
+
+        // ── POOL RESET (2026-08-02, P0-2) ─────────────────────────────────────
+
+        /// <summary>
+        /// Wipes EVERY piece of per-life runtime state this brain accumulated, so a pooled
+        /// body handed back out by <see cref="EnemyPool"/> behaves exactly like a freshly
+        /// built one. Called by <see cref="Enemy.ResetForPool"/> (release) and
+        /// <see cref="Enemy.PrepareForReuse"/> (acquire) — both sides, because a body can
+        /// reach the pool through either path and the acquire side is the one a spawner
+        /// re-stamps immediately after.
+        ///
+        /// WHY THIS EXISTS: Enemy's reset only ever touched Enemy's OWN fields. Everything
+        /// below survived Release/Get before today, and each one is a live bug:
+        ///   * <c>_tactics</c> / <c>Role</c>  — a caster body reused as a Tank kept KiterTactics
+        ///     and stood off at 10 m instead of closing (SetTactics is null-ignoring, so nothing
+        ///     could ever clear it).
+        ///   * <c>_leashRadius</c> / <c>_homeAnchor</c> / room AABB — a dungeon mob's leash
+        ///     leaking into a village wave makes the wave enemy DORMANT at its gate: the leash
+        ///     gate yields no target while the hero is outside the old anchor's radius.
+        ///   * <c>_heroOnlyTarget</c> — an arena duelist body reused in the village never sieges.
+        ///   * <c>_provokedUntil</c> / <c>_tauntUntil</c> / <c>_taunter</c> — a stale override
+        ///     pointed at a destroyed transform.
+        ///   * <c>_coordinatedFlankSet</c> — a pincer bearing from a squad that no longer exists.
+        ///   * <c>_bowEquipChecked</c> — a body that was NON-Ranged last life latched the check
+        ///     true, so reused as Ranged it fires arrows with EMPTY HANDS (and vice versa: a
+        ///     former ranger keeps a bow while swinging a sword).
+        ///   * scene refs (heart / hero / pet) — resolved ONCE at Awake; the pool is
+        ///     DontDestroyOnLoad, so after a scene change they point at destroyed objects and
+        ///     the body silently has no heart to siege. Re-resolved here (once per spawn, which
+        ///     is exactly the cadence Awake used to have).
+        /// Idempotent and safe to call on a live brain.
+        /// </summary>
+        public void ResetForPool()
+        {
+            // Authored identity (prefab-assigned overlay/role) — NOT a blanket null, see the
+            // _authoredTactics field comment. A runtime-stamped body drops back to unstamped.
+            _tactics = _authoredTactics;
+            Role     = _authoredRole;
+
+            // Mode flags set by specialist spawners (arena / dungeon / outpost).
+            _heroOnlyTarget = false;
+            _bowEquipChecked = false;
+
+            // Leash + room ownership (dungeon-only opt-ins; MUST be off for a village wave).
+            _homeAnchor  = Vector3.zero;
+            _leashRadius = 0f;
+            _hasRoomArea = false;
+            _roomId      = string.Empty;
+            _roomArea    = new Bounds(Vector3.zero, Vector3.zero);
+            _roomSlack   = 0f;
+            _wakeRadius  = 0f;
+
+            // Targeting / override state.
+            _currentTarget           = null;
+            _provokedUntil           = 0f;
+            _tauntUntil              = 0f;
+            _taunter                 = null;
+            _targetEvalTimer         = 0f;
+            _legacyEvalTimer         = 0f;
+            _heroResolveTimer        = 0f;
+            _provokedHeroResolveTimer = 0f;
+
+            // Tactical posture + the per-archetype motion timers.
+            _tacticalState        = EnemyTacticalState.Rush;
+            _suppressTimer        = 0f;
+            _coordinatedFlankSet  = false;
+            _coordinatedFlankAngle = 0f;
+            _repositionTimer      = 0f;
+            _atRallyPoint         = false;
+            _kiteStrafeTimer      = 0f;
+            _kiteStrafeSign       = 1f;
+
+            // Attack + heal cadence.
+            _nextAttackTime = 0f;
+            _healCooldown   = 0f;
+
+            // Perception + path-validity caches.
+            _sensorScanTimer = 0f;
+            _lastAwareness   = DeNelle.Core.AwarenessState.Unaware;
+            _rushPathTimer   = 0f;
+            _rushPathValid   = true;
+
+            // Scene refs: re-resolve for the scene this body is being spawned INTO.
+            var hc = FindAnyObjectByType<HeartController>();
+            _heartTransform = hc != null ? hc.transform : null;
+            _heroTransform  = FindHeroTransform();
+            _petTransform   = TryFindByTag("PetTarget");
         }
 
         // ── DEF-72: tactical state update ─────────────────────────────────────
@@ -1183,7 +1304,15 @@ namespace DeNelle.Village
             if (_heroOnlyTarget)
             {
                 bool valid = _heroTransform != null && _heroTransform.gameObject.activeInHierarchy;
-                if (!valid) _heroTransform = FindHeroTransform();
+                // P0-4: this re-scan was UNTHROTTLED, and Update() had already tried to re-resolve
+                // _heroTransform on its 1 s cadence a few lines earlier in the SAME frame — so with
+                // no hero in the scene an arena/dungeon duelist ran a whole-scene
+                // FindAnyObjectByType every frame. Share Update's cadence instead of re-scanning.
+                if (!valid && _heroResolveTimer <= 0f)
+                {
+                    _heroResolveTimer = 1f;
+                    _heroTransform = FindHeroTransform();
+                }
                 return _heroTransform;
             }
 
@@ -1200,11 +1329,21 @@ namespace DeNelle.Village
                 // eval interval. When tactics weights aren't assigned the scorer
                 // degrades to the legacy nearest-ish chain (FindNearbyHero ?? Tower ?? tag).
                 default:
-                    // Basic strategy (per user req): DPS focus-fire healers first (protect
-                    // the support), then score for low-HP/threat. Tanks protect healer by
-                    // choosing hero/structure near healers. Healers already prioritize allies.
-                    if ((Role == EnemyRole.DPS || Role == EnemyRole.Ranged) && FindMostDamagedAlly() != null)
-                        return FindMostDamagedAlly() ?? ScoreAndPickTarget();
+                    // P0-3 (2026-08-02) — DELETED: a branch here used to read
+                    //     if ((Role == DPS || Role == Ranged) && FindMostDamagedAlly() != null)
+                    //         return FindMostDamagedAlly() ?? ScoreAndPickTarget();
+                    // FindMostDamagedAlly scans for a wounded ENEMY — this unit's OWN side — and
+                    // handed it back as the ATTACK target. The comment above it claimed "DPS
+                    // focus-fire healers first (protect the support)", i.e. it described HERO-side
+                    // behaviour that does not exist in this class. Live effect: seconds after first
+                    // contact there is always a wounded enemy within the 6 m heal-scan radius, so
+                    // EVERY DPS and Ranged enemy abandoned the march and clustered on its own
+                    // wounded — the recurring "enemies just mill around / never attack me". It also
+                    // bypassed the _targetEvalTimer throttle entirely and ran the 6 m
+                    // OverlapSphereNonAlloc + up to 32 GetComponentInParent<Enemy> TWICE per enemy
+                    // per frame. Ally SUPPORT is a Healer-role job and is already implemented
+                    // honestly above (Healer -> FindMostDamagedAlly -> TickHeal HEALS it); it is
+                    // never a target to attack. Do not reinstate.
                     return ScoreAndPickTarget();
             }
         }
@@ -1264,10 +1403,20 @@ namespace DeNelle.Village
         /// </summary>
         private Transform ScoreAndPickTarget()
         {
-            // No tactics SO ⇒ preserve today's EXACT behaviour (per-frame legacy chain,
-            // no scoring, no throttle) so the common case has zero regression.
+            // No tactics SO => the legacy nearest-ish chain. P0-4 (2026-08-02): this used to run
+            // UNTHROTTLED — 20 m OverlapSphere + a whole-scene FindAnyObjectByType every frame per
+            // enemy. It is now on its own tight (0.25 s) cadence with the previous pick cached, so
+            // a null-tactics enemy can NEVER scan per-frame again no matter which spawn path built
+            // it. The pick itself is unchanged, so behaviour is the same to within a quarter second.
             if (_tactics == null)
+            {
+                _legacyEvalTimer -= Time.deltaTime;
+                bool legacyCacheValid = _currentTarget != null && _currentTarget.gameObject.activeInHierarchy;
+                if (_legacyEvalTimer > 0f && legacyCacheValid)
+                    return _currentTarget;
+                _legacyEvalTimer = LegacyEvalInterval;
                 return FindNearbyHero() ?? FindNearestTower() ?? FindClosestTarget();
+            }
 
             // Throttle: reuse the cached pick between eval ticks (and drop a dead/
             // disabled cached target immediately so we don't aim at a corpse).
@@ -1473,7 +1622,14 @@ namespace DeNelle.Village
         private Transform FindClosestTarget()
         {
             // WO-450: resolve the hero by component, not the (undeclared) "HeroTarget" tag.
-            var hero = FindHeroTransform();
+            // P0-4 (2026-08-02): this called FindHeroTransform() — FindAnyObjectByType<HeroLocomotion>,
+            // a WHOLE-SCENE scan — and then THREW THE RESULT AWAY (it never cached into
+            // _heroTransform), so it re-scanned on the very next call forever. Update() already
+            // re-resolves _heroTransform on a 1 s cadence, so read that cache; only fall through to
+            // a live scan when the cache is genuinely empty, and CACHE the result when it is.
+            var hero = _heroTransform != null && _heroTransform.gameObject.activeInHierarchy
+                ? _heroTransform
+                : (_heroTransform = FindHeroTransform());
             if (hero != null) return hero;
             // "HeartTarget" may be undefined (FindWithTag throws) — TryFindByTag guards it.
             var heart = TryFindByTag("HeartTarget");

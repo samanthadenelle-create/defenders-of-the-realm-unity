@@ -32,8 +32,15 @@ namespace DeNelle.Village
     public sealed class PlayerAttackController : MonoBehaviour
     {
         [Header("Base Attack")]
+        // P1-6 (2026-08-02): raised 30 -> 52.5 as part of making the perfect-hit mechanic REAL.
+        // 52.5 is not a buff — it is the damage the hero has ALWAYS dealt. The old perfect-hit
+        // check compared elapsed time against a FIXED 0.13 s coroutine delay with no player input
+        // anywhere in the loop, so `isPerfect` was unconditionally true above ~20 FPS and the
+        // 1.75x multiplier applied to EVERY swing (30 x 1.75 = 52.5). The stated 30 was a lie, and
+        // on a frame hitch > 50 ms the player silently lost 43% damage for no reason they could
+        // see. The number is now honest and the multiplier is EARNED. See ResolveAttack.
         [Tooltip("Flat damage per hit before any talent multipliers.")]
-        [SerializeField] private float _baseDamage = 30f;
+        [SerializeField] private float _baseDamage = 52.5f;
 
         [Tooltip("Radius of the OverlapSphere damage check around the hero (fallback when " +
                  "the equipped weapon sets no reach).")]
@@ -112,14 +119,28 @@ namespace DeNelle.Village
         [SerializeField, Min(0f)] private float _impactFrameDelay = 0.13f;
 
         [Header("Perfect Hit Window")]
+        // P1-6 (2026-08-02): the window is now a REAL input window — the player must press attack
+        // a SECOND time during the wind-up (see RegisterPerfectTap). It therefore has to CLOSE at
+        // or before the impact frame, because that is when ResolveAttack applies the damage: a tap
+        // arriving after the hit has already landed cannot retroactively empower it. WO-217 pins the
+        // damage to the impact frame and that is not negotiable, so the window is bounded by it
+        // (and clamped in code, so an authored end past the impact frame can never again be
+        // silently unreachable). Start pulled 0.08 -> 0.03 to make the achievable band as wide as
+        // the impact frame allows: [0.03, 0.13] = a 100 ms second-tap window.
         [Tooltip("Seconds after swing input when the perfect-hit window opens.")]
-        [SerializeField, Min(0f)] private float _perfectHitWindowStart = 0.08f;
+        [SerializeField, Min(0f)] private float _perfectHitWindowStart = 0.03f;
 
-        [Tooltip("Seconds after swing input when the perfect-hit window closes.")]
-        [SerializeField, Min(0f)] private float _perfectHitWindowEnd = 0.18f;
+        [Tooltip("Seconds after swing input when the perfect-hit window closes. Clamped at runtime " +
+                 "to the impact-frame delay - the hit resolves there, so a later tap cannot count.")]
+        [SerializeField, Min(0f)] private float _perfectHitWindowEnd = 0.13f;
 
-        [Tooltip("Damage multiplier applied when the player hits in the perfect window.")]
-        [SerializeField, Min(1f)] private float _perfectHitMultiplier = 1.75f;
+        // P1-6: 1.75 -> 1.25. The old 1.75 was an always-on multiplier masquerading as a skill
+        // bonus; it has been folded into _baseDamage (30 x 1.75 = 52.5). What remains is a genuine,
+        // earned bonus on top of the honest base. Deliberately a BONUS-ONLY design: missing the
+        // window costs the player nothing versus today's damage, so a tight window is pure upside
+        // for skilled play and never a hidden punishment.
+        [Tooltip("Damage multiplier applied when the player lands a real second tap in the perfect window.")]
+        [SerializeField, Min(1f)] private float _perfectHitMultiplier = 1.25f;
 
         [Tooltip("Sound played on a perfect hit (optional).")]
         [SerializeField] private AudioClip _perfectHitSound;
@@ -283,6 +304,8 @@ namespace DeNelle.Village
 
             if (attackPressed && !_isInSwing && Time.time >= _nextAttackTime)
                 StartAttack();
+            else if (attackPressed && _isInSwing)
+                RegisterPerfectTap();   // P1-6: the SECOND tap — the perfect-hit input
 
             UpdateBlock();
         }
@@ -378,9 +401,36 @@ namespace DeNelle.Village
         {
             if (HeroLocomotion.InputSuppressed) return false;
             if (!BattleLock.IsInBattle()) return false;
-            if (_isInSwing || Time.time < _nextAttackTime) return false;
+            // P1-6: a press that arrives MID-SWING is the perfect-hit second tap, not a dropped
+            // input. This is what makes the mechanic reachable on TOUCH — the mobile HUD's
+            // basic-attack button is the only attack input on a phone, so tapping it twice is the
+            // gesture. Still returns false (no NEW swing started), so every existing caller's
+            // contract is unchanged.
+            if (_isInSwing) { RegisterPerfectTap(); return false; }
+            if (Time.time < _nextAttackTime) return false;
             StartAttack();
             return true;
+        }
+
+        // ── P1-6: the perfect-hit input ───────────────────────────────────────
+
+        // Seconds from swing start at which the player's second tap landed; < 0 = no tap this
+        // swing. Recorded, not evaluated, at press time — ResolveAttack decides.
+        private float _perfectTapElapsed = -1f;
+
+        /// <summary>
+        /// P1-6: record the perfect-hit SECOND TAP for the swing in flight. Public so any input
+        /// surface (keyboard/gamepad/mouse in <see cref="Update"/>, the HUD basic-attack button via
+        /// <see cref="TriggerBasicAttack"/>, a future virtual stick) feeds the same one seam.
+        /// First tap wins — mashing after the window has closed cannot overwrite a good tap with a
+        /// bad one, and (because the window has a lower bound) mashing from frame zero does not
+        /// guarantee a perfect either. No-op when no swing is in flight.
+        /// </summary>
+        public void RegisterPerfectTap()
+        {
+            if (!_isInSwing) return;
+            if (_perfectTapElapsed >= 0f) return;          // first tap wins
+            _perfectTapElapsed = Time.time - _swingStartTime;
         }
 
         private void StartAttack()
@@ -388,6 +438,7 @@ namespace DeNelle.Village
             _nextAttackTime = Time.time + _attackCooldown;
             _swingStartTime = Time.time;
             _isInSwing      = true;
+            _perfectTapElapsed = -1f;   // P1-6: each swing needs its OWN second tap
 
             // #51: the whoosh on the swing itself (the "swish" before the clash). The clash plays
             // later only when ResolveAttack connects, so swing + hit read as two distinct beats.
@@ -502,10 +553,41 @@ namespace DeNelle.Village
             float hitDelay = _impactFrameDelay > 0f ? _impactFrameDelay : _perfectHitWindowStart;
             yield return new WaitForSeconds(hitDelay);
 
-            float elapsed   = Time.time - _swingStartTime;
-            bool isPerfect  = elapsed >= _perfectHitWindowStart
-                           && elapsed <= _perfectHitWindowEnd;
+            // P1-6 (2026-08-02) — THE PERFECT HIT IS NOW A REAL INPUT.
+            // What this used to be:
+            //     float elapsed  = Time.time - _swingStartTime;
+            //     bool isPerfect = elapsed >= 0.08f && elapsed <= 0.18f;
+            // `elapsed` was just the coroutine's own FIXED 0.13 s wait read back. 0.13 sits dead
+            // centre of [0.08, 0.18] and there was NO second player input anywhere in this method,
+            // so isPerfect was unconditionally TRUE at any frame rate above ~20 FPS. Consequences:
+            // the 1.75x multiplier applied to every swing (so the hero's "30" base melee was really
+            // 52.5), the gold PERFECT stamp fired on every single hit and therefore meant nothing,
+            // and a frame hitch over 50 ms randomly cost the player 43% damage with no cue.
+            // What it is now: the player must press attack a SECOND time during the wind-up
+            // (RegisterPerfectTap — keyboard/gamepad/mouse, or a second tap of the mobile HUD
+            // button). The multiplier moved into _baseDamage so a missed window deals exactly the
+            // damage the hero dealt before this change; a landed tap is a real +25% on top.
+            // The window is CLAMPED to the impact frame: WO-217 pins damage to the impact frame, so
+            // any authored window past it would be unreachable — the clamp makes that structural
+            // instead of a silent lie, and self-reports once if the authoring disagrees.
+            float windowStart = Mathf.Max(0f, _perfectHitWindowStart);
+            float windowEnd   = Mathf.Min(_perfectHitWindowEnd, hitDelay);
+            if (_perfectHitWindowEnd > hitDelay)
+                FlowTrace.Once("Combat", "perfect-window-clamped",
+                    $"perfect-hit window end {_perfectHitWindowEnd:F3}s is AFTER the impact frame " +
+                    $"{hitDelay:F3}s where damage resolves - clamped to {windowEnd:F3}s. A tap in the " +
+                    "clamped-off tail could never have counted; widen _impactFrameDelay instead if a " +
+                    "longer window is wanted.");
+
+            bool isPerfect  = _perfectTapElapsed >= windowStart
+                           && _perfectTapElapsed <= windowEnd;
             bool riposte    = Time.time <= _riposteArmedUntil;   // empowered counter after a parry
+
+            // §12: PROVE the timing input, so "perfect never fires" / "perfect always fires" is a
+            // data read, not a theory. Throttled — this is one line per swing otherwise.
+            FlowTrace.Throttle("Combat", "perfect-window", 1f,
+                $"perfect-hit eval: tap={(_perfectTapElapsed < 0f ? "NONE" : _perfectTapElapsed.ToString("F3") + "s")} " +
+                $"window=[{windowStart:F3}, {windowEnd:F3}]s -> perfect={isPerfect}");
 
             Collider[] hits = Physics.OverlapSphere(transform.position, EffectiveRange(), _enemyLayer);
 

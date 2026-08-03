@@ -192,6 +192,18 @@ namespace DeNelle.Village
                     EnemyBrain brain = enemy.GetComponent<EnemyBrain>();
                     if (brain == null) brain = enemy.gameObject.AddComponent<EnemyBrain>();
                     brain.Role = entry.Role;
+                    // P0-4 (2026-08-02): this is THE live wave path and it stamped the Role but
+                    // NEVER applied the matching tactics — so every smart-composed wave enemy ran
+                    // with _tactics == null, i.e. the whole WO-145 tactical layer (kite / flank /
+                    // siege / support, the scored target priority, the eval throttle) was DEAD in
+                    // the one place the player actually meets it. Null tactics also dropped the
+                    // brain onto the untuned legacy target chain. ApplyRoleTactics assigns the
+                    // SHARED runtime archetype singletons (KiterTactics / CoordinatedFlanker /
+                    // Siege / Support) — never mutate what it hands back: one instance is shared by
+                    // every enemy of that archetype for the whole session, so a per-enemy tweak
+                    // would leak to all of them. Use ScriptableObject.CreateInstance if a genuine
+                    // per-enemy override is ever needed.
+                    EnemyBrain.ApplyRoleTactics(brain, entry.Role);
 
                     spawned.Add(enemy);
                 }

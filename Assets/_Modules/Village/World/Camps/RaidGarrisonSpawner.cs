@@ -271,6 +271,16 @@ namespace DeNelle.Village.World.Camps
             var brain = boss.gameObject.GetComponent<EnemyBrain>();
             if (brain == null) brain = boss.gameObject.AddComponent<EnemyBrain>();
             brain.Role = EnemyRole.MiniBoss;
+            // P0-5 (owner-filed, 2026-08-02): the boss had a brain but NO tactics, so it fell to
+            // the legacy chain FindNearbyHero ?? FindNearestTower ?? FindClosestTarget. In a RAID
+            // scene there is no player Tower and no HeartOfElarion, so the moment hero aggro
+            // dropped the boss acquired NOTHING and stood inert at the keep. Applying the shared
+            // archetype puts it on the SCORED path, which can acquire the raider's deployed troops
+            // (TroopController implements IDamageableStructure) inside
+            // max(_threatScanRadius 12, _towerScanRadius 20) = 20 m. MiniBoss has no case in
+            // ApplyRoleTactics, so give it the front-line Siege archetype explicitly — a boss that
+            // HOLDS the keep is exactly the siege posture. SHARED SINGLETON: never mutate it.
+            brain.SetTactics(EnemyBrain.SiegeTactics);
 
             Track(boss);
         }
@@ -305,6 +315,23 @@ namespace DeNelle.Village.World.Camps
 
             // V — the guard must RENDER, else the hero fights an invisible garrison defender.
             VerifyGuardRenders(guard, $"guard-{index} ({def.Id})", pos);
+
+            // P0-5 (owner-filed, 2026-08-02): guards got NO EnemyBrain AT ALL — only Configure +
+            // SetBrainTarget(anchor). With no brain the body falls to Enemy's own acquisition, whose
+            // only non-hero source is SweepForNearestStructure at _structureSweepRadius = 3 m
+            // (Enemy.cs:106). A raid guard therefore fought ONLY what walked within 3 m of it and
+            // never advanced on the raider's deployed troops — the garrison was a set of statues.
+            // Give it the same brain every other garrison path already builds (precedent:
+            // BattleArena.cs:1300, EnemyGroupSpawner.cs:176, RegionMobSpawner.cs:380), with the role
+            // derived from the enemy id and the matching SHARED archetype tactics applied so it
+            // runs the SCORED target path (TroopController implements IDamageableStructure, so
+            // deployed troops are acquirable inside the 20 m tower/threat scan). SetBrainTarget's
+            // anchor still tethers it to the garrison, so it holds the keep rather than roaming.
+            var guardBrain = guard.gameObject.GetComponent<EnemyBrain>();
+            if (guardBrain == null) guardBrain = guard.gameObject.AddComponent<EnemyBrain>();
+            EnemyRole guardRole = EnemyBrain.RoleForId(def.Id);
+            guardBrain.Role = guardRole;
+            EnemyBrain.ApplyRoleTactics(guardBrain, guardRole);   // SHARED singletons — never mutate
 
             Track(guard);
         }
