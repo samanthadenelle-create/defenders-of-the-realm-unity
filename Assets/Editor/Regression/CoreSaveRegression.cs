@@ -616,10 +616,17 @@ namespace DeNelle.Editor
                 log.AppendLine("  lifetime-1 -> lifetime-2 round-trip holds (bestWave/crystals/difficulty/heroLevel/petName/baseLayout)");
 
                 // ── ResetToNewGame carve-out: wallet + breachStyle survive; progression wipes. ──
-                svc2.BindWallet("test-wallet-123");
+                // The fixture MUST be a real base58 pubkey. It used to be "test-wallet-123", which
+                // the 2026-08-02 identity work now correctly RETIRES on save: a bound key that is
+                // neither guest-shaped nor wallet-shaped can never authenticate against the backend
+                // (api/_lib/wallet-auth.js WALLET_RE), so it is stashed and cleared rather than left
+                // to 401 forever. A hyphen is not in the base58 alphabet. Asserting the old fixture
+                // survived would have been asserting the BROKEN behaviour.
+                const string walletFixture = "BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV";
+                svc2.BindWallet(walletFixture);
                 svc2.SetBreachStyle(BreachStyle.TowerSim);
                 svc2.ResetToNewGame();
-                if (st.BoundWallet != "test-wallet-123") failures.Add("ResetToNewGame wiped BoundWallet — the carve-out contract broken");
+                if (st.BoundWallet != walletFixture) failures.Add("ResetToNewGame wiped BoundWallet — the carve-out contract broken");
                 if (st.BreachStyle != BreachStyle.TowerSim) failures.Add("ResetToNewGame wiped BreachStyle — preferences must survive New Game");
                 if (st.Resources.Crystals != 250 || st.Resources.Food != 80 || st.Resources.Coins != 15)
                     failures.Add($"ResetToNewGame did not restore STARTER resources (got {st.Resources.Crystals}/{st.Resources.Food}/{st.Resources.Coins})");

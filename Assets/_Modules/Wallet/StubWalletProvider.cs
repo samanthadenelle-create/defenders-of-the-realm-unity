@@ -6,8 +6,23 @@
 // provider that compiles and RUNS today, with no SDK dependency. This is it.
 //
 // What it fakes:
-//   * Connect()     — generates a deterministic devnet-shaped base58 address
-//                     after a short simulated handshake delay.
+//   * Connect()     — generates a SELF-EVIDENTLY FAKE, 44-char, devnet-shaped
+//                     address after a short simulated handshake delay.
+//
+// SECURITY (audit 2026-08-02) — the stub address must never be mistakable for a
+// real wallet. It used to be a plain 44-char base58 string minted from a CONSTANT
+// seed (new Random(0xDEFEED)), so (a) every device produced the SAME first address
+// and (b) GameStateService's old denylist test ("does not start with guest-local-")
+// read it as a real cloud identity. If SOLANA_SDK were ever missing from an Android
+// build, every tester would have shared ONE player_data row. Two structural fixes:
+//   1. The address carries the "stub-wallet-" marker, whose '-' is NOT in the base58
+//      alphabet — so it fails GameStateService.IsCloudIdentityShaped by construction,
+//      not by policy. Length stays 44 (12 marker + 32 base58) so nothing that
+//      measures a devnet-shaped address changes.
+//   2. The RNG is seeded per instance, so two devices no longer mint the same
+//      "wallet" for logs, analytics and leaderboards.
+// Cloud-save keying additionally requires provider attestation
+// (WalletService.IsRealSigningWallet), which this provider can never satisfy.
 //   * GetBalance()  — returns fixed devnet mock balances (generous, so the store
 //                     and all five packs are exercisable end-to-end).
 //   * SendPayment() — simulates Solana finality (~1s), debits the mock balance,
@@ -39,6 +54,15 @@ namespace DeNelle.Wallet
         // base58 alphabet — Bitcoin/Solana convention (no 0, O, I, l).
         private const string Base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
+        /// <summary>
+        /// The marker every stub address carries. The hyphen is NOT a base58 character,
+        /// which is what makes a stub address structurally unable to pass the cloud
+        /// identity allowlist (GameStateService.IsCloudIdentityShaped). 12 chars, so a
+        /// 32-char base58 tail still yields the familiar 44-char total length.
+        /// Do NOT "clean this up" into pure base58 — the ugliness IS the safety.
+        /// </summary>
+        public const string FakeAddressMarker = "stub-wallet-";
+
         // Devnet mock balances — generous on purpose so all five packs (up to
         // Founder's Vow at 0.45 SOL / 49.99 USDC / 600 SKR) are purchasable.
         private static readonly WalletBalance StartingBalance = new WalletBalance
@@ -51,7 +75,10 @@ namespace DeNelle.Wallet
         private WalletBalance _balance = StartingBalance;
         private WalletAccount _account;
         private bool _connected;
-        private readonly System.Random _rng = new System.Random(0xDEFEED);
+        // Per-INSTANCE seed (was the constant 0xDEFEED): a fixed seed made every device
+        // mint an identical first "wallet", which is indistinguishable from a shared
+        // identity in logs, analytics and any list keyed by address.
+        private readonly System.Random _rng = new System.Random(Guid.NewGuid().GetHashCode());
 
         /// <inheritdoc/>
         public string ProviderName => "Devnet Stub Wallet";
@@ -167,10 +194,14 @@ namespace DeNelle.Wallet
         //  Mock-value generation
         // =====================================================================
 
-        /// <summary>A devnet-shaped 44-char base58 string (not a real key — display only).</summary>
+        /// <summary>
+        /// A devnet-shaped 44-char address that is SELF-EVIDENTLY FAKE: the
+        /// "stub-wallet-" marker (non-base58 '-') plus 32 base58 chars. Not a real key,
+        /// and by construction not a value that can key a cloud save.
+        /// </summary>
         private string GenerateDevnetAddress()
         {
-            return RandomBase58(44);
+            return FakeAddressMarker + RandomBase58(44 - FakeAddressMarker.Length);
         }
 
         /// <summary>A fabricated base58 transaction signature (Solana signatures are ~88 chars).</summary>

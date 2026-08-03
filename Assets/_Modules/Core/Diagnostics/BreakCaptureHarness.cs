@@ -618,6 +618,12 @@ namespace DeNelle.Core.Diagnostics
         // ---- trace-tail ring (all platforms, incl. WebGL) -----------------------
         const int TailCap        = 80;    // last N kept lines
         const int TailLineMax    = 300;   // per-line clamp so the ring stays tiny
+        // WO-846 (owner: a bug submitted from Settings must "save stack trace to the db").
+        // Error/exception lines get a LARGER clamp than [Flow:*] lines because they now carry
+        // call frames. 500 is not arbitrary - it is exactly BugReportVM.MaxTailLineChars, the
+        // server's own per-line cap, so a frame is never silently re-truncated downstream.
+        const int TailBreakLineMax = 500;
+        const int TailStackFrames  = 4;   // enough to name the throw site and its callers
         static readonly Queue<string> s_tail = new Queue<string>(TailCap);
         static bool s_tailInstalled;
         static bool s_inTailHandler;
@@ -641,7 +647,16 @@ namespace DeNelle.Core.Diagnostics
                 bool isBreak = type == LogType.Error || type == LogType.Exception || type == LogType.Assert;
                 if (!isFlow && !isBreak) return;              // tail = [Flow:*] lines + hard breaks only
 
-                string line = (isBreak && !isFlow ? type + ": " : "") + Truncate(condition, TailLineMax);
+                // WO-846 / audit 2026-08-02: the `stack` argument used to be DISCARDED here,
+                // so a bug report reached the db carrying "NullReferenceException: Object
+                // reference not set..." and NOTHING else - no file, no method, nowhere to
+                // look, which is precisely the report the owner asked to stop receiving.
+                // (The F8 break-log path never had this hole: OnLog above already records
+                // Truncate(stack, 1200).) Frames ride the SAME line so the ring's
+                // drop-oldest budget still counts one entry per event, not one per frame.
+                string line = isBreak && !isFlow
+                    ? Truncate(type + ": " + condition + FirstFrames(stack), TailBreakLineMax)
+                    : Truncate(condition, TailLineMax);
                 lock (s_tail)
                 {
                     while (s_tail.Count >= TailCap) s_tail.Dequeue();   // drop-oldest, bounded
@@ -650,6 +665,27 @@ namespace DeNelle.Core.Diagnostics
             }
             catch { }
             finally { s_inTailHandler = false; }
+        }
+
+        /// <summary>
+        /// The first <see cref="TailStackFrames"/> non-blank frames of a Unity log stack,
+        /// flattened onto one line ("newest &lt; older"). Empty string when there is no
+        /// stack, so a caller can always concatenate it unconditionally.
+        /// </summary>
+        static string FirstFrames(string stack)
+        {
+            if (string.IsNullOrEmpty(stack)) return string.Empty;
+            var sb = new StringBuilder(" | at ");
+            int taken = 0;
+            foreach (string raw in stack.Split('\n'))
+            {
+                string f = raw.Trim();
+                if (f.Length == 0) continue;
+                if (taken > 0) sb.Append(" < ");
+                sb.Append(f);
+                if (++taken >= TailStackFrames) break;
+            }
+            return taken == 0 ? string.Empty : sb.ToString();
         }
 
         /// <summary>Snapshot of the recent [Flow:*]/error lines (oldest first).</summary>

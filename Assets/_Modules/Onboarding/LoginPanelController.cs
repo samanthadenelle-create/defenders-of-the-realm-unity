@@ -20,9 +20,23 @@
 // RUNTIME GATE: email/password sign-in needs the Email/Password provider ENABLED in the
 // Firebase console — until then SignIn/SignUp surface "operation not allowed" here; Guest
 // always works.
+//
+// SOFTLOCK LAW (security audit 2026-08-02, BINDING): this is the FIRST screen an Android
+// tester sees and there is no way past it except through this file. Two invariants keep
+// it from becoming a kill-the-app dead end:
+//   1. "Play as Guest" is NEVER disabled. SetBusy locks every OTHER control; the escape
+//      hatch stays live for the whole busy window. Previously SetBusy(true) disabled it
+//      too, so an unanswered wallet handshake (no wallet app installed, or the player
+//      backgrounded the wallet and came back) left the screen on "Opening your wallet..."
+//      with EVERY button dead.
+//   2. Every await on this surface is TIME-BOUNDED. The wallet connect await gets a
+//      35s ceiling here on top of WalletService's own 30s provider ceiling, so the UI
+//      un-busies and tells the truth even if the wallet layer below is rewritten.
 // =============================================================================
 
 using System;
+using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;
@@ -84,8 +98,21 @@ namespace DeNelle.Onboarding
             bool signedIn = false;
             try
             {
-                await FirebaseAuthService.Instance.EnsureInitializedAsync();
-                signedIn = FirebaseAuthService.Instance.IsSignedIn;
+                // SOFTLOCK LAW: BOUNDED. This await happens BEFORE any login UI exists, so a
+                // hang here is the WORST softlock on the surface - not "stuck on the sign-in
+                // screen" but "no sign-in screen ever appears". Firebase's
+                // CheckAndFixDependenciesAsync talks to Play services and has no ceiling of
+                // its own; on a device with a stale/updating Play services it can sit there.
+                // On expiry we simply present the panel, where Guest always works.
+                bool ready = await FirebaseAuthService.Instance.EnsureInitializedAsync()
+                    .AsUniTask().Timeout(TimeSpan.FromSeconds(InitTimeoutSeconds), DelayType.UnscaledDeltaTime);
+                signedIn = ready && FirebaseAuthService.Instance.IsSignedIn;
+            }
+            catch (TimeoutException)
+            {
+                FlowTrace.Fail("Auth",
+                    $"Firebase init did not answer within {InitTimeoutSeconds}s - presenting the login " +
+                    "surface anyway so the player is never left with no screen at all.");
             }
             catch (Exception e) { FlowTrace.Warn("Auth", "login init check threw: " + e.Message); }
 
@@ -251,40 +278,158 @@ namespace DeNelle.Onboarding
         // =====================================================================
         //  Actions — presentation only; auth logic is in FirebaseAuthService
         // =====================================================================
+        /// <summary>
+        /// Hard ceiling on the boot-time Firebase init probe (seconds). Short on purpose:
+        /// nothing is on screen while it runs, so the cost of waiting is a blank app.
+        /// </summary>
+        private const float InitTimeoutSeconds = 12f;
+
+        /// <summary>
+        /// Hard ceiling on any ONE network sign-in / reset call (seconds). Firebase's own
+        /// Task-returning calls do not promise to complete on a captive-portal or dead-cell
+        /// connection; without a ceiling the form stays greyed out with a "Signing in..."
+        /// that never resolves.
+        /// </summary>
+        private const float NetworkTimeoutSeconds = 25f;
+
+        /// <summary>
+        /// Awaits an auth attempt with a hard ceiling, turning a HANG into an ordinary
+        /// failed <see cref="AuthOutcome"/> the normal failure path can render. Never
+        /// throws, so no caller is left busy forever.
+        /// <para>
+        /// The underlying Task is NOT cancellable (Firebase owns it), so it is handed to
+        /// <see cref="Observe"/>: it may still complete later, and an unawaited faulted
+        /// Task would otherwise surface as an UnobservedTaskException.
+        /// </para>
+        /// </summary>
+        private static async UniTask<AuthOutcome> Bounded(Task<AuthOutcome> attempt, float seconds, string what)
+        {
+            try
+            {
+                return await attempt.AsUniTask()
+                    .Timeout(TimeSpan.FromSeconds(seconds), DelayType.UnscaledDeltaTime);
+            }
+            catch (TimeoutException)
+            {
+                FlowTrace.Fail("Auth", what + " did not answer within " + (int)seconds +
+                                       "s - releasing the form (Play as Guest was live throughout).");
+                Observe(attempt);
+                return AuthOutcome.Fail(what + " timed out. Check your connection and try again, " +
+                                        "or tap Play as Guest to start now.");
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("Auth", what + " threw: " + e.GetType().Name + ": " + e.Message);
+                return AuthOutcome.Fail(what + " failed. Try again, or tap Play as Guest to start now.");
+            }
+        }
+
+        /// <summary>Swallow-and-log a late result so an abandoned Task can never raise
+        /// UnobservedTaskException. No UI is touched - the panel has already moved on.</summary>
+        private static async void Observe(Task attempt)
+        {
+            try { await attempt; }
+            catch (Exception e) { FlowTrace.Warn("Auth", "abandoned auth attempt ended in: " + e.Message); }
+        }
+
         private async void OnSignIn()
         {
             if (!BeginAttempt(out string email, out string password)) return;
-            SetStatus("Signing in...", info: true);
-            AuthOutcome outcome = await _vm.SignInAsync(email, password);
+            SetStatus("Signing in... you can still tap Play as Guest.", info: true);
+            AuthOutcome outcome = await Bounded(_vm.SignInAsync(email, password), NetworkTimeoutSeconds, "Sign-in");
             HandleOutcome(outcome);
         }
 
         private async void OnCreateAccount()
         {
             if (!BeginAttempt(out string email, out string password)) return;
-            SetStatus("Creating your account...", info: true);
-            AuthOutcome outcome = await _vm.SignUpAsync(email, password);
+            SetStatus("Creating your account... you can still tap Play as Guest.", info: true);
+            AuthOutcome outcome = await Bounded(_vm.SignUpAsync(email, password), NetworkTimeoutSeconds,
+                                                "Account creation");
             HandleOutcome(outcome);
         }
+
+        /// <summary>
+        /// UI failsafe ceiling on the whole wallet-connect await (seconds). Sits ABOVE
+        /// WalletService's own 30s provider ceiling so the honest, specific message
+        /// normally comes from the wallet layer; this only fires if something below
+        /// stops honouring its own timeout. Counted in UNSCALED time, on the player
+        /// loop - so a backgrounded app (the player is IN the wallet app) does not burn
+        /// the budget, and the count resumes when they come back.
+        /// </summary>
+        private const float ConnectUiTimeoutSeconds = 35f;
 
         // WO-847: the wallet-first primary. Honest statuses on every branch; a success
         // resolves the same AuthOutcome shape as email sign-in (UserId = wallet address),
         // so HandleOutcome -> Continue is byte-identical downstream.
+        //
+        // SOFTLOCK LAW: this await is bounded. Guest stays interactable throughout
+        // (SetBusy never touches it), so even a hung handshake leaves a way into the game.
         private async void OnConnectWallet()
         {
             if (_busy || _routed) return;
             SetBusy(true);
-            SetStatus("Opening your wallet...", info: true);
-            AuthOutcome outcome = await _vm.ConnectWalletAsync();
+            SetStatus("Opening your wallet... you can still tap Play as Guest.", info: true);
+
+            Task<AuthOutcome> attempt = _vm.ConnectWalletAsync();
+            AuthOutcome outcome;
+            try
+            {
+                outcome = await attempt.AsUniTask()
+                    .Timeout(TimeSpan.FromSeconds(ConnectUiTimeoutSeconds), DelayType.UnscaledDeltaTime);
+            }
+            catch (TimeoutException)
+            {
+                if (_routed) return;
+                FlowTrace.Fail("Auth",
+                    $"wallet connect did not resolve within {ConnectUiTimeoutSeconds}s - restoring the login " +
+                    "surface (guest escape was live throughout).");
+                SetBusy(false);
+                SetStatus("Your wallet did not respond. Open your wallet app and try Connect Wallet again, " +
+                          "or tap Play as Guest to start now.", info: false);
+                WatchLateConnect(attempt);
+                return;
+            }
+            catch (Exception e)
+            {
+                if (_routed) return;
+                FlowTrace.Fail("Auth", "wallet connect threw at the panel: " + e.Message);
+                SetBusy(false);
+                SetStatus("Wallet connect failed. Try again, or tap Play as Guest to start now.", info: false);
+                return;
+            }
             HandleOutcome(outcome);
+        }
+
+        /// <summary>
+        /// A connect that timed out at the UI is NOT cancelled underneath - Mobile Wallet
+        /// Adapter can still come back minutes later and (via WalletSkinBootstrap) bind the
+        /// save to that wallet. If that happens while the player is still sitting on this
+        /// screen, honour it instead of leaving them bound-but-not-continued. Fully guarded:
+        /// once the panel has routed or been destroyed this does nothing.
+        /// </summary>
+        private async void WatchLateConnect(Task<AuthOutcome> attempt)
+        {
+            AuthOutcome late;
+            try { late = await attempt; }
+            catch (Exception e) { FlowTrace.Warn("Auth", "late wallet connect ended in an error: " + e.Message); return; }
+
+            if (this == null || _routed || _canvas == null) return;   // panel gone / player already in
+            if (!late.Success) return;
+            FlowTrace.Step("Auth", "wallet connect arrived AFTER the UI timeout and succeeded - continuing.");
+            Continue();
         }
 
         private async void OnGoogleSignIn()
         {
             if (_busy || _routed) return;
             SetBusy(true);
-            SetStatus("Opening Google sign-in...", info: true);
-            AuthOutcome outcome = await _vm.SignInWithGoogleAsync();
+            SetStatus("Opening Google sign-in... you can still tap Play as Guest.", info: true);
+            // Longer ceiling than a plain network call: a real player is picking an account
+            // in a native overlay. UNSCALED player-loop time, so while that overlay has the
+            // foreground and Unity is paused the budget does not burn (same semantic as the
+            // wallet handshake) - this only fires on an actually dead flow.
+            AuthOutcome outcome = await Bounded(_vm.SignInWithGoogleAsync(), 60f, "Google sign-in");
             HandleOutcome(outcome);
         }
 
@@ -303,7 +448,8 @@ namespace DeNelle.Onboarding
             FlowTrace.Step("Auth", "forgot password tapped.");
             SetBusy(true);
             SetStatus("Sending reset email...", info: true);
-            AuthOutcome outcome = await _vm.SendPasswordResetAsync(email);
+            AuthOutcome outcome = await Bounded(_vm.SendPasswordResetAsync(email), NetworkTimeoutSeconds,
+                                                "Reset email");
             if (_routed) return;
             SetBusy(false);
             if (outcome.Success)
@@ -320,9 +466,13 @@ namespace DeNelle.Onboarding
             return at <= 1 ? "*" + (at >= 0 ? email.Substring(at) : "") : email[0] + "***" + email.Substring(at);
         }
 
+        // SOFTLOCK LAW: intentionally NOT gated on _busy. The escape hatch must work even
+        // while a sign-in / wallet handshake is still pending - that pending await is
+        // exactly the state a stuck player is trying to escape. Only _routed (already
+        // continued) short-circuits it.
         private void OnPlayAsGuest()
         {
-            if (_busy || _routed) return;
+            if (_routed) return;
             FlowTrace.Step("Auth", "chose Play as Guest.");
             _vm.ContinueAsGuest();   // guest identity is minted on load; nothing to bind
             Continue();
@@ -348,8 +498,9 @@ namespace DeNelle.Onboarding
             if (_routed) return;
             if (outcome.Success)
             {
-                // The VM already bound the UID as the save player-id. View just proceeds.
-                FlowTrace.Step("Auth", $"auth OK uid={outcome.UserId} — continuing.");
+                // IDENTITY LAW: an EMAIL/GOOGLE success binds NOTHING (Firebase = access);
+                // only the wallet path re-keys the save. View just proceeds either way.
+                FlowTrace.Step("Auth", "auth OK - continuing.");
                 Continue();
                 return;
             }
@@ -357,13 +508,17 @@ namespace DeNelle.Onboarding
             SetBusy(false);
         }
 
+        // SOFTLOCK LAW (see the file header): busy locks every control EXCEPT Play as
+        // Guest. _guest is deliberately absent from this method and is left interactable
+        // for the lifetime of the panel - it is the only guaranteed way into the game,
+        // and OnPlayAsGuest's own `if (_busy || _routed) return;` is dropped for the same
+        // reason (a hung connect must not swallow the tap). Do NOT "tidy" _guest back in.
         private void SetBusy(bool busy)
         {
             _busy = busy;
             if (_signIn != null) _signIn.interactable = !busy;
             if (_createAccount != null) _createAccount.interactable = !busy;
             if (_google != null) _google.interactable = !busy;
-            if (_guest != null) _guest.interactable = !busy;
             if (_forgot != null) _forgot.interactable = !busy;
             if (_connectWallet != null) _connectWallet.interactable = !busy;
         }

@@ -1,7 +1,22 @@
 // =============================================================================
-// FirebaseAuthService (WO-769) — email/password identity in front of the Neon
-// backend. Firebase issues a verified ID token; GameStateService attaches it as
-// a Bearer header to /api/game/save, which keys the save by the Firebase UID.
+// FirebaseAuthService (WO-769) — email/password/Google identity: ACCESS to the game.
+// -----------------------------------------------------------------------------
+// CORRECTED 2026-08-02 (security audit). This header used to claim: "Firebase issues
+// a verified ID token; GameStateService attaches it as a Bearer header to
+// /api/game/save, which keys the save by the Firebase UID." EVERY CLAUSE OF THAT WAS
+// FALSE, and believing it is what produced a real P0: nothing ever calls
+// GetIdTokenAsync (zero call sites), no Bearer header is built anywhere, and the
+// backend's save-auth is a WALLET-signed nonce challenge (X-Wallet / X-Nonce /
+// X-Signature — see GameStateService.TryAttachAuthHeaders + api/_lib/wallet-auth.js).
+// A Firebase UID cannot even pass api/_lib/wallet-auth.js's base58 WALLET_RE check.
+//
+// The actual contract, and the owner ruling it implements:
+//   FIREBASE = ACCESS  — sign-in/distribution. This service. Binds NO save key.
+//   WALLET   = DATA    — the connected Solana address is the cloud save key
+//                        (GameStateService.BindWallet attested overload).
+// If a Bearer/ID-token scheme is ever built, write it here THEN — do not describe it
+// in advance; a comment that describes an unbuilt scheme reads as a spec and gets
+// "implemented" against by the next author.
 // -----------------------------------------------------------------------------
 // Lives in DeNelle.Core (overrideReferences:false -> auto-refs Firebase.*.dll).
 // Instrumented per §12 (FlowTrace) and Guard-safe. Async via the Firebase SDK's
@@ -325,8 +340,15 @@ namespace DeNelle.Core.Auth
         }
 
         /// <summary>
-        /// The current user's Firebase ID token (JWT) for the Neon /api/game/save
-        /// Bearer header. Null when signed out. forceRefresh re-mints if near expiry.
+        /// The current user's Firebase ID token (JWT). Null when signed out; forceRefresh
+        /// re-mints if near expiry.
+        /// <para>
+        /// UNUSED as of 2026-08-02 — ZERO call sites. The backend does not accept a Bearer
+        /// token; /api/game/save authenticates a WALLET-signed nonce. Keep this method (it
+        /// is the obvious hook if a Firebase-verified rail is ever built server-side), but
+        /// do not describe that rail as if it exists — the previous version of this comment
+        /// did, and the next author implemented against the description.
+        /// </para>
         /// </summary>
         public async Task<string> GetIdTokenAsync(bool forceRefresh = false)
         {

@@ -5,10 +5,19 @@
 // auth + player-binding logic lives here. VMs are pure C# (build no uGUI).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Onboarding   Namespace: DeNelle.Onboarding.
-// Wraps DeNelle.Core.Auth.FirebaseAuthService (email/password) and, on success,
-// binds the Firebase UID as the save player-id via GameStateService.BindWallet so
-// /api/game/save (Neon) keys by that UID. Guest needs no bind — GameStateService
-// mints a stable guest-local-* id on load when not signed in.
+// Wraps DeNelle.Core.Auth.FirebaseAuthService (email/password/Google).
+//
+// IDENTITY LAW (owner ruling, re-asserted by the security audit 2026-08-02):
+//   FIREBASE = ACCESS   — who may open the game (distribution + login).
+//   SOLANA WALLET = DATA — what keys the cloud save (BoundWallet / playerId).
+// So email + Google sign-in DO NOT bind a save key. They used to bind the Firebase
+// UID, which was wrong twice over: it contradicts the ruling, and a 28-char UID
+// contains glyphs outside base58 and is REJECTED by api/_lib/wallet-auth.js
+// (^[1-9A-HJ-NP-Za-km-z]{32,44}$) - so the moment backend auth flips to Enforced
+// those players would be permanently 401'd out of their own saves.
+// An email player therefore keeps the guest/device key (GameStateService mints a
+// stable guest-local-* id on load) until they connect a wallet, and only
+// ConnectWalletAsync - a real wallet - ever binds an identity here.
 // =============================================================================
 using System;
 using System.Threading.Tasks;
@@ -55,19 +64,23 @@ namespace DeNelle.Onboarding
             return outcome;
         }
 
-        /// <summary>Sign in with email/password; on success bind the UID as the save player-id.</summary>
+        /// <summary>
+        /// Sign in with email/password. Grants ACCESS only — it deliberately does NOT
+        /// re-key the save (identity law, see the file header). The player keeps their
+        /// device/guest key until they connect a wallet.
+        /// </summary>
         public async Task<AuthOutcome> SignInAsync(string email, string password)
         {
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignInAsync(email, password);
-            if (outcome.Success) BindPlayer(outcome.UserId);
+            if (outcome.Success) NoteAccessGranted("email sign-in");
             return outcome;
         }
 
-        /// <summary>Create an account, then bind the UID as the save player-id.</summary>
+        /// <summary>Create an account. ACCESS only — never binds the save key (identity law).</summary>
         public async Task<AuthOutcome> SignUpAsync(string email, string password)
         {
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignUpAsync(email, password);
-            if (outcome.Success) BindPlayer(outcome.UserId);
+            if (outcome.Success) NoteAccessGranted("email account creation");
             return outcome;
         }
 
@@ -124,7 +137,7 @@ namespace DeNelle.Onboarding
             }
             if (string.IsNullOrEmpty(idToken)) return AuthOutcome.Fail("Google returned no ID token.");
             AuthOutcome outcome = await FirebaseAuthService.Instance.SignInWithGoogleCredentialAsync(idToken);
-            if (outcome.Success) BindPlayer(outcome.UserId);
+            if (outcome.Success) NoteAccessGranted("Google sign-in");   // ACCESS only - never the save key
             return outcome;
 #endif
         }
@@ -138,12 +151,31 @@ namespace DeNelle.Onboarding
             FlowTrace.Step("Auth", "guest continue — using the device-hash guest identity (no bind).");
         }
 
-        // Key the save to the Firebase UID (Guarded — one bad op logs + is skipped, never a soft-lock).
-        private static void BindPlayer(string uid)
+        /// <summary>
+        /// A Firebase identity granted ACCESS. Nothing is bound: the save key is the
+        /// wallet's job (identity law, file header). Traced so "I signed in and my save
+        /// did not move" is answerable from the log rather than from a code read.
+        /// </summary>
+        private static void NoteAccessGranted(string how)
+        {
+            FlowTrace.Step("Auth", how + " OK - ACCESS granted. The save key is NOT re-bound " +
+                                   "(Firebase = access, wallet = data identity); connect a wallet to key the cloud save.");
+        }
+
+        /// <summary>
+        /// Bind a connected WALLET address as the save player-id (Guarded — one bad op logs
+        /// and is skipped, never a soft-lock). Wallet path ONLY: the attested cloud bind
+        /// already happened inside the Wallet assembly's connect handler, and this
+        /// idempotent re-bind exists so a success can never continue unbound. It passes
+        /// through the UNATTESTED overload on purpose — Onboarding cannot see the provider,
+        /// so it must not be able to grant a cloud identity; when the address already
+        /// matches, BindWallet early-outs and the existing attestation is untouched.
+        /// </summary>
+        private static void BindPlayer(string walletAddress)
         {
             var svc = GameStateService.Instance;
             if (svc == null) { FlowTrace.Warn("Auth", "BindPlayer: GameStateService null — save not re-keyed."); return; }
-            Guard.Try("Auth", "BindWallet(firebase uid)", () => svc.BindWallet(uid));
+            Guard.Try("Auth", "BindWallet(connected wallet address)", () => svc.BindWallet(walletAddress));
         }
     }
 }

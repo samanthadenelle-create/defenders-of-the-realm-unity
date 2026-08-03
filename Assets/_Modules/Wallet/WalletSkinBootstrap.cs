@@ -80,8 +80,14 @@ namespace DeNelle.Wallet
                     string key = skin.ResolveIdentityKey(null, account.Address);
                     if (!string.IsNullOrEmpty(key))
                     {
-                        GameStateService.Instance?.BindWallet(key);
-                        FlowTrace.Step("Skin", $"Bound NeonDB identity key ({skin.IdentityKeyKind}) from wallet connect.");
+                        // Attest ONLY when this really is the connected wallet address from a
+                        // real signing provider. A skin may resolve the identity key to
+                        // something else entirely (a Pi UID), which must never key a cloud save.
+                        bool attested = _wallet.IsRealSigningWallet &&
+                                        string.Equals(key, account.Address, StringComparison.Ordinal);
+                        GameStateService.Instance?.BindWallet(key, attested);
+                        FlowTrace.Step("Skin", $"Bound NeonDB identity key ({skin.IdentityKeyKind}) from wallet connect " +
+                                               $"(cloud-attested={attested}).");
                     }
                     else
                     {
@@ -121,8 +127,14 @@ namespace DeNelle.Wallet
                 var account = await _wallet.Connect();
                 if (!account.IsValid)
                 {
-                    FlowTrace.Warn("Wallet", "Login wallet connect cancelled/failed - no identity bound.");
-                    return AuthOutcome.Fail("Connect cancelled.");
+                    // Tell the player WHICH failure this was. "Connect cancelled" after a
+                    // 30s timeout is a lie that sends them looking for the wrong fix -
+                    // WalletService.LastConnectError carries the real, actionable reason.
+                    string why = string.IsNullOrEmpty(_wallet.LastConnectError)
+                        ? "Connect cancelled."
+                        : _wallet.LastConnectError;
+                    FlowTrace.Warn("Wallet", "Login wallet connect did not complete - no identity bound: " + why);
+                    return AuthOutcome.Fail(why);
                 }
 
                 var svc = GameStateService.Instance;
@@ -132,8 +144,15 @@ namespace DeNelle.Wallet
                 }
                 else
                 {
-                    Guard.Try("Wallet", "BindWallet(wallet address, login path)", () => svc.BindWallet(account.Address));
-                    FlowTrace.Step("Wallet", $"Login connect bound save identity to wallet {account.ShortAddress}.");
+                    // ATTESTED bind: this address came from a real, key-holding signing
+                    // wallet, which is the ONLY thing allowed to key a cloud save. The
+                    // devnet stub reports false here, so an SDK-less build can never point
+                    // every tester at one shared player_data row.
+                    bool attested = _wallet.IsRealSigningWallet;
+                    Guard.Try("Wallet", "BindWallet(wallet address, login path)",
+                        () => svc.BindWallet(account.Address, attested));
+                    FlowTrace.Step("Wallet", $"Login connect bound save identity to wallet {account.ShortAddress} " +
+                                             $"(cloud-attested={attested}).");
                 }
 
                 return new AuthOutcome { Success = true, UserId = account.Address, Email = string.Empty, Error = string.Empty };

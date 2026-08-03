@@ -704,9 +704,49 @@ namespace DeNelle.Core.State
             Save();
         }
 
-        /// <summary>playerSlice <c>bindWallet</c> — tag the save to a wallet. Idempotent.</summary>
-        public void BindWallet(string address)
+        /// <summary>playerSlice <c>bindWallet</c> — tag the save to a wallet. Idempotent.
+        /// <para>UNATTESTED by design: this overload keys the LOCAL save only. It cannot
+        /// grant a cloud identity, because callers that reach it (email sign-in, skin
+        /// paths, debug tools) have no way to prove the string came from a real signing
+        /// wallet. Use the attested overload for that.</para></summary>
+        public void BindWallet(string address) => BindWallet(address, attestedRealWallet: false);
+
+        /// <summary>
+        /// Tag the save to a wallet, optionally ATTESTING that <paramref name="address"/>
+        /// came from a real, key-holding, signing wallet provider
+        /// (WalletService.IsRealSigningWallet) — the ONLY way an address becomes a cloud
+        /// save key (see IsRealWalletConnected).
+        /// <para>
+        /// The attestation is stored per-device in PlayerPrefs, NOT in the save envelope:
+        /// it is a statement about what this device proved, so it must not travel with a
+        /// copied/restored save, and keeping it out of the envelope avoids a schema bump.
+        /// An attested address is never DOWNGRADED by a later unattested bind of the same
+        /// string (the early-out below), and binding a different address simply stops
+        /// matching, which fails the allowlist automatically.
+        /// </para>
+        /// </summary>
+        public void BindWallet(string address, bool attestedRealWallet)
         {
+            if (attestedRealWallet)
+            {
+                if (IsCloudIdentityShaped(address))
+                {
+                    PlayerPrefs.SetString(AttestedIdentityKey, address);
+                    PlayerPrefs.Save();
+                    _warnedUnattested = false;
+                    FlowTrace.Step("Save", "cloud identity ATTESTED by a real signing wallet - cloud sync enabled.");
+                }
+                else
+                {
+                    // Refuse loudly: a "real" provider handing back something that is not
+                    // wallet-shaped is a provider bug, and silently trusting it is exactly
+                    // the hole the allowlist exists to close.
+                    FlowTrace.Fail("Save",
+                        "a wallet provider claimed a REAL connection but the address is not base58/32-44 " +
+                        "(len=" + (address?.Length ?? 0) + ") - attestation REFUSED, staying local-only.");
+                }
+            }
+
             if (_state.BoundWallet == address) return;
             _state.BoundWallet = address;
             PlayerChanged.Invoke();
@@ -857,6 +897,15 @@ namespace DeNelle.Core.State
         /// Transient runtime fields (prepTimerLocked, paused, dungeonEnteredAt,
         /// torchBurnEndsAt, activeRegionRun) live in runtime SOs, not here, so
         /// ResetToNewGame simply omits them.
+        /// <para>
+        /// THE STANDING RULE (audit 2026-08-02): every persisted GameState field is either
+        /// assigned in this body or is a documented carve-out above. Two were neither -
+        /// <see cref="GameState.Settlements"/> (never assigned) and
+        /// <see cref="GameState.Zones"/> (only backfilled) - so a "new" game inherited the
+        /// old realm's discovery flags and node claims. ResetToNewGameFullClearRegression
+        /// now enumerates GameState by reflection and fails on the NEXT unassigned field,
+        /// because the defect here is always a field someone forgot, never a wrong value.
+        /// </para>
         /// </summary>
         public void ResetToNewGame()
         {
@@ -954,7 +1003,17 @@ namespace DeNelle.Core.State
             s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).
             s.Arena = ArenaProgress.Empty;                    // ARENA MVP (v34) — New Game: zeroed W/L ledger.
             s.PetActiveSlots = new List<string>();            // flag_17 (v34) — New Game: no pet slotted (no pet owned on a fresh save).
-            EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
+            s.Settlements = new List<DeNelle.Core.World.SettlementState>();   // WO-159 (v21) — New Game: no claimed or razed node settlements. AUDIT 2026-08-02: this line was MISSING, so "Start New" inherited every claimed/razed node from the previous save INCLUDING its 3-day razed lockout. Added following the Tribes/Wards precedent directly above.
+            // WO-164 — RESEED the zone graph. AUDIT 2026-08-02: this used to be a bare
+            // EnsureZoneGraph(s) call, which is a BACKFILL helper - it early-returns when
+            // Zones already has entries (by design: the 5 defaults must never duplicate
+            // across the fresh-save / post-load / migrator call sites). On a reset that
+            // early-return meant the previous save's map discovery + clear flags survived
+            // intact, so a brand-new game opened on a pre-explored realm. Nulling first is
+            // what turns the backfill into a reseed; the helper stays the single seeder so
+            // the default graph is still authored in exactly one place.
+            s.Zones = null;
+            EnsureZoneGraph(s);
             ClearEquipPrefs();                                // WO-860 Part A1 — see below.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
@@ -1031,6 +1090,19 @@ namespace DeNelle.Core.State
         private const string SyncQueueKey  = "dotr-sync-queue";
         private const float  MinSyncDelay  = 8f;   // seconds between background syncs
 
+        /// <summary>
+        /// Hard ceiling on EVERY backend request (seconds), matching BugReportVM's 15.
+        /// <para>
+        /// Without it a stalled socket (captive-WiFi portal, dead cell hand-off) never
+        /// completes: SyncToBackend's `_isSyncing` guard - which IS reset in a finally -
+        /// simply never reaches that finally, so every later sync early-returns for the
+        /// REST OF THE SESSION with no error and no retry, and the player's progress
+        /// stops leaving the device silently. UnityWebRequest.timeout aborts the request
+        /// and completes it as a failure, which is what makes the finally reachable.
+        /// </para>
+        /// </summary>
+        private const int RequestTimeoutSeconds = 15;
+
         // ── State ─────────────────────────────────────────────────────────
         // The last snapshot the server acknowledged — null means never synced.
         // Uses PersistedState (plain class) NOT the GameState ScriptableObject.
@@ -1040,6 +1112,53 @@ namespace DeNelle.Core.State
         private static bool _warnedGuestAccount;   // log the guest-wallet assignment once, not every sync
         private const string GuestWalletPrefix = "guest-local-";
 
+        // ── Cloud identity (security audit 2026-08-02) ────────────────────────
+        //
+        // WHAT KEYS A CLOUD SAVE. Owner ruling: Firebase = ACCESS (distribution +
+        // login); the Solana WALLET = DATA identity (the save key). The old test was a
+        // DENYLIST - "BoundWallet does not start with guest-local-" - which said yes to
+        // absolutely anything else: a devnet stub address, a Firebase UID, a debug
+        // string. Two live consequences that this block closes:
+        //   * the stub minted a constant-seeded 44-char base58 address, so a build
+        //     missing SOLANA_SDK would have pointed every tester at ONE player_data row;
+        //   * email sign-in bound the 28-char Firebase UID, which the server's wallet rail
+        //     rejects (^[1-9A-HJ-NP-Za-km-z]{32,44}$) - those players would be 401'd out
+        //     of their own saves the moment auth flips to Enforced.
+        //
+        // The test is now an ALLOWLIST with three independent gates, ALL required:
+        //   1. shape        - base58 charset, 32..44 chars, not the guest prefix
+        //                     (IsCloudIdentityShaped - the same rule the backend applies);
+        //   2. attestation  - a REAL signing wallet provider vouched for this exact
+        //                     address on this device (BindWallet's attested overload);
+        //   3. current      - the attested address still equals the bound one.
+        // A string can no longer talk its way into a cloud identity by looking right.
+        private const string AttestedIdentityKey = "dotr-cloud-identity-attested";
+        private const string LegacyIdentityKey   = "dotr-legacy-identity-orphaned";
+        private const string Base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        private static bool _warnedUnattested;
+
+        /// <summary>
+        /// Shape gate for a cloud-save key: base58 charset (no 0/O/I/l), 32-44 chars,
+        /// and never the local guest prefix. Deliberately the SAME rule as the backend's
+        /// wallet regex - a value that fails here would be 401'd by /api/auth/nonce, so
+        /// letting it key a save only manufactures an unreachable row.
+        /// <para>Public + static so the regression oracle can assert it against real
+        /// strings (a stub address, a Firebase UID, a genuine pubkey) with no scene.</para>
+        /// </summary>
+        public static bool IsCloudIdentityShaped(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            if (id.StartsWith(GuestWalletPrefix, StringComparison.Ordinal)) return false;
+            if (id.Length < 32 || id.Length > 44) return false;
+            foreach (char c in id)
+                if (Base58Alphabet.IndexOf(c) < 0) return false;
+            return true;
+        }
+
+        /// <summary>The address a real signing wallet has vouched for ON THIS DEVICE, or empty.</summary>
+        private static string AttestedCloudIdentity =>
+            PlayerPrefs.GetString(AttestedIdentityKey, string.Empty);
+
         /// <summary>Robustness (owner 2026-06-07): if no real wallet/account is connected, assign a
         /// deterministic LOCAL guest wallet so the save/load-state flow always has an identity and
         /// runs end-to-end instead of silently skipping. Logged ONCE so we can confirm the path is
@@ -1047,6 +1166,7 @@ namespace DeNelle.Core.State
         private void EnsureAccount(string op)
         {
             if (_state == null) return;
+            RetireLegacyIdentity();
             if (!string.IsNullOrEmpty(_state.BoundWallet)) return;
             // LB-4: never embed the RAW device fingerprint in the player id — hash
             // it with a static salt (SHA256(deviceId + salt)) so the persisted /
@@ -1060,12 +1180,100 @@ namespace DeNelle.Core.State
             }
         }
 
-        /// <summary>True only when a REAL (non-guest) wallet is connected — the gate for actual cloud
-        /// load/save NETWORK calls. A guest/local wallet or none returns false (local-save-only),
-        /// which is expected and must not be treated as an error.</summary>
+        /// <summary>
+        /// MIGRATION (security audit 2026-08-02). Before this change, email/Google sign-in
+        /// bound the FIREBASE UID as BoundWallet, and the old denylist happily cloud-synced
+        /// it - so real player_data rows keyed by a 28-char UID may exist on the server.
+        /// Those rows are already unreachable under enforced auth (nonce.js rejects a UID),
+        /// and continuing to write under that key only deepens the mess.
+        /// <para>
+        /// So: an id that is neither a guest key nor a valid cloud identity is RETIRED -
+        /// stashed verbatim in PlayerPrefs (<c>dotr-legacy-identity-orphaned</c>) and
+        /// reported loudly, then cleared so EnsureAccount re-mints the stable device-hash
+        /// guest key. Nothing is orphaned SILENTLY, and NO local progress is lost: the local
+        /// save is a single PlayerPrefs envelope, not a per-identity store - BoundWallet is
+        /// a field inside it, so re-keying does not move or drop a byte of the player's game.
+        /// The only thing left behind is the SERVER row, whose id is preserved here so a
+        /// backend-side re-key can be run later against a known list.
+        /// </para>
+        /// </summary>
+        private void RetireLegacyIdentity()
+        {
+            string id = _state?.BoundWallet;
+            if (string.IsNullOrEmpty(id)) return;
+            if (id.StartsWith(GuestWalletPrefix, StringComparison.Ordinal)) return;
+            if (IsCloudIdentityShaped(id)) return;   // a real wallet-shaped key - leave it alone
+
+            // Keep a small de-duplicated list rather than a single slot: a debug/dev bind
+            // (DebugCanvasUI mints "0xTEST...", which is not base58 and lands here too)
+            // must never overwrite and lose a genuine retired UID.
+            string stash = PlayerPrefs.GetString(LegacyIdentityKey, string.Empty);
+            var seen = new List<string>(stash.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries));
+            if (!seen.Contains(id))
+            {
+                seen.Insert(0, id);
+                while (seen.Count > 4) seen.RemoveAt(seen.Count - 1);
+                PlayerPrefs.SetString(LegacyIdentityKey, string.Join(";", seen));
+                PlayerPrefs.Save();
+            }
+            _state.BoundWallet = null;
+            FlowTrace.Warn("Save",
+                "RETIRED a non-wallet save key (len=" + id.Length + ") that could never authenticate " +
+                "against the backend - almost certainly a Firebase UID bound by the old email sign-in " +
+                "path. Local progress is untouched; this device now uses its guest key. The old id is " +
+                "preserved in PlayerPrefs '" + LegacyIdentityKey + "' so any server row under it can be " +
+                "re-keyed deliberately instead of vanishing.");
+        }
+
+        /// <summary>True only when a REAL, provider-ATTESTED wallet keys this save — the gate for actual
+        /// cloud load/save NETWORK calls. A guest/local wallet, an unattested address, or none returns
+        /// false (local-save-only), which is expected and must not be treated as an error.
+        /// <para>ALLOWLIST, not a denylist (see the block comment above): shape AND attestation AND
+        /// currency. Anything that has not been vouched for by a real signing wallet on THIS device
+        /// stays local, so a stub/UID/debug string can never reach a shared cloud row.</para></summary>
         private bool IsRealWalletConnected()
-            => !string.IsNullOrEmpty(_state?.BoundWallet)
-               && !_state.BoundWallet.StartsWith(GuestWalletPrefix);
+        {
+            string id = _state?.BoundWallet;
+            if (!IsCloudIdentityShaped(id)) return false;
+
+            if (!string.Equals(AttestedCloudIdentity, id, StringComparison.Ordinal))
+            {
+                if (!_warnedUnattested)
+                {
+                    _warnedUnattested = true;
+                    FlowTrace.Warn("Sync",
+                        "the bound save key is wallet-SHAPED but no real wallet has attested it on this " +
+                        "device - staying LOCAL-ONLY. Tap Connect Wallet once to re-attest and resume " +
+                        "cloud sync. (This is also what stops a devnet-stub address from keying a shared row.)");
+                }
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>The local GUEST save key shape: "guest-local-" + 64 lowercase hex (see EnsureAccount).
+        /// Deliberately the SAME rule as the backend's GUEST_RE in api/_lib/wallet-auth.js — a mismatch
+        /// here means a guest whose saves 401 forever, silently.</summary>
+        private static bool IsGuestIdentity(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            if (!id.StartsWith(GuestWalletPrefix, StringComparison.Ordinal)) return false;
+            if (id.Length != GuestWalletPrefix.Length + 64) return false;
+            for (int i = GuestWalletPrefix.Length; i < id.Length; i++)
+            {
+                char c = id[i];
+                bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+                if (!hex) return false;
+            }
+            return true;
+        }
+
+        /// <summary>True when this identity may talk to the cloud AT ALL — an attested wallet (full value,
+        /// signed rail) OR a local guest (degraded, unverified rail, rate-limited and marked trust='guest'
+        /// server-side). The guest rail exists because the front door offers "Play as Guest" and a tester
+        /// who cannot save is a tester we lose. The two rails are chosen by the SHAPE of the bound id, never
+        /// by which headers arrive, so a caller can never downgrade a wallet row onto the weak rail.</summary>
+        private bool CanCloudSync() => IsRealWalletConnected() || IsGuestIdentity(_state?.BoundWallet);
 
         // ── Lifecycle hooks ───────────────────────────────────────────────
         private void OnApplicationPause(bool paused)
@@ -1117,7 +1325,8 @@ namespace DeNelle.Core.State
         /// </summary>
         public async UniTask LoadFromBackend()
         {
-            if (!IsRealWalletConnected())
+            // Attested wallet OR local guest — both rails may load. See CanCloudSync.
+            if (!CanCloudSync())
             {
                 Debug.Log("[Persistence] No wallet connected — skipping cloud load (local save only; expected).");
                 return;
@@ -1125,6 +1334,7 @@ namespace DeNelle.Core.State
 
             var url = $"{LoadUrl}?playerId={Uri.EscapeDataString(_state.BoundWallet)}";
             using var req = UnityWebRequest.Get(url);
+            req.timeout = RequestTimeoutSeconds;   // never hang the boot-time cloud load
             req.SetRequestHeader("Accept", "application/json");
 
             // WO-121: attach wallet-signed auth headers when enforcement is on and
@@ -1243,6 +1453,15 @@ namespace DeNelle.Core.State
         /// </summary>
         private async UniTask<bool> TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
         {
+            // GUEST RAIL — no signature, no nonce. The id IS the credential (an unguessable 256-bit
+            // device hash); the server rate-limits it and marks the row trust='guest'. This MUST come
+            // FIRST: a guest has no signer at all and would otherwise fail closed below and never sync.
+            if (IsGuestIdentity(_state?.BoundWallet))
+            {
+                req.SetRequestHeader("X-Guest-Id", _state.BoundWallet);
+                return true;
+            }
+
             if (!BackendAuthConfig.Enforced)
                 return true; // flag off — current behaviour, no auth headers, send as before.
 
@@ -1307,6 +1526,7 @@ namespace DeNelle.Core.State
         {
             var url = $"{NonceUrl}?wallet={Uri.EscapeDataString(wallet)}";
             using var req = UnityWebRequest.Get(url);
+            req.timeout = RequestTimeoutSeconds;   // a stalled nonce fetch stalls the whole sync
             req.SetRequestHeader("Accept", "application/json");
 
             // WO-769: the awaiter throws on non-2xx; honor the documented "null on any
@@ -1373,7 +1593,8 @@ namespace DeNelle.Core.State
         {
             if (_isSyncing) return;
             if (!highPriority && Time.time - _lastSyncTime < MinSyncDelay) return;
-            if (!IsRealWalletConnected())
+            // Attested wallet OR local guest — both rails may sync. See CanCloudSync.
+            if (!CanCloudSync())
             {
                 Debug.Log("[Persistence] No wallet connected — skipping cloud sync (local save only; expected).");
                 return;
@@ -1394,7 +1615,7 @@ namespace DeNelle.Core.State
                     return;
                 }
 
-                bool ok = await SendDelta(delta);
+                bool ok = await SendCurrentSnapshot();
                 if (ok)
                     _lastSyncedSnapshot = Snapshot();
                 else
@@ -1406,10 +1627,28 @@ namespace DeNelle.Core.State
             }
         }
 
-        private async UniTask<bool> SendDelta(SyncDeltaPayload delta)
+        /// <summary>
+        /// Uploads the CURRENT full snapshot to /api/game/save under the CURRENT identity.
+        /// <para>
+        /// HONESTY NOTE (security audit 2026-08-02) — this was called
+        /// <c>SendDelta(SyncDeltaPayload delta)</c> and never read its argument: it always
+        /// posted <see cref="Snapshot"/>. The name made two real bugs invisible:
+        /// FlushOfflineQueue "replayed" N queued payloads by posting the same current
+        /// snapshot N times, and a payload queued under identity A would upload under
+        /// whatever BoundWallet happened to be current at flush time (a wrong-key write).
+        /// </para>
+        /// <para>
+        /// It is NOT converted into a real per-payload sender here: SyncDeltaPayload is a
+        /// flat wire shape (Crystals/Towers/PetsJson...) while the deployed endpoint - and
+        /// <see cref="LoadFromBackend"/> - round-trip the nested PersistedState shape.
+        /// Sending the flat object would be a backend contract change, which is not this
+        /// lane's call. So the parameter is GONE (a lie removed rather than a lie kept),
+        /// the redundant N posts are collapsed at the caller, and the queue is honestly
+        /// documented as a retry MARKER, not a body.
+        /// </para>
+        /// </summary>
+        private async UniTask<bool> SendCurrentSnapshot()
         {
-            // `delta` is the "something changed" signal (BuildDeltaPayload gates it);
-            // we send the FULL snapshot so save/load round-trip through one shape.
             byte[] body;
             try
             {
@@ -1436,6 +1675,7 @@ namespace DeNelle.Core.State
                 uploadHandler   = new UploadHandlerRaw(body),
                 downloadHandler = new DownloadHandlerBuffer(),
             };
+            req.timeout = RequestTimeoutSeconds;   // a stalled upload used to park _isSyncing for the session
             req.SetRequestHeader("Content-Type", "application/json");
 
             // WO-121: attach wallet-signed auth headers when enforcement is on and a
@@ -1455,7 +1695,7 @@ namespace DeNelle.Core.State
             // WO-769: a non-2xx (e.g. 401 while Neon isn't verifying the Firebase token yet)
             // makes the UniTask awaiter THROW UnityWebRequestException — which previously
             // propagated out and aborted scene navigation (see SceneRouter guard). Catch it
-            // so SendDelta always fulfills its bool contract: log + re-queue offline (false).
+            // so this always fulfills its bool contract: log + re-queue offline (false).
             try
             {
                 await req.SendWebRequest();
@@ -1562,6 +1802,11 @@ namespace DeNelle.Core.State
 
         // ── Offline queue ─────────────────────────────────────────────────
 
+        /// <summary>
+        /// Records that this identity still has UNSENT changes. The stored payload is a
+        /// retry MARKER (and an audit trail of what changed), NOT a body that is later
+        /// uploaded verbatim — see <see cref="SendCurrentSnapshot"/> for why.
+        /// </summary>
         private void EnqueueOffline(SyncDeltaPayload delta)
         {
             var queue = LoadOfflineQueue();
@@ -1572,24 +1817,61 @@ namespace DeNelle.Core.State
             Debug.LogWarning($"[Sync] Queued offline payload (queue depth: {queue.Count}).");
         }
 
+        /// <summary>
+        /// Drains the retry queue. Because the upload is always the CURRENT snapshot under
+        /// the CURRENT identity (see <see cref="SendCurrentSnapshot"/>), this does exactly
+        /// two honest things instead of pretending to replay bodies:
+        /// <list type="number">
+        ///   <item>DROPS entries queued under a DIFFERENT playerId, loudly. Posting them now
+        ///         would write one player's key with another player's snapshot — the
+        ///         wrong-key write the old per-entry loop performed silently.</item>
+        ///   <item>Collapses every remaining entry into ONE upload. N identical posts were
+        ///         pure redundant traffic (and N chances to half-fail).</item>
+        /// </list>
+        /// </summary>
         private async UniTask FlushOfflineQueue()
         {
             if (!PlayerPrefs.HasKey(SyncQueueKey)) return;
             var queue = LoadOfflineQueue();
             if (queue.Count == 0) return;
 
-            var remaining = new List<SyncDeltaPayload>();
+            string current = _state?.BoundWallet;
+            var mine = new List<SyncDeltaPayload>();
+            int foreign = 0;
             foreach (var queued in queue)
             {
-                if (!await SendDelta(queued)) remaining.Add(queued);
+                if (queued == null) continue;
+                if (!string.IsNullOrEmpty(queued.PlayerId) &&
+                    !string.Equals(queued.PlayerId, current, StringComparison.Ordinal)) { foreign++; continue; }
+                mine.Add(queued);
             }
 
-            if (remaining.Count == 0) PlayerPrefs.DeleteKey(SyncQueueKey);
-            else
+            if (foreign > 0)
+                FlowTrace.Warn("Sync",
+                    "dropped " + foreign + " queued sync marker(s) belonging to a DIFFERENT identity - the " +
+                    "upload is this device's current snapshot, so sending them under the current key would " +
+                    "overwrite the wrong player's row. Their state was never on this device to send.");
+
+            if (mine.Count == 0)
             {
-                PlayerPrefs.SetString(SyncQueueKey,
-                    JsonConvert.SerializeObject(remaining, SaveSchema.JsonSettings));
+                PlayerPrefs.DeleteKey(SyncQueueKey);
+                PlayerPrefs.Save();
+                return;
             }
+
+            // ONE upload covers every queued marker for this identity: the snapshot already
+            // contains all of their effects.
+            bool ok = await SendCurrentSnapshot();
+            if (ok)
+            {
+                PlayerPrefs.DeleteKey(SyncQueueKey);
+                // The queued work is now on the server; record it so the caller's own
+                // delta build sees "no changes" instead of posting the same bytes again.
+                _lastSyncedSnapshot = Snapshot();
+            }
+            else
+                PlayerPrefs.SetString(SyncQueueKey,
+                    JsonConvert.SerializeObject(mine, SaveSchema.JsonSettings));
             PlayerPrefs.Save();
         }
 

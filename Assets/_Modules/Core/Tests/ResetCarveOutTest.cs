@@ -177,6 +177,59 @@ namespace DeNelle.Core.Tests
             Assert.That(_state.Regions.Discovered, Is.Empty, "regions wiped");
         }
 
+        // =====================================================================
+        //  World state — the coverage hole that let two fields ship unwiped
+        // =====================================================================
+        //
+        // AUDIT 2026-08-02. This fixture asserted ~15 fields and had ZERO coverage of
+        // Zones or Settlements, which is exactly why both shipped broken:
+        //   * Settlements was simply ABSENT from ResetToNewGame's body (Tribes and Wards,
+        //     added in the same v34 batch, were there).
+        //   * Zones was worse than absent: the reset called EnsureZoneGraph, a BACKFILL
+        //     helper that early-returns once Zones is non-empty, so it could never reseed.
+        // Net effect: "Start New" opened on the PREVIOUS save's explored/cleared realm,
+        // still holding its claimed nodes and their 3-day razed lockouts.
+
+        [Test]
+        public void reset_reseeds_the_zone_graph_instead_of_inheriting_it()
+        {
+            // A "previous save" zone graph: fewer entries than the default AND carrying
+            // progress flags. Both properties matter - a reset that merely topped the list
+            // up to 5, or that kept the objects and their flags, would be the shipped bug.
+            _state.Zones = new List<DeNelle.Core.World.ZoneState>
+            {
+                new DeNelle.Core.World.ZoneState { RegionKey = "not-a-real-zone", Discovered = true, Cleared = true },
+            };
+
+            _service.ResetToNewGame();
+
+            var fresh = new List<DeNelle.Core.World.ZoneState>(DeNelle.Core.World.ZoneManager.DefaultZoneGraph());
+            Assert.That(_state.Zones, Is.Not.Null, "reset must leave a zone graph, never null");
+            Assert.That(_state.Zones.Count, Is.EqualTo(fresh.Count),
+                "reset must RESEED the default zone graph, not backfill around the old save's zones");
+            Assert.That(_state.Zones.Exists(z => z.RegionKey == "not-a-real-zone"), Is.False,
+                "the previous save's zone survived New Game - the reset is still backfilling");
+            Assert.That(_state.Zones.TrueForAll(z => !z.Discovered && !z.Cleared), Is.True,
+                "a new game must start on an UNEXPLORED realm - discovery/clear flags were inherited");
+        }
+
+        [Test]
+        public void reset_clears_claimed_and_razed_settlements()
+        {
+            _state.Settlements = new List<DeNelle.Core.World.SettlementState>
+            {
+                new DeNelle.Core.World.SettlementState { SiteId = "node-1" },
+                // A RAZED site with a live lockout - the worst thing to inherit into a new game.
+                new DeNelle.Core.World.SettlementState { SiteId = "node-2", RazedUntilDay = 9 },
+            };
+
+            _service.ResetToNewGame();
+
+            Assert.That(_state.Settlements, Is.Not.Null, "settlements must be a list, never null");
+            Assert.That(_state.Settlements, Is.Empty,
+                "New Game inherited the previous save's node settlements - including any 3-day razed lockout");
+        }
+
         [Test]
         public void reset_seeds_the_starter_dungeon_discovered()
         {
@@ -200,7 +253,12 @@ namespace DeNelle.Core.Tests
         public void reset_then_relaunch_keeps_the_preserved_fields_persisted()
         {
             // Reset writes the save — the preserved fields must survive a reload.
-            _state.BoundWallet = "WALLET-XYZ";
+            // The wallet fixture must be a REAL base58 address (audit 2026-08-02): Save() ->
+            // EnsureAccount -> RetireLegacyIdentity now retires any bound key that could never
+            // authenticate against the backend (a Firebase UID, a debug string, the old
+            // "WALLET-XYZ" placeholder), so a fake id here would be cleared and re-minted as a
+            // guest key and this test would be asserting the OLD, broken behaviour.
+            _state.BoundWallet = "BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV";
             _state.BreachStyle = BreachStyle.Atb;
             _state.MyInviteCode = "KEEP01";
             _state.Contacts = new List<ChatContact> { new ChatContact { Code = "FRIEND" } };
@@ -212,7 +270,7 @@ namespace DeNelle.Core.Tests
             _service = TestSupport.SpawnService(out _state);
             Assert.That(_service.Load(), Is.True);
 
-            Assert.That(_state.BoundWallet, Is.EqualTo("WALLET-XYZ"));
+            Assert.That(_state.BoundWallet, Is.EqualTo("BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV"));
             Assert.That(_state.BreachStyle, Is.EqualTo(BreachStyle.Atb));
             Assert.That(_state.MyInviteCode, Is.EqualTo("KEEP01"));
             Assert.That(_state.Contacts.Count, Is.EqualTo(1));
