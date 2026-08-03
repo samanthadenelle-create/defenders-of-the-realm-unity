@@ -26,8 +26,25 @@
 a difficulty card (generated base) → deploy troops on the ring → Begin: watch auto-combat →
 Stars + loot summary → home.**
 
-That is the whole loop. It is the Clash of Clans PvE model: you never control a unit mid-fight —
-you *deploy and watch*. Everything in the raid pillar serves that one sentence.
+That is the whole loop. It is the Clash of Clans PvE model, with **one deliberate divergence** —
+see the posture ruling immediately below.
+
+> ### ⚑ POSTURE RULING (owner, 2026-08-02 — BINDING, supersedes "you never control a unit")
+> **V1 raids are HERO-LED. The hero is present, controllable, and fights alongside the deployed
+> troops.** The pure deploy-and-watch spectator model is **DEFERRED**, not cancelled.
+>
+> **Why:** hero-led is what ships today and works. Removing the hero costs 3-4 dev-days and
+> *subtracts* the only interactive element in the scene — because the base is currently a 21.6 m
+> square holding ~6 anchored guards, with indestructible walls and a victory condition that counts
+> corpses rather than buildings.
+>
+> **The load-bearing point:** every item that would make drop-and-watch worth watching is required
+> under *either* posture — siegeable structures, interior content, towers that shoot troops. So the
+> posture question costs nothing to defer, and the depth work is never wasted. Re-open it only once
+> the base is a puzzle worth watching.
+>
+> No spectator / deploy-only path is required for V1. Anything below that assumes the hero is
+> absent from a raid is describing the deferred model, not the shipping one.
 
 ---
 

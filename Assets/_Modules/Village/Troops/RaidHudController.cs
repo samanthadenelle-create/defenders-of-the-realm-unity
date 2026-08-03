@@ -46,6 +46,10 @@ namespace DeNelle.Village
         private RectTransform _timerFill;          // shrinks left->right with the clock
         private TMPro.TextMeshProUGUI _destLabel;
         private RectTransform _destFill;           // grows with destruction%
+        // THE OBJECTIVE (owner concept 2026-08-02): the raid is won by razing the central
+        // spire, so the headline readout on the right is the spire's HP, not a corpse count.
+        private TMPro.TextMeshProUGUI _objLabel;
+        private RectTransform _objFill;            // DRAINS as the spire is chipped down
         private TMPro.TextMeshProUGUI _troopLabel;
         private TMPro.TextMeshProUGUI _starCount;  // "n/3"
         private readonly Image[] _starDiamonds = new Image[3];
@@ -150,12 +154,27 @@ namespace DeNelle.Village
             _starCount = MakeLabel(barT, "0/3", new Vector2(0.60f, 0.42f), new Vector2(0.70f, 0.96f),
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, bold: true);
 
-            // ── Right: DESTRUCTION % (number + fill bar) ───────────────────────
-            _destLabel = MakeLabel(barT, "Razed 0%", new Vector2(0.72f, 0.42f), new Vector2(0.98f, 0.96f),
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right);
+            // ── Right: THE OBJECTIVE (spire HP) + the destruction readout under it ──
+            // The old right column said "Razed N%" and was fed a pure corpse count, so it
+            // read 100% with every structure untouched. The headline is now the WIN
+            // CONDITION - the spire - and the blended destruction sits under it as the
+            // secondary (scoring) number.
+            _objLabel = MakeLabel(barT, "SPIRE 100%", new Vector2(0.72f, 0.52f), new Vector2(0.98f, 0.98f),
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right, bold: true);
+
+            var objTrack = ElarionUiKit.AddImage(barT, "ObjectiveTrack",
+                new Vector2(0.72f, 0.34f), new Vector2(0.98f, 0.48f), new Color(0f, 0f, 0f, 0.5f), rounded: false);
+            objTrack.GetComponent<Image>().raycastTarget = false;
+            var objFillGo = ElarionUiKit.AddImage(objTrack.transform, "ObjectiveFill",
+                new Vector2(0f, 0f), new Vector2(1f, 1f), ElarionUi.Gilt, rounded: false);
+            objFillGo.GetComponent<Image>().raycastTarget = false;
+            _objFill = (RectTransform)objFillGo.transform;
+
+            _destLabel = MakeLabel(barT, "Razed 0%", new Vector2(0.72f, 0.02f), new Vector2(0.98f, 0.30f),
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right);
 
             var destTrack = ElarionUiKit.AddImage(barT, "DestTrack",
-                new Vector2(0.72f, 0.14f), new Vector2(0.98f, 0.30f), new Color(0f, 0f, 0f, 0.5f), rounded: false);
+                new Vector2(0.62f, 0.02f), new Vector2(0.70f, 0.14f), new Color(0f, 0f, 0f, 0.5f), rounded: false);
             destTrack.GetComponent<Image>().raycastTarget = false;
             var destFillGo = ElarionUiKit.AddImage(destTrack.transform, "DestFill",
                 new Vector2(0f, 0f), new Vector2(0f, 1f), ElarionUi.Affordable, rounded: false);
@@ -218,7 +237,31 @@ namespace DeNelle.Village
                     _starDiamonds[i].color = i < stars ? StarLit : StarDim;
             if (_starCount != null) _starCount.text = stars + "/3";
 
-            // Destruction: number + fill bar.
+            // THE OBJECTIVE: spire HP remaining. Colourblind-safe - a NUMBER plus a bar
+            // that DRAINS (motion), never hue alone. "SPIRE DOWN" is the win read.
+            if (_objLabel != null || _objFill != null)
+            {
+                if (!s.HasObjective)
+                {
+                    // Legacy raid base with no spire - say so rather than showing a fake bar.
+                    if (_objLabel != null) _objLabel.text = "CLEAR THE BASE";
+                    if (_objFill != null) _objFill.anchorMax = new Vector2(1f, 1f);
+                }
+                else if (s.ObjectiveComplete)
+                {
+                    if (_objLabel != null) _objLabel.text = "SPIRE DOWN";
+                    if (_objFill != null) _objFill.anchorMax = new Vector2(0f, 1f);
+                }
+                else
+                {
+                    float frac = Mathf.Clamp01(s.ObjectiveHpFraction);
+                    if (_objLabel != null) _objLabel.text = "SPIRE " + Mathf.CeilToInt(frac * 100f) + "%";
+                    if (_objFill != null) _objFill.anchorMax = new Vector2(frac, 1f);
+                }
+            }
+
+            // Secondary (scoring) readout: how much of the BASE has been razed - the
+            // objective-weighted blend of spire damage + garrison cleared.
             int pct = Mathf.Clamp(Mathf.RoundToInt(s.DestructionPct * 100f), 0, 100);
             if (_destLabel != null) _destLabel.text = "Razed " + pct + "%";
             if (_destFill != null) _destFill.anchorMax = new Vector2(pct / 100f, 1f);

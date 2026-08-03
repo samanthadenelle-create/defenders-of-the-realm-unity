@@ -64,6 +64,7 @@ namespace DeNelle.Village
         private bool _finalized;
         private bool _timeExpiredFired;
         private RaidGarrisonSpawner _spawner;
+        private RaidSpire _spire;         // the OBJECTIVE (null in a legacy spire-less raid)
         private int _garrisonTotalPeak;   // stable total once the staggered spawn settles
         private int _deployedCount;
         private readonly RaidDeployLog _deployLog = new RaidDeployLog();
@@ -88,8 +89,42 @@ namespace DeNelle.Village
         /// <summary>Living garrison defenders right now.</summary>
         public int GarrisonAlive => _spawner != null ? _spawner.AliveCount : 0;
 
-        /// <summary>Live destruction fraction 0..1 (killed / total; 1 once cleared).</summary>
-        public float DestructionPct
+        // =====================================================================
+        //  THE OBJECTIVE (owner concept 2026-08-02): a raid is won by razing the
+        //  central SPIRE, not by counting corpses. The garrison is still SCORED -
+        //  it just is not the win condition any more.
+        // =====================================================================
+
+        /// <summary>
+        /// Share of the destruction readout owned by the SPIRE. The remainder is the
+        /// garrison clear. Kept public so the HUD copy, the loot floor and the oracle all
+        /// read the same number instead of re-deriving it.
+        /// WHY THE GARRISON KEEPS 40%: the objective decides WIN/LOSE, but a player who
+        /// rushes the spire past a full, living garrison should not be paid the same as
+        /// one who dismantled the base. Splitting it keeps both worth doing.
+        /// </summary>
+        public const float SpireWeight = 0.60f;
+
+        /// <summary>True when this raid actually has a spire objective (false in a legacy raid base).</summary>
+        public bool HasObjective => _spire != null;
+
+        /// <summary>True once the spire has been razed - the raid is won.</summary>
+        public bool ObjectiveComplete => _spire != null && _spire.IsDestroyed;
+
+        /// <summary>Spire HP remaining as 0..1 (1 = untouched). 0 when there is no spire.</summary>
+        public float ObjectiveHpFraction => _spire != null ? _spire.HpFraction : 0f;
+
+        /// <summary>
+        /// The condition that ends the raid in a WIN: the spire falls. A legacy raid base
+        /// with no spire falls back to the old "garrison wiped" rule, so nothing that
+        /// shipped before regresses.
+        /// </summary>
+        public bool RaidWon => _spire != null
+            ? _spire.IsDestroyed
+            : (_spawner != null && _spawner.Cleared);
+
+        /// <summary>Living garrison fraction razed, 0..1 (1 once the garrison is wiped).</summary>
+        private float GarrisonRazedPct
         {
             get
             {
@@ -98,6 +133,24 @@ namespace DeNelle.Village
                 if (total <= 0) return 0f;
                 int alive = GarrisonAlive;
                 return Mathf.Clamp01((total - alive) / (float)total);
+            }
+        }
+
+        /// <summary>
+        /// Live destruction fraction 0..1. WITH a spire this is the OBJECTIVE-weighted
+        /// blend (<see cref="SpireWeight"/> spire damage + the rest garrison razed), which
+        /// is what the HUD's "Base Razed" bar shows. WITHOUT one it degrades to the legacy
+        /// pure garrison count. Before this it was corpse-count only, which is why the HUD
+        /// could read "Razed 100%" with every building untouched.
+        /// </summary>
+        public float DestructionPct
+        {
+            get
+            {
+                float garrison = GarrisonRazedPct;
+                if (_spire == null) return garrison;
+                float spire = Mathf.Clamp01(_spire.DamagedFraction);
+                return Mathf.Clamp01(spire * SpireWeight + garrison * (1f - SpireWeight));
             }
         }
 
@@ -117,10 +170,14 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The LIVE projected star tier if the raid settled at this instant.</summary>
+        /// <summary>
+        /// The LIVE projected star tier if the raid settled at this instant. The "cleared"
+        /// axis is now the OBJECTIVE (<see cref="RaidWon"/>), not the corpse count - the
+        /// star ladder itself (ComputeStars) is untouched, only what feeds it.
+        /// </summary>
         public int ProjectedStars =>
-            ComputeStars(_spawner != null && _spawner.Cleared,
-                         _spawner != null && _spawner.Cleared,   // boss dies on full clear (V1)
+            ComputeStars(RaidWon,
+                         RaidWon,                                 // the objective IS the boss kill now
                          DestructionPct, _elapsed, _clockSeconds, SurvivalPct);
 
         /// <summary>The simple re-watch record (order/time/place of every deploy).</summary>
@@ -277,6 +334,19 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Raid", "RaidScoring: no RaidGarrisonSpawner found — destruction% will read 0 (scoring degrades to clock/deploy only).");
             else
                 FlowTrace.Step("Raid", "RaidScoring bound to the garrison spawner (clock + destruction% live).");
+
+            // The OBJECTIVE. Baked into the scene, so it is present from load - but bind the
+            // same tolerant way in case a scene predates the spire (legacy raid bases keep the
+            // old garrison-wipe rule rather than becoming unwinnable).
+            _spire = RaidSpire.Active != null ? RaidSpire.Active : FindAnyObjectByType<RaidSpire>();
+            if (_spire == null)
+                FlowTrace.Warn("Raid", "RaidScoring: this raid scene has NO RaidSpire objective — " +
+                                       "falling back to the legacy garrison-wipe win condition. " +
+                                       "Re-bake it with RaidBaseGenerator.BuildAllRaidScenes to get the spire.");
+            else
+                FlowTrace.Step("Raid", $"RaidScoring bound to the OBJECTIVE: spire '{_spire.name}' " +
+                                       $"({_spire.MaxHp:0} HP). Razing it wins the raid; destruction% is " +
+                                       $"{SpireWeight:P0} spire / {1f - SpireWeight:P0} garrison.");
         }
 
         private void Update()
@@ -331,8 +401,14 @@ namespace DeNelle.Village
             if (_finalized && _result != null) return _result;
             _finalized = true;
 
-            float destruction = cleared ? 1f : DestructionPct;
-            bool bossDown = cleared;   // V1: the boss is part of the garrison, so a full clear kills it
+            // DESTRUCTION ON SETTLE. With a spire the win is the OBJECTIVE, so a victory is
+            // floored at the spire's share (SpireWeight) and rises with whatever else the
+            // player razed - a spire rush past a living garrison no longer pays the same as
+            // a full dismantle. Without a spire the legacy "cleared => 100%" holds exactly.
+            float destruction = _spire != null
+                ? (cleared ? Mathf.Max(SpireWeight, DestructionPct) : DestructionPct)
+                : (cleared ? 1f : DestructionPct);
+            bool bossDown = cleared;   // the objective IS the boss kill (spire) / full clear (legacy)
             // Survival is sampled BEFORE any teardown - the surviving bodies are still on the
             // field at Finalize (nothing on the victory path destroys troops; the scene only
             // unloads at ReturnHome), so this is the real number, not an estimate.

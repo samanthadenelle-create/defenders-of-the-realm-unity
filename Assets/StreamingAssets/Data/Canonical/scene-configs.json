@@ -8,10 +8,10 @@
     "ownership": "Player | Enemy",
     "faction": "orc | hollow | troll | mixed | none",
     "wallTier": "Wood | Iron | ReinforcedSteel",
-    "baseRadius": "perimeter radius (m)",
-    "wallSegmentsPerSide": "tiled wall segments per side (force ODD so the gate centres)",
-    "centralBuilding": "structures-catalog id placed at centre (command hut / mage base / heart)",
-    "towers": "[{ type: structures-catalog id, count }]",
+    "baseRadius": "perimeter HALF-EXTENT (m). THE ARENA SIZE: RaidBaseGenerator builds the outer ring to exactly this. Raid tiers target ~20/50/60% of the 140m RaidGround plane (radius = 70 * sqrt(fraction)) = 31 / 49 / 54m. Clamped to 63m (RaidNavBake.GroundScale).",
+    "wallSegmentsPerSide": "MINIMUM wall panels per side (forced ODD so the gate centres). Sets the granularity + the gate width; baseRadius sets the size. The generator ADDS panels when needed so none is stretched past 3m.",
+    "centralBuilding": "structures-catalog id of THE SPIRE at centre — the RAID OBJECTIVE. Destroying it WINS the raid (RaidSpire; HP 1200/2200/3500 by difficulty). Its visualPrefabPath is the spire art.",
+    "towers": "[{ type: structures-catalog id, count }] — the TURRET TYPE PALETTE, weighted by count. HOW MANY turrets is archerTowerCount + mageTowerCount; WHAT each one is comes from here, and its range/damage/fireRate/element/art come from that structures-catalog row.",
     "props": "{ set: [structures-catalog ids], count }",
     "garrison": "ENEMY only — { composition:[{enemyId,count}], baseEnemyLevel (absolute FLOOR), levelOffset (relative to PLAYER level), difficultyMultiplier, boss }. Generator computes enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset) so outposts scale with the player but never below the floor (always a meaningful fight).",
     "themeColor": "faction banner/accent hex",
@@ -22,9 +22,10 @@
     "entranceCount": "perimeter gates: 2 = main + side breach (Regular), 1 = single gate (Hard/Extreme)",
     "interiorWallLayers": "concentric inner keep rings beyond the outer perimeter (0 = single ring, 1 = inner kill-zone keep)",
     "towerPlacementStyle": "Cardinal (mid-side, 4) | OverlappingFire (corners + mid-side crossfire)",
-    "archerTowerCount": "Watchtower_Archer_* props placed (runtime-armed turrets)",
-    "mageTowerCount": "Watchtower_Mage_* props placed (runtime-armed turrets)",
-    "eliteCount": "elite garrison units (spawner/scoring data — not geometry)",
+    "archerTowerCount": "Watchtower_Archer_* turrets placed. archer+mage is the TOTAL turret count (4 / 7 / 10 by tier); ~60% go on the wall line, the rest guard the spire so neither the approach nor the objective is safe.",
+    "mageTowerCount": "Watchtower_Mage_* turrets placed (see archerTowerCount).",
+    "difficulty": "Regular | Hard | Extreme — drives the SPIRE HP (1200/2200/3500) and the arena-wide tower DPS budget (12/16/20), which caps what the most-covered point in the arena can take.",
+    "eliteCount": "elite garrison units. AUTHORED BUT NOT YET CONSUMED — its only honest home is RaidGarrisonSpawner (see the raid-arena-shape oracle's dead-key allowlist).",
     "shardDropChance": "0..1 chance of a shard drop (3-star-only gating applied later by scoring — not geometry)"
   },
   "configs": [
@@ -68,7 +69,7 @@
       "faction": "orc",
       "difficulty": "Regular",
       "wallTier": "Wood",
-      "baseRadius": 28,
+      "baseRadius": 31,
       "wallSegmentsPerSide": 9,
       "centralBuilding": "tower_siege_tower",
       "towers": [
@@ -85,11 +86,11 @@
         "composition": [
           {
             "enemyId": "orc-berserker",
-            "count": 4
+            "count": 7
           },
           {
             "enemyId": "orc-shaman",
-            "count": 1
+            "count": 2
           }
         ],
         "baseEnemyLevel": 3,
@@ -105,7 +106,7 @@
       "entranceCount": 2,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "Cardinal",
-      "archerTowerCount": 4,
+      "archerTowerCount": 3,
       "mageTowerCount": 1,
       "eliteCount": 0,
       "shardDropChance": 0.0
@@ -118,7 +119,7 @@
       "faction": "mixed",
       "difficulty": "Hard",
       "wallTier": "Iron",
-      "baseRadius": 35,
+      "baseRadius": 49,
       "wallSegmentsPerSide": 11,
       "centralBuilding": "tower_arcane_spire",
       "towers": [
@@ -139,19 +140,19 @@
         "composition": [
           {
             "enemyId": "troll",
-            "count": 2
+            "count": 4
           },
           {
             "enemyId": "ogre",
-            "count": 1
+            "count": 2
           },
           {
             "enemyId": "orc-berserker",
-            "count": 3
+            "count": 6
           },
           {
             "enemyId": "orc-shaman",
-            "count": 2
+            "count": 3
           }
         ],
         "baseEnemyLevel": 5,
@@ -167,7 +168,7 @@
       "entranceCount": 1,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "OverlappingFire",
-      "archerTowerCount": 6,
+      "archerTowerCount": 5,
       "mageTowerCount": 2,
       "eliteCount": 1,
       "shardDropChance": 0.0
@@ -180,7 +181,7 @@
       "faction": "hollow",
       "difficulty": "Extreme",
       "wallTier": "ReinforcedSteel",
-      "baseRadius": 32,
+      "baseRadius": 54,
       "wallSegmentsPerSide": 13,
       "centralBuilding": "tower_arcane_spire",
       "towers": [
@@ -197,15 +198,15 @@
         "composition": [
           {
             "enemyId": "hollow-acolyte",
-            "count": 3
+            "count": 7
           },
           {
             "enemyId": "orc-shaman",
-            "count": 2
+            "count": 5
           },
           {
             "enemyId": "hollow-warrior",
-            "count": 2
+            "count": 7
           }
         ],
         "baseEnemyLevel": 6,
@@ -221,7 +222,7 @@
       "entranceCount": 1,
       "interiorWallLayers": 1,
       "towerPlacementStyle": "OverlappingFire",
-      "archerTowerCount": 8,
+      "archerTowerCount": 7,
       "mageTowerCount": 3,
       "eliteCount": 3,
       "shardDropChance": 0.20

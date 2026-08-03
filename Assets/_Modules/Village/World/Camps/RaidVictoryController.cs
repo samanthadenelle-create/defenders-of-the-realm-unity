@@ -61,6 +61,7 @@ namespace DeNelle.Village.World.Camps
         [SerializeField] private float _autoReturnSeconds = 12f;
 
         private RaidGarrisonSpawner _spawner;
+        private RaidSpire _spire;  // THE OBJECTIVE (owner concept 2026-08-02) - razing it wins
         private bool _handled;     // victory handled once (guards a double OnCleared)
         private bool _returning;   // a return is already in flight
 
@@ -111,10 +112,37 @@ namespace DeNelle.Village.World.Camps
         private void OnDestroy()
         {
             if (_spawner != null) _spawner.OnCleared -= HandleCleared;
+            if (_spire != null) _spire.OnDestroyedEvent -= HandleSpireRazed;
         }
 
         private IEnumerator BindRoutine()
         {
+            // ---- THE OBJECTIVE ------------------------------------------------
+            // Owner concept 2026-08-02: a raid is won by RAZING THE CENTRAL SPIRE, not by
+            // counting corpses. The spire is baked into the scene so it exists at load.
+            // A scene with no spire (a legacy bake) keeps the old garrison-wipe rule below,
+            // so nothing that already shipped becomes unwinnable.
+            _spire = RaidSpire.Active != null ? RaidSpire.Active : FindAnyObjectByType<RaidSpire>();
+            if (_spire != null)
+            {
+                if (_spire.IsDestroyed)
+                {
+                    FlowTrace.Step("Raid", "RaidVictoryController: spire was ALREADY razed on bind — running victory immediately.");
+                    HandleVictory("spire razed (already down at bind)");
+                    yield break;
+                }
+                _spire.OnDestroyedEvent -= HandleSpireRazed;
+                _spire.OnDestroyedEvent += HandleSpireRazed;
+                FlowTrace.Step("Raid", $"RaidVictoryController bound to the OBJECTIVE: spire '{_spire.name}' " +
+                                       $"({_spire.MaxHp:0} HP). Razing it WINS the raid.");
+            }
+            else
+            {
+                FlowTrace.Warn("Raid", "RaidVictoryController: this raid scene has NO RaidSpire — falling back to " +
+                                       "the legacy garrison-wipe win condition. Re-bake with " +
+                                       "RaidBaseGenerator.BuildAllRaidScenes to get the spire objective.");
+            }
+
             // The spawner lives on the RaidBase_<id> root and arms its garrison a frame
             // after Start; give it a handful of frames to appear, then bind.
             for (int i = 0; i < 10 && _spawner == null; i++)
@@ -148,17 +176,46 @@ namespace DeNelle.Village.World.Camps
         }
 
         // =====================================================================
-        //  STEP 1 — VICTORY. The last defender died (or the garrison was empty).
+        //  STEP 1 — VICTORY. THE OBJECTIVE: the central spire falls.
+        //  (Legacy fallback: the last defender died, in a scene with no spire.)
         // =====================================================================
 
+        /// <summary>The spire was razed — this is the win, whatever the garrison is doing.</summary>
+        private void HandleSpireRazed(RaidSpire spire)
+        {
+            if (spire != null) spire.OnDestroyedEvent -= HandleSpireRazed;
+            HandleVictory("SPIRE RAZED");
+        }
+
+        /// <summary>
+        /// The garrison was wiped. With a spire objective present this is a MILESTONE, not a
+        /// win — the owner's concept moved the win condition off corpse-count. Only a
+        /// spire-less (legacy) raid base still wins here, so old bakes never soft-lock.
+        /// </summary>
         private void HandleCleared(RaidGarrisonSpawner spawner)
         {
-            if (_handled) { FlowTrace.Step("Raid", "victory already handled — ignoring duplicate OnCleared."); return; }
-            _handled = true;
             if (_spawner != null) _spawner.OnCleared -= HandleCleared;
 
+            if (_spire != null && !_spire.IsDestroyed)
+            {
+                FlowTrace.Step("Raid", "garrison wiped, but the SPIRE still stands — the raid is not over. " +
+                                       $"Objective at {_spire.HpFraction:P0} HP. Raze it to win.");
+                return;
+            }
+
+            HandleVictory(_spire != null ? "garrison wiped after the spire fell" : "garrison wiped (legacy, no spire)");
+        }
+
+        private void HandleVictory(string reason)
+        {
+            if (_handled) { FlowTrace.Step("Raid", "victory already handled — ignoring duplicate signal."); return; }
+            _handled = true;
+            if (_spawner != null) _spawner.OnCleared -= HandleCleared;
+            if (_spire != null) _spire.OnDestroyedEvent -= HandleSpireRazed;
+
+            RaidGarrisonSpawner spawner = _spawner;
             string configId = ResolveConfigId(spawner);
-            FlowTrace.Step("Raid", $"VICTORY — raid '{configId}' garrison wiped. Running claim -> next-companion -> return.");
+            FlowTrace.Step("Raid", $"VICTORY — raid '{configId}' won ({reason}). Running claim -> next-companion -> return.");
 
             // Victory fanfare (reuse the audio service; null-safe cross-module call).
             // PlayMusic(Victory) is the clean cross-module call available on IAudioService

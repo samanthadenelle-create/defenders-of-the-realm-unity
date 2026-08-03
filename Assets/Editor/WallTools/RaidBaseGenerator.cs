@@ -1,97 +1,172 @@
 // =============================================================================
-// RaidBaseGenerator — the "Iron Bastion" CONCENTRIC raid-base generator: the
-// raid-tier evolution of the single-ring PerimeterWallGenerator. Where Perimeter
-// builds ONE square ring (4 corner towers + per-side fill, gate = centre slot),
-// this builds a DOUBLE-RING fortress that funnels the player through a killing
-// courtyard into a boss keep:
-//
-//   OUTER ring  (Iron, large)  — gate on SOUTH only → the single approach.
-//   INNER keep  (Steel, small) — gate on NORTH only → OPPOSITE the outer gate,
-//                                 so the player must cross the courtyard under
-//                                 fire to reach the keep (the funnel).
-//   BossSpawn marker at keep centre (0,0,0) — the garrison/boss spawner places
-//                                 the boss here later (we only drop the marker).
-//   Court watchtowers between the rings — crossfire over the courtyard.
-//
-// REUSES PerimeterWallGenerator's proven place pattern verbatim — box-fit to
-// (1.5,3,1.5) / upright (-90X FBX-flat correction) / ground-seat / WallSegment+
-// tier — but PARAMETERIZED BY TIER: the tier is passed into the segment placer so
-// each ring is built from its own wall art (Iron outer, Steel keep). BuildRing is
-// the reusable primitive — adding more layouts later (gauntlet, enclave) is just
-// another Build* method composing rings.
-//
-// TURRET ARMING (important): corner/court towers are NAMED with "Watchtower" in
-// them on purpose — GarrisonController.ArmGarrisonTurrets arms any prop whose name
-// CONTAINS "Watchtower" as a live EnemyOwned turret at runtime. So the crossfire
-// comes alive with NO DefenseTower wiring here — the name IS the contract.
-//
-// Tier-driven art via WallTierData.Get(tier).SegmentPrefabPath. Builds into the
-// OPEN scene under its own idempotent root (re-run rebuilds; delete the root to
-// remove). Null-guards missing prefabs with Debug.LogWarning (never crashes).
-//
+// RaidBaseGenerator - data-in / scene-out builder for the RaidBase_*.unity levels.
 // -----------------------------------------------------------------------------
-// CONFIG-DRIVEN (WO raid generator): BuildFromConfig(configId, parentRoot) reads a
-// SceneConfigDef from SceneConfigCatalog (scene-configs.json — the ONE contract)
-// and builds ANY raid level from data: 1+interiorWallLayers concentric rings
-// (outer tier=wallTier, gates per entranceCount, inner keep = ReinforcedSteel with
-// a single OPPOSITE-side gate = the Iron-Bastion funnel), archerTowerCount +
-// mageTowerCount Watchtower props per towerPlacementStyle (Cardinal = mid-side,
-// OverlappingFire = corners + mid-side crossfire), and a BossSpawn at centre.
-// BuildIronBastion is preserved for the existing menu items. BuildSceneFor(id) /
-// BuildAllRaidScenes() bake each level into Assets/Scenes/RaidBase_<id>.unity.
+// WHAT CHANGED (owner complaint 2026-08-02: "the raid is just a square room with 1
+// enemy"). Measured before: the base occupied ~2.4% of the authored 140 m floor (a
+// ~21.6 m square), every watchtower sat inside that square so ALL of them could
+// shoot the same point, and there was no objective - the raid ended when the last
+// BODY fell. The concept the owner approved, built here against the shipped systems:
+//
+//   1. THE ARENA FILLS ITS SPACE. The ring half-extent now comes from the config's
+//      authored `baseRadius` instead of falling out of wallSegmentsPerSide * 1.5 m.
+//      With the raid radii raised to 31 / 49 / 54 m the three tiers occupy roughly
+//      20% / 50% / 60% of the 140 m RaidGround plane (radius = mapRadius * sqrt(f),
+//      mapRadius = 70 m). wallSegmentsPerSide is NOT dead - it is now the MINIMUM
+//      panel count per side (i.e. the granularity + the gate width); the builder adds
+//      panels as needed so no panel is stretched past MaxSegmentWidth.
+//   2. AN OUTER WALL RING IS THE BOUNDARY. Same BuildRing primitive, now solid: each
+//      panel gets a real BoxCollider on the "Structure" layer, so walls block
+//      movement and line-of-sight instead of being decoration (they never carried a
+//      collider before - RaidBaseGenerator only called WallSegment.SetTier, and only
+//      WallSegment.Configure builds the blocker).
+//   3. MULTIPLE AGGRESSIVE TOWERS on two bands (outer wall line + an inner ring that
+//      covers the spire), so there is no safe approach AND no safe spot at the
+//      objective. Count = archerTowerCount + mageTowerCount (4 / 7 / 10). TYPE comes
+//      from the previously-dead `towers[]` array; range / fire-rate / element /
+//      damage-weight / art come from that type's structures-catalog row.
+//   4. A CENTRAL SPIRE (RaidSpire) with tier HP 1200 / 2200 / 3500. DESTROYING IT
+//      WINS THE RAID. Its art comes from the previously-dead `centralBuilding` key.
+//
+// KEYS THAT WERE AUTHORED BUT READ BY NOTHING, AND NOW HAVE CONSUMERS:
+//   centralBuilding -> the spire's structures-catalog art id      (PlaceSpire)
+//   towers[]        -> the turret TYPE palette (weighted by count)(ResolveTowerTypes)
+//   difficulty      -> spire HP + the tower DPS budget            (TierFor)
+//   baseRadius      -> the ring half-extent (was ignored here)    (BuildConfigLayout)
+// Still dead and DELIBERATELY not faked: `eliteCount` and `props` - their only honest
+// consumer is RaidGarrisonSpawner / a prop dresser, which this lane does not own.
+//
+// BALANCE (the reason this is not just "more towers"): every turret's damage is
+// scaled by a single factor k so that the WORST point in the arena - found by
+// sampling the whole floor - can never take more than the tier's DPS budget. k is
+// clamped to <= 1, so a turret is never made stronger than its catalog row authors.
+// The builder logs the worst-case concurrency, the resulting DPS and the hero
+// time-to-death at 100 HP (base) and 195 HP (geared).
+//
+// STILL TRUE FROM BEFORE: tier-driven wall art via WallTierData, "Watchtower" in the
+// name so GarrisonTurretArmer can still arm anything this builder did not stat,
+// BossSpawn marker for RaidGarrisonSpawner, idempotent roots, LogWarning + fall back
+// on a missing (gitignored) prefab - never an error, never a throw.
+//
+// NAVMESH: this builder does NOT bake one - RaidNavBake is the ONE baker for these
+// scenes (it drops the 140 m RaidGround plane, marks renderers NavigationStatic and
+// runs the legacy scene bake). Run it AFTER this. See BuildAllRaidScenes' log line.
 //
 // Batchmode: DeNelle.Editor.RaidBaseGenerator.BuildInOpenScene
 //            DeNelle.Editor.RaidBaseGenerator.BuildIntoScene  (pass a scene path)
 //            DeNelle.Editor.RaidBaseGenerator.BuildAllRaidScenes
-// Menu:      Defenders/Walls/Build Raid Base — Iron Bastion
+// Menu:      Defenders/Walls/Build Raid Base - Iron Bastion
 //            Defenders/Walls/Build All Raid Scenes (config-driven)
 // =============================================================================
 using System;                   // Enum.TryParse, StringComparison
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using DeNelle.Village;          // WallSegment, SceneConfigCatalog, SceneConfigDef
+using Newtonsoft.Json;          // structures-catalog read (same reader shape as CatalogBootstrap)
+using DeNelle.Core;             // CanonicalJson, MagentaGuard
+using DeNelle.Core.Combat;      // DamageElement
+using DeNelle.Village;          // WallSegment, SceneConfigCatalog, SceneConfigDef, DefenseTower
 using DeNelle.Village.Walls;    // WallTier, WallTierData
-using Object = UnityEngine.Object;   // disambiguate Object (System.Object vs UnityEngine.Object) — System is in scope
+using DeNelle.Village.World.Camps;  // RaidSpire, RaidGarrisonSpawner
+using Object = UnityEngine.Object;   // disambiguate Object (System.Object vs UnityEngine.Object)
 
 namespace DeNelle.Editor
 {
     public static class RaidBaseGenerator
     {
-        // ── Tunables (owner-editable; later sourced from scene-configs.json) ──
-        // Corner/court tower art (Resources path). Falls back gracefully if missing.
-        private const string CornerTowerPath = "Structures/Tower_Medieval_Wood";
+        // == Arena scale =======================================================
 
-        // Outer ring: bigger, Iron, single SOUTH gate (the approach).
-        private const int   OuterSlotsPerSide = 15;   // 15 * 1.5m = 22.5m wall run/side
-        private const WallTier OuterTier      = WallTier.Iron;
-        // Inner keep: smaller, ReinforcedSteel, single NORTH gate (opposite → funnel).
-        private const int   InnerSlotsPerSide = 7;    // 7 * 1.5m = 10.5m wall run/side
-        private const WallTier InnerTier      = WallTier.ReinforcedSteel;
+        /// <summary>
+        /// Half-extent of the ground RaidNavBake authors (GroundScale 14 -> a 140 m
+        /// Unity Plane -> +/-70 m). The footprint fractions in the tier table are
+        /// expressed against THIS. If RaidNavBake.GroundScale changes, change this.
+        /// </summary>
+        public const float MapHalfExtent = 70f;
 
-        // One wall slot = the owner's box; X = the tiling unit (segment width).
+        /// <summary>Widest a single wall panel may be stretched before the builder adds panels instead.</summary>
+        private const float MaxSegmentWidth = 3.0f;
+        /// <summary>Narrowest a panel may be squeezed (keeps the gate opening walkable).</summary>
+        private const float MinSegmentWidth = 1.2f;
+
+        /// <summary>Wall panel height / thickness (the owner's box; X is the tiling axis).</summary>
         private static readonly Vector3 SegSize = new Vector3(1.5f, 3.0f, 1.5f);
-        private const string RootName = "RaidBase_IronBastion";
 
-        // Side index → cardinal name, by the 90°-around-origin rot index (0=S,1=E,2=N,3=W).
+        // == Tower balance =====================================================
+
+        /// <summary>A turret never reaches further than this fraction of the arena radius (a lane must exist).</summary>
+        private const float TowerRangeFractionOfRadius = 0.55f;
+        private const float TowerRangeFloor = 12f;
+        /// <summary>Fraction of the turrets placed on the wall line; the rest guard the spire.</summary>
+        private const float OuterBandShare = 0.6f;
+        /// <summary>Inner (spire-guard) band radius as a fraction of the arena radius.</summary>
+        private const float InnerBandFraction = 0.35f;
+
+        /// <summary>Hero base max HP (HeroHealth._maxHp) - the floor case for the time-to-death report.</summary>
+        private const float HeroBaseHp = 100f;
+        /// <summary>A fully geared/talented hero (HeroHealth.cs:211 worked example) - the ceiling case.</summary>
+        private const float HeroGearedHp = 195f;
+
+        // == Art ===============================================================
+
+        /// <summary>Fallback watchtower art when the catalog row has none (or the pack is not imported).</summary>
+        private const string FallbackTowerPath = "Structures/Tower_Medieval_Wood";
+        /// <summary>Fallback turret types when towers[] is empty.</summary>
+        private const string DefaultArcherTowerId = "tower_ground_archer";
+        private const string DefaultMageTowerId = "tower_arcane_spire";
+
+        private const string RootName = "RaidBase_IronBastion";
+        private const string DefaultScene = "Assets/Scenes/MainCastle_Hall.unity";
+        private const string HeroStartName = "HeroStartPoint_PlayerSpawn";
+
+        // Side index -> cardinal name, by the 90-degree-around-origin rot index (0=S,1=E,2=N,3=W).
         private static readonly string[] SideName = { "S", "E", "N", "W" };
 
-        private const string DefaultScene = "Assets/Scenes/MainCastle_Hall.unity";
+        // Legacy Iron-Bastion flagship tunables (menu item preserved verbatim).
+        private const int OuterSlotsPerSide = 15;
+        private const WallTier OuterTier = WallTier.Iron;
+        private const int InnerSlotsPerSide = 7;
+        private const WallTier InnerTier = WallTier.ReinforcedSteel;
 
-        // ── Entry points ─────────────────────────────────────────────────────
+        // =====================================================================
+        //  Tier table - keyed off the config's authored `difficulty` string.
+        // =====================================================================
 
-        [MenuItem("Defenders/Walls/Build Raid Base — Iron Bastion")]
+        /// <summary>
+        /// Per-difficulty objective + survivability budget. `Footprint` is the share of
+        /// the 140 m plane the arena should occupy and is used ONLY to sanity-check the
+        /// authored baseRadius (radius = MapHalfExtent * sqrt(footprint)); the authored
+        /// value is what actually builds, so the data stays in charge.
+        /// </summary>
+        private struct RaidTier
+        {
+            public string Name;
+            public float Footprint;      // share of the map AREA
+            public float SpireHp;        // objective HP
+            public float TowerDpsBudget; // hard ceiling on concurrent tower DPS anywhere in the arena
+        }
+
+        private static RaidTier TierFor(string difficulty)
+        {
+            string d = (difficulty ?? "").Trim();
+            if (string.Equals(d, "Extreme", StringComparison.OrdinalIgnoreCase))
+                return new RaidTier { Name = "Extreme", Footprint = 0.60f, SpireHp = 3500f, TowerDpsBudget = 20f };
+            if (string.Equals(d, "Hard", StringComparison.OrdinalIgnoreCase))
+                return new RaidTier { Name = "Hard", Footprint = 0.50f, SpireHp = 2200f, TowerDpsBudget = 16f };
+            return new RaidTier { Name = "Regular", Footprint = 0.20f, SpireHp = 1200f, TowerDpsBudget = 12f };
+        }
+
+        // == Entry points ======================================================
+
+        [MenuItem("Defenders/Walls/Build Raid Base - Iron Bastion")]
         public static void BuildInOpenScene()
         {
             var root = Build();
             EditorSceneManager.MarkSceneDirty(root.scene);
             Debug.Log($"[RaidBaseGenerator] built '{RootName}' in the open scene " +
-                      $"(outer {OuterTier} / keep {InnerTier} — Ctrl+S to keep).");
+                      $"(outer {OuterTier} / keep {InnerTier} - Ctrl+S to keep).");
         }
 
         // Batch: open <scenePath>, build the bastion under its own root, save.
-        // Reproducible (re-run rebuilds; delete the root to remove). Existing scene
-        // content untouched (separate root). Parameterized so any test scene works.
         public static void BuildIntoScene(string scenePath)
         {
             if (string.IsNullOrEmpty(scenePath)) scenePath = DefaultScene;
@@ -103,8 +178,7 @@ namespace DeNelle.Editor
                       $"(outer {OuterTier} / keep {InnerTier}).");
         }
 
-        // Batch: build into a FRESH empty scene (camera + light) so the bastion stands
-        // ALONE for a clean visual eyeball — no castle/hub overlap. Saves a dedicated file.
+        // Batch: build into a FRESH empty scene (camera + light) so the bastion stands ALONE.
         public static void BuildToNewScene()
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
@@ -115,9 +189,9 @@ namespace DeNelle.Editor
                       $"(outer {OuterTier} / keep {InnerTier}).");
         }
 
-        // ── Config-driven entry points (WO raid generator) ───────────────────
+        // == Config-driven entry points ========================================
 
-        // The three flagship raid levels, in difficulty order.
+        /// <summary>The three flagship raid levels, in difficulty order.</summary>
         private static readonly string[] RaidConfigIds =
             { "raider_camp_small", "fortified_garrison", "mage_enclave" };
 
@@ -125,13 +199,18 @@ namespace DeNelle.Editor
         public static void BuildAllRaidScenes()
         {
             SceneConfigCatalog.Invalidate();   // pick up any fresh JSON edit
+            InvalidateStructureCatalog();
             foreach (var id in RaidConfigIds) BuildSceneFor(id);
-            Debug.Log($"[RaidBaseGenerator] baked {RaidConfigIds.Length} raid scene(s) from scene-configs.json.");
+            Debug.Log($"[RaidBaseGenerator] baked {RaidConfigIds.Length} raid scene(s) from scene-configs.json. " +
+                      "NEXT (required): DeNelle.Editor.RaidNavBake.BakeAll - it drops the RaidGround plane and " +
+                      "bakes the legacy NavMesh. Without it the hero and every agent have nothing to walk on.");
         }
 
-        // Batch: build ONE config into its own fresh scene (camera + light) so the
-        // raid base stands ALONE for a clean eyeball, saved to RaidBase_<id>.unity.
-        // Mirrors BuildToNewScene but driven by the config id.
+        /// <summary>
+        /// Build ONE config into its own fresh scene (camera + light), saved to
+        /// RaidBase_&lt;id&gt;.unity. Deterministic: the same config id always produces
+        /// the same layout (the only stochastic input is a stable hash of the id).
+        /// </summary>
         public static void BuildSceneFor(string configId)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
@@ -144,21 +223,20 @@ namespace DeNelle.Editor
             Debug.Log($"[RaidBaseGenerator] built + saved raid '{configId}' into NEW scene {path}.");
         }
 
-        // Build a complete raid level from its scene-config under parentRoot. Idempotent
-        // per-config: an existing 'RaidBase_<id>' child of parentRoot is rebuilt. Reads
-        // ALL geometry from the SceneConfigDef; garrison/scoring fields are ignored here
-        // (spawner/scoring layers). Null-guards a missing config (LogWarning, no crash).
+        /// <summary>
+        /// Build a complete raid level from its scene-config under parentRoot. Idempotent
+        /// per-config. Null-guards a missing config (LogWarning, no crash).
+        /// </summary>
         public static void BuildFromConfig(string configId, Transform parentRoot)
         {
             var def = SceneConfigCatalog.Find(configId);
             if (def == null)
             {
-                Debug.LogWarning($"[RaidBaseGenerator] no scene-config '{configId}' — nothing built.");
+                Debug.LogWarning($"[RaidBaseGenerator] no scene-config '{configId}' - nothing built.");
                 return;
             }
 
             string rootName = $"RaidBase_{configId}";
-            // Idempotent: remove a prior build under the same parent (or globally if parentRoot is null).
             var prior = parentRoot != null ? parentRoot.Find(rootName) : null;
             if (prior != null) Object.DestroyImmediate(prior.gameObject);
             var priorGlobal = GameObject.Find(rootName);
@@ -171,242 +249,566 @@ namespace DeNelle.Editor
 
             BuildConfigLayout(def, root.transform);
 
-            // ── GARRISON WIRING ──────────────────────────────────────────────────
-            // Attach the runtime spawner that fills this baked base with its config's
-            // garrison (boss + composition, player-level-scaled). It carries the STORED
-            // config id (NOT the scene name — the baked scene is RaidBase_<id>, which
-            // won't match the config's sceneName, so SceneOwnership can't resolve it by
-            // name; the spawner sets ownership itself off this id). At runtime it reads
-            // SceneConfigCatalog.Find(configId).garrison, spawns on a ring at
-            // baseRadius*0.5, and arms the Watchtower_* props.
-            var spawner = root.AddComponent<DeNelle.Village.World.Camps.RaidGarrisonSpawner>();
+            // GARRISON WIRING - the runtime spawner that fills this baked base with its
+            // config's garrison (boss + composition, player-level-scaled). It carries the
+            // STORED config id (the baked scene is RaidBase_<id>, which will not match the
+            // config's sceneName, so SceneOwnership cannot resolve it by name).
+            var spawner = root.AddComponent<RaidGarrisonSpawner>();
             spawner.SetConfigId(configId);
         }
 
-        // The data-driven layout: outer perimeter (+ optional inner keep) + towers +
-        // boss marker, all from the config. The Iron-Bastion funnel falls out naturally
-        // when interiorWallLayers>0 (inner keep gate OPPOSITE the outer gate).
+        // =====================================================================
+        //  The data-driven layout.
+        // =====================================================================
         private static void BuildConfigLayout(SceneConfigDef def, Transform root)
         {
+            RaidTier tier = TierFor(def.difficulty);
+            int seed = StableHash(def.id);
+
+            // -- ARENA RADIUS. The authored baseRadius is the SIZE (owner concept step 1).
+            //    Clamped so a fat-fingered value can never spill off the RaidGround plane.
+            float suggested = MapHalfExtent * Mathf.Sqrt(Mathf.Clamp01(tier.Footprint));
+            float radius = def.baseRadius > 1f ? def.baseRadius : suggested;
+            float maxRadius = MapHalfExtent * 0.9f;
+            if (radius > maxRadius)
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] '{def.id}' baseRadius {def.baseRadius:F1}m exceeds the " +
+                                 $"RaidGround half-extent budget ({maxRadius:F1}m) - clamped. Raise " +
+                                 "RaidNavBake.GroundScale (and MapHalfExtent here) if a bigger arena is wanted.");
+                radius = maxRadius;
+            }
+            radius = Mathf.Max(10f, radius);
+
+            float footprintPct = (radius * radius) / (MapHalfExtent * MapHalfExtent) * 100f;
+
+            // -- OUTER perimeter. entranceCount: 1 = south only, 2 = south + north.
             WallTier outerTier = ParseTier(def.wallTier, WallTier.Wood);
-            int slots = Mathf.Max(3, def.wallSegmentsPerSide);
-
-            // ── OUTER perimeter gates from entranceCount ─────────────────────────
-            //   1 = south only (the single approach); 2 = south + north (main + breach).
             bool twoGates = def.entranceCount >= 2;
-            var outerGates = new bool[4] { true, false, twoGates, false }; // S [+N]
-            float outerExtent = BuildRing(root, slots, outerTier,
-                                          outerGates, CornerTowerPath, "Outer");
+            var outerGates = new bool[4] { true, false, twoGates, false };
+            var outer = BuildRing(root, radius, Mathf.Max(3, def.wallSegmentsPerSide), outerTier,
+                                  outerGates, "Outer");
 
-            // ── INNER keep ring(s) — the kill-zone (interiorWallLayers) ──────────
-            //   ReinforcedSteel, smaller, single gate OPPOSITE the outer south gate
-            //   (→ NORTH) so the player crosses the courtyard under fire (the funnel).
-            float innermostExtent = outerExtent;
+            // -- INNER keep ring(s) (interiorWallLayers) - the kill-zone. Each layer sits
+            //    at 45% of the ring outside it, with a single NORTH gate opposite the outer
+            //    SOUTH gate, so the player crosses the courtyard under fire (the funnel).
+            float innermost = outer.HalfExtent;
             int innerLayers = Mathf.Max(0, def.interiorWallLayers);
             for (int layer = 0; layer < innerLayers; layer++)
             {
-                int innerSlots = Mathf.Max(3, slots - (layer + 1) * 4);   // each ring tighter
-                var innerGates = new bool[4] { false, false, true, false }; // N only (opposite S)
-                innermostExtent = BuildRing(root, innerSlots, WallTier.ReinforcedSteel,
-                                            innerGates, CornerTowerPath, $"Keep{layer + 1}");
+                float keepRadius = Mathf.Max(8f, innermost * 0.45f);
+                var innerGates = new bool[4] { false, false, true, false };
+                var keep = BuildRing(root, keepRadius, Mathf.Max(3, def.wallSegmentsPerSide - 2),
+                                     WallTier.ReinforcedSteel, innerGates, $"Keep{layer + 1}");
+                innermost = keep.HalfExtent;
             }
 
-            // ── TOWERS — archer + mage Watchtower props per placement style ──────
-            // Named "Watchtower_*" → GarrisonController.ArmGarrisonTurrets arms them.
-            // Placed in the courtyard band between the innermost ring and the outer ring.
-            float towerBand = innerLayers > 0
-                ? (innermostExtent + outerExtent) * 0.5f   // crossfire over the courtyard
-                : outerExtent + SegSize.x * 0.6f;          // single-ring: just inside the wall line
-            PlaceTowers(root, def, towerBand);
+            // -- THE OBJECTIVE. Central spire at the origin; destroying it wins the raid.
+            var spire = PlaceSpire(root, def, tier);
 
-            // ── BOSS marker at centre ────────────────────────────────────────────
+            // -- TOWERS. Two bands so neither the approach nor the objective is safe.
+            var towerReport = PlaceTowers(root, def, tier, radius, outer.SegmentWidth, seed);
+
+            // -- BOSS marker. Pushed clear of the spire footprint so the boss does not
+            //    spawn inside it (RaidGarrisonSpawner navmesh-snaps from this point).
+            float bossOffset = Mathf.Max(4f, innermost * 0.35f);
             var boss = new GameObject("BossSpawn");
             boss.transform.SetParent(root, false);
-            boss.transform.localPosition = Vector3.zero;
+            boss.transform.localPosition = new Vector3(0f, 0f, -bossOffset);
 
-            Debug.Log($"[RaidBaseGenerator] '{root.name}' ({def.displayName}, {def.difficulty}): " +
-                      $"outer {outerTier} {slots}/side gates={(twoGates ? "S,N" : "S")} ±{outerExtent:F1}m, " +
-                      $"{innerLayers} inner keep layer(s), style={def.towerPlacementStyle} " +
-                      $"{def.archerTowerCount} archer + {def.mageTowerCount} mage towers, BossSpawn@centre.");
+            // -- HERO ENTRY. The raid scenes carried NO HeroStartPoint_PlayerSpawn, so
+            //    HeroControlEnsurer.SpawnEmergencyHero fell back to the CASTLE courtyard
+            //    spot (6, liftY+1, 4) - which with a real arena is inside the walls, on top
+            //    of the objective. Author the marker outside the south gate instead.
+            var heroStart = new GameObject(HeroStartName);
+            heroStart.transform.SetParent(root, false);
+            heroStart.transform.localPosition = new Vector3(0f, 0f, -(radius + 8f));
+
+            Debug.Log(
+                $"[RaidBaseGenerator] '{root.name}' ({def.displayName}, {tier.Name}) BUILT: " +
+                $"radius {radius:F1}m (~{footprintPct:F0}% of the {MapHalfExtent * 2f:F0}m plane), " +
+                $"outer {outerTier} {outer.SlotsPerSide}/side @ {outer.SegmentWidth:F2}m panels " +
+                $"gates={(twoGates ? "S,N" : "S")}, {innerLayers} keep layer(s) (innermost +/-{innermost:F1}m), " +
+                $"SPIRE {(spire != null ? spire.MaxHp.ToString("F0") : "MISSING")} HP at centre = THE WIN CONDITION, " +
+                $"{towerReport.Placed} turret(s) [{towerReport.TypeSummary}], " +
+                $"worst-case {towerReport.WorstConcurrent} concurrent -> {towerReport.WorstDps:F1} DPS " +
+                $"(budget {tier.TowerDpsBudget:F0}, damage x{towerReport.DamageScale:F2}); " +
+                $"hero time-to-death {(towerReport.WorstDps > 0.01f ? (HeroBaseHp / towerReport.WorstDps).ToString("F1") : "inf")}s " +
+                $"@{HeroBaseHp:F0}HP / {(towerReport.WorstDps > 0.01f ? (HeroGearedHp / towerReport.WorstDps).ToString("F1") : "inf")}s " +
+                $"@{HeroGearedHp:F0}HP. BossSpawn @ -{bossOffset:F1}m, hero entry @ -{radius + 8f:F1}m.");
         }
 
-        // Place archerTowerCount + mageTowerCount Watchtower props around the band radius.
-        // Cardinal       → the 4 side-midpoints (N/E/S/W), round-robin filled.
-        // OverlappingFire→ corners FIRST (diagonals) then side-midpoints → crossfire.
-        // Archer towers carry "Watchtower_Archer_*", mage towers "Watchtower_Mage_*"
-        // (both contain "Watchtower" → armed by GarrisonController).
-        private static void PlaceTowers(Transform root, SceneConfigDef def, float band)
+        // =====================================================================
+        //  THE SPIRE - the win condition. Art from the config's `centralBuilding`.
+        // =====================================================================
+
+        private static RaidSpire PlaceSpire(Transform root, SceneConfigDef def, RaidTier tier)
         {
-            int archers = Mathf.Max(0, def.archerTowerCount);
-            int mages = Mathf.Max(0, def.mageTowerCount);
-            int total = archers + mages;
-            if (total <= 0) return;
+            string catalogId = string.IsNullOrEmpty(def.centralBuilding) ? DefaultMageTowerId : def.centralBuilding;
+            var entry = FindStructure(catalogId);
 
-            bool overlapping = !string.Equals(def.towerPlacementStyle, "Cardinal",
-                                               System.StringComparison.OrdinalIgnoreCase);
-            var dirs = BuildTowerDirections(total, overlapping);
-            var prefab = Resources.Load<GameObject>(CornerTowerPath);
+            float targetHeight = 9f;
+            if (entry != null && entry.repo != null && entry.repo.visualHeight > 0.5f)
+                targetHeight = entry.repo.visualHeight;
+            targetHeight = Mathf.Clamp(targetHeight * 1.6f, 8f, 18f);   // a monument, not a hut
 
-            int placed = 0;
-            for (int i = 0; i < total; i++)
+            GameObject go = null;
+            string prefabPath = entry != null ? entry.visualPrefabPath : null;
+            if (!string.IsNullOrEmpty(prefabPath))
             {
-                bool isMage = i >= archers;          // archers first, then mages
-                string kind = isMage ? "Mage" : "Archer";
-                int idx = isMage ? (i - archers) : i;
-                var pos = dirs[i] * band;
-                if (PlaceCornerTower(root, prefab, pos, $"Watchtower_{kind}_{idx}")) placed++;
-            }
-            Debug.Log($"[RaidBaseGenerator] placed {placed}/{total} watchtowers " +
-                      $"({archers} archer + {mages} mage, style={(overlapping ? "OverlappingFire" : "Cardinal")}).");
-        }
-
-        // Evenly spread `count` outward XZ directions. Cardinal uses the 4 side mids
-        // (S/E/N/W) round-robin; OverlappingFire interleaves the 4 diagonals (corners)
-        // FIRST then the 4 side mids, so the first towers cover the corners (crossfire),
-        // with any remainder spread evenly on a circle to avoid stacking.
-        private static Vector3[] BuildTowerDirections(int count, bool overlapping)
-        {
-            // Cardinal side-midpoint directions (match BuildRing's 90° index 0=S..3=W).
-            Vector3[] cardinals =
-            {
-                new Vector3(0f, 0f, -1f),  // S
-                new Vector3(1f, 0f,  0f),  // E
-                new Vector3(0f, 0f,  1f),  // N
-                new Vector3(-1f, 0f, 0f),  // W
-            };
-            Vector3[] diagonals =
-            {
-                new Vector3( 1f, 0f, -1f).normalized,  // SE
-                new Vector3( 1f, 0f,  1f).normalized,  // NE
-                new Vector3(-1f, 0f,  1f).normalized,  // NW
-                new Vector3(-1f, 0f, -1f).normalized,  // SW
-            };
-
-            var anchors = overlapping
-                ? new[] { diagonals[0], cardinals[1], diagonals[1], cardinals[2],
-                          diagonals[2], cardinals[3], diagonals[3], cardinals[0] } // corner+mid weave
-                : cardinals;
-
-            var dirs = new Vector3[count];
-            for (int i = 0; i < count; i++)
-            {
-                if (i < anchors.Length)
+                var prefab = Resources.Load<GameObject>(prefabPath);
+                if (prefab != null)
                 {
-                    dirs[i] = anchors[i];
+                    go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                    if (go == null) go = Object.Instantiate(prefab);
                 }
                 else
                 {
-                    // Remainder: spread evenly on the circle, offset to dodge the anchors.
-                    float t = (i - anchors.Length + 0.5f) / Mathf.Max(1, count - anchors.Length);
-                    float ang = t * Mathf.PI * 2f + Mathf.PI * 0.25f;
-                    dirs[i] = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang));
+                    Debug.LogWarning($"[RaidBaseGenerator] spire art Resources/{prefabPath} " +
+                                     $"(centralBuilding '{catalogId}') not found - the art pack may not be " +
+                                     "imported. Falling back to a URP-safe primitive obelisk.");
                 }
             }
-            return dirs;
-        }
-
-        // Parse a wallTier string ("Wood"/"Iron"/"ReinforcedSteel") → WallTier enum.
-        private static WallTier ParseTier(string s, WallTier fallback)
-        {
-            if (!string.IsNullOrEmpty(s) && Enum.TryParse(s, true, out WallTier t)) return t;
-            return fallback;
-        }
-
-        // ── Composition: the Iron Bastion flagship layout ────────────────────
-
-        private static GameObject Build()
-        {
-            var prior = GameObject.Find(RootName);
-            if (prior != null) Object.DestroyImmediate(prior);
-
-            var root = new GameObject(RootName);
-            root.transform.position = Vector3.zero;
-
-            BuildIronBastion(root.transform);
-            return root;
-        }
-
-        // The flagship double-ring complex. Composes two BuildRings + boss marker +
-        // court crossfire towers. Outer SOUTH gate, inner NORTH gate (opposite) →
-        // the player crosses the killing courtyard under fire to reach the keep.
-        private static void BuildIronBastion(Transform root)
-        {
-            // OUTER ring — Iron, large, gate on SOUTH only (the single approach).
-            var outerGates = new bool[4] { true, false, false, false }; // S only
-            float outerExtent = BuildRing(root, OuterSlotsPerSide, OuterTier,
-                                          outerGates, CornerTowerPath, "Outer");
-
-            // INNER keep ring — Steel, small, gate on NORTH only (OPPOSITE the outer
-            // gate → the funnel: cross the courtyard under fire to breach the keep).
-            var innerGates = new bool[4] { false, false, true, false }; // N only
-            float innerExtent = BuildRing(root, InnerSlotsPerSide, InnerTier,
-                                          innerGates, CornerTowerPath, "Keep");
-
-            // BOSS spawn marker at the keep centre. Just the marker — the garrison/
-            // boss spawner reads this transform and places the boss at runtime.
-            var boss = new GameObject("BossSpawn");
-            boss.transform.SetParent(root, false);
-            boss.transform.localPosition = Vector3.zero;   // keep centre = world origin
-
-            // COURT crossfire towers between the rings, off the inner keep corners.
-            // Named "Watchtower_Court_<n>" so GarrisonController arms them too. Placed
-            // partway out from each inner corner toward the outer ring, on the diagonal.
-            float courtRadius = (innerExtent + outerExtent) * 0.5f;
-            var courtPrefab = Resources.Load<GameObject>(CornerTowerPath);
-            int courtTowers = 0;
-            for (int c = 0; c < 4; c++)   // one off each diagonal (NE/NW/SE/SW)
+            else
             {
-                // Diagonal directions: (±,±) on the XZ plane, normalized.
-                var diag = new Vector3((c == 0 || c == 3) ? 1f : -1f, 0f,
-                                       (c == 0 || c == 1) ? 1f : -1f).normalized;
-                var pos = diag * courtRadius;
-                if (PlaceCornerTower(root, courtPrefab, pos, $"Watchtower_Court_{c}")) courtTowers++;
+                Debug.LogWarning($"[RaidBaseGenerator] centralBuilding '{catalogId}' has no visualPrefabPath in " +
+                                 "structures-catalog.json - falling back to a URP-safe primitive obelisk.");
             }
 
-            Debug.Log($"[RaidBaseGenerator] '{RootName}': OUTER {OuterTier} {OuterSlotsPerSide}/side " +
-                      $"(gate S, ±{outerExtent:F1}m) + KEEP {InnerTier} {InnerSlotsPerSide}/side " +
-                      $"(gate N, ±{innerExtent:F1}m) + BossSpawn@centre + {courtTowers} court towers. " +
-                      $"Funnel: cross the courtyard S→N under crossfire.");
+            if (go == null) go = BuildFallbackObelisk(targetHeight);
+
+            go.name = RaidSpire.ObjectName;
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+
+            // Stand it up BEFORE measuring height (a flat FBX would otherwise be "scaled to
+            // height" on the wrong axis and become a pancake), then scale + ground-seat.
+            EnsureUpright(go, $"spire art '{catalogId}'");
+            float built = ScaleToHeight(go, targetHeight);
+            SeatOnGround(go);
+
+            var spire = go.GetComponent<RaidSpire>();
+            if (spire == null) spire = go.AddComponent<RaidSpire>();
+            spire.Configure(def.id, catalogId, tier.SpireHp, built);
+
+            Debug.Log($"[RaidBaseGenerator] SPIRE '{catalogId}' placed at centre: {tier.SpireHp:F0} HP, " +
+                      $"{built:F1}m tall, art='{(string.IsNullOrEmpty(prefabPath) ? "<primitive>" : prefabPath)}'. " +
+                      "It implements IDamageable (hero/troop seam) + IDamageableStructure (enemy seam).");
+            return spire;
         }
 
-        // ── BuildRing: the reusable concentric primitive ─────────────────────
-        // Builds ONE square ring centred on world origin: 4 corner towers via the
-        // 90°-around-origin mirror, then per-side wall fill. A side's centre slot is
-        // left OPEN as a gate ONLY if gateSides[s] is true; otherwise the whole side
-        // is filled SOLID (no gate) → controlled, offset entry between rings.
-        //
-        // slotsPerSide is forced ODD so the gate is the exact CENTRE slot.
-        // Returns the ring's halfExtent (corner offset) so callers can place props
-        // relative to it. towerPrefabPath/ringName drive art + naming.
-        private static float BuildRing(Transform root, int slotsPerSide, WallTier tier,
-                                       bool[] gateSides, string towerPrefabPath, string ringName)
+        /// <summary>
+        /// URP-safe fallback obelisk (never a default-material primitive: under URP that
+        /// renders MAGENTA). Uses the committed MagentaGuard.BuildUrpLitMaterial path.
+        /// </summary>
+        private static GameObject BuildFallbackObelisk(float height)
         {
-            // ── Slot count → odd (gate is the centre, so centring is guaranteed) ─
-            int n = Mathf.Max(3, slotsPerSide);
-            if ((n & 1) == 0) n++;                  // safety: force ODD so the gate centres
-            int gateIndex = (n - 1) / 2;
-            float span = n * SegSize.x;             // wall-run length per side (ends-to-ends)
+            var rootGo = new GameObject("SpireFallback");
 
-            // ── Tower footprint → derive the corner offset (extent) ──────────────
-            var towerPrefab = Resources.Load<GameObject>(towerPrefabPath);
+            var shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shaft.name = "Shaft";
+            shaft.transform.SetParent(rootGo.transform, false);
+            shaft.transform.localScale = new Vector3(2.2f, height * 0.5f, 2.2f);  // cylinder is 2 units tall
+            shaft.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
+            ApplyUrpMaterial(shaft, new Color(0.34f, 0.30f, 0.42f));
+
+            var crown = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            crown.name = "Crown";
+            crown.transform.SetParent(rootGo.transform, false);
+            crown.transform.localScale = Vector3.one * 2.6f;
+            crown.transform.localPosition = new Vector3(0f, height, 0f);
+            crown.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+            ApplyUrpMaterial(crown, new Color(0.62f, 0.36f, 0.78f));
+
+            var plinth = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            plinth.name = "Plinth";
+            plinth.transform.SetParent(rootGo.transform, false);
+            plinth.transform.localScale = new Vector3(5f, 1.2f, 5f);
+            plinth.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+            ApplyUrpMaterial(plinth, new Color(0.24f, 0.22f, 0.26f));
+
+            return rootGo;
+        }
+
+        /// <summary>Assigns a URP/Lit material via the committed MagentaGuard path (never the default).</summary>
+        private static void ApplyUrpMaterial(GameObject go, Color color)
+        {
+            var r = go != null ? go.GetComponent<Renderer>() : null;
+            if (r == null) return;
+            var m = MagentaGuard.BuildUrpLitMaterial(color);
+            if (m != null) r.sharedMaterial = m;
+        }
+
+        // =====================================================================
+        //  TOWERS - count from archer+mage, TYPE from towers[], stats from the
+        //  structures-catalog row, damage scaled to the tier's DPS budget.
+        // =====================================================================
+
+        private struct TowerReport
+        {
+            public int Placed;
+            public int WorstConcurrent;
+            public float WorstDps;
+            public float DamageScale;
+            public string TypeSummary;
+        }
+
+        /// <summary>One turret the builder is about to place (position + resolved stats).</summary>
+        private sealed class TowerPlan
+        {
+            public Vector3 Pos;
+            public string CatalogId;
+            public string PrefabPath;
+            public float Range;
+            public float FireRate;
+            public float RawDamage;
+            public bool CanHitAir;
+            public DamageElement Element;
+            public string Label;
+        }
+
+        private static TowerReport PlaceTowers(Transform root, SceneConfigDef def, RaidTier tier,
+                                               float radius, float segWidth, int seed)
+        {
+            var report = new TowerReport { DamageScale = 1f, TypeSummary = "none" };
+
+            int archers = Mathf.Max(0, def.archerTowerCount);
+            int mages = Mathf.Max(0, def.mageTowerCount);
+            int total = archers + mages;
+            if (total <= 0)
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] '{def.id}' authors 0 towers " +
+                                 "(archerTowerCount + mageTowerCount) - the arena has no turrets.");
+                return report;
+            }
+
+            // TYPE palette from the (previously dead) towers[] array, weighted by count.
+            var archerTypes = ResolveTowerTypes(def, DefaultArcherTowerId);
+            var mageTypes = ResolveTowerTypes(def, DefaultMageTowerId);
+
+            // BAND SPLIT from the authored towerPlacementStyle:
+            //   "Cardinal"        -> every turret on the wall line (the centre is a safe
+            //                        pocket) - the easy, teachable shape.
+            //   "OverlappingFire" -> ~60% on the wall line, the rest ringing the SPIRE, so
+            //                        the objective itself is contested crossfire.
+            bool overlapping = !string.Equals(def.towerPlacementStyle, "Cardinal",
+                                              StringComparison.OrdinalIgnoreCase);
+            float outerShare = overlapping ? OuterBandShare : 1f;
+
+            // Two bands: the wall line (no safe approach) + a spire guard (no safe objective).
+            int outerCount = Mathf.Clamp(Mathf.CeilToInt(total * outerShare), 1, total);
+            int innerCount = total - outerCount;
+            float outerBand = Mathf.Max(4f, radius - Mathf.Max(2.5f, segWidth));
+
+            // Deterministic per-config phase so the three arenas do not read identically.
+            float phase = (seed % 360) * Mathf.Deg2Rad;
+
+            float rangeCap = Mathf.Max(TowerRangeFloor, radius * TowerRangeFractionOfRadius);
+            var plans = new List<TowerPlan>(total);
+            var typeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            // PASS 1 - identity + combat stats. Positions come after, because the inner band
+            // radius depends on the resolved RANGES (see below).
+            for (int i = 0; i < total; i++)
+            {
+                bool isMage = i >= archers;
+                int kindIndex = isMage ? (i - archers) : i;
+                var palette = isMage ? mageTypes : archerTypes;
+                string typeId = palette[kindIndex % palette.Count];
+
+                var plan = new TowerPlan
+                {
+                    CatalogId = typeId,
+                    Label = $"Watchtower_{(isMage ? "Mage" : "Archer")}_{kindIndex}",
+                };
+                ResolveTowerStats(plan, rangeCap);
+                plans.Add(plan);
+
+                typeCounts.TryGetValue(typeId, out int n);
+                typeCounts[typeId] = n + 1;
+            }
+
+            // INNER BAND RADIUS - it MUST be inside its own turrets' reach, or the "spire
+            // guard" band does not actually guard the spire. Caught by simulating the layout
+            // before it shipped: at 0.35 * radius the Extreme enclave's guards stood 18.9 m
+            // out with a 16 m reach, so the objective had ZERO tower coverage - the exact
+            // opposite of the intent. Take the tighter of the fraction and 75% of the
+            // shortest inner-band reach.
+            float innerBand = Mathf.Max(3f, radius * InnerBandFraction);
+            if (innerCount > 0)
+            {
+                float minInnerRange = float.MaxValue;
+                for (int i = outerCount; i < plans.Count; i++)
+                    minInnerRange = Mathf.Min(minInnerRange, plans[i].Range);
+                if (minInnerRange < float.MaxValue)
+                    innerBand = Mathf.Max(3f, Mathf.Min(innerBand, minInnerRange * 0.75f));
+            }
+
+            // PASS 2 - positions.
+            for (int i = 0; i < plans.Count; i++)
+            {
+                bool onOuter = i < outerCount;
+                int bandIndex = onOuter ? i : (i - outerCount);
+                int bandTotal = onOuter ? outerCount : Mathf.Max(1, innerCount);
+                float band = onOuter ? outerBand : innerBand;
+                // The inner band is offset half a step so it never lines up behind the outer one.
+                float ang = phase + (bandIndex / (float)bandTotal) * Mathf.PI * 2f
+                                  + (onOuter ? 0f : Mathf.PI / bandTotal);
+                plans[i].Pos = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang)) * band;
+            }
+
+            // ---- BALANCE PASS ------------------------------------------------
+            // Find the single most-covered point in (and just outside) the arena and
+            // scale every turret's damage so THAT point can never exceed the tier's DPS
+            // budget. k is clamped to <= 1 so no turret is ever made stronger than its
+            // catalog row authors. This is the "limit how many can engage at once"
+            // lever, enforced as an arena-wide ceiling instead of a per-tower guess.
+            int worstConcurrent;
+            float worstRawDps = WorstCaseDps(plans, radius, out worstConcurrent);
+            float k = (worstRawDps > 0.01f && worstRawDps > tier.TowerDpsBudget)
+                ? tier.TowerDpsBudget / worstRawDps
+                : 1f;
+
+            int placed = 0;
+            for (int i = 0; i < plans.Count; i++)
+            {
+                var plan = plans[i];
+                plan.RawDamage = Mathf.Max(1f, plan.RawDamage * k);
+                var go = PlaceTowerProp(root, plan);
+                if (go != null) { ArmTower(go, plan); placed++; }
+            }
+
+            var summary = new System.Text.StringBuilder();
+            foreach (var kv in typeCounts)
+            {
+                if (summary.Length > 0) summary.Append(", ");
+                summary.Append(kv.Value).Append('x').Append(kv.Key);
+            }
+
+            report.Placed = placed;
+            report.WorstConcurrent = worstConcurrent;
+            report.WorstDps = worstRawDps * k;
+            report.DamageScale = k;
+            report.TypeSummary = summary.Length > 0 ? summary.ToString() : "none";
+
+            Debug.Log($"[RaidBaseGenerator] turrets for '{def.id}': {placed}/{total} placed " +
+                      $"({outerCount} on the wall line @ {outerBand:F1}m, {innerCount} guarding the spire " +
+                      $"@ {innerBand:F1}m, style={(overlapping ? "OverlappingFire" : "Cardinal")}), " +
+                      $"range cap {rangeCap:F1}m, types [{report.TypeSummary}]. " +
+                      $"Worst point in the arena is covered by {worstConcurrent} turret(s) = " +
+                      $"{worstRawDps:F1} raw DPS -> x{k:F2} -> {report.WorstDps:F1} DPS (budget {tier.TowerDpsBudget:F0}).");
+            return report;
+        }
+
+        /// <summary>
+        /// The type palette for a turret slot, expanded from the config's (previously
+        /// unread) <c>towers[]</c> array and weighted by each entry's count. Falls back to
+        /// a single default id when towers[] is absent/empty.
+        /// </summary>
+        private static List<string> ResolveTowerTypes(SceneConfigDef def, string fallbackId)
+        {
+            var list = new List<string>();
+            if (def.towers != null)
+            {
+                for (int i = 0; i < def.towers.Count; i++)
+                {
+                    var t = def.towers[i];
+                    if (t == null || string.IsNullOrEmpty(t.type)) continue;
+                    int n = Mathf.Clamp(t.count, 1, 16);
+                    for (int c = 0; c < n; c++) list.Add(t.type);
+                }
+            }
+            if (list.Count == 0) list.Add(fallbackId);
+            return list;
+        }
+
+        /// <summary>
+        /// Fill a plan's combat stats from its structures-catalog row (range / damage /
+        /// fireRate / canHitAir / element / art). Range is capped so a turret can never
+        /// blanket the arena. A missing row logs once and takes sane defaults.
+        /// </summary>
+        private static void ResolveTowerStats(TowerPlan plan, float rangeCap)
+        {
+            var entry = FindStructure(plan.CatalogId);
+            var repo = entry != null ? entry.repo : null;
+
+            float range = repo != null && repo.range > 0.5f ? repo.range : 18f;
+            plan.Range = Mathf.Clamp(range, TowerRangeFloor, rangeCap);
+            plan.FireRate = repo != null && repo.fireRate > 0.01f ? repo.fireRate : 0.8f;
+            plan.RawDamage = repo != null && repo.damage > 0.01f ? repo.damage : 10f;
+            plan.CanHitAir = true;   // the party is ground; keep the turret able to reach it
+            plan.Element = ParseElement(repo != null ? repo.element : null);
+            plan.PrefabPath = entry != null && !string.IsNullOrEmpty(entry.visualPrefabPath)
+                ? entry.visualPrefabPath : FallbackTowerPath;
+
+            if (entry == null)
+                Debug.LogWarning($"[RaidBaseGenerator] tower type '{plan.CatalogId}' is not in " +
+                                 "structures-catalog.json - using default turret stats + fallback art.");
+        }
+
+        /// <summary>
+        /// Sample the arena floor and return the highest total DPS any single point can be
+        /// exposed to, plus how many turrets reach it. Deterministic and cheap; this is the
+        /// number the balance ceiling is enforced against, so the oracle can recompute it.
+        /// </summary>
+        private static float WorstCaseDps(List<TowerPlan> plans, float radius, out int worstConcurrent)
+        {
+            worstConcurrent = 0;
+            float worst = 0f;
+            // Sample the whole arena plus an 8 m approach apron, at ~1.5 m resolution.
+            float extent = radius + 8f;
+            float step = Mathf.Max(1.25f, extent / 40f);
+            for (float x = -extent; x <= extent + 0.001f; x += step)
+            {
+                for (float z = -extent; z <= extent + 0.001f; z += step)
+                {
+                    var p = new Vector3(x, 0f, z);
+                    float dps = 0f;
+                    int n = 0;
+                    for (int i = 0; i < plans.Count; i++)
+                    {
+                        var t = plans[i];
+                        Vector3 d = t.Pos - p; d.y = 0f;
+                        if (d.sqrMagnitude > t.Range * t.Range) continue;
+                        dps += t.RawDamage * t.FireRate;
+                        n++;
+                    }
+                    if (dps > worst) { worst = dps; worstConcurrent = n; }
+                }
+            }
+            return worst;
+        }
+
+        /// <summary>
+        /// Place the turret prop. The name keeps the "Watchtower" token so
+        /// GarrisonTurretArmer still recognises it (it will SKIP this one - the tower
+        /// already carries a DefenseTower - which is exactly the intent: the builder's
+        /// per-type stats win over the spawner's uniform ones).
+        /// </summary>
+        private static GameObject PlaceTowerProp(Transform parent, TowerPlan plan)
+        {
+            var prefab = Resources.Load<GameObject>(plan.PrefabPath);
+            if (prefab == null && plan.PrefabPath != FallbackTowerPath)
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] turret art Resources/{plan.PrefabPath} " +
+                                 $"('{plan.CatalogId}') not found - trying the fallback tower art.");
+                prefab = Resources.Load<GameObject>(FallbackTowerPath);
+            }
+
+            GameObject go;
+            if (prefab != null)
+            {
+                go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                if (go == null) go = Object.Instantiate(prefab);
+            }
+            else
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] no turret art at all (Resources/{FallbackTowerPath} " +
+                                 $"missing too) - building a URP-safe primitive turret for '{plan.Label}'.");
+                go = BuildFallbackTurret();
+            }
+
+            go.name = plan.Label;
+            go.transform.SetParent(parent, false);
+            var outward = plan.Pos.sqrMagnitude > 0.001f ? plan.Pos.normalized : Vector3.forward;
+            go.transform.rotation = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.z), Vector3.up);
+            go.transform.position = plan.Pos;
+            EnsureUpright(go, $"turret art '{plan.CatalogId}' ({plan.Label})");
+            SeatOnGround(go);
+            return go;
+        }
+
+        /// <summary>URP-safe primitive turret (never a default-material primitive).</summary>
+        private static GameObject BuildFallbackTurret()
+        {
+            var rootGo = new GameObject("TurretFallback");
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            body.name = "Body";
+            body.transform.SetParent(rootGo.transform, false);
+            body.transform.localScale = new Vector3(1.6f, 2.2f, 1.6f);
+            body.transform.localPosition = new Vector3(0f, 2.2f, 0f);
+            ApplyUrpMaterial(body, new Color(0.30f, 0.26f, 0.24f));
+
+            var cap = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cap.name = "Cap";
+            cap.transform.SetParent(rootGo.transform, false);
+            cap.transform.localScale = new Vector3(2.2f, 0.5f, 2.2f);
+            cap.transform.localPosition = new Vector3(0f, 4.5f, 0f);
+            ApplyUrpMaterial(cap, new Color(0.42f, 0.20f, 0.16f));
+            return rootGo;
+        }
+
+        /// <summary>
+        /// Bake an EnemyOwned <see cref="DefenseTower"/> onto the turret with the resolved
+        /// stats. Reuses the shipped tower brain (its EnemyOwned path targets the hero +
+        /// companions through IDamageableStructure) rather than writing a second one.
+        ///
+        /// NOTE (documented limitation, unchanged here): an EnemyOwned DefenseTower is
+        /// INDESTRUCTIBLE by design - DefenseTower.IsAlive is `Allegiance == PlayerOwned`
+        /// and ApplyContactDamage early-returns for anything else ("garrison turrets are
+        /// not sieged"). See the REPORT for the ruling + the exact patch if that changes.
+        /// </summary>
+        private static void ArmTower(GameObject go, TowerPlan plan)
+        {
+            var dt = go.GetComponent<DefenseTower>();
+            if (dt == null) dt = go.AddComponent<DefenseTower>();
+            dt.Allegiance = TowerAllegiance.EnemyOwned;
+            dt.Range = plan.Range;
+            dt.Damage = plan.RawDamage;
+            dt.FireRate = plan.FireRate;
+            dt.CanHitAir = plan.CanHitAir;
+            dt.Element = plan.Element;
+            dt.BoltColor = new Color(0.95f, 0.3f, 0.2f);   // hostile red bolt
+        }
+
+        // =====================================================================
+        //  BuildRing - the reusable concentric primitive, now RADIUS-driven.
+        // =====================================================================
+
+        private struct RingReport
+        {
+            public float HalfExtent;
+            public int SlotsPerSide;
+            public float SegmentWidth;
+        }
+
+        /// <summary>
+        /// Build ONE square ring whose corner offset is <paramref name="targetHalfExtent"/>
+        /// (the authored baseRadius). Panel COUNT is derived so no panel is stretched past
+        /// <see cref="MaxSegmentWidth"/>, with <paramref name="minSlotsPerSide"/> (the
+        /// authored wallSegmentsPerSide) as the floor - so the data still sets the
+        /// granularity and the gate width while baseRadius sets the size. Count is forced
+        /// ODD so the gate lands on the exact centre panel.
+        /// </summary>
+        private static RingReport BuildRing(Transform root, float targetHalfExtent, int minSlotsPerSide,
+                                            WallTier tier, bool[] gateSides, string ringName)
+        {
+            var towerPrefab = Resources.Load<GameObject>(FallbackTowerPath);
             float towerHalf = MeasureTowerHalf(towerPrefab);
-            // Corner sits beyond the wall run by the tower's half-footprint, so the run
-            // fills exactly the gap between the two corner towers' inner ends.
-            float halfExtent = span * 0.5f + towerHalf;
 
-            // ── Four corner WATCHTOWERS via the 90°-around-origin mirror ─────────
-            // Author one corner at (H,0,-H); swing 90/180/270 around the centre (0,0,0).
-            // Name MUST contain "Watchtower" → GarrisonController arms it as a turret.
+            // The wall run per side is the gap between the two corner towers.
+            float halfExtent = Mathf.Max(towerHalf + MinSegmentWidth, targetHalfExtent);
+            float run = Mathf.Max(MinSegmentWidth, halfExtent * 2f - towerHalf * 2f);
+
+            int n = Mathf.Max(3, minSlotsPerSide);
+            int needed = Mathf.CeilToInt(run / MaxSegmentWidth);
+            if (needed > n) n = needed;
+            if ((n & 1) == 0) n++;                       // force ODD so the gate centres
+            float segW = Mathf.Max(MinSegmentWidth, run / n);
+            int gateIndex = (n - 1) / 2;
+
+            // Four corner watchtowers via the 90-degree-around-origin mirror. The name MUST
+            // contain "Watchtower" so GarrisonTurretArmer arms them at runtime (these are the
+            // ones the builder deliberately leaves un-statted - the corner garrison turrets).
             int towers = 0;
             var baseCorner = new Vector3(halfExtent, 0f, -halfExtent);
             for (int s = 0; s < 4; s++)
             {
                 var rot = Quaternion.Euler(0f, 90f * s, 0f);
                 if (PlaceCornerTower(root, towerPrefab, rot * baseCorner,
-                                     $"Watchtower_{ringName}_{SideName[s]}")) towers++;
+                                     $"Watchtower_{ringName}_{SideName[s]}") != null) towers++;
             }
 
-            // ── Fill each side; open the centre slot only where gateSides[s] ─────
             int segs = 0;
             for (int s = 0; s < 4; s++)
             {
@@ -416,20 +818,20 @@ namespace DeNelle.Editor
                 var alongDir = rot * Vector3.right;
                 for (int i = 0; i < n; i++)
                 {
-                    if (sideHasGate && i == gateIndex) continue;   // the gate opening (this side)
-                    float along = -span * 0.5f + (i + 0.5f) * SegSize.x;
-                    segs += PlaceSegment(root, midpoint + alongDir * along, rot, tier,
+                    if (sideHasGate && i == gateIndex) continue;   // the gate opening
+                    float along = -run * 0.5f + (i + 0.5f) * segW;
+                    segs += PlaceSegment(root, midpoint + alongDir * along, rot, tier, segW,
                                          $"{ringName}_S{SideName[s]}_{i}");
                 }
             }
 
-            Debug.Log($"[RaidBaseGenerator] ring '{ringName}': {n} slots/side, tier {tier} " +
-                      $"({towers} watchtowers, {segs} wall segments); span {span:F1}m, " +
-                      $"extent ±{halfExtent:F1}m, gates=[{GatesToStr(gateSides)}].");
-            return halfExtent;
+            Debug.Log($"[RaidBaseGenerator] ring '{ringName}': target +/-{targetHalfExtent:F1}m -> " +
+                      $"+/-{halfExtent:F1}m, {n} panel(s)/side @ {segW:F2}m (floor {minSlotsPerSide}), tier {tier} " +
+                      $"({towers} watchtowers, {segs} wall panels), gates=[{GatesToStr(gateSides)}].");
+
+            return new RingReport { HalfExtent = halfExtent, SlotsPerSide = n, SegmentWidth = segW };
         }
 
-        // Pretty-print the per-side gate flags for the log (e.g. "S").
         private static string GatesToStr(bool[] gateSides)
         {
             if (gateSides == null) return "none";
@@ -439,10 +841,10 @@ namespace DeNelle.Editor
             return acc.Length > 0 ? acc : "none";
         }
 
-        // ── Place helpers (mirrored from PerimeterWallGenerator) ─────────────
+        // =====================================================================
+        //  Place helpers
+        // =====================================================================
 
-        // Half the larger horizontal extent of the corner tower prefab (its reach toward
-        // the wall run). Measured from a throwaway instance; SegSize.x fallback if unknown.
         private static float MeasureTowerHalf(GameObject prefab)
         {
             if (prefab == null) return SegSize.x;
@@ -459,40 +861,85 @@ namespace DeNelle.Editor
             return half;
         }
 
-        // Place a corner/court tower (seated, facing outward from the centre). The
-        // caller's `name` carries the "Watchtower" token → runtime turret-arming. False
-        // on missing prefab (logged, never crashes).
-        private static bool PlaceCornerTower(Transform parent, GameObject prefab, Vector3 pos, string name)
+        /// <summary>Place a corner/court tower (seated, facing outward). Null on missing prefab (logged).</summary>
+        private static GameObject PlaceCornerTower(Transform parent, GameObject prefab, Vector3 pos, string name)
         {
             if (prefab == null)
             {
-                Debug.LogWarning($"[RaidBaseGenerator] tower prefab missing at Resources/{CornerTowerPath} — skipping '{name}'.");
-                return false;
+                Debug.LogWarning($"[RaidBaseGenerator] tower prefab missing at Resources/{FallbackTowerPath} - skipping '{name}'.");
+                return null;
             }
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (go == null) go = Object.Instantiate(prefab);
-            go.name = name;                         // MUST contain "Watchtower" → GarrisonController arms it
+            go.name = name;                         // MUST contain "Watchtower"
             go.transform.SetParent(parent, false);
             var outward = pos.sqrMagnitude > 0.001f ? pos.normalized : Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.z), Vector3.up);
             go.transform.position = pos;
-
-            var rends = go.GetComponentsInChildren<Renderer>(true);
-            if (rends.Length > 0)
-            {
-                var b = rends[0].bounds;
-                for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
-                go.transform.position += new Vector3(0f, -b.min.y, 0f);   // ground-seat
-            }
-            return true;
+            SeatOnGround(go);
+            return go;
         }
 
-        // Place one tier wall segment along a (rotated) side. PARAMETERIZED BY TIER:
-        // the segment art comes from WallTierData.Get(tier).SegmentPrefabPath, so each
-        // ring is built from its own wall art. Box-fit + seat are done while
-        // axis-aligned (reliable world-AABB fit), THEN the wrapper is rotated to the
-        // side and positioned — Y-rotation preserves the fit/seat.
-        private static int PlaceSegment(Transform parent, Vector3 pos, Quaternion sideRot, WallTier tier, string name)
+        /// <summary>
+        /// FBX-FLAT CORRECTION. Several Resources/Structures entries are raw .fbx models, not
+        /// prefabs (ArcaneSpire_1 is one), and this project's FBX imports have a history of
+        /// landing FLAT - which is exactly why PlaceSegment applies a hard -90 X to every wall
+        /// panel. A flat spire would then be "scaled to height" on the wrong axis and become a
+        /// pancake. Rather than hardcode a correction per asset, MEASURE: if the model is
+        /// materially wider than it is tall, stand it up and say so. Idempotent + logged.
+        /// </summary>
+        private static void EnsureUpright(GameObject go, string what)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) return;
+            var b = rends[0].bounds;
+            for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
+            float widest = Mathf.Max(b.size.x, b.size.z);
+            if (b.size.y >= widest * 0.8f) return;      // already standing
+
+            go.transform.rotation = go.transform.rotation * Quaternion.Euler(-90f, 0f, 0f);
+            Debug.LogWarning($"[RaidBaseGenerator] '{what}' imported FLAT " +
+                             $"(h={b.size.y:F1}m vs {widest:F1}m wide) - applied the -90 X FBX-flat " +
+                             "correction so it stands up. If the art is genuinely squat, this is a false " +
+                             "positive - author a prefab with the right orientation instead.");
+        }
+
+        /// <summary>Drop an object so its lowest renderer bound sits at y = 0.</summary>
+        private static void SeatOnGround(GameObject go)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) return;
+            var b = rends[0].bounds;
+            for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
+            go.transform.position += new Vector3(0f, -b.min.y, 0f);
+        }
+
+        /// <summary>Uniformly scale an object so its rendered height matches <paramref name="target"/>. Returns the height achieved.</summary>
+        private static float ScaleToHeight(GameObject go, float target)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) return target;
+            var b = rends[0].bounds;
+            for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
+            if (b.size.y <= 0.0001f) return target;
+            float f = Mathf.Clamp(target / b.size.y, 0.2f, 8f);
+            go.transform.localScale *= f;
+            return b.size.y * f;
+        }
+
+        /// <summary>
+        /// Place one tier wall panel along a (rotated) side, stretched to
+        /// <paramref name="segWidth"/>. The panel is box-fitted + ground-seated while
+        /// axis-aligned (reliable world-AABB fit), then rotated to the side.
+        ///
+        /// NEW: the panel gets a real BoxCollider on the "Structure" layer. Before this
+        /// the raid walls carried NO collider (the generator only calls WallSegment.SetTier,
+        /// and only WallSegment.Configure builds the blocker + moves the layer), so they
+        /// blocked neither movement nor the line-of-sight linecasts that are masked to
+        /// "Structure". A boundary wall you can shoot straight through is not a boundary.
+        /// </summary>
+        private static int PlaceSegment(Transform parent, Vector3 pos, Quaternion sideRot, WallTier tier,
+                                        float segWidth, string name)
         {
             var prefab = Resources.Load<GameObject>(WallTierData.Get(tier).SegmentPrefabPath);
             if (prefab == null)
@@ -510,16 +957,16 @@ namespace DeNelle.Editor
             if (go == null) go = Object.Instantiate(prefab);
             go.transform.SetParent(seg.transform, false);
             go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // FBX imports flat → stand upright
+            go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // FBX imports flat -> stand upright
 
             float seatY = 0f;
+            Vector3 sc = seg.transform.localScale;
             var rends = go.GetComponentsInChildren<Renderer>(true);
             if (rends.Length > 0)
             {
                 var b = rends[0].bounds;
                 for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
-                var sc = seg.transform.localScale;
-                if (b.size.x > 0.0001f) sc.x *= SegSize.x / b.size.x;
+                if (b.size.x > 0.0001f) sc.x *= segWidth / b.size.x;
                 if (b.size.y > 0.0001f) sc.y *= SegSize.y / b.size.y;
                 if (b.size.z > 0.0001f) sc.z *= SegSize.z / b.size.z;
                 seg.transform.localScale = sc;
@@ -534,7 +981,178 @@ namespace DeNelle.Editor
 
             var ws = seg.AddComponent<WallSegment>();
             ws.SetTier((int)tier);
+
+            // SOLID BOUNDARY. Sizes are authored in WORLD units, so they are divided by the
+            // fit scale that lives on this transform. WallSegment.Awake adopts this collider
+            // as its blocker; the "Structure" layer is what every LoS linecast is masked to.
+            var box = seg.AddComponent<BoxCollider>();
+            float sx = Mathf.Abs(sc.x) > 0.0001f ? sc.x : 1f;
+            float sy = Mathf.Abs(sc.y) > 0.0001f ? sc.y : 1f;
+            float sz = Mathf.Abs(sc.z) > 0.0001f ? sc.z : 1f;
+            box.size = new Vector3(segWidth / sx, SegSize.y / sy, SegSize.z / sz);
+            box.center = new Vector3(0f, (SegSize.y * 0.5f - seatY) / sy, 0f);
+            box.isTrigger = false;
+            int structureLayer = LayerMask.NameToLayer("Structure");
+            if (structureLayer >= 0) seg.layer = structureLayer;
+
             return 1;
+        }
+
+        private static WallTier ParseTier(string s, WallTier fallback)
+        {
+            if (!string.IsNullOrEmpty(s) && Enum.TryParse(s, true, out WallTier t)) return t;
+            return fallback;
+        }
+
+        private static DamageElement ParseElement(string s)
+        {
+            if (!string.IsNullOrEmpty(s) && Enum.TryParse(s, true, out DamageElement e)) return e;
+            return DamageElement.None;
+        }
+
+        /// <summary>Stable, platform-independent hash of a config id (the deterministic layout seed).</summary>
+        private static int StableHash(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return 17;
+            unchecked
+            {
+                int h = 23;
+                for (int i = 0; i < s.Length; i++) h = h * 31 + s[i];
+                return h & 0x7fffffff;
+            }
+        }
+
+        // =====================================================================
+        //  structures-catalog reader (editor-side).
+        //  CatalogRegistry is populated by CatalogBootstrap, which is
+        //  [RuntimeInitializeOnLoadMethod] and therefore NEVER runs in batchmode
+        //  editor code (BlankStartCensusRegression.cs:99 documents the same catch).
+        //  So the builder reads the canonical JSON directly, with the same
+        //  CanonicalJson (Resources-copy-wins) + Newtonsoft path CatalogBootstrap uses.
+        // =====================================================================
+
+        private const string StructuresRelativePath = "Data/Canonical/structures-catalog.json";
+
+        [Serializable]
+        private sealed class StructRepo
+        {
+            public float range;
+            public float damage;
+            public float fireRate;
+            public bool canHitAir;
+            public string element;
+            public float visualHeight;
+            public float heightMul;
+        }
+
+        [Serializable]
+        private sealed class StructEntry
+        {
+            public string id;
+            public string visualPrefabPath;
+            public StructRepo repo;
+        }
+
+        [Serializable]
+        private sealed class StructFile
+        {
+            public List<StructEntry> entries;
+        }
+
+        private static Dictionary<string, StructEntry> _structures;
+
+        /// <summary>Force a fresh structures-catalog read on next access (after a JSON edit).</summary>
+        public static void InvalidateStructureCatalog() => _structures = null;
+
+        private static StructEntry FindStructure(string id)
+        {
+            EnsureStructures();
+            if (string.IsNullOrEmpty(id) || _structures == null) return null;
+            return _structures.TryGetValue(id, out var e) ? e : null;
+        }
+
+        private static void EnsureStructures()
+        {
+            if (_structures != null) return;
+            _structures = new Dictionary<string, StructEntry>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string text = CanonicalJson.Read(StructuresRelativePath);
+                if (string.IsNullOrEmpty(text))
+                {
+                    Debug.LogWarning($"[RaidBaseGenerator] {StructuresRelativePath} not found - " +
+                                     "turret/spire art + stats fall back to defaults.");
+                    return;
+                }
+                var settings = new JsonSerializerSettings
+                {
+                    NullValueHandling = NullValueHandling.Ignore,
+                    MissingMemberHandling = MissingMemberHandling.Ignore,
+                };
+                var file = JsonConvert.DeserializeObject<StructFile>(text, settings);
+                if (file == null || file.entries == null)
+                {
+                    Debug.LogWarning("[RaidBaseGenerator] structures-catalog.json parsed empty - defaults used.");
+                    return;
+                }
+                foreach (var e in file.entries)
+                {
+                    if (e == null || string.IsNullOrEmpty(e.id)) continue;
+                    _structures[e.id] = e;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] structures-catalog.json read failed ({ex.Message}) - defaults used.");
+            }
+        }
+
+        // =====================================================================
+        //  Legacy Iron-Bastion flagship layout (menu items preserved).
+        // =====================================================================
+
+        private static GameObject Build()
+        {
+            var prior = GameObject.Find(RootName);
+            if (prior != null) Object.DestroyImmediate(prior);
+
+            var root = new GameObject(RootName);
+            root.transform.position = Vector3.zero;
+
+            BuildIronBastion(root.transform);
+            return root;
+        }
+
+        private static void BuildIronBastion(Transform root)
+        {
+            // Radii preserved from the original slot-driven maths (15 and 7 slots @ 1.5 m
+            // plus the corner tower half-footprint) so the flagship reads as it always has.
+            var outerGates = new bool[4] { true, false, false, false };  // S only
+            var outer = BuildRing(root, OuterSlotsPerSide * SegSize.x * 0.5f + 4f, OuterSlotsPerSide,
+                                  OuterTier, outerGates, "Outer");
+
+            var innerGates = new bool[4] { false, false, true, false };  // N only (opposite)
+            var inner = BuildRing(root, InnerSlotsPerSide * SegSize.x * 0.5f + 4f, InnerSlotsPerSide,
+                                  InnerTier, innerGates, "Keep");
+
+            var boss = new GameObject("BossSpawn");
+            boss.transform.SetParent(root, false);
+            boss.transform.localPosition = Vector3.zero;
+
+            float courtRadius = (inner.HalfExtent + outer.HalfExtent) * 0.5f;
+            var courtPrefab = Resources.Load<GameObject>(FallbackTowerPath);
+            int courtTowers = 0;
+            for (int c = 0; c < 4; c++)
+            {
+                var diag = new Vector3((c == 0 || c == 3) ? 1f : -1f, 0f,
+                                       (c == 0 || c == 1) ? 1f : -1f).normalized;
+                if (PlaceCornerTower(root, courtPrefab, diag * courtRadius, $"Watchtower_Court_{c}") != null)
+                    courtTowers++;
+            }
+
+            Debug.Log($"[RaidBaseGenerator] '{RootName}': OUTER {OuterTier} (gate S, +/-{outer.HalfExtent:F1}m) + " +
+                      $"KEEP {InnerTier} (gate N, +/-{inner.HalfExtent:F1}m) + BossSpawn@centre + " +
+                      $"{courtTowers} court towers. Funnel: cross the courtyard S->N under crossfire.");
         }
     }
 }
