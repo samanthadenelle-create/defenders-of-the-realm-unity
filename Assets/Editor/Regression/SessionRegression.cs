@@ -11,8 +11,16 @@
 // Runs in batchmode (Unity closed) via:
 //   run-unity-method.ps1 -Method DeNelle.Editor.SessionRegression.RunAll -LogName session-regression.log
 //
-// Prints a single authoritative marker (mirrors DataRegression):
-//   REGRESSION_OK   (all checks passed)  /  REGRESSION_FAIL: <n> failure(s)
+// Prints a single authoritative marker:
+//   SESSION_GUARDS_OK 6/6 checks  /  SESSION_GUARDS_FAIL: <n> failure(s)
+//
+// MARKER NOTE (2026-08-02): this class used to emit a bare `REGRESSION_OK`, the same
+// literal DataRegression.RunAll and the legacy Assets/Editor/RegressionSuite.cs emitted.
+// Because the project judges by MARKER (never exit code), a log carrying REGRESSION_OK
+// did not say WHICH suite produced it — a 6-check pass read as a ~90-suite pass. The
+// markers are now disjoint AND deliberately do not contain "REGRESSION_OK" as a
+// substring, so a grep for the real gate can never be satisfied by this suite.
+// Enforced by RegressionMarkerRegression [regression-marker].
 //
 // CHECKS (each fix it guards):
 //   1. VENDOR CONTRACT  — VendorStockContract.AllowedFor maps each vendor context
@@ -60,12 +68,12 @@ namespace DeNelle.Editor
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
             {
-                log.AppendLine("REGRESSION_OK");
+                log.AppendLine("SESSION_GUARDS_OK 6/6 checks");
                 Debug.Log(log.ToString());
             }
             else
             {
-                log.AppendLine($"REGRESSION_FAIL: {failures.Count} failure(s):");
+                log.AppendLine($"SESSION_GUARDS_FAIL: {failures.Count} failure(s):");
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());

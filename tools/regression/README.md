@@ -11,9 +11,31 @@ One suite, two teams, run on **every check-in**. It has four layers:
 | **Unity tests** | CLI (Windows + Unity) | Yes | EditMode + PlayMode | EconomyService/AnimParams/GameState/catalog logic (EditMode); DEFEND→wave/hero/NRE end-to-end (PlayMode) |
 | **Manual QA** | A human, before a player build | Play the game | Yes | T-pose / walk facing, HUD readability, build preview isolation, DTT grounding + defeat flow, gates/compass/trees, node interaction |
 
+> ### ⚠ MARKER / SUITE CORRECTION (2026-08-02) — read before trusting anything below
+> `checkin_gate.ps1` stage 3 used to invoke **`DeNelle.Editor.RegressionSuite.RunAll`**
+> (the 22-case battery described in this file) and judge it by the bare literal
+> `REGRESSION_OK` — which **three** classes emitted. So the real gate,
+> **`DeNelle.Editor.DataRegression.RunAll`** (~90 registered oracle suites + ~26 inline
+> catalog checks — what CLAUDE.md / START_HERE.md / every RESULT file mean by
+> `REGRESSION_OK`), had **never run in the automated check-in path**. Also fixed the same
+> day: this script did not PARSE at all under PowerShell 5.1 (`"$platform:"` is a hard
+> parser error), so no stage of it had been running either.
+>
+> Now: markers are disjoint and the gate runs **both** suites and requires **both**.
+>
+> | Entry point | Marker | What it is |
+> |---|---|---|
+> | `DeNelle.Editor.DataRegression.RunAll` | `REGRESSION_OK <n>/<n> suites` | **THE** gate |
+> | `DeNelle.Editor.RegressionSuite.RunAll` | `CHECKIN_SUITE_OK <p>/<n> cases` | the 22-case battery below |
+> | `DeNelle.Editor.SessionRegression.RunAll` | `SESSION_GUARDS_OK 6/6 checks` | past-session guards |
+>
+> `RegressionMarkerRegression` `[regression-marker]` now enforces marker uniqueness,
+> full registration of every `Run(out string)` oracle, and that every gate-script grep
+> resolves to exactly one emitter.
+
 **Why the headless Regression suite layer exists** (owner: *"so we don't patch one
-hole by creating 3 more"*): it is the fast single-marker (`REGRESSION_OK` /
-`REGRESSION_FAIL`) smoke battery that runs in plain editor batchmode — **no test
+hole by creating 3 more"*): it is the fast single-marker (`CHECKIN_SUITE_OK` /
+`CHECKIN_SUITE_FAIL`) smoke battery that runs in plain editor batchmode — **no test
 asmdef, no play mode, no NavMesh bake**. It proves the *static preconditions* of
 the core loop (the catalog parses, the playable scene opens with its wiring, the
 reward fields exist) so that a later PlayMode failure is a real gameplay bug, not
@@ -77,11 +99,16 @@ Stages run in order and short-circuit on a hard prerequisite failure:
 1. **Static gate** (`static_gate.py`) — must pass or nothing else runs.
 2. **Compile gate** (`DeNelle.Editor.CompileGate.Run` via `run-unity-method.ps1`)
    — must print `COMPILE_GATE_OK` or the rest is skipped.
-3. **Regression suite** (`DeNelle.Editor.RegressionSuite.RunAll` via `run-unity-method.ps1`)
-   — must print `REGRESSION_OK`. Headless smoke cases; no test asmdef / play mode.
-4. **EditMode tests** (`-runTests -testPlatform EditMode`).
-5. **PlayMode tests** (`-runTests -testPlatform PlayMode`).
-6. **Build** (`build-windows.ps1`) — only with `-Build`, only if the above are green.
+3. **Data regression — THE gate** (`DeNelle.Editor.DataRegression.RunAll` via
+   `run-unity-method.ps1`) — must print `REGRESSION_OK <n>/<n> suites`. ~90 registered
+   oracle suites + ~26 inline catalog checks. Judged on the SHAPED marker, not the token.
+4. **Check-in battery** (`DeNelle.Editor.RegressionSuite.RunAll` via `run-unity-method.ps1`)
+   — must print `CHECKIN_SUITE_OK`. Headless smoke cases; no test asmdef / play mode.
+   Not redundant with 3: only this stage opens Village2, runs the behavioural NavMesh
+   castle-gate query, and lints for per-frame fork-bombs / Yarn `command:`.
+5. **EditMode tests** (`-runTests -testPlatform EditMode`).
+6. **PlayMode tests** (`-runTests -testPlatform PlayMode`).
+7. **Build** (`build-windows.ps1`) — only with `-Build`, only if the above are green.
 
 It prints a summary table and returns a single exit code: `0` = PASS,
 `1` = at least one FAIL. Results XML lands in `Builds/tests-EditMode.xml` /
@@ -114,7 +141,8 @@ A change **must not merge** if any of these are red:
 
 - Static gate exits non-zero (UI or CLI).
 - CompileGate does not print `COMPILE_GATE_OK`.
-- RegressionSuite does not print `REGRESSION_OK` (see the per-case `[FAIL]` rows).
+- DataRegression does not print `REGRESSION_OK <n>/<n> suites` (see the `REGRESSION_FAIL` rows).
+- RegressionSuite does not print `CHECKIN_SUITE_OK` (see the per-case `[FAIL]` rows).
 - Any EditMode or PlayMode test fails.
 - (For a player-facing build) any **Manual QA** Section 1-6 item is FAIL.
 

@@ -11,7 +11,18 @@
 // validates the response — so a silent JSON->object mapping break (wrong top-level key,
 // renamed field, parse-to-empty) becomes a hard REGRESSION FAIL line instead of an
 // empty store at runtime with no error. Prints a single authoritative marker:
-//   REGRESSION_OK   (all checks passed)  /  REGRESSION_FAIL: <n> failure(s)
+//   REGRESSION_OK <n>/<n> suites          (all checks passed)
+//   REGRESSION_FAIL: <n> failure(s) ...   (>=1 check failed)
+//
+// THE MARKER IS THE VERDICT (project law: judge by marker, never exit code) — so it
+// must say WHICH suite produced it. Until 2026-08-02 THREE classes emitted a bare
+// `REGRESSION_OK` (this file, SessionRegression, and the 22-case legacy
+// Assets/Editor/RegressionSuite.cs) and the check-in gate ran the LEGACY one while
+// every RESULT file read its marker as this one's. Distinct markers now:
+//   DataRegression.RunAll    -> REGRESSION_OK <n>/<n> suites   (THE gate)
+//   RegressionSuite.RunAll   -> CHECKIN_SUITE_OK <p>/<n> cases (legacy smoke battery)
+//   SessionRegression.RunAll -> SESSION_GUARDS_OK
+// RegressionMarkerRegression [regression-marker] keeps that invariant true.
 // =============================================================================
 using System.Collections.Generic;
 using System.Text;
@@ -255,6 +266,25 @@ namespace DeNelle.Editor
             // when the flag is off (reversible).
             CheckEnemyStructureSweep(failures, log);
 
+            // =====================================================================
+            //  >>> REGISTERED ORACLE SUITES — START FENCE <<<
+            // ---------------------------------------------------------------------
+            // Everything between this fence and the END fence is ONE registered
+            // oracle suite per line: `Class.Run(out reason)` -> failures.Add(reason)
+            // on red, `log.AppendLine("[tag] " + reason)` on green.
+            //
+            // The two counters below make the verdict marker SELF-DESCRIBING
+            // (REGRESSION_OK <n>/<n> suites). Without a count in the marker, a small
+            // suite's log reads identically to this one's — which is exactly how the
+            // check-in gate ran the 22-case legacy battery for months while every
+            // RESULT file claimed the full set had passed. See RegressionMarkerRegression.
+            //
+            // *** ADD NEW SUITE REGISTRATIONS ABOVE THE END FENCE, NOT BELOW IT. ***
+            // A line added below the end fence still RUNS but is not COUNTED.
+            // =====================================================================
+            int suiteTagLinesBefore = CountOracleTagLines(log);
+            int suiteFailuresBefore = failures.Count;
+
             // --- monetization covenant gate (LB-5) + tower upgrade perks (overnight silos C/E) ---
             if (!MonetizationCovenantRegression.Run(out var covReason)) failures.Add(covReason); else log.AppendLine("[covenant] " + covReason);
             if (!TowerPerkRegression.Run(out var towerPerkReason)) failures.Add(towerPerkReason); else log.AppendLine("[tower-perks] " + towerPerkReason);
@@ -338,7 +368,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-lore suite", () => { if (!DungeonLoreReadableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-lore] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-state-reset suite", () => { if (!DungeonStateResetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-state-reset] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-defeat suite", () => { if (!DungeonDefeatEndsRunRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-defeat] " + r); });
-            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitReachableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
+            // NOTE: tag was a DUPLICATE of the DungeonExitRegression line above ("[dungeon-exit]"),
+            // so two different suites reported under one tag and one of them was invisible in the
+            // log. Renamed to [dungeon-exit-reachable]. (The two suites ALSO share the
+            // DUNGEON_EXIT_OK marker literal inside their own bodies — that is tracked as known
+            // debt in RegressionMarkerRegression's allowlist; fixing it means editing those files.)
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit-reachable suite", () => { if (!DungeonExitReachableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit-reachable] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-defeat-realtime suite", () => { if (!DungeonRealtimeSettleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-defeat-realtime] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-toast suite", () => { if (!DungeonToastRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-toast] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-fpv suite", () => { if (!DungeonFpvRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-fpv] " + r); });
@@ -380,6 +415,48 @@ namespace DeNelle.Editor
             // --- shields: every shield carries a real defense value, the ladder climbs with req.level, and GearLoadout actually SUMS the off-hand (all three were missing - shields were pure decoration) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "shield-defense suite", () => { if (!DeNelle.Editor.Regression.ShieldDefenseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shield-defense] " + r); });
 
+            // --- 2026-08-02 oracle wave: suites written by the parallel lanes tonight.
+            // Each class was VERIFIED to exist on disk with a public static bool Run(out string)
+            // before being registered here (a phantom registration is a compile break).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "modifier-key-coverage suite", () => { if (!DeNelle.Editor.Regression.ModifierKeyCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[modifier-key-coverage] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-foliage suite", () => { if (!HubFoliageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-foliage] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "glossary suite", () => { if (!DeNelle.Editor.Regression.GlossaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[glossary] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "item-identity suite", () => { if (!DeNelle.Editor.Regression.ItemIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[item-identity] " + r); });
+
+            // Second wave of the 2026-08-02 program (PM spec). Each class + its declared
+            // tag were read off disk before registering; tags are the ones the suite
+            // headers themselves declare, not the ones the spec guessed.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-pool-reset suite", () => { if (!DeNelle.Editor.Regression.EnemyPoolResetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-pool-reset] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-reach suite", () => { if (!DeNelle.Editor.Regression.TutorialStepReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-reach] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "runtime-spawn-visual suite", () => { if (!DeNelle.Editor.Regression.RuntimeSpawnVisualRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[runtime-spawn-visual] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-identity suite", () => { if (!DeNelle.Editor.Regression.WalletIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-identity] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "loot-class-gate suite", () => { if (!DeNelle.Editor.Regression.LootClassGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[loot-class-gate] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "shader-predicate-authority suite", () => { if (!DeNelle.Editor.Regression.ShaderPredicateSingleAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shader-predicate-authority] " + r); });
+            // --- dynamic difficulty: neutral lands EXACTLY on the authored target, both rails reachable, spike expires at read time, no dead authored key ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dynamic-difficulty suite", () => { if (!DeNelle.Editor.Regression.DynamicDifficultyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dynamic-difficulty] " + r); });
+            // --- raid arena shape: footprint is a real fraction of the plane (the 2.4% square can never return), the spire is reachable by the HERO's seam, navmesh present ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-arena-shape suite", () => { if (!DeNelle.Editor.Regression.RaidArenaShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-arena-shape] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "reset-full-clear suite", () => { if (!DeNelle.Editor.Regression.ResetToNewGameFullClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[reset-full-clear] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cathedral-cumulative suite", () => { if (!DeNelle.Editor.Regression.CathedralCumulativeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cathedral-cumulative] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-equip-hub suite", () => { if (!DeNelle.Editor.Regression.HeroEquipHudHubRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-equip-hub] " + r); });
+            // The gear lane FOLDED shield-improvement + defense-cap into this one file rather
+            // than shipping the three classes the spec named - registered as it actually landed.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "armed-hero suite", () => { if (!DeNelle.Editor.Regression.ArmedHeroInvariantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armed-hero] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "buildmenu-economy suite", () => { if (!DeNelle.Editor.Regression.BuildMenuRealEconomyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buildmenu-economy] " + r); });
+
+            // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
+            // oracle, no gate script grepping a marker nobody emits. Registered LAST so
+            // it sees the fully-built registry above it (it reads SOURCE, not runtime
+            // state, so its own registration line is what satisfies its self-reference).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });
+
+            // =====================================================================
+            //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
+            // =====================================================================
+            int suitesGreen = CountOracleTagLines(log) - suiteTagLinesBefore;
+            int suitesRed   = failures.Count - suiteFailuresBefore;
+            int suitesTotal = suitesGreen + suitesRed;
+
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
 
@@ -392,19 +469,42 @@ namespace DeNelle.Editor
             CheckTutorialSteps(failures, log);
 
             // --- verdict -----------------------------------------------------------
+            // THE marker is SELF-DESCRIBING: it carries the registered-suite count on the
+            // SAME line, so a log can never be mistaken for a different (smaller) suite's
+            // pass. Consumers grep the shaped form  REGRESSION_OK <n>/<n> suites  — see
+            // tools/regression/checkin_gate.ps1 and RegressionMarkerRegression.
             log.AppendLine("=== verdict ===");
+            log.AppendLine($"registered oracle suites: {suitesTotal} ({suitesGreen} green, {suitesRed} red)");
             if (failures.Count == 0)
             {
-                log.AppendLine("REGRESSION_OK");
+                log.AppendLine($"REGRESSION_OK {suitesGreen}/{suitesTotal} suites");
                 Debug.Log(log.ToString());
             }
             else
             {
-                log.AppendLine($"REGRESSION_FAIL: {failures.Count} failure(s):");
+                log.AppendLine($"REGRESSION_FAIL: {failures.Count} failure(s) ({suitesGreen}/{suitesTotal} registered suites green):");
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());
             }
+        }
+
+        // =====================================================================
+        //  Registered-suite counter (feeds the self-describing REGRESSION_OK marker)
+        // =====================================================================
+        // Every registered oracle suite reports green by appending a line that STARTS
+        // with its "[tag] " prefix, so counting lines that begin with '[' between the
+        // START and END fences yields the exact number of suites that reported green —
+        // without touching (and churning) the ~90 registration lines themselves.
+        private static int CountOracleTagLines(StringBuilder log)
+        {
+            if (log == null) return 0;
+            string s = log.ToString();
+            int n = 0;
+            if (s.Length > 0 && s[0] == '[') n++;
+            for (int i = 0; i + 1 < s.Length; i++)
+                if (s[i] == '\n' && s[i + 1] == '[') n++;
+            return n;
         }
 
         // =====================================================================
@@ -2120,7 +2220,10 @@ namespace DeNelle.Editor
         {
             GearCatalog.Reload();
             string[] classes = { "knight", "mage", "ranger", "cleric" };
-            log.AppendLine("[armed-hero] BestWeapon(job,1) resolves an attachable prefab per class:");
+            // Tag disambiguated 2026-08-02: the registered ArmedHeroInvariantRegression suite
+            // owns "[armed-hero]". This INLINE check keeps a distinct tag so a log grep names
+            // exactly which of the two produced a line.
+            log.AppendLine("[armed-hero-inline] BestWeapon(job,1) resolves an attachable prefab per class:");
 
             foreach (var job in classes)
             {

@@ -1,4 +1,4 @@
-# triage-archive.ps1 — after a run: archive raw logs (zip), append distinct signatures
+# triage-archive.ps1 - after a run: archive raw logs (zip), append distinct signatures
 # to the recurring-issues ledger, then CLEAR the live logs so the next run is clean.
 # Keeps signal (recurrence), drops noise (raw logs of already-fixed stuff).
 # Usage: powershell -NoProfile -File .claude/skills/run-defenders/triage-archive.ps1 [-Label "free-text"]
@@ -19,14 +19,14 @@ $sources = @(
   "$repo\Builds\autopilot-tickets.json"
 ) | Where-Object { Test-Path $_ }
 
-if ($sources.Count -eq 0) { Write-Host "[triage-archive] no run logs found — nothing to do"; exit 0 }
+if ($sources.Count -eq 0) { Write-Host "[triage-archive] no run logs found - nothing to do"; exit 0 }
 
 # 1) ARCHIVE (zip, never delete) ------------------------------------------------
 $zip = "$archive\${stamp}_run.zip"
 Compress-Archive -Path $sources -DestinationPath $zip -Force
 Write-Host "[triage-archive] archived $($sources.Count) file(s) -> $zip"
 
-# 2) LEDGER — append this run's DISTINCT error/Fail signatures (normalized) ------
+# 2) LEDGER - append this run's DISTINCT error/Fail signatures (normalized) ------
 $pl = "$ll\Player.log"
 $sigs = @{}
 if (Test-Path $pl) {
@@ -48,7 +48,7 @@ if (-not (Test-Path $ledger)) {
 # RECURRING ISSUES LEDGER
 
 Cross-run signal, deduped. Raw logs live zipped in `logs/archive/`. Curate **Status**
-(open / fixed / false-alarm) by hand — a `fixed` signature that REAPPEARS is the real alert.
+(open / fixed / false-alarm) by hand - a `fixed` signature that REAPPEARS is the real alert.
 
 | First seen | Last seen | Runs | Status | Signature |
 |---|---|---|---|---|
@@ -70,4 +70,4 @@ Write-Host "[triage-archive] ledger: $added new signature(s) appended (reappeari
 foreach ($f in @("$ll\Player.log","$ll\break-log.jsonl")) {
   if (Test-Path $f) { Clear-Content -Force $f; Write-Host "[triage-archive] cleared $f" }
 }
-Write-Host "[triage-archive] DONE — folder clean; recurrence tracked in $ledger"
+Write-Host "[triage-archive] DONE - folder clean; recurrence tracked in $ledger"

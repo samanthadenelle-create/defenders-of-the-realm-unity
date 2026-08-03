@@ -24,7 +24,8 @@ through `run-unity-method.ps1` (batchmode, editor CLOSED):
 | # | Gate | Invoke | Proof marker (grep the LOG, never the exit code) |
 |---|---|---|---|
 | 1 | Compile | `run-unity-method.ps1 -Method DeNelle.Editor.CompileGate.Run -LogName compile-gate.log` | `COMPILE_GATE_OK :: scripts compiled clean` |
-| 2 | Data regression (**THE gate**) | `run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.RunAll -LogName data-regression.log` | `REGRESSION_OK` / `REGRESSION_FAIL: <n> failure(s)` |
+| 2 | Data regression (**THE gate**) | `run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.RunAll -LogName data-regression.log` | `REGRESSION_OK <n>/<n> suites` / `REGRESSION_FAIL: <n> failure(s)` |
+| 2b | Check-in battery (22 cases: scenes/NavMesh/lints) | `run-unity-method.ps1 -Method DeNelle.Editor.RegressionSuite.RunAll -LogName regression.log` | `CHECKIN_SUITE_OK <p>/<n> cases` / `CHECKIN_SUITE_FAIL` |
 | 3 | Unit tests (Tier 2) | `run-tests.ps1 [-Platform EditMode\|PlayMode]` | `TESTS_OK :: <p>/<t> passed` (judged from NUnit XML) |
 | 4 | UI pixels | `run-unity-method.ps1 -Method DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless -LogName ui-capture.log` | `UI_CAPTURE_OK <count>` + open the PNGs |
 | 5 | Player build | `build-windows.ps1` / `AndroidBuild.BuildSeekerApk` / `WebGLBuild.BuildWebGL` | `[build] SUCCESS -> ...exe` / `[AndroidBuild] SUCCEEDED` / `[WebGLBuild] SUCCEEDED` |
@@ -57,9 +58,12 @@ marker, runs TWO static scans:
 **THE regression gate.** `RunAll()` (`:36-390`, no MenuItem — batchmode only)
 loads the REAL canonical catalogs through the SAME loaders the game uses and
 validates the resulting objects, then fans out to the sibling suite tree.
-Single verdict: `REGRESSION_OK` (`:380`) or `REGRESSION_FAIL: <n> failure(s)`
-(`:385`) — failures are emitted via `Debug.LogError` (`:388`) so they land in
-`break-log.jsonl` too.
+Single verdict: **`REGRESSION_OK <n>/<n> suites`** or `REGRESSION_FAIL: <n> failure(s)`
+— failures are emitted via `Debug.LogError` so they land in `break-log.jsonl` too.
+The count is on the marker line ON PURPOSE (2026-08-02): the registered suites live
+between the `>>> REGISTERED ORACLE SUITES — START/END FENCE <<<` comments and are
+counted at runtime, so a log can never be mistaken for a smaller suite's pass.
+**New suite registrations go ABOVE the END fence.**
 
 **26 inline checks** called from `RunAll` (top-of-file gear checks inline at
 `:42-81`, then):
@@ -212,8 +216,9 @@ and `HudPostureRegression` has no uppercase marker at all.
 |---|---|---|---|
 | `ArenaCombatOracle` | `Run()` `:92` (void — not the out-reason contract) | `[MenuItem Defenders/QA/Run Arena Combat Oracle]` `:91` / `-executeMethod DeNelle.Editor.ArenaCombatOracle.Run` — drives the REAL arena resolve + reads FlowTrace lines | `ARENA_ORACLE_OK/FAIL` |
 | `BlankStartCensusRegression` | `Run()` `:61` (void) | `[MenuItem Defenders/Regression/Blank Start Census (WO-703)]` `:60` — blank start scene contains ONLY tree+well+walls/gates | `BLANK_START_OK/FAIL` |
-| `RepairProbeRegression` | `RunStandalone()` `:48`, `Run(out reason)` `:53` | script-only. **Has a fully conformant `Run(out reason)` that NOTHING calls — true orphan of RunAll** (REP-1 legacy `Repair(100f)` under-repair proof) | `REPAIR_PROBE_OK/FAIL` |
-| `SessionRegression` | `RunAll()` `:47` (void) | script-only — guards a past session's fixes (incl. SaveSchema PetName audit `:398`) | **`REGRESSION_OK/FAIL` — COLLIDES with DataRegression's whole-batch verdict marker** |
+| `RepairProbeRegression` | `RunStandalone()` `:48`, `Run(out reason)` `:53` | script-only. Conformant `Run(out reason)` that RunAll does not call — **deliberate**, declared in its own header ("STANDALONE oracle, deliberately NOT wired into DataRegression.RunAll"); `RegressionMarkerRegression` honours that declaration as its opt-out | `REPAIR_PROBE_OK/FAIL` |
+| `SessionRegression` | `RunAll()` (void) | script-only — guards a past session's fixes (incl. SaveSchema PetName audit) | `SESSION_GUARDS_OK 6/6 checks` / `SESSION_GUARDS_FAIL` — *(was `REGRESSION_OK/FAIL`; the collision with DataRegression's verdict marker was FIXED 2026-08-02)* |
+| `RegressionMarkerRegression` | `Run(out reason)`, `RunStandalone()` | **registered** in `DataRegression.RunAll` as `[regression-marker]` — source-scans `Assets/Editor` + the gate `.ps1`s: no two oracle files share an `*_OK` literal, every `Run(out string)` oracle under `Assets/Editor/Regression` is registered, every gate grep resolves to exactly one emitter, and no suite green-passes out of a null guard (ratchet) | `REGRESSION_MARKER_OK/FAIL` |
 
 **Suite detail highlights (verified from code):**
 
@@ -745,15 +750,20 @@ blank; `-Phases` filters driver phases.
    structural; every caller must verify the marker (memory
    `gates-report-success-without-proving-it`). Consider adding an optional
    `-Marker` param that greps and gates the exit code.
-2. **`[dungeon-exit]` tag + Guard-label + MARKER collision** —
-   `DungeonExitRegression` (`DataRegression.cs:335`) vs
-   `DungeonExitReachableRegression` (`:341`) share the tag, the Guard label,
-   the `"dungeon-exit: "` reason prefix AND the `DUNGEON_EXIT_OK/FAIL` markers
-   while testing different systems (composed dungeons vs the rich dungeon's
-   source-lint). Indistinguishable in a log grep. Rename one set.
-2b. **`SessionRegression` emits `REGRESSION_OK`/`REGRESSION_FAIL`** — the exact
-   whole-batch verdict markers of `DataRegression.RunAll`. A standalone
-   SessionRegression run can be mis-grepped as a passing/failing full gate.
+2. **`[dungeon-exit]` tag + Guard-label + MARKER collision** — *PARTIALLY FIXED
+   2026-08-02:* the DataRegression tag + Guard label for
+   `DungeonExitReachableRegression` are now `[dungeon-exit-reachable]`. The two
+   suites STILL share the `DUNGEON_EXIT_OK/FAIL` marker literal inside their own
+   bodies — allowlisted as named debt in `RegressionMarkerRegression`
+   (`KnownDuplicateMarkers`). Renaming one set closes it.
+2b. **`SessionRegression` emits `REGRESSION_OK`/`REGRESSION_FAIL`** — **FIXED
+   2026-08-02.** It now emits `SESSION_GUARDS_OK/FAIL`, and the legacy
+   `Assets/Editor/RegressionSuite.cs` emits `CHECKIN_SUITE_OK/FAIL`. The blast
+   radius was larger than this entry recorded: `tools/regression/checkin_gate.ps1`
+   was *invoking the 22-case legacy suite* and judging it by the shared
+   `REGRESSION_OK` literal, so DataRegression's ~90 registered oracle suites had
+   never run in the automated check-in path at all. The gate now runs BOTH and
+   requires BOTH markers, and `RegressionMarkerRegression` makes a recurrence red.
 3. **Duplicate MenuItem `Defenders/Build/WebGL Player`** — `WebGLBuild.cs:36`
    vs `DesktopBuild.cs:33`, divergent compression/exception settings; the menu
    binds only one. Consolidate or rename.

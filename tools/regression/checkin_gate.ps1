@@ -6,11 +6,20 @@
 #   1. STATIC GATE    - tools/regression/static_gate.py (no Unity).
 #   2. COMPILE GATE   - DeNelle.Editor.CompileGate.Run via run-unity-method.ps1
 #                       (expects the COMPILE_GATE_OK marker in the log).
-#   3. REGRESSION     - DeNelle.Editor.RegressionSuite.RunAll via run-unity-method.ps1
-#                       (headless smoke cases; expects the REGRESSION_OK marker).
-#   4. EDITMODE TESTS - Unity -runTests -testPlatform EditMode.
-#   5. PLAYMODE TESTS - Unity -runTests -testPlatform PlayMode.
-#   6. BUILD (opt)    - build-windows.ps1, only when -Build is passed.
+#   3. DATA REGRESSION- DeNelle.Editor.DataRegression.RunAll via run-unity-method.ps1.
+#                       *** THIS IS "THE" REGRESSION GATE *** (~90 registered oracle
+#                       suites + ~26 inline catalog checks). Expects the shaped marker
+#                       REGRESSION_OK <n>/<n> suites.
+#   4. CHECK-IN BATTERY-DeNelle.Editor.RegressionSuite.RunAll via run-unity-method.ps1
+#                       (22 cases: scene-open, NavMesh castle gate, source lints).
+#                       Expects CHECKIN_SUITE_OK. BOTH 3 and 4 must be green.
+#   5. EDITMODE TESTS - Unity -runTests -testPlatform EditMode.
+#   6. PLAYMODE TESTS - Unity -runTests -testPlatform PlayMode.
+#   7. BUILD (opt)    - build-windows.ps1, only when -Build is passed.
+#
+# FIXED 2026-08-02: stage 3 used to run the stage-4 battery and judge it by the bare
+# literal REGRESSION_OK - which all three regression classes emitted - so the full
+# DataRegression oracle set had NEVER run in the automated check-in path.
 #
 # Prints a single summary table and returns ONE exit code: 0 only when every
 # stage that ran passed. Stages 1-2 are hard prerequisites (a failure there
@@ -96,7 +105,10 @@ function Invoke-UnityTests($platform) {
     if (Test-Path $lock) { Remove-Item $lock -Force -ErrorAction SilentlyContinue }
 
     if (-not (Test-Path $resultsXml)) {
-        Write-Host "[gate] $platform: no results XML produced. Last 40 log lines:"
+        # NOTE: ${platform} MUST be brace-delimited here. "$platform:" is a HARD PowerShell
+        # 5.1 PARSER error (drive-qualified variable reference) - it made this entire script
+        # unparseable, i.e. the check-in gate could not run at all. Found 2026-08-02.
+        Write-Host "[gate] ${platform}: no results XML produced. Last 40 log lines:"
         if (Test-Path $log) { Get-Content $log -Tail 40 }
         return [pscustomobject]@{ Ok = $false; Detail = 'no results XML (compile/license error?)' }
     }
@@ -154,40 +166,85 @@ if ($staticOk) {
     Add-Result 'Compile gate' 'SKIP' 'static gate failed'
 }
 
-# --- 3) regression suite (headless smoke cases) ------------------------------
-# Runs DeNelle.Editor.RegressionSuite.RunAll and judges from the REGRESSION_OK
-# marker. Headless smoke layer (catalog/scene/wiring) that needs no test asmdef.
-$regressionOk = $false
+# --- 3) DATA REGRESSION - THE regression gate --------------------------------
+# Runs DeNelle.Editor.DataRegression.RunAll (~90 registered oracle suites + ~26
+# inline catalog checks) and judges from its SELF-DESCRIBING marker
+#   REGRESSION_OK <n>/<n> suites
+# This is what CLAUDE.md, START_HERE.md and every RESULT file mean by REGRESSION_OK.
+#
+# HISTORY (2026-08-02, why this is spelled out): this stage used to invoke
+# DeNelle.Editor.RegressionSuite.RunAll - the 22-case LEGACY battery - and judge it
+# by the bare literal 'REGRESSION_OK', which all THREE regression classes emitted.
+# So roughly 64 oracle suites, including every one written that week, had NEVER run
+# in the automated check-in path, and the small suite's pass read as the full set's.
+# The marker is now shaped (count on the same line) so it cannot be confused, and
+# BOTH suites run because they cover different ground.
+$dataRegressionOk = $false
 if ($compileOk) {
-    Write-Host "`n[gate] 3/6 regression suite (RegressionSuite.RunAll)..."
+    Write-Host "`n[gate] 3/7 DATA regression - THE gate (DataRegression.RunAll)..."
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
+        -Method 'DeNelle.Editor.DataRegression.RunAll' -LogName 'data-regression.log' -TimeoutMin $TimeoutMin
+    $dlog = Join-Path $proj 'Builds\data-regression.log'
+    $dmarker = $null
+    if (Test-Path $dlog) {
+        # Shaped grep on purpose: 'REGRESSION_OK <n>/<n> suites'. A bare REGRESSION_OK,
+        # or another suite's marker that merely CONTAINS the token, cannot satisfy it.
+        $dmarker = Select-String -Path $dlog -Pattern 'REGRESSION_OK \d+/\d+ suites' | Select-Object -First 1
+    }
+    $dataRegressionOk = [bool]$dmarker
+    if ($dataRegressionOk) { Add-Result 'Data regression (THE gate)' 'PASS' ($dmarker.Line.Trim()) }
+    else {
+        Add-Result 'Data regression (THE gate)' 'FAIL' 'no "REGRESSION_OK <n>/<n> suites" marker (see Builds\data-regression.log)'
+        if (Test-Path $dlog) {
+            Write-Host '[gate] data-regression FAIL rows:'
+            Select-String -Path $dlog -Pattern 'REGRESSION_FAIL|^\s+- ' | Select-Object -First 40 |
+                ForEach-Object { Write-Host ('    ' + $_.Line.Trim()) }
+        }
+    }
+} else {
+    Add-Result 'Data regression (THE gate)' 'SKIP' 'compile gate not green'
+}
+
+# --- 4) legacy check-in battery (scene-open / NavMesh / source lints) --------
+# DeNelle.Editor.RegressionSuite.RunAll -> CHECKIN_SUITE_OK <p>/<n> cases.
+# NOT redundant with stage 3: only this one opens Village2, runs the behavioural
+# NavMesh castle-gate query, and lints for per-frame fork-bombs / Yarn 'command:'.
+$checkinSuiteOk = $false
+if ($compileOk) {
+    Write-Host "`n[gate] 4/7 legacy check-in battery (RegressionSuite.RunAll)..."
     & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
         -Method 'DeNelle.Editor.RegressionSuite.RunAll' -LogName 'regression.log' -TimeoutMin $TimeoutMin
     $rlog = Join-Path $proj 'Builds\regression.log'
-    $rmarker = $false
-    if (Test-Path $rlog) { $rmarker = [bool](Select-String -Path $rlog -Pattern 'REGRESSION_OK' -Quiet) }
-    $regressionOk = $rmarker
-    if ($regressionOk) { Add-Result 'Regression suite' 'PASS' 'REGRESSION_OK' }
+    $rmarker = $null
+    if (Test-Path $rlog) {
+        $rmarker = Select-String -Path $rlog -Pattern 'CHECKIN_SUITE_OK' | Select-Object -First 1
+    }
+    $checkinSuiteOk = [bool]$rmarker
+    if ($checkinSuiteOk) { Add-Result 'Check-in battery' 'PASS' ($rmarker.Line.Trim()) }
     else {
-        Add-Result 'Regression suite' 'FAIL' 'no REGRESSION_OK marker (see Builds\regression.log)'
+        Add-Result 'Check-in battery' 'FAIL' 'no CHECKIN_SUITE_OK marker (see Builds\regression.log)'
         if (Test-Path $rlog) {
-            Write-Host '[gate] regression FAIL rows:'
+            Write-Host '[gate] check-in battery FAIL rows:'
             Select-String -Path $rlog -Pattern '\[FAIL\]' | ForEach-Object { Write-Host ('    ' + $_.Line.Trim()) }
         }
     }
 } else {
-    Add-Result 'Regression suite' 'SKIP' 'compile gate not green'
+    Add-Result 'Check-in battery' 'SKIP' 'compile gate not green'
 }
 
-# --- 4/5) Unity tests --------------------------------------------------------
+# BOTH markers are required. The gate must never pass while the ~90-suite set is unrun.
+$regressionOk = $dataRegressionOk -and $checkinSuiteOk
+
+# --- 5/6) Unity tests --------------------------------------------------------
 if ($compileOk) {
-    Write-Host "`n[gate] 4/6 EditMode tests..."
+    Write-Host "`n[gate] 5/7 EditMode tests..."
     $em = Invoke-UnityTests 'EditMode'
     Add-Result 'EditMode tests' ($(if ($em.Ok) { 'PASS' } else { 'FAIL' })) $em.Detail
 
     if ($SkipPlayMode) {
         Add-Result 'PlayMode tests' 'SKIP' '-SkipPlayMode'
     } else {
-        Write-Host "`n[gate] 5/6 PlayMode tests..."
+        Write-Host "`n[gate] 6/7 PlayMode tests..."
         $pm = Invoke-UnityTests 'PlayMode'
         Add-Result 'PlayMode tests' ($(if ($pm.Ok) { 'PASS' } else { 'FAIL' })) $pm.Detail
     }
@@ -200,7 +257,7 @@ if ($compileOk) {
 $testsGreen = -not ($results | Where-Object { $_.Stage -like '*tests' -and $_.Status -eq 'FAIL' })
 if ($Build) {
     if ($compileOk -and $regressionOk -and $testsGreen) {
-        Write-Host "`n[gate] 6/6 build-windows.ps1..."
+        Write-Host "`n[gate] 7/7 build-windows.ps1..."
         & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'build-windows.ps1')
         if ($LASTEXITCODE -eq 0) { Add-Result 'Windows build' 'PASS' 'exe produced' }
         else { Add-Result 'Windows build' 'FAIL' "build-windows.ps1 exit $LASTEXITCODE" }

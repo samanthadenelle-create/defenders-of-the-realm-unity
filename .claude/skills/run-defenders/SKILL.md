@@ -35,8 +35,22 @@ powershell -ExecutionPolicy Bypass -File ./run-unity-method.ps1 -Method DeNelle.
 **2. Data/logic gate** (headless "real object in -> assert -> one marker"; catalogs, save, equip):
 ```bash
 powershell -ExecutionPolicy Bypass -File ./run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.RunAll -LogName data-regression.log
-# -> prints  REGRESSION_OK   (or REGRESSION_FAIL: <reasons>)
+# -> prints  REGRESSION_OK <n>/<n> suites   (or REGRESSION_FAIL: <n> failure(s) ...)
 ```
+
+The marker carries its suite COUNT on the same line on purpose. Grep the SHAPE
+(`REGRESSION_OK \d+/\d+ suites`), never the bare token — until 2026-08-02 three
+different classes emitted a bare `REGRESSION_OK` and the check-in gate was judging
+the 22-case legacy battery while every RESULT file read it as this ~90-suite one.
+Sibling markers, all disjoint now:
+| Entry point | Marker |
+|---|---|
+| `DeNelle.Editor.DataRegression.RunAll` (**THE** gate) | `REGRESSION_OK <n>/<n> suites` |
+| `DeNelle.Editor.RegressionSuite.RunAll` (22-case battery) | `CHECKIN_SUITE_OK <p>/<n> cases` |
+| `DeNelle.Editor.SessionRegression.RunAll` | `SESSION_GUARDS_OK 6/6 checks` |
+`DeNelle.Editor.Regression.RegressionMarkerRegression` ([regression-marker], registered
+in the data gate) keeps those disjoint and fails if a new oracle is written but never
+registered, or a gate script greps a marker nobody emits.
 
 **3. Build the Windows player** (ALWAYS wipe `Builds/Windows` first — stale exe-stub = level3 crash):
 ```bash
@@ -84,7 +98,7 @@ Useless on a headless box; this is the only path that renders. Boot a single sce
   how `AssertVendorTalkRoute` works). `Player.log` holds Step lines but is **overwritten per
   fleet instance** → unreliable for fleets.
 - **License "505 / LICENSE ERROR" line is transient.** Judge success by the marker
-  (`COMPILE_GATE_OK` / `REGRESSION_OK` / `[build] SUCCESS`), not the wrapper exit line. Re-run if
+  (`COMPILE_GATE_OK` / `REGRESSION_OK <n>/<n> suites` / `[build] SUCCESS`), not the wrapper exit line. Re-run if
   a batchmode call reports a license error at *shutdown* but produced its marker. Do NOT kill processes.
 - **Editor lock.** If `tasklist | grep Unity.exe` shows a process, a build/gate is running or the
   editor is open — defer; don't collide. (Unity *Hub* is fine.)

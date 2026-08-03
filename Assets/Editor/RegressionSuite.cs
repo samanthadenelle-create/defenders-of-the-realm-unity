@@ -8,9 +8,19 @@
 // the systems most likely to silently break when a fix lands elsewhere:
 // compile, the placement-recipe math, the canonical data files, the playable
 // scene's core wiring, and the structure kit. It logs ONE grep-able verdict —
-//   REGRESSION_OK   (every case passed)
-//   REGRESSION_FAIL (>=1 case failed)
+//   CHECKIN_SUITE_OK <p>/<n> cases   (every case passed)
+//   CHECKIN_SUITE_FAIL <f>/<n> cases failed
 // — plus a per-case PASS/FAIL list so a failing run names exactly what broke.
+//
+// *** THIS IS NOT "THE REGRESSION GATE". *** (renamed 2026-08-02)
+// This battery emits ~22 cases. THE gate the project means by "REGRESSION_OK" is
+// DeNelle.Editor.DataRegression.RunAll (~90 registered oracle suites + ~26 inline
+// catalog checks). Until 2026-08-02 this class ALSO emitted a bare `REGRESSION_OK`,
+// tools/regression/checkin_gate.ps1 ran THIS class, and its marker was read as the
+// full suite's pass — so the whole DataRegression oracle set had never run in the
+// automated check-in path. The markers are now disjoint and the gate runs BOTH.
+// The two suites are complementary, not redundant: only this one opens scenes,
+// runs the NavMesh castle-gate query, and lints for fork-bombs / Yarn `command:`.
 //
 // HEADLESS / BATCHMODE:
 //   -executeMethod DeNelle.Editor.RegressionSuite.RunAll
@@ -50,7 +60,7 @@ namespace DeNelle.Editor
 {
     /// <summary>
     /// Headless per-check-in regression battery. Runs a set of independent CASES
-    /// and logs a single <c>REGRESSION_OK</c> / <c>REGRESSION_FAIL</c> verdict plus
+    /// and logs a single <c>CHECKIN_SUITE_OK</c> / <c>CHECKIN_SUITE_FAIL</c> verdict plus
     /// a per-case PASS/FAIL list. Each case is wrapped so one throwing case can
     /// never abort the whole run — it is recorded as a FAIL and the rest continue.
     /// </summary>
@@ -139,7 +149,7 @@ namespace DeNelle.Editor
 
         /// <summary>
         /// Runs every regression case. Logs a per-case PASS/FAIL list and the single
-        /// <c>REGRESSION_OK</c> / <c>REGRESSION_FAIL</c> verdict. In batchmode, exits
+        /// <c>CHECKIN_SUITE_OK</c> / <c>CHECKIN_SUITE_FAIL</c> verdict. In batchmode, exits
         /// the editor with code 0 (all passed) or 1 (any failed). Returns true on pass.
         /// </summary>
         [MenuItem("Defenders/QA/Run Regression Suite")]
@@ -193,13 +203,13 @@ namespace DeNelle.Editor
             bool ok = failed == 0;
             if (ok)
             {
-                sb.AppendLine("  VERDICT: REGRESSION_OK");
+                sb.AppendLine($"  VERDICT: CHECKIN_SUITE_OK {passed}/{results.Count} cases");
                 sb.AppendLine("==========================================================");
                 Debug.Log(sb.ToString());
             }
             else
             {
-                sb.AppendLine("  VERDICT: REGRESSION_FAIL");
+                sb.AppendLine($"  VERDICT: CHECKIN_SUITE_FAIL {failed}/{results.Count} cases failed");
                 sb.AppendLine("==========================================================");
                 Debug.LogError(sb.ToString());
             }
