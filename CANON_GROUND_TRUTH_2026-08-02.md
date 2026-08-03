@@ -1,5 +1,18 @@
 # CANON GROUND TRUTH — 2026-08-02 (marathon day 2: Echo program · action bar · raid truth · tester wallet program)
 
+> # ⚠ SUPERSEDED 2026-08-03 — frozen ledger, true as of 2026-08-02 only.
+> **Live anchor is now `CANON_GROUND_TRUTH_2026-08-03.md`.** Do not act on this file's HEAD, gate counts,
+> or server state. Specifically corrected there:
+> - **HEAD `e60b19e5` is 17 commits behind** (current `56be3ae2`).
+> - Gates are now **`REGRESSION_OK 104/104 suites`** + **`TESTS_OK 912/912`** (this file's 884/884 was
+>   current for less than a day).
+> - **§3's "the `auth_nonces` table does not exist in Neon" is WRONG** — the table exists and returns
+>   HTTP 200 on production, probed 2026-08-03. The real blocker is different: `api/` is deployed to
+>   PREVIEW only, and prod's nonce endpoint has no CORS.
+> - The working tree is **clean** — the item-identity lane §1 flags as uncommitted landed in `e60f22d6`.
+>
+> Everything not contradicted above still holds; §4 (lessons) and §5 (raid anatomy) remain load-bearing.
+
 > **LIVE ANCHOR (2026-08-02).** Records reality after the day-2 marathon on `wip/village2-and-f8-tickets`.
 > **Supersedes `CANON_GROUND_TRUTH_2026-08-01.md`** (still valid for anything not contradicted here).
 >

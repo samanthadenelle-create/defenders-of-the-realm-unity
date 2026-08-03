@@ -1,5 +1,16 @@
 # MASTER BACKLOG - everything needing done (known dictionary, 2026-07-19)
 
+> # ⚠ ROWS ARE STALE — many have SHIPPED (flagged 2026-08-03)
+> **Cross-check any row against `CANON_GROUND_TRUTH_2026-08-03.md` + the 07-22 §5 module digests before
+> treating it as open.** Known-shipped since this audit: DG-01 dungeon exit, DG-02 dungeon dressing,
+> CITY-01 wave curve, ECON-01/02/03, FTUE-01/02, the dungeon prop/light pass, the raid rescale + spire
+> objective, raid troop animation + magenta sweep, and the defense-cap unification. The VERDICT paragraph
+> below describes a July-19 tree and reads as far bleaker than the current one.
+>
+> **Why it is stale:** the 2026-08-02 Sunday sweep skipped step 5 (refresh the known dictionaries).
+> Banner per §15 — frozen ledger, not rewritten. Its *findings* remain a good work source; its *statuses*
+> do not.
+
 > Comprehensive find-all-work audit: 60 agents across 11 systems. The plumbing is mature; the game
 > breaks at the WIRING + CONTENT edges (built systems disconnected from the reachable surface).
 > Refresh every Sunday (SUNDAY_HOUSEKEEPING.md). VERDICT: The engine, plumbing, and instrumentation are genuinely strong; the gap between "built" and "a complete good game" is overwhelmingly one of disconnection and dead content — the systems that would make it feel finished are authored but never wired to the one surface the player reaches. The only playable dungeon is an exit-less, prop-less, light-less box while a full dungeon-mechanics stack and a 211-prop KayKit pack sit unused; the wave difficulty curve, wall defense, and per-kill reward economy are authored-but-dead so the core defend loop neither escalates nor rewards; ~90% of the soundscape is placeholder synth while licensed WAVs sit at the wrong path; boss/melee/status VFX render as billboard squares; paid packs charge real crypto and silently drop the goods; and the FTUE teaches mecha

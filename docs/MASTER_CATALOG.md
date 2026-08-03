@@ -1,5 +1,26 @@
 # MASTER CATALOG — Project Index
 
+> # ⚠ THIS INDEX FILE WAS **NOT** REFRESHED BY WO-836 — use it as a FILENAME LIST ONLY (flagged 2026-08-03)
+> WO-836 rewrote the **19 section files** under `docs/MASTER_CATALOG/`. **It did not rewrite this file's own
+> body.** §1–§3 below are ~2026-07 fiction and contradict both the section files and the live anchor:
+> Village-Hero "Blaise + class bodies" · NPCs "party-of-4" · Enemies/World "OuterWorld streaming"
+> (that scene is DELETED) · Dialogue "64 `.yarn` nodes + vendored Yarn" (Yarn is FULLY REMOVED, WO-557)
+> · `SaveSchema CurrentVersion=30` (it is **36**) · "next free WO = 412" (it is **853** main / **863**
+> UI-seat) · EconomyService "4-resource wallet" (5 with Coins) · `ZoneManager` village ±42/±33 (actual
+> **52/52** — the 42/33 figure mis-classifies the courtyard and IS the 07-26 "enemies inside the castle" bug).
+> Several §3 ledger rows are also closed (Aegis set reachable, the six WebGL-broken catalogs pinned,
+> Settings/Pause UXML converted, `HUDManager`/`VirtualDPadLean` deleted, backend live, OuterWorld gone).
+>
+> **⚠ And the 19 section files are code-true as of `b77a178e` (2026-08-02 morning), NOT current HEAD** —
+> ~20 commits landed after that fleet ran. Known drift: `economy-meta.md` says WO-830 is "spec only, NOT in
+> code" (it shipped) · `docs-wo-state.md` says save v35 / next-WO 836 · `resources-art.md` says the KayKit
+> bodies have no Animator wiring (WO-833 shipped it) · `village-npcs.md` documents the
+> `"Forge"`→`"Blacksmith"` anchor mapping as correct (that mapping **was** the WO-840 bug).
+>
+> **Read order that actually works:** `CANON_GROUND_TRUTH_2026-08-03.md` → `KEY_FACTS.md` →
+> the `CLI_LANES_WO_NUMBERS.md` banner → the specific `docs/MASTER_CATALOG/<area>.md` → `CLAUDE.md` →
+> `docs/ARCHITECTURE_PRINCIPLES.md` → the newest `docs/HANDOVER.md` block.
+
 The single master index a new session reads to understand the whole project
 **without operating on assumptions**. Each area below has a deep section catalog
 under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comments).

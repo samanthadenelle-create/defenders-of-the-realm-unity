@@ -1,5 +1,18 @@
 # REGRESSION COVERAGE MATRIX - known dictionary (2026-07-19)
 
+> # ⚠ COUNTS ARE STALE — 2 Sundays overdue (flagged 2026-08-03)
+> **Use the PROPOSED ASSERTIONS in this file. Do NOT quote its counts, its VERDICT, or its `Stats` blob.**
+> The body is frozen at 2026-07-19, when the gate ran **16 suites** and the honest verdict was
+> "0 of 73 covered". The gate now runs **`REGRESSION_OK 104/104 suites`** with **`TESTS_OK 912/912`,
+> zero reds** — ≥13 oracles landed on 07-20 and ten more on 08-02 alone (raid-deploy-ui, wallet-provider,
+> hud-actionbar, echo-picker, dungeon-room-ownership, realm-map, dungeon-treasure, echo-card-layout,
+> starter-loadout, shield-defense). Reading "0 of 73 covered / all 5 P1s unguarded" as current state is
+> flatly wrong and would re-open closed work.
+>
+> **Why it is stale:** the 2026-08-02 Sunday sweep ran steps 1/2/6/8 but skipped step 5 (refresh the known
+> dictionaries). This banner is the §15 flag, not a rewrite — the next sweep reconciles the counts against
+> the live suite list. Read the count off the marker, never off this file.
+
 > Produced by the silo-audit + regression-coverage fleet (this-week arc 07-13..07-19). Each row is a
 > source-cited fact. Refresh every Sunday (SUNDAY_HOUSEKEEPING.md). VERDICT: NO — regressions do not cover the findings. 0 of 73 have hard defect-specific coverage; 12 SOFT (partial/report-only), 61 fully uncovered. All 5 P1s (3 monetization integrity failures, dungeon roach-motel, waves.json schema) are unguarded. 68 findings need a new/extended regression, ~68 NEW vs GAP_AUDIT. Seven root oracles (exhaustive save round-trip, all-7-sites enemy divergence, one PlayMode NavMesh reachability suite, a global feature-flag-defaults walk, authored-portal↔scene join, modal-arbiter source-lint, pack economy integrity) close ~half; the rest are per-finding suites.
 

@@ -1,6 +1,33 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-02) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-03) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-03.md`** (supersedes 08-02, bannered). Branch
+> `wip/village2-and-f8-tickets`, **HEAD `56be3ae2`, local==origin, PUSHED**. **Working tree CLEAN.**
+> Gates `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** + **`TESTS_OK 912/912`, zero reds** +
+> **`UI_CAPTURE_OK 28`**. Save **v36**. WO blocks unchanged (main **853** / UI-seat **863**).
+>
+> **The overnight wave (15 commits) is the thing to know:** enemies actually reach you now; raids went from
+> ~2.4% of the floor to 20/49/60% with a **spire objective** instead of a corpse count (raid walls had no
+> colliders and no raid scene had a hero spawn point); raid troops animate and aren't magenta; the tutorial's
+> Hollow step can be completed; **the check-in gate had never run at all** — it did not parse under PS 5.1.
+>
+> **⚠ SERVER — verified live 2026-08-03, corrects 08-02:** **`auth_nonces` EXISTS** and returns HTTP 200 on
+> production (the 08-02 "table does not exist" line is dead). But **`api/` is deployed to PREVIEW only** and
+> the game hardcodes the prod domain, so none of the overnight server work is reachable — and **prod's nonce
+> endpoint has no CORS**, so a browser blocks the WebGL wallet rail regardless. `player_data` = 2 test rows
+> from May; `bug_reports` = 0. **Promoting `api/` to prod is the single highest-value action on the board**
+> and is the owner's call.
+>
+> **⚠ THE SEAM:** nothing in the game can damage a wall, gate or enemy tower — `WallSegment.cs:28` and
+> `Gate.cs:45` implement `IDamageableStructure`, `TroopController.cs:449-459` sweeps for `IDamageable`, and
+> the two are disjoint. Prerequisite under both raid roadmaps; makes the WO-774.0 posture ruling deferrable.
+>
+> **⚠ CANON HEALTH:** `docs/MASTER_CATALOG.md` (the INDEX) was NOT refreshed by WO-836 — only the 19 area
+> files were; treat the index as a filename list. The area files are code-true as of `b77a178e`, not HEAD.
+> `docs/reference/REGRESSION_COVERAGE_MATRIX.md` is two Sundays stale — never quote its counts.
+> **The 08-02 thread below is SUPERSEDED.**
+>
+> ## ▶ LIVE THREAD (2026-08-02) — SUPERSEDED (see 08-03 above)
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-02.md`** (supersedes 08-01, bannered). Branch
 > `wip/village2-and-f8-tickets`, **HEAD `e60b19e5`, local==origin, PUSHED** (21 commits dated 08-02).
 > ⚠ working tree NOT clean — an in-flight item-identity lane is uncommitted.

@@ -29,6 +29,38 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-03) — the solo-night wave + the FIRST live server verification
+- **Anchor = `CANON_GROUND_TRUTH_2026-08-03.md`** (supersedes 08-02, bannered). **HEAD `56be3ae2`, pushed,
+  local==origin, working tree CLEAN.** Gates: `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** +
+  **`TESTS_OK 912/912` zero reds** + `UI_CAPTURE_OK 28`. Save still **v36**.
+- **⚠ The 08-02 anchor pinned `e60b19e5` and 17 commits landed after it** — three boot docs inherited the
+  stale sha AND the stale 884/884 count. Read the count off the marker, never off a doc.
+- **SERVER, PROBED LIVE (not reported) — this corrects 08-02:** **`auth_nonces` EXISTS**; prod
+  `GET /api/auth/nonce` returns **HTTP 200** with a real nonce. ⚠ but the table's only rows were minted by
+  the probe — no real client has ever used it. **`api/` is deployed to PREVIEW only** and the game
+  hardcodes the prod domain, so the overnight server work is unreachable; **and prod's nonce endpoint has
+  NO CORS + `OPTIONS` 400**, so a browser blocks the WebGL wallet rail regardless of the client. Prod is
+  proven to be running OLD `api/` code (prose error shape + missing `bugreports`/`authrejects` views).
+  `player_data` = **2 test rows, newest 2026-05-31**; `bug_reports` = **0**; `analytics_events` = 80,749
+  (web tracing flows fine). **Promoting `api/` to prod is the highest-value action on the board — owner's call.**
+- **THE SEAM (verified from code):** **nothing can damage a wall, gate or enemy tower.** `WallSegment.cs:28`
+  + `Gate.cs:45` implement `IDamageableStructure`; `TroopController.cs:449-459` sweeps for `IDamageable`;
+  disjoint. "Razed %" counts bodies, not buildings. ~2–3 days, and it is the prerequisite under BOTH raid
+  roadmaps — which makes the **WO-774.0 drop-and-watch-vs-led ruling free to defer.**
+- **Overnight (15 commits):** enemies actually reach you (own-wounded targeting + `_stopTightenedForHero`
+  surviving pooling); pooled-enemy statues fixed; **raids rescaled 2.4% → 20/49/60% of floor with a spire
+  objective** (raid walls had NO colliders; no raid scene had a hero spawn point); raid troops animate +
+  aren't magenta; unarmed level-1 Mage fixed; defense cap unified at **0.90**; tutorial Hollow step
+  completable; **the check-in gate had never run at all** (didn't parse under PS 5.1); `DeNelle.Core.Difficulty`
+  → **`DeNelle.Core.Adaptive`** (it shadowed the persisted enum).
+- **Adaptive difficulty is INERT** — math correct + oracle-proven, but `WaveManager` records none of the six
+  fields, so every read returns 1.0.
+- **Canon health:** `docs/MASTER_CATALOG.md` (the INDEX) was NOT refreshed by WO-836 — only the 19 area
+  files were; the index still says Blaise/party-of-4/v30/next-WO-412. **Use it as a filename list only.**
+  The area files are code-true as of `b77a178e`, not HEAD. `docs/reference/REGRESSION_COVERAGE_MATRIX.md`
+  is two Sundays stale (still says "16 suites") — use its proposed assertions, never its counts.
+  RESULT-file debt = **33**, not 31.
+
 ## Latest (2026-08-01) — post-reboot ship wave: Realm Map + KayKit NPCs + Queues ruling + release train
 - **Anchor = `CANON_GROUND_TRUTH_2026-08-01.md`** (supersedes 07-26, bannered). **HEAD `ac0a52e3`, pushed,
   local==origin.** Gates: `COMPILE_GATE_OK` + `REGRESSION_OK` + `UI_CAPTURE_OK 23` (pixels eyeballed).

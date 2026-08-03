@@ -16,7 +16,66 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-08-03 (the solo-night wave + first live server verification) ★★
+
+**Anchor:** `../CANON_GROUND_TRUTH_2026-08-03.md` (NEW — supersedes 08-02, bannered). Branch
+`wip/village2-and-f8-tickets`, **HEAD `56be3ae2`, local==origin, pushed. Working tree CLEAN.** Prod
+untouched. Save **v36**. Gates: `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** +
+**`TESTS_OK 912/912`, zero reds** + `UI_CAPTURE_OK 28`. WO blocks unchanged (main **853** / UI-seat **863**).
+
+**⚠ Read the marker, not a doc.** The 08-02 anchor pinned `e60b19e5`; 17 commits landed after it, and
+three boot documents inherited both the stale sha and the stale `884/884` test count. That count was
+current for less than a day.
+
+**Shipped overnight (15 commits, `e60b19e5` → `8e70a3d4`, all pushed):**
+- **Enemies now reach you** — DPS/Ranged were targeting their own wounded ally, and
+  `_stopTightenedForHero` survived pooling so a reused body halted 2.5 m out, outside the 1.5 m engage
+  ring. Pooled enemies also stopped freezing as statues (`_casting` never cleared on death).
+- **Raids are not a square room** — footprint 2.4% → **20/49/60%** of the authored floor with a **central
+  spire as the win condition**. Raid walls had **no colliders at all**; no raid scene had a hero spawn
+  point, so the hero landed on castle courtyard coordinates, inside the walls on the objective. Arenas
+  re-baked 4/4 walkable.
+- **Raid troops animate and aren't magenta** — nothing under `Troops/` ever assigned an AnimatorController,
+  and `MagentaGuard` only swept at scene load.
+- Unarmed level-1 Mage fixed; shield upgrades do something; defense cap is one constant at **0.90**
+  (was fourteen literals drifted into two numbers); tutorial Hollow step completable.
+- **The check-in gate had never been running** — `checkin_gate.ps1` did not *parse* under PowerShell 5.1.
+- `DeNelle.Core.Difficulty` → **`DeNelle.Core.Adaptive`** (it shadowed the persisted `Difficulty` enum).
+
+**⚠ SERVER — probed live this session, corrects the 08-02 anchor:**
+- **`auth_nonces` EXISTS.** Prod `GET /api/auth/nonce` returns **HTTP 200** with a real nonce. The 08-02
+  "table does not exist" line is dead. **Caveat:** the only rows in it were minted by the probe.
+- **`api/` is deployed to PREVIEW only** and the game hardcodes the prod domain — prod is provably running
+  OLD code (prose error shape; `bugreports`/`authrejects` views absent).
+- **NEW, not in the night report: prod's nonce endpoint has NO CORS and `OPTIONS` returns 400** — a browser
+  blocks the WebGL wallet rail no matter what the client does.
+- `player_data` = **2 test rows, newest 2026-05-31**. `bug_reports` = **0**. `analytics_events` = 80,749.
+- **`vercel deploy --prod` is the single highest-value action on the board. Owner's call.**
+
+**⚠ THE SEAM worth ranking first if one architectural thing gets built:** nothing in the game can damage a
+wall, gate, or enemy tower. `WallSegment.cs:28` + `Gate.cs:45` implement `IDamageableStructure`;
+`TroopController.cs:449-459` sweeps for `IDamageable`; the interfaces are **disjoint**. ~2–3 days. It sits
+under both raid roadmaps, which makes the **WO-774.0 posture ruling free to defer**.
+
+**OPEN:** (1) promote `api/`. (2) owner felt-verify the rescaled raids, shields, starter loadout, respawn,
+treasure cache, Echo picker — and Perfect Hit as a double-tap (100 ms window, unvalidated by hand).
+(3) **Adaptive difficulty is INERT** — math oracle-proven, but `WaveManager` records none of its six fields.
+(4) Design calls: should shields drop at all; `lumberyard` in `FoundingKit` vs the WO-837 ruling; `category`
+on ten legacy `weapons.json` rows. (5) WO-848 / 851 / 861 / 862 / 837 as before. (6) The 6 Echo emergence PNGs.
+
+**⚠ CANON HEALTH:** `docs/MASTER_CATALOG.md` — the **INDEX** — was NOT refreshed by WO-836; only the 19
+area files were. Its body still claims Blaise + party-of-4, OuterWorld streaming, 64 Yarn nodes,
+`SaveSchema v30`, "next free WO = 412". **Use it as a filename index only.** The 19 area files are code-true
+as of `b77a178e` (08-02 morning), not HEAD. `docs/reference/REGRESSION_COVERAGE_MATRIX.md` is two Sundays
+overdue and still says "16 suites" against a 104-suite tree — use its proposed assertions, never its counts.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-08-02 (marathon day 2: Echo program · tester wallet · dungeon+gear evening) ★★
+
+> ⚠ **SUPERSEDED 2026-08-03 — frozen ledger.** HEAD is now `56be3ae2` (17 commits later), gates are
+> `REGRESSION_OK 104/104` + `TESTS_OK 912/912`, the working tree is clean, and **`auth_nonces` exists**.
+> See the 08-03 block above.
 
 **Anchor:** `../CANON_GROUND_TRUTH_2026-08-02.md` (NEW — supersedes 08-01, bannered). Branch
 `wip/village2-and-f8-tickets`, **HEAD `e60b19e5`, local==origin, pushed.** Prod untouched.
