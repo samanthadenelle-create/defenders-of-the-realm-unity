@@ -1415,7 +1415,7 @@ namespace DeNelle.Village.Hero
         private static string ArmorStats(ArmorDef a)
         {
             if (a == null) return "";
-            int defPct = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
+            int defPct = RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f);
             string s = "+" + defPct + "% def";
             if (a.hpBonus > 0f) s += "   +" + Fmt1(a.hpBonus) + " hp";
             if (!string.IsNullOrEmpty(a.weight)) s += "   " + a.weight;
@@ -1436,8 +1436,10 @@ namespace DeNelle.Village.Hero
         {
             var m = SelectedMember;
             if (a == null || m == null || m.EquippedArmor == null) return "";
-            int cur = RoundToInt(Clamp(m.EquippedArmor.defense, 0f, 0.9f) * 100f);
-            int nw  = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
+            // CAP: GearLoadout.MaxArmorDefense on BOTH sides of the delta - a display-only
+            // literal here is exactly how the shown number drifted from the applied one.
+            int cur = RoundToInt(Clamp(m.EquippedArmor.defense, 0f, GearLoadout.MaxArmorDefense) * 100f);
+            int nw  = RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f);
             int d = nw - cur;
             return d == 0 ? "= equipped" : (d > 0 ? "+" + d + "% def vs equipped" : d + "% def vs equipped");
         }

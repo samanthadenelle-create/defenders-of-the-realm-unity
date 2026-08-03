@@ -116,6 +116,9 @@ namespace DeNelle.Village.Hero
         public const string IconRoleWeapon = "weapon";
         public const string IconRoleArmor  = "armor";
         public const string IconRolePotion = "potion";
+        // F8-641: a crafting MATERIAL is its own icon role. It used to be typed as a potion,
+        // which is what let a materials.json row ("Iron Scrap") render a health bottle.
+        public const string IconRoleMaterial = "material";
 
         private readonly IInventoryStore _store;
         private readonly IEquipTarget _equip;        // may be null (no hero / tests)
@@ -415,8 +418,17 @@ namespace DeNelle.Village.Hero
                 // WO-808: stats read the LIVE leveled power (level 1 == authored, unchanged).
                 int lvl = GearLevel(w.id);
                 int dmgPct = RoundToInt((Max(0.1f, GearStatResolver.EffectiveDamageMult(w, lvl)) - 1f) * 100f);
+                // OFF-HAND items (shields) live in weapons.json, so they land in this tab - but
+                // their whole point is `defense`, and this line only ever printed "+0% dmg". A
+                // player who spent wood + iron improving a shield to Lv 5 saw a level badge, a
+                // zero, and no way to tell the purchase did anything. Print the stat the item
+                // actually carries, resolved at the SAME level GearLoadout.ApplyStats applies.
+                bool showsDefense = w.IsOffHandItem || w.defense > 0f;
+                string statLine = showsDefense
+                    ? "+" + RoundToInt(GearStatResolver.EffectiveDefense(w, lvl) * 100f) + "% def"
+                    : "+" + dmgPct + "% dmg";
                 string stats = (lvl > 1 ? "Lv " + lvl + "   " : "")
-                    + "+" + dmgPct + "% dmg" + (w.reach > 0f ? "   reach " + Fmt1(w.reach) + "m" : "");
+                    + statLine + (w.reach > 0f ? "   reach " + Fmt1(w.reach) + "m" : "");
                 string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
                 _details[w.id] = new InventoryDetail(name, DescribeGear(w.job, w.rarity), stats, qty,
                     IconRoleWeapon, w.id, w.rarity, canUse: false, canEquip: true);
@@ -461,17 +473,35 @@ namespace DeNelle.Village.Hero
         {
         }
 
+        // F8-641 ("shows as poition but says iron scrap"): this bucket is the store's CATCH-ALL
+        // (IInventoryStore.OwnedConsumables = anything owned that is neither weapon nor armor),
+        // so crafting MATERIALS land here alongside potions. The old body set `name = id` and
+        // hardcoded IconRolePotion, so the two halves of a row's identity were resolved from
+        // DIFFERENT sources: the View spaced the id into "Iron Scrap" while the icon path fell
+        // through to a generic potion sprite. Both halves now come from the SAME id-keyed
+        // catalog row (ItemIdentity: consumables.json, then materials.json) - name, icon role,
+        // authored icon path, and whether the row can be USED at all.
         private void BuildConsumables()
         {
             foreach (var (id, qty) in _store.OwnedConsumables())
             {
                 if (string.IsNullOrEmpty(id) || qty <= 0) continue;
-                string name = id;
-                _details[id] = new InventoryDetail(name, "Consumable you own.", "Consumable", qty,
-                    IconRolePotion, id, null, canUse: true, canEquip: false);
+
+                var row = DeNelle.Village.Items.ItemIdentity.Resolve(id);
+                bool isMaterial = row.Kind == DeNelle.Village.Items.ItemIdentityKind.Material;
+
+                string name = row.DisplayName;                       // authored name, else the raw id
+                string role = isMaterial ? IconRoleMaterial : IconRolePotion;
+                string desc = isMaterial ? "A crafting material." : "Consumable you own.";
+                string stats = isMaterial ? "Material" : "Consumable";
+
+                // A material has no use-effect. Marking it CanUse produced a live "Use" button
+                // that could only ever fail - the same identity lie in verb form.
+                _details[id] = new InventoryDetail(name, desc, stats, qty,
+                    role, id, null, canUse: !isMaterial, canEquip: false);
                 _slotKind[id] = InventoryTabKind.Consumables;
-                _slots.Add(new ItemVM(id, name + (qty > 1 ? " x" + qty : ""), IconRolePotion, id,
-                    0, "gold", true));
+                _slots.Add(new ItemVM(id, name + (qty > 1 ? " x" + qty : ""), role, id,
+                    0, "gold", true, iconPath: row.IconPath));
             }
         }
 

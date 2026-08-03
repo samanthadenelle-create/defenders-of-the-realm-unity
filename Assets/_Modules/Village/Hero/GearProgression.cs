@@ -130,13 +130,41 @@ namespace DeNelle.Village
         }
 
         /// <summary>Effective armor damage-reduction fraction at <paramref name="level"/>.
-        /// Multiplied THEN clamped to the same 0..0.9 window ApplyStats always enforced —
-        /// a levelled legendary can never approach immunity.</summary>
+        /// Multiplied THEN clamped to <see cref="GearLoadout.MaxArmorDefense"/> - the ONE
+        /// owner-locked ceiling the applied value and every display site share, so a levelled
+        /// legendary can never approach immunity.</summary>
         public static float EffectiveDefense(ArmorDef def, int level)
         {
             if (def == null) return 0f;
             var band = GearLevelCatalog.BandFor(def.rarity);
-            return Mathf.Clamp(def.defense * (band != null ? band.MultAt(level) : 1f), 0f, 0.9f);
+            return Mathf.Clamp(def.defense * (band != null ? band.MultAt(level) : 1f),
+                               0f, GearLoadout.MaxArmorDefense);
+        }
+
+        /// <summary>
+        /// Effective OFF-HAND (shield) damage-reduction fraction at <paramref name="level"/>.
+        ///
+        /// A deliberate OVERLOAD of the armor resolver above, not a second resolver: identical
+        /// math (authored defense x the rarity band's multiplier at this level, then the ONE
+        /// ceiling), because a shield's `defense` means exactly what an armor piece's `defense`
+        /// means - the same additive term in the same GearLoadout.ArmorDefense sum. The only
+        /// reason a separate signature is needed is that shields are WeaponDef rows (they live in
+        /// weapons.json), and WeaponDef and ArmorDef share no base type.
+        ///
+        /// WHY IT HAD TO EXIST (Tier 0, 2026-08-02): GearProgression.Improve already accepted
+        /// shields - it charged wood + iron and wrote GameState.GearLevels[shieldId] - but
+        /// GearLoadout.ApplyStats read the equipped off-hand's `defense` RAW, so the purchased
+        /// level never reached the damage chain. Levelling a shield was a paid no-op.
+        ///
+        /// Returns 0 for any row with no authored defense (every ordinary weapon), so calling it
+        /// on a non-shield off-hand is safe and inert.
+        /// </summary>
+        public static float EffectiveDefense(WeaponDef def, int level)
+        {
+            if (def == null) return 0f;
+            var band = GearLevelCatalog.BandFor(def.rarity);
+            return Mathf.Clamp(def.defense * (band != null ? band.MultAt(level) : 1f),
+                               0f, GearLoadout.MaxArmorDefense);
         }
     }
 

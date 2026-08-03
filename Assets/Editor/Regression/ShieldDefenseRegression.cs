@@ -28,8 +28,10 @@
 //                       fits the knight, and is the WEAKEST shield in the game -
 //                       non-zero, but never the reason to skip an upgrade.
 //   4 [loadout-sums]    GearLoadout.ApplyStats really FOLDS the equipped off-hand
-//                       into the published ArmorDefense, and the 0.70 balance
-//                       ceiling is still enforced on the summed total. Source-lint:
+//                       into the published ArmorDefense, and the shared balance
+//                       ceiling (GearLoadout.MaxArmorDefense - owner-locked at 0.90
+//                       on 2026-08-02, was 0.70) is still enforced on the summed
+//                       total. Source-lint:
 //                       there is no scene-free way to drive ApplyStats, but the
 //                       thing that regresses here is a deleted term, which a lint
 //                       catches exactly.
@@ -77,8 +79,11 @@ namespace DeNelle.Editor.Regression
         /// <summary>The WO-860 seeded starter off-hand. Must stay level 1 and stay the floor.</summary>
         private const string StarterShieldId = "knight_shield_starter";
 
-        /// <summary>The balance ceiling ApplyStats clamps the SUMMED defense to.</summary>
-        private const float DefenseClamp = 0.70f;
+        /// <summary>The balance ceiling ApplyStats clamps the SUMMED defense to. Read from the
+        /// ENGINE'S OWN constant, never re-typed: the owner raised this from 0.70 to 0.90 on
+        /// 2026-08-02 precisely because display and engine had drifted, and an oracle carrying a
+        /// private copy of the number is one more place for it to drift again.</summary>
+        private static float DefenseClamp => GearLoadout.MaxArmorDefense;
 
         /// <summary>A shield alone may never out-defend the best chestpiece (0.35 today).</summary>
         private const float MaxSaneShieldDefense = 0.20f;
@@ -375,10 +380,16 @@ namespace DeNelle.Editor.Regression
                              "shield can carry a defense value and the hero still takes full damage, because " +
                              "HeroHealth reads only this scalar");
 
-            if (args.IndexOf("0.70f", StringComparison.Ordinal) < 0 && args.IndexOf("0.7f", StringComparison.Ordinal) < 0)
-                failures.Add("[loadout-sums] the 0.70 clamp is gone from the ArmorDefense assignment (it reads: " +
-                             "Mathf.Clamp(" + Condense(args) + ")) - adding a fourth defense source with no ceiling " +
-                             "is how a stacked hero becomes unkillable");
+            // The ceiling must be the SHARED symbol, not a literal. This used to demand the
+            // literal "0.70f", which was itself the bug: the engine's private 0.70 and the shop's
+            // 0.90 were both self-consistent and silently disagreed. The owner locked the value at
+            // 0.90 (2026-08-02) and locked its DEFINITION to one place; ArmedHeroInvariantRegression
+            // [defense-cap] asserts the value, this asserts the ceiling still exists here at all.
+            if (args.IndexOf("MaxArmorDefense", StringComparison.Ordinal) < 0)
+                failures.Add("[loadout-sums] the ArmorDefense assignment does not clamp to " +
+                             "GearLoadout.MaxArmorDefense (it reads: Mathf.Clamp(" + Condense(args) + ")) - either " +
+                             "the ceiling is gone (a stacked hero becomes unkillable) or it has been re-inlined as a " +
+                             "literal, which is exactly how the applied cap drifted away from the displayed one");
 
             // The off-hand term must be floor-guarded like the accessory term, or a negative
             // authored value would HEAL the hero through the mitigation formula.

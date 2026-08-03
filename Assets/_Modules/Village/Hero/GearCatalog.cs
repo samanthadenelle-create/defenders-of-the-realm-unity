@@ -257,7 +257,17 @@ namespace DeNelle.Village
             EnsureLoaded();
         }
 
-        /// <summary>Highest-damageMult weapon the given class+level can equip, or null.</summary>
+        /// <summary>
+        /// Highest-damageMult MAIN-HAND weapon the given class+level can equip, or null.
+        ///
+        /// EXCLUDES off-hand items (shields). weapons.json carries shields as rows too, so without
+        /// this gate a shield could win the main-hand pick on a damageMult tie and be handed to
+        /// EnforceHandSlots, which moves it to the off hand and leaves the MAIN HAND EMPTY. That is
+        /// exactly what happened when mage_starter was removed on 2026-08-02: 'tripo_shield_a' tied
+        /// 'tripo_staff_a' at damageMult 1.0, won on file order, and a level-1 Mage spawned unarmed.
+        /// Every caller of this method wants a main-hand pick (starter loadout, arena/outpost loot
+        /// rolls, the armed-hero oracles), so the exclusion is correct at all of them.
+        /// </summary>
         public static WeaponDef BestWeapon(string job, int level)
         {
             EnsureLoaded();
@@ -266,7 +276,8 @@ namespace DeNelle.Village
             {
                 foreach (var w in _weapons)
                 {
-                    if (w == null || !JobMatches(w.job, job) || !MeetsReq(w.req, level)) continue;
+                    if (w == null || w.IsOffHandItem) continue;
+                    if (!JobMatches(w.job, job) || !MeetsReq(w.req, level)) continue;
                     if (best == null || w.damageMult > best.damageMult) best = w;
                 }
             }
@@ -474,10 +485,76 @@ namespace DeNelle.Village
             return itemJob.Equals(heroJob ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool MeetsReq(GearReq req, int level)
+        /// <summary>
+        /// True when a wearer at <paramref name="level"/> meets the item's equip requirement.
+        ///
+        /// PUBLIC (F8 seq-642 Fix B). This was `private static`, which meant the EQUIP SEAM
+        /// (GearLoadout.EquipWeaponById / EquipOffHandById / EquipArmorById) physically could
+        /// not ask the same question the auto-best queries ask - so a manual equip enforced
+        /// NEITHER the class gate nor the level gate. The hole was masked only because the
+        /// shop/equip UI pre-filters its lists; every non-UI caller (arena grants, outpost
+        /// drops, story grants, AutoPilot) went straight through it.
+        /// v1: level only. (dex/arcane/might carried but not yet enforced.)
+        /// </summary>
+        public static bool MeetsReq(GearReq req, int level)
         {
-            // v1: level only. (dex/arcane/might carried but not yet enforced.)
             return req == null || level >= req.level;
+        }
+
+        /// <summary>The level an item demands (1 when it carries no req block). For log text.</summary>
+        public static int RequiredLevel(GearReq req) => req != null ? req.level : 1;
+
+        /// <summary>
+        /// The ONE equip-eligibility question for a weapon / off-hand item: does it fit the
+        /// class AND does the wearer meet its level requirement? <paramref name="reason"/>
+        /// carries a player-diagnosable explanation on refusal (never empty on false), so the
+        /// caller can Warn with real detail instead of failing silently.
+        /// </summary>
+        public static bool CanEquipWeapon(WeaponDef w, string job, int level, out string reason)
+        {
+            if (w == null) { reason = "no WeaponDef"; return false; }
+            if (!WeaponFitsClass(w, job))
+            {
+                reason = "class gate: item job='" + (w.job ?? "<null>") + "' does not fit wearer class '" +
+                         (job ?? "<null>") + "'";
+                return false;
+            }
+            if (!MeetsReq(w.req, level))
+            {
+                reason = "level gate: requires level " + RequiredLevel(w.req) + ", wearer is level " + level;
+                return false;
+            }
+            reason = null;
+            return true;
+        }
+
+        /// <summary>
+        /// The ONE equip-eligibility question for armor. Mirrors <see cref="BestArmor"/> exactly
+        /// - BOTH the legacy `job` gate and the weight-class gate (light/heavy) - plus the level
+        /// requirement, so what a player may MANUALLY equip is precisely what auto-best may pick.
+        /// </summary>
+        public static bool CanEquipArmor(ArmorDef a, string job, int level, out string reason)
+        {
+            if (a == null) { reason = "no ArmorDef"; return false; }
+            if (!JobMatches(a.job, job))
+            {
+                reason = "class gate: item job='" + (a.job ?? "<null>") + "' does not fit wearer class '" +
+                         (job ?? "<null>") + "'";
+                return false;
+            }
+            if (!ArmorFitsClass(a, job))
+            {
+                reason = "weight gate: item weight='" + (a.weight ?? "<null>") + "' but class '" +
+                         (job ?? "<null>") + "' wears '" + ClassWeight(job) + "'";
+                return false;
+            }
+            if (!MeetsReq(a.req, level))
+            {
+                reason = "level gate: requires level " + RequiredLevel(a.req) + ", wearer is level " + level;
+                return false;
+            }
+            reason = null;
+            return true;
         }
 
         private static void EnsureLoaded()

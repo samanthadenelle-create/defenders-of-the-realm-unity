@@ -109,6 +109,31 @@ namespace DeNelle.Village
         /// <summary>Fractional incoming-damage reduction from equipped armor (0 = none).</summary>
         public float ArmorDefense { get; private set; } = 0f;
 
+        /// <summary>
+        /// THE armor damage-reduction ceiling. OWNER-LOCKED at 0.90 (2026-08-02): "the cap is
+        /// 0.90, and display and engine must agree on it."
+        ///
+        /// WHY THIS CONSTANT EXISTS AT ALL. Before it there were FOURTEEN copies of the literal
+        /// and they had drifted into two different numbers: <see cref="ApplyStats"/> clamped the
+        /// APPLIED value at 0.70 while every shop / equip / inventory readout clamped its display
+        /// at 0.90. The store advertised "+85% def" and the damage chain granted 70% - a lie the
+        /// player pays gold and resources for, and one that no compiler could ever catch because
+        /// both sides were self-consistent literals. There is now exactly ONE definition; every
+        /// engine clamp and every display clamp reads THIS symbol. Never re-inline the number.
+        ///
+        /// SCOPE - what this is NOT:
+        ///   * NOT the talent damage-reduction cap. HeroTalentModifiers' reduction is clamped at
+        ///     0.95 inside HeroHealth (HeroHealth.cs ~:543). That is a SEPARATE mitigation stage
+        ///     applied after this one and is deliberately a different number; it is not a
+        ///     fifteenth copy of this cap and must not be folded into it.
+        ///   * NOT a per-item bound. GearStatResolver.Effective* clamps each RESOLVED piece here
+        ///     too, so a single fat-fingered 1.3 in a json row can never alone grant immunity.
+        ///
+        /// The value is deliberately below 1.0: at 0.90 the hero still takes a tenth of every
+        /// blow, so no stack of gear can ever make an encounter unloseable.
+        /// </summary>
+        public const float MaxArmorDefense = 0.90f;
+
         /// <summary>The currently-equipped pieces (null when nothing qualifies). For UI/debug.</summary>
         public WeaponDef EquippedWeapon { get; private set; }   // MAIN hand
         public ArmorDef  EquippedArmor  { get; private set; }
@@ -399,13 +424,16 @@ namespace DeNelle.Village
             if (AegisSetActive)
             {
                 weapon *= AegisWeaponPerkMult(job);
-                armor   = Mathf.Clamp(armor + AegisSetDefenseBonus, 0f, 0.9f);
+                armor   = Mathf.Clamp(armor + AegisSetDefenseBonus, 0f, MaxArmorDefense);
             }
 
             // WO-543: accessory (ring + amulet) bonuses stack ADDITIVELY on top of weapon + armor.
             //   • damage chain: weaponMult × (1 + ringDmg + amuletDmg)
-            //   • defense:      armor.defense + ring.defense + amulet.defense  (CAP 0.70 — never immune)
+            //   • defense:      armor.defense + ring.defense + amulet.defense + offHand.defense
+            //                   (CAP MaxArmorDefense - never immune)
             //   • max HP:       armor.hpBonus + ring.hpBonus + amulet.hpBonus  (folded by HeroHealth)
+            // Accessories carry NO gear level of their own (no rarity band is authored for them),
+            // so they are read flat, exactly as before.
             float accDamage  = (EquippedRing != null ? EquippedRing.damageMult : 0f)
                              + (EquippedAmulet != null ? EquippedAmulet.damageMult : 0f);
             float accDefense = (EquippedRing != null ? EquippedRing.defense : 0f)
@@ -418,13 +446,32 @@ namespace DeNelle.Village
             // SHIELDS WERE INERT (owner 2026-08-02): every category "shield" row carried no
             // defense value AND the equipped off-hand was never summed here - decoration on both
             // halves, so a Squire's Heater did exactly nothing. The off-hand now contributes
-            // exactly like an accessory: additive, floor-guarded (a negative authored value can
-            // never HEAL through the mitigation formula), and under the SAME 0.70 ceiling, so a
-            // shield can never make the hero immune.
-            float offHandDefense = EquippedOffHand != null ? EquippedOffHand.defense : 0f;
+            // exactly like armor: additive, floor-guarded (a negative authored value can never
+            // HEAL through the mitigation formula), and under the SAME ceiling, so a shield can
+            // never make the hero immune.
+            //
+            // AND IT IS LEVEL-SCALED, through the SAME GearStatResolver the weapon (line ~393)
+            // and the armor (line ~396) already go through - NOT a raw `.defense` read.
+            //
+            // THE BUG THIS CLOSES (owner-called Tier 0, 2026-08-02): shields live in weapons.json,
+            // so GearProgression.Improve ACCEPTS them - it charges real wood + iron off the
+            // ResourceLedger, writes GameState.GearLevels[shieldId] and reports "improved to Lv 5"
+            // in the UI. But this line read EquippedOffHand.defense RAW, so the level it just sold
+            // you never reached ArmorDefense, which is the one scalar HeroHealth.TakeDamage
+            // consumes. An epic shield taken to L5 cost thousands of resources and delivered
+            // EXACTLY ZERO mitigation - silent, repeatable resource theft, with a congratulatory
+            // toast on top. Routing it through the resolver is the whole fix; there is deliberately
+            // no second resolver for off-hands, because two resolvers is how this drifts again.
+            float offHandDefense = EquippedOffHand != null
+                ? GearStatResolver.EffectiveDefense(EquippedOffHand, GearProgression.GearLevelOf(gs, EquippedOffHand.id))
+                : 0f;
 
             WeaponMult   = weapon;
-            ArmorDefense = Mathf.Clamp(armor + Mathf.Max(0f, accDefense) + Mathf.Max(0f, offHandDefense), 0f, 0.70f);
+            // OWNER-LOCKED CEILING (2026-08-02): MaxArmorDefense, the SAME symbol every display
+            // site clamps to. This clamp used to read 0.70 while the shop showed 0.90 - see the
+            // MaxArmorDefense doc comment. Do not re-inline the number.
+            ArmorDefense = Mathf.Clamp(armor + Mathf.Max(0f, accDefense) + Mathf.Max(0f, offHandDefense),
+                                       0f, MaxArmorDefense);
             GearHpBonus  = Mathf.Max(0, Mathf.RoundToInt(EquippedArmor != null ? EquippedArmor.hpBonus : 0f) + accHp);
 
             // Drive the body's armor visual tier off the equipped piece. EquipmentController
@@ -597,6 +644,21 @@ namespace DeNelle.Village
                 FlowTrace.Step("Gear", $"EnforceHandSlots: '{EquippedWeapon.id}' is an off-hand item in the main slot -> moved to off-hand.");
                 if (EquippedOffHand == null) EquippedOffHand = EquippedWeapon;
                 EquippedWeapon = null;
+
+                // ARMED-HERO INVARIANT: evicting a shield must not LEAVE the main hand empty.
+                // The 2H branch below already refills; this branch did not, so a class whose
+                // best pick resolved to a shield spawned with nothing in the main hand at all
+                // (the level-1 Mage, 2026-08-02). Refill from the best 1H the class can hold.
+                var refill = GearCatalog.BestOneHandedWeapon(job, level);
+                if (refill != null)
+                {
+                    EquippedWeapon = refill;
+                    FlowTrace.Step("Gear", $"EnforceHandSlots: main-hand refilled with 1H '{refill.id}' after the shield moved off.");
+                }
+                else
+                {
+                    FlowTrace.Warn("Gear", $"EnforceHandSlots: no 1H main-hand exists for class '{job}' at level {level} — hero is UNARMED (off-hand retained).");
+                }
             }
 
             bool mainIs2H = EquippedWeapon != null && EquippedWeapon.IsTwoHanded;
@@ -803,13 +865,88 @@ namespace DeNelle.Village
         }
 
         /// <summary>The wearer's current class id (for catalog queries, persistence keys, and
-        /// the Aegis per-class weapon perk). A companion loadout's BindOwnerClass override wins;
-        /// otherwise the hero's HeroAbilities class.</summary>
+        /// the Aegis per-class weapon perk). Precedence:
+        ///   1. a companion loadout's BindOwnerClass override (authoritative for that body);
+        ///   2. the hero's live HeroAbilities class;
+        ///   3. the PERSISTED player class from GameState - the SAME source
+        ///      HeroBodySwapper.ResolveHeroClass trusts to build the BODY;
+        ///   4. AbilityCatalog.DefaultClass, and only with a FlowTrace.Warn naming the object.
+        ///
+        /// WHY STEP 3 EXISTS (F8 seq-642, PROVEN from Player.log, not inferred). A composed
+        /// dungeon hero carries NO HeroAbilities: DungeonBaker.PopulateForPlay attaches only
+        /// HeroLocomotion + HeroBodySwapper, and HeroControlEnsurer's emergency wiring is gated
+        /// by IsVillageScene, which every dg_* scene fails. So step 2 was null and the old code
+        /// fell straight to AbilityCatalog.DefaultClass - which is the literal string "mage"
+        /// (AbilityCatalog.cs:207, pinned by Assets/Data/Tests/AbilityCatalogTest.cs:52). The
+        /// capture reads, one line after BuildKnightV3Body:
+        ///     [Flow:Gear] Refresh: job='mage' level=1 bestWeapon='mage_oak' offHand='&lt;null&gt;'
+        ///                 bestArmor='armor_cloth'
+        /// i.e. HeroBodySwapper built the KNIGHT body while this component armed him as a MAGE:
+        /// an Oakheart STAFF and cloth robes ("in starter loop i get a staff?").
+        ///
+        /// AND IT CORRUPTED A SAVE SLOT THE PLAYER NEVER PLAYED: PrefJobKey() routes through
+        /// here, so every persisted equip in that dungeon was written under `...-mage` - the
+        /// same capture shows EquipOffHandById('knight_shield_starter') landing in the MAGE's
+        /// off-hand slot - while the knight's own persisted sword was never read back.
+        ///
+        /// A SILENT wrong-class default is exactly the no-silent-failure violation CLAUDE.md
+        /// section 12 forbids: the wrong class flowed through catalog queries, persistence keys
+        /// and the damage chain for an entire dungeon run without emitting one line.
+        /// </summary>
         private string CurrentJob()
         {
             if (!string.IsNullOrEmpty(_ownerClassOverride)) return _ownerClassOverride;
             if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
-            return _abilities != null ? _abilities.HeroClass : AbilityCatalog.DefaultClass;
+            if (_abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass)) return _abilities.HeroClass;
+
+            string persisted = PersistedPlayerJob();
+            if (!string.IsNullOrEmpty(persisted))
+            {
+                // Not a Warn: this is the CORRECT answer for any hero built without a
+                // HeroAbilities component (every composed dungeon). Once-per-key so a
+                // dungeon run logs it exactly once instead of on every equip/ApplyStats.
+                FlowTrace.Once("Gear", "job-from-gamestate-" + persisted,
+                    $"CurrentJob: no HeroAbilities on '{gameObject.name}' - resolved class '{persisted}' " +
+                    "from the PERSISTED GameState.HeroClass (the same source HeroBodySwapper builds " +
+                    "the body from), NOT the catalog default.");
+                return persisted;
+            }
+
+            FlowTrace.Warn("Gear",
+                $"CurrentJob: '{gameObject.name}' has NO HeroAbilities, no BindOwnerClass override AND no " +
+                $"persisted GameState.HeroClass - falling back to AbilityCatalog.DefaultClass " +
+                $"('{AbilityCatalog.DefaultClass}'). Gear, the per-class PlayerPrefs slots and the damage " +
+                "chain will all key off that class; if this wearer is not a " + AbilityCatalog.DefaultClass +
+                " the equipped gear AND the save slot are WRONG. Fix the SOURCE (persist the hero class, " +
+                "or BindOwnerClass on a companion) - do not treat this line as normal.");
+            return AbilityCatalog.DefaultClass;
+        }
+
+        /// <summary>
+        /// The lowercase job key for the PERSISTED player class, or null when no class has been
+        /// chosen / no save service is up. Reads GameStateService.State.HeroClass - byte-identical
+        /// to HeroBodySwapper.ResolveHeroClass's source - and maps it through
+        /// DeNelle.Core.State.PlayableHeroes.JobKey, the registry documented as "the SAME key
+        /// weapons.json `job`, armor weight-class lookup and the per-class PlayerPrefs slots use".
+        /// HeroBodySwapper already picks the STARTER kit through that exact accessor
+        /// (PlayableHeroes.JobKey(cls)), so the kit and this loadout can never key off different
+        /// strings.
+        ///
+        /// FULLY QUALIFIED ON PURPOSE (including the extension method, called statically): the
+        /// file header forbids importing DeNelle.Core.State here, because that namespace's
+        /// HeroClass type would shadow the DeNelle.Village names used throughout this file.
+        ///
+        /// CLERIC NOTE: JobKey maps Cleric -> "cleric", while HeroAbilities aliases her ability
+        /// loadout to "mage". "cleric" is the correct GEAR key (GearCatalog.ClassWeight and the
+        /// Aegis perk table both have real "cleric" rows; keying her as "mage" would gate her to
+        /// LIGHT armor). She is not in PlayableHeroes.Roster, so this is inert today.
+        /// </summary>
+        private static string PersistedPlayerJob()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc == null || svc.State == null) return null;
+            var opt = DeNelle.Core.State.HeroClassOptExtensions.ToNullable(svc.State.HeroClass);
+            return opt.HasValue ? DeNelle.Core.State.PlayableHeroes.JobKey(opt.Value) : null;
         }
 
         private void TryReapplyVisuals()

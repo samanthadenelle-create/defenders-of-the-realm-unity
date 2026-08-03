@@ -359,7 +359,7 @@ namespace DeNelle.Village.Hero
                 var aCopy = a;
                 var cost = GearCatalog.GetBuyCost(a);
                 bool affordable = _economy == null || _economy.CanAfford(cost);
-                int aDefPct = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
+                int aDefPct = RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f);
                 string aStats = "+" + aDefPct + "% def" + (a.hpBonus > 0f ? "   +" + Fmt1(a.hpBonus) + " hp" : "") + DeltaVsEquipped(a);
                 string name = string.IsNullOrEmpty(a.name) ? a.id : a.name;
                 _rowDetails[a.id] = new ShopDetail(name, DescribeGear(a.job, a.rarity), aStats,
@@ -552,7 +552,7 @@ namespace DeNelle.Village.Hero
                                 : ac != null ? DescribeGear(ac.job, ac.rarity)
                                 : (isPotionSell ? "Consumable you own." : "Owned item.");
                 string sellStats = w != null ? "+" + RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f) + "% dmg"
-                                 : a != null ? "+" + RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f) + "% def"
+                                 : a != null ? "+" + RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f) + "% def"
                                  : ac != null ? AccessorySellStats(ac)
                                  : "Consumable";
                 string sellName = w != null ? w.name : a != null ? a.name : ac != null ? ac.name : id;
@@ -617,7 +617,7 @@ namespace DeNelle.Village.Hero
                 _rowDetails[id] = new ShopDetail(name,
                     isWeapon ? DescribeGear(w.job, w.rarity) : DescribeGear(a.job, a.rarity),
                     isWeapon ? "+" + RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f) + "% dmg"
-                             : "+" + RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f) + "% def",
+                             : "+" + RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f) + "% def",
                     "", iconRole, id);
                 _items.Add(new ItemVM(id, label, iconRole, id, 0, "gold", true,
                     isWeapon ? w.rarity : a.rarity));
@@ -751,13 +751,18 @@ namespace DeNelle.Village.Hero
         private string DeltaVsEquipped(ArmorDef a)
         {
             if (a == null || _equip == null || _equip.EquippedArmorName == null) return "";
-            int cur = RoundToInt(Clamp(_equip.EquippedArmorDefense, 0f, 0.9f) * 100f);
-            int nw  = RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f);
+            int cur = RoundToInt(Clamp(_equip.EquippedArmorDefense, 0f, GearLoadout.MaxArmorDefense) * 100f);
+            int nw  = RoundToInt(Clamp(a.defense, 0f, GearLoadout.MaxArmorDefense) * 100f);
             int d = nw - cur;
             return d == 0 ? "\n(= equipped)" : (d > 0 ? "\n(+" + d + "% def vs equipped)" : "\n(" + d + "% def vs equipped)");
         }
 
         // ── Pure math (System.Math — no UnityEngine.Mathf, keeps the VM Unity-UI-free) ──
+        // NOTE on the defense ceiling: every Clamp above bounds at GearLoadout.MaxArmorDefense,
+        // the ONE owner-locked cap the engine (GearLoadout.ApplyStats) applies. It is a `const
+        // float`, so the compiler inlines it and this VM gains NO runtime dependency on a
+        // MonoBehaviour - the purity note above still holds. What it buys is that the shop can
+        // never again advertise a mitigation number the damage chain refuses to grant.
         private static int RoundToInt(float f) => (int)Math.Floor(f + 0.5f);
         private static float Max(float a, float b) => a > b ? a : b;
         private static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);

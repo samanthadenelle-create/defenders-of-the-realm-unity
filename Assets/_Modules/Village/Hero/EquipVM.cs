@@ -213,7 +213,20 @@ namespace DeNelle.Village.Hero
                 return (lvl > 1 ? "Lv " + lvl + "  " : "")
                     + "+" + dmgPct + "% dmg" + (w.reach > 0f ? "  reach " + Fmt1(w.reach) + "m" : "");
             }
-            if (slotKey == SlotChest || slotKey == SlotOffHand)
+            if (slotKey == SlotOffHand)
+            {
+                // OFF-HAND items are WeaponDef ROWS (shields live in weapons.json, not armor.json).
+                // This branch used to share the SlotChest path and call GearCatalog.FindArmor(id),
+                // which returns null for every shield - so the off-hand slot's stat line was
+                // unconditionally EMPTY. Combined with the raw `.defense` read in ApplyStats, a
+                // levelled shield showed nothing anywhere and did nothing in combat.
+                var o = GearCatalog.FindWeapon(id);
+                if (o == null) return "";
+                int oLvl = GearLevel(id);
+                int oDefPct = RoundToInt(GearStatResolver.EffectiveDefense(o, oLvl) * 100f);
+                return (oLvl > 1 ? "Lv " + oLvl + "  " : "") + "+" + oDefPct + "% def";
+            }
+            if (slotKey == SlotChest)
             {
                 var a = GearCatalog.FindArmor(id);
                 if (a == null) return "";
@@ -386,9 +399,13 @@ namespace DeNelle.Village.Hero
             float dmgFill = Clamp((mult - 1f), 0f, 1f);
             _stats.Add(new EquipStat("Damage", new BarVM(dmgFill, "+" + dmgPct + "%", "dmg")));
 
+            // CAP: GearLoadout.MaxArmorDefense - the SAME symbol GearLoadout.ApplyStats clamps
+            // the applied value to. A local literal here is what let the panel advertise a
+            // number the damage chain never granted (display 0.90 vs applied 0.70).
             float def = t != null ? t.ArmorDefense : 0f;
-            int defPct = RoundToInt(Clamp(def, 0f, 0.9f) * 100f);
-            _stats.Add(new EquipStat("Defense", new BarVM(Clamp(def, 0f, 0.9f), "+" + defPct + "%", "def")));
+            float defShown = Clamp(def, 0f, GearLoadout.MaxArmorDefense);
+            int defPct = RoundToInt(defShown * 100f);
+            _stats.Add(new EquipStat("Defense", new BarVM(defShown, "+" + defPct + "%", "def")));
         }
 
         // Owned items valid for the selected slot, filtered by the active target's class — the
