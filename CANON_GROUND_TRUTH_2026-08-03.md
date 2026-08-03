@@ -69,6 +69,27 @@ Frozen detail lives in `NIGHT_WRAP_2026-08-02.md`; this is the canon summary.
 
 ## 3. THE SERVER — FIRST LIVE VERIFICATION (2026-08-03, this session)
 
+### 3.0 The stack, stated plainly (owner clarification 2026-08-03 — stop re-confusing these)
+
+> **Firebase = ACCESS + DELIVERY. Vercel = the API host. Neon = where the data lands.**
+
+| Layer | What it is | What it is NOT |
+|---|---|---|
+| **Firebase** | App Distribution (how a tester RECEIVES the APK) + Firebase Auth (login/access) | **not** a backend — there is **no `firebase.json` and no `functions/` in this repo**; no Firebase-hosted API exists |
+| **Vercel** | hosts the `api/` serverless functions; also where the **demo WebGL links** are deployed | not how the game reaches testers |
+| **Neon** | Postgres — `player_data`, `bug_reports`, `auth_nonces`, `analytics_events` | never reached directly by the client; always through `api/` |
+
+**The consequence that matters:** the Firebase-distributed APK **hardcodes the Vercel domain** in nine
+shipping client files — `GameStateService.cs:1083` (`/api/game/save`+`/load`), `BugReportVM.cs:44`
+(`/api/bug-report`), `WebTrace.cs:76` (`/api/trace`), plus `EventTracker`, `PromoCodeService`,
+`ReferralService`, `PiSignInController`. So promoting `api/` is **not** about getting a build to testers —
+they already have it via Firebase. It is about **the APK already on their phones silently dropping their
+bug reports and their progress** against old server code. That is why `bug_reports` has 0 rows and
+`player_data` is two May fixtures.
+
+⚠ One `vercel deploy` ships **both** the demo WebGL and `api/` — which is where "Vercel is just for demo
+links" comes from, and why the API half gets forgotten.
+
 > **Everything in this section is probed, not reported.** The 08-02 anchor's "`auth_nonces` does not
 > exist" line is **now WRONG** and is corrected here.
 
