@@ -1,6 +1,14 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-02 (evening — 5th collision resolved): next free WO = **853**. **782–852 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-03: next free WO = **854**. **782–853 CONSUMED.**
+> - **853** = **Structures are targetable** — the disjoint-contract seam. `WallSegment.cs:28` + `Gate.cs:45`
+>   implement `IDamageableStructure` while `TroopController.cs:449-469` sweeps for `IDamageable`; the two
+>   are disjoint, so nothing can damage a wall, gate or enemy tower and "Razed %" counts bodies. Extends
+>   the `RaidSpire` dual-interface precedent and gives `CombatFaction.Friendly` its first real producer.
+>   ⚠ walls must STAY on layer `Structure` (it is the tower LoS mask). File
+>   `WORK_ORDER_853_structures_are_targetable.md`. **READY** — one owner decision open (scoring weights).
+>
+> *(banner bumped 853 → 854 in the SAME edit as the mint — the rule that broke 5x on 08-02)*
 > - **851** = every-4th-wave BOSS encounters + statistical adaptation (owner rulings: statistics not
 >   AI, every 4th wave, boss enemies at boss scale, Syndrath's flair — JSON-driven HP bar + boss
 >   music reusing the least-used clip). File `WORK_ORDER_851_every_fourth_wave_adaptation.md`.
