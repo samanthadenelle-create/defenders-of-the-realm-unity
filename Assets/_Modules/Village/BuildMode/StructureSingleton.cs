@@ -235,8 +235,13 @@ namespace DeNelle.Village
         }
 
         // Per-id outcome of one Enforce pass — tallied by EnforceAll for the WO-834
-        // summary trace line (surfaced=N suppressed=M).
-        private enum EnforceOutcome { None, StoodDown, LatchSkipped, Surfaced, Suppressed }
+        // summary trace line. Suppressed means a twin was ACTUALLY deactivated on this
+        // pass; AlreadyDown means the gate was closed but the row's twins were already
+        // inactive (nothing to do). Keeping those apart is the point: the pre-F8-651
+        // code reported Suppressed for any row that merely AUTHORED bakedTwins, so the
+        // session logged suppressed=9 while StandDownBakedTwins deactivated nothing —
+        // a trace claiming work it never did.
+        private enum EnforceOutcome { None, StoodDown, LatchSkipped, Surfaced, Suppressed, AlreadyDown }
 
         /// <summary>
         /// THE enforcement verb for one singleton id.
@@ -282,18 +287,22 @@ namespace DeNelle.Village
             }
             else if (MayBakedTwinSurface(itemId))
             {
-                ResurfaceBakedTwins(itemId);
-                outcome = EnforceOutcome.Surfaced;
+                // Surfaced ONLY if a twin actually came back: the row may author no twins, its
+                // twin may be absent from this scene bake, or the barracks route may be refused
+                // by its own gates. The gate being OPEN is not the same as work happening.
+                outcome = ResurfaceBakedTwins(itemId) > 0
+                    ? EnforceOutcome.Surfaced : EnforceOutcome.None;
             }
             else
             {
                 // WO-834 blank-town gate: never player-built on this (migrated) save —
                 // the baked twin may NOT stand in for it. Actively deactivate (the bake
                 // ships ACTIVE), so a Build-Your-Own founding is truly blank.
-                int stood = StandDownBakedTwins(itemId,
+                var tally = StandDownBakedTwins(itemId,
                     $"'{itemId}' never player-built on this save (blank-town gate, WO-834)");
-                outcome = stood > 0 || BakedTwinsOf(itemId).Count > 0
-                    ? EnforceOutcome.Suppressed : EnforceOutcome.None;
+                outcome = tally.stood > 0        ? EnforceOutcome.Suppressed   // deactivated a standing twin
+                        : tally.alreadyDown > 0  ? EnforceOutcome.AlreadyDown  // twins exist but were already inactive
+                        : EnforceOutcome.None;                                 // no twin of this id in this scene bake
             }
 
             s_builtMemo.Remove(itemId);         // world changed - drop this frame's memo for the id
@@ -308,17 +317,25 @@ namespace DeNelle.Village
         /// </summary>
         public static void EnforceAll()
         {
-            int rows = 0, surfaced = 0, suppressed = 0;
+            int rows = 0, twinRows = 0, surfaced = 0, suppressed = 0, alreadyDown = 0;
             foreach (var entry in CatalogRegistry.All())
             {
                 if (entry?.repo == null || !entry.repo.singleton) continue;
                 rows++;
+                if (BakedTwinsOf(entry.id).Count > 0) twinRows++;
                 var outcome = EnforceInternal(entry.id);
                 if (outcome == EnforceOutcome.Surfaced) surfaced++;
                 else if (outcome == EnforceOutcome.Suppressed) suppressed++;
+                else if (outcome == EnforceOutcome.AlreadyDown) alreadyDown++;
             }
+            // Each count means exactly one thing (F8 seq=651 — the old line inflated
+            // suppressed with rows that merely AUTHORED twins): twinRows = rows that author
+            // bakedTwins at all; surfaced = rows where a twin ACTUALLY came back; suppressed =
+            // rows whose twin this pass DEACTIVATED; alreadyDown = gate-closed rows whose twins
+            // were already inactive. A row that did nothing is in none of the three.
             FlowTrace.Step("Singleton",
-                $"EnforceAll: swept {rows} singleton catalog row(s) - surfaced={surfaced} suppressed={suppressed} (blank-town gate).");
+                $"EnforceAll: swept {rows} singleton catalog row(s) ({twinRows} authoring baked twins) - " +
+                $"surfaced={surfaced} suppressed={suppressed} alreadyDown={alreadyDown} (blank-town gate).");
         }
 
         /// <summary>
@@ -358,22 +375,31 @@ namespace DeNelle.Village
         /// <summary>
         /// Deactivates every ACTIVE baked twin of <paramref name="itemId"/> (the
         /// storefront-standdown pattern - never a scene edit). <paramref name="reason"/>
-        /// names WHY in the trace (placed-wins vs the WO-834 blank-town gate). Returns
-        /// how many twins stood down. Idempotent, traced.
+        /// names WHY in the trace (placed-wins vs the WO-834 blank-town gate).
+        /// Returns <c>stood</c> = twins this call DEACTIVATED and <c>alreadyDown</c> =
+        /// twins that exist in the scene but were already inactive; a twin absent from
+        /// the scene bake counts in NEITHER. Idempotent, traced.
         /// </summary>
-        private static int StandDownBakedTwins(string itemId, string reason)
+        private static (int stood, int alreadyDown) StandDownBakedTwins(string itemId, string reason)
         {
-            int stood = 0;
+            int stood = 0, alreadyDown = 0;
             foreach (var bakedName in BakedTwinsOf(itemId))
             {
-                var baked = GameObject.Find(bakedName);   // active-only: absent or already stood down = skip
-                if (baked == null) continue;
+                var baked = GameObject.Find(bakedName);   // active-only lookup
+                if (baked == null)
+                {
+                    // Plain Find is blind to inactive objects, so a null here is BOTH
+                    // "already stood down" and "not in this scene bake". Split them with
+                    // the incl-inactive scan so the EnforceAll tally cannot overclaim.
+                    if (FindByNameInclInactive(bakedName) != null) alreadyDown++;
+                    continue;
+                }
                 baked.SetActive(false);
                 stood++;
                 FlowTrace.Step("Singleton",
                     $"baked twin '{bakedName}' stood down - {reason}.");
             }
-            return stood;
+            return (stood, alreadyDown);
         }
 
         /// <summary>
@@ -392,12 +418,17 @@ namespace DeNelle.Village
                 if (bakedName == "CastleBarracks")
                 {
                     // Unlock-gated: EnsureBarracksSurfaced no-ops while BarracksUnlock is
-                    // locked, else reactivates + re-skins the baked building.
-                    Guard.Try("Singleton", "EnsureBarracksSurfaced (singleton resurface)",
-                        HubStructureVisualInjector.EnsureBarracksSurfaced);
+                    // locked (or the placed-wins / blank-town gates refuse), else reactivates
+                    // + re-skins the baked building. COUNT ITS ANSWER, not the attempt - the
+                    // route can be refused, and a tally that reports refused work as done is
+                    // the F8 seq=651 defect wearing the other sign. Throw -> false (Guard
+                    // fallback) -> uncounted, which is also the truth.
+                    bool barracksStands = Guard.Try("Singleton", "EnsureBarracksSurfaced (singleton resurface)",
+                        HubStructureVisualInjector.EnsureBarracksSurfaced, fallback: false);
                     FlowTrace.Step("Singleton",
-                        $"resurface '{bakedName}' for '{itemId}' routed through EnsureBarracksSurfaced (unlock gate respected).");
-                    surfaced++;
+                        $"resurface '{bakedName}' for '{itemId}' routed through EnsureBarracksSurfaced - " +
+                        $"{(barracksStands ? "SURFACED (stands)" : "REFUSED by its gates (stays down)")}.");
+                    if (barracksStands) surfaced++;
                     continue;
                 }
 

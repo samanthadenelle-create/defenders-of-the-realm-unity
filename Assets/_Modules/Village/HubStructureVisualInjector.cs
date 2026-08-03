@@ -159,22 +159,41 @@ namespace DeNelle.Village
         /// swap ran while locked and deactivated the building, so <see cref="FindByName"/>
         /// (active-only) can no longer see it - this scans INCLUDING inactive, reactivates
         /// it, then re-runs its swap to skin the lightweight model + fit its collider.
-        /// Idempotent + gated: a no-op unless the barracks is genuinely unlocked now.
-        /// Called by <see cref="BarracksNpcInjector"/>'s 1 Hz poll.
+        /// Idempotent + gated: a no-op unless the barracks is genuinely unlocked now, the
+        /// player has NOT built their own (placed wins), and the WO-834 blank-town gate is
+        /// open. Called by <see cref="BarracksNpcInjector"/>'s 1 Hz poll and by
+        /// StructureSingleton's resurface branch (which only runs when nothing is placed).
+        /// <para>RETURNS true when the baked barracks is STANDING once this call returns
+        /// (reactivated here, or already standing and re-skinned); false when a gate refused
+        /// it or no CastleBarracks exists in this scene. StructureSingleton.ResurfaceBakedTwins
+        /// counts its surfaced= tally off this answer, so a refused resurface is never reported
+        /// as work done — the F8 seq=651 lesson (a tally that overclaims hides the real bug).
+        /// Callers free to ignore it: BarracksNpcInjector's poll does.</para>
         /// </summary>
-        public static void EnsureBarracksSurfaced()
+        public static bool EnsureBarracksSurfaced()
         {
-            if (!BarracksUnlock.IsUnlocked) return;
+            if (!BarracksUnlock.IsUnlocked) return false;
+            // PLACED WINS — StructureSingleton.Enforce's own precedence (it tests
+            // HasPlacedInstance FIRST, StructureSingleton.cs:262). A player-built barracks
+            // owns the singleton, and MarkEverBuilt at the commit seam
+            // (BuildModeController.cs:1842) is precisely what OPENS MayBakedTwinSurface — so
+            // the gate ALONE lets the player's own build resurface the baked twin (owner F8
+            // seq=651 "seems like two barracks": place a barracks -> the 1 Hz poll below
+            // reactivates CastleBarracks and nothing re-enforces afterwards). IsPlayerBuilt
+            // reads BaseLayout/PlacedStructure/live Building and EXCLUDES baked twins
+            // (HasPlacedInstance:422-441), so this check can never self-latch off the twin
+            // it is suppressing.
+            if (StructureSingleton.IsPlayerBuilt("barracks")) return false;
             // WO-834 blank-town gate: on a Build-Your-Own (migrated, never-built) save the
             // baked CastleBarracks may NOT surface at unlock — the player builds their own
             // from the palette (first is free, WO-812). Default-Town/legacy saves carry the
             // template grant ('barracks' in EverBuiltStructureIds), so this is a no-op for them.
-            if (!StructureSingleton.MayBakedTwinSurface("barracks")) return;
+            if (!StructureSingleton.MayBakedTwinSurface("barracks")) return false;
 
             Transform barracks = null;
             foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (t != null && t.name == "CastleBarracks") { barracks = t; break; }
-            if (barracks == null) return;   // not in this scene (pack not imported / not a hub)
+            if (barracks == null) return false;   // not in this scene (pack not imported / not a hub)
 
             if (!barracks.gameObject.activeSelf)
             {
@@ -185,6 +204,11 @@ namespace DeNelle.Village
 
             for (int i = 0; i < Swaps.Length; i++)
                 if (Swaps[i].bakedName == "CastleBarracks") { TrySwap(Swaps[i]); break; }
+
+            // Report the OBSERVED end state, not the intent: TrySwap runs its own gates and
+            // the WO-673 migration standdown branch can deactivate the object again. Reading
+            // activeSelf back is the only answer that cannot overclaim.
+            return barracks.gameObject.activeSelf;
         }
 
         private static void ApplyAll()

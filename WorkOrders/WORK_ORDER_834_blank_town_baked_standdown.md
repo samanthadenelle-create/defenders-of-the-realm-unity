@@ -75,6 +75,7 @@ the last three are the Lever-1/WO-724 paths that would silently refurnish the to
    twins (they arrive ACTIVE from the scene bake; skipping resurface alone leaves them standing).
 2. `StructureSingleton.EnforceAll` — one `[Flow:Singleton]` summary Step:
    `EnforceAll: swept N singleton catalog row(s) - surfaced=X suppressed=Y (blank-town gate)`.
+   > ⚠ **SUPERSEDED 2026-08-03** (WO-853 session, owner F8 seq=651) — this trace format changed. The counts above overclaimed (`suppressed` counted any row that merely AUTHORED `bakedTwins`, so a session logged `suppressed=9` with zero actual standdowns). Live format is now `EnforceAll: swept N singleton catalog row(s) (T authoring baked twins) - surfaced=X suppressed=Y alreadyDown=Z (blank-town gate)`, where every count means work actually done. Body below stays frozen per CLAUDE.md §15.
 3. `StrategicPlacementMigration.StanddownActiveForBaked` — now also true when the gate is closed
    (`HasRecord(id) || !MayBakedTwinSurface(id)`), so `HubStructureVisualInjector.TrySwap` stands the
    bake down at scene load (no N-frame furnished flash before the deferred EnforceAll).
