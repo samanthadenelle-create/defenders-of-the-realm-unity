@@ -3,19 +3,44 @@
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/walls/KayWalls.tsx -> WallSegment.cs.
 //
-// One MonoBehaviour per wall section on the square perimeter. VillageController
-// instantiates one per WallLayout.Segments entry and calls Configure() to wire
-// the section's identity + footprint. Week-3 depth: structure + serialized
-// fields, no damage / rubble-collapse gameplay yet (that lands Week 4 with the
-// enemy aggression pass, KayWalls.tsx's `isDestroyed` -> rubble logic).
+// One MonoBehaviour per wall section. TWO spawners produce them:
+//   * VillageController — one per WallLayout.Segments entry, then Configure() to wire
+//     the section's identity + footprint (the PLAYER's Elarion perimeter).
+//   * RaidBaseGenerator.PlaceSegment (Editor/WallTools, :982) — one per raid-base wall
+//     panel, WITHOUT calling Configure() (it authors the BoxCollider + Structure layer
+//     itself). These are ENEMY walls and they bake into the RaidBase_* scenes.
+// The second spawner is why every ownership question below is answered from
+// SceneOwnership rather than assumed player-owned (see StructureToughnessReduction).
 //
 // The actual KayKit straight-wall mesh is supplied as a child by the scene
 // builder; this component just owns the section's data + collider sizing.
+//
+// WHY IT IMPLEMENTS *TWO* DAMAGE INTERFACES (WO-853, mirroring the RaidSpire essay at
+// World/Camps/RaidSpire.cs:8-31):
+//   IDamageableStructure — the seam ENEMIES use (Enemy.ProbeForStructure ->
+//                          ApplyContactDamage). A wall only ever had this one, so it
+//                          could be HIT but never FOUND by a search.
+//   IDamageable          — the seam the PLAYER and TROOPS use. PlayerAttackController.
+//                          ResolveAttack and TroopController.NearestHostile sweep for
+//                          GetComponentInParent<IDamageable>() and reject
+//                          Faction != Hostile. Without this a raid wall is indestructible.
+// Both entry points funnel into the single private ApplyDamage() so the enemy path and
+// the player path can never diverge.
+//
+// LAYER — DELIBERATELY *NOT* THE RaidSpire TRICK. RaidSpire/BreakableContainer make
+// themselves findable by moving onto the "Enemy" layer. A wall MUST NOT: "Structure" is
+// the line-of-sight BLOCKER mask every tower linecasts against (DefenseTower.
+// BlockedByWall, TowerCombat, ArcaneTower, PlayerAttackController, HeroTargetIndicator).
+// Relayering a wall would make towers shoot through walls again. Walls stay on
+// "Structure" and the target masks widen instead.
 // =============================================================================
 
 using System;
+using System.Collections;
 using UnityEngine;
-using DeNelle.Core.Combat;
+using UnityEngine.AI;             // NavMeshObstacle — dropped on collapse (see Collapse)
+using DeNelle.Core.Combat;        // IDamageable / IDamageableStructure / DamageElement
+using DeNelle.Core.Diagnostics;   // FlowTrace / Guard (CLAUDE.md S12)
 
 namespace DeNelle.Village
 {
@@ -25,8 +50,10 @@ namespace DeNelle.Village
     /// damage HP. Instantiated by <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class WallSegment : MonoBehaviour, IDamageableStructure
+    public sealed class WallSegment : MonoBehaviour, IDamageable, IDamageableStructure
     {
+        private const string Sys = "WallSegment";
+
         [Header("Identity")]
         [Tooltip("Stable damage id from WallLayout -- wall-<index>.")]
         [SerializeField] private string _segmentId;
@@ -59,10 +86,34 @@ namespace DeNelle.Village
                  "(effective HP scales ~x1.6 per tier) — the build-mode wall-tier sink.")]
         [SerializeField] private int _tier = 1;
 
+        [Header("Collapse (WO-853)")]
+        [Tooltip("Seconds the razed section takes to slump into the ground. Readability only — " +
+                 "the collider drop and the Collapsed event both fire on frame 0.")]
+        [SerializeField, Min(0.01f)] private float _collapseSeconds = 0.9f;
+
         // Effective-HP multiplier per tier: wood (x1) → stone (x1.6) → reinforced (x2.56).
         // Incoming contact damage is DIVIDED by this, so a tier-3 wall takes ~2.56x longer to
         // wear down on the shared 0-100 damage track without changing the collapse threshold.
         private static readonly float[] s_tierToughness = { 1f, 1f, 1.6f, 2.56f };
+
+        /// <summary>Full health on the wall's inverted 0-100 damage track (Damage 0 == MaxHp).</summary>
+        public const float MaxHp = 100f;
+
+        // Fraction of the section's own height it sinks on collapse. Below 1 on purpose:
+        // a stub of rubble stays above ground so the razed section READS as rubble rather
+        // than as a piece that silently vanished.
+        private const float SinkFraction = 0.85f;
+
+        // Shader property the Gate's ForceFieldGate.shader ramps on destruction
+        // (Gate.cs:81). Pushed here on the same MaterialPropertyBlock shape so a wall
+        // whose material declares _Collapse tears the same way. On a plain URP/Lit wall
+        // material the property does not exist and SetFloat is a silent no-op — which is
+        // exactly why the sink below, not this ramp, is the tell that always reads.
+        private static readonly int CollapseId = Shader.PropertyToID("_Collapse");
+
+        // ---- Collapse runtime ------------------------------------------------
+        private MaterialPropertyBlock _mpb;
+        private bool _collapsed;
 
         /// <summary>Stable damage id -- <c>wall-&lt;index&gt;</c>.</summary>
         public string SegmentId => _segmentId;
@@ -100,10 +151,55 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// <see cref="IDamageableStructure"/> — true while the section still
-        /// stands and an enemy can contact-attack it. False once it is rubble.
+        /// True while the section still stands and can be attacked. Satisfies BOTH
+        /// <see cref="IDamageableStructure"/> (the enemy contact seam) and
+        /// <see cref="IDamageable"/> (the player/troop seam) — one liveness answer, so
+        /// the two contracts can never disagree about whether this wall is a target.
         /// </summary>
         public bool IsAlive => _damage < 100f;
+
+        // =====================================================================
+        //  IDamageable — the PLAYER + TROOP attack seam (WO-853)
+        // =====================================================================
+
+        /// <summary>
+        /// DERIVED from who owns the loaded scene, never serialized: a wall in an
+        /// enemy-owned scene (a baked RaidBase_*, flipped by RaidGarrisonSpawner via
+        /// <see cref="SceneOwnership.SetEnemyOwned"/>) is Hostile so the hero and troops
+        /// will acquire it; the player's own Elarion perimeter reads Friendly and is
+        /// rejected by the Faction != Hostile gate at every sweep site. A serialized
+        /// field would let a prefab or a stale scene lie about allegiance.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
+
+        /// <summary>World position — used by range / nearest-target queries.</summary>
+        public Vector3 WorldPosition => transform.position;
+
+        /// <summary>
+        /// Remaining health on the 0-100 scale every other IDamageable uses. This
+        /// component's stored model is INVERTED (<see cref="Damage"/> counts UP from 0 to
+        /// 100 and there is no HP field), so this is the reading of that same single
+        /// track from the other end: <c>MaxHp - Damage</c>. Nothing is double-booked —
+        /// writing Damage moves Hp and vice versa.
+        /// </summary>
+        public float Hp => Mathf.Max(0f, MaxHp - _damage);
+
+        /// <summary>Remaining health as 0..1 (0 once collapsed).</summary>
+        public float HpFraction => Mathf.Clamp01(Hp / MaxHp);
+
+        /// <summary>
+        /// <see cref="IDamageable"/> attack entry — hero melee / abilities / troops /
+        /// pets. Element is ignored: stone carries no elemental resists. Routes into the
+        /// same <see cref="ApplyDamage"/> the enemy contact path uses.
+        /// </summary>
+        public void TakeDamage(float amount, DamageElement element) => ApplyDamage(amount, "attack");
+
+        /// <summary>
+        /// <see cref="IDamageable"/> — a no-op. A wall does not move, so Slow/Freeze have
+        /// nothing to act on, and Burn is owned by StructureBurn's own contact ticks.
+        /// </summary>
+        public void ApplyStatus(StatusEffect effect, float seconds) { /* a wall cannot be slowed, frozen or re-burned */ }
 
         /// <summary>
         /// Raised whenever the section's accumulated damage changes — carries
@@ -141,20 +237,147 @@ namespace DeNelle.Village
         /// instead of pathing straight through (port spec Week 4).
         /// </summary>
         /// <param name="amount">Damage to accumulate. Non-positive values are ignored.</param>
-        public void ApplyContactDamage(float amount)
+        public void ApplyContactDamage(float amount) => ApplyDamage(amount, "contact");
+
+        /// <summary>
+        /// THE single damage method. Both damage seams land here — the enemy contact path
+        /// (<see cref="ApplyContactDamage"/>) and the player/troop path
+        /// (<see cref="TakeDamage(float, DamageElement)"/>) — so tier toughness, the BULWARK
+        /// reduction, the clamp, the events and the collapse can never differ between them.
+        /// </summary>
+        /// <param name="amount">Damage before tier / talent reduction. Non-positive is ignored.</param>
+        /// <param name="via">Trace label for which seam delivered the hit.</param>
+        private void ApplyDamage(float amount, string via)
         {
             if (amount <= 0f || IsDestroyed) return;
+
             // S5 — higher tiers absorb the hit more slowly (effective-HP scaling on the
             // shared 0-100 track). The collapse threshold stays 100; only the rate changes.
             int t = Mathf.Clamp(_tier, 1, 3);
             float effective = amount / s_tierToughness[t];
+
             // WO-676 (BULWARK): Hardened Ramparts (structureToughness, always-on) +
             // Warden of Elarion (structureToughnessWave, only while the wave phase is
             // Active) reduce the intake ON TOP of the tier divide. Σ=0 → ×1 (unchanged).
-            effective *= 1f - StructureToughnessReduction("WallSegment");
+            // WO-853 §9 — GATED ON FACTION. The hero's own defensive talents must protect
+            // only the hero's own walls; on an enemy raid wall (Faction == Hostile) they
+            // used to make the target up to 50% tougher, so investing in defence made
+            // raiding harder.
+            if (Faction == CombatFaction.Friendly)
+                effective *= 1f - StructureToughnessReduction("WallSegment");
+
             _damage = Mathf.Clamp(_damage + effective, 0f, 100f);
             DamageChanged?.Invoke(_damage);
-            if (_damage >= 100f) Collapsed?.Invoke(this);
+            FlowTrace.Throttle(Sys, $"wall-hit:{GetInstanceID()}", 1f,
+                $"WallSegment '{name}' took {effective:0.#} ({via}, tier {t}, {Faction}) -> " +
+                $"damage {_damage:0}/100 ({HpFraction:P0} standing).");
+
+            if (_damage >= 100f) Collapse();
+        }
+
+        /// <summary>
+        /// Razes the section: drops every solid collider and any carving NavMeshObstacle so
+        /// it stops blocking BOTH tower line-of-sight (the Structure-mask linecasts) and
+        /// NavMeshAgent pathing, raises <see cref="Collapsed"/>, then slumps the ruin so the
+        /// kill reads. Runs exactly once — a razed section is never re-armed (WO-753:
+        /// destroyed is destroyed; <see cref="Repair"/> already refuses to revive it).
+        /// </summary>
+        private void Collapse()
+        {
+            if (_collapsed) return;
+            _collapsed = true;
+
+            // Stop blocking BEFORE the event fires, so any subscriber that re-queries
+            // physics or the navmesh already sees the opening.
+            int colliders = 0;
+            foreach (var c in GetComponentsInChildren<Collider>(true))
+            {
+                if (c == null || c.isTrigger || !c.enabled) continue;
+                c.enabled = false;
+                colliders++;
+            }
+
+            // WallNavObstacleInstaller / the raid bakes fit CARVING NavMeshObstacles to wall
+            // pieces so they block agents without a rebake. Disabling the obstacle hands the
+            // carved navmesh back, which is what actually lets an agent walk through the gap
+            // — a collider alone never carved anything. Zero found is normal for a segment
+            // whose barrier obstacle lives on a sibling object.
+            int obstacles = 0;
+            foreach (var o in GetComponentsInChildren<NavMeshObstacle>(true))
+            {
+                if (o == null || !o.enabled) continue;
+                o.enabled = false;
+                obstacles++;
+            }
+
+            FlowTrace.Step(Sys, $"WallSegment '{name}' ({Faction}) COLLAPSED: {colliders} solid collider(s) " +
+                                $"and {obstacles} carving obstacle(s) dropped - it no longer blocks tower " +
+                                "line-of-sight or agent pathing.");
+
+            Collapsed?.Invoke(this);
+
+            // Readability only, and guarded so a presentation fault can never swallow the
+            // collapse above. Skipped outside play mode: the edit-mode regression harness
+            // drives walls to 100 damage on bare GameObjects, where StartCoroutine cannot run.
+            if (!Application.isPlaying) return;
+            Guard.Try(Sys, "wall collapse visual", () => StartCoroutine(CollapseRoutine()));
+        }
+
+        /// <summary>
+        /// The visible tell. Mirrors the shape of the one real destruction tell in the game
+        /// — Gate's eased <c>_Collapse</c> ramp pushed through a MaterialPropertyBlock
+        /// (Gate.cs:285-339) — and adds an accelerating sink, because a wall's KayKit
+        /// material has no <c>_Collapse</c> property for the ramp alone to drive.
+        /// </summary>
+        private IEnumerator CollapseRoutine()
+        {
+            var renderers = GetComponentsInChildren<Renderer>(true);
+
+            // Sink distance from the actual art bounds when there is art, else the
+            // configured tier height (raid walls never get Configure()'d, so _height
+            // sits at its serialized default for them).
+            float span = Mathf.Max(1f, _height);
+            if (renderers != null && renderers.Length > 0 && renderers[0] != null)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++)
+                    if (renderers[i] != null) b.Encapsulate(renderers[i].bounds);
+                span = Mathf.Max(1f, b.size.y);
+            }
+
+            Vector3 from = transform.position;
+            Vector3 to = from + Vector3.down * (span * SinkFraction);
+            float dur = Mathf.Max(0.01f, _collapseSeconds);
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / dur);
+                transform.position = Vector3.Lerp(from, to, k * k);   // accelerating fall
+                PushCollapseRamp(renderers, k);
+                yield return null;
+            }
+            transform.position = to;
+            PushCollapseRamp(renderers, 1f);
+        }
+
+        /// <summary>
+        /// Writes the 0..1 collapse value into every renderer's MaterialPropertyBlock.
+        /// GetPropertyBlock first so StructureTierVisual's tier tint on the same renderer
+        /// survives; SetFloat on a shader without the property is a no-op, never an error.
+        /// </summary>
+        private void PushCollapseRamp(Renderer[] renderers, float value)
+        {
+            if (renderers == null) return;
+            _mpb ??= new MaterialPropertyBlock();
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_mpb);
+                _mpb.SetFloat(CollapseId, value);
+                r.SetPropertyBlock(_mpb);
+            }
         }
 
         /// <summary>
@@ -164,9 +387,14 @@ namespace DeNelle.Village
         /// (Warden of Elarion) is added ONLY while <see cref="WaveManager.Phase"/> is
         /// <see cref="WavePhase.Active"/> (null-safe instance check — mirrors
         /// OfflineHarvestService.IsCombatActive). Total reduction capped at 0.5 (WO-676 G2).
-        /// Walls/gates are the player's Elarion perimeter only (VillageController-built);
-        /// enemy strongholds do not use these components, so no ownership gate is needed.
         /// Returns 0 with no service / no unlocked nodes — byte-identical baseline.
+        ///
+        /// OWNERSHIP IS THE CALLER'S JOB. This reader answers "what is the hero's talent
+        /// reduction", nothing more. Its prior doc claimed enemy strongholds do not use
+        /// WallSegment/Gate and therefore needed no ownership gate — that was FALSE
+        /// (RaidBaseGenerator.PlaceSegment adds a WallSegment to every raid wall panel), and
+        /// the missing gate meant BULWARK made enemy walls up to 50% tougher. Every caller
+        /// now checks <see cref="Faction"/> first; do not drop that check (WO-853 §9).
         /// </summary>
         internal static float StructureToughnessReduction(string traceSystem)
         {

@@ -238,7 +238,14 @@ namespace DeNelle.Village
         // so the reticle never acquired even with a foe right there. Attacks still landed in
         // waves because HeroAbilities sweeps the ENEMY layer only (no overflow). Mask to the
         // Enemy layer here too + a roomier buffer so only enemy colliders come back.
-        private static readonly Collider[] _hits = new Collider[128];
+        //
+        // WO-853 re-opens that mask by exactly ONE layer — Structure — so the reticle can
+        // acquire a wall / gate / enemy turret, and raises the buffer 128 → 256 to pay for it:
+        // a 45 m scan inside a walled base returns many wall panels, and OverlapSphereNonAlloc
+        // truncates in arbitrary order, so the crowd-out failure above would return in kind.
+        // The mask is deliberately NOT opened to Default — that is the layer the ground and
+        // the ~2,900 hub props sit on, i.e. the exact 2026-06-02 failure this comment records.
+        private static readonly Collider[] _hits = new Collider[256];
         private static Texture2D _ringTex;
         private int _enemyMask;
 
@@ -248,6 +255,15 @@ namespace DeNelle.Village
             _abilities = GetComponent<HeroAbilities>();
             _enemyMask = LayerMask.GetMask("Enemy");
             if (_enemyMask == 0) _enemyMask = ~0;   // layer undefined → fall back to all
+
+            // WO-853: the reticle must also acquire STRUCTURES. Walls and gates stay on the
+            // "Structure" layer (it is the tower line-of-sight blocker mask — relayering them
+            // onto Enemy would make towers shoot through walls), so the only way the scan can
+            // return one is to include that layer. Applied AFTER the fallback above so the
+            // ~0 degrade is byte-identical; GetMask returns 0 for an undeclared layer, making
+            // the OR a no-op. Safe because RebuildCandidates and PickEnemyAtScreenPoint reject
+            // any Faction other than Hostile — the player's own perimeter reports Friendly.
+            _enemyMask |= LayerMask.GetMask("Structure");
 
             // WO-449: ACTIVATE the LoS gate out-of-the-box. The castle wall geometry is built onto
             // the dedicated "Structure" layer (CastleWallsFromRecipe + CastleHubBuilder.BuildInnerWallRing),
@@ -741,7 +757,30 @@ namespace DeNelle.Village
             Vector3 eye = transform.position + Vector3.up * 1.4f;
             Vector3 torso = target.WorldPosition + Vector3.up * 1.0f;
             // Clear when the linecast hits NOTHING between eye and torso.
-            return !Physics.Linecast(eye, torso, _losMask, QueryTriggerInteraction.Ignore);
+            if (!Physics.Linecast(eye, torso, out RaycastHit hit, _losMask, QueryTriggerInteraction.Ignore))
+                return true;
+            // WO-853 SELF-HIT EXEMPTION — also clear when the first thing the cast hits IS the
+            // target. A wall or gate lives ON the "Structure" layer this cast is masked to, and
+            // the torso point sits inside that wall's own collider, so the cast always reports
+            // the wall as occluding itself and the reticle could never acquire or lock one.
+            // Nothing can occlude a wall from itself.
+            // NOT a targeting-through-walls hole: Physics.Linecast reports the CLOSEST hit, so
+            // "the first blocker is the target" proves nothing else stands in front of it. A
+            // wall behind a DIFFERENT wall reports that other wall here and stays blocked.
+            // Byte-identical for every target NOT on a _losMask layer (all enemies): its
+            // collider can never be the reported hit, so this collapses to the old expression.
+            return ResolvesTo(hit.collider, target);
+        }
+
+        /// <summary>
+        /// True when <paramref name="col"/> belongs to <paramref name="target"/> — resolved the
+        /// same way RebuildCandidates resolves a collider to its damageable
+        /// (<c>GetComponentInParent</c>), so a hit on a child collider still counts as the target.
+        /// </summary>
+        private static bool ResolvesTo(Collider col, IDamageable target)
+        {
+            if (col == null) return false;
+            return ReferenceEquals(col.GetComponentInParent<IDamageable>(), target);
         }
 
         private void SetVisible(bool on)

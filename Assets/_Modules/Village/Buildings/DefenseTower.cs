@@ -8,6 +8,28 @@
 //
 // Reuses: IDamageable (DeNelle.Core.Combat) for find+damage, EnemyBrain.Role for
 // priority, ProjectileMover for the visual bolt. All data-tunable.
+//
+// WHY IT IMPLEMENTS *TWO* DAMAGE CONTRACTS (WO-853 — mirrors RaidSpire.cs:61 and
+// BreakableContainer.cs:38, the two shipped precedents):
+//
+//   IDamageableStructure  is the seam ENEMIES use (Enemy.TickContactAttack /
+//                         Enemy.RangedAttack / StructureBurn -> ApplyContactDamage).
+//   IDamageable           is the seam the PLAYER uses. PlayerAttackController.
+//                         ResolveAttack and TroopController.NearestHostile do a masked
+//                         Physics.OverlapSphere, then GetComponentInParent<IDamageable>(),
+//                         and REJECT anything whose Faction != CombatFaction.Hostile.
+//
+// A tower carrying ONLY IDamageableStructure can be hit but never FOUND by a search —
+// which is why an EnemyOwned garrison turret was unkillable by hero and troops. Both
+// contracts now land on ONE HP bucket: ApplyContactDamage and TakeDamage both route
+// into ApplyDamage(). Faction is DERIVED from Allegiance, never serialized — an
+// EnemyOwned turret reports Hostile (attackable), a PlayerOwned one reports Friendly
+// (so the player's own defences are rejected by the same faction filters).
+//
+// The ONE place the two contracts answer DIFFERENTLY is IsAlive, and it is deliberate:
+// the player seam reports liveness only, the enemy seam also requires PlayerOwned (an
+// EXPLICIT interface member). See the long comment above the two properties before
+// touching either — collapsing them back into one property reintroduces a softlock.
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
@@ -32,7 +54,7 @@ namespace DeNelle.Village
         EnemyOwned = 1,
     }
 
-    public sealed class DefenseTower : MonoBehaviour, IDamageableStructure
+    public sealed class DefenseTower : MonoBehaviour, IDamageable, IDamageableStructure
     {
         public float Range       = 14f;
         public float Damage      = 8f;
@@ -108,13 +130,15 @@ namespace DeNelle.Village
         [SerializeField, Min(10f)] private float _maxHp = 200f;
         private float _hp = -1f;   // <0 = not yet initialised; set to _maxHp on first use / Awake
 
-        // WO-672 Slice A (owner rulings F8-39 "either they exist or do not" + F8-42
-        // broken = inoperable until repaired): at 0 HP the tower BREAKS instead of
-        // Destroy(gameObject)ing — an inoperable in-world shell until Repair().
-        // Mirrors the ResourceCollector Broken model.
+        // Set at 0 HP. WO-672 Slice A originally kept the tower standing as an inoperable shell
+        // awaiting Repair(); WO-753 SUPERSEDED that — ApplyDamage hands off to
+        // Destructible.NotifyBroken, which Destroy(gameObject)s it (Destructible.cs:193). So this
+        // flag gates the last frame of behaviour (Update early-outs, Repair() refuses) between the
+        // break and Unity's end-of-frame destroy, and reads true on the dying object.
         private bool _broken;
 
-        /// <summary>True once enemies broke this tower (hp 0) — inoperable until <see cref="Repair"/>. (WO-672)</summary>
+        /// <summary>True once this tower was destroyed at hp 0 (it is being removed this frame; a
+        /// destroyed tower is LOST — see <see cref="Repair"/>). (WO-672 / WO-753)</summary>
         public bool IsBroken => _broken;
 
         /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
@@ -123,21 +147,99 @@ namespace DeNelle.Village
         /// <summary>Max HP (WO-761: lets StructureBurn size a percent-of-max fire tick).</summary>
         public float MaxHp => _maxHp;
 
-        /// <summary>Fired once when enemies destroy this tower (HP reaches 0). Observers
-        /// (persistence / target-release) can subscribe. WO-672: fires at the BREAK moment
-        /// (the tower persists as an inoperable shell) — listeners release targets exactly as
-        /// before. WO-753 (owner 2026-07-19): a destroyed tower is NOT auto-re-placed in-world;
-        /// it returns ONLY via full-cost build-mode placement — no in-place respawn observer.</summary>
+        /// <summary>Fired once when this tower is destroyed (HP reaches 0). Observers
+        /// (persistence / target-release, e.g. DragonBoss) can subscribe. It fires immediately
+        /// AFTER Destructible.NotifyBroken, i.e. after Destroy(gameObject) has been requested but
+        /// while Unity still has the object live (destroy is deferred to end of frame) — so a
+        /// listener can still read this instance. WO-753 (owner 2026-07-19): a destroyed tower is
+        /// NOT re-placed in-world; it returns ONLY via full-cost build-mode placement.</summary>
         public event System.Action<DefenseTower> Destroyed;
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  THE TWO IsAlive's ARE DELIBERATELY DIFFERENT (WO-853 — DO NOT "SIMPLIFY"
+        //  THESE INTO ONE PROPERTY). Both IDamageable and IDamageableStructure declare
+        //  `bool IsAlive { get; }`; this type answers them differently ON PURPOSE, so it
+        //  departs from the RaidSpire/BreakableContainer precedent (one shared IsAlive).
+        //  RaidSpire can share one because it has no friendly variant — a tower does.
+        //
+        //  PLAYER-facing (IDamageable, the implicit public member below) = LIVENESS ONLY.
+        //  This is the seam that needed opening: it is what lets the hero and troops find
+        //  and kill an EnemyOwned garrison turret.
+        //
+        //  ENEMY-facing (IDamageableStructure, the EXPLICIT member below) = liveness AND
+        //  player ownership — byte-identical to the pre-WO-853 behaviour. It must stay that
+        //  way: Enemy.SweepForNearestStructure / Enemy.ProbeForStructureForward / EnemyBrain
+        //  acquire targets through this seam, and ApplyContactDamage still REFUSES damage to
+        //  a non-PlayerOwned tower. If this seam reported an EnemyOwned turret alive, hostile
+        //  mobs would path to their own garrison turret and flail at an invulnerable target
+        //  forever. Dropping the ApplyContactDamage gate is NOT the alternative — that makes
+        //  the garrison demolish itself.
+        // ─────────────────────────────────────────────────────────────────────
+
         /// <summary>
-        /// <see cref="IDamageableStructure"/> — true while this PLAYER tower still stands and an
-        /// enemy can siege it. EnemyOwned garrison turrets are NOT sieged structures (they are an
-        /// enemy asset, not a defence of Elarion): they report NOT-alive so a hostile mob's sweep
-        /// skips them (preserves the pre-fix status quo where garrison turrets were untargetable),
-        /// while every PlayerOwned defence becomes attackable. WO-672: a broken shell is not alive.
+        /// <see cref="IDamageable"/> (the PLAYER/troop seam) — LIVENESS ONLY: true while this
+        /// tower has HP left and has not broken, whatever its <see cref="Allegiance"/>. Before
+        /// WO-853 the single IsAlive also required <c>Allegiance == PlayerOwned</c>, so an
+        /// EnemyOwned garrison turret read as permanently dead and no player attack could ever
+        /// acquire it. A tower that has already broken reports false even on the frame before
+        /// Unity's deferred Destroy lands, so nothing re-targets a corpse.
+        /// See the block above for why the <see cref="IDamageableStructure"/> answer differs.
         /// </summary>
-        public bool IsAlive => Allegiance == TowerAllegiance.PlayerOwned && Hp > 0f && !_broken;
+        public bool IsAlive => Hp > 0f && !_broken;
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> (the ENEMY siege / contact / burn seam) — liveness
+        /// AND player ownership, exactly as the single IsAlive read before WO-853. EXPLICIT so it
+        /// does not leak onto the public surface: only a caller holding an
+        /// <c>IDamageableStructure</c> reference sees it, which is precisely the enemy-side
+        /// acquisition path. Reporting false for an EnemyOwned turret keeps hostile mobs from
+        /// acquiring a target that <see cref="ApplyContactDamage"/> refuses to damage, and keeps
+        /// StructureBurn from igniting a fire that could never burn it down.
+        /// The ownership tests on the other callers that meant ownership are unchanged:
+        /// <see cref="ApplyContactDamage"/>, the <see cref="EffectiveDamage"/>/
+        /// <see cref="EffectiveRange"/>/<see cref="EffectiveFireRate"/> stat gates, the
+        /// <see cref="Update"/> allegiance fork, and WaveDamageReport's row filter.
+        /// </summary>
+        bool IDamageableStructure.IsAlive =>
+            Allegiance == TowerAllegiance.PlayerOwned && Hp > 0f && !_broken;
+
+        // ── IDamageable — the PLAYER / TROOP attack seam (WO-853) ─────────────
+        // Everything that searches for a target to attack (PlayerAttackController.ResolveAttack,
+        // TroopController.NearestHostile, HeroAbilities, pets) resolves IDamageable and rejects
+        // Faction != Hostile. Implementing it here is what makes an enemy garrison turret a
+        // findable, killable object instead of scenery.
+
+        /// <summary>
+        /// <see cref="IDamageable"/> — DERIVED from <see cref="Allegiance"/>, never serialized:
+        /// an EnemyOwned garrison turret is <see cref="CombatFaction.Hostile"/> (the hero and
+        /// troops accept it); a PlayerOwned defence is <see cref="CombatFaction.Friendly"/>, so
+        /// the same faction filters REJECT it and the player can never attack their own tower.
+        /// </summary>
+        public CombatFaction Faction => Allegiance == TowerAllegiance.EnemyOwned
+            ? CombatFaction.Hostile
+            : CombatFaction.Friendly;
+
+        /// <summary>
+        /// <see cref="IDamageable"/> — this tower's world position, used by the range and
+        /// nearest-target queries of every attacker that acquires through the interface.
+        /// </summary>
+        public Vector3 WorldPosition => transform.position;
+
+        /// <summary>
+        /// <see cref="IDamageable"/> hero / troop / pet / ability damage entry. Routes into the
+        /// SAME <see cref="ApplyDamage"/> as the enemy contact seam, so a tower has exactly one
+        /// HP bucket and one death path. The element is ignored — stone carries no resists.
+        /// Carries NO allegiance gate: the Faction filter at the caller already decided that a
+        /// PlayerOwned tower is not a valid target.
+        /// </summary>
+        public void TakeDamage(float amount, DamageElement element) => ApplyDamage(amount, "attack");
+
+        /// <summary>
+        /// <see cref="IDamageable"/> — a no-op. A tower models no movement or status track, so
+        /// slow / freeze / burn statuses have nothing to apply to (StructureBurn drives its own
+        /// damage-over-time through <see cref="ApplyContactDamage"/> instead).
+        /// </summary>
+        public void ApplyStatus(StatusEffect effect, float seconds) { /* a tower cannot be slowed or frozen */ }
 
         /// <summary>
         /// WO-672 (F8-42): full restore — HP back to max, broken cleared; the Update fire
@@ -154,40 +256,67 @@ namespace DeNelle.Village
             FlowTrace.Step("Structure", $"'{name}' REPAIRED (hp {_maxHp:0})");
         }
 
-        /// <summary>Current HP (lazy-initialised to <see cref="_maxHp"/>).</summary>
-        private float Hp
+        /// <summary>
+        /// <see cref="IDamageable"/> — current HP, lazy-initialised to <see cref="_maxHp"/> on
+        /// first read. Public because the IDamageable contract exposes it (low-HP target scoring
+        /// reads it); it was private while this component carried only IDamageableStructure.
+        /// </summary>
+        public float Hp
         {
             get { if (_hp < 0f) _hp = _maxHp; return _hp; }
         }
 
         /// <summary>
         /// <see cref="IDamageableStructure"/> contact-attack entry point — a Hollow One in melee
-        /// contact routes its hit here (the SAME seam WallSegment / Gate / the Heart use). Reduces
-        /// HP; at zero the tower is destroyed and <see cref="Destroyed"/> fires. A no-op on an
-        /// EnemyOwned garrison turret (not a sieged structure). Traces the hit + the kill (§12).
+        /// contact, a ranged enemy strike, or a StructureBurn tick routes its hit here (the SAME
+        /// seam WallSegment / Gate / the Heart use). Routes into <see cref="ApplyDamage"/>.
+        ///
+        /// KEEPS its ownership gate: this seam is driven by the enemy side, and a garrison turret
+        /// is their own asset. The gate is paired with the explicit
+        /// <c>IDamageableStructure.IsAlive</c> above — together they keep the enemy seam
+        /// byte-identical to pre-WO-853, so a hostile mob neither acquires nor damages an
+        /// EnemyOwned turret. Keeping only one of the two would strand mobs on a target they
+        /// cannot hurt. The PLAYER destroys an enemy turret through <see cref="TakeDamage"/>
+        /// instead, which carries no such gate.
         /// </summary>
         public void ApplyContactDamage(float amount)
         {
+            if (Allegiance != TowerAllegiance.PlayerOwned) return;   // garrison turrets aren't sieged by their own side
+            ApplyDamage(amount, "contact");
+        }
+
+        /// <summary>
+        /// The ONE damage path both contracts land on. Reduces HP; at zero the tower breaks,
+        /// its VFX are torn down and <see cref="Destroyed"/> fires. Traces the hit + the kill (§12).
+        /// </summary>
+        /// <param name="amount">Damage to apply. Non-positive is ignored.</param>
+        /// <param name="via">Which seam delivered it ("contact" | "attack") — trace text only.</param>
+        private void ApplyDamage(float amount, string via)
+        {
             if (amount <= 0f) return;
-            if (Allegiance != TowerAllegiance.PlayerOwned) return;   // garrison turrets aren't sieged
-            if (Hp <= 0f) return;
+            if (Hp <= 0f || _broken) return;
 
             _hp = Hp - amount;
             FlowTrace.Throttle("DefenseTower", $"hurt:{GetInstanceID()}", 1f,
-                $"'{name}' took {amount:0.#} contact dmg -> HP {_hp:0.#}/{_maxHp:0.#} (enemy siege).");
+                $"'{name}' took {amount:0.#} {via} dmg -> HP {_hp:0.#}/{_maxHp:0.#} " +
+                $"(allegiance={Allegiance}, faction={Faction}).");
 
             if (_hp <= 0f)
             {
                 _hp = 0f;
                 _broken = true;
-                // WO-672 Slice A: no Destroy(gameObject) — the tower persists as an
-                // inoperable shell ("either they exist or do not", F8-39) until Repair().
-                FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable until repaired");
+                FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable, and removed by Destructible below");
                 // WO-753 (owner 2026-07-19 destroyed-items-...-vfx-cleanup): tear this tower's VFX
                 // down WITH it, synchronously, through the ONE-owner Destructible - no aura/effect
-                // outlives the dead tower (the "i see a vfx but no tower" orphan). Repair re-enables
-                // them (symmetric). Because the root stays active on a broken shell, no Unity
-                // lifecycle event fires here, so this explicit teardown is the guarantee.
+                // outlives the dead tower (the "i see a vfx but no tower" orphan).
+                //
+                // NotifyBroken DOES Destroy(gameObject) (Destructible.cs:193) — it supersedes the
+                // WO-672 "persistent inoperable shell" design, so this tower is GONE at end of
+                // frame, not a standing husk. Unity defers the destroy, so the two lines after this
+                // one still run against a live object. A tower with no PlacedStructure (every
+                // EnemyOwned garrison turret) skips NotifyBroken's layout/free-build/rebuild-prompt
+                // block, which is guarded on `placed != null` — only the VFX teardown and the
+                // removal apply to it.
                 Destructible.For(gameObject)?.NotifyBroken("DefenseTower hp0");
                 Destroyed?.Invoke(this);
                 if (_aimBeam != null) _aimBeam.enabled = false;   // drop the lock-on beam at the break
@@ -201,6 +330,89 @@ namespace DeNelle.Village
             // WO-753: compose the ONE-owner VFX-teardown lifecycle onto this tower so a destroy /
             // break tears every held effect down in one place (no orphaned VFX).
             Destructible.Ensure(gameObject);
+            // Covers a tower BAKED as EnemyOwned (RaidBaseGenerator.ArmTower serialises Allegiance
+            // into the scene, so it is already correct here). Start() covers the runtime-armed case.
+            EnsureEnemyOwnedHittable();
+        }
+
+        private void Start()
+        {
+            // SECOND attempt, and the one that actually fires for garrison camps.
+            // GarrisonTurretArmer.cs:61-62 does `AddComponent<DefenseTower>()` and only THEN sets
+            // `dt.Allegiance = EnemyOwned`. AddComponent runs Awake SYNCHRONOUSLY, so the Awake
+            // call above still saw the PlayerOwned default and correctly declined to move anything.
+            // Start runs after that assignment, so it sees the real allegiance. Idempotent — a
+            // tower already moved in Awake no-ops here.
+            EnsureEnemyOwnedHittable();
+        }
+
+        /// <summary>Set once <see cref="EnsureEnemyOwnedHittable"/> has reached a verdict, so the
+        /// Awake+Start double call moves layers (and warns) at most once.</summary>
+        private bool _hittabilityResolved;
+
+        /// <summary>
+        /// Puts an ENEMY-OWNED turret's solid colliders on the "Enemy" physics layer so the
+        /// player's masked sweeps can actually RETURN it. Directly models
+        /// <c>RaidSpire.EnsureHittable</c> (RaidSpire.cs:160-203), including its loud warn when the
+        /// project has no "Enemy" layer; the collider guarantee itself already lives in
+        /// <see cref="EnsureContactCollider"/>, which Awake runs first, so a freshly-built capsule
+        /// is moved too.
+        ///
+        /// WHY IT IS NEEDED (WO-853): PlayerAttackController.ResolveAttack, TroopController.
+        /// NearestHostile, HeroAbilities and HeroTargetIndicator all do a LAYER-MASKED
+        /// Physics.OverlapSphere and then GetComponentInParent&lt;IDamageable&gt;(). Baked turrets
+        /// carry no layer assignment at all (RaidBaseGenerator.ArmTower sets none, so they sit on
+        /// Default), which means implementing IDamageable buys nothing on its own — the sweep never
+        /// returns the collider, so the faction filter is never even reached. Widening those masks
+        /// to Default instead is NOT the alternative: HeroTargetIndicator's dated "2026-06-02
+        /// targeting fix" note (above its candidate scan) records that a ~0-masked scan into a fixed
+        /// buffer already failed once because the hub's ~2,900 colliders crowded the real target out
+        /// of the buffer, and Default is exactly where the ground and hub props live.
+        ///
+        /// WHY MOVING A TOWER IS SAFE, THOUGH §4 FORBIDS IT FOR WALLS: the WO-853 §4 constraint is
+        /// that WALLS must stay on "Structure" because that layer IS the line-of-sight blocker mask
+        /// (DefenseTower.BlockedByWall, TowerCombat, ArcaneTower, PlayerAttackController,
+        /// HeroTargetIndicator all linecast against it) — moving a wall would let towers shoot
+        /// through walls again, regressing 2cb3c40d. A TOWER is not a LoS blocker: every one of
+        /// those linecasts is masked to "Structure" only, so a tower sitting on "Enemy" neither
+        /// occludes anything nor self-blocks its own BlockedByWall check. No wall layering is
+        /// touched anywhere by this method.
+        ///
+        /// PLAYER-OWNED TOWERS NEVER MOVE — the early return below is what keeps the player's own
+        /// defences off the layer their own hero sweeps for.
+        /// </summary>
+        private void EnsureEnemyOwnedHittable()
+        {
+            if (_hittabilityResolved) return;
+            // A PlayerOwned tower is left exactly where it is. Note this may be reached while the
+            // allegiance is still the default (see Start's note); returning WITHOUT setting the
+            // resolved flag is deliberate so the later call re-decides.
+            if (Allegiance != TowerAllegiance.EnemyOwned) return;
+
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            if (enemyLayer < 0)
+            {
+                _hittabilityResolved = true;   // retrying cannot conjure the layer; warn once.
+                FlowTrace.Warn("DefenseTower",
+                    $"'{name}': project has no 'Enemy' layer - an EnemyOwned turret cannot be moved onto " +
+                    "the mask the hero's/troops' sweeps use, so it stays UNTARGETABLE by the player. Layer left untouched.");
+                return;
+            }
+
+            int moved = 0;
+            foreach (var c in GetComponentsInChildren<Collider>(true))
+            {
+                if (c == null || c.isTrigger) continue;          // triggers are not swept
+                if (c.gameObject.layer == enemyLayer) continue;  // idempotent
+                c.gameObject.layer = enemyLayer;
+                moved++;
+            }
+            if (gameObject.layer != enemyLayer) { gameObject.layer = enemyLayer; moved++; }
+
+            _hittabilityResolved = true;
+            FlowTrace.Step("DefenseTower",
+                $"'{name}': EnemyOwned turret moved onto layer 'Enemy' ({moved} object(s)) - the hero's and " +
+                "troops' masked sweeps can now return it, and its derived Faction=Hostile passes their filter.");
         }
 
         /// <summary>

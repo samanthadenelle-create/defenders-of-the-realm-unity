@@ -992,8 +992,10 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Finds the nearest live defensive tower (<see cref="DefenseTower"/> or
-        /// <see cref="ArcaneTower"/>) by the established <c>IsAlive</c> filter. Returns
-        /// false when no tower is alive - the "all towers destroyed" gate.
+        /// <see cref="ArcaneTower"/>) by the <c>IDamageableStructure.IsAlive</c> filter - the
+        /// SAME seam <see cref="DealStrike"/> damages through, so selection can never outrun
+        /// what the dragon can actually hurt (see the cast note in the DefenseTower loop).
+        /// Returns false when no tower is alive - the "all towers destroyed" gate.
         /// </summary>
         private bool NearestAliveTower(out IDamageableStructure best, out MonoBehaviour bestMb, out Vector3 bestPos)
         {
@@ -1005,12 +1007,24 @@ namespace DeNelle.Village
 
             foreach (var t in FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
             {
-                if (t == null || !t.IsAlive) continue;
+                // THE CAST IS LOAD-BEARING (WO-853) - do not "clean it up".
+                // DefenseTower answers the two IsAlive contracts DIFFERENTLY: the public
+                // (IDamageable, player-facing) one is LIVENESS ONLY, while the EXPLICIT
+                // IDamageableStructure.IsAlive also requires Allegiance == PlayerOwned. `t` is a
+                // CONCRETE DefenseTower here, so an uncast `t.IsAlive` binds the public
+                // liveness-only member and would select an EnemyOwned garrison turret. DealStrike
+                // (:1282) damages through an IDamageableStructure, so it binds the explicit member
+                // and REFUSES that turret - the dragon would park on a target it can never damage,
+                // firing impact VFX forever. Cast so selection matches the seam that deals damage.
+                if (t == null || !((IDamageableStructure)t).IsAlive) continue;
                 float sqr = (t.transform.position - here).sqrMagnitude;
                 if (sqr < bestSqr) { bestSqr = sqr; best = t; bestMb = t; bestPos = t.transform.position; }
             }
             foreach (var a in FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
             {
+                // No cast needed here (unlike the DefenseTower loop above): ArcaneTower implements
+                // ONLY IDamageableStructure (ArcaneTower.cs:39) and has no EnemyOwned variant
+                // (ArcaneTower.cs:254), so it has a single IsAlive and no seam to mismatch.
                 if (a == null || !a.IsAlive) continue;
                 float sqr = (a.transform.position - here).sqrMagnitude;
                 if (sqr < bestSqr) { bestSqr = sqr; best = a; bestMb = a; bestPos = a.transform.position; }

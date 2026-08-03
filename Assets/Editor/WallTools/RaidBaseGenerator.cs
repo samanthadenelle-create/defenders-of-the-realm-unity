@@ -743,10 +743,16 @@ namespace DeNelle.Editor
         /// stats. Reuses the shipped tower brain (its EnemyOwned path targets the hero +
         /// companions through IDamageableStructure) rather than writing a second one.
         ///
-        /// NOTE (documented limitation, unchanged here): an EnemyOwned DefenseTower is
-        /// INDESTRUCTIBLE by design - DefenseTower.IsAlive is `Allegiance == PlayerOwned`
-        /// and ApplyContactDamage early-returns for anything else ("garrison turrets are
-        /// not sieged"). See the REPORT for the ruling + the exact patch if that changes.
+        /// DESTRUCTIBILITY (WO-853 - this SUPERSEDES the old "indestructible by design" note):
+        /// an EnemyOwned DefenseTower is now killable BY THE PLAYER. DefenseTower implements
+        /// IDamageable as well as IDamageableStructure, and answers the two IsAlive's
+        /// differently: IDamageable.IsAlive is liveness-only (`Hp > 0 && !_broken`) and Faction
+        /// derives from Allegiance, so an EnemyOwned turret reports CombatFaction.Hostile and
+        /// passes the hero's / troops' faction filter - player damage lands via
+        /// IDamageable.TakeDamage. The ENEMY seam is UNCHANGED: the explicit
+        /// IDamageableStructure.IsAlive still requires PlayerOwned and ApplyContactDamage still
+        /// early-returns for anything else, so the garrison never acquires or besieges its own
+        /// turret.
         /// </summary>
         private static void ArmTower(GameObject go, TowerPlan plan)
         {

@@ -444,6 +444,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armed-hero suite", () => { if (!DeNelle.Editor.Regression.ArmedHeroInvariantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armed-hero] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buildmenu-economy suite", () => { if (!DeNelle.Editor.Regression.BuildMenuRealEconomyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buildmenu-economy] " + r); });
 
+            // --- WO-853 structures are targetable: Faction derived (never serialized) on every
+            // IDamageable, walls stay on layer Structure (towers must not shoot through them),
+            // a wall at 100 damage drops its solid colliders, and DefenseTower's two IsAlive
+            // answers stay deliberately different (player seam = liveness, enemy seam = +PlayerOwned) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-targetable suite", () => { if (!DeNelle.Editor.Regression.StructureTargetableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-targetable] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

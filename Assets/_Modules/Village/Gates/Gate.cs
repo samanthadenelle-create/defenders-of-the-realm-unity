@@ -17,11 +17,33 @@
 // Geometry comes from docs/four-cardinal-gates-spec.md: on the SQUARE wall a
 // gate sits centred in one side, the wall sections meet the pillars flush, and
 // gate HP rides on the buildingDamage map as gate-0 .. gate-3.
+//
+// WO-853 — WHY IT IMPLEMENTS *TWO* DAMAGE INTERFACES (the RaidSpire essay at
+// World/Camps/RaidSpire.cs:8-31 is the reference):
+//   IDamageableStructure — the seam ENEMIES use (Enemy.ProbeForStructure ->
+//                          ApplyContactDamage).
+//   IDamageable          — the seam the PLAYER and TROOPS use (PlayerAttackController.
+//                          ResolveAttack / TroopController.NearestHostile sweep for
+//                          GetComponentInParent<IDamageable>() and reject
+//                          Faction != Hostile).
+// All three damage entry points — TakeDamage(float), TakeDamage(float,DamageElement)
+// and ApplyContactDamage — funnel into the single private ApplyDamage(), so the HP
+// write, the collapse ramp, the blocker toggle and HpChanged can never diverge.
+//
+// SCOPE (WO-853 §6): there is NO Gate component in any RaidBase_* scene — a raid
+// "gate" is a literal skipped wall panel. Gates matter for the PLAYER's own perimeter,
+// where Faction reads Friendly and the player/troop sweeps correctly ignore them. The
+// IDamageable half exists so the contract holds if a gate ever stands in an enemy scene,
+// not because anything hostile owns one today.
+//
+// LAYER: untouched here. Gate pieces are put on "Structure" by their spawners
+// (Village2Generator / BaseLayoutLoader) because that layer is the towers'
+// line-of-sight blocker mask. Never move a gate to "Enemy" to make it findable.
 // =============================================================================
 
 using System;
 using UnityEngine;
-using DeNelle.Core.Combat;
+using DeNelle.Core.Combat;        // IDamageable / IDamageableStructure / DamageElement
 
 namespace DeNelle.Village
 {
@@ -42,7 +64,7 @@ namespace DeNelle.Village
     /// <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class Gate : MonoBehaviour, IDamageableStructure
+    public sealed class Gate : MonoBehaviour, IDamageable, IDamageableStructure
     {
         [Header("Identity")]
         [Tooltip("Stable damage id -- gate-0 (N) .. gate-3 (W). From WallLayout.Gates.")]
@@ -121,13 +143,49 @@ namespace DeNelle.Village
         public bool IsForceFieldUp => HpFraction > CollapseThreshold;
 
         /// <summary>
-        /// <see cref="IDamageableStructure"/> — true while the gate still has HP
-        /// for an enemy to attack. Once HP hits zero the field is fully torn and
-        /// enemies stop attacking and path through the opening. (The force field
-        /// stops *blocking* earlier, at the 25% collapse threshold — see
-        /// <see cref="IsForceFieldUp"/>.)
+        /// True while the gate still has HP to attack. Satisfies BOTH
+        /// <see cref="IDamageableStructure"/> (the enemy contact seam) and
+        /// <see cref="IDamageable"/> (the player/troop seam) — one liveness answer, so the
+        /// two contracts can never disagree about whether this gate is a target. Once HP
+        /// hits zero the field is fully torn and enemies stop attacking and path through
+        /// the opening. (The force field stops *blocking* earlier, at the 25% collapse
+        /// threshold — see <see cref="IsForceFieldUp"/>.)
         /// </summary>
         public bool IsAlive => _hp > 0f;
+
+        // =====================================================================
+        //  IDamageable — the PLAYER + TROOP attack seam (WO-853)
+        //  Hp / IsAlive above already satisfy the rest of the contract.
+        // =====================================================================
+
+        /// <summary>
+        /// DERIVED from who owns the loaded scene, never serialized: a gate in an
+        /// enemy-owned scene reads Hostile so the hero and troops would acquire it; the
+        /// player's own Elarion perimeter reads Friendly and is rejected by the
+        /// Faction != Hostile gate at every sweep site — which is what keeps a deployed
+        /// troop from chewing on the player's own gate. A serialized field would let a
+        /// prefab or a stale scene lie about allegiance.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
+
+        /// <summary>World position — used by range / nearest-target queries.</summary>
+        public Vector3 WorldPosition => transform.position;
+
+        /// <summary>
+        /// <see cref="IDamageable"/> attack entry — hero melee / abilities / troops / pets.
+        /// Element is ignored: the force field models no elemental resists. Routes into the
+        /// same <see cref="ApplyDamage"/> as the other two entry points, so it drives the
+        /// shader collapse and the blocker toggle identically.
+        /// </summary>
+        public void TakeDamage(float amount, DamageElement element)
+            => ApplyDamage(amount, applyToughness: false);
+
+        /// <summary>
+        /// <see cref="IDamageable"/> — a no-op. A gate does not move, so Slow/Freeze have
+        /// nothing to act on, and Burn is owned by StructureBurn's own contact ticks.
+        /// </summary>
+        public void ApplyStatus(StatusEffect effect, float seconds) { /* a gate cannot be slowed, frozen or re-burned */ }
 
         /// <summary>
         /// Wires this gate from a <see cref="GateGap"/> layout record. Called by
@@ -164,10 +222,35 @@ namespace DeNelle.Village
         /// the violet sheet apart so enemies can pour through.
         /// </summary>
         /// <param name="amount">Damage on the 0–100 HP scale.</param>
-        public void TakeDamage(float amount)
+        public void TakeDamage(float amount) => ApplyDamage(amount, applyToughness: false);
+
+        /// <summary>
+        /// THE single damage method. Every entry point lands here — the direct/scripted
+        /// <see cref="TakeDamage(float)"/>, the player/troop
+        /// <see cref="TakeDamage(float, DamageElement)"/>, and the enemy
+        /// <see cref="ApplyContactDamage"/> — so the HP write, the collapse ramp, the
+        /// blocker toggle and <see cref="HpChanged"/> can never differ between them.
+        /// </summary>
+        /// <param name="amount">Damage on the 0-100 HP scale. Non-positive is ignored.</param>
+        /// <param name="applyToughness">
+        /// True only on the ENEMY contact path: the hero's BULWARK structure-toughness
+        /// talents are a defensive bonus against a siege, not a global damage resist, so
+        /// the direct and player-attack paths deliberately pass false — matching the
+        /// behaviour these two paths already had before they were unified.
+        /// </param>
+        private void ApplyDamage(float amount, bool applyToughness)
         {
             if (amount <= 0f || _hp <= 0f) return;
-            _hp = Mathf.Max(0f, _hp - amount);
+
+            float effective = amount;
+            // WO-853 §9 — the BULWARK reduction is GATED ON FACTION. The hero's own
+            // defensive talents must protect only the hero's own perimeter; applied to a
+            // Hostile gate they would make an enemy structure up to 50% tougher, so
+            // investing in defence would make attacking harder.
+            if (applyToughness && Faction == CombatFaction.Friendly)
+                effective *= 1f - WallSegment.StructureToughnessReduction("Gate");
+
+            _hp = Mathf.Max(0f, _hp - effective);
             RefreshCollapseTarget(snap: false);
             ApplyForceFieldState();
             HpChanged?.Invoke(this);
@@ -191,17 +274,17 @@ namespace DeNelle.Village
         /// <summary>
         /// <see cref="IDamageableStructure"/> contact-attack entry point — a
         /// Hollow One in melee contact with the force field routes its hit here.
-        /// A thin adapter onto the existing <see cref="TakeDamage"/>, which drives
+        /// A thin adapter onto the shared <see cref="ApplyDamage"/>, which drives
         /// the shader collapse + blocker toggle. Once the field collapses below
         /// 25% the blocker drops and enemies pour through (port spec Week 4).
         /// WO-676 (BULWARK): the ENEMY intake is reduced by the hero's structure-
         /// toughness talents (Hardened Ramparts always-on + Warden of Elarion while
         /// the wave phase is Active, capped 0.5) via the shared
-        /// <see cref="WallSegment.StructureToughnessReduction"/> reader — ×1 at Σ=0.
-        /// The player-facing <see cref="TakeDamage"/>/<see cref="Repair"/> paths are untouched.
+        /// <see cref="WallSegment.StructureToughnessReduction"/> reader — ×1 at Σ=0, and
+        /// (WO-853 §9) only when <see cref="Faction"/> is Friendly. The direct
+        /// <see cref="TakeDamage(float)"/> / <see cref="Repair"/> paths are untouched.
         /// </summary>
-        public void ApplyContactDamage(float amount)
-            => TakeDamage(amount * (1f - WallSegment.StructureToughnessReduction("Gate")));
+        public void ApplyContactDamage(float amount) => ApplyDamage(amount, applyToughness: true);
 
         /// <summary>True while a hero is inside this gate's proximity radius.</summary>
         public bool IsOpenForHero => _isOpenForHero;

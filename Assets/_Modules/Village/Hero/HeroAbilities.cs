@@ -61,7 +61,8 @@ namespace DeNelle.Village
         [Tooltip("Elarion — the Heart. Healing Beacon (E) restores its HP.")]
         [SerializeField] private HeartController _heart;
 
-        [Tooltip("Layers an ability hit-test sweeps for IDamageable targets. Set to the Enemy layer.")]
+        [Tooltip("Layers an ability hit-test sweeps for IDamageable targets. Set to the Enemy layer; " +
+                 "Awake adds the Structure layer on top (WO-853) so abilities can also hit walls and gates.")]
         [SerializeField] private LayerMask _enemyMask = ~0;
 
         [Header("Placeholder VFX")]
@@ -103,7 +104,12 @@ namespace DeNelle.Village
         private readonly List<string> _extraKeys = new List<string>();
 
         // Reusable overlap buffer — avoids per-cast GC (Physics.OverlapSphereNonAlloc).
-        private readonly Collider[] _overlap = new Collider[64];
+        // WO-853 raised this from 64: the sweep mask now includes the Structure layer, and a
+        // ranged class centres a blast on a target up to RangedCastReach (45 m) away, so a
+        // sweep inside a walled base returns a large number of wall panels. OverlapSphereNonAlloc
+        // truncates at the buffer length in arbitrary order, so too small a buffer lets wall
+        // colliders crowd the enemy bodies out of the result.
+        private readonly Collider[] _overlap = new Collider[128];
 
         // ── F8 "movement interrupts casting" — interruptible cast WIND-UP ──────────
         // Casts were INSTANT (TryCast committed in one frame), so there was no window to
@@ -307,6 +313,15 @@ namespace DeNelle.Village
                     Debug.Log($"[HeroAbilities] Awake backstop: resolved class '{ _heroClass}' from GameState.");
                 }
             }
+
+            // WO-853: ability hit-tests must also reach STRUCTURES. Walls and gates stay on the
+            // "Structure" layer (it is the tower line-of-sight blocker mask — relayering them
+            // onto Enemy would make towers shoot through walls), so the only way an ability
+            // sweep can return one is to include that layer in the mask. GetMask returns 0 for
+            // an undeclared layer, so this is a no-op then and the ~0 fallback is untouched.
+            // Safe because every sweep here resolves candidates through AsHostile, which
+            // rejects any Faction other than Hostile — the player's own perimeter is Friendly.
+            _enemyMask = _enemyMask.value | LayerMask.GetMask("Structure");
 
             // Seed the pool LAST so the mage starts full on its Cathedral-boosted max
             // (identical to the old `_mana = _maxMana` for every other class / unbuilt Cathedral).

@@ -147,7 +147,30 @@ Gate it on faction in the same pass.
 5. `DestructionPct` reflects razed structures per §7; the three scoring oracles updated and green.
 6. BULWARK no longer protects enemy walls (§9).
 7. New oracle asserts: every `IDamageable` implementor's `Faction` is derived, never serialized; walls
-   remain on layer `Structure`; and `WallSegment.Collapsed` has at least one subscriber (the §5.5 gap
-   was invisible precisely because nothing asserted it).
+   remain on layer `Structure`; and **a `WallSegment` driven to 100 damage has its solid colliders
+   disabled** — assert the BEHAVIOUR, not a subscriber count.
+
+   > ⚠ **CORRECTED 2026-08-03 (silo B feedback — the original criterion was unsatisfiable).** It read
+   > "`WallSegment.Collapsed` has at least one subscriber". The collapse is implemented as the
+   > component's OWN lifecycle, mirroring `Gate.ApplyForceFieldState` which is likewise self-owned — so
+   > the event correctly has zero external subscribers and always will. Asserting a subscriber count
+   > would have forced a fake listener into existence to satisfy a gate. Assert the observable effect.
+
+## 11. FOLLOW-ON TICKETS OPENED BY IMPLEMENTATION (do not fold into 853)
+
+- **Razed raid walls will not open a walkable lane.** Wall pathing blocks come from carving
+  `NavMeshObstacle`s, and `WallNavObstacleInstaller` only targets objects named `WallBarrier-*` (`:131`).
+  `RaidBaseGenerator.PlaceSegment` names its objects `Wall_<name>` and adds no obstacle — raid arenas rely
+  on the **baked** navmesh. So a razed raid wall stops blocking tower LoS and physics, but troops still
+  will not path through the gap until raid walls carry carving obstacles or the arena is re-baked.
+  Acceptance #1's pathing half is therefore **partially deferred** to this ticket.
+- **Baked enemy turrets sit on layer `Default`.** `RaidBaseGenerator.ArmTower` (`:751`) assigns no layer
+  and only wall panels are moved to `Structure` (`:995-996`), so widening the hero/troop masks to
+  `Enemy|Structure` still will not return an enemy turret. Needs a `RaidSpire.EnsureHittable`-style layer
+  move for `EnemyOwned` towers — safe here, because towers are not LoS blockers, so §4's wall constraint
+  does not apply. **Acceptance #2 depends on this.**
+- **Wall damage does not persist a collapse.** `_collapsed` is not serialized and nothing calls
+  `Collapse()` outside `ApplyDamage`, so a wall restored from save at 100 damage stands with its collider on.
+- **`Assets/_Modules/Core/README.md:10`** repeats the stale 5-implementor claim (there are 18).
 8. Gates: `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n>` + `TESTS_OK <n>/<n>`, counts read off the markers.
 9. Owner felt-verifies. **PO closes, not CLI.**

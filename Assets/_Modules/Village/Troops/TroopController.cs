@@ -53,7 +53,9 @@ namespace DeNelle.Village
         [SerializeField] private string _ownedTroopId;
 
         [Header("Combat")]
-        [Tooltip("Layers swept for IDamageable hostile targets. Set to the village Enemy layer.")]
+        [Tooltip("Layers swept for IDamageable hostile targets. Set to the village Enemy layer; " +
+                 "Awake and SetEnemyMask add the Structure layer on top (WO-853) so raid walls " +
+                 "and gates are acquirable.")]
         [SerializeField] private LayerMask _enemyMask = ~0;
 
         [Header("Live state")]
@@ -96,7 +98,12 @@ namespace DeNelle.Village
         private IDamageable _cachedFoe;
 
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
-        private readonly Collider[] _overlap = new Collider[48];
+        // WO-853 raised this from 48: the hunt mask now includes the Structure layer, so a
+        // sweep inside a raid base returns every wall panel in the 14 m scan radius as well as
+        // the enemy bodies. OverlapSphereNonAlloc truncates at the buffer length and its result
+        // order is arbitrary, so a 48-slot buffer filled with wall panels would crowd the enemy
+        // colliders out and stop the troop finding a foe at all.
+        private readonly Collider[] _overlap = new Collider[128];
 
         // ── Navigation (mirrors Pet: drive a NavMeshAgent via Move()) ─────────
         // The agent constrains the troop to the SAME baked NavMesh the hero +
@@ -174,9 +181,25 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Sets the LayerMask the troop sweeps for hostile targets. The deployer /
-        /// factory calls this so the mask need not be authored per-instance.
+        /// factory calls this so the mask need not be authored per-instance. The Structure
+        /// layer is added on top of whatever the caller passes (see
+        /// <see cref="WithStructureLayer"/>) — <c>TroopDeployer.VillageEnemyMask</c> hands over
+        /// the Enemy layer alone, and a troop that cannot sweep Structure can never find a wall.
         /// </summary>
-        public void SetEnemyMask(LayerMask enemyMask) => _enemyMask = enemyMask;
+        public void SetEnemyMask(LayerMask enemyMask) => _enemyMask = WithStructureLayer(enemyMask);
+
+        /// <summary>
+        /// WO-853: returns <paramref name="mask"/> with the "Structure" layer added.
+        /// Walls and gates STAY on Structure — that layer is the tower line-of-sight blocker
+        /// mask, so relayering them onto Enemy would make towers shoot through walls — which
+        /// means the only way a sweep can find one is to include Structure in the mask.
+        /// <see cref="LayerMask.GetMask"/> returns 0 for an undeclared layer, so the OR is a
+        /// no-op and any caller's ~0 fallback survives unchanged.
+        /// Widening is safe because <see cref="NearestHostile"/> rejects every non-Hostile
+        /// faction: the player's own perimeter reports Friendly and is skipped.
+        /// </summary>
+        private static LayerMask WithStructureLayer(LayerMask mask) =>
+            mask.value | LayerMask.GetMask("Structure");
 
         /// <summary>
         /// Applies a veterancy DAMAGE multiplier to this troop's per-hit damage (WO-453
@@ -363,6 +386,12 @@ namespace DeNelle.Village
             _agent.autoBraking = false;
             _agent.stoppingDistance = 0f;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+
+            // WO-853: add the Structure layer to whatever mask was authored on this instance,
+            // so a scene-placed / dev-spawned troop that never receives SetEnemyMask still
+            // sweeps walls and gates. A no-op when the mask is already ~0 or Structure is
+            // undeclared. SetEnemyMask applies the same widening to the deployer's mask.
+            _enemyMask = WithStructureLayer(_enemyMask);
         }
 
         private void Update()

@@ -76,7 +76,8 @@ namespace DeNelle.Village
         [Tooltip("Minimum seconds between attacks.")]
         [SerializeField, Min(0.1f)] private float _attackCooldown = 0.6f;
 
-        [Tooltip("Layer mask covering enemy colliders.")]
+        [Tooltip("Layer mask covering enemy colliders. Awake adds the Structure layer on top " +
+                 "(WO-853) so the swing can also reach walls, gates and enemy turrets.")]
         [SerializeField] private LayerMask _enemyLayer;
 
         // WO-449: line-of-sight gate for the MELEE swing. The swing's damage OverlapSphere
@@ -216,6 +217,16 @@ namespace DeNelle.Village
             // Default to the Enemy layer, then to Everything — matching HeroHealth/HeroAbilities.
             if (_enemyLayer == 0) _enemyLayer = LayerMask.GetMask("Enemy");
             if (_enemyLayer == 0) _enemyLayer = ~0;
+
+            // WO-853: the swing must also reach STRUCTURES. Walls and gates stay on the
+            // "Structure" layer (it is the tower line-of-sight blocker mask — relayering them
+            // onto Enemy would make towers shoot through walls), so the only way the melee
+            // sweep can return one is to include that layer. Applied AFTER the two fallbacks
+            // above so those still decide the base mask; GetMask returns 0 for an undeclared
+            // layer, making the OR a no-op that leaves the ~0 fallback byte-identical.
+            // Safe because ResolveAttack / FaceNearestHostile reject any target whose
+            // Faction is not Hostile — the player's own perimeter reports Friendly.
+            _enemyLayer = _enemyLayer.value | LayerMask.GetMask("Structure");
 
             // WO-449: activate the melee LoS gate out-of-the-box against the dedicated
             // "Structure" wall layer (same layer HeroTargetIndicator's reticle gate uses, set on
@@ -541,7 +552,30 @@ namespace DeNelle.Village
             Vector3 eye   = transform.position + Vector3.up * 1.4f;
             Vector3 torso = target.WorldPosition + Vector3.up * 1.0f;
             // Clear when the linecast hits NOTHING between eye and torso.
-            return !Physics.Linecast(eye, torso, _losMask, QueryTriggerInteraction.Ignore);
+            if (!Physics.Linecast(eye, torso, out RaycastHit hit, _losMask, QueryTriggerInteraction.Ignore))
+                return true;
+            // WO-853 SELF-HIT EXEMPTION — also clear when the first thing the cast hits IS the
+            // target. A wall or gate lives ON the "Structure" layer this cast is masked to, and
+            // the torso point sits inside that wall's own collider, so the cast always reports
+            // the wall as occluding itself and the hero could never swing at one. Nothing can
+            // occlude a wall from itself.
+            // NOT a shoot-through-wall hole: Physics.Linecast reports the CLOSEST hit, so "the
+            // first blocker is the target" proves nothing else stands in front of it. A wall
+            // behind a DIFFERENT wall reports that other wall here and stays blocked.
+            // Byte-identical for every target NOT on a _losMask layer (all enemies): its
+            // collider can never be the reported hit, so this collapses to the old expression.
+            return ResolvesTo(hit.collider, target);
+        }
+
+        /// <summary>
+        /// True when <paramref name="col"/> belongs to <paramref name="target"/> — resolved the
+        /// same way the melee sweep resolves a collider to its damageable
+        /// (<c>GetComponentInParent</c>), so a hit on a child collider still counts as the target.
+        /// </summary>
+        private static bool ResolvesTo(Collider col, IDamageable target)
+        {
+            if (col == null) return false;
+            return ReferenceEquals(col.GetComponentInParent<IDamageable>(), target);
         }
 
         private IEnumerator ResolveAttack()
