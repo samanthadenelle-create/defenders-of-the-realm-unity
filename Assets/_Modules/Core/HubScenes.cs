@@ -26,6 +26,15 @@ namespace DeNelle.Core
 
         /// <summary>True if <paramref name="sceneName"/> is a home/hub scene (exact or prefix-contains,
         /// matching WorldSceneLoader's prior behaviour so CastleHub* variants still count).</summary>
+        /// <remarks>
+        /// MATCHING IS SUBSTRING, NOT EXACT. `sceneName.Contains(Names[i])` means
+        /// IsHub("CastleHub_MainKeep_Backup") and IsHub("Village2_Test") are BOTH true, where a
+        /// private `== "CastleHub"` list returns false. Replacing any private `==` hub list with
+        /// this predicate is therefore a WIDENING, and must be a deliberate call at that call site
+        /// (see HeroEquipHud.IsHubScene for the reasoning template). Conversely, tightening this to
+        /// exact-or-StartsWith is a behaviour change across ~40 call sites - do not do it as a
+        /// side effect of another ticket. Assets/Tests/EditMode/HubScenesTest.cs guards the shape.
+        /// </remarks>
         public static bool IsHub(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;

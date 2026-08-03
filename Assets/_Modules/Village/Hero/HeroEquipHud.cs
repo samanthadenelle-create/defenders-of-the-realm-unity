@@ -50,8 +50,23 @@ namespace DeNelle.Village
                 EnsureExists();
         }
 
-        private static bool IsHubScene(string n) =>
-            n == "MainCastle_Hall" || n == "Village2" || n == "CastleHub";
+        // HUB GATE -> the ONE canonical list (DeNelle.Core.HubScenes), NOT a private copy.
+        //
+        // THE BUG THIS FIXES: this was `n == "MainCastle_Hall" || n == "Village2" ||
+        // n == "CastleHub"`. The live home hub is `Main_Castle_Overworld` (CLAUDE.md sec.7), which
+        // that list never named - so the equip HUD never self-installed on the scene the player
+        // actually plays, and the bag button simply did not exist. A private hub list drifting
+        // behind canon is precisely the failure HubScenes was created to end (WO-411 root cause A).
+        //
+        // DELIBERATE BEHAVIOUR CHANGE, ACCEPTED: HubScenes.IsHub matches by `==` OR `Contains`,
+        // so it is WIDER than the `==` list it replaces - "CastleHub_MainKeep_Backup" now counts,
+        // where it did not before. That is accepted here rather than tightened globally: IsHub has
+        // ~40 callers across live lanes, and every other self-installing injector in the project
+        // (StoryCompanionInjector, CraftingStationInjector, JewelerStationInjector, EchoWispInjector,
+        // SylasStewardInjector, ...) already gates on exactly this predicate. The worst case of the
+        // widening here is one extra bag ICON in a hypothetically-named hub variant - not a gameplay
+        // gate - so consistency with every sibling injector beats a bespoke narrower predicate.
+        private static bool IsHubScene(string n) => DeNelle.Core.HubScenes.IsHub(n);
 
         private void Awake()
         {

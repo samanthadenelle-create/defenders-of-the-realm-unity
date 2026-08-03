@@ -737,12 +737,12 @@ namespace DeNelle.Village.World.Camps
             {
                 var w = PickWeapon(job, level, targetRarity);
                 if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
-                var a = PickArmor(level, targetRarity);
+                var a = PickArmor(job, level, targetRarity);
                 if (a != null) { hero.EquipArmorById(a.id); return a.name; }
             }
             else
             {
-                var a = PickArmor(level, targetRarity);
+                var a = PickArmor(job, level, targetRarity);
                 if (a != null) { hero.EquipArmorById(a.id); return a.name; }
                 var w = PickWeapon(job, level, targetRarity);
                 if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
@@ -772,14 +772,22 @@ namespace DeNelle.Village.World.Camps
 
         // Pick the eligible weapon nearest the target rarity (prefer exact rarity;
         // else the best the hero qualifies for). Returns null if the catalog is empty.
+        //
+        // ELIGIBILITY IS ASKED OF GearCatalog, NOT RE-IMPLEMENTED HERE (WO loot-class-gate,
+        // 2026-08-02). The local JobOk helper was a third copy of GearCatalog.JobMatches and
+        // the ARMOR half below never called it at all - so a Mage looted heavy plate that
+        // GearLoadout.Refresh silently DROPPED on the next refresh (ArmorFitsClass,
+        // GearLoadout.cs:352). Both halves now go through the ONE authority
+        // (CanEquipWeapon / CanEquipArmor = class gate + weight gate + level gate), which is
+        // the same question BestWeapon/BestArmor answer, so the exact-rarity pick and the
+        // fallback can never disagree about what the hero may hold.
         private static WeaponDef PickWeapon(string job, int level, string rarity)
         {
             WeaponDef exact = null;
             foreach (var w in GearCatalog.AllWeapons())
             {
                 if (w == null) continue;
-                if (!JobOk(w.job, job)) continue;
-                if (w.req != null && level < w.req.level) continue;
+                if (!GearCatalog.CanEquipWeapon(w, job, level, out _)) continue;
                 if (string.Equals(w.rarity, rarity, StringComparison.OrdinalIgnoreCase))
                 {
                     if (exact == null || w.damageMult > exact.damageMult) exact = w;
@@ -789,27 +797,24 @@ namespace DeNelle.Village.World.Camps
             return GearCatalog.BestWeapon(job, level); // fallback: best the hero qualifies for
         }
 
-        private static ArmorDef PickArmor(int level, string rarity)
+        // Armor is gated on CLASS exactly like the weapon half above. The comment that used to
+        // sit on the fallback ("armor jobs are 'any'") was the bug in prose: armor also carries
+        // a light/heavy WEIGHT class (Ranger/Mage = light, Knight/Cleric = heavy), and passing
+        // the literal "any" as the JOB made BestArmor evaluate ClassWeight("any") == "heavy".
+        private static ArmorDef PickArmor(string job, int level, string rarity)
         {
             ArmorDef exact = null;
             foreach (var a in GearCatalog.AllArmors())
             {
                 if (a == null) continue;
-                if (a.req != null && level < a.req.level) continue;
+                if (!GearCatalog.CanEquipArmor(a, job, level, out _)) continue;
                 if (string.Equals(a.rarity, rarity, StringComparison.OrdinalIgnoreCase))
                 {
                     if (exact == null || a.defense > exact.defense) exact = a;
                 }
             }
             if (exact != null) return exact;
-            return GearCatalog.BestArmor("any", level); // fallback (armor jobs are "any")
-        }
-
-        private static bool JobOk(string itemJob, string heroJob)
-        {
-            if (string.IsNullOrEmpty(itemJob)) return true;
-            if (itemJob.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
-            return itemJob.Equals(heroJob ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            return GearCatalog.BestArmor(job, level); // fallback: best the hero's CLASS qualifies for
         }
 
         // Locate the active hero's GearLoadout (the real armory grant surface),

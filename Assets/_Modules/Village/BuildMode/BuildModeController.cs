@@ -476,9 +476,22 @@ namespace DeNelle.Village
         {
             // Build/upgrade/sell/move all funnel through here — one gate covers them.
             // No building in enemy territory (raid bases are hostile, not buildable).
+            //
+            // F8 seq 632 ROOT CAUSE 1 (2026-08-02): this refusal used to be a bare Debug.Log.
+            // The player tapped BUILD — the spotlit, tutorial-highlighted button — and NOTHING
+            // HAPPENED, with no toast, no reason, no trace. The owner sat 300s on founding_hollow
+            // because of exactly this. CLAUDE.md sec.12 forbids a silent failure: a refusal the
+            // player can feel must be a refusal the player can READ, and a refusal the CLI can
+            // find in the captured trace. Now: player-facing toast + FlowTrace.Warn, always.
             if (DeNelle.Village.SceneOwnership.IsEnemyOwned)
             {
-                Debug.Log("[BuildMode] blocked — enemy-owned scene (You can't build in enemy territory).");
+                string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    "You can't build in enemy territory.",
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Danger);
+                FlowTrace.Warn("Build", $"BuildMode.Enter REFUSED in scene '{scene}': it is ENEMY-OWNED " +
+                    "(scene-configs.json ownership=Enemy). Nothing opens - the player was told via toast. " +
+                    "Any flow that waits on a placement signal here can NEVER complete (F8 seq 632 root cause 1).");
                 return;
             }
 
@@ -1805,9 +1818,16 @@ namespace DeNelle.Village
                     ? $"free build (FOUNDING-KIT, per-id) consumed on '{_armed.id}' -- this founding id now charged; general one-free-total untouched (never resets)"
                     : $"free build (one-free-TOTAL, non-founding) consumed on '{_armed.id}' -- all later non-founding placements now charged (never resets)");
             }
-            else
+            else if (!ChargeLedger(cost))
             {
-                ChargeLedger(cost);
+                // CanAfford passed ~90 lines above and TrySpend is atomic against the same store, so a
+                // decline HERE is a genuine race -- but it must never be silent (CLAUDE.md sec.12): the
+                // structure is already spawned and the player was NOT charged.
+                // KNOWN ORDERING DEBT: the real fix is to charge BEFORE loader.Spawn and refund on a
+                // spawn failure. That reorder is its own ticket - it is not safe to do inline here.
+                FlowTrace.Fail("BuildMode",
+                    $"Place: ChargeLedger DECLINED {Describe(cost)} for '{_armed.id}' AFTER the CanAfford gate -- " +
+                    "the structure is standing but UNPAID. Charge must move ahead of loader.Spawn.");
             }
 
             // Append to the live BaseLayout so Exit() persists it.
@@ -2188,7 +2208,13 @@ namespace DeNelle.Village
             }
 
             // Charge ONLY after the affordability gate passes (mirrors the place-charge rule).
-            ChargeLedger(cost);
+            if (!ChargeLedger(cost))
+            {
+                FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' ABORTED: the ledger DECLINED {Describe(cost)} -- no level granted, nothing charged.");
+                BuildFeedbackToast.Show(ShortfallMessage(cost));
+                ShowSelectionPanel(ps);
+                return;
+            }
 
             int newLevel = level + 1;
 
@@ -2570,19 +2596,34 @@ namespace DeNelle.Village
         /// founding tutorial steps force the player to place while they still have ZERO
         /// starting resources (v32 zeroed StartingBudget). These are EXEMPT from the
         /// general one-free-total rule so a first run can never soft-lock at founding:
-        ///   pet-house           <- founding_hollow  (build.structure_placed:pet-house)
-        ///   lumberyard          <- founding_stores  (build.structure_placed:lumberyard)
-        ///   tower_ground_archer <- founding_defense (build.tower_placed -- the canonical
-        ///                          founding tower: cheapest Tower row, the AutoPilot's
-        ///                          tutorial first-tower; a non-archer tower still comes
-        ///                          free via the untouched general one-free-total below).
+        ///   pet-house            <- founding_hollow  (build.structure_placed:pet-house)
+        ///   collector_lumbermill <- founding_stores  (build.structure_placed:collector_lumbermill)
+        ///   lumberyard           <- founding_stores, the ACCEPTED EQUIVALENT (TutorialFlow
+        ///                           .BuildIdMatches treats the wood ids as one building), so it
+        ///                           stays exempt: a player who places the Lumberyard instead
+        ///                           also completes the step and must not be charged for it.
+        ///   tower_ground_archer  <- founding_defense (build.tower_placed -- the canonical
+        ///                           founding tower: cheapest Tower row, the AutoPilot's
+        ///                           tutorial first-tower; a non-archer tower still comes
+        ///                           free via the untouched general one-free-total below).
         /// Verified against StreamingAssets/Data/Canonical/tutorial/tutorial-steps.json.
         /// Each seeds free ONCE (per-id), independent of the general freebie.
+        ///
+        /// F8 seq 632 ROOT CAUSE 2 (2026-08-02): founding_stores was retargeted from
+        /// `lumberyard` to `collector_lumbermill`. The catalog proves why: `lumberyard` is
+        /// behaviorId GameplayBuilding with storageCapacity 500 / storageResource "wood" -- a
+        /// STOCKPILE that stores timber and harvests nothing -- while `collector_lumbermill`
+        /// (displayName "Lumbermill") is behaviorId ResourceCollector, the card that actually
+        /// harvests. The step's own copy said "it harvests timber for you", so the awaited id
+        /// and the promise disagreed. `collector_lumbermill` MUST be exempt here or the
+        /// retargeted step soft-locks a v32 zero-resource founding (it costs wood 40 / food 20 /
+        /// iron 30).
         /// </summary>
         private static readonly HashSet<string> FoundingKit =
             new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
             {
                 "pet-house",
+                "collector_lumbermill",
                 "lumberyard",
                 "tower_ground_archer",
             };
@@ -2721,14 +2762,40 @@ namespace DeNelle.Village
             return "Not enough resources";
         }
 
-        /// <summary>Spend the cost through the ledger (atomic). No-op for a free cost.</summary>
-        public static void ChargeLedger(DeNelle.Core.Catalog.ResourceCost cost)
+        /// <summary>
+        /// Spend the cost through the ledger (atomic). Returns TRUE only when the cost was actually
+        /// deducted (a free cost counts as paid); FALSE means the ledger DECLINED and NOTHING moved.
+        /// <para/>
+        /// 2026-08-02: this used to return void and THROW TrySpend's bool away, so a declined spend
+        /// still produced a building - a live free-structure path. Every caller MUST honour the return.
+        /// A spend that cannot be PROVEN is never reported as made: with no economy service a
+        /// wood/food/iron cost cannot be charged at all, so it returns false rather than pretending.
+        /// </summary>
+        public static bool ChargeLedger(DeNelle.Core.Catalog.ResourceCost cost)
         {
-            if (cost.IsZero) return;
+            if (cost.IsZero) return true;
             var econ = EconomyService.Instance;
-            if (econ != null) { econ.TrySpend(ToEconomy(cost)); return; }
-            // Service-less fallback: charge the persisted crystal wallet directly.
-            if (cost.crystals > 0) GameStateService.Instance?.AddCrystals(-cost.crystals);
+            if (econ != null)
+            {
+                if (econ.TrySpend(ToEconomy(cost))) return true;
+                FlowTrace.Warn("Build", $"ChargeLedger: EconomyService DECLINED {Describe(cost)} -- nothing was deducted.");
+                return false;
+            }
+            // Service-less fallback: charge the persisted crystal wallet directly, but ONLY when it
+            // can actually cover the crystal slot.
+            if (cost.crystals > 0)
+            {
+                var gs = GameStateService.Instance;
+                if (gs == null || CrystalBalance < cost.crystals)
+                {
+                    FlowTrace.Warn("Build", $"ChargeLedger: no economy service and the crystal wallet cannot cover {cost.crystals} -- nothing deducted.");
+                    return false;
+                }
+                gs.AddCrystals(-cost.crystals);
+                return true;
+            }
+            FlowTrace.Warn("Build", $"ChargeLedger: no economy service -- {Describe(cost)} could NOT be charged.");
+            return false;
         }
 
         /// <summary>Refund the cost through the ledger (Grant). No-op for a free cost.</summary>

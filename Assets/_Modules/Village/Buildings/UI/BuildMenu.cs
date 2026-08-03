@@ -12,7 +12,8 @@
 //   Root         — Build Tower / Upgrade Tower / Repair Wall / Manage Towers /
 //                  Build Mode (Obsidian button rows; Close = the chrome's ONE
 //                  shared Close per obsidian-panel-chrome canon)
-//   BuildTower   — element radio + costs + timing + Build (WO-131 prepaid spend)
+//   BuildTower   — catalog-tower radio + REAL costs vs the REAL ledger + Build
+//                  (WO-131 prepaid spend, WO-861 verified: the spend must SUCCEED)
 //   UpgradeTower — placed-tower list + upgrade info (cost-enforced TryUpgrade)
 //
 // Behavioural contracts preserved:
@@ -21,9 +22,23 @@
 //   • BuildingPlaced event — still relayed from TowerPlacementSystem.OnTowerPlaced
 //     for menu-initiated placements (WO-T1); OnboardingIntegrator +
 //     TutorialSignalAdapters subscribe.
-//   • WO-131 single authoritative crystal spend (OnConfirmBuild, prepaid: true).
+//   • WO-131 single authoritative spend (OnConfirmBuild, prepaid: true).
 //   • New: routes through the PanelManager modal arbiter ("Build") like every
 //     other kit modal — battle-lock may reject an open (revert + stay hidden).
+//
+// WO-861 (owner Tier 0, 2026-08-02) — TWO live economy defects removed from THIS View:
+//   1. THE FAKE WALLET. A private GetMaterialCount(id) returned the literals wood=20 /
+//      stone=5. Those literals were shown to the player as their balance, were what the
+//      Build button's afford gate compared against, and were never deducted — so every
+//      tower priced in wood/stone was FREE. A second hard-coded TowerVariantDef table
+//      (4 rows x crystal/wood/stone cost + times + upgrade cost + DPS/HP) was a rival
+//      cost authority to the catalog. BOTH DELETED. The screen now lists real catalog
+//      Tower rows priced by BuildModeController.CostFor against the real IEconomy ledger,
+//      all via BuildMenuVM (the View reads no state and calls no service).
+//   2. THE UNVERIFIED SPEND. OnConfirmBuild called BuildModeController.ChargeLedger,
+//      which DISCARDS IEconomy.TrySpend's bool, then placed with prepaid:true even when
+//      the ledger DECLINED — a live free-tower path. The spend is now
+//      BuildMenuVM.TrySpendBuild, whose bool decides whether the placement happens.
 // =============================================================================
 
 using System;
@@ -70,34 +85,14 @@ namespace DeNelle.Village
         private enum MenuScreen { Root, BuildTower, UpgradeTower }
         private MenuScreen _screen = MenuScreen.Root;
 
-        // Local element enum — deliberately NOT DeNelle.BattleATB's ElementType:
-        // DeNelle.Village must not take a dependency on BattleATB (WO-31 §Files).
-        private enum TowerElement { Flame, Ice, Aether, Physical }
-        private TowerElement _selectedElement = TowerElement.Flame;
+        // WO-861: the Build-Tower radio now selects a REAL catalog tower id. The old local
+        // TowerElement enum + the hard-coded TowerVariantDef balance table (a SECOND cost
+        // authority divergent from the catalog) are DELETED — every number on this screen
+        // comes from BuildMenuVM.TowerOptions (CatalogRegistry -> BuildModeController.CostFor).
+        private string _selectedTowerId;
         // WO-127: the manage/upgrade screen tracks a LIVE Tower (not a Building) so
         // its level reads correctly and the Upgrade button calls Tower.TryUpgrade().
         private Tower _selectedTowerForUpgrade;
-
-        /// <summary>One element tower's stub costs/timing (WO-31 — Week 6 moves these to JSON).</summary>
-        private struct TowerVariantDef
-        {
-            public TowerElement Element;
-            public string DisplayName;
-            public int CrystalCost;
-            public int Wood, Stone;
-            public int BuildTimeSec;
-            public int UpgradeCrystalCost, UpgradeStone, UpgradeTimeSec;
-            public int Dps, Hp;
-        }
-
-        // STUB — Week 6: hard-coded variant table until tower-variants.json lands.
-        private static readonly TowerVariantDef[] Variants =
-        {
-            new TowerVariantDef { Element = TowerElement.Flame,    DisplayName = "Flame Tower",  CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 30, Hp = 200 },
-            new TowerVariantDef { Element = TowerElement.Ice,      DisplayName = "Ice Tower",    CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 26, Hp = 220 },
-            new TowerVariantDef { Element = TowerElement.Aether,   DisplayName = "Aether Tower", CrystalCost = 180, Wood = 20, Stone = 8,  BuildTimeSec = 180, UpgradeCrystalCost = 240, UpgradeStone = 18, UpgradeTimeSec = 360, Dps = 34, Hp = 190 },
-            new TowerVariantDef { Element = TowerElement.Physical, DisplayName = "Stone Tower",  CrystalCost = 120, Wood = 15, Stone = 10, BuildTimeSec = 120, UpgradeCrystalCost = 160, UpgradeStone = 12, UpgradeTimeSec = 240, Dps = 24, Hp = 260 },
-        };
 
         /// <summary>Raised when a building is successfully placed — carries the new Building + its def.
         /// (Relayed from TowerPlacementSystem's commit for menu-initiated placements; args may be null —
@@ -171,6 +166,7 @@ namespace DeNelle.Village
             _vm.Changed += OnResourcesChanged;
 
             _screen = MenuScreen.Root;            // always open on the chooser
+            _selectedTowerId = null;              // re-defaults to the cheapest catalog row
             _selectedTowerForUpgrade = null;
             _upgradeListScrollPos = 1f;           // WO-795: fresh open starts at the list top
             Disarm();
@@ -311,9 +307,10 @@ namespace DeNelle.Village
         // ── Build Tower screen ────────────────────────────────────────────────
 
         /// <summary>
-        /// Element radio (Flame / Ice / Aether / Physical) + the selected variant's
-        /// crystal + material costs (ASCII +/- marks — glyphs are missing from the
-        /// TMP font) + build time + a Build button disabled when unaffordable.
+        /// Catalog-tower radio + the selected row's REAL catalog cost (ASCII +/- marks —
+        /// glyphs are missing from the TMP font) against the REAL on-hand ledger + the
+        /// real raise time + a Build button disabled when the live wallet can't cover it.
+        /// WO-861: every number here is VM data; the View authors none of them.
         /// </summary>
         private void RenderBuildTower()
         {
@@ -323,39 +320,54 @@ namespace DeNelle.Village
                 TextAlignmentOptions.Left, new Vector2(0.08f, top - 0.05f), new Vector2(0.92f, top));
             top -= 0.06f;
 
-            foreach (TowerElement el in new[] { TowerElement.Flame, TowerElement.Ice,
-                                                TowerElement.Aether, TowerElement.Physical })
+            var options = _vm != null ? _vm.TowerOptions : null;
+            if (options == null || options.Count == 0)
+            {
+                // No fabricated fallback row: an unbootstrapped catalog is reported, not invented.
+                MakeText(_bodyHost, "No tower rows in the catalog - nothing can be priced.", 14,
+                    ElarionUi.Danger, FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.08f, top - 0.08f), new Vector2(0.92f, top));
+                return;
+            }
+
+            var selection = _vm.TowerOptionFor(_selectedTowerId);
+            _selectedTowerId = selection.Id;
+
+            foreach (var opt in options)
             {
                 const float rowH = 0.075f, gap = 0.012f;
-                bool selected = el == _selectedElement;
-                TowerElement captured = el;
+                bool selected = string.Equals(opt.Id, _selectedTowerId, StringComparison.OrdinalIgnoreCase);
+                string captured = opt.Id;
                 ElarionUiKit.BuildObsidianButton(_bodyHost,
-                    (selected ? "> " : "") + el,
+                    (selected ? "> " : "") + opt.DisplayName,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.10f, top - rowH), new Vector2(0.90f, top),
-                    () => { _selectedElement = captured; Render(); });
+                    () => { _selectedTowerId = captured; Render(); });
                 top -= rowH + gap;
             }
             top -= 0.02f;
 
-            var variant = VariantFor(_selectedElement);
-            top = AddCostRow("Crystals", variant.CrystalCost, CrystalBalance, top);
-            if (variant.Wood > 0)  top = AddCostRow("Wood",  variant.Wood,  GetMaterialCount("wood"),  top);
-            if (variant.Stone > 0) top = AddCostRow("Stone", variant.Stone, GetMaterialCount("stone"), top);
+            var cost = selection.Cost;
+            if (cost.crystals > 0) top = AddCostRow("Crystals", cost.crystals, _vm.MaterialCount("crystals"), top);
+            if (cost.wood > 0)     top = AddCostRow("Wood",     cost.wood,     _vm.MaterialCount("wood"),     top);
+            if (cost.iron > 0)     top = AddCostRow("Iron",     cost.iron,     _vm.MaterialCount("iron"),     top);
+            if (cost.food > 0)     top = AddCostRow("Food",     cost.food,     _vm.MaterialCount("food"),     top);
 
-            MakeText(_bodyHost, "Build time: " + FormatTime(variant.BuildTimeSec), 13,
-                ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
+            int buildSeconds = _vm.BuildSeconds;
+            if (buildSeconds > 0)
+                MakeText(_bodyHost, "Build time: " + FormatTime(buildSeconds), 13,
+                    ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
+                    new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
 
-            bool canBuild = CanAfford(variant);
+            bool canBuild = _vm.CanAfford(cost);
             var btn = ElarionUiKit.BuildObsidianButton(_bodyHost, "Build",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canBuild ? ElarionUiKit.ObsidianButtonColor.Green
                          : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.12f),
-                () => OnConfirmBuild(variant));
+                () => OnConfirmBuild(selection));
             btn.interactable = canBuild;
         }
 
@@ -374,38 +386,46 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Arms the canonical arcane-tower def for tap-to-place (the placement
-        /// pipeline is shared). The chosen element is remembered for when the
-        /// variant system goes live.
+        /// Arms the canonical tower def for tap-to-place (the placement pipeline is shared)
+        /// AFTER the spend has actually landed.
+        ///
+        /// WO-861 ORDER OF OPERATIONS (owner AC: "insufficient wood -> placement blocked and
+        /// resources unchanged"):
+        ///   1. re-check affordability on the LIVE ledger (the button state can be stale);
+        ///   2. resolve the TowerData FIRST, so a missing asset can never charge the player;
+        ///   3. spend through BuildMenuVM.TrySpendBuild — which HONOURS IEconomy.TrySpend's
+        ///      bool. Previously this called BuildModeController.ChargeLedger (which DISCARDS
+        ///      that bool) and then placed with prepaid:true regardless, so a DECLINED spend
+        ///      still raised a tower. Now a false return returns here: no placement, no charge.
         /// </summary>
-        private void OnConfirmBuild(TowerVariantDef v)
+        private void OnConfirmBuild(BuildMenuVM.TowerBuildOption option)
         {
-            if (!CanAfford(v))
+            if (_vm == null || option.IsEmpty)
             {
-                SetStatus("Not enough crystals or materials for the " + v.DisplayName + ".", isError: true);
+                SetStatus("No tower selected.", isError: true);
+                return;
+            }
+            var cost = option.Cost;
+            if (!_vm.CanAfford(cost))
+            {
+                SetStatus(_vm.ShortfallFor(cost) + " for the " + option.DisplayName + ".", isError: true);
                 return;
             }
 
-            var data = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+            var data = _vm.PlacedTowerData;
             if (data == null)
             {
                 SetStatus("Tower definition asset missing (Towers/DevTower).", isError: true);
                 return;
             }
 
-            // WO-131 — SINGLE AUTHORITATIVE CRYSTAL SPEND for tower placement.
-            // Deduct the DISPLAYED cost (v.CrystalCost) through BuildModeController.ChargeLedger,
-            // which routes through EconomyService for multi-resource costs or GameState.Crystals fallback.
-            // This ensures a placement charges through the canonical ledger, never double-charging.
-            // CanAfford(v) above re-checked the live balance one statement ago.
-            var cost = new DeNelle.Core.Catalog.ResourceCost
+            // THE spend. False => the ledger declined; nothing was deducted and nothing is placed.
+            if (!_vm.TrySpendBuild(cost, out string spendFailure))
             {
-                crystals = v.CrystalCost,
-                wood = v.Wood,
-                iron = v.Stone,   // Note: UI calls it "Stone", catalog uses "Iron" for the third resource
-                food = 0
-            };
-            BuildModeController.ChargeLedger(cost);
+                SetStatus(spendFailure ?? "The build could not be charged - placement blocked.", isError: true);
+                Render();   // re-price against whatever the wallet actually says now
+                return;
+            }
 
             if (TowerPlacementSystem.Instance == null)
                 new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
@@ -417,7 +437,7 @@ namespace DeNelle.Village
             HookPlacementRelay(TowerPlacementSystem.Instance);
             TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
             Close();   // hide the menu so the world click lands the placement
-            SetStatus($"Click a clear tile to raise the {v.DisplayName}.");
+            SetStatus($"Click a clear tile to raise the {option.DisplayName}.");
         }
 
         // ── WO-T1: BuildingPlaced relay (menu-initiated placements) ───────────
@@ -589,15 +609,24 @@ namespace DeNelle.Village
             int level = t != null ? t.CurrentLevel : 1;
             bool atMax = level >= Tower.MaxLevel;
 
-            // Cost block kept as the element-variant stub (economy gating happens in
-            // TryUpgrade — the display is informative).
-            var v = VariantFor(_selectedElement);
-            top = AddCostRow("Crystals", v.UpgradeCrystalCost, CrystalBalance, top);
-            if (v.UpgradeStone > 0) top = AddCostRow("Stone", v.UpgradeStone, GetMaterialCount("stone"), top);
-            MakeText(_bodyHost, "Upgrade time: " + FormatTime(v.UpgradeTimeSec), 13,
-                ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
-            top -= 0.055f;
+            // WO-861: the REAL price Tower.TryUpgrade charges — NextUpgradeCost of wood AND
+            // iron AND crystals — against the REAL on-hand ledger. The old block showed the
+            // deleted variant table's invented UpgradeCrystalCost / UpgradeStone / time.
+            var up = _vm != null ? _vm.UpgradePriceFor(t) : default;
+            if (up.IsZero)
+            {
+                MakeText(_bodyHost, "Upgrade cost not authored for this tower.", 13,
+                    ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
+                    new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
+                top -= 0.055f;
+            }
+            else
+            {
+                if (up.crystals > 0) top = AddCostRow("Crystals", up.crystals, _vm.MaterialCount("crystals"), top);
+                if (up.wood > 0)     top = AddCostRow("Wood",     up.wood,     _vm.MaterialCount("wood"),     top);
+                if (up.iron > 0)     top = AddCostRow("Iron",     up.iron,     _vm.MaterialCount("iron"),     top);
+                top -= 0.010f;
+            }
 
             if (atMax)
             {
@@ -607,7 +636,9 @@ namespace DeNelle.Village
                 return;   // no Upgrade button at max level (WO-127)
             }
 
-            MakeText(_bodyHost, $"Result: Lvl {level + 1}/{Tower.MaxLevel}  (+{v.Dps} DPS, +{v.Hp / 4} HP)",
+            // Real live stats off the tower itself — no invented DPS/HP deltas.
+            MakeText(_bodyHost,
+                $"Result: Lvl {level + 1}/{Tower.MaxLevel}  (now {t.CurrentDamage:0.#} dmg / {t.CurrentRange:0.#}m)",
                 13, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
                 new Vector2(0.10f, top - 0.05f), new Vector2(0.90f, top));
 
@@ -634,31 +665,13 @@ namespace DeNelle.Village
         }
 
         // ── WO-31 helpers ─────────────────────────────────────────────────────
-
-        private static TowerVariantDef VariantFor(TowerElement el)
-        {
-            foreach (var v in Variants) if (v.Element == el) return v;
-            return Variants[0];
-        }
-
-        private bool CanAfford(TowerVariantDef v)
-        {
-            return CrystalBalance >= v.CrystalCost
-                   && GetMaterialCount("wood") >= v.Wood
-                   && GetMaterialCount("stone") >= v.Stone;
-        }
-
-        // STUB — Week 6: material inventory is not tracked yet, so report fixed
-        // on-hand counts. Crystals come from the live GameState (CrystalBalance).
-        private static int GetMaterialCount(string id)
-        {
-            switch (id)
-            {
-                case "wood":  return 20;
-                case "stone": return 5;
-                default:      return 0;
-            }
-        }
+        //
+        // DELETED (WO-861 — do not reintroduce, BuildMenuRealEconomyRegression lints for it):
+        //   VariantFor / CanAfford(TowerVariantDef) / GetMaterialCount(string)
+        // GetMaterialCount was a literal-returning fake wallet ("wood" -> 20, "stone" -> 5)
+        // that the player SAW as their balance and the Build button gated on, and that was
+        // never deducted. Balances, affordability and the spend all live in BuildMenuVM now,
+        // reading IEconomy — the one GameState-backed ledger.
 
         /// <summary>Formats seconds as "Xm Ys" (or "Ys" under a minute).</summary>
         private static string FormatTime(int seconds)

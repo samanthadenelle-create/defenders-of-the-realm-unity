@@ -2343,12 +2343,12 @@ namespace DeNelle.Village.Arena
             {
                 var w = PickArenaWeapon(job, level, targetRarity);
                 if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
-                var a = PickArenaArmor(level, targetRarity);
+                var a = PickArenaArmor(job, level, targetRarity);
                 if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
             }
             else
             {
-                var a = PickArenaArmor(level, targetRarity);
+                var a = PickArenaArmor(job, level, targetRarity);
                 if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
                 var w = PickArenaWeapon(job, level, targetRarity);
                 if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
@@ -2358,16 +2358,20 @@ namespace DeNelle.Village.Arena
 
         // Pick the eligible weapon at the target rarity the hero qualifies for; else the
         // best weapon for the hero's job/level (GearCatalog fallback). Null if none.
+        //
+        // ELIGIBILITY IS ASKED OF GearCatalog, NOT RE-IMPLEMENTED HERE (WO loot-class-gate,
+        // 2026-08-02). This used to inline the job/level test; the ARMOR half inlined a
+        // level-only test and so awarded gear the class cannot wear. Both halves now call
+        // the ONE authority (GearCatalog.CanEquipWeapon / CanEquipArmor), which is the same
+        // question BestWeapon/BestArmor answer - so the exact-rarity pick and the fallback
+        // can no longer disagree about what the hero may hold.
         private static DeNelle.Village.WeaponDef PickArenaWeapon(string job, int level, string rarity)
         {
             DeNelle.Village.WeaponDef exact = null;
             foreach (var w in DeNelle.Village.GearCatalog.AllWeapons())
             {
                 if (w == null) continue;
-                if (!string.IsNullOrEmpty(w.job)
-                    && !w.job.Equals("any", StringComparison.OrdinalIgnoreCase)
-                    && !w.job.Equals(job ?? string.Empty, StringComparison.OrdinalIgnoreCase)) continue;
-                if (w.req != null && level < w.req.level) continue;
+                if (!DeNelle.Village.GearCatalog.CanEquipWeapon(w, job, level, out _)) continue;
                 if (string.Equals(w.rarity, rarity, StringComparison.OrdinalIgnoreCase))
                 {
                     if (exact == null || w.damageMult > exact.damageMult) exact = w;
@@ -2376,19 +2380,26 @@ namespace DeNelle.Village.Arena
             return exact ?? DeNelle.Village.GearCatalog.BestWeapon(job, level);
         }
 
-        private static DeNelle.Village.ArmorDef PickArenaArmor(int level, string rarity)
+        // Armor is gated on CLASS exactly like the weapon half above. Two gates matter and
+        // both live in CanEquipArmor: the legacy `job` field AND the light/heavy WEIGHT class
+        // (Ranger/Mage = light, Knight/Cleric = heavy). Without them a Mage was handed heavy
+        // plate, which GearLoadout.Refresh then silently DROPS (ArmorFitsClass, GearLoadout.cs
+        // :352) - the player saw a reward line and then an empty armor slot. The fallback also
+        // passes the REAL job; it used to hardcode "any", which is not a class and made
+        // BestArmor's own ArmorFitsClass gate resolve against ClassWeight("any") == "heavy".
+        private static DeNelle.Village.ArmorDef PickArenaArmor(string job, int level, string rarity)
         {
             DeNelle.Village.ArmorDef exact = null;
             foreach (var a in DeNelle.Village.GearCatalog.AllArmors())
             {
                 if (a == null) continue;
-                if (a.req != null && level < a.req.level) continue;
+                if (!DeNelle.Village.GearCatalog.CanEquipArmor(a, job, level, out _)) continue;
                 if (string.Equals(a.rarity, rarity, StringComparison.OrdinalIgnoreCase))
                 {
                     if (exact == null || a.defense > exact.defense) exact = a;
                 }
             }
-            return exact ?? DeNelle.Village.GearCatalog.BestArmor("any", level);
+            return exact ?? DeNelle.Village.GearCatalog.BestArmor(job, level);
         }
     }
 }
