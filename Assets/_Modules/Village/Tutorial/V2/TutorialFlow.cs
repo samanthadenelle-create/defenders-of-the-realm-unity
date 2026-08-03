@@ -65,6 +65,19 @@ namespace DeNelle.Village
         private const float ReachedRadius = 6f;         // hero.reached:<anchor> proximity (m)
         private const float ContextualAutoCloseSeconds = 10f; // hint without dialogue: auto-dismiss
 
+        // F8 seq 632 ROOT CAUSE 3 (2026-08-02): a step may author SEVERAL highlights
+        // (founding_defend = ["hud.wave_button", "world.gate_direction"]) but UiSpotlight is a
+        // singleton with ONE target, so only Highlight[0] was ever shown and the rest were
+        // silently dropped. The flow now WALKS the whole list, rotating the single spotlight
+        // across every authored id so each one is actually rendered.
+        private const float HighlightCycleSeconds = 4f;
+
+        // F8 seq 632 ROOT CAUSE 4 (2026-08-02): five silent minutes must never be possible. While a
+        // step is stranded and the builder has NOT been opened, re-state the objective as a toast on
+        // this cadence (escalating coach beat), capped so it can never become spam.
+        private const float CoachNudgeSeconds = 45f;
+        private const int CoachNudgeMaxBeats = 4;
+
         /// <summary>Persistence key prefixes (SeenTutorials — additive, no schema change:
         /// GameState.SeenTutorials is an existing SerializableDict, SaveSchema.cs:254).</summary>
         private const string SeenPrefix = "tutorial_v2:";
@@ -261,6 +274,17 @@ namespace DeNelle.Village
         private bool _completionArmed;
         private string _awaitSignal;
 
+        // Highlight walk (ROOT CAUSE 3) — every authored id for the live step, rotated through the
+        // single UiSpotlight so none is silently dropped.
+        private readonly List<string> _highlightIds = new List<string>();
+        private int _highlightIndex;
+        private float _nextHighlightAt;
+
+        // Coach escalation (ROOT CAUSE 4) — per-step nudge bookkeeping.
+        private int _coachBeats;
+        private float _nextCoachAt;
+        private bool _builderOpenedThisStep;
+
         private HeroLocomotion _hero;
         private WaveManager _wave;
 
@@ -311,6 +335,27 @@ namespace DeNelle.Village
             if (!HubScenes.IsHub(scene))
             {
                 FlowTrace.Step("Tutorial", $"Bootstrap({reason}): scene '{scene}' is not a hub — waiting.");
+                return;
+            }
+            // F8 seq 632 ROOT CAUSE 1 (2026-08-02) - the flow could arm where building is IMPOSSIBLE.
+            // Village2 is BOTH a HubScenes.Names entry AND ownership:"Enemy" in scene-configs.json.
+            // BuildModeController.Enter() refuses outright on an enemy-owned scene, so EVERY placement
+            // step ("build.structure_placed:<id>") is a GENUINE can-never-complete state there: the
+            // player taps the spotlit BUILD button and nothing happens, forever. The owner sat 300s on
+            // founding_hollow and was auto-advanced by the watchdog.
+            //
+            // WHY THIS GATE AND NOT step.Scene: TutorialStepDef.Scene is DEAD DATA (Phase.WaitTrigger is
+            // declared and never assigned; the only .Trigger reads are the contextual path), and the
+            // authored value is "MainCastle_Hall" - a LEGACY scene, NOT the live hub
+            // (Main_Castle_Overworld, CLAUDE.md sec.7). Honouring it would stop the FTUE from EVER
+            // running. The correct, smaller fix is the semantic one: the FTUE is a TOWN flow, so refuse
+            // to arm anywhere its steps cannot complete. sceneLoaded re-evaluates, so walking back into
+            // the home hub still arms it.
+            if (HubScenes.IsEnemyOwnedScene(scene))
+            {
+                FlowTrace.Warn("Tutorial", $"Bootstrap({reason}): hub scene '{scene}' is ENEMY-OWNED " +
+                    "(scene-configs.json ownership=Enemy) - build mode is refused there, so the founding " +
+                    "placement steps could never complete. NOT arming; re-evaluated on the next scene load.");
                 return;
             }
             if (FindAnyObjectByType<TutorialFlow>() != null) return;
@@ -383,6 +428,8 @@ namespace DeNelle.Village
 
                 case Phase.AwaitCompletion:
                     TickDeferredIntro();   // WO-702 truce: release a builder-held intro
+                    TickHighlightCycle();  // ROOT CAUSE 3: walk EVERY authored highlight
+                    TickCoachNudge();      // ROOT CAUSE 4: never five silent minutes again
                     TickProximityProbe();
                     TickScriptedWave();
                     TickStagedEncounter();
@@ -452,6 +499,9 @@ namespace DeNelle.Village
             _watchdogAt = Time.unscaledTime;
             _completionArmed = false;
             _awaitSignal = step.Completion != null ? step.Completion.Signal : null;
+            _coachBeats = 0;
+            _nextCoachAt = Time.unscaledTime + CoachNudgeSeconds;
+            _builderOpenedThisStep = false;
 
             FlowTrace.Step("Tutorial", $"STEP-ENTER :: {step.Id} (order={step.Order}, completes on '{_awaitSignal}').");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_enter", new
@@ -507,22 +557,7 @@ namespace DeNelle.Village
                 ObjectiveBannerUi.Show(step.Objective.Text, step.Objective.Count,
                     step.Skippable ? (Action)SkipCurrentStep : null,
                     (Action)SkipAll);   // persistent whole-FTUE skip (confirmed in the banner)
-            if (step.Highlight != null && step.Highlight.Count > 0)
-                UiSpotlight.Show(step.Highlight[0]);
-            else if (IsPlacementStep())
-            {
-                // F8 seq 603 (2026-08-02): a PLACEMENT step always lights the Build-button
-                // coach highlight so the player is pointed at the door into the builder even
-                // when the step data authors no highlight. Same registry path every authored
-                // highlight takes (UiSpotlight -> TutorialHighlightRegistry; "hud.build_button"
-                // is registered by HudKitController). founding_hollow authors it already —
-                // this is the code-level guarantee against data drift.
-                UiSpotlight.Show("hud.build_button");
-                FlowTrace.Step("Tutorial", $"step '{step.Id}' placement step with no authored highlight — " +
-                    "defaulting the coach highlight to 'hud.build_button' (F8 seq 603 rule).");
-            }
-            else
-                UiSpotlight.Hide();
+            ArmHighlights(step);
 
             // Intro dialogue — the standard NPC template; its end raises
             // dialogue.ended:<id> through the Core adapter.
@@ -702,13 +737,184 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Tutorial", $"step '{stepId}' deferred intro dialogue '{id}' unknown — continuing without it.");
         }
 
+        // =====================================================================
+        //  ROOT CAUSE 3 (F8 seq 632) — walk EVERY authored highlight
+        // ---------------------------------------------------------------------
+        //  EnterStep used to do `UiSpotlight.Show(step.Highlight[0])` and drop the rest
+        //  on the floor with no trace. founding_defend authors
+        //  ["hud.wave_button", "world.gate_direction"], so the GATE callout — the half
+        //  that tells the player WHERE the enemies come from — never rendered, ever.
+        //  UiSpotlight is a singleton with ONE target, so the fix is to ROTATE it across
+        //  the whole authored list on a slow, readable cadence rather than to teach only
+        //  the first item. A single-id step never cycles (no churn, no log spam).
+        // =====================================================================
+
+        /// <summary>Builds the live step's highlight walk and shows the first id. A PLACEMENT
+        /// step with no authored highlight still falls back to the Build-button coach mark
+        /// (the F8 seq 603 rule); a step with nothing at all clears the spotlight.</summary>
+        private void ArmHighlights(TutorialStepDef step)
+        {
+            _highlightIds.Clear();
+            _highlightIndex = 0;
+
+            if (step != null && step.Highlight != null)
+                foreach (var h in step.Highlight)
+                    if (!string.IsNullOrEmpty(h) && !_highlightIds.Contains(h))
+                        _highlightIds.Add(h);
+
+            if (_highlightIds.Count == 0 && IsPlacementStep())
+            {
+                // F8 seq 603 (2026-08-02): a PLACEMENT step always lights the Build-button
+                // coach highlight so the player is pointed at the door into the builder even
+                // when the step data authors no highlight. Same registry path every authored
+                // highlight takes (UiSpotlight -> TutorialHighlightRegistry; "hud.build_button"
+                // is registered by HudKitController). This is the code-level guarantee
+                // against data drift.
+                _highlightIds.Add("hud.build_button");
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' placement step with no authored highlight - " +
+                    "defaulting the coach highlight to 'hud.build_button' (F8 seq 603 rule).");
+            }
+
+            if (_highlightIds.Count == 0)
+            {
+                UiSpotlight.Hide();
+                return;
+            }
+
+            _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
+            UiSpotlight.Show(_highlightIds[0]);
+            if (_highlightIds.Count > 1)
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' authors {_highlightIds.Count} highlights " +
+                    $"[{string.Join(", ", _highlightIds)}] - the ONE spotlight rotates across all of them every " +
+                    $"{HighlightCycleSeconds:0}s (F8 seq 632: only Highlight[0] used to render).");
+        }
+
+        /// <summary>Rotates the single spotlight across every authored highlight id so none is
+        /// silently dropped. No-op for a 0/1-id step.</summary>
+        private void TickHighlightCycle()
+        {
+            if (_highlightIds.Count < 2) return;
+            if (Time.unscaledTime < _nextHighlightAt) return;
+            _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
+            _highlightIndex = (_highlightIndex + 1) % _highlightIds.Count;
+            UiSpotlight.Show(_highlightIds[_highlightIndex]);
+        }
+
+        // =====================================================================
+        //  ROOT CAUSE 4 (F8 seq 632) — the escalating coach beat
+        // ---------------------------------------------------------------------
+        //  The owner sat FIVE SILENT MINUTES on founding_hollow. The objective banner was
+        //  up, but nothing ever re-stated the ask and nothing noticed the builder had never
+        //  been opened. A stranded player must be coached, not timed out: while the step is
+        //  awaiting and the builder has NOT been opened even once, re-toast the objective
+        //  every CoachNudgeSeconds, escalating from the objective line to an explicit
+        //  "tap BUILD" instruction, capped at CoachNudgeMaxBeats so it can never be spam.
+        //  Opening the builder retires the nudge — at that point the player has found the
+        //  door and the watchdog is paused anyway.
+        // =====================================================================
+
+        private void TickCoachNudge()
+        {
+            if (_step == null) return;
+
+            // The builder being open at ANY point this step means the player found the door.
+            if (DeNelle.Core.BuildModeState.IsActive)
+            {
+                if (!_builderOpenedThisStep)
+                {
+                    _builderOpenedThisStep = true;
+                    FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' - builder opened; " +
+                        "the escalating nudge stands down (the player has found the door).");
+                }
+                return;
+            }
+            if (_builderOpenedThisStep) return;
+            if (_coachBeats >= CoachNudgeMaxBeats) return;
+            if (Time.unscaledTime < _nextCoachAt) return;
+
+            _coachBeats++;
+            _nextCoachAt = Time.unscaledTime + CoachNudgeSeconds;
+
+            string objective = _step.Objective != null && !string.IsNullOrEmpty(_step.Objective.Text)
+                ? _step.Objective.Text : null;
+            string msg;
+            if (IsPlacementStep())
+                msg = _coachBeats <= 1 && objective != null
+                    ? objective
+                    : (objective != null ? objective + " - tap BUILD to open the builder." : "Tap BUILD to open the builder.");
+            else
+                msg = objective;
+
+            if (string.IsNullOrEmpty(msg))
+            {
+                // No authored objective = nothing honest to say. Report it rather than
+                // toasting a placeholder (CLAUDE.md sec.12: no silent failure, no fiction).
+                FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' has been idle " +
+                    $"{Time.unscaledTime - _stepEnteredAt:0}s with NO authored objective text - " +
+                    "cannot re-state the ask; the step teaches nothing while stranded.");
+                _coachBeats = CoachNudgeMaxBeats;   // do not re-check every frame
+                return;
+            }
+
+            ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold, 3.4f);
+            FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' idle " +
+                $"{Time.unscaledTime - _stepEnteredAt:0}s awaiting '{_awaitSignal}' with the builder never opened - " +
+                $"re-stated the objective (beat {_coachBeats}/{CoachNudgeMaxBeats}).");
+
+            // Re-assert the spotlight from the top of the walk: a glow the player scrolled
+            // past is worth re-showing with the toast.
+            if (_highlightIds.Count > 0)
+            {
+                _highlightIndex = 0;
+                _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
+                UiSpotlight.Show(_highlightIds[0]);
+            }
+        }
+
+        // =====================================================================
+        //  ROOT CAUSE 2 (F8 seq 632) — emitter/listener id equivalence
+        // ---------------------------------------------------------------------
+        //  founding_stores awaited "build.structure_placed:lumberyard" and OnSignal matched
+        //  it with a strict string.Equals, while the PRE-placement auto-completer
+        //  (BaseLayoutSatisfiesBuildSignal) had used the wood-id equivalence helper
+        //  (BuildIdMatches) since WO-748. That asymmetry is the defect: the Town palette
+        //  ships BOTH "lumberyard" (the Lumberyard storage container) and
+        //  "collector_lumbermill" (the card literally labelled Lumbermill, the one that
+        //  actually harvests timber). A player who placed the harvester raised
+        //  "build.structure_placed:collector_lumbermill", the strict compare said no, and
+        //  the step stalled for the full 300s bound with the player having DONE THE THING.
+        //  The live signal path now applies the SAME equivalence the auto-completer does.
+        // =====================================================================
+
+        /// <summary>True when a RAISED signal satisfies the step's AWAITED signal. Exact
+        /// (ordinal-ignore-case) for every signal, plus the wood-id equivalence for
+        /// <c>build.structure_placed:&lt;id&gt;</c> — the same <see cref="BuildIdMatches"/>
+        /// rule <see cref="BaseLayoutSatisfiesBuildSignal"/> has always used.</summary>
+        private static bool SignalSatisfies(string awaited, string raised)
+        {
+            if (string.IsNullOrEmpty(awaited) || string.IsNullOrEmpty(raised)) return false;
+            if (string.Equals(raised, awaited, StringComparison.OrdinalIgnoreCase)) return true;
+
+            if (!awaited.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase) ||
+                !raised.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string wantId = awaited.Substring(TutorialSignals.StructurePlacedPrefix.Length);
+            string gotId = raised.Substring(TutorialSignals.StructurePlacedPrefix.Length);
+            return BuildIdMatches(gotId, wantId);
+        }
+
         private void OnSignal(string id)
         {
             // Mandatory-step completion.
             if (_phase == Phase.AwaitCompletion && _completionArmed &&
                 !string.IsNullOrEmpty(_awaitSignal) &&
-                string.Equals(id, _awaitSignal, StringComparison.OrdinalIgnoreCase))
+                SignalSatisfies(_awaitSignal, id))
             {
+                if (!string.Equals(id, _awaitSignal, StringComparison.OrdinalIgnoreCase))
+                    FlowTrace.Step("Tutorial", $"step '{_step.Id}' completed by EQUIVALENT signal '{id}' " +
+                        $"(awaited '{_awaitSignal}') - same building under a different catalog id " +
+                        "(F8 seq 632 root cause 2: the player did the thing, the game now notices).");
                 CompleteCurrentStep(skipped: false);
                 return;
             }
@@ -850,11 +1056,16 @@ namespace DeNelle.Village
             if (step.Grant != null && step.Grant.StarterPet)
                 ApplyStarterPetGrant(step);
 
+            _highlightIds.Clear();   // ROOT CAUSE 3: never rotate a dead step's walk
+            _highlightIndex = 0;
             UiSpotlight.Hide();
             ObjectiveBannerUi.Hide();
             PressureHeld = false;
 
             // Outro (Sylas reacts) — plays over the transition; never gates the chain.
+            // A SKIPPED step (player skip OR a watchdog rescue) never plays one: the outro
+            // is Sylas reacting to a thing the player did, so playing it for a step that did
+            // not happen narrates a fiction (F8 seq 632 root cause 4).
             if (!skipped && step.Dialogue != null && !string.IsNullOrEmpty(step.Dialogue.Outro))
             {
                 if (!CoreDialogue.DialogueService.Play(step.Dialogue.Outro))
@@ -1005,26 +1216,12 @@ namespace DeNelle.Village
                 $"(acquiredNew={acquiredNew}, StarterPetId='{state.StarterPetId}', roster={(state.Pets != null ? state.Pets.Count : 0)} pet(s)).");
         }
 
-        /// <summary>World position of the placed Echo Hollow — the persisted BaseLayout
-        /// record (itemId "pet-house") projected through PlacementGrid; falls back to the
-        /// hero, then the origin, so the birth moment always has SOME anchor.</summary>
-        private Vector3 ResolveHollowPosition()
-        {
-            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-            var grid = PlacementGrid.Instance;
-            if (state != null && state.BaseLayout != null && grid != null)
-            {
-                foreach (var rec in state.BaseLayout)
-                {
-                    if (!string.Equals(rec.itemId, "pet-house", StringComparison.OrdinalIgnoreCase)) continue;
-                    Vector3 pos = grid.CellToWorld(new Vector2Int(rec.cellX, rec.cellZ));
-                    if (rec.worldY != 0f) pos.y = rec.worldY;
-                    return pos;
-                }
-            }
-            if (_hero == null) _hero = FindAnyObjectByType<HeroLocomotion>();
-            return _hero != null ? _hero.transform.position : Vector3.zero;
-        }
+        // ResolveHollowPosition() REMOVED (F8 seq 632 sweep, 2026-08-02): it existed only to
+        // anchor the PetDeployer.SummonAt "visible birth" of the founding Echo at the placed
+        // Hollow. That birth was SCRAPPED on 2026-07-17 (echoes are portrait cards, not 3D
+        // models — see ApplyStarterPetGrant step 2), leaving this method with ZERO callers.
+        // Dead code in a flow this load-bearing reads as a live path and mis-teaches the next
+        // reader; it is gone. The Hollow BUILDING itself is untouched and still real.
 
         // =====================================================================
         //  WO-T4 — scripted town wave (spec step 4: horn blast, no Start-Wave press)
@@ -1250,10 +1447,23 @@ namespace DeNelle.Village
 
             // Owner ruling 2026-07-08 ("auto-advance the watchdog"): a step whose combat/
             // completion driver can never settle (e.g. town_wave's scripted spawner) must not
-            // strand the banner forever. On trip we AUTO-COMPLETE (advance) the stuck step down
-            // the SAME path a real completion signal takes — CompleteCurrentStep -> AdvanceToNextStep
-            // — so state stays consistent (latch disarmed, drivers disarmed, seen-marked, UI hidden,
+            // strand the banner forever. On trip we RESCUE (advance) the stuck step down the
+            // SAME path a real completion takes — CompleteCurrentStep -> AdvanceToNextStep — so
+            // state stays consistent (latch disarmed, drivers disarmed, seen-marked, UI hidden,
             // next step entered with a fresh watchdog window).
+            //
+            // F8 seq 632 ROOT CAUSE 4 (2026-08-02): the rescue is recorded as SKIPPED, never as a
+            // genuine completion. It used to pass skipped:false, which made a step the player never
+            // did indistinguishable from one they did: the STEP-COMPLETE trace and the
+            // tutorial_step_complete analytic both fired, and — worse — the OUTRO played, so Sylas
+            // narrated "There - your Hollow stands, and your first Echo has answered" for a Hollow
+            // that was never built and is absent from BaseLayout. The tutorial must never tell the
+            // player a thing happened that did not. skipped:true suppresses the outro + the
+            // completion trace/analytic while KEEPING the two things a rescue must still do:
+            //   * MarkTutorialSeen  — otherwise the stuck step replays forever on resume, and
+            //   * the essential GRANT (grant.starterPet / grant.prepaidTower) — the SkipAll rule:
+            //     a player who did not finish a beat must never end up half-granted and blocked
+            //     out of the systems the later beats depend on.
             //
             // Fires ONCE per stuck step: CompleteCurrentStep advances _step and EnterStep resets
             // _watchdogAt/_stepEnteredAt, so this cannot re-trip on the same step.
@@ -1265,16 +1475,22 @@ namespace DeNelle.Village
             FlowTrace.Fail("Tutorial", $"STEP-STUCK :: {stuckId} — no '{awaited}' after " +
                 $"{idle:0}s in-step (bound {bound:0}s" +
                 (IsPlacementStep() ? ", placement 300s rule, builder time excluded" : ", builder time excluded") +
-                "; ff.tutorialv2 on); AUTO-ADVANCED via watchdog.");
+                $"; ff.tutorialv2 on; builderOpenedThisStep={_builderOpenedThisStep}, coachBeats={_coachBeats}); " +
+                "RESCUED via watchdog and recorded as SKIPPED - the step was NOT completed, its outro is " +
+                "suppressed (no fiction narrated), grants still applied so the player is never half-granted.");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_drop", new
             {
                 stepId = stuckId,
                 secondsIdle = idle,
                 autoAdvanced = true,
+                recordedAs = "skipped",
+                builderOpened = _builderOpenedThisStep,
+                coachBeats = _coachBeats,
             });
 
-            // Reuse the normal completion/advance path (not skipped — the step is credited).
-            CompleteCurrentStep(skipped: false);
+            // Reuse the normal completion/advance path, recorded HONESTLY as a skip.
+            _skips++;
+            CompleteCurrentStep(skipped: true);
         }
 
         // =====================================================================

@@ -21,12 +21,13 @@
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_hollow", "outro": "tut_founding_hollow_done" },
-      "highlight": ["hud.build_button"],
+      "highlight": ["hud.build_button", "build.card.pet-house"],
       "skipIfPrebuilt": true,
       "grant": { "starterPet": true },
       "completion": { "signal": "build.structure_placed:pet-house" },
       "skippable": true,
-      "objective": { "text": "Place the Echo Hollow anywhere you like", "count": 1 }
+      "objective": { "text": "Place the Echo Hollow anywhere you like", "count": 1 },
+      "_note": "F8 seq 632 root cause 3 (2026-08-02): this step used to highlight ONLY hud.build_button - the DOOR into the builder - and never the CARD, leaving the player to find the Echo Hollow among ~10 Town cards unaided while the next step highlights its card. It now teaches both, and TutorialFlow rotates the single spotlight across the whole list (Highlight[0] used to be the only one that ever rendered)."
     },
     {
       "id": "founding_stores",
@@ -35,11 +36,12 @@
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_stores" },
-      "highlight": ["build.card.lumberyard"],
+      "highlight": ["hud.build_button", "build.card.collector_lumbermill"],
       "skipIfPrebuilt": true,
-      "completion": { "signal": "build.structure_placed:lumberyard" },
+      "completion": { "signal": "build.structure_placed:collector_lumbermill" },
       "skippable": true,
-      "objective": { "text": "Place your Lumberyard - it harvests timber for you", "count": 1 }
+      "objective": { "text": "Place your Lumbermill - it harvests timber for you", "count": 1 },
+      "_note": "F8 seq 632 root cause 2 (2026-08-02): this step awaited build.structure_placed:lumberyard while promising 'it harvests timber for you'. The catalog says otherwise - lumberyard is behaviorId GameplayBuilding with storageCapacity 500 / storageResource wood (a STOCKPILE that harvests nothing, and per WO-837 a capacity-cap progression building, never a founding freebie), while collector_lumbermill (displayName 'Lumbermill') is behaviorId ResourceCollector, the card that actually harvests. Both ship in the SAME Town palette (build-categories.json: Resource + Collector, neither in lockedIds), so a player who placed the harvester raised an id the step never awaited and stalled the full 300s. The awaited id, the copy and the highlight now all name the Lumbermill; TutorialFlow.SignalSatisfies additionally accepts the lumberyard/lumbermill equivalence on the LIVE signal path (it was previously applied only in the pre-placement auto-completer), so either placement completes the step."
     },
     {
       "id": "founding_town",
@@ -74,11 +76,12 @@
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_defense" },
-      "highlight": ["hud.build_button"],
+      "highlight": ["hud.build_button", "build.tab_defenses"],
       "grant": { "prepaidTower": true },
       "completion": { "signal": "build.tower_placed" },
       "skippable": true,
-      "objective": { "text": "Raise a tower on your walls' weak side", "count": 1 }
+      "objective": { "text": "Raise a tower on your walls' weak side", "count": 1 },
+      "_note": "F8 seq 632 root cause 3 (2026-08-02): the Build button alone is not a teach - towers live behind the DEFENSES tab, which the Town-default palette does not show. Both are taught now that the flow walks the whole highlight list."
     },
     {
       "id": "founding_defend",

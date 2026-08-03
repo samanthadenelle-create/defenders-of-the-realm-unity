@@ -125,7 +125,13 @@ namespace DeNelle.Core.UI
             "world.gate_direction", // TutorialWorldAnchors resolver (nearest gate to hero)
             "build.tab_town",       // WO-702 — BuildPaletteUI Town category tab (registers when the palette builds)
             "build.tab_defenses",   // WO-702 — BuildPaletteUI Defenses category tab (founding_defense beat)
-            "build.card.lumberyard",// WO-746 BM-3 — founding_stores anchors its spotlight to the Lumberyard card (registered per Render as build.card.<entryId>)
+            "build.card.lumberyard",// WO-746 BM-3 — the Lumberyard card (registered per Render as build.card.<entryId>); kept as the accepted wood-id equivalent
+            // F8 seq 632 root cause 3 (2026-08-02): a step must be able to point at the CARD, not
+            // just the Build button. BuildPaletteUI registers "build.card.<entryId>" for every card
+            // it renders, so these two resolve the moment the Town palette builds; they are listed
+            // here because DataRegression validates every authored highlight against this contract.
+            "build.card.pet-house",           // founding_hollow — the Echo Hollow card among ~10 Town cards
+            "build.card.collector_lumbermill",// founding_stores — the Lumbermill card (the collector that actually harvests)
             "hud.pets",             // FTUE-04 — the persistent "Pets" pet-box button (EchoUnlockFeedback EchoPetBoxButton) the founding_echo beat spotlights; resolved lazily below
         };
 
