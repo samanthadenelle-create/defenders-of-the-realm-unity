@@ -35,6 +35,133 @@ namespace DeNelle.Core.Quests
         [JsonProperty("grantItemId")] public string GrantItemId;
     }
 
+    /// <summary>
+    /// WO-854 Phase 2 -- the completion CONDITION for one stage. Optional and
+    /// additive: a stage with no completeOn keeps the legacy path (a dialogue
+    /// authoring an explicit AdvanceQuest command), so every quest that shipped
+    /// before this field behaves exactly as it did.
+    ///
+    /// Shape in quests.json:
+    ///   "completeOn": { "kind": "talk", "targetId": "village_elder", "count": 1 }
+    ///
+    /// ToSignalId() composes the TutorialSignals bus id the stage waits for. The
+    /// Village-side StoryQuestSignalBridge subscribes the bus and advances the
+    /// quest on a match; Core only describes the condition (Core raises, Village
+    /// bridges -- the QuestRewardBridge pattern).
+    /// </summary>
+    [Serializable]
+    public sealed class QuestCompletion
+    {
+        /// <summary>Condition family. See KindTalk..KindDialogueCommand below.</summary>
+        [JsonProperty("kind")] public string Kind;
+        /// <summary>The thing the kind points at (dialogue id, structure id, panel id,
+        /// anchor id, region id, species id, quest-flag name). Unused by kinds whose
+        /// signal carries no target (wave, arena).</summary>
+        [JsonProperty("targetId")] public string TargetId;
+        /// <summary>How many times the signal must fire. 0 or 1 both mean "once".</summary>
+        [JsonProperty("count")] public int Count;
+
+        // -- kind vocabulary v1 (WO-854 sec.4) --------------------------------
+        // Emitter LIVE today:
+        public const string KindTalk            = "talk";
+        public const string KindWave            = "wave";
+        public const string KindBuild           = "build";
+        public const string KindPanel           = "panel";
+        public const string KindArena           = "arena";
+        public const string KindReach           = "reach";
+        public const string KindFlag            = "flag";
+        public const string KindDialogueCommand = "dialoguecommand";
+        // Emitter NOT built yet (Silo E / WO-827) -- composed here so authoring and
+        // the oracle share one grammar, but nothing Raises these ids yet:
+        public const string KindPet        = "pet";
+        public const string KindUpgrade    = "upgrade";
+        public const string KindPopulation = "population";
+        public const string KindRegion     = "region";
+
+        // Signal prefixes for the four not-yet-emitted kinds. They live here rather
+        // than in TutorialSignals because no emitter references them yet; Silo E
+        // promotes each one into TutorialSignals when it lands the matching Raise.
+        public const string PetBondedPrefix          = "pet.bonded:";
+        public const string StructureUpgradedPrefix  = "structure.upgraded:";
+        public const string PopulationThresholdPrefix = "population.threshold:";
+        public const string RegionClearedPrefix      = "region.cleared:";
+
+        /// <summary>Kind lowercased + trimmed, so authoring is case-insensitive.</summary>
+        public string NormalizedKind =>
+            string.IsNullOrEmpty(Kind) ? string.Empty : Kind.Trim().ToLowerInvariant();
+
+        /// <summary>Firings needed to satisfy the stage (never below 1).</summary>
+        public int RequiredCount => Count > 1 ? Count : 1;
+
+        /// <summary>
+        /// The TutorialSignals bus id this condition waits for, or null when the kind
+        /// is not bus-driven (flag = polled through QuestService.HasFlag;
+        /// dialogueCommand = the dialogue calls AdvanceQuest itself) or unrecognised.
+        /// </summary>
+        public string ToSignalId()
+        {
+            string target = string.IsNullOrEmpty(TargetId) ? string.Empty : TargetId.Trim();
+            switch (NormalizedKind)
+            {
+                case KindTalk:
+                    return string.IsNullOrEmpty(target) ? null : DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix + target;
+                case KindWave:
+                    return DeNelle.Core.Tutorial.TutorialSignals.WaveCleared;
+                case KindBuild:
+                    return string.IsNullOrEmpty(target) ? null : DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix + target;
+                case KindPanel:
+                    return string.IsNullOrEmpty(target) ? null : DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix + target;
+                case KindArena:
+                    return DeNelle.Core.Tutorial.TutorialSignals.ArenaWin;
+                case KindReach:
+                    return string.IsNullOrEmpty(target) ? null : DeNelle.Core.Tutorial.TutorialSignals.HeroReachedPrefix + target;
+                case KindPet:
+                    return string.IsNullOrEmpty(target) ? null : PetBondedPrefix + target;
+                case KindUpgrade:
+                    return string.IsNullOrEmpty(target) ? null : StructureUpgradedPrefix + target;
+                case KindPopulation:
+                    return string.IsNullOrEmpty(target) ? null : PopulationThresholdPrefix + target;
+                case KindRegion:
+                    return string.IsNullOrEmpty(target) ? null : RegionClearedPrefix + target;
+                default:
+                    return null;   // flag / dialogueCommand / unknown -- not bus-driven
+            }
+        }
+
+        /// <summary>
+        /// True when something in the shipped build actually Raises this kind's signal.
+        /// The four false rows are Silo E / WO-827 work; the oracle reports a stage
+        /// authored against them as unreachable rather than scoring it completable.
+        /// </summary>
+        public static bool IsEmitterLive(string kind)
+        {
+            string k = string.IsNullOrEmpty(kind) ? string.Empty : kind.Trim().ToLowerInvariant();
+            switch (k)
+            {
+                case KindTalk:
+                case KindWave:
+                case KindBuild:
+                case KindPanel:
+                case KindArena:
+                case KindReach:
+                case KindFlag:
+                case KindDialogueCommand:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Key this condition's progress is counted under inside QuestState.Counters.
+        /// Scoped by stage id so a later stage of the same quest never inherits an
+        /// earlier stage's tally.
+        /// </summary>
+        public string CounterKey(string stageId) =>
+            (string.IsNullOrEmpty(stageId) ? "?" : stageId) + "#" + NormalizedKind + ":" +
+            (string.IsNullOrEmpty(TargetId) ? string.Empty : TargetId.Trim());
+    }
+
     /// <summary>One ordered step of a quest.</summary>
     [Serializable]
     public sealed class QuestStage
@@ -44,6 +171,10 @@ namespace DeNelle.Core.Quests
         [JsonProperty("reward")] public QuestReward Reward;
         [JsonProperty("requiresFlag")] public string RequiresFlag;
         [JsonProperty("grantsKeystone")] public bool GrantsKeystone;
+        // WO-854 Phase 2: how the player finishes this stage. Absent/null keeps the
+        // legacy behaviour (a dialogue must author an explicit AdvanceQuest verb), so
+        // this is purely additive over the quests.json that shipped at version 2.
+        [JsonProperty("completeOn")] public QuestCompletion CompleteOn;
     }
 
     /// <summary>A complete quest definition (a stage chain).</summary>

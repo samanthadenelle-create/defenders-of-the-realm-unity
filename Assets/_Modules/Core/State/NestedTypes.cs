@@ -224,6 +224,16 @@ namespace DeNelle.Core.State
         // WO-290: current stage id within the quest's stage chain (QuestCatalog).
         // Additive — defaults to null on read of an older save, no version bump.
         [JsonProperty("stageId")] public string StageId;
+        // WO-854 Phase 2: per-stage progress tallies for counting completion
+        // conditions (a QuestStage.completeOn whose count is > 1 -- e.g. "clear 3
+        // waves"). Keyed by QuestCompletion.CounterKey(stageId), so a later stage
+        // never inherits an earlier one's tally. Written by the Village-side
+        // StoryQuestSignalBridge and erased when the stage it belongs to advances.
+        // Additive -- the field initializer supplies an empty dictionary on read of an
+        // older save that has no "counters" member, so NO version bump / migrator
+        // step is required (same convention as stageId above and keystones /
+        // trackedId on QuestProgress below).
+        [JsonProperty("counters")] public Dictionary<string, int> Counters = new Dictionary<string, int>();
     }
 
     /// <summary>The persisted quest ledger (dungeonsSlice QuestProgress).</summary>

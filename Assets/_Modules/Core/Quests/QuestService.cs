@@ -146,12 +146,43 @@ namespace DeNelle.Core.Quests
             Persist();
         }
 
-        /// <summary>Moves a quest from Active → Completed (idempotent).</summary>
+        /// <summary>
+        /// Moves a quest from Active → Completed (idempotent).
+        ///
+        /// WO-854 Phase 2 hardening: this used to write Completed[id] for ANY id, with no
+        /// catalog lookup -- the only quest verb that never checked. A dialogue authoring
+        /// CompleteQuest against an id absent from quests.json (the shipped 'companion.sylas'
+        /// verbs) therefore minted a phantom Completed entry for a quest that does not exist,
+        /// and CompletedQuestCount -- which the WO-587 population-growth bridge polls -- counted
+        /// it, inflating a live progression input. An unknown id is now refused and traced, the
+        /// same treatment StartQuest already gave it (:92) -- and any phantom row it already left
+        /// in Active/Available is evicted rather than left to rot (see the note in the body).
+        /// Known ids behave exactly as before, and the read path (IsCompleted /
+        /// CompletedQuestCount) is untouched.
+        /// </summary>
         public void CompleteQuest(string id)
         {
             if (string.IsNullOrEmpty(id)) return;
             var prog = Progress;
             if (prog == null) return;
+            if (QuestCatalog.FindQuest(id) == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Quest",
+                    $"CompleteQuest unknown id '{id}' (not in QuestCatalog) -- NOT completed. A quest that " +
+                    "does not exist must never reach the Completed ledger; CompletedQuestCount feeds " +
+                    "population growth.");
+                Debug.LogWarning($"[QuestService] CompleteQuest unknown id '{id}'.");
+                // Evict any phantom Active/Available row for this id instead of returning flat.
+                // AdvanceQuest routes final-stage completion through here (:140), and an id with no
+                // catalog entry has no stages, so a bare return would leave a pre-fix save's phantom
+                // stuck in Active forever, re-entering this path on every advance. Nothing is written
+                // to Completed; the read path (IsCompleted / CompletedQuestCount) is untouched.
+                // Non-short-circuit '|' on purpose: both Remove calls must run.
+                bool evicted = prog.Active.Remove(id) | prog.Available.Remove(id);
+                if (prog.TrackedId == id) { prog.TrackedId = null; evicted = true; }
+                if (evicted) Persist();
+                return;
+            }
             prog.Active.Remove(id);
             prog.Available.Remove(id);
             prog.Completed[id] = true;
@@ -216,7 +247,19 @@ namespace DeNelle.Core.Quests
 
         // ── Public API — flags ────────────────────────────────────────────────
 
-        /// <summary>Sets a per-quest boolean flag (e.g. an objective sub-step).</summary>
+        /// <summary>
+        /// Sets a per-quest boolean flag (e.g. an objective sub-step) on an ACTIVE quest.
+        ///
+        /// WO-854 Phase 2 hardening: this used to seed <c>prog.Active[id]</c> when the quest
+        /// was not active, which STARTED the quest as a side effect -- bypassing StartQuest's
+        /// catalog lookup and Available bookkeeping. Two live consequences: a dialogue that
+        /// authored SetQuestFlag before StartQuest started the quest by accident, and a flag
+        /// naming an id absent from quests.json (the shipped 'companion.sylas' verbs) minted a
+        /// phantom Active entry with no stage chain, which CompleteQuest then counted in
+        /// CompletedQuestCount. It now writes the flag only when the quest is already active
+        /// and otherwise no-ops with a trace. The read side (HasFlag) is unchanged, so every
+        /// flag set on a genuinely active quest behaves exactly as before.
+        /// </summary>
         public void SetFlag(string id, string flag)
         {
             if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(flag)) return;
@@ -224,9 +267,12 @@ namespace DeNelle.Core.Quests
             if (prog == null) return;
             if (!prog.Active.TryGetValue(id, out var st) || st == null)
             {
-                // Allow setting a flag on a not-yet-active quest by seeding a state.
-                st = new QuestState { BeatIndex = 0 };
-                prog.Active[id] = st;
+                bool completed = prog.Completed != null
+                    && prog.Completed.TryGetValue(id, out bool done) && done;
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Quest",
+                    $"SetFlag('{id}','{flag}') but the quest is {(completed ? "already COMPLETED" : "not Active")} " +
+                    "-- flag dropped (a flag no longer starts/reopens a quest as a side effect; author StartQuest first).");
+                return;
             }
             if (st.Flags == null) st.Flags = new Dictionary<string, bool>();
             st.Flags[flag] = true;
