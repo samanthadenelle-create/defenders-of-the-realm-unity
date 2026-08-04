@@ -148,22 +148,33 @@ namespace DeNelle.Editor.Audio
         //                    03_Step_grass / 08_Step_rock / 12_Step_wood (code change,
         //                    own WO - out of scope for a mapping-table edit).
         //
-        //   DragonRoar     - REPLACED CONCURRENTLY by another seat on 2026-08-04:
-        //                    dragon_roar.wav was git-rm'd and dragon_roar.mp3 (65 KB,
-        //                    valid ID3) dropped in its place, with DragonRoar.mp3
-        //                    already written into Resources/Sfx. This row now points at
-        //                    the .mp3 so the mirror does not silently log "source
-        //                    missing" and leave the runtime copy unmanaged.
-        //                    Resources.Load("Sfx/DragonRoar") is extension-agnostic, so
-        //                    the loader key is unaffected.
-        //                    *** The .mp3's PROVENANCE IS NOT RECORDED ANYWHERE. ***
-        //                    Whoever swapped it must log its source + licence in
-        //                    Assets/Audio/SFX/Combat/SOURCE_LICENSE.md before ship -
-        //                    an unlabelled replacement is the same blocker in new bytes.
+        //   RESOLVED 2026-08-04 - both rows are now owner-generated Suno audio.
+        //   The owner holds a Suno PRO subscription, which grants commercial rights, so
+        //   these are licence-clean and the "unresolved" name below is now historical.
+        //   Provenance is recorded in Assets/Audio/SFX/Combat/SOURCE_LICENSE.md as an
+        //   owner attestation dated 2026-08-04.
+        //
+        //   DragonRoar     - the unlicensed Freesound-derived dragon_roar.wav was
+        //                    git-rm'd. An ElevenLabs FREE-tier clip briefly stood in,
+        //                    but free-tier output needs attribution for commercial use
+        //                    (tools/AudioGen/generate-sfx.ps1:13-14), so it was replaced
+        //                    outright by a Suno Pro take rather than resolving the tier
+        //                    question. Cheaper and unambiguous.
+        //   FootstepsWalk  - footsteps_walk_loop.wav (unlicensed) git-rm'd; replaced by
+        //                    a Suno Pro walk clip. This one is LOOPED at runtime
+        //                    (HeroLocomotion.cs:707 sets _footstepSrc.loop = true), and
+        //                    MP3 encoder padding can leave a small gap at the loop seam
+        //                    that a WAV would not.
+        //                    *** OWNER RULING 2026-08-04: the padding is ACCEPTABLE. ***
+        //                    Do NOT re-encode this to WAV to "fix" the seam - she has
+        //                    heard it and accepted it. A future audit that flags the
+        //                    .mp3-in-a-loop as a defect is re-opening a closed call.
+        //   Resources.Load is extension-agnostic, so both loader keys are unaffected by
+        //   the .wav -> .mp3 change.
         // (sourceFileUnderCombatMasterDir, destFileNameUnderRuntimeSfxDir)
         private static readonly (string src, string dest)[] CombatUnresolvedMirror =
         {
-            ("footsteps_walk_loop.wav","FootstepsWalk.wav"),
+            ("footsteps_walk.mp3",     "FootstepsWalk.mp3"),
             ("dragon_roar.mp3",        "DragonRoar.mp3"),
         };
 
