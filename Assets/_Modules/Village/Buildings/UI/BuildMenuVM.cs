@@ -346,15 +346,131 @@ namespace DeNelle.Village
         /// The REAL price of the selected placed tower's next level: Tower.TryUpgrade charges
         /// <c>NextUpgradeCost</c> of wood AND iron AND crystals (Tower.cs), so the menu shows exactly
         /// that instead of the deleted variant table's invented upgrade numbers. Zero when the tower
-        /// is null / maxed / has no authored cost.
+        /// is null / maxed / free / has no authored cost — callers that need to tell those apart
+        /// must use <see cref="UpgradeQuoteFor"/>, which is the authority this delegates to.
         /// </summary>
-        public CoreCost UpgradePriceFor(Tower tower)
+        public CoreCost UpgradePriceFor(Tower tower) => UpgradeQuoteFor(tower).Cost;
+
+        /// <summary>
+        /// Why a placed tower can or cannot be upgraded right now. These are FIVE distinct states
+        /// that a bare "price == 0" check collapsed into one, which is how a tower whose next level
+        /// is authored at zero cost (it upgrades, for free) reported itself to the player as an
+        /// un-authored tower.
+        /// </summary>
+        public enum UpgradeAvailability
         {
-            if (tower == null) return default;
-            int each = tower.NextUpgradeCost;
-            if (each <= 0 || each == int.MaxValue) return default;
-            return new CoreCost { wood = each, iron = each, crystals = each };
+            /// <summary>Still being raised — it has no TowerData, so it has no level, stats or price.</summary>
+            NotBuilt,
+            /// <summary>Already at the last level.</summary>
+            Maxed,
+            /// <summary>The next level is authored, and authored at zero cost.</summary>
+            Free,
+            /// <summary>The next level is authored with a real price.</summary>
+            Priced,
+            /// <summary>The next level has no authored row at all — Tower.TryUpgrade refuses it.</summary>
+            Unpriced,
         }
+
+        /// <summary>Everything the upgrade screen needs about one placed tower's next level.</summary>
+        public readonly struct UpgradeQuote
+        {
+            public readonly UpgradeAvailability Availability;
+            public readonly int      Level;
+            public readonly int      MaxLevel;
+            public readonly CoreCost Cost;
+            public readonly float    NowDamage;
+            public readonly float    NowRange;
+            public readonly float    NextDamage;
+            public readonly float    NextRange;
+            /// <summary>True when the live ledger covers <see cref="Cost"/> (always true when free).</summary>
+            public readonly bool     Affordable;
+
+            public UpgradeQuote(UpgradeAvailability availability, int level, int maxLevel, CoreCost cost,
+                float nowDamage, float nowRange, float nextDamage, float nextRange, bool affordable)
+            {
+                Availability = availability;
+                Level        = level;
+                MaxLevel     = maxLevel;
+                Cost         = cost;
+                NowDamage    = nowDamage;
+                NowRange     = nowRange;
+                NextDamage   = nextDamage;
+                NextRange    = nextRange;
+                Affordable   = affordable;
+            }
+
+            /// <summary>True when a next level exists to advertise (so its stats can be shown).</summary>
+            public bool HasNextLevel =>
+                Availability == UpgradeAvailability.Priced || Availability == UpgradeAvailability.Free;
+
+            /// <summary>True when tapping Upgrade would actually succeed.</summary>
+            public bool CanUpgradeNow => HasNextLevel && Affordable;
+
+            /// <summary>True when the tower is built, so its live stats are real numbers.</summary>
+            public bool HasStats => Availability != UpgradeAvailability.NotBuilt;
+        }
+
+        /// <summary>
+        /// Quote the selected tower's next level. Mirrors <see cref="Tower.TryUpgrade"/> exactly:
+        /// the price is <c>upgrades[currentLevel].upgradeCost</c> charged on wood AND iron AND
+        /// crystals, an un-authored row is refused, and a zero cost is a real (free) upgrade.
+        ///
+        /// The next level's stats are PROJECTED from the authored row rather than re-derived, so
+        /// they carry the same village research + hero-talent modifiers Tower already folded into
+        /// its live values. Tower.CurrentDamage is purely multiplicative in those modifiers, so the
+        /// perk RATIO transfers exactly; Tower.CurrentRange adds a flat talent bonus after the
+        /// multiplier, so the scaled perk DELTA transfers exactly.
+        /// </summary>
+        public UpgradeQuote UpgradeQuoteFor(Tower tower)
+        {
+            int max = Tower.MaxLevel;
+            var data = tower != null ? tower.Data : null;
+            if (data == null)
+                return new UpgradeQuote(UpgradeAvailability.NotBuilt, 0, max, default, 0f, 0f, 0f, 0f, false);
+
+            int level = tower.CurrentLevel;
+            float nowDamage = tower.CurrentDamage;
+            float nowRange  = tower.CurrentRange;
+
+            if (level >= max)
+                return new UpgradeQuote(UpgradeAvailability.Maxed, level, max, default,
+                    nowDamage, nowRange, nowDamage, nowRange, false);
+
+            var rows = data.upgrades;
+            var nowRow  = RowAt(rows, level - 1);   // upgrades[level-1] == the level the tower is on
+            var nextRow = RowAt(rows, level);       // upgrades[level]   == the level it would reach
+            if (nextRow == null)
+                return new UpgradeQuote(UpgradeAvailability.Unpriced, level, max, default,
+                    nowDamage, nowRange, nowDamage, nowRange, false);
+
+            int nowTier  = tower.EffectiveTier;
+            int nextTier = level + 1;
+            float perkDamageNow  = nowRow != null ? TowerPerkTable.EffectiveDamage(nowRow.damage, nowTier) : 0f;
+            float perkDamageNext = TowerPerkTable.EffectiveDamage(nextRow.damage, nextTier);
+            float nextDamage = perkDamageNow > 0.0001f
+                ? nowDamage * (perkDamageNext / perkDamageNow)
+                : perkDamageNext * ModifierService.Active.TowerDamageMult;
+
+            float rangeMult     = ModifierService.Active.TowerRangeMult;
+            float perkRangeNow  = nowRow != null ? TowerPerkTable.EffectiveRange(nowRow.range, nowTier) : 0f;
+            float perkRangeNext = TowerPerkTable.EffectiveRange(nextRow.range, nextTier);
+            float nextRange = nowRange + (perkRangeNext - perkRangeNow) * rangeMult;
+
+            int each = nextRow.upgradeCost;
+            if (each < 0 || each == int.MaxValue)
+                return new UpgradeQuote(UpgradeAvailability.Unpriced, level, max, default,
+                    nowDamage, nowRange, nextDamage, nextRange, false);
+            if (each == 0)
+                return new UpgradeQuote(UpgradeAvailability.Free, level, max, default,
+                    nowDamage, nowRange, nextDamage, nextRange, true);
+
+            var cost = new CoreCost { wood = each, iron = each, crystals = each };
+            return new UpgradeQuote(UpgradeAvailability.Priced, level, max, cost,
+                nowDamage, nowRange, nextDamage, nextRange, CanAfford(cost));
+        }
+
+        private static DeNelle.Core.Data.TowerUpgrade RowAt(DeNelle.Core.Data.TowerUpgrade[] rows, int index)
+            => (rows != null && index >= 0 && index < rows.Length) ? rows[index] : null;
 
         /// <summary>Repair the most-damaged wall/structure through the sanctioned WallRepairController
         /// API (replaces the removed reflection seam). Surfaces the worst-damaged structure's repair

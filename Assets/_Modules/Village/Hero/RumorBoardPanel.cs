@@ -61,6 +61,26 @@ namespace DeNelle.Village.Hero
         private string _selectedId;
         private RowKind _selectedKind = RowKind.None;
 
+        // ── Chip metrics (iteration 3 — the store-listing capture RCA) ───────────
+        // MEASURED capture 2026-08-03 (RumorBoard_1920x1080.png): the detail pane is
+        // x 968..1711 (744 ref px) and the reward row ran 0.05-0.95 of it = 669 px. The four
+        // worst-case chips asked for text.Length*18+28 = 1090 px — a per-character budget that
+        // over-estimates a FontMicro glyph by ~37% (measured: ~13.1 px/char) — so the
+        // HorizontalLayoutGroup shrank every chip to 60.6% of its ask (measured chip edges at
+        // x 1152 / 1254 / 1366 / 1674 match that ratio exactly) while the labels, authored
+        // NoWrap + Overflow, kept painting at FULL width straight through their neighbours:
+        // "Crystals 220Food 90Magic 45em: relic_drowned_ledger". Two changes kill it:
+        //   1. a chip is sized from its label's MEASURED preferred width, never a guess;
+        //   2. a chip label is FITTED (bounded auto-size -> ellipsis), so even if a row does
+        //      run short the text can never paint outside its own chip again.
+        private const float ChipPadPx     = 16f;   // 8 per side around the measured label
+        private const float ChipSpacingPx = 6f;    // reward row gap (tag row keeps 8)
+        private const float ChipHeightPx  = 48f;   // inside the 56px band (44px label rect)
+        // Fitted floor for the REWARD row only: four chips at FontMicro(32) sit ~98% full in a
+        // 714px row, so a modest relaxation absorbs any font-metric drift without ever
+        // ellipsizing a reward's NAME. Well above the kit's FontHardFloor (20).
+        private const float ChipMinFontPx = 26f;
+
         // ── Public API ──────────────────────────────────────────────────────────
 
         public void Open()
@@ -230,9 +250,13 @@ namespace DeNelle.Village.Hero
             bodyRt.offsetMax = new Vector2(0f, -148f);
 
             // Reward chip row (crystals / food / magic / items as chips — signed spec),
-            // bottom-hung just above the fixed-height CTA band.
+            // bottom-hung just above the fixed-height CTA band. Iteration 3 (store-listing
+            // capture): this row runs 0.02-0.98 of the pane, not 0.05-0.95 — at 1920x1080 the
+            // detail pane is only ~744 ref px wide and the worst-case rumor pays FOUR chips,
+            // so the row needs every pixel it can honestly take (669 -> 714 ref px).
             _detailRewardRow = MakeChipRow(detailGo.transform, "DetailRewardRow",
-                topPx: 0f, heightPx: 56f, fromBottomPx: 148f);
+                topPx: 0f, heightPx: 56f, fromBottomPx: 148f,
+                sideFrac: 0.02f, spacingPx: ChipSpacingPx);
 
             // Status line — iteration 2 (capture RumorBoard_daily defect 4): the footer-zone
             // seat rendered the line full-width across the Close band (the kit re-seats the
@@ -700,10 +724,13 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.FitBlock(_detailBody, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
 
             // Reward chips (signed spec): one gilt-bordered chip per authored reward part.
-            string reward = _vm.RewardFor(_selectedId);
-            if (!string.IsNullOrEmpty(reward))
-                foreach (var part in reward.Split(new[] { " | " }, System.StringSplitOptions.RemoveEmptyEntries))
-                    MakeChip(_detailRewardRow, part, ElarionUi.Gilt);
+            // The VM hands over READY-TO-DRAW parts — resolved item display names included —
+            // so the View no longer re-parses a joined string to find the chip boundaries.
+            var rewardParts = _vm.RewardPartsFor(_selectedId);
+            if (rewardParts != null)
+                foreach (var part in rewardParts)
+                    if (!string.IsNullOrEmpty(part))
+                        MakeChip(_detailRewardRow, part, ElarionUi.Gilt, ChipMinFontPx);
 
             // CTA row — pinned at the pane's bottom, full words, >= the touch floor. The
             // pane now lives inside the bodyRight zone, whose floor already clears Close.
@@ -783,14 +810,15 @@ namespace DeNelle.Village.Hero
         /// bottom-hung at <paramref name="fromBottomPx"/> above the pane bottom when &gt;= 0.
         /// Chips are rebuilt into it per selection (RenderDetail).</summary>
         private static RectTransform MakeChipRow(Transform parent, string name,
-            float topPx, float heightPx, float fromBottomPx = -1f)
+            float topPx, float heightPx, float fromBottomPx = -1f,
+            float sideFrac = 0.05f, float spacingPx = 8f)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
             go.transform.SetParent(parent, false);
             var rt = go.GetComponent<RectTransform>();
             bool fromBottom = fromBottomPx >= 0f;
-            rt.anchorMin = new Vector2(0.05f, fromBottom ? 0f : 1f);
-            rt.anchorMax = new Vector2(0.95f, fromBottom ? 0f : 1f);
+            rt.anchorMin = new Vector2(sideFrac, fromBottom ? 0f : 1f);
+            rt.anchorMax = new Vector2(1f - sideFrac, fromBottom ? 0f : 1f);
             rt.pivot = new Vector2(0.5f, fromBottom ? 0f : 1f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             rt.sizeDelta = new Vector2(0f, heightPx);
@@ -799,13 +827,16 @@ namespace DeNelle.Village.Hero
             hlg.childControlWidth = true; hlg.childForceExpandWidth = false;
             hlg.childControlHeight = true; hlg.childForceExpandHeight = false;
             hlg.childAlignment = TextAnchor.MiddleLeft;
-            hlg.spacing = 8f;
+            hlg.spacing = spacingPx;
             return rt;
         }
 
         /// <summary>One bordered chip: dim-gilt border frame, obsidian fill, micro label.
-        /// Shape (the border) + the word carry the meaning — never colour alone.</summary>
-        private static void MakeChip(RectTransform row, string text, Color ink)
+        /// Shape (the border) + the word carry the meaning — never colour alone.
+        /// The chip is sized from its label's MEASURED width and the label is FITTED to the
+        /// chip, so a crowded row shrinks text INSIDE the borders instead of painting it
+        /// across the next chip (see the ChipPadPx block for the captured proof).</summary>
+        private static void MakeChip(RectTransform row, string text, Color ink, float minFontPx = 0f)
         {
             if (row == null || string.IsNullOrEmpty(text)) return;
 
@@ -815,11 +846,11 @@ namespace DeNelle.Village.Hero
             borderImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.55f);
             borderImg.raycastTarget = false;
             var le = chip.GetComponent<LayoutElement>();
-            // Width budget: FontMicro glyphs (~0.55em) + padding; deterministic in edit-mode
-            // capture (no TMP preferred-value round-trip needed). Height 48 inside the 56px
-            // row: fill inset leaves 44px for the FontMicro (~36px) line — never culled.
-            le.preferredWidth = text.Length * 18f + 28f;
-            le.preferredHeight = 48f;
+            // Height 48 inside the 56px row: the fill inset leaves a 44px label rect, which
+            // seats the FontMicro (~40px) line box AND the fitted floor's (~33px) — never
+            // culled vertically, which is why Ellipsis is safe on this label (below).
+            le.preferredHeight = ChipHeightPx;
+            le.flexibleWidth = 0f;   // a chip never absorbs slack — it stays word-sized
 
             var fill = new GameObject("Fill", typeof(Image));
             fill.transform.SetParent(chip.transform, false);
@@ -842,10 +873,22 @@ namespace DeNelle.Village.Hero
             t.color = ink;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
-            // Overflow, not Ellipsis: vertical Ellipsis CULLS a line that misses the rect by
-            // one pixel (the empty-chip defect class) — a chip label must always render.
-            t.overflowMode = TMPro.TextOverflowModes.Overflow;
             t.raycastTarget = false;
+
+            // MEASURE the label (TMP's own metrics, rect-independent — valid at build time,
+            // before any layout pass) and size the chip to it. The old text.Length*18+28 guess
+            // is what over-asked the row into the shrink that garbled the capture.
+            float textW = t.GetPreferredValues(text).x;
+            if (textW <= 1f) textW = text.Length * 14f;   // font atlas not ready — honest estimate
+            le.preferredWidth = textW + ChipPadPx;
+            le.minWidth = 0f;   // a too-full row still shrinks rather than spilling off the pane
+
+            // FIT the label to whatever width the chip ends up with: bounded auto-size, then
+            // Ellipsis. The old Overflow was the run-together's second half — a shrunken chip
+            // let its text paint over the neighbours. Ellipsis's vertical-cull trap does not
+            // apply here: the 44px label rect seats the floor's line box with room to spare.
+            ElarionUiKit.FitSingleLine(t, minFontPx > 0f ? minFontPx : ElarionUiKit.FontFloor,
+                                       ElarionUi.FontMicro);
         }
 
         // ── Commands ────────────────────────────────────────────────────────────

@@ -294,14 +294,25 @@ namespace DeNelle.Village
             SetStatus("Restoring the nearest damaged wall section.");
         }
 
+        // HEIGHT IS LOAD-BEARING (2026-08-04). The kit fits every button label with
+        // ElarionUiKit.FitSingleLine, which auto-sizes down to FontFloor and then ELLIPSISES.
+        // When the button rect is shorter than one line box at that floor, TMP lays out no line
+        // at all and the button renders as a blank slab with NO LABEL. At the old 0.08 of the
+        // body this row measured ~35 canvas units against a ~40-unit floor line box, so "< Back"
+        // was invisible in every capture and on any aspect where the scaler shrinks the body. The
+        // play-mode min-touch guard papered over it by growing the rect after layout (and does not
+        // run in edit mode at all); the rect is now authored tall enough to carry its own label.
+        private const float BackButtonHeight = 0.14f;
+
         /// <summary>The "Back" row shown on every sub-screen; returns to Root.</summary>
         private float AddBackButton()
         {
+            const float bottom = 0.845f;
             ElarionUiKit.BuildObsidianButton(_bodyHost, "< Back",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.855f), new Vector2(0.38f, 0.935f),
+                new Vector2(0.08f, bottom), new Vector2(0.38f, bottom + BackButtonHeight),
                 () => { _screen = MenuScreen.Root; _selectedTowerForUpgrade = null; Disarm(); Render(); });
-            return 0.83f;   // content starts below the back row
+            return 0.825f;   // content starts below the back row
         }
 
         // ── Build Tower screen ────────────────────────────────────────────────
@@ -562,8 +573,16 @@ namespace DeNelle.Village
                 if (t == null) continue;
                 bool selected = ReferenceEquals(t, _selectedTowerForUpgrade);
                 // WO-127: print the LIVE level (1..MaxLevel) so it always matches
-                // TowerManagerPanel's t.CurrentLevel for the same tower.
-                string label = DeNelle.Village.UI.PlacedTowerListVM.FormatMenuRow(t.name, t.CurrentLevel, selected);
+                // TowerManagerPanel's level for the same tower.
+                //
+                // 2026-08-04: the row used to label itself with t.name -- the GAMEOBJECT name.
+                // That is a scene-graph identifier, not a display string (the construction queue
+                // spells it "Tower_<towerName>", a prefab instance carries "(Clone)", an editor
+                // stub carries whatever it was built with), so raw ids such as "Stone4" reached
+                // the player. The VM resolves the AUTHORED tower name instead, and reports whether
+                // the tower has finished being raised so an unbuilt one does not claim "Lvl 1".
+                string label = DeNelle.Village.UI.PlacedTowerListVM.FormatMenuRow(
+                    _vm.Towers.DisplayNameFor(t), _vm.Towers.LevelOf(t), selected, _vm.Towers.IsBuilt(t));
                 Tower captured = t;
                 // WO-795: fixed-height LayoutElement host; the obsidian button fills it
                 // (row internals unchanged — label / colors / click as before).
@@ -597,54 +616,90 @@ namespace DeNelle.Village
                 BuildUpgradeInfoBlock(_selectedTowerForUpgrade, UpgradeInfoTop - 0.02f);
         }
 
+        // Two info rows sit between the list band and the Upgrade CTA. The band is short, so the
+        // budget is spent on TWO legible lines rather than four sub-legible ones: line 1 is the
+        // price (or why there is no price), line 2 is what the upgrade actually buys.
+        private const float UpgradeInfoRowHeight = 0.095f;
+        private const float UpgradeCtaBottom     = 0.02f;
+        private const float UpgradeCtaTop        = 0.17f;   // see BackButtonHeight: a short rect renders a blank button
+
         /// <summary>
         /// WO-127: upgrade info + a REAL upgrade action for the selected live tower.
         /// The Upgrade button calls the single cost-enforced <see cref="Tower.TryUpgrade"/>
         /// (never the free Upgrade — tower-upgrade consolidation, owner 2026-06-27; the
-        /// canonical surface remains the proximity HUD context button) and is hidden at
-        /// <see cref="Tower.MaxLevel"/>.
+        /// canonical surface remains the proximity HUD context button) and appears ONLY when
+        /// that transaction could actually succeed — never at <see cref="Tower.MaxLevel"/>, on a
+        /// tower still under construction, or on a level with no authored cost row.
         /// </summary>
         private void BuildUpgradeInfoBlock(Tower t, float top)
         {
-            int level = t != null ? t.CurrentLevel : 1;
-            bool atMax = level >= Tower.MaxLevel;
+            // WO-861: the REAL price Tower.TryUpgrade charges — the next level's upgradeCost on
+            // wood AND iron AND crystals — against the REAL on-hand ledger.
+            //
+            // 2026-08-04: this block used to test "price is zero" and, on a hit, print the
+            // developer note "Upgrade cost not authored for this tower." to the PLAYER. Zero is
+            // not one state: a tower still being raised has no data at all, a maxed tower has no
+            // next level, an authored-at-zero level really is free (Tower.TryUpgrade charges
+            // nothing and succeeds), and only a MISSING row is genuinely un-authored. The VM now
+            // returns which of those it is, and each gets its own player-facing line.
+            var quote = _vm != null ? _vm.UpgradeQuoteFor(t) : default;
 
-            // WO-861: the REAL price Tower.TryUpgrade charges — NextUpgradeCost of wood AND
-            // iron AND crystals — against the REAL on-hand ledger. The old block showed the
-            // deleted variant table's invented UpgradeCrystalCost / UpgradeStone / time.
-            var up = _vm != null ? _vm.UpgradePriceFor(t) : default;
-            if (up.IsZero)
+            string costLine;
+            switch (quote.Availability)
             {
-                MakeText(_bodyHost, "Upgrade cost not authored for this tower.", 13,
-                    ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
-                    new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
-                top -= 0.055f;
+                case BuildMenuVM.UpgradeAvailability.NotBuilt:
+                    costLine = "The crew is still raising this tower.";
+                    break;
+                case BuildMenuVM.UpgradeAvailability.Maxed:
+                    costLine = $"Fully upgraded - Lvl {quote.Level} of {quote.MaxLevel}.";
+                    break;
+                case BuildMenuVM.UpgradeAvailability.Free:
+                    costLine = "Costs nothing - the next level is free.";
+                    break;
+                case BuildMenuVM.UpgradeAvailability.Unpriced:
+                    costLine = "This tower cannot be upgraded any further.";
+                    break;
+                case BuildMenuVM.UpgradeAvailability.Priced:
+                default:
+                    costLine = "Cost: " + ElarionUi.CompactNumber(quote.Cost.wood) + " wood, "
+                             + ElarionUi.CompactNumber(quote.Cost.iron) + " iron, "
+                             + ElarionUi.CompactNumber(quote.Cost.crystals) + " crystals";
+                    break;
             }
-            else
-            {
-                if (up.crystals > 0) top = AddCostRow("Crystals", up.crystals, _vm.MaterialCount("crystals"), top);
-                if (up.wood > 0)     top = AddCostRow("Wood",     up.wood,     _vm.MaterialCount("wood"),     top);
-                if (up.iron > 0)     top = AddCostRow("Iron",     up.iron,     _vm.MaterialCount("iron"),     top);
-                top -= 0.010f;
-            }
+            MakeText(_bodyHost, costLine, ElarionUi.FontMicro,
+                ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0.10f, top - UpgradeInfoRowHeight), new Vector2(0.90f, top));
+            top -= UpgradeInfoRowHeight;
 
-            if (atMax)
+            // Line 2 — the live stats. Only printed once the tower is built: an unbuilt tower has
+            // no stats, and "0 dmg / 0m" is a fabricated reading, not a real one. When a next
+            // level exists this shows the BEFORE -> AFTER pair, which is what the old line claimed
+            // to be ("Result: Lvl 2/3") while actually printing the current level's numbers.
+            if (quote.HasStats)
             {
-                MakeText(_bodyHost, $"Lvl {level}/{Tower.MaxLevel} - fully upgraded.", 13,
+                string statLine = quote.HasNextLevel
+                    ? $"Lvl {quote.Level} to {quote.Level + 1}:  dmg {quote.NowDamage:0.#} to {quote.NextDamage:0.#}," +
+                      $"  range {quote.NowRange:0.#}m to {quote.NextRange:0.#}m"
+                    : $"Now:  dmg {quote.NowDamage:0.#},  range {quote.NowRange:0.#}m";
+                MakeText(_bodyHost, statLine, ElarionUi.FontMicro,
                     ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                    new Vector2(0.10f, top - 0.05f), new Vector2(0.90f, top));
-                return;   // no Upgrade button at max level (WO-127)
+                    new Vector2(0.10f, top - UpgradeInfoRowHeight), new Vector2(0.90f, top));
             }
 
-            // Real live stats off the tower itself — no invented DPS/HP deltas.
-            MakeText(_bodyHost,
-                $"Result: Lvl {level + 1}/{Tower.MaxLevel}  (now {t.CurrentDamage:0.#} dmg / {t.CurrentRange:0.#}m)",
-                13, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0.10f, top - 0.05f), new Vector2(0.90f, top));
+            // No CTA when tapping it could not possibly succeed — Tower.TryUpgrade refuses an
+            // unbuilt tower (Uninitialized), a maxed one (Maxed) and an un-authored level
+            // (UnknownCost), so offering the button there is an invitation to a dead end.
+            if (!quote.HasNextLevel) return;
 
-            ElarionUiKit.BuildObsidianButton(_bodyHost, "Upgrade",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.12f), () =>
+            // COLOURBLIND LAW: the button STATES why it is dead ("Not enough Iron (100)"), so the
+            // green/grey face is reinforcement, never the only signal.
+            bool canUpgrade = quote.CanUpgradeNow;
+            var cta = ElarionUiKit.BuildObsidianButton(_bodyHost,
+                canUpgrade ? "Upgrade" : _vm.ShortfallFor(quote.Cost),
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                canUpgrade ? ElarionUiKit.ObsidianButtonColor.Green
+                           : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.26f, UpgradeCtaBottom), new Vector2(0.74f, UpgradeCtaTop), () =>
                 {
                     var res = _selectedTowerForUpgrade != null
                         ? _selectedTowerForUpgrade.TryUpgrade()
@@ -652,16 +707,17 @@ namespace DeNelle.Village
                     bool ok = res == Tower.UpgradeResult.Success;
                     string msg = res switch
                     {
-                        Tower.UpgradeResult.Success     => $"Upgraded to Lvl {_selectedTowerForUpgrade?.CurrentLevel}.",
-                        Tower.UpgradeResult.Maxed       => "Tower already at max level.",
+                        Tower.UpgradeResult.Success     => "Upgraded to Lvl " + _vm.Towers.LevelOf(_selectedTowerForUpgrade) + ".",
+                        Tower.UpgradeResult.Maxed       => "This tower is already at its highest level.",
                         Tower.UpgradeResult.CantAfford  => "Not enough resources to upgrade.",
-                        Tower.UpgradeResult.UnknownCost => "Upgrade cost not set for this tower.",
-                        Tower.UpgradeResult.NoEconomy   => "Economy unavailable — cannot upgrade.",
-                        _                               => "Cannot upgrade this tower.",
+                        Tower.UpgradeResult.UnknownCost => "This tower cannot be upgraded any further.",
+                        Tower.UpgradeResult.NoEconomy   => "Your stores are unavailable right now - try again in a moment.",
+                        _                               => "The crew is still raising this tower.",
                     };
                     SetStatus(msg, isError: !ok);
                     Render();
                 });
+            if (cta != null) cta.interactable = canUpgrade;
         }
 
         // ── WO-31 helpers ─────────────────────────────────────────────────────

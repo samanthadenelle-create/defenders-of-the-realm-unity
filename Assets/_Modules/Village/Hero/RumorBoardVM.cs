@@ -21,7 +21,9 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.Quests;
+using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Village.Items;
 
 namespace DeNelle.Village.Hero
 {
@@ -143,12 +145,15 @@ namespace DeNelle.Village.Hero
         }
 
         /// <summary>WO-810 detail rewards row: the quest's TOTAL authored rewards across all
-        /// stages, formatted ASCII ("Crystals 20 | Food 10 | Item: xyz"). "" when unrewarded —
-        /// the View hides the row rather than rendering an empty line.</summary>
-        public string RewardFor(string id)
+        /// stages as READY-TO-DRAW parts, one per chip ("Crystals 20", "Food 10", "Iron
+        /// Longsword"). Empty when unrewarded — the View hides the row rather than rendering
+        /// an empty line. The View NEVER parses this back out of a joined string, and an item
+        /// part is ALWAYS a resolved display name (see <see cref="ItemDisplayName"/>).</summary>
+        public IReadOnlyList<string> RewardPartsFor(string id)
         {
+            var parts = new List<string>();
             var def = FindDef(id);
-            if (def == null || def.Stages == null) return "";
+            if (def == null || def.Stages == null) return parts;
             int crystals = 0, food = 0, magic = 0;
             var items = new List<string>();
             foreach (var st in def.Stages)
@@ -159,12 +164,44 @@ namespace DeNelle.Village.Hero
                 magic += st.Reward.Magic;
                 if (!string.IsNullOrEmpty(st.Reward.GrantItemId)) items.Add(st.Reward.GrantItemId);
             }
-            var parts = new List<string>();
             if (crystals > 0) parts.Add("Crystals " + crystals);
             if (food > 0) parts.Add("Food " + food);
             if (magic > 0) parts.Add("Magic " + magic);
-            foreach (var it in items) parts.Add("Item: " + it);
-            return string.Join(" | ", parts);
+            // NAME the item, never key it. The "Item: " prefix is deliberately gone: it cost
+            // six glyphs of a row that already cannot seat four chips at FontMicro, and the
+            // chip sits in the rewards row under a named quest — the name IS the reward.
+            foreach (var it in items) parts.Add(ItemDisplayName(it));
+            return parts;
+        }
+
+        /// <summary>The same rewards as <see cref="RewardPartsFor"/> joined ASCII for a single
+        /// line ("Crystals 20 | Food 10 | Iron Longsword"). "" when unrewarded.</summary>
+        public string RewardFor(string id) => string.Join(" | ", RewardPartsFor(id));
+
+        /// <summary>
+        /// Player-facing name for a granted item id, read off the SAME row the item resolves to:
+        /// gear first (weapons/armor/accessories.json — the only shipped grant today is
+        /// `knight_iron` -> "Iron Longsword"), then the non-gear identity catalogs (consumables /
+        /// materials). An id NO shipped catalog owns is a CONTENT gap, not a code one, so the last
+        /// resort is the kit's P10 formatter (`relic_drowned_ledger` -> "Relic Drowned Ledger") —
+        /// a raw snake_case key is never player-visible, and the row is never hidden either: a
+        /// reward the player earns is always named.
+        /// </summary>
+        public static string ItemDisplayName(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return "";
+
+            var w = GearCatalog.FindWeapon(itemId);
+            if (w != null && !string.IsNullOrEmpty(w.name)) return w.name;
+            var a = GearCatalog.FindArmor(itemId);
+            if (a != null && !string.IsNullOrEmpty(a.name)) return a.name;
+            var ac = GearCatalog.FindAccessory(itemId);
+            if (ac != null && !string.IsNullOrEmpty(ac.name)) return ac.name;
+
+            var row = ItemIdentity.Resolve(itemId);
+            if (row.IsKnown && !string.IsNullOrEmpty(row.DisplayName)) return row.DisplayName;
+
+            return ElarionUiKit.SpacedDisplayName(itemId);
         }
 
         // ── Commands ────────────────────────────────────────────────────────────

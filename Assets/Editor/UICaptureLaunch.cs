@@ -791,14 +791,37 @@ namespace DeNelle.Editor
 
                 stubTowers = CreateStubTowers(8);
 
+                // 2026-08-04: the stubs used to be bare GameObject + AddComponent<Tower>, i.e.
+                // towers with NO TowerData. That is the state a tower is in while the crew is
+                // still raising it -- it has no level, no stats and no upgrade price -- so the
+                // shot showed an un-authored tower rather than the upgrade screen. Seed the REAL
+                // shipped ArcherTower asset (authored 100/220 upgrade costs) so the capture
+                // exercises the priced path with real numbers. _data is set directly instead of
+                // through Tower.Initialize because Initialize instantiates the level visual and
+                // wires combat -- scene side effects this throwaway host must not create.
+                string[] seedIds = { "Towers/ArcherTower", "Towers/FrostTower", "Towers/MageTower" };
+                int seeded = 0;
+                for (int i = 0; i < stubTowers.Length; i++)
+                {
+                    var seedData = Resources.Load<DeNelle.Core.Data.TowerData>(seedIds[i % seedIds.Length]);
+                    if (seedData == null) continue;
+                    SetPrivateField(stubTowers[i].GetComponent<Tower>(), "_data", seedData);
+                    seeded++;
+                }
+                if (seeded == 0)
+                    Debug.LogWarning("[UICap-HL] no TowerData under Resources/Towers -- the upgrade-tower " +
+                                     "shot will render the still-under-construction state.");
+
                 hostGo = new GameObject("~UICapBuildMenu");
                 var menu = hostGo.AddComponent<BuildMenu>();
 
                 InvokePrivate(menu, "EnsureBuilt");
 
                 // Public injectable ctor: (economy, towers, wallRepair, fallbackCrystals,
-                // onClose) -- null economy/wallRepair are the VM's own supported fallbacks.
-                vm = new BuildMenuVM(null, PlacedTowerListVM.CreateDefault(null), null, 500, null);
+                // onClose). A FUNDED ledger is injected so the shot shows the affordable CTA;
+                // with a null economy the VM correctly reports 0 wood/iron on hand and the
+                // button would read its (equally real) "Not enough Wood" state instead.
+                vm = new BuildMenuVM(new CaptureLedger(400), PlacedTowerListVM.CreateDefault(null), null, 500, null);
                 SetPrivateField(menu, "_vm", vm);
 
                 // Select the first stub tower BEFORE the single render pass so the
@@ -1194,6 +1217,47 @@ namespace DeNelle.Editor
         //  real VM path. Eight of them overflow the WO-795 wells on purpose: the
         //  clip-not-spill behaviour is exactly what the screenshots verify.
         // ---------------------------------------------------------------------
+        /// <summary>
+        /// A read-only, evenly-funded ledger for capture runs. It exists only so a shot can show
+        /// the affordable branch of a priced screen; it never pretends to have spent anything
+        /// (TrySpend debits its own fields and nothing else), and no shipped code constructs it.
+        /// </summary>
+        private sealed class CaptureLedger : DeNelle.Village.IEconomy
+        {
+            public CaptureLedger(int each)
+            {
+                Coins = each; Wood = each; Iron = each; Food = each; Crystals = each;
+            }
+
+            public int Coins { get; private set; }
+            public int Wood { get; private set; }
+            public int Iron { get; private set; }
+            public int Food { get; private set; }
+            public int Crystals { get; private set; }
+
+            public event Action<DeNelle.Village.ResourceSnapshot> OnChanged;
+
+            public bool CanAfford(DeNelle.Village.ResourceCost cost)
+                => Wood >= cost.Wood && Food >= cost.Food && Iron >= cost.Iron
+                   && Crystals >= cost.Crystals && Coins >= cost.Coins;
+
+            public bool TrySpend(DeNelle.Village.ResourceCost cost)
+            {
+                if (!CanAfford(cost)) return false;
+                Wood -= cost.Wood; Food -= cost.Food; Iron -= cost.Iron;
+                Crystals -= cost.Crystals; Coins -= cost.Coins;
+                OnChanged?.Invoke(new DeNelle.Village.ResourceSnapshot(Wood, Food, Iron, Crystals));
+                return true;
+            }
+
+            public void Grant(DeNelle.Village.ResourceCost amount)
+            {
+                Wood += amount.Wood; Food += amount.Food; Iron += amount.Iron;
+                Crystals += amount.Crystals; Coins += amount.Coins;
+                OnChanged?.Invoke(new DeNelle.Village.ResourceSnapshot(Wood, Food, Iron, Crystals));
+            }
+        }
+
         private static GameObject[] CreateStubTowers(int count)
         {
             string[] flavors = { "Flame", "Ice", "Aether", "Stone" };

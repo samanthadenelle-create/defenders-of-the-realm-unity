@@ -112,7 +112,65 @@ namespace DeNelle.Village.UI
             Raise();
         }
 
+        // ── Per-tower projections (the View asks the VM, never the scene object) ──
+
+        /// <summary>
+        /// True once the tower has been handed its <see cref="Tower.Data"/>. A placed tower is
+        /// created by TowerConstructionQueue as a bare GameObject and only receives its data when
+        /// TowerConstruction.CompleteConstruction runs, so a tower still being raised reports
+        /// FALSE here — its level, stats and upgrade price do not exist yet and must not be
+        /// printed as zeroes.
+        /// </summary>
+        public bool IsBuilt(Tower t) => t != null && t.Data != null;
+
+        /// <summary>The tower's live upgrade level, or 0 while it is still being raised.</summary>
+        public int LevelOf(Tower t) => IsBuilt(t) ? t.CurrentLevel : 0;
+
+        /// <summary>
+        /// The player-facing name of a placed tower. Reads the AUTHORED
+        /// <see cref="DeNelle.Core.Data.TowerData.towerName"/> first; the GameObject name is only
+        /// a fallback, because it is a scene-graph identifier, not a display string — the queue
+        /// names towers "Tower_&lt;towerName&gt;", a prefab instance carries "(Clone)", and an
+        /// editor-built stub carries whatever it was constructed with. Either way the result runs
+        /// through <see cref="PrettifyTowerName"/> so a raw identifier can never reach the screen.
+        /// </summary>
+        public string DisplayNameFor(Tower t)
+        {
+            if (t == null) return "Tower";
+            string authored = t.Data != null ? t.Data.towerName : null;
+            return PrettifyTowerName(!string.IsNullOrWhiteSpace(authored) ? authored : t.name);
+        }
+
         // ── Pure formatting helpers (unit-testable without a scene) ────────────
+
+        /// <summary>
+        /// Turns an identifier-shaped tower name into readable English: drops the "Tower_"/"Tower-"
+        /// scene prefix and any "(Clone)" suffix, splits a run-together camel hump ("DevTower" ->
+        /// "Dev Tower") and separates a trailing index from the word it is stuck to ("Stone4" ->
+        /// "Stone 4"). Idempotent — an already-clean name ("Archer Tower") is returned unchanged.
+        /// </summary>
+        public static string PrettifyTowerName(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "Tower";
+
+            string s = raw.Replace("Tower-", "").Replace("Tower_", "").Replace("(Clone)", "").Trim();
+            if (s.Length == 0) return "Tower";
+
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (i > 0)
+                {
+                    char prev = s[i - 1];
+                    bool camelHump = char.IsUpper(c) && char.IsLower(prev);
+                    bool indexRun  = char.IsDigit(c) && char.IsLetter(prev);
+                    if ((camelHump || indexRun) && prev != ' ') sb.Append(' ');
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
 
         /// <summary>Manager list row: "&gt; Tower 3  -  Lv 2   (rng 12, dmg 20)".</summary>
         public static string FormatManagerRow(int index1, int level, float range, float damage, bool selected)
@@ -125,11 +183,14 @@ namespace DeNelle.Village.UI
                $"rng {range:0}   dmg {damage:0}   |   " +
                (canUpgrade ? $"Upgrade: {cost} cost" : "Max Level");
 
-        /// <summary>BuildMenu upgrade-screen row: "&gt; Archer  (Lvl 2/3)".</summary>
-        public static string FormatMenuRow(string towerName, int level, bool selected)
+        /// <summary>
+        /// BuildMenu upgrade-screen row: "&gt; Archer  (Lvl 2/3)". A tower that has not finished
+        /// construction has no level yet, so it reads "(building)" instead of a fabricated "Lvl 1".
+        /// </summary>
+        public static string FormatMenuRow(string towerName, int level, bool selected, bool built = true)
             => (selected ? "> " : "")
-             + (towerName ?? "").Replace("Tower-", "").Replace("Tower_", "")
-             + "  (Lvl " + level + "/" + Tower.MaxLevel + ")";
+             + PrettifyTowerName(towerName)
+             + (built ? "  (Lvl " + level + "/" + Tower.MaxLevel + ")" : "  (building)");
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
     }

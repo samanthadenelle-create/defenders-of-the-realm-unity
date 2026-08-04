@@ -780,7 +780,9 @@ namespace DeNelle.Core.UI
             // Gold header title across the top.
             chrome.title = Header(chrome.content.transform, title ?? "", x0: headerX0, x1: headerX1, y0: 0.92f, y1: 0.98f);
             // §1.14 (owner F8 flag_06): bounded auto-size + ellipsis — the title can never clip.
-            FitSingleLine(chrome.title);
+            // Header fits BOTH the title and its drop-shadow copy, so no re-fit is done here:
+            // a second FitSingleLine would re-read the title's fontSize as its new maxSize and
+            // could ratchet the title below the shadow it is supposed to sit on top of.
 
             // The single standard Close button (top-right corner).
             chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
@@ -1009,7 +1011,12 @@ namespace DeNelle.Core.UI
         /// rect (non-overlay / physical-size modes) → the kit's 1920 portrait reference
         /// (no canvas / headless with no valid Screen).
         /// </summary>
-        private static float PostScaleCanvasHeight(Transform under)
+        /// <remarks>PUBLIC so a screen can size its own bands in REFERENCE PIXELS on the frame
+        /// it builds them (CANON_GROUND_TRUTH 2026-08-02 §4: a text band must be fixed px >= the
+        /// font's line box, never a fraction of a parent). Reading the parent's rect on the
+        /// creation frame returns RAW SCREEN PIXELS; this returns the post-scale height that the
+        /// fraction anchors will actually resolve against, on that frame and every frame after.</remarks>
+        public static float PostScaleCanvasHeight(Transform under)
         {
             const float fallbackH = 1920f;   // kit portrait reference height
             var canvas = under != null ? under.GetComponentInParent<Canvas>() : null;
@@ -1277,18 +1284,31 @@ namespace DeNelle.Core.UI
             // BlinkChrome: skip the drop-shadow + the gilt underline rule (chrome); keep the TITLE (content).
             // WO-714 P9: gate on BlinkChromeActive (flag AND art present), never the raw flag.
             bool chrome = !BlinkChromeActive;
+            TextMeshProUGUI shadow = null;
             if (chrome)
             {
                 // Soft shadow under the title for legibility on busy scenes.
-                var shadow = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
-                                   new Color(0f, 0f, 0f, 0.55f), ElarionUi.FontTitle,
-                                   TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
+                shadow = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
+                               new Color(0f, 0f, 0f, 0.55f), ElarionUi.FontTitle,
+                               TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
                 shadow.GetComponent<RectTransform>().anchoredPosition += new Vector2(1.5f, -1.5f);
             }
 
             var title = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
                               ElarionUi.Gilt, ElarionUi.FontTitle,
                               TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
+
+            // DOUBLE-DRAWN TITLE FIX (capture Builds/ui-capture/LoreReadingModal_2340x1080.png):
+            // the shadow is a pixel copy of the title drawn 1.5px behind it, but ONLY the title
+            // was ever fit-protected (BuildObsidianPanel called FitSingleLine on the returned
+            // label). The header band is 6% of the panel (~44 ref px) while FontTitle(88) wraps
+            // at a ~110px line box, so the title auto-shrank to ~34px on one line and the
+            // unfitted shadow stayed at 88, WRAPPED to two lines, and painted a giant dark ghost
+            // out of the band in both directions. Fit BOTH labels here, from identical rect /
+            // text / font / spacing inputs, so the pair can never resolve to different sizes
+            // again -- and so no caller has to remember to fit the copy it cannot reach.
+            if (shadow != null) FitSingleLine(shadow);
+            FitSingleLine(title);
 
             // Gilt rule hugging the header's bottom edge.
             if (chrome) Rule(parent, y0 - 0.008f, x0, x1);

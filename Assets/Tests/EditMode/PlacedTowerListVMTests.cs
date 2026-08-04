@@ -106,5 +106,41 @@ namespace DeNelle.Tests.EditMode
             Assert.That(PlacedTowerListVM.FormatMenuRow("Tower_Ballista", 1, true),
                 Is.EqualTo("> Ballista  (Lvl 1/3)"));
         }
+
+        // 2026-08-04 — the store-capture defect: the upgrade row labelled itself with the
+        // GAMEOBJECT name, so raw identifiers ("Stone4", "DevTower", a prefab's "(Clone)")
+        // reached the player as display names. The formatter now renders identifier shapes
+        // as English, and leaves an already-clean name untouched.
+        [Test]
+        public void menu_row_formatter_renders_identifier_names_as_english()
+        {
+            Assert.That(PlacedTowerListVM.PrettifyTowerName("Tower_Stone4"), Is.EqualTo("Stone 4"));
+            Assert.That(PlacedTowerListVM.PrettifyTowerName("DevTower"), Is.EqualTo("Dev Tower"));
+            Assert.That(PlacedTowerListVM.PrettifyTowerName("Tower_Archer(Clone)"), Is.EqualTo("Archer"));
+            // Idempotent: an authored display name survives unchanged.
+            Assert.That(PlacedTowerListVM.PrettifyTowerName("Archer Tower"), Is.EqualTo("Archer Tower"));
+            Assert.That(PlacedTowerListVM.PrettifyTowerName("Frost Tower"), Is.EqualTo("Frost Tower"));
+            // A nameless object still reads as something a player can parse.
+            Assert.That(PlacedTowerListVM.PrettifyTowerName(""), Is.EqualTo("Tower"));
+            Assert.That(PlacedTowerListVM.PrettifyTowerName(null), Is.EqualTo("Tower"));
+        }
+
+        // A tower still being raised has no TowerData, so it has no level and no stats.
+        // Printing "Lvl 1/3" (and, downstream, "0 dmg / 0m") for it is a fabricated reading.
+        [Test]
+        public void an_unbuilt_tower_reports_no_level_and_reads_as_building()
+        {
+            var t = NewTower("Tower_Archer");
+            var vm = new PlacedTowerListVM(() => new[] { t });
+
+            Assert.That(vm.IsBuilt(t), Is.False, "a tower with no TowerData is not finished");
+            Assert.That(vm.LevelOf(t), Is.EqualTo(0));
+            Assert.That(vm.DisplayNameFor(t), Is.EqualTo("Archer"),
+                "with no authored name the cleaned object name is the fallback");
+            Assert.That(PlacedTowerListVM.FormatMenuRow(vm.DisplayNameFor(t), vm.LevelOf(t), false, vm.IsBuilt(t)),
+                Is.EqualTo("Archer  (building)"));
+
+            vm.Dispose();
+        }
     }
 }
