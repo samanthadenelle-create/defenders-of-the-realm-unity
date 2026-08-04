@@ -1,5 +1,25 @@
 # Solana dApp Store — Listing Plan (2026-07-22)
 
+> ## ⚠ CORRECTION 2026-08-04 — row L1 is CLOSED. Frozen ledger, banner not rewrite (§15).
+>
+> **L1 (dragon licence) is RESOLVED and has been since 2026-07-24 — two days AFTER this plan was written.**
+> Verified at source 2026-08-04: `Assets/Dragon/` is git-tracked and carries the licensed Asset-Store model
+> (product 71047 "Dragon Animated", WDallgraphics); `git ls-files` returns **zero** 3DHaupt / `RedDragon`
+> remnants. The CC-BY-NC commercial-ship hard stop named in this document **no longer exists.**
+> A readiness check run against this file alone will wrongly re-raise it as a blocker — it did on 2026-08-04.
+>
+> **L2 is a DIFFERENT item and is still open:** non-commercial **AUDIO** (dragon roar CC-BY-NC + unverified
+> combat SFX), row `:91`, citing `docs/SME/AUDIO_SME.md:222`. Replacing the dragon MODEL did not clear the
+> audio. ⚠ Note the audio picture is complicated by a known quirk: `SfxClipLibrary.asset` does not exist, so
+> the `SfxId` path falls back to procedural/generated audio and live SFX come from the Village-side
+> `GameSfx` authored-Resources-else-synth pattern — so what SHIPS is not the same as what is in the repo.
+> An audit is in flight (2026-08-04) to separate the two.
+>
+> **Everything else in this plan still stands**, and its ~1-2 week Path A estimate is unchanged: the long
+> pole is now the owner's on-chain publisher setup (Portal + KYC/KYB, a funded ~0.2 SOL mainnet wallet,
+> minting the Publisher->App->Release NFT trio), plus listing assets, a hosted privacy-policy URL, promoting
+> `api/` to production, and one on-device wallet-connect test.
+
 > Synthesis of a 2-agent deep dive: (A) Solana Mobile dApp Store publishing requirements (official
 > `docs.solanamobile.com` + corroborating guides) and (B) a code-verified store-readiness gap audit of
 > this repo. **Draft plan for owner decisions — nothing here is committed to yet.** Push HELD.
