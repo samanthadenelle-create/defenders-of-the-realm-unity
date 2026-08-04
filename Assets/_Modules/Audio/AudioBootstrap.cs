@@ -105,16 +105,25 @@ namespace DeNelle.Audio
             TryAssignClip(service, MusicTrack.Village, "whispering_pines");
             TryAddClip(service,    MusicTrack.Village, "village");
             TryAssignClip(service, MusicTrack.Victory, "victory");
-            // Dungeon theme (owner Suno track 2026-06-29): "The Whispering Depths" — this slot was
-            // previously silent (no dungeon.mp3 shipped).
-            TryAssignClip(service, MusicTrack.Dungeon, "whispering_depths");
+            // Dungeon theme (owner slot mapping 2026-08-04): "Echoes Beneath Elarion" is the
+            // PRIMARY dungeon track, displacing the prior "whispering_depths" pick. Dungeon is
+            // NOT a pooled track - AudioService.AddMusicClip pools only Battle and Overworld and
+            // routes everything else to SetMusicClip, which REPLACES rather than appends - so
+            // whispering_depths cannot be kept here as a rotation variant. It stays on disk,
+            // unreferenced, pending a Dungeon pool or a re-slot.
+            TryAssignClip(service, MusicTrack.Dungeon, "Music/echoes_beneath_elarion");
 
-            // Game-over music (owner-supplied 2026-06-02): Resources/Audio/Music/GameOver.mp3.
-            // Load the legacy 'defeat' sting first as a fallback, then GameOver — the new clip
-            // wins when present (SetMusicClip overwrites), and it lives under a Resources/ path
-            // so it actually loads in the WebGL build (the old defeat.mp3 was outside Resources).
+            // Game-over music (owner slot mapping 2026-08-04): "Heartwood Collapse" is the
+            // PRIMARY defeat track, displacing Resources/Audio/Music/GameOver.mp3. Load the
+            // legacy 'defeat' sting first as a fallback, then the owner track - the second
+            // assign wins when present (SetMusicClip overwrites). Defeat is NOT a pooled track
+            // (AddMusicClip pools only Battle/Overworld), so GameOver.mp3 cannot be kept as a
+            // variant; it stays on disk, unreferenced.
+            // Playback shape is unchanged: the Defeat slot is non-looping and plays on the
+            // time-frozen game-over modal, which the player dismisses - the displaced
+            // GameOver.mp3 was 5:19, so this 2:53 track is SHORTER than what it replaces.
             TryAssignClip(service, MusicTrack.Defeat,  "defeat");
-            TryAssignClip(service, MusicTrack.Defeat,  "Audio/Music/GameOver");
+            TryAssignClip(service, MusicTrack.Defeat,  "Music/heartwood_collapse");
 
             // Pooled tracks (WO-171) — the owner's NEW themes (2026-06-02), cycled by
             // NextFromPool. Battle: 3 themes. Overworld: 2 themes ("a loop of either is fine"

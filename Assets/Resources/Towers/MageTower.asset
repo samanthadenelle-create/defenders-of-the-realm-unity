@@ -28,12 +28,12 @@ MonoBehaviour:
     ability: 5
     range: 16
     damage: 28
-    upgradeCost: 140
+    upgradeCost: 880
   - visualPrefab: {fileID: 126972, guid: f0e75fbaaa86f59498a7b63cedca938e, type: 3}
     ability: 5
     range: 18
     damage: 40
-    upgradeCost: 300
+    upgradeCost: 1760
   scaffoldingPrefab: {fileID: 0}
   buildTime: 5
   workerHammerVFX: {fileID: 0}

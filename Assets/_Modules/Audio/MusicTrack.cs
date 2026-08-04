@@ -135,6 +135,12 @@ namespace DeNelle.Audio
         public const float OverworldVolume = 0.4f;
         /// <summary>Arena ("Echo's theme") default volume — soft background, sits under the raid combat SFX.</summary>
         public const float ArenaVolume = 0.4f;   // arena BGM — soft background
+        /// <summary>
+        /// Raid ("brass-rampart") default volume - above the ambient-bed tier (0.4) because the track is
+        /// featured driving brass, below the active-combat tier (0.7) because Raid sits on MusicLayer.Wave
+        /// and is superseded by the Battle layer once combat music takes over.
+        /// </summary>
+        public const float RaidVolume = 0.5f;    // offensive-raid BGM - featured bed, yields to Battle
 
         private static readonly Dictionary<MusicTrack, MusicTrackDef> Defs =
             new Dictionary<MusicTrack, MusicTrackDef>
@@ -156,6 +162,8 @@ namespace DeNelle.Audio
                 "Assets/Audio/world.mp3",                              OverworldVolume, true, 1.2f, 1.0f) },
             { MusicTrack.Arena,   new MusicTrackDef(MusicTrack.Arena,
                 "Assets/Audio/Resources/Music/echo_theme.mp3",         ArenaVolume,   true,  1.2f, 1.0f) },
+            { MusicTrack.Raid,    new MusicTrackDef(MusicTrack.Raid,
+                "Assets/Audio/Resources/Music/Raid/brass-rampart.mp3", RaidVolume,    true,  1.2f, 1.0f) },
         };
 
         /// <summary>

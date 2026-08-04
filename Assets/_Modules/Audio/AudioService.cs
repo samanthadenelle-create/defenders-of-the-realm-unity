@@ -109,6 +109,11 @@ namespace DeNelle.Audio
                  "Default mix volume 0.4 (soft background), loops. // arena BGM — soft background")]
         [SerializeField] private AudioClip _arenaClip;
 
+        [Tooltip("Music/Raid/brass-rampart.mp3 - the offensive-raid BGM (WO-453), driving " +
+                 "brass for marching a troop army on an enemy fortress. Default mix volume " +
+                 "0.5 (MusicTrackRegistry.RaidVolume), loops. Single clip, not pooled.")]
+        [SerializeField] private AudioClip _raidClip;
+
         // ── Rotating clip pools (WO-171) ─────────────────────────────────────
         // Some contexts have MORE THAN ONE clip and rotate per request so the
         // music varies (battle: 3 owner tracks; overworld: 2 tracks). The pools
@@ -453,6 +458,7 @@ namespace DeNelle.Audio
                 case MusicTrack.Defeat:  return _defeatClip;
                 case MusicTrack.Overworld: return NextFromPool(_overworldPool, ref _overworldCursor) ?? _overworldClip;
                 case MusicTrack.Arena:   return _arenaClip;
+                case MusicTrack.Raid:    return _raidClip;
                 default:                 return null;
             }
         }
@@ -497,6 +503,7 @@ namespace DeNelle.Audio
                 case MusicTrack.Defeat:  _defeatClip = clip;  break;
                 case MusicTrack.Overworld: _overworldClip = clip; SeedPool(_overworldPool, clip); break;
                 case MusicTrack.Arena:   _arenaClip = clip;   break;
+                case MusicTrack.Raid:    _raidClip = clip;    break;
             }
 
             // If this track was requested but silent for want of a clip, start it.
