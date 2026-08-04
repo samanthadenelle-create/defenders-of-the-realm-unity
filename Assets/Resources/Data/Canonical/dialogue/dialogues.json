@@ -1,5 +1,5 @@
 {
- "version": 3,
+ "version": 4,
  "speakers": [
   {
    "name": "Mother Wren",
@@ -321,6 +321,7 @@
   },
   {
    "id": "SylasFirstMeeting",
+   "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). The StartQuest/SetQuestFlag verbs on node 'accept' and the CompleteQuest on the command-only node 'accept_close' all named quest id 'companion.sylas', which is not in quests.json - QuestService.StartQuest logs the unknown id and returns, so the beat played and no quest state moved. RESOLUTION = REMOVE, not repoint: the companion recruitment thread is RETIRED under ff.singlehero (default ON), and this node's only two hosts (SylasFirstMeeting.cs ShouldRun and CastleCompanionIntroducerInjector.Bootstrap) both stand down when that flag is on, so the beat is unreachable in the shipping build. No shipped quest serves a companion recruitment thread, so there was nothing honest to repoint at. Prose and the RecruitCompanion verb are untouched - the beat still plays intact with ff.singlehero OFF. Node 'accept_close' was deleted because it carried the CompleteQuest and nothing else; 'accept' is now terminal, the same shape as the sibling 'decline' node.",
    "startNode": "encounter",
    "nodes": [
     {
@@ -420,22 +421,9 @@
      "id": "accept",
      "commands": [
       {
-       "verb": "StartQuest",
-       "args": [
-        "companion.sylas"
-       ]
-      },
-      {
        "verb": "RecruitCompanion",
        "args": [
         "Ranger"
-       ]
-      },
-      {
-       "verb": "SetQuestFlag",
-       "args": [
-        "companion.sylas",
-        "met"
        ]
       }
      ],
@@ -451,18 +439,6 @@
       {
        "speaker": "Sylas",
        "text": "Lead on. Let's see what the dark side of this land is hiding."
-      }
-     ],
-     "next": "accept_close"
-    },
-    {
-     "id": "accept_close",
-     "commands": [
-      {
-       "verb": "CompleteQuest",
-       "args": [
-        "companion.sylas"
-       ]
       }
      ]
     },
@@ -483,6 +459,7 @@
   },
   {
    "id": "CompanionMeeting",
+   "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). Node 'charge' fired StartQuest/SetQuestFlag/CompleteQuest all naming quest id 'companion.sylas', which is not in quests.json - a silent no-op dressed as progress. RESOLUTION = REMOVE, not repoint. This beat is still REACHABLE (CompanionMeetingTrigger does not check ff.singlehero, so it hosts on the 'Play Intro' non-fast-path route), but read the prose: 'charge' is the FTUE orientation brief about the Heart and holding the line, not a recruitment contract - the quest verbs are leftovers of the retired companion framing. Repointing them at the shipped onboarding quest elarion.welcome would be strictly WORSE than the bug: the node fires Start and Complete together, and CompleteQuest jumps a quest straight to Completed without paying any stage reward or granting the keystone, so it would burn 'A New Defender' (both stages, 150 crystals, 20 food, the keystone) before the player ever met the Elder or survived a wave. The RecruitCompanion verb is left alone - it is not a quest verb and it is the ff.singlehero-OFF restore path.",
    "startNode": "meet",
    "nodes": [
     {
@@ -503,28 +480,9 @@
      "id": "charge",
      "commands": [
       {
-       "verb": "StartQuest",
-       "args": [
-        "companion.sylas"
-       ]
-      },
-      {
        "verb": "RecruitCompanion",
        "args": [
         "Ranger"
-       ]
-      },
-      {
-       "verb": "SetQuestFlag",
-       "args": [
-        "companion.sylas",
-        "met"
-       ]
-      },
-      {
-       "verb": "CompleteQuest",
-       "args": [
-        "companion.sylas"
        ]
       }
      ],

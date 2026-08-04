@@ -52,12 +52,12 @@ namespace DeNelle.Tests.EditMode
         /// exist in quests.json. Baseline 1: "companion.sylas", fired by SylasFirstMeeting and
         /// CompanionMeeting. QuestService.StartQuest logs the unknown id and returns, so the
         /// recruit beat plays and no quest state moves. WO-854 sec.6 ruling D4.</summary>
-        private const int KnownOrphanQuestIds = 1;
+        private const int KnownOrphanQuestIds = 0;   // PAID 2026-08-04: Silo D removed the 6 companion.sylas verb sites. Ratchet tightened - a new orphan now FAILS.
 
         /// <summary>Distinct grantItemId values on quest stages that resolve in no shipped item
         /// catalog. Baseline 1: "iron-sword" on forgemaster.first-commission/claim-weapon.
         /// WO-854 sec.6 ruling D6.</summary>
-        private const int KnownUnresolvedGrantItemIds = 1;
+        private const int KnownUnresolvedGrantItemIds = 0;   // PAID 2026-08-04: Silo C retargeted iron-sword -> knight_iron. Ratchet tightened - a new unresolvable grantItemId now FAILS.
 
         /// <summary>The denominator the whole program reports against (24 quests / 63 stages).
         /// If content legitimately changes this, the oracle's marker text, its

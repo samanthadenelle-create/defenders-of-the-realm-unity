@@ -221,7 +221,36 @@ thing, which makes the objective text a lie.
 
 ## 6. THE MINIMAL OWNER DECISION SET — ranked
 
-**Creative and scope calls. The architect deliberately chose NONE of them.**
+> # ✅ OWNER RULING 2026-08-04: **RETARGET ONTO WHAT SHIPS.**
+> Verbatim: *"retarget onto what ships"* — in answer to the §7 fork (retarget vs build).
+>
+> **This resolves D1, D2, D3, D5, D6, D7 and D8 in one direction, and makes 63/63 reachable inside this
+> program.** No new species, no new structures, no new enemy family, no sixth region, no new item.
+> Quest content points at shipped content; where prose names something that does not exist, the PROSE
+> moves, not the game.
+>
+> | Ruling | Resolved as |
+> |---|---|
+> | **D2** 8 pet species | RETARGET the 8 `petbond.*` lines onto the 3 shipped species (`ice-wolf`, `flame-pup`, `aether-sprite`). **26 stages unblocked.** Also answers voice-draft Q1: no second companion track is built, so Fenn trains what already exists. |
+> | **D3** Stable / Inn / Granary | RETARGET onto shipped structures. `vendor.granary` already says "Mother Wren's mill" in its own text. Fenn's anchor stays at `pet-house` and is now CANON, not inferred. |
+> | **D7** region names | RENAME prose to the shipped titles: Verdant Forest→The Thornwood, Frost Peaks→Hollowfrost Vale, Ashen Wastes→The Emberwastes, the Mire→The Mirewood. |
+> | **D1** Stone Mountains | RETARGET onto a shipped region (no sixth region is authored). |
+> | **D5** Stonebelly | RETARGET onto a shipped enemy family. |
+> | **D6** `iron-sword` | RETARGET onto a shipped item id (`knight_iron` is the near neighbour). |
+> | **D8** `forgemasters_act4` | RE-GATE the 5 legendary recipes onto a quest that IS completable — do not build the region chain. `forgemasters_act2` is all hub-completable talk beats. |
+>
+> **STILL OPEN — retarget does not answer these two:**
+> - **D0** — approve or amend the voice draft (`docs/NARRATIVE/QUEST_CAST_VOICES_2026-08-03.md`). Blocks
+>   PO felt-close, not mechanical completability. The oracle can score placeholder copy as completable.
+> - **D4** — `elarion.welcome`: delete, or keep as the non-tutorial onboarding thread? The retarget spirit
+>   argues against duplicating Sylas's shipped beat, but deleting a quest is its own content call.
+>   **Silo C PROPOSES, the owner disposes — no agent deletes a quest.**
+>
+> **Ceiling under this ruling: 63/63 reachable**, gated only on WO-827 travel for the region stages and on
+> D0 for felt-close. Where a stage's objective cannot be honestly retargeted, Silo C reports it rather than
+> inventing a mechanic.
+
+**Creative and scope calls. The architect deliberately chose NONE of them.** *(Superseded above for D1/D2/D3/D5/D6/D7/D8.)*
 
 ### The minimum FOUR
 
