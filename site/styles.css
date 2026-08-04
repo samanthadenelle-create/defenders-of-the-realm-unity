@@ -1,0 +1,318 @@
+/* ---------------------------------------------------------------------------
+   Echoes of Elarion — public one-pager + privacy policy
+   WO-863. Plain static CSS. No framework, no CDN, no webfonts, no remote assets.
+   The page commits to a single dark "lantern in the dark" look (the game's own
+   palette) rather than following the OS light/dark preference — deliberate.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --ink:        #0a0908;   /* page base                */
+  --ink-raise:  #14110d;   /* cards / raised surfaces  */
+  --ink-line:   #2a2318;   /* hairlines                */
+  --gold:       #e8b84b;   /* the lantern              */
+  --gold-dim:   #a88a3c;
+  --parch:      #efe6d4;   /* body text                */
+  --parch-dim:  #a89e8d;   /* secondary text           */
+  --alarm:      #ff2d6f;   /* PLACEHOLDER markers only */
+  --measure:    68ch;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--parch);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--gold); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: #ffd88a; }
+
+.wrap {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+
+/* ---------------------------------------------------------------------------
+   PRE-DEPLOY BANNER + PLACEHOLDER MARKERS
+   These exist so an unfinished page cannot be published by accident.
+   DELETE the .predeploy-banner block from each page, and replace every
+   .placeholder span, before any production deploy. See site/README.md.
+   --------------------------------------------------------------------------- */
+
+.predeploy-banner {
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  background: var(--alarm);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  padding: 12px 20px;
+  border-bottom: 3px solid #000;
+  text-align: center;
+}
+.predeploy-banner strong { display: block; font-size: 15px; letter-spacing: 0.08em; }
+.predeploy-banner a { color: #fff; }
+
+.placeholder {
+  display: inline-block;
+  background: var(--alarm);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 2px dashed #fff;
+  white-space: nowrap;
+}
+.placeholder::before { content: "\26A0 "; }
+
+/* Unfilled {{...}} fields carried over VERBATIM from docs/PRIVACY_POLICY.md.
+   Highlight only — no character is added to or removed from the text. */
+.tofill {
+  background: rgba(255, 45, 111, 0.22);
+  border-bottom: 2px solid var(--alarm);
+  color: #ffd7e4;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+  padding: 1px 3px;
+}
+
+/* ---------------------------------------------------------------------------
+   HERO
+   --------------------------------------------------------------------------- */
+
+.hero {
+  padding: 64px 0 48px;
+  text-align: center;
+  border-bottom: 1px solid var(--ink-line);
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgba(232, 184, 75, 0.10), transparent 70%),
+    var(--ink);
+}
+
+.sigil {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 22px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.1rem, 9vw, 3.6rem);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.series {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+}
+
+.tagline {
+  margin: 22px auto 0;
+  max-width: 22ch;
+  font-size: clamp(1.05rem, 4.4vw, 1.45rem);
+  font-style: italic;
+  color: var(--parch);
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 30px;
+  padding: 10px 20px;
+  border: 1px solid var(--gold-dim);
+  border-radius: 999px;
+  background: rgba(232, 184, 75, 0.07);
+  color: var(--gold);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   SECTIONS
+   --------------------------------------------------------------------------- */
+
+section { padding: 52px 0; border-bottom: 1px solid var(--ink-line); }
+
+h2 {
+  margin: 0 0 20px;
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  font-weight: 600;
+}
+
+.lede {
+  margin: 0 0 20px;
+  max-width: var(--measure);
+  font-size: clamp(1.1rem, 4.6vw, 1.3rem);
+  line-height: 1.5;
+}
+
+p { max-width: var(--measure); }
+
+.pillars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+@media (min-width: 640px) {
+  .pillars { grid-template-columns: repeat(2, 1fr); gap: 22px; }
+}
+
+.pillars li {
+  background: var(--ink-raise);
+  border: 1px solid var(--ink-line);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.pillars h3 {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+  color: var(--gold);
+  font-weight: 600;
+}
+.pillars p { margin: 0; font-size: 0.95rem; color: var(--parch-dim); max-width: none; }
+
+/* ---------------------------------------------------------------------------
+   SCREENSHOT SLOTS
+   Sized to the game's landscape capture ratio (2340 x 1080). Empty on purpose —
+   see site/README.md: no approved marketing frame exists yet.
+   --------------------------------------------------------------------------- */
+
+.shots {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 760px) {
+  .shots { grid-template-columns: repeat(2, 1fr); }
+  .shots li:first-child { grid-column: 1 / -1; }
+}
+
+.shot {
+  aspect-ratio: 2340 / 1080;
+  border: 2px dashed var(--alarm);
+  border-radius: 10px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 45, 111, 0.07) 0 12px,
+    transparent 12px 24px
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  text-align: center;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  color: var(--alarm);
+}
+.shot b { font-size: 0.86rem; letter-spacing: 0.1em; }
+.shot span { color: var(--parch-dim); letter-spacing: 0.02em; max-width: 42ch; }
+
+/* ---------------------------------------------------------------------------
+   SUPPORT + FOOTER
+   --------------------------------------------------------------------------- */
+
+.support p { margin-top: 0; }
+
+footer {
+  padding: 40px 0 64px;
+  font-size: 0.88rem;
+  color: var(--parch-dim);
+  text-align: center;
+}
+footer nav { margin-bottom: 12px; }
+footer nav a { margin: 0 10px; }
+
+/* ---------------------------------------------------------------------------
+   PRIVACY DOCUMENT
+   Long-form reading column. The policy text itself is rendered verbatim from
+   docs/PRIVACY_POLICY.md — no wording is changed here, only presented.
+   --------------------------------------------------------------------------- */
+
+.doc { padding: 40px 0 72px; }
+.doc .wrap { max-width: 760px; }
+
+.doc h1 {
+  font-size: clamp(1.6rem, 6vw, 2.2rem);
+  line-height: 1.2;
+  color: var(--gold);
+  margin: 0 0 24px;
+  font-weight: 600;
+}
+.doc h2 {
+  margin: 40px 0 12px;
+  font-size: 1.12rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--gold);
+  font-weight: 600;
+}
+.doc p, .doc li { max-width: none; }
+.doc ul { padding-left: 22px; }
+.doc li { margin-bottom: 10px; }
+.doc hr { border: 0; border-top: 1px solid var(--ink-line); margin: 36px 0; }
+.doc strong { color: #fff; }
+
+.docmeta {
+  background: var(--ink-raise);
+  border: 1px solid var(--ink-line);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 0 0 28px;
+  font-size: 0.95rem;
+}
+.docmeta p { margin: 4px 0; }
+
+blockquote.draftnote {
+  margin: 0 0 28px;
+  padding: 16px 20px;
+  border: 2px dashed var(--alarm);
+  border-radius: 10px;
+  background: rgba(255, 45, 111, 0.06);
+  font-size: 0.95rem;
+}
+blockquote.draftnote p { margin: 0; }
+
+.doc em.closing { color: var(--parch-dim); font-size: 0.92rem; }
+
+.backlink {
+  display: inline-block;
+  margin-bottom: 28px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}

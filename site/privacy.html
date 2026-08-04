@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Echoes of Elarion — DeNelle Studios</title>
+<meta name="description" content="Privacy policy for Echoes of Elarion (Defenders of the Realm), published by DeNelle Studios.">
+<meta name="robots" content="noindex, nofollow">
+<!-- ^ noindex is deliberate while the policy still carries an unresolved support
+     address. REMOVE as part of the pre-deploy checklist in site/README.md. -->
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- =========================================================================
+     PRE-DEPLOY BANNER — DELETE THIS ENTIRE <div> BEFORE ANY PRODUCTION DEPLOY.
+     ========================================================================= -->
+<div class="predeploy-banner">
+  <strong>&#9888; PRE-PUBLICATION DRAFT &mdash; DO NOT DEPLOY</strong>
+  This policy is rendered verbatim from <code>docs/PRIVACY_POLICY.md</code>. The body
+  text is now complete and verified against the shipping code, but the document still
+  carries an unresolved <code>SUPPORT_EMAIL_PLACEHOLDER</code> in four places
+  (contact header, section 7, section 8, section 11). The owner must designate a real
+  support address <em>in the source markdown</em>, then this page is regenerated. Do
+  not publish a privacy policy whose contact address does not route.
+</div>
+
+<!-- =========================================================================
+     VERBATIM RENDER OF docs/PRIVACY_POLICY.md
+     Rule (WO-863 §6): the policy text is hosted AS AUTHORED. No wording is
+     changed, added, reordered or paraphrased here — this file is presentation
+     only. SUPPORT_EMAIL_PLACEHOLDER is reproduced exactly as it appears in the
+     source; the .tofill highlight is CSS styling, not a text edit.
+     If the markdown changes, re-render this file from it.
+     ========================================================================= -->
+<article class="doc">
+  <div class="wrap">
+
+    <a class="backlink" href="/">&larr; Echoes of Elarion</a>
+
+    <h1>Privacy Policy &mdash; Echoes of Elarion (Defenders of the Realm)</h1>
+
+    <div class="docmeta">
+      <p><strong>App:</strong> Echoes of Elarion (a chapter of Defenders of the Realm)</p>
+      <p><strong>Publisher:</strong> DeNelle Studios</p>
+      <p><strong>Contact:</strong> <span class="tofill">SUPPORT_EMAIL_PLACEHOLDER</span></p>
+      <p><strong>Effective date:</strong> 4 August 2026</p>
+    </div>
+
+    <hr>
+
+    <h2>1. Summary (plain language)</h2>
+    <p>Echoes of Elarion is a single-player game. We collect the <strong>minimum</strong> needed to run the game, keep your
+    progress, fix bugs, and improve it. We do <strong>not</strong> sell your data, and we do <strong>not</strong> use it for advertising
+    profiling. <strong>The game shows no advertisements</strong> &mdash; see section 4.</p>
+    <p>You can play the entire game as a <strong>guest</strong>. As a guest we never receive your name, email address, or phone
+    number. If you choose to create an account or sign in, we receive your <strong>email address</strong> (or, for Google
+    sign-in, the basic account details Google returns). If you connect a Solana wallet, we record your <strong>public
+    wallet address</strong> &mdash; never your seed phrase or private keys, which the app never sees.</p>
+    <p>Your progress is saved on your device <strong>and</strong>, by default, backed up to our server so it can be restored.
+    This backup runs automatically for signed-in players <em>and</em> for guests; a guest backup is stored under an
+    opaque identifier derived from your device, not under any personal detail.</p>
+
+    <h2>2. What we collect</h2>
+
+    <p><strong>a. Account details &mdash; only if you sign in.</strong><br>
+    The sign-in screen offers email + password, Google sign-in (Android), Connect Wallet, and Play as Guest.
+    If you create an account or sign in with email, your <strong>email address and password</strong> are handled by Google
+    Firebase Authentication on our behalf; we can see the email address, never the password. If you use Google
+    sign-in, we receive the basic account information Google returns for that sign-in. If you use Play as Guest,
+    none of this is collected.</p>
+
+    <p><strong>b. Public wallet address &mdash; only if you connect a wallet.</strong><br>
+    When you connect a Solana wallet, the <strong>public address</strong> becomes the key your cloud save, and any bug report
+    you send, is stored under. Signing happens inside your wallet app; the game never receives, requests, or
+    stores your seed phrase or private keys.</p>
+
+    <p><strong>c. A device-derived player identifier &mdash; if you play as a guest.</strong><br>
+    So that a guest still gets a cloud backup, the game generates a stable identifier by hashing your device&rsquo;s
+    identifier with a fixed salt (SHA-256). The raw device identifier is never sent to us &mdash; only the hash. It is
+    pseudonymous: it identifies a device&rsquo;s save, not a person.</p>
+
+    <p><strong>d. Your game save.</strong><br>
+    Your progress &mdash; village layout, buildings, resources, roster and Echoes, queues, quests, hero and army state,
+    your in-game settings, your in-game invite code and any in-game contacts you add &mdash; is stored on your device
+    and, by default, uploaded in full to our server under the identifier in (b) or (c). The upload happens
+    automatically when the game is paused or closed, and any upload that fails is retried on the next launch.</p>
+
+    <p><strong>e. Gameplay analytics.</strong><br>
+    The game sends event records such as <code>session_start</code> and progression events, along with app version, Unity
+    version, and platform. These are <strong>not anonymous</strong>: each event is labelled with the same identifier as your
+    save &mdash; your wallet address if one is connected, otherwise your guest identifier, otherwise <code>anonymous</code>.</p>
+
+    <p><strong>f. Diagnostic logs &mdash; web version only.</strong><br>
+    In the browser/web version, diagnostic tracing is <strong>on by default</strong> and streams the game&rsquo;s log output to our
+    server: log, warning, error and exception text, stack traces, the active scene name, timestamps, the app
+    version, and the hostname the game was loaded from, tagged with a random per-session identifier that is not
+    linked to your account. This remote streaming is <strong>web-only</strong> &mdash; the Android build does not send it.</p>
+
+    <p><strong>g. Bug reports &mdash; only when you submit one.</strong><br>
+    The in-game bug report form sends what the form shows you: your written note, a screenshot of the game (on by
+    default, and you can turn it off before sending), the recent diagnostic log lines, the scene name, the app
+    version, the platform, a per-report session id, and your save identifier from (b) or (c) so we can follow up
+    on repeat reports. Pressing Submit is the consent &mdash; nothing is sent unless you press it.</p>
+
+    <p><strong>h. Pi Network sign-in &mdash; web version, inside Pi Browser only.</strong><br>
+    If you play the web version inside Pi Browser and sign in with Pi, we receive your Pi user id and username
+    from Pi&rsquo;s authentication service in order to establish that session. This does not apply to the Android /
+    Solana dApp Store version.</p>
+
+    <p><strong>We do not collect:</strong> your phone number, your precise or GPS location, your device&rsquo;s contacts, your photo
+    library, your camera or microphone, your biometric data, or any advertising identifier. The Android app
+    requests only the INTERNET permission.</p>
+
+    <h2>3. How we use it</h2>
+    <p>To run the game, save and restore your progress, authenticate you, diagnose and fix bugs, measure and improve
+    performance and features, and &mdash; if you connect a wallet &mdash; to deliver anything you purchase. We do <strong>not</strong>
+    build advertising profiles, and we do <strong>not</strong> use your data to target advertising.</p>
+
+    <h2>4. Advertising</h2>
+    <p><strong>The game does not currently show advertisements.</strong> No advertising SDK is integrated, no advertising network
+    is contacted, and no data whatsoever is shared with any advertising network.</p>
+    <p>The game does contain an optional &ldquo;Ad&rdquo; button that shortens a build timer. In the current version it grants
+    that time saving immediately without presenting any advertisement, because no ad provider is connected. It is
+    always optional; nothing in the game requires it.</p>
+    <p>If rewarded advertising is introduced in a future version, this policy will be updated <strong>before</strong> that version
+    ships, and the advertising provider will be named in this section and in section 5.</p>
+
+    <h2>5. Who we share it with</h2>
+    <ul>
+      <li><strong>Infrastructure providers who run the service on our behalf</strong> &mdash; Vercel (application hosting and server
+      functions) and Neon (the Postgres database that stores cloud saves, analytics, diagnostics, and bug reports).</li>
+      <li><strong>Google Firebase Authentication</strong> &mdash; if you create an account or sign in with email or Google, Firebase
+      handles that sign-in and holds your credentials. Google&rsquo;s own privacy policy governs its handling.</li>
+      <li><strong>Pi Network</strong> &mdash; only in the web version inside Pi Browser, and only if you sign in with Pi, in order to
+      verify that sign-in.</li>
+      <li><strong>Your Solana wallet app</strong> &mdash; only in the sense that signing happens there; we send it nothing about you.</li>
+      <li><strong>No advertising networks and no data brokers.</strong></li>
+    </ul>
+    <p>We do <strong>not</strong> sell your data or share it for anyone else&rsquo;s marketing.</p>
+
+    <h2>6. Data retention</h2>
+    <ul>
+      <li><strong>Web diagnostic logs</strong> and authentication-rejection records are deleted automatically on a daily sweep once
+      they are more than <strong>7 days</strong> old.</li>
+      <li><strong>Cloud saves</strong> are kept for as long as the identifier they are stored under is in use, so that your
+      progress can be restored. Ask us and we will delete yours.</li>
+      <li><strong>Gameplay analytics events</strong> and <strong>bug reports</strong> are retained until they are no longer useful for
+      diagnosing and improving the game, and are deleted on request.</li>
+      <li><strong>Local save data</strong> lives on your device until you delete the app or clear its data.</li>
+    </ul>
+
+    <h2>7. Children</h2>
+    <p>This game is not directed to children under <strong>13</strong>, and we do not knowingly collect personal data from them.
+    Thirteen is the threshold set by the U.S. Children&rsquo;s Online Privacy Protection Act (COPPA), and this section
+    follows that standard.</p>
+    <p>Where local law sets a <strong>higher</strong> minimum age for consenting to data processing &mdash; in particular the EU/UK
+    GDPR, under which member states set a digital-consent age between 13 and 16 &mdash; that higher local age applies
+    instead, and the game is not directed to anyone under it.</p>
+    <p>The game does not ask for your age and has no age gate. If you believe a child has provided us with personal
+    data, contact us at <span class="tofill">SUPPORT_EMAIL_PLACEHOLDER</span> and we will delete it.</p>
+
+    <h2>8. Your choices &amp; rights</h2>
+    <ul>
+      <li><strong>Play as a guest.</strong> You can play the whole game without giving us an email address, a Google account, or a
+      wallet address.</li>
+      <li><strong>Turn off the bug-report screenshot.</strong> The screenshot toggle is on the report form, and nothing is sent
+      until you press Submit.</li>
+      <li><strong>Clear your local save</strong> through your device&rsquo;s app settings.</li>
+      <li><strong>Ask us to delete your data.</strong> Contact <span class="tofill">SUPPORT_EMAIL_PLACEHOLDER</span> with your wallet address, the email you
+      signed up with, or your report/session id, and we will delete the cloud save, analytics, diagnostic and
+      bug-report records associated with it.</li>
+    </ul>
+    <p><strong>Please note:</strong> the current version has <strong>no in-game setting that turns analytics or diagnostics off</strong>, and
+    the game&rsquo;s Settings screen does not offer one. Analytics are sent on all platforms and web diagnostic tracing
+    is on by default in the browser version. Until an opt-out exists in the game, the way to stop collection is to
+    stop playing and uninstall, or to write to us and ask for deletion. We would rather tell you that plainly than
+    describe a switch that is not there.</p>
+
+    <h2>9. Security</h2>
+    <p>Everything the game sends travels over HTTPS. Cloud saves keyed to a wallet require a signature from that
+    wallet over a single-use challenge, so another player cannot write to your save. Guest cloud saves use a
+    weaker, rate-limited path and are marked as untrusted on our side. No database credentials or secrets are
+    embedded in the game client. We never handle wallet private keys, and transaction signing happens entirely
+    inside your wallet app. No method of transmission or storage is 100% secure.</p>
+
+    <h2>10. Changes</h2>
+    <p>We may update this policy. The effective date at the top will change, and material updates will be noted
+    in-app or on this page. Any change that widens what we collect &mdash; including the introduction of advertising &mdash;
+    will be published here before the version that makes the change ships.</p>
+
+    <h2>11. Contact</h2>
+    <p>DeNelle Studios &mdash; <span class="tofill">SUPPORT_EMAIL_PLACEHOLDER</span></p>
+
+  </div>
+</article>
+
+<footer class="wrap">
+  <nav>
+    <a href="/">Home</a>
+  </nav>
+  <p>&copy; 2026 DeNelle Studios. All rights reserved.</p>
+</footer>
+
+</body>
+</html>

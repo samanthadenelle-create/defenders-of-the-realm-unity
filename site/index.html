@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echoes of Elarion — DeNelle Studios</title>
+<meta name="description" content="Echoes of a Forgotten Civilization. A town-building and defense game from DeNelle Studios. Coming to the Solana dApp Store (Seeker).">
+<meta name="robots" content="noindex, nofollow">
+<!-- ^ noindex is deliberate while the page still carries placeholders.
+     REMOVE this robots tag as part of the pre-deploy checklist in site/README.md. -->
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- =========================================================================
+     PRE-DEPLOY BANNER — DELETE THIS ENTIRE <div> BEFORE ANY PRODUCTION DEPLOY.
+     It exists so a page carrying unresolved placeholders cannot ship quietly.
+     ========================================================================= -->
+<div class="predeploy-banner">
+  <strong>&#9888; PRE-PUBLICATION DRAFT &mdash; DO NOT DEPLOY</strong>
+  Unresolved items: (1) public store title + subtitle, (2) public support email,
+  (3) short/long description copy pending owner approval, (4) no approved screenshots.
+  Clear the checklist in <code>site/README.md</code>, delete this banner, then deploy.
+</div>
+
+<header class="hero">
+  <div class="wrap">
+
+    <!-- Local inline SVG sigil. No image files, no remote assets. -->
+    <svg class="sigil" viewBox="0 0 64 64" role="img" aria-label="Heart of Elarion sigil" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="29" fill="none" stroke="#a88a3c" stroke-width="1.5"/>
+      <path d="M32 10 L32 54 M32 22 L20 32 M32 22 L44 32 M32 34 L23 42 M32 34 L41 42"
+            fill="none" stroke="#e8b84b" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="32" cy="18" r="4.5" fill="#e8b84b"/>
+    </svg>
+
+    <!-- ==================================================================
+         TITLE — canon-strings.json: gameTitle = "Echoes of Elarion",
+         gameSubtitle = "Defenders of the Realm" (the SERIES/franchise label).
+         Package id is com.denellestudios.echoesofelarion. canon-strings.json
+         "_gameSubtitleNote" states the full title verbatim: "Defenders of the
+         Realm: Echoes of Elarion" — rendered below as the store title.
+         ================================================================== -->
+    <h1>Echoes of Elarion</h1>
+    <p class="series">A chapter of Defenders of the Realm</p>
+    <p class="series">Full title: Defenders of the Realm: Echoes of Elarion</p>
+
+    <!-- Canon tagline (canon-strings.json "tagline" / "titleTagline"). -->
+    <p class="tagline">Echoes of a Forgotten Civilization</p>
+
+    <!-- Accurate framing. The game is NOT live on the store. Do not change this
+         to "Available now" / "Download now" until it actually ships. -->
+    <p><span class="badge">Coming to the Solana dApp Store &mdash; Seeker</span></p>
+  </div>
+</header>
+
+<main>
+
+  <!-- ====================================================================
+       DESCRIPTION COPY — DRAFT, pending owner approval (WO-863 §4 item 3).
+       Every claim below is limited to systems that exist in the build.
+       Do not add features, ratings, reviews, or availability claims.
+       ==================================================================== -->
+  <section class="wrap" id="about">
+    <h2>About</h2>
+    <p class="lede">
+      The Heart of Elarion still stands, and it still remembers. Raise the last village
+      around it, wake the Echoes sleeping in its roots, and hold the dark back one night
+      at a time.
+    </p>
+    <p>
+      Echoes of Elarion is a town-builder and defense game. You lay out your own village
+      around the Heart &mdash; the world tree at its centre &mdash; place and upgrade its
+      buildings, walls and towers, keep the builder, training and research queues turning,
+      and defend it when the waves come. Between defenses you range out across the Realm
+      Map to raid what the dark has taken.
+    </p>
+    <p>
+      The Echoes are the awakened essences of the people the Heart once guarded. Each
+      returns with a calling of its own, and you decide what each one tends &mdash; match
+      an Echo to its calling and it gives back double.
+    </p>
+  </section>
+
+  <section class="wrap" id="pillars">
+    <h2>What you do</h2>
+    <ul class="pillars">
+      <li>
+        <h3>Build the village you want</h3>
+        <p>Place every building yourself, move it later, and grow the layout around the Heart as your stockpiles allow.</p>
+      </li>
+      <li>
+        <h3>Hold the line</h3>
+        <p>Walls, gates and towers you position and upgrade, tested by waves that come for the Heart.</p>
+      </li>
+      <li>
+        <h3>Wake the Echoes</h3>
+        <p>Six essences the Heart kept. Each has a calling; you choose what each one gathers.</p>
+      </li>
+      <li>
+        <h3>Take the Realm back</h3>
+        <p>Ride out from the village to raid the places the dark has claimed, then bring it home.</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ====================================================================
+       SCREENSHOTS — intentionally EMPTY.
+       Reviewed the full headless capture set (Builds/ui-capture/, Builds/UICaps/)
+       on 2026-08-04: every frame carries debug overlays, clipped/overlapping
+       text, empty states or unauthored placeholder data. None is fit for a
+       public page. Slots are left at the game's true 2340x1080 capture ratio so
+       approved frames drop straight in.
+       TO FILL: copy the approved PNGs into site/assets/ and replace each <li>
+       with <li><img src="/assets/<name>.png" width="2340" height="1080"
+       alt="..." loading="lazy"></li>. Local files only — never hotlink.
+       ==================================================================== -->
+  <section class="wrap" id="screens">
+    <h2>Screens</h2>
+    <ul class="shots">
+      <li>
+        <div class="shot">
+          <b>&#9888; SCREENSHOT SLOT 1 &mdash; EMPTY</b>
+          <span>No approved marketing frame yet. Every image in the current headless
+                capture set shows debug overlays or placeholder data.</span>
+        </div>
+      </li>
+      <li>
+        <div class="shot">
+          <b>&#9888; SCREENSHOT SLOT 2 &mdash; EMPTY</b>
+          <span>2340 &times; 1080 landscape.</span>
+        </div>
+      </li>
+      <li>
+        <div class="shot">
+          <b>&#9888; SCREENSHOT SLOT 3 &mdash; EMPTY</b>
+          <span>2340 &times; 1080 landscape.</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ====================================================================
+       SUPPORT — the owner's personal address must NEVER appear here or
+       anywhere else in this site. Only a studio/support inbox she designates.
+       ==================================================================== -->
+  <section class="wrap support" id="support">
+    <h2>Support</h2>
+    <p>Questions, bug reports or data requests:</p>
+    <p><span class="placeholder">SUPPORT_EMAIL_PLACEHOLDER</span></p>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <nav>
+    <a href="/privacy">Privacy Policy</a>
+  </nav>
+  <p>&copy; 2026 DeNelle Studios. All rights reserved.</p>
+</footer>
+
+</body>
+</html>

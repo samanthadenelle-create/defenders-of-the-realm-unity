@@ -34,7 +34,14 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **853** (782–852 consumed) |
-> | **860–899 reserved** | UI seat | **863** (860/861/862 consumed) |
+> | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
+>
+> - **863** = Vercel one-pager + hosted privacy policy (the two dApp Store listing URLs). File
+>   `WORK_ORDER_863_vercel_landing_and_privacy_page.md`, READY.
+>   ⚠ **Banner reconciled 2026-08-04 by the CLI: 863 was minted to disk without the banner being bumped**,
+>   so the banner was still offering it as next-free and the CLI nearly minted over it. Same failure that
+>   struck 5x on 08-02. The rule is unchanged and it is the only one that matters here: **bump YOUR row in
+>   the SAME edit as the mint.**
 >
 > - **860** = start loadout (sword+shield, not the stale axe) + weapon/armor shelf thinning. UI seat. IMPLEMENTED (lane agent), pending gate.
 > - **861** = Sylas + Thrain playable (re-enable, not build-new; appendix carries the approved kits/trees/Cathedral map). UI seat. IN FLIGHT.
