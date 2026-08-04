@@ -223,6 +223,8 @@ Legend: **AUTHORED** = real recorded clip plays · **SYNTH** = procedural placeh
 
 None of the three descriptions match the claimed source. Either the IDs were mis-transcribed or the sounds came from different pages. **Action needed:** re-locate the true sources of `sword_clash_1..4`, `footsteps_walk_loop`, `dragon_roar` (and the rest of the 17-WAV set, which has no IDs logged at all) and record real licenses. If any turn out CC-BY, an in-game credits line is required; CC-BY-NC would be unusable commercially. Until verified, treat the recorded combat set's license as **unknown**.
 
+> **⏩ ADDRESSED 2026-08-04 — read `Assets/Audio/SFX/Combat/SOURCE_LICENSE.md` before acting on the paragraph above.** Rather than re-locating unknown sources, the mirror table (`Assets/Editor/Audio/SfxResourceMirror.cs`) was **re-pointed** so 14 of the 16 runtime combat clips now come from the licensed leohpaz pack; the loader keys did not move. **Still genuinely open:** `DragonRoar` (no creature vocalisation exists in the free pack) and `FootstepsWalk` (needs a walk *loop*, not a one-shot step) — one clip each to source. Also note a 16th clip the audit missed: `Resources/Sfx/HeroHit.wav` was shipping with no mirror row, byte-identical to `sword_clash_3.wav`. **The re-point only takes effect once the mirror is RUN on a machine holding the gitignored leohpaz pack and the regenerated `Resources/Sfx/*.wav` are committed.**
+
 ### 4c. Hovl Studio RPG VFX Bundle (v6.0.4, purchased 2026-07-10)
 
 Ledger-identified. Its `HSFiles/Sounds` skill WAVs are licensed under the same Asset Store EULA as the VFX — fine to use, including re-routing them through our own SFX system (they'd be strong authored candidates for `Sfx_FireExplosion` / `Sfx_ArcaneExplosion` / cast sounds — see §5).
@@ -233,7 +235,9 @@ VFX-only; no audio in the imported folder or the .unitypackage (§1f). Another a
 
 ### 4e. Music
 
-All BGM is owner-generated (Suno). No third-party publisher, no store license; rights follow Suno's terms for the owner's account tier — worth a one-line confirmation before commercial launch (Suno's free tier historically did not grant commercial rights; paid tiers do).
+All BGM is owner-generated (Suno). No third-party publisher, no store license; rights follow Suno's terms for the owner's account tier.
+
+> **✅ RESOLVED 2026-08-04 — do not re-raise.** Owner confirmed her Suno subscription tier is **Pro**, which grants commercial rights. All 16 owner-generated music tracks are **CLEARED for commercial use**, not merely "clear of third parties". This is an **owner attestation** (owner's direct statement, 2026-08-04) — a different evidence class from the hash-verified/EULA-covered asset rows, but a legitimate and sufficient one. Recorded in `Assets/Audio/SFX/Combat/SOURCE_LICENSE.md` §2b. The earlier "worth a one-line confirmation before commercial launch" concern is **closed**.
 
 Sources: [leohpaz store page](https://assetstore.unity.com/packages/audio/sound-fx/rpg-essentials-sound-effects-free-227708) · [leohpaz publisher](https://assetstore.unity.com/publishers/61102) · [leohpaz itch.io](https://leohpaz.itch.io/rpg-essentials-sfx-free) · [freesound 6341](https://freesound.org/s/6341/) · [freesound 98277](https://freesound.org/s/98277/) · [freesound 426521](https://freesound.org/s/426521/)
 

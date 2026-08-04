@@ -271,7 +271,15 @@ namespace DeNelle.HUD
 
         private void OnShowCredits()
         {
-            ShowToast("Defenders of the Realm v2 — DeNelle Studios. Models: KayKit + Tripo. Audio: original soundtrack.");
+            // Credits accuracy (2026-08-04): the previous string claimed "Audio: original
+            // soundtrack", which was affirmatively FALSE - the music is owner-original
+            // (Suno Pro), but a large share of the shipping SFX is third-party licensed
+            // (leohpaz RPG Essentials, Unity Asset Store EULA; Hovl Studio skill sounds
+            // inside the VFX prefabs). ASCII-ONLY: non-ASCII renders as tofu on device.
+            ShowToast("Defenders of the Realm v2 - DeNelle Studios. Models: KayKit + Tripo. "
+                    + "Music: original score by DeNelle Studios (made with Suno). "
+                    + "Sound effects: leohpaz 'RPG Essentials' and Hovl Studio, "
+                    + "licensed via the Unity Asset Store.");
         }
 
         // SECURITY (store-hardening Path A, S1): the 5-tap dev unlock + resource grant are stripped from

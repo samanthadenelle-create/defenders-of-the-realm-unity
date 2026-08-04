@@ -14,10 +14,20 @@
 // makes that mirror REPEATABLE and extends it to the leohpaz pack so the SfxId synth
 // path (ProceduralSfx checks Resources/Sfx/Sfx_<Id> first) upgrades to authored audio.
 //
+// LICENCE RE-POINT (2026-08-04): Pass 1 no longer sources the Freesound-derived
+// Assets/Audio/SFX/Combat masters - their provenance was checked and proved WRONG
+// (docs/SME/AUDIO_SME.md sec 4b), so the clips they mirrored were shipping under an
+// unknown licence. Pass 1a now sources the SAME loader names from the licensed
+// leohpaz pack; Pass 1b holds the two rows that had no honest equivalent
+// (DragonRoar, FootstepsWalk) and is the remaining pre-launch licence blocker.
+// Full record: Assets/Audio/SFX/Combat/SOURCE_LICENSE.md.
+//
 // WHAT IT DOES (all via AssetDatabase.CopyAsset - correct .meta/GUID handling):
-//   Pass 1  Combat masters  Assets/Audio/SFX/Combat/<master>.wav
+//   Pass 1a leohpaz clips   Assets/Leohpaz/RPG_Essentials_Free/<cat>/<clip>.wav
 //                        -> Assets/_Modules/Audio/Resources/Sfx/<LoaderName>.wav
 //           (the string-name path used by GameSfx / EnemyCombatAudio / HeroLocomotion)
+//   Pass 1b Combat masters  Assets/Audio/SFX/Combat/<master>.wav -> same dest folder
+//           (ONLY the 2 unresolved rows - unknown licence, tracked, not shipped blind)
 //   Pass 2  leohpaz clips   Assets/Leohpaz/RPG_Essentials_Free/<cat>/<clip>.wav
 //                        -> Assets/_Modules/Audio/Resources/Sfx/Sfx_<SfxId>.wav
 //           (the ProceduralSfx override path - upgrades the SfxId synth placeholders)
@@ -29,11 +39,17 @@
 // each copy the AudioImporter is NORMALIZED to carry NO divergent per-platform
 // overrides (WO-682 SFX_WEBGL_OK) so the WebGL SFX oracle stays green.
 //
-// MACHINE-LOCAL CAVEAT: the leohpaz source pack is an Asset Store import; on a fresh
-// clone it may be absent (re-import via Package Manager > My Assets). The MIRROR
-// COPIES this tool writes into Resources/Sfx SHOULD be committed - then the runtime
-// never depends on the source pack being present (same pattern as the committed
-// combat mirror + its Assets/Audio/SFX/Combat masters).
+// MACHINE-LOCAL CAVEAT: the leohpaz source pack is an Asset Store import and is
+// GITIGNORED (.gitignore:372 "Assets/Leohpaz/"); on a fresh clone it is absent
+// (re-import via Package Manager > My Assets). The MIRROR COPIES this tool writes
+// into Resources/Sfx SHOULD be committed - then the runtime never depends on the
+// source pack being present.
+//
+// *** THIS MEANS THE 2026-08-04 LICENCE RE-POINT DOES NOT TAKE EFFECT UNTIL THIS
+// TOOL IS RUN ON A MACHINE THAT HAS THE PACK, AND THE RESULTING
+// Assets/_Modules/Audio/Resources/Sfx/*.wav ARE COMMITTED. *** Editing the table
+// alone changes nothing that ships: the committed Resources copies are still the
+// old unknown-provenance bytes until the mirror overwrites them.
 //
 // RUN (headless, via run-unity-method.ps1):
 //   .\run-unity-method.ps1 DeNelle.Editor.Audio.SfxResourceMirror.Mirror
@@ -61,25 +77,94 @@ namespace DeNelle.Editor.Audio
         private const string CombatMasterDir = "Assets/Audio/SFX/Combat";
         private const string LeohpazRoot = "Assets/Leohpaz/RPG_Essentials_Free";
 
-        // -- Pass 1: combat masters -> runtime string-name clips --------------
-        // (sourceFileUnderCombatMasterDir, destFileNameUnderRuntimeSfxDir)
+        // =====================================================================
+        // LICENCE RE-POINT (2026-08-04) - see Assets/Audio/SFX/Combat/SOURCE_LICENSE.md
+        // ---------------------------------------------------------------------
+        // The Assets/Audio/SFX/Combat/*.wav masters have UNKNOWN provenance: the
+        // three Freesound IDs their licence file logged were checked and every one
+        // resolves to an UNRELATED sound (docs/SME/AUDIO_SME.md sec 4b), and the
+        // other 14 WAVs never had an ID logged at all. One of the three checked IDs
+        // is CC-BY-NC, which would be unusable commercially. Since the runtime
+        // copies in Resources/Sfx are byte-identical to those masters, "the masters
+        // don't ship" is NOT a defence - the unknown-licence audio ships.
+        //
+        // So the string-name combat rows are now sourced from the leohpaz
+        // "RPG Essentials Sound Effects - FREE" pack (purchased 2026-06-29, Unity
+        // Asset Store Extension EULA: commercial use permitted, NO attribution
+        // required). THE LOADER KEYS DID NOT MOVE - game code still calls
+        // Resources.Load("Sfx/SwordClash") etc, so every dest filename below is
+        // byte-identical to what it was; only the SOURCE path changed.
+        //
+        // TWO ROWS COULD NOT BE HONESTLY RE-POINTED and still read from the
+        // unknown-provenance masters (CombatUnresolvedMirror below) - they are
+        // tracked as the remaining licence blocker, NOT quietly mis-mapped.
+        // =====================================================================
+
+        // -- Pass 1a: leohpaz -> runtime string-name combat clips --------------
+        // (leohpazRelativePath, destFileNameUnderRuntimeSfxDir)
         private static readonly (string src, string dest)[] CombatMirror =
         {
-            ("sword_clash_1.wav",      "SwordClash.wav"),
-            ("sword_clash_2.wav",      "SwordClash2.wav"),
-            ("sword_clash_3.wav",      "SwordClash3.wav"),
-            ("sword_clash_4.wav",      "SwordClash4.wav"),
-            ("melee_swing.wav",        "SwordSwing.wav"),
-            ("sword_draw.wav",         "WeaponDraw.wav"),
-            ("cast_spell.wav",         "SpellCast.wav"),
-            ("enemy_cast_chant.wav",   "EnemyCastCharge.wav"),
-            ("enemy_death.wav",        "EnemyDeath.wav"),
-            ("enemy_death_2.wav",      "EnemyDeath2.wav"),
+            // Melee clash pool (GameSfx.PlaySwordClash picks 1 of 4 at random).
+            ("10_Battle_SFX/39_Block_03.wav",            "SwordClash.wav"),
+            ("10_Battle_SFX/22_Slash_04.wav",            "SwordClash2.wav"),
+            ("10_Battle_SFX/15_Impact_flesh_02.wav",     "SwordClash3.wav"),
+            // Weakest of the four (a dull body-fall thud among three sharper hits,
+            // kept for pool variety). If it reads wrong on audition, delete THIS ROW
+            // *and* Resources/Sfx/SwordClash4.wav - PlaySwordClash shrinks the pool
+            // gracefully, but deleting only the row would strand the old clip on disk.
+            ("12_Player_Movement_SFX/45_Landing_01.wav", "SwordClash4.wav"),
+
+            ("12_Player_Movement_SFX/56_Attack_03.wav",  "SwordSwing.wav"),
+            ("12_Player_Movement_SFX/61_Hit_03.wav",     "HeroHit.wav"),
+            ("10_UI_Menu_SFX/070_Equip_10.wav",          "WeaponDraw.wav"),
+            ("8_Atk_Magic_SFX/18_Thunder_02.wav",        "SpellCast.wav"),
+            ("8_Atk_Magic_SFX/45_Charge_05.wav",         "EnemyCastCharge.wav"),
+            ("10_Battle_SFX/69_Enemy_death_01.wav",      "EnemyDeath.wav"),
+            // The free pack contains exactly ONE enemy-death vocalisation, so the
+            // second death take is the SAME source. Correct sound, no variety: the
+            // 50/50 pick in EnemyCombatAudio.PlayDeath now plays one clip either way.
+            // Fix = one clip from leohpaz's paid "90 Retro RPG Battle SFX" pack.
+            ("10_Battle_SFX/69_Enemy_death_01.wav",      "EnemyDeath2.wav"),
+            // No construction/hammer sound exists in the free pack; this is a
+            // "got stronger" swell. Tonally magical rather than structural - audition.
+            ("8_Buffs_Heals_SFX/16_Atk_buff_04.wav",     "BuildingUpgrade.wav"),
+            ("10_UI_Menu_SFX/013_Confirm_03.wav",        "UiClick.wav"),
+            // Arrow striking a body; same source as EnemyHit (Pass 2) by design.
+            ("10_Battle_SFX/77_flesh_02.wav",            "TowerArrowHit.wav"),
+        };
+
+        // -- Pass 1b: rows with NO honest leohpaz equivalent --------------------
+        // These deliberately do NOT read from the leohpaz pack, rather than being
+        // forced onto a wrong-sounding clip.
+        //
+        //   FootstepsWalk  - LICENCE BLOCKER, still the unverified Freesound master.
+        //                    HeroLocomotion.cs:707 assigns this to a LOOPING
+        //                    AudioSource. The master is a 5.83s stereo multi-step
+        //                    walk loop; every leohpaz step is a single 0.67s one-shot,
+        //                    which looped becomes a metronomic 1.5 Hz single step with
+        //                    no L/R variation - wrong on the game's most-continuous
+        //                    sound. Fix = a licensed walk LOOP, or change
+        //                    HeroLocomotion to a timed one-shot stepper cycling
+        //                    03_Step_grass / 08_Step_rock / 12_Step_wood (code change,
+        //                    own WO - out of scope for a mapping-table edit).
+        //
+        //   DragonRoar     - REPLACED CONCURRENTLY by another seat on 2026-08-04:
+        //                    dragon_roar.wav was git-rm'd and dragon_roar.mp3 (65 KB,
+        //                    valid ID3) dropped in its place, with DragonRoar.mp3
+        //                    already written into Resources/Sfx. This row now points at
+        //                    the .mp3 so the mirror does not silently log "source
+        //                    missing" and leave the runtime copy unmanaged.
+        //                    Resources.Load("Sfx/DragonRoar") is extension-agnostic, so
+        //                    the loader key is unaffected.
+        //                    *** The .mp3's PROVENANCE IS NOT RECORDED ANYWHERE. ***
+        //                    Whoever swapped it must log its source + licence in
+        //                    Assets/Audio/SFX/Combat/SOURCE_LICENSE.md before ship -
+        //                    an unlabelled replacement is the same blocker in new bytes.
+        // (sourceFileUnderCombatMasterDir, destFileNameUnderRuntimeSfxDir)
+        private static readonly (string src, string dest)[] CombatUnresolvedMirror =
+        {
             ("footsteps_walk_loop.wav","FootstepsWalk.wav"),
-            ("dragon_roar.wav",        "DragonRoar.wav"),
-            ("building_construct.wav", "BuildingUpgrade.wav"),
-            ("ui_select.wav",          "UiClick.wav"),
-            ("projectile_whoosh_1.wav","TowerArrowHit.wav"),
+            ("dragon_roar.mp3",        "DragonRoar.mp3"),
         };
 
         // -- Pass 2: leohpaz clips -> SfxId synth-override + named drops -------
@@ -114,7 +199,14 @@ namespace DeNelle.Editor.Audio
 
             int copied = 0, skipped = 0, missing = 0;
 
-            copied += MirrorSet("combat", CombatMasterDir, CombatMirror, ref skipped, ref missing);
+            // Pass 1a: the string-name combat clips, now sourced from the licensed
+            // leohpaz pack (2026-08-04 licence re-point).
+            copied += MirrorSet("combat", LeohpazRoot, CombatMirror, ref skipped, ref missing);
+            // Pass 1b: the two rows with no honest leohpaz equivalent - still the
+            // unknown-provenance masters. See the CombatUnresolvedMirror banner.
+            copied += MirrorSet("combat-unresolved", CombatMasterDir, CombatUnresolvedMirror,
+                                ref skipped, ref missing);
+            // Pass 2: SfxId synth-overrides + the named leohpaz drops.
             copied += MirrorSet("leohpaz", LeohpazRoot, LeohpazMirror, ref skipped, ref missing);
 
             AssetDatabase.SaveAssets();
