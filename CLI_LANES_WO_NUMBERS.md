@@ -1,6 +1,14 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-03: next free WO = **854**. **782–853 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-03 (evening): next free WO = **855**. **782–854 CONSUMED.**
+> - **854** = **Quest Completability Program** — owner ruled that a quest which can be ACCEPTED and TRACKED
+>   but not completed is a BUG. Audit found **0 of 63 stages completable**: `QuestService.AdvanceQuest` has
+>   exactly ONE caller and no shipped dialogue names any of the 24 quest ids. 7 phases behind a
+>   `QUEST_REACH_OK <n>/63` oracle + ratchet. Adds `completeOn` to `QuestStage` (**no save bump** — catalog
+>   content, not the persisted contract). File `WORK_ORDER_854_quest_completability_program.md`.
+>   **READY (P0-P2, zero owner deps); P3-P7 gated on the §6 ruling set.**
+>
+> *(banner bumped 854 -> 855 in the SAME edit as the mint)*
 > - **853** = **Structures are targetable** — the disjoint-contract seam. `WallSegment.cs:28` + `Gate.cs:45`
 >   implement `IDamageableStructure` while `TroopController.cs:449-469` sweeps for `IDamageable`; the two
 >   are disjoint, so nothing can damage a wall, gate or enemy tower and "Razed %" counts bodies. Extends
