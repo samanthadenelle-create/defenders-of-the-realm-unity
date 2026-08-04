@@ -1278,9 +1278,11 @@ namespace DeNelle.Village
             _moveWorldPoint.z = Mathf.Clamp(_moveWorldPoint.z, mapCentre.z - halfH, mapCentre.z + halfH);
         }
 
-        /// <summary>True when the armed catalog entry is a tower (gets the rotate panel).</summary>
-        private static bool IsTowerEntry(CatalogEntry entry)
-            => entry != null && entry.type == CatalogType.Tower;
+        // NOTE (WO-855): the rotate-panel tower check used to live here as a narrower
+        // private duplicate (type == Tower only). It now shares the ONE classifier
+        // declared further down -- see IsTowerEntry. That version is a strict superset
+        // (same type check, plus a repo.behaviorId fallback), so a row that is a tower
+        // but omitted its type now correctly gets the rotate panel too.
 
         /// <summary>
         /// WO-334 — open the Preview &amp; Rotate panel for the armed tower at a validated
@@ -1763,7 +1765,11 @@ namespace DeNelle.Village
             // First-build freebie (owner 2026-07-13): read the flag ONCE here so the
             // affordability gate, the charge and the consumption below all agree.
             bool freeBuild = FreeBuildAvailable(_armed);
-            DeNelle.Core.Catalog.ResourceCost cost = freeBuild ? default : CostFor(_armed);
+            // WO-855: charge through the SAME resolver the ghost validator + palette price with
+            // (SoftcappedCostFor = CostFor + the tower spam softcap). Behaviour-neutral for every
+            // non-tower row and for the first four towers; from the 5th tower on, the commit now
+            // charges the surcharge the player was already shown, instead of the flat base cost.
+            DeNelle.Core.Catalog.ResourceCost cost = freeBuild ? default : SoftcappedCostFor(_armed);
             if (!CanAfford(cost))
             {
                 Debug.Log($"[BuildMode] Not enough resources to place '{_armed.id}' — placement aborted.");
@@ -1899,6 +1905,11 @@ namespace DeNelle.Village
             Guard.Try("BuildMode", "spawn vendor NPC for placed building",
                 () => CastleVendorNpcInjector.NotifyBuildingPlaced(_armed.id, ps.transform));
 
+            // WO-855 Phase 1: this placement changed the live tower census -- drop the cached
+            // count so the NEXT ghost frame prices the next tower at the correct ordinal
+            // (without waiting out the TTL).
+            InvalidateTowerCount();
+
             // WO-612 (owner 2026-07-06): construction takes TIME — start a WO-172 timer job
             // AFTER the charge (the WO-131 seam the service documents). A null job (both
             // free slots busy / service absent) degrades to instant completion: placement
@@ -1906,8 +1917,27 @@ namespace DeNelle.Village
             if (DeNelle.Core.FeatureFlags.BuildTimers)
             {
                 string jobKey = UnderConstructionVisual.KeyFor(data);
-                var job = BuildTimerService.Instance != null
-                    ? BuildTimerService.Instance.StartBuild(jobKey, 0) : null;
+                var svc = BuildTimerService.Instance;
+                // WO-855 Phase 4 -- THE HARD-CODED ZERO IS GONE. This call passed the literal
+                // `0` as the tier, so EVERY structure in the game -- a 40-wood collector and a
+                // 2000-basket endgame building alike -- built in exactly baseBuildSeconds, and
+                // BuildTimerConfig.tierGrowth was unreachable dead tuning. The tier is now
+                // DERIVED from the structure's own authored cost basket (see
+                // BuildTimerConfig.TierForCost): the one economic weight WO-855 sec.4 defines,
+                // it needs no new RepoProps field (there is no repo.buildSeconds / repo.tier),
+                // and it tracks the Phase 2/3 JSON cost retune automatically.
+                // CostFor (NOT EffectiveCostFor): the timer keys off the structure's INTRINSIC
+                // weight, so a freebie does not make a build instant and the tower softcap
+                // surcharge does not stretch the timer.
+                int tier = svc != null && svc.Config != null
+                    ? svc.Config.TierForCost(CostFor(_armed)) : 0;
+                var job = svc != null ? svc.StartBuild(jobKey, tier) : null;
+                // Sec.12 proving line: a capture must show the RESOLVED tier + duration, so
+                // "every building takes 15s" can never silently come back.
+                FlowTrace.Step("BuildTimer",
+                    $"build '{jobKey}' tier={tier} (basket {BuildTimerConfig.CostBasket(CostFor(_armed)):0}) -> " +
+                    $"{(svc != null && svc.Config != null ? svc.Config.DurationSecondsForTier(tier, BuildJobKind.Build) : 0f):0}s " +
+                    "(WO-855: tier derived from the authored cost basket, no longer the hard-coded 0).");
                 if (job != null) UnderConstructionVisual.Attach(ps, jobKey);
                 else FlowTrace.Step("Build",
                     $"no free build slot for '{jobKey}' — completed instantly (never block)");
@@ -2744,11 +2774,10 @@ namespace DeNelle.Village
             // id-prefix guess. The wooden lane above already claimed the free towers, so any
             // tower reaching here (arcane-tower, tower_arcane_spire, tower_wall_wizard,
             // tower_siege_tower, tower_catapult, ...) is charged.
-            bool isTower = entry.type == CatalogType.Tower
-                || (entry.repo != null
-                    && (string.Equals(entry.repo.behaviorId, "DefenseTower", System.StringComparison.OrdinalIgnoreCase)
-                     || string.Equals(entry.repo.behaviorId, "ArcaneTower",  System.StringComparison.OrdinalIgnoreCase)));
-            if (isTower) return false;
+            // WO-855: classification moved to the ONE shared IsTowerEntry helper (same
+            // predicate, verbatim) so the freebie lane and the tower softcap can never
+            // disagree about what a tower is.
+            if (IsTowerEntry(entry)) return false;
 
             // Lane 3 -- EVERYTHING ELSE (any NON-tower building): the FIRST placement of each
             // distinct building id is FREE, a second of the same id is PAID. Free while THIS id
@@ -2757,14 +2786,177 @@ namespace DeNelle.Village
             return used == null || !used.Contains(entry.id);
         }
 
+        // =====================================================================
+        //  WO-855 Phase 1 -- TOWER SPAM SOFTCAP (the ONE placement cost multiplier)
+        // ---------------------------------------------------------------------
+        //  Measured baseline (WO-855 Phase 0): NOTHING limited tower count. No cap, no
+        //  singleton flag on any tower row, flat cost -- the 1st and the 50th archer cost
+        //  the same, so "wall of towers" was the dominant (and free) strategy.
+        //
+        //  The fix is ONE multiplier applied at ONE place: the NEW-PLACEMENT cost path.
+        //  It deliberately lives in EffectiveCostFor / SoftcappedCostFor and NOT in
+        //  CostFor, because CostFor is ALSO the base of UpgradeCostFor (2431) and
+        //  RefundCostFor (2579) -- putting the multiply there would inflate every upgrade
+        //  step AND every sell refund, which WO-855 sec.5 forbids ("Does not apply to
+        //  upgrades of existing towers (only new place)").
+        //
+        //  Curve (WO-855 sec.5, "linear" mode). `ordinal` is the 1-based index of the tower
+        //  BEING placed (= live count + 1), which is how the WO's own worked example reads:
+        //  "place when count already 4 -> 5th uses startAtCount=5 -> mult = 1+0.15 = 1.15".
+        //      ordinal <  5 : x1.00   (the first four towers are un-surcharged)
+        //      ordinal >= 5 : min(3.0, 1 + (ordinal - 5 + 1) * 0.15)
+        //  So the 5th costs x1.15, the 8th x1.60, the 18th hits the x3.0 ceiling.
+        //
+        //  FREEBIES ARE UNTOUCHED (owner-locked, see FreeBuildAvailable): the first two
+        //  wooden archer placements and the first placement of each distinct non-tower id
+        //  short-circuit to a ZERO cost BEFORE the multiplier is ever consulted. Starting
+        //  wood/iron are 0, so those freebies ARE the starting budget -- a softcap that
+        //  charged placement #1 or #2 would soft-lock a fresh save.
+        // =====================================================================
+
+        /// <summary>WO-855: the 1-based placement ordinal at which the tower surcharge starts (the first 4 are free of it).</summary>
+        public const int TowerSoftcapStartAtOrdinal = 5;
+
+        /// <summary>WO-855: linear surcharge added per tower at/after <see cref="TowerSoftcapStartAtOrdinal"/>.</summary>
+        public const float TowerSoftcapMultPerExtra = 0.15f;
+
+        /// <summary>WO-855: hard ceiling on the tower surcharge (never more than 3x the authored cost).</summary>
+        public const float TowerSoftcapMaxMult = 3.0f;
+
+        /// <summary>
+        /// PURE curve: the cost multiplier for the tower at 1-based <paramref name="placementOrdinal"/>.
+        /// Monotonic non-decreasing, 1.0 below the start ordinal, clamped at
+        /// <see cref="TowerSoftcapMaxMult"/>. No world/state reads -- the oracle drives this directly.
+        /// </summary>
+        public static float TowerSoftcapMultiplier(int placementOrdinal)
+        {
+            if (placementOrdinal < TowerSoftcapStartAtOrdinal) return 1f;
+            int extras = placementOrdinal - TowerSoftcapStartAtOrdinal + 1;
+            return Mathf.Min(TowerSoftcapMaxMult, 1f + extras * TowerSoftcapMultPerExtra);
+        }
+
+        /// <summary>
+        /// Is this catalog row a TOWER? Read from the CATALOG (<c>entry.type == CatalogType.Tower</c>)
+        /// with the DefenseTower/ArcaneTower <c>repo.behaviorId</c> as a belt-and-braces fallback for a
+        /// row that omitted the type -- never an id-prefix guess. This is the SINGLE tower classifier;
+        /// both the freebie lanes (<see cref="FreeBuildAvailable"/>) and the WO-855 softcap read it, so
+        /// "what counts as a tower" can never drift between the two rules.
+        /// </summary>
+        public static bool IsTowerEntry(CatalogEntry entry)
+        {
+            if (entry == null) return false;
+            if (entry.type == CatalogType.Tower) return true;
+            var repo = entry.repo;
+            return repo != null
+                && (string.Equals(repo.behaviorId, "DefenseTower", System.StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(repo.behaviorId, "ArcaneTower",  System.StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Live-count cache. EffectiveCostFor runs EVERY FRAME while a ghost is armed
+        // (IsValidPlacement gate 5), so an unguarded FindObjectsByType would allocate an
+        // array per frame on a mobile target. A short realtime TTL keeps the count honest
+        // (a sold tower is reflected within half a second) at one scan per half second;
+        // Place() and the oracle call InvalidateTowerCount() for an immediate recount.
+        private const float TowerCountTtlSeconds = 0.5f;
+        private static int   s_towerCountCache = -1;
+        private static float s_towerCountStamp = -1f;
+
+        /// <summary>Force the next <see cref="LiveTowerCount"/> to re-scan the world (call after a place / sell).</summary>
+        public static void InvalidateTowerCount()
+        {
+            s_towerCountCache = -1;
+            s_towerCountStamp = -1f;
+        }
+
+        /// <summary>
+        /// How many PLAYER towers stand in the world right now. Two DISJOINT component sets are
+        /// summed because the game has two tower-raising lanes and neither sees the other:
+        ///   * <see cref="PlacedStructure"/> whose catalog row is a tower -- the Build-Mode /
+        ///     BaseLayout lane (BaseLayoutLoader.Spawn is the only thing that adds the component);
+        ///   * <see cref="Tower"/> -- the legacy Build-Menu lane (TowerConstructionQueue /
+        ///     TowerPersistenceService are the only things that add it).
+        /// They never co-occur on one object, so the sum cannot double-count. Deliberately NOT
+        /// counting <see cref="DefenseTower"/> components: raid arenas and enemy strongholds carry
+        /// EnemyOwned garrison turrets, and baked scene towers would surcharge the player's very
+        /// FIRST placement. No save field (WO-855 forbids one) -- this is a live world read.
+        /// </summary>
+        public static int LiveTowerCount()
+        {
+            float now = Time.realtimeSinceStartup;
+            if (s_towerCountCache >= 0 && s_towerCountStamp >= 0f && now - s_towerCountStamp < TowerCountTtlSeconds)
+                return s_towerCountCache;
+
+            int count = 0;
+            var placed = Object.FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None);
+            for (int i = 0; i < placed.Length; i++)
+            {
+                var ps = placed[i];
+                if (ps == null || string.IsNullOrEmpty(ps.itemId)) continue;
+                if (IsTowerEntry(CatalogRegistry.Get(ps.itemId))) count++;
+            }
+            count += Object.FindObjectsByType<Tower>(FindObjectsSortMode.None).Length;
+
+            s_towerCountCache = count;
+            s_towerCountStamp = now;
+            return count;
+        }
+
+        /// <summary>
+        /// PURE: apply the WO-855 tower softcap to <paramref name="baseCost"/> given
+        /// <paramref name="liveTowerCount"/> towers already standing. Non-tower rows and a
+        /// multiplier of 1 return the base cost VERBATIM (byte-identical to the pre-WO-855
+        /// behaviour). Each slot is CEILed so a surcharge can never round away to nothing.
+        /// The oracle drives this overload directly -- no world reads, fully deterministic.
+        /// </summary>
+        public static DeNelle.Core.Catalog.ResourceCost ApplyTowerSoftcap(
+            CatalogEntry entry, DeNelle.Core.Catalog.ResourceCost baseCost, int liveTowerCount)
+        {
+            if (!IsTowerEntry(entry)) return baseCost;
+            int ordinal = Mathf.Max(1, liveTowerCount + 1);
+            float mult = TowerSoftcapMultiplier(ordinal);
+            if (mult <= 1f) return baseCost;
+
+            var scaled = new DeNelle.Core.Catalog.ResourceCost
+            {
+                wood     = Mathf.CeilToInt(baseCost.wood     * mult),
+                food     = Mathf.CeilToInt(baseCost.food     * mult),
+                iron     = Mathf.CeilToInt(baseCost.iron     * mult),
+                crystals = Mathf.CeilToInt(baseCost.crystals * mult),
+            };
+            // Sec.12 proving line: a capture must show the REAL numbers (ordinal + multiplier +
+            // before/after cost). Keyed by id+ordinal so each new tower logs exactly once
+            // instead of once per ghost frame.
+            FlowTrace.Once("Economy", $"softcap:{entry.id}:{ordinal}",
+                $"tower softcap x{mult:0.##} on '{entry.id}' -- placement #{ordinal} " +
+                $"(live towers {liveTowerCount}, startAt {TowerSoftcapStartAtOrdinal}, " +
+                $"perExtra {TowerSoftcapMultPerExtra:0.##}, cap x{TowerSoftcapMaxMult:0.##}): " +
+                $"w{baseCost.wood}/f{baseCost.food}/i{baseCost.iron}/c{baseCost.crystals} -> " +
+                $"w{scaled.wood}/f{scaled.food}/i{scaled.iron}/c{scaled.crystals}");
+            return scaled;
+        }
+
+        /// <summary>
+        /// The authored build cost WITH the WO-855 tower softcap applied for the CURRENT live
+        /// tower count -- but WITHOUT the placement freebie. This is what a surface should read
+        /// when it prices a build through a path that does NOT burn the freebie ledger (the
+        /// legacy Build Menu), so pricing can never hand out an unlimited free tower.
+        /// Surfaces that go through the freebie-consuming Build-Mode commit read
+        /// <see cref="EffectiveCostFor"/> instead.
+        /// </summary>
+        public static DeNelle.Core.Catalog.ResourceCost SoftcappedCostFor(CatalogEntry entry)
+            => ApplyTowerSoftcap(entry, CostFor(entry), LiveTowerCount());
+
         /// <summary>
         /// The cost the player actually pays: ZERO (all components — wood/iron/food/
-        /// crystals) while the entry's first-build freebie is live, else CostFor.
-        /// The ONE cost reader for the ghost validator, the palette, the info panel
-        /// and the Place() commit, so every surface agrees with the ledger.
+        /// crystals) while the entry's first-build freebie is live, else CostFor WITH the
+        /// WO-855 tower softcap. The ONE cost reader for the ghost validator, the palette,
+        /// the info panel and the Place() commit, so every surface agrees with the ledger.
+        /// Freebie is checked FIRST and short-circuits, so the owner-locked free placements
+        /// (2 wooden archers + first-of-each non-tower id) stay exactly free -- the softcap
+        /// can never charge a fresh, zero-resource save for placement #1 or #2.
         /// </summary>
         public static DeNelle.Core.Catalog.ResourceCost EffectiveCostFor(CatalogEntry entry)
-            => FreeBuildAvailable(entry) ? default : CostFor(entry);
+            => FreeBuildAvailable(entry) ? default : SoftcappedCostFor(entry);
 
         /// <summary>Map the Core cost to EconomyService.ResourceCost (1:1 field copy).</summary>
         public static ResourceCost ToEconomy(DeNelle.Core.Catalog.ResourceCost c)

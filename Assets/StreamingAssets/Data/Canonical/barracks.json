@@ -20,29 +20,29 @@
       "level": 3,
       "displayName": "Barracks III",
       "unlocksTroopIds": ["troop-shieldguard"],
-      "cost": { "wood": 320, "food": 90, "iron": 160, "crystals": 0, "coins": 0 },
-      "buildTimeSeconds": 300
+      "cost": { "wood": 520, "food": 145, "iron": 260, "crystals": 0, "coins": 0 },
+      "buildTimeSeconds": 720
     },
     {
       "level": 4,
       "displayName": "Barracks IV",
       "unlocksTroopIds": ["troop-outrider"],
-      "cost": { "wood": 600, "food": 180, "iron": 320, "crystals": 20, "coins": 0 },
-      "buildTimeSeconds": 720
+      "cost": { "wood": 1450, "food": 430, "iron": 770, "crystals": 50, "coins": 0 },
+      "buildTimeSeconds": 3600
     },
     {
       "level": 5,
       "displayName": "Barracks V",
       "unlocksTroopIds": ["troop-battlemage"],
-      "cost": { "wood": 1000, "food": 320, "iron": 560, "crystals": 60, "coins": 0 },
-      "buildTimeSeconds": 1500
+      "cost": { "wood": 3200, "food": 1020, "iron": 1790, "crystals": 190, "coins": 0 },
+      "buildTimeSeconds": 10800
     },
     {
       "level": 6,
       "displayName": "Barracks VI",
       "unlocksTroopIds": ["troop-echo-legionnaire"],
-      "cost": { "wood": 1800, "food": 560, "iron": 1000, "crystals": 140, "coins": 0 },
-      "buildTimeSeconds": 3600
+      "cost": { "wood": 7200, "food": 2240, "iron": 4000, "crystals": 560, "coins": 0 },
+      "buildTimeSeconds": 28800
     }
   ]
 }

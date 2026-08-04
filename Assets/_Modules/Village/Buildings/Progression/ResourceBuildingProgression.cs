@@ -179,8 +179,14 @@ namespace DeNelle.Village.Buildings.Progression
         // via IntervalForLevel during construction. If it sits after _byId it is still
         // null when Build() runs -> the type initializer throws NRE and poisons the whole
         // type (TypeInitializationException cascade across upgrade/dialogue/harvester).
-        // Level 1 ticks every 8s dropping ~1.2s/level to 3.2s at level 5 (2.5x throughput).
-        private static readonly float[] HarvestIntervalByLevel = { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+        // WO-855 Phase 5 (gather faucet re-scale, 2026-08-03). WAS { 8, 6.8, 5.6, 4.4, 3.2 } -
+        // a level-5 lumbermill ticked every 3.2s for 55 wood = 61,875 wood/HOUR before the
+        // xEchoCount and production-perk multipliers, i.e. ~196 wood/sec late-game, which made
+        // every sink in the game free (WO-855 section 4.8: "one mid tower should cost several minutes
+        // of income", it cost ~4 seconds). The RATIO is preserved exactly (2.5x throughput from
+        // L1 to L5, -7.5s per level) so the "an upgrade visibly speeds income" axis is untouched;
+        // only the absolute cadence moved (mobile-collector pacing: ~1 tick/minute at L1).
+        private static readonly float[] HarvestIntervalByLevel = { 50f, 42.5f, 35f, 27.5f, 20f };
 
         // LAZY + GUARDED catalog (WO-453). Previously `_byId = Build()` ran inside the
         // static .cctor. ANY exception thrown by Build() there raises a TypeInitialization
@@ -236,18 +242,23 @@ namespace DeNelle.Village.Buildings.Progression
 
             // Farm — produces Food. Upgraded with Wood + Crystals (you spend the
             // other harvestables to grow your food output). 5 levels.
+            // WO-855 Phase 5: yield 20/+12 -> 13/+4 and baseCost 85 -> 130. See the
+            // HarvestIntervalByLevel note: the faucet, not the sinks, was the runaway.
+            // Per-hour at x1 echo / no perks: L1 936, L3 2,160, L5 5,220 food.
             dict[FarmId] = MakeBuilding(
                 FarmId, "Farm", HarvestResource.Food,
-                baseYield: 20, yieldStep: 12,
+                baseYield: 13, yieldStep: 4,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
-                baseCost: 85, costStep: 1.9f);
+                baseCost: 130, costStep: 1.9f);
 
             // Lumbermill — produces Wood. Upgraded with Food + Crystals. 5 levels.
+            // WO-855 Phase 5: yield 15/+10 -> 10/+3 and baseCost 80 -> 125.
+            // Per-hour at x1 echo / no perks: L1 720, L3 1,646, L5 3,960 wood.
             dict[LumbermillId] = MakeBuilding(
                 LumbermillId, "Lumbermill", HarvestResource.Wood,
-                baseYield: 15, yieldStep: 10,
+                baseYield: 10, yieldStep: 3,
                 costResources: new[] { HarvestResource.Food, HarvestResource.Crystals },
-                baseCost: 80, costStep: 1.9f);
+                baseCost: 125, costStep: 1.9f);
 
             // Forge — produces Iron. Upgraded with Wood + Crystals. 5 harvestable
             // levels PLUS a 6th MAGIC-GATED tier (DEF-121): the Arcane Forge. Reaching
@@ -256,9 +267,12 @@ namespace DeNelle.Village.Buildings.Progression
             // economy correction. The priciest curve.
             dict[ForgeId] = MakeBuilding(
                 ForgeId, "Forge", HarvestResource.Iron,
-                baseYield: 8, yieldStep: 6,
+                // WO-855 Phase 5: yield 8/+6 -> 6/+2 and baseCost 130 -> 200. Iron is the
+                // scarcest harvestable by design; per-hour at x1 echo / no perks:
+                // L1 432, L3 1,029, L5 2,520, arcane 3,600 iron.
+                baseYield: 6, yieldStep: 2,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
-                baseCost: 130, costStep: 2.0f,
+                baseCost: 200, costStep: 2.0f,
                 magicTier: new MagicTier(
                     magicCost: 3,
                     techNodeId: TechTree.ArcaneForgeNodeId,
@@ -303,10 +317,15 @@ namespace DeNelle.Village.Buildings.Progression
         // Speed ladder HarvestIntervalByLevel is declared near the top (before _byId)
         // so it is initialized before Build() reads it — see the comment there.
         // The arcane (Magic-gated) tier is the fastest tick in the game.
-        private const float ArcaneHarvestInterval = 2.4f;
+        // WO-855 Phase 5: was 2.4s + x1.5 size, which made the arcane forge a 99,000 iron/HOUR
+        // faucet (2.75x the level-5 forge, and the single largest income line in the game once
+        // the xEchoCount and forge resourceEfficiency perks stacked on top). Re-scaled to stay
+        // the FASTEST tick in the game (18s < the L5 20s) and still the biggest haul, but as a
+        // ~1.4x step over L5 rather than a 2.75x cliff.
+        private const float ArcaneHarvestInterval = 18f;
         // Size: harvestable tiers leave size at 1.0 (size = YieldPerTick); the
         // arcane tier multiplies the haul so a maxed forge reads as a big payout.
-        private const float ArcaneYieldSizeMultiplier = 1.5f;
+        private const float ArcaneYieldSizeMultiplier = 1.1f;
 
         /// <summary>The curated tick interval (seconds) for a 1-based <paramref name="level"/>.</summary>
         private static float IntervalForLevel(int level)
@@ -321,7 +340,7 @@ namespace DeNelle.Village.Buildings.Progression
             // can never itself be null during cctor. Keeps the curve identical, never a flat 6f.
             float[] ladder = (HarvestIntervalByLevel != null && HarvestIntervalByLevel.Length > 0)
                 ? HarvestIntervalByLevel
-                : new[] { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+                : new[] { 50f, 42.5f, 35f, 27.5f, 20f };   // WO-855: MUST mirror the ladder above.
             int i = Mathf.Clamp(level - 1, 0, ladder.Length - 1);
             return ladder[i];
         }

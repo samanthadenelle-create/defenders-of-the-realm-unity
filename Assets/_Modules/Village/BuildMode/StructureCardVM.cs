@@ -112,7 +112,13 @@ namespace DeNelle.Village
             var repo = entry != null ? entry.repo : null;
 
             Freebie = freebie;
-            EffectiveCost = freebie ? default : ResolveCost(entry);
+            // WO-855 Phase 1: the palette card / info panel is the price the player reads BEFORE
+            // arming, so it must carry the tower-spam softcap or the ghost would reject
+            // CannotAfford at a number this card never showed. SoftcappedCostFor (not
+            // EffectiveCostFor) so the INJECTED `freebie` argument stays the single freebie
+            // authority for this projection -- ResolveCost below was a private duplicate of
+            // BuildModeController.CostFor and could not see the multiplier.
+            EffectiveCost = freebie ? default : BuildModeController.SoftcappedCostFor(entry);
             Affordable = ComputeAffordable(economy, EffectiveCost);
 
             TargetingTag = TargetingTagFor(entry);
@@ -168,14 +174,9 @@ namespace DeNelle.Village
 
         // ── Pure helpers (ported verbatim from the two Views) ────────────────
 
-        /// <summary>Resolve build cost: authored multi-cost wins, else crystals-only buildCost.</summary>
-        private static CoreCost ResolveCost(CatalogEntry e)
-        {
-            var repo = e != null ? e.repo : null;
-            if (repo == null) return default;
-            if (!repo.cost.IsZero) return repo.cost;
-            return new CoreCost { crystals = repo.buildCost };
-        }
+        // RETIRED (WO-855): the private ResolveCost duplicate of BuildModeController.CostFor
+        // lived here and was the reason this card could not see the tower softcap. The ctor
+        // now calls BuildModeController.SoftcappedCostFor -- the ONE resolver -- directly.
 
         private static bool ComputeAffordable(IEconomy economy, CoreCost cost)
         {

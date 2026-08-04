@@ -1,36 +1,36 @@
 {
   "version": 1,
-  "_comment": "WO-808 Option A (owner-locked 2026-07-30): per-instance gear power levels. Same owned weapon/armor levels up in place; rarity stays identity, level is the power ladder. statMult index 0 = level 1 (always 1.0 = authored baseline). costWood/costIron index N = the cost to REACH level N+1 (index 0 = level 1 = free/owned). Curves are soft placeholders - owner retunes numbers, structure stays. Max level per band = statMult length. DUAL-COPY RULE: Assets/Resources/Data/Canonical is the runtime authority; Assets/StreamingAssets/Data/Canonical must stay byte-identical.",
+  "_comment": "WO-808 Option A (owner-locked 2026-07-30): per-instance gear power levels. Same owned weapon/armor levels up in place; rarity stays identity, level is the power ladder. statMult index 0 = level 1 (always 1.0 = authored baseline). costWood/costIron index N = the cost to REACH level N+1 (index 0 = level 1 = free/owned). WO-855 Phase 6 (2026-08-03) retune: improve costs lifted against the post-faucet-cut economy - rarity ordering preserved, per-level step shape normalized to 1 : 2.5 : 6 : 14, iron = wood/2 throughout. Common stays approachable (first step 90W/45I ~ one early tower); legendary is a genuine chase. NOTE: improve is INSTANT (GearProgression.Improve - no job, no queue channel), so gear costs resources ONLY and never wall-clock; a timed reforge is engine work, not a data tune. Curves are soft placeholders - owner retunes numbers, structure stays. Max level per band = statMult length. DUAL-COPY RULE: Assets/Resources/Data/Canonical is the runtime authority; Assets/StreamingAssets/Data/Canonical must stay byte-identical.",
   "bands": [
     {
       "rarity": "common",
       "statMult": [1.00, 1.12, 1.22, 1.30, 1.36],
-      "costWood": [0, 60, 140, 300, 600],
-      "costIron": [0, 30, 70, 150, 300]
+      "costWood": [0, 90, 225, 540, 1260],
+      "costIron": [0, 45, 115, 270, 630]
     },
     {
       "rarity": "uncommon",
       "statMult": [1.00, 1.10, 1.19, 1.26, 1.32],
-      "costWood": [0, 90, 210, 450, 900],
-      "costIron": [0, 45, 105, 225, 450]
+      "costWood": [0, 150, 375, 900, 2100],
+      "costIron": [0, 75, 190, 450, 1050]
     },
     {
       "rarity": "rare",
       "statMult": [1.00, 1.09, 1.17, 1.23, 1.28],
-      "costWood": [0, 140, 320, 700, 1400],
-      "costIron": [0, 70, 160, 350, 700]
+      "costWood": [0, 260, 650, 1560, 3600],
+      "costIron": [0, 130, 325, 780, 1800]
     },
     {
       "rarity": "epic",
       "statMult": [1.00, 1.08, 1.15, 1.21, 1.25],
-      "costWood": [0, 220, 500, 1100, 2200],
-      "costIron": [0, 110, 250, 550, 1100]
+      "costWood": [0, 450, 1100, 2700, 6300],
+      "costIron": [0, 225, 550, 1350, 3150]
     },
     {
       "rarity": "legendary",
       "statMult": [1.00, 1.07, 1.13, 1.18, 1.22],
-      "costWood": [0, 350, 800, 1750, 3500],
-      "costIron": [0, 175, 400, 875, 1750]
+      "costWood": [0, 800, 2000, 4800, 11200],
+      "costIron": [0, 400, 1000, 2400, 5600]
     }
   ]
 }

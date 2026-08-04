@@ -239,9 +239,17 @@ namespace DeNelle.Village
         /// <summary>
         /// The tower rows this menu can price + build: every <see cref="CatalogType.Tower"/> entry
         /// in the registry, cheapest first, capped at <see cref="MaxTowerOptions"/>. Cost comes from
-        /// the REAL <see cref="BuildModeController.CostFor"/> — the same resolver the Build-Mode
-        /// commit charges through — so the menu can never show a price the ledger disagrees with.
-        /// Empty (not fabricated) when the catalog has not been bootstrapped.
+        /// the REAL <see cref="BuildModeController.SoftcappedCostFor"/> -- the same resolver the
+        /// Build-Mode commit charges through -- so the menu can never show a price the ledger
+        /// disagrees with. Empty (not fabricated) when the catalog has not been bootstrapped.
+        ///
+        /// WO-855 Phase 1: this used to read the raw <c>CostFor</c>, so the tower-spam softcap
+        /// would have been invisible AND uncharged on this lane -- the Build Menu was a way to
+        /// buy the 20th tower at the 1st tower's price. It reads SoftcappedCostFor and NOT
+        /// <c>EffectiveCostFor</c> ON PURPOSE: EffectiveCostFor also zeroes the cost while a
+        /// placement FREEBIE is live, but the freebie ledger is burned only by
+        /// BuildModeController.Place -- this lane spends through TrySpendBuild and never touches
+        /// FreeBuildsUsed, so pricing it freebie-aware would mint UNLIMITED free towers.
         /// </summary>
         public IReadOnlyList<TowerBuildOption> TowerOptions
         {
@@ -266,7 +274,7 @@ namespace DeNelle.Village
                 foreach (var e in rows)
                 {
                     if (e == null || string.IsNullOrEmpty(e.id)) continue;
-                    CoreCost cost = BuildModeController.CostFor(e);
+                    CoreCost cost = BuildModeController.SoftcappedCostFor(e);
                     string label = !string.IsNullOrEmpty(e.displayName) ? e.displayName : e.id;
                     float dmg = e.repo != null ? e.repo.damage : 0f;
                     float rng = e.repo != null ? e.repo.range  : 0f;

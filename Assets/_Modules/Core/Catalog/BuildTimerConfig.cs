@@ -11,6 +11,19 @@
 //   • the premium instant-finish crystal price;
 //   • the free build-slot count (concurrency / scarcity → sellable slots later).
 //
+// WO-855 Phase 4 (2026-08-03) -- the curve is now actually REACHABLE. The placement
+// path used to pass a hard-coded literal tier 0, so every structure built in exactly
+// baseBuildSeconds (15s) and tierGrowth was dead tuning. The tier is now derived from
+// the structure's authored cost basket (TierForCost), and the defaults were retuned to
+// the WO-855 sec.4.6 mobile bands -- snappy early, hours-long endgame:
+//   base 15s -> 30s | upgradeMultiplier 1.25 -> 1.35 | freeBuildSlots stays 2 (scarcity)
+//   tier ladder at growth 3.0: 30s | 1.5m | 4.5m | 13.5m | 40.5m | ~2h
+// Against the live catalog that reads: founding + collectors + walls 30s, starter
+// towers/shops 1.5m, barracks + heavy towers 4.5m, fountain 13.5m; the top two bands
+// are headroom the Phase 2/3 cost retune grows into.
+// There is NO Resources/Economy/BuildTimerConfig.asset in the tree -- these C# defaults
+// ARE the live numbers. Author an asset only to override them.
+//
 // Lives in DeNelle.Core (pure data, no Village ref) so both the Village
 // BuildTimerService AND a future Core-side replay/validation can read the same
 // numbers. BuildTimerService resolves an instance via Resources.Load (path below)
@@ -35,7 +48,7 @@ namespace DeNelle.Core.Catalog
 
         [Header("Hybrid duration curve (tier 0 = first build)")]
         [Tooltip("Base seconds for a tier-0 build — keep onboarding snappy (seconds–minutes).")]
-        [Min(0f)] public float baseBuildSeconds = 15f;
+        [Min(0f)] public float baseBuildSeconds = 30f;
 
         [Tooltip("Per-tier multiplier — durations scale super-linearly: tierSeconds = base * pow(growth, tier). " +
                  ">1 makes high tiers the hours-long endgame drag that drives ad-watches/spend.")]
@@ -45,7 +58,21 @@ namespace DeNelle.Core.Catalog
         [Min(0f)] public float maxDurationSeconds = 48f * 3600f;
 
         [Tooltip("Upgrades multiply the same tier curve by this (upgrades a touch longer than a fresh build of the same tier).")]
-        [Min(0f)] public float upgradeMultiplier = 1.25f;
+        [Min(0f)] public float upgradeMultiplier = 1.35f;
+
+        [Header("Cost -> tier bands (WO-855 Phase 4)")]
+        [Tooltip("Ascending resource-basket thresholds. A structure whose authored cost basket reaches " +
+                 "thresholds[i] builds at tier i+1. Below thresholds[0] = tier 0 (the snappy early game).")]
+        // CALIBRATED against the live structures-catalog basket spread (5 .. 440 as of
+        // 2026-08-03), NOT invented: band 0 deliberately swallows EVERY founding piece and
+        // every collector/wall (pet-house 125, collector_lumbermill 105, lumberyard 80,
+        // farm 90, wall_stone 120, gate_stone 135) so the first ten minutes of a new save
+        // are never gated -- the owner's hard constraint. Band 1 takes the starter towers
+        // and shops (150-245), band 2 the barracks/heavy towers (270-335), band 3 the
+        // fountain (440). Bands 4-5 are HEADROOM: nothing reaches them today, and they are
+        // what turns the ladder into the hours-long endgame as the Phase 2/3 cost retune
+        // pushes late rows up. Re-check this table whenever catalog costs move.
+        public float[] tierCostThresholds = { 140f, 260f, 420f, 900f, 2000f };
 
         [Header("Rewarded-ad skip (opt-in, store-build only)")]
         [Tooltip("Seconds knocked off the remaining timer per rewarded-ad watch (the fixed chunk). Default 15 min.")]
@@ -79,6 +106,47 @@ namespace DeNelle.Core.Catalog
             if (type == BuildJobKind.Upgrade) seconds *= Mathf.Max(0f, upgradeMultiplier);
             return Mathf.Min(seconds, Mathf.Max(0f, maxDurationSeconds));
         }
+
+        /// <summary>
+        /// WO-855 sec.4 resource BASKET -- the one weighted scalar the work order defines for
+        /// comparing costs across the four axes: <c>wood + 1.5*iron + 1.0*food + 2.0*crystals</c>.
+        /// Pure; used as the structure's economic WEIGHT when deriving its build tier.
+        /// </summary>
+        public static float CostBasket(ResourceCost cost)
+            => cost.wood + 1.5f * cost.iron + 1.0f * cost.food + 2.0f * cost.crystals;
+
+        /// <summary>
+        /// WO-855 Phase 4 -- the BUILD TIER for a structure of <paramref name="cost"/>.
+        /// -----------------------------------------------------------------------------
+        /// Before WO-855 the placement path passed a hard-coded literal 0 here, so every
+        /// structure in the game built in exactly <see cref="baseBuildSeconds"/> and the whole
+        /// <see cref="tierGrowth"/> curve was unreachable dead tuning. There is NO
+        /// <c>repo.buildSeconds</c> / <c>repo.tier</c> field on RepoProps (checked at source --
+        /// adding one is forbidden by WO-855's "check before adding fields"), so the tier is
+        /// derived from the structure's own AUTHORED COST BASKET: the cheap founding shed is
+        /// tier 0 (snappy), the expensive endgame building is a high tier (the hours-long drag),
+        /// and the whole ladder re-tunes itself for free when the Phase 2/3 JSON cost pass lands.
+        /// Returns 0..<c>tierCostThresholds.Length</c>; a null/empty threshold table degrades to
+        /// tier 0 (the pre-WO-855 behaviour) rather than throwing.
+        /// </summary>
+        public int TierForCost(ResourceCost cost)
+        {
+            var bands = tierCostThresholds;
+            if (bands == null || bands.Length == 0) return 0;
+            float basket = CostBasket(cost);
+            int tier = 0;
+            for (int i = 0; i < bands.Length; i++)
+                if (basket >= bands[i]) tier = i + 1;
+                else break;                       // ascending table -- first miss ends the climb
+            return tier;
+        }
+
+        /// <summary>
+        /// The highest tier <see cref="TierForCost"/> can ever return (= the threshold count).
+        /// The oracle asserts the <see cref="maxDurationSeconds"/> clamp holds HERE, at the top
+        /// of the REACHABLE ladder, not at an arbitrary tier number.
+        /// </summary>
+        public int MaxReachableTier => tierCostThresholds != null ? tierCostThresholds.Length : 0;
 
         /// <summary>Crystal price to instant-finish a job with <paramref name="remainingSeconds"/> left.</summary>
         public int InstantFinishPrice(double remainingSeconds)

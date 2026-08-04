@@ -118,6 +118,10 @@ namespace DeNelle.Editor
 
                 // ── 10. DAMAGE STATES (WO-672 D) — real DamageStatesCatalog loader ───────
                 CheckDamageStates(failures, log);
+
+                // -- 11. WO-855 -- tower spam softcap + the build-tier fix ----------------
+                CheckTowerSoftcap(entries, created, failures, log);
+                CheckBuildTierDerivation(entries, failures, log);
             }
             catch (System.Exception ex)
             {
@@ -700,6 +704,457 @@ namespace DeNelle.Editor
                 failures.Add($"damage-states.json raw parse failed: {ex.Message}");
             }
         }
+
+        // =====================================================================
+        //  11a. WO-855 PHASE 1 -- TOWER SPAM SOFTCAP
+        //  ---------------------------------------------------------------------
+        //  Phase 0 measured that NOTHING limited tower count: no cap, no singleton
+        //  flag, flat cost -- the 1st and the 50th archer cost the same. This gate
+        //  proves the one multiplier is (a) correctly shaped, (b) wired into the
+        //  NEW-PLACEMENT path only, and (c) unable to touch the owner-locked
+        //  freebies that ARE a fresh save's entire starting budget.
+        // =====================================================================
+        private static void CheckTowerSoftcap(List<CatalogEntry> entries, List<GameObject> created,
+                                              List<string> failures, StringBuilder log)
+        {
+            var archer = CatalogRegistry.Get("tower_ground_archer");
+            if (archer == null)
+            {
+                failures.Add("[softcap] 'tower_ground_archer' not in registry -- the softcap gate cannot run");
+                return;
+            }
+
+            // -- A. PURE CURVE -- monotonic, flat below the start ordinal, capped --
+            int start = BuildModeController.TowerSoftcapStartAtOrdinal;
+            float per  = BuildModeController.TowerSoftcapMultPerExtra;
+            float cap  = BuildModeController.TowerSoftcapMaxMult;
+            if (start < 2)  failures.Add($"[softcap] startAtOrdinal {start} < 2 -- the very FIRST tower would be surcharged");
+            if (per <= 0f)  failures.Add($"[softcap] multPerExtra {per} <= 0 -- tower spam is not self-limiting at all");
+            if (cap <= 1f)  failures.Add($"[softcap] maxMult {cap} <= 1 -- the ceiling cancels the whole curve");
+
+            for (int ordinal = 1; ordinal < start; ordinal++)
+            {
+                float m = BuildModeController.TowerSoftcapMultiplier(ordinal);
+                if (!Mathf.Approximately(m, 1f))
+                    failures.Add($"[softcap] tower #{ordinal} multiplier {m} != 1.0 -- the first {start - 1} towers must be un-surcharged");
+            }
+
+            float expectFirstSurcharge = Mathf.Min(cap, 1f + per);
+            float gotFirstSurcharge = BuildModeController.TowerSoftcapMultiplier(start);
+            if (!Mathf.Approximately(gotFirstSurcharge, expectFirstSurcharge))
+                failures.Add($"[softcap] tower #{start} multiplier {gotFirstSurcharge} != expected {expectFirstSurcharge} (1 + multPerExtra)");
+
+            float prevMult = 0f;
+            bool everRose = false;
+            for (int ordinal = 1; ordinal <= 60; ordinal++)
+            {
+                float m = BuildModeController.TowerSoftcapMultiplier(ordinal);
+                if (m < prevMult - 0.0001f)
+                    failures.Add($"[softcap] multiplier NOT monotonic: #{ordinal} = {m} < #{ordinal - 1} = {prevMult}");
+                if (m > cap + 0.0001f)
+                    failures.Add($"[softcap] multiplier {m} at #{ordinal} exceeds the {cap} ceiling -- the clamp broke");
+                if (m > prevMult + 0.0001f && ordinal > 1) everRose = true;
+                prevMult = m;
+            }
+            if (!everRose)
+                failures.Add("[softcap] multiplier never rose across 60 placements -- tower spam is still free");
+            if (!Mathf.Approximately(BuildModeController.TowerSoftcapMultiplier(60), cap))
+                failures.Add($"[softcap] multiplier at #60 = {BuildModeController.TowerSoftcapMultiplier(60)} -- expected the {cap} ceiling");
+            log.AppendLine($"  [softcap] curve: #1..#{start - 1} x1.00, #{start} x{gotFirstSurcharge:0.##}, " +
+                           $"#8 x{BuildModeController.TowerSoftcapMultiplier(8):0.##}, ceiling x{cap:0.##} OK");
+
+            // -- B. PURE APPLICATION -- a tower row escalates, slot by slot --------
+            CoreCost archerBase = BuildModeController.CostFor(archer);
+            CoreCost at0 = BuildModeController.ApplyTowerSoftcap(archer, archerBase, 0);
+            CoreCost at4 = BuildModeController.ApplyTowerSoftcap(archer, archerBase, start - 1);   // placing #start
+            CoreCost at7 = BuildModeController.ApplyTowerSoftcap(archer, archerBase, start + 2);   // three later
+            if (Total(at0) != Total(archerBase))
+                failures.Add($"[softcap] cost with 0 live towers ({Total(at0)}) != the authored cost ({Total(archerBase)}) -- the softcap leaked onto tower #1");
+            if (Total(at4) <= Total(archerBase))
+                failures.Add($"[softcap] tower #{start} total {Total(at4)} did NOT rise above the authored {Total(archerBase)} -- the multiplier is not applied");
+            if (Total(at7) <= Total(at4))
+                failures.Add($"[softcap] tower #{start + 3} total {Total(at7)} did not exceed tower #{start} total {Total(at4)} -- the escalation is flat");
+            log.AppendLine($"  [softcap] '{archer.id}' basket-total: #1={Total(at0)} -> #{start}={Total(at4)} -> #{start + 3}={Total(at7)} OK");
+
+            // -- C. NON-TOWER IMMUNITY -- a building row is never surcharged -------
+            CatalogEntry nonTower = null;
+            foreach (var e in entries)
+            {
+                if (e == null || e.repo == null || BuildModeController.IsTowerEntry(e)) continue;
+                if (BuildModeController.CostFor(e).IsZero) continue;
+                nonTower = e; break;
+            }
+            if (nonTower == null)
+            {
+                failures.Add("[softcap] no non-tower priced row found -- the non-tower immunity gate could not run");
+            }
+            else
+            {
+                CoreCost nBase = BuildModeController.CostFor(nonTower);
+                CoreCost nAt50 = BuildModeController.ApplyTowerSoftcap(nonTower, nBase, 50);
+                if (Total(nAt50) != Total(nBase))
+                    failures.Add($"[softcap] non-tower '{nonTower.id}' was surcharged at 50 live towers " +
+                                 $"({Total(nBase)} -> {Total(nAt50)}) -- the softcap must be tower-class only");
+                else
+                    log.AppendLine($"  [softcap] non-tower '{nonTower.id}' immune at 50 live towers OK");
+            }
+
+            // -- D. LIVE WIRING -- real PlacedStructure towers in the world raise the
+            //      PLACE cost, and leave UPGRADE + REFUND untouched (WO-855 sec.5:
+            //      "does not apply to upgrades of existing towers, only new place").
+            //      Baseline first: check 7 leaves its own tower PlacedStructures alive
+            //      until the shared finally, so we must measure, not assume, zero.
+            BuildModeController.InvalidateTowerCount();
+            int baseline = BuildModeController.LiveTowerCount();
+            int want = start + 3;                       // enough to be well past the surcharge start
+            for (int i = baseline; i < want; i++)
+            {
+                var go = new GameObject($"SoftcapOracleTower_{i}");
+                created.Add(go);
+                var ps = go.AddComponent<PlacedStructure>();
+                ps.itemId = archer.id;
+                ps.level = 1;
+                ps.gridCell = new Vector2Int(40 + i, 40);
+            }
+            BuildModeController.InvalidateTowerCount();
+            int live = BuildModeController.LiveTowerCount();
+            if (live < want)
+            {
+                failures.Add($"[softcap] LiveTowerCount() returned {live} after seeding {want} tower PlacedStructure(s) " +
+                             "-- the live census does not see catalog-placed towers (the softcap would never arm)");
+            }
+            else
+            {
+                CoreCost livePlace = BuildModeController.SoftcappedCostFor(archer);
+                if (Total(livePlace) <= Total(archerBase))
+                    failures.Add($"[softcap] SoftcappedCostFor with {live} live towers = {Total(livePlace)}, " +
+                                 $"not above the authored {Total(archerBase)} -- the softcap is NOT wired into the place path");
+                else
+                    log.AppendLine($"  [softcap] live wiring: {live} towers standing -> place cost {Total(archerBase)} -> {Total(livePlace)} OK");
+
+                // UPGRADE must be identical to the pure fallback off the RAW build cost.
+                CoreCost upStep = BuildModeController.UpgradeCostFor(archer, 1);
+                CoreCost expectUp = ExpectedUpgradeStep(archer, 1, archerBase);
+                if (Total(upStep) != Total(expectUp))
+                    failures.Add($"[softcap] UpgradeCostFor(L1->L2) = {Total(upStep)} with {live} live towers, " +
+                                 $"expected {Total(expectUp)} off the RAW cost -- the softcap leaked into UPGRADES");
+                else
+                    log.AppendLine($"  [softcap] UpgradeCostFor unchanged at {live} live towers ({Total(upStep)}) OK");
+
+                // REFUND must be identical too (RefundCostFor sums CostFor + upgrade steps).
+                var refundMethod = typeof(BuildModeController).GetMethod("RefundCostFor",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                if (refundMethod == null)
+                {
+                    failures.Add("[softcap] RefundCostFor not found -- the refund-immunity gate could not run");
+                }
+                else
+                {
+                    var rgo = new GameObject("SoftcapRefundProbe");
+                    created.Add(rgo);
+                    var rps = rgo.AddComponent<PlacedStructure>();
+                    rps.itemId = archer.id;
+                    rps.level = 1;
+                    rps.gridCell = new Vector2Int(2, 2);
+                    // NOTE: this probe is itself a tower PlacedStructure, so it nudges the live
+                    // count by one -- which is precisely the point: the refund must not move.
+                    BuildModeController.InvalidateTowerCount();
+                    var refund = (CoreCost)refundMethod.Invoke(null, new object[] { rps });
+                    if (refund.wood != archerBase.wood / 2 || refund.iron != archerBase.iron / 2 ||
+                        refund.food != archerBase.food / 2 || refund.crystals != archerBase.crystals / 2)
+                    {
+                        // Only a genuine leak fails here; the WO-676 salvage talent is 0 headless.
+                        float salvage = DeNelle.Village.Talents.HeroTalentModifiers.StatSum("knight", "salvage");
+                        if (salvage <= 0f)
+                            failures.Add($"[softcap] RefundCostFor L1 = w{refund.wood}/f{refund.food}/i{refund.iron}/c{refund.crystals} " +
+                                         $"with towers standing, expected 50% of the RAW cost " +
+                                         $"(w{archerBase.wood / 2}/f{archerBase.food / 2}/i{archerBase.iron / 2}/c{archerBase.crystals / 2}) " +
+                                         "-- the softcap leaked into REFUNDS");
+                    }
+                    else
+                    {
+                        log.AppendLine("  [softcap] RefundCostFor unchanged with towers standing OK");
+                    }
+                }
+            }
+
+            // -- E. FREEBIES SURVIVE THE SOFTCAP -- the owner-locked free placements ARE
+            //      the starting budget on a v32 zero-resource save (starting wood/iron
+            //      are 0), so a softcap that charged placement #1 or #2 would soft-lock
+            //      a fresh run. Driven on a THROWAWAY GameState with the softcap fully
+            //      armed (towers still standing from D).
+            CheckFreebiesUnderSoftcap(archer, failures, log);
+
+            BuildModeController.InvalidateTowerCount();   // leave no stale census for later suites
+        }
+
+        /// <summary>The pure UpgradeCostFor expectation off a RAW build cost (authored table wins, else base x fromLevel).</summary>
+        private static CoreCost ExpectedUpgradeStep(CatalogEntry entry, int fromLevel, CoreCost rawBase)
+        {
+            var repo = entry != null ? entry.repo : null;
+            int idx = Mathf.Max(0, fromLevel - 1);
+            if (repo != null && repo.upgradeCost != null && idx < repo.upgradeCost.Length && !repo.upgradeCost[idx].IsZero)
+                return repo.upgradeCost[idx];
+            int scale = Mathf.Max(1, fromLevel);
+            return new CoreCost
+            {
+                wood     = rawBase.wood     * scale,
+                food     = rawBase.food     * scale,
+                iron     = rawBase.iron     * scale,
+                crystals = rawBase.crystals * scale,
+            };
+        }
+
+        // =====================================================================
+        //  11b. FREEBIES UNDER THE ARMED SOFTCAP + the zero-resource founding walk.
+        //  Installs a throwaway GameState through the SAME private seams the
+        //  FoundingReachabilityRegression oracle uses, then drives the REAL
+        //  BuildModeController.FreeBuildAvailable / EffectiveCostFor.
+        // =====================================================================
+        private static void CheckFreebiesUnderSoftcap(CatalogEntry archer, List<string> failures, StringBuilder log)
+        {
+            var stateField = typeof(GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+            var instField  = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (stateField == null || instField == null)
+            {
+                failures.Add("[softcap] GameStateService _state/_instance seams not reflectable -- the freebie gate could not run");
+                return;
+            }
+
+            var priorInstance = GameStateService.Instance;
+            GameObject gssGo = null;
+            GameState throwaway = null;
+            try
+            {
+                // A v32 fresh save exactly as GameStateService.ResetToNewGame leaves it:
+                // ZERO wood / ZERO iron / empty freebie ledger. The freebies literally ARE
+                // the starting budget, which is why they are load-bearing here.
+                throwaway = ScriptableObject.CreateInstance<GameState>();
+                throwaway.Resources = ResourceBalance.Zero;
+                throwaway.Wood = StartingBudget.StrategicWood;
+                throwaway.Iron = StartingBudget.StrategicIron;
+                throwaway.FreeBuildsUsed = new List<string>();
+                gssGo = new GameObject("GSS (softcap freebie oracle)");
+                var gss = gssGo.AddComponent<GameStateService>();
+                stateField.SetValue(gss, throwaway);
+                instField.SetValue(null, gss);
+
+                if (StartingBudget.StrategicWood != 0 || StartingBudget.StrategicIron != 0)
+                    log.AppendLine($"  [softcap] note: StartingBudget is no longer zero " +
+                                   $"(wood {StartingBudget.StrategicWood}, iron {StartingBudget.StrategicIron}) -- " +
+                                   "the freebies are no longer the only route through founding");
+                else
+                    log.AppendLine("  [softcap] fresh save: 0 wood / 0 iron -- the placement freebies ARE the starting budget");
+
+                BuildModeController.InvalidateTowerCount();
+                int liveNow = BuildModeController.LiveTowerCount();
+                if (liveNow < BuildModeController.TowerSoftcapStartAtOrdinal)
+                    log.AppendLine($"  [softcap] note: only {liveNow} live tower(s) while checking freebies -- surcharge may not be armed");
+
+                // The two WOODEN archer freebies must both be EXACTLY zero with the
+                // softcap armed. This is the soft-lock guard: charging either one on a
+                // 0-wood / 0-iron save leaves the player with no way to found.
+                for (int placement = 1; placement <= 2; placement++)
+                {
+                    if (!BuildModeController.FreeBuildAvailable(archer))
+                    {
+                        failures.Add($"[softcap] archer placement #{placement} is NOT free -- the owner-locked " +
+                                     "2 wooden-tower freebie broke (a fresh 0-resource save cannot found)");
+                        break;
+                    }
+                    CoreCost eff = BuildModeController.EffectiveCostFor(archer);
+                    if (!eff.IsZero)
+                    {
+                        failures.Add($"[softcap] archer placement #{placement} costs " +
+                                     $"w{eff.wood}/f{eff.food}/i{eff.iron}/c{eff.crystals} with the softcap armed -- " +
+                                     "the freebie MUST short-circuit before the multiplier");
+                        break;
+                    }
+                    throwaway.FreeBuildsUsed.Add(archer.id);   // burn it, exactly as Place() does
+                }
+                log.AppendLine("  [softcap] both wooden archer freebies still cost ZERO with the softcap armed OK");
+
+                // The THIRD archer is charged -- and, with the softcap armed, charged MORE
+                // than the authored cost. This is the whole point of Phase 1.
+                if (BuildModeController.FreeBuildAvailable(archer))
+                {
+                    failures.Add("[softcap] archer placement #3 is still FREE -- the 2-cap wooden freebie is not being burned");
+                }
+                else
+                {
+                    CoreCost third = BuildModeController.EffectiveCostFor(archer);
+                    CoreCost raw = BuildModeController.CostFor(archer);
+                    if (third.IsZero)
+                        failures.Add("[softcap] archer placement #3 resolves ZERO cost -- placements past the freebie must be charged");
+                    else if (liveNow >= BuildModeController.TowerSoftcapStartAtOrdinal && Total(third) <= Total(raw))
+                        failures.Add($"[softcap] archer placement #3 costs {Total(third)} with {liveNow} towers standing -- " +
+                                     $"not above the authored {Total(raw)}; EffectiveCostFor is not routed through the softcap");
+                    else
+                        log.AppendLine($"  [softcap] archer placement #3 charged {Total(third)} (authored {Total(raw)}, {liveNow} towers standing) OK");
+                }
+
+                // FOUNDING WALK on a 0-wood / 0-iron save: every id the founding tutorial
+                // forces must resolve a ZERO effective cost at its first placement, in
+                // sequence, with the softcap armed. Total must be exactly 0.
+                throwaway.FreeBuildsUsed.Clear();
+                var foundingWalk = new[] { "pet-house", "collector_lumbermill", "tower_ground_archer" };
+                int walkTotal = 0;
+                foreach (var id in foundingWalk)
+                {
+                    var e = CatalogRegistry.Get(id);
+                    if (e == null)
+                    {
+                        failures.Add($"[softcap] founding-walk id '{id}' is not in the catalog -- the founding sequence cannot complete");
+                        continue;
+                    }
+                    CoreCost c = BuildModeController.EffectiveCostFor(e);
+                    walkTotal += Total(c);
+                    if (!c.IsZero)
+                        failures.Add($"[softcap] founding step '{id}' costs w{c.wood}/f{c.food}/i{c.iron}/c{c.crystals} " +
+                                     "on a fresh 0-wood/0-iron save -- the founding sequence SOFT-LOCKS");
+                    throwaway.FreeBuildsUsed.Add(id);
+                }
+                if (walkTotal == 0)
+                    log.AppendLine($"  [softcap] founding walk ({string.Join(" -> ", foundingWalk)}) totals 0 on a fresh save OK");
+            }
+            catch (System.Exception ex)
+            {
+                failures.Add($"[softcap] freebie gate threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                if (gssGo != null) Object.DestroyImmediate(gssGo);
+                if (throwaway != null) Object.DestroyImmediate(throwaway);
+                instField.SetValue(null, priorInstance);
+            }
+        }
+
+        // =====================================================================
+        //  11c. WO-855 PHASE 4 -- BUILD TIER IS NO LONGER A CONSTANT.
+        //  ---------------------------------------------------------------------
+        //  Phase 0 measured BuildModeController passing a hard-coded literal 0 as the
+        //  tier to BuildTimerService.StartBuild, so EVERY structure in the game built
+        //  in exactly baseBuildSeconds and BuildTimerConfig.tierGrowth was unreachable
+        //  dead tuning. The FIRST gate below FAILS against the pre-fix tree by design.
+        // =====================================================================
+        private static void CheckBuildTierDerivation(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
+        {
+            // -- A. THE CALL SITE -- this gate is RED on the pre-WO-855 tree -------
+            string bmcPath = System.IO.Path.Combine(Application.dataPath,
+                "_Modules", "Village", "BuildMode", "BuildModeController.cs");
+            if (!System.IO.File.Exists(bmcPath))
+            {
+                failures.Add("[build-tier] BuildModeController.cs not found -- the hard-coded-tier gate cannot run");
+            }
+            else
+            {
+                string src;
+                try { src = System.IO.File.ReadAllText(bmcPath); }
+                catch (System.Exception ex) { src = null; failures.Add($"[build-tier] BuildModeController.cs unreadable ({ex.Message})"); }
+                if (src != null)
+                {
+                    if (src.IndexOf("StartBuild(jobKey, 0)", System.StringComparison.Ordinal) >= 0)
+                        failures.Add("[build-tier] BuildModeController still calls StartBuild(jobKey, 0) -- the HARD-CODED tier is back, " +
+                                     "so every structure in the game builds in exactly baseBuildSeconds and tierGrowth is dead tuning");
+                    if (src.IndexOf("TierForCost(", System.StringComparison.Ordinal) < 0)
+                        failures.Add("[build-tier] BuildModeController does not call BuildTimerConfig.TierForCost -- the placement path " +
+                                     "is not deriving a real build tier");
+                    else
+                        log.AppendLine("  [build-tier] placement path derives its tier via TierForCost (no hard-coded 0) OK");
+                }
+            }
+
+            // Same resolve BuildTimerService performs (authored asset, else code default).
+            // Explicit null test, NOT ??, so Unity's fake-null can never slip a dead object through.
+            var cfg = Resources.Load<BuildTimerConfig>(BuildTimerConfig.ResourcesPath);
+            if (cfg == null) cfg = BuildTimerConfig.CreateDefault();
+
+            // -- B. THE BANDS -- ascending, positive, and actually reachable -------
+            var bands = cfg.tierCostThresholds;
+            if (bands == null || bands.Length == 0)
+            {
+                failures.Add("[build-tier] tierCostThresholds is empty -- every structure collapses back to tier 0 (a flat timer)");
+                return;
+            }
+            for (int i = 0; i < bands.Length; i++)
+            {
+                if (bands[i] <= 0f)
+                    failures.Add($"[build-tier] tierCostThresholds[{i}] = {bands[i]} <= 0 -- a non-positive band makes the tier meaningless");
+                if (i > 0 && bands[i] <= bands[i - 1])
+                    failures.Add($"[build-tier] tierCostThresholds not ascending: [{i}] {bands[i]} <= [{i - 1}] {bands[i - 1]}");
+            }
+
+            // -- C. TWO REAL CATALOG ROWS PRODUCE TWO DIFFERENT DURATIONS --------
+            //      (the whole point of the fix -- pre-WO-855 every row produced 15s).
+            var tierHistogram = new Dictionary<int, int>();
+            var byTier = new Dictionary<int, string>();
+            foreach (var e in entries)
+            {
+                if (e == null || e.repo == null) continue;
+                CoreCost c = BuildModeController.CostFor(e);
+                if (c.IsZero) continue;
+                int t = cfg.TierForCost(c);
+                tierHistogram.TryGetValue(t, out int n);
+                tierHistogram[t] = n + 1;
+                if (!byTier.ContainsKey(t)) byTier[t] = e.id;
+            }
+            if (tierHistogram.Count < 2)
+            {
+                failures.Add($"[build-tier] every priced catalog row resolves the SAME tier ({tierHistogram.Count} distinct) -- " +
+                             "build duration is still a constant; the cost bands do not split the catalog");
+            }
+            else
+            {
+                var tiersSorted = new List<int>(byTier.Keys);
+                tiersSorted.Sort();
+                int lo = tiersSorted[0], hi = tiersSorted[tiersSorted.Count - 1];
+                float dLo = cfg.DurationSecondsForTier(lo, BuildJobKind.Build);
+                float dHi = cfg.DurationSecondsForTier(hi, BuildJobKind.Build);
+                if (dHi <= dLo)
+                    failures.Add($"[build-tier] '{byTier[hi]}' (tier {hi}, {dHi}s) does not build LONGER than '{byTier[lo]}' (tier {lo}, {dLo}s)");
+                else
+                    log.AppendLine($"  [build-tier] '{byTier[lo]}' tier {lo} = {dLo:0}s vs '{byTier[hi]}' tier {hi} = {dHi:0}s -- " +
+                                   "two rows, two durations OK");
+                var histo = new List<string>();
+                foreach (var t in tiersSorted)
+                    histo.Add($"t{t}x{tierHistogram[t]}({cfg.DurationSecondsForTier(t, BuildJobKind.Build):0}s)");
+                log.AppendLine("  [build-tier] catalog tier histogram: " + string.Join(" ", histo));
+            }
+
+            // -- D. MOBILE SHAPE -- snappy early, long endgame (WO-855 sec.4.6) ----
+            float tier0 = cfg.DurationSecondsForTier(0, BuildJobKind.Build);
+            if (tier0 > 180f)
+                failures.Add($"[build-tier] tier-0 build is {tier0}s -- the first 10 minutes of a new save would be gated " +
+                             "(owner: early builds stay snappy)");
+            int top = cfg.MaxReachableTier;
+            float topSec = cfg.DurationSecondsForTier(top, BuildJobKind.Build);
+            if (topSec < 30f * 60f)
+                failures.Add($"[build-tier] the top reachable tier ({top}) builds in {topSec}s -- the endgame has no wall-clock drag " +
+                             "(owner: endgame long, hours)");
+            log.AppendLine($"  [build-tier] shape: tier0 {tier0:0}s .. top reachable tier {top} {topSec / 3600f:0.##}h " +
+                           $"(base {cfg.baseBuildSeconds}s, growth x{cfg.tierGrowth}, upgradeMult x{cfg.upgradeMultiplier}, slots {cfg.freeBuildSlots})");
+
+            // -- E. THE CLAMP HOLDS AT (AND PAST) THE HIGHEST REACHABLE TIER -----
+            //      A builder-queue job that becomes reachable at high tiers must still
+            //      respect maxDurationSeconds -- including the upgrade multiplier and a
+            //      few tiers of headroom past the top band.
+            for (int t = top; t <= top + 3; t++)
+            {
+                float b = cfg.DurationSecondsForTier(t, BuildJobKind.Build);
+                float u = cfg.DurationSecondsForTier(t, BuildJobKind.Upgrade);
+                if (b > cfg.maxDurationSeconds + 0.01f)
+                    failures.Add($"[build-tier] BUILD duration at tier {t} = {b}s exceeds maxDurationSeconds {cfg.maxDurationSeconds}s");
+                if (u > cfg.maxDurationSeconds + 0.01f)
+                    failures.Add($"[build-tier] UPGRADE duration at tier {t} = {u}s exceeds maxDurationSeconds {cfg.maxDurationSeconds}s " +
+                                 "(the upgradeMultiplier escapes the clamp)");
+            }
+            if (cfg.freeBuildSlots != 2)
+                failures.Add($"[build-tier] freeBuildSlots is {cfg.freeBuildSlots} -- WO-855 sec.4.6 keeps it at 2 (scarcity)");
+            log.AppendLine($"  [build-tier] maxDurationSeconds {cfg.maxDurationSeconds / 3600f:0.#}h clamp holds through tier {top + 3} OK");
+        }
+
+        /// <summary>Flat basket total of a cost (all four slots) -- the comparison scalar for the softcap gates.</summary>
+        private static int Total(CoreCost c) => c.wood + c.food + c.iron + c.crystals;
 
         // =====================================================================
         //  Verdict + markers

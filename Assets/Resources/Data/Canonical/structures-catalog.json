@@ -13,12 +13,26 @@
     "behaviorId": "DefenseTower",
     "buildCost": 100,
     "cost": {
-     "wood": 70,
+     "wood": 90,
      "food": 0,
      "iron": 40,
      "crystals": 0
     },
     "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 360,
+      "food": 0,
+      "iron": 160,
+      "crystals": 0
+     },
+     {
+      "wood": 720,
+      "food": 0,
+      "iron": 320,
+      "crystals": 0
+     }
+    ],
     "upgradeVisualPath": [
      "Structures/Tower_Tribal_Tier2",
      "Structures/Tower_Tribal_Tier3"
@@ -54,7 +68,7 @@
     "scale": 1.0,
     "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
    },
-   "canHitAir": true
+   "canHitAir": false
   },
   {
    "id": "tower_wall_wizard",
@@ -66,16 +80,30 @@
     "behaviorId": "DefenseTower",
     "buildCost": 150,
     "cost": {
-     "wood": 40,
+     "wood": 60,
      "food": 0,
-     "iron": 20,
-     "crystals": 60
+     "iron": 30,
+     "crystals": 70
     },
     "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 240,
+      "food": 0,
+      "iron": 120,
+      "crystals": 280
+     },
+     {
+      "wood": 480,
+      "food": 0,
+      "iron": 240,
+      "crystals": 560
+     }
+    ],
     "navSurface": "Blocker",
     "heightMul": 1.25,
     "range": 22.0,
-    "damage": 20.0,
+    "damage": 30.0,
     "fireRate": 0.5,
     "canHitAir": true,
     "element": "None",
@@ -116,17 +144,31 @@
     "behaviorId": "DefenseTower",
     "buildCost": 140,
     "cost": {
-     "wood": 80,
+     "wood": 160,
      "food": 0,
-     "iron": 50,
-     "crystals": 0
+     "iron": 90,
+     "crystals": 20
     },
     "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 640,
+      "food": 0,
+      "iron": 360,
+      "crystals": 80
+     },
+     {
+      "wood": 1280,
+      "food": 0,
+      "iron": 720,
+      "crystals": 160
+     }
+    ],
     "navSurface": "Blocker",
     "heightMul": 0.75,
-    "range": 50.0,
-    "damage": 45.0,
-    "fireRate": 2.0,
+    "range": 36.0,
+    "damage": 20.0,
+    "fireRate": 1.5,
     "canHitAir": true,
     "airOnly": true,
     "element": "None",
@@ -171,6 +213,20 @@
      "crystals": 0
     },
     "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 400,
+      "food": 0,
+      "iron": 320,
+      "crystals": 0
+     },
+     {
+      "wood": 800,
+      "food": 0,
+      "iron": 640,
+      "crystals": 0
+     }
+    ],
     "navSurface": "Blocker",
     "heightMul": 0.75,
     "range": 28.0,
@@ -363,9 +419,9 @@
     "behaviorId": "CrystalMine",
     "buildCost": 200,
     "cost": {
-     "wood": 120,
+     "wood": 80,
      "food": 0,
-     "iron": 80,
+     "iron": 50,
      "crystals": 0
     },
     "navSurface": "Blocker",
@@ -888,12 +944,26 @@
     "behaviorId": "ArcaneTower",
     "buildCost": 200,
     "cost": {
-     "wood": 30,
+     "wood": 40,
      "food": 0,
-     "iron": 30,
-     "crystals": 80
+     "iron": 40,
+     "crystals": 85
     },
     "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 160,
+      "food": 0,
+      "iron": 160,
+      "crystals": 340
+     },
+     {
+      "wood": 320,
+      "food": 0,
+      "iron": 320,
+      "crystals": 680
+     }
+    ],
     "upgradeVisualPath": [
      "Structures/ArcaneSpire_2",
      "Structures/ArcaneSpire_3"
@@ -905,7 +975,7 @@
     "navSurface": "Blocker",
     "heightMul": 1.25,
     "range": 16.0,
-    "damage": 16.0,
+    "damage": 20.0,
     "fireRate": 0.6,
     "canHitAir": true,
     "element": "Aether",

@@ -370,11 +370,16 @@ namespace DeNelle.Editor.Regression
                 if (entry.type != CatalogType.Tower)
                     failures.Add("[catalog-cost] offered id '" + opt.Id + "' is type " + entry.type + ", not Tower");
 
-                CoreCost catalogCost = BuildModeController.CostFor(entry);
+                // WO-855: the menu prices through SoftcappedCostFor (CostFor + the tower-spam
+                // softcap) -- the SAME resolver BuildModeController.Place charges. Compare
+                // against that, not the raw CostFor, or this oracle would false-pass a menu
+                // that had silently dropped the surcharge. (Headless: no live towers => the
+                // two are identical, so this is a strictly tighter assertion.)
+                CoreCost catalogCost = BuildModeController.SoftcappedCostFor(entry);
                 if (!SameCost(opt.Cost, catalogCost))
                     failures.Add("[catalog-cost] '" + opt.Id + "' DISPLAYED cost " + Describe(opt.Cost) +
                                  " != catalog cost " + Describe(catalogCost) +
-                                 " (BuildModeController.CostFor) - the menu is pricing from a second, divergent table");
+                                 " (BuildModeController.SoftcappedCostFor) - the menu is pricing from a second, divergent table");
                 if (catalogCost.IsZero)
                     failures.Add("[catalog-cost] '" + opt.Id + "' resolves a ZERO catalog cost - the menu would hand out a free tower");
                 log.AppendLine("  [catalog-cost] " + opt.Id + " -> " + Describe(opt.Cost) + " (matches CostFor)");
