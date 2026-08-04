@@ -49,6 +49,13 @@ namespace DeNelle.Tests.EditMode
             return def;
         }
 
+        private static QuestDef Gated(string id, string title, string requires)
+        {
+            var def = Q(id, title);
+            def.RequiresQuestId = requires;
+            return def;
+        }
+
         private static FakeBackend Seed()
         {
             var b = new FakeBackend();
@@ -131,6 +138,43 @@ namespace DeNelle.Tests.EditMode
             Assert.That(changed, Is.GreaterThan(0));
             // It became active -> moved out of Available into Active.
             Assert.That(b.IsActive("q_story"), Is.True);
+        }
+
+        [Test]
+        public void quest_gated_on_an_unfinished_prerequisite_stays_off_the_board()
+        {
+            // The defect this locks: with no prerequisite gate the terminal act of a chain is
+            // startable (and finishable) on a fresh save, so whatever it unlocks is a freebie.
+            var b = Seed();
+            b.Quests.Add(Gated("q_act2", "The Old Fire", "q_story"));
+            using var vm = new RumorBoardVM(b, null);
+
+            var availIds = new List<string>();
+            foreach (var i in vm.AvailableQuests) availIds.Add(i.Id);
+            Assert.That(availIds, Does.Not.Contain("q_act2"),
+                "a quest whose requiresQuestId is not completed must not be offered");
+
+            vm.Accept("q_act2");
+            Assert.That(b.StartCalls, Is.EqualTo(0), "Accept must refuse a gated quest, whoever calls it");
+            Assert.That(vm.Status, Does.Contain("The Dimming"),
+                "the refusal names the prerequisite's TITLE, not its raw id");
+        }
+
+        [Test]
+        public void completing_the_prerequisite_opens_the_next_act()
+        {
+            var b = Seed();
+            b.Quests.Add(Gated("q_act2", "The Old Fire", "q_story"));
+            b.Completed.Add("q_story");
+            using var vm = new RumorBoardVM(b, null);
+
+            var availIds = new List<string>();
+            foreach (var i in vm.AvailableQuests) availIds.Add(i.Id);
+            Assert.That(availIds, Does.Contain("q_act2"), "the gate opens once the prerequisite is completed");
+
+            vm.Accept("q_act2");
+            Assert.That(b.StartCalls, Is.EqualTo(1));
+            Assert.That(b.IsActive("q_act2"), Is.True);
         }
 
         [Test]

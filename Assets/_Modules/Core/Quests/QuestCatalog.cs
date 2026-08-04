@@ -188,6 +188,18 @@ namespace DeNelle.Core.Quests
         // quest. Drives the board's tab filter + the HUD pin's type-aware fallback. No enum
         // churn — the board normalizes (NormalizedType) so unknown values fall back to "story".
         [JsonProperty("type")] public string Type;
+        // The quest that must be COMPLETED before this one may be accepted. Absent, null or
+        // empty means no prerequisite, so every quest that shipped before this field behaves
+        // exactly as it did. The field name mirrors the one gear-recipes.json already ships for
+        // the same concept, so one idea keeps one word across the codebase.
+        //
+        // Catalog content, NOT the persisted contract: the save serializes QuestState /
+        // QuestProgress (Core/State/NestedTypes.cs:218-226), never a QuestDef, so adding a
+        // field here needs no save-schema bump -- same precedent as QuestState.stageId there.
+        //
+        // Honoured by RumorBoardVM.Rebuild (a quest whose prerequisite is unfinished never
+        // enters the Available list) and by RumorBoardVM.Accept (which refuses to start one).
+        [JsonProperty("requiresQuestId")] public string RequiresQuestId;
         [JsonProperty("stages")] public List<QuestStage> Stages = new List<QuestStage>();
     }
 

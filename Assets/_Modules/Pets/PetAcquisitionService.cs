@@ -43,6 +43,8 @@ using System;
 using System.Collections.Generic;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Quests;
+using DeNelle.Core.Tutorial;
 using UnityEngine;
 
 namespace DeNelle.Pets
@@ -259,6 +261,21 @@ namespace DeNelle.Pets
 
             FlowTrace.Step("PetAcquire", $"Acquired '{species}' via {source} — roster now {state.Pets.Count} pet(s), slot={slot}");
             Debug.Log($"[PetAcquisitionService] Acquired '{species}' via {source} → roster ({state.Pets.Count} pets).");
+
+            // pet.bonded:<species> (WO-854 Silo E). Raised HERE, where the bond genuinely
+            // completes: the roster entry is written, the deploy slot is assigned and the save
+            // has flushed. Every acquisition path (Tame / Hatch / Rescue / Gift / Starter) funnels
+            // through this method, and the Owns() guard above returns false before this line when
+            // the species is already owned - so the id fires exactly once per NEW bond, never on a
+            // panel open and never twice.
+            //
+            // The id is composed from QuestCompletion.PetBondedPrefix - the SAME constant
+            // QuestCompletion.ToSignalId() uses to compose what a completeOn {kind:"pet"} stage
+            // awaits - so the emitter and the matcher cannot drift apart. def.Species is the
+            // catalog's own species string (PetCatalog.FindBySpecies matched it by ordinal
+            // equality above), so the token is byte-identical to the pets.json id.
+            TutorialSignals.Raise(QuestCompletion.PetBondedPrefix + def.Species);
+
             PetAcquired?.Invoke(species);
             Changed?.Invoke();
             return true;

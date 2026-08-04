@@ -46,9 +46,13 @@
 //
 // THE DEFECT CLASS THIS PINS (owner ruling 2026-08-03): a quest that can be
 // ACCEPTED and TRACKED but never COMPLETED is a BUG, not an unbuilt feature -- the
-// game makes a promise it cannot keep. Every one of the 24 shipped quests is
-// acceptable off the rumor board with no gate at all (RumorBoardVM.Rebuild), and
-// as of the baseline NONE of their stages had a completion source of any kind.
+// game makes a promise it cannot keep. As of the baseline every one of the 24
+// shipped quests was acceptable off the rumor board with no gate at all and NONE
+// of their stages had a completion source of any kind. Since then RumorBoardVM
+// honours QuestDef.RequiresQuestId, so the board offers a quest only once its
+// prerequisite is completed - and the mirror-image defect is now in scope too: a
+// quest gated behind one nobody can finish is just as unkeepable a promise, and
+// Case 1's chain walk stops its stages counting toward the score.
 //
 // ---------------------------------------------------------------------------
 //  THE NINE CASES
@@ -61,13 +65,23 @@
 //                       raw JSON -- a DTO field that stops mapping is how a
 //                       completion condition can be authored and silently ignored.
 //
-//   1 [entry-live]      Every quest is ENTERABLE. Satisfied wholesale while the
-//                       rumor board renders every non-completed catalog quest with
-//                       no gate and its Accept path calls StartQuest (source-lint
-//                       of RumorBoardVM.cs), and the board itself has an opener.
-//                       If that lint ever fails, each quest must instead be named
-//                       by a StartQuest author. An unenterable quest contributes
-//                       ZERO completable stages no matter what else is authored.
+//   1 [entry-live]      Every quest is ENTERABLE, in TWO layers.
+//                       (a) OFFERED: the rumor board renders every non-completed
+//                       catalog quest and its Accept path calls StartQuest
+//                       (source-lint of RumorBoardVM.cs), and the board itself has
+//                       an opener. If that lint ever fails, each quest must instead
+//                       be named by a StartQuest author.
+//                       (b) UNGATED: a quest carrying requiresQuestId is offered
+//                       only once that prerequisite is COMPLETED, so it is reachable
+//                       only if the prerequisite is itself reachable AND fully
+//                       completable -- walked TRANSITIVELY down the chain
+//                       (forgemasters_act1 -> act2 -> act3 -> act4). A prerequisite
+//                       naming an unknown quest, or a CYCLE, makes every quest in it
+//                       unreachable and is reported once, never recursed into.
+//                       An unreachable quest contributes ZERO completable stages no
+//                       matter what else is authored -- which is the whole point: an
+//                       act nobody can reach must not pad the score, or the number
+//                       would say the terminal reward is earnable when it is not.
 //
 //   2 [advance-live]    THE SPINE. Every stage index needs a DISTINCT completion
 //                       source: a completeOn whose composed signal has a LIVE
@@ -146,6 +160,12 @@
 //   SHIPPED phase. It only ever goes UP, and every phase's acceptance criterion is
 //   "raise the floor and still pass". Without it either nothing ships until 63 or
 //   nothing is enforced at all. Backsliding below the floor is a hard failure.
+//
+//   A PREREQUISITE CAN LOWER THE NUMBER, and that is correct, not a regression to
+//   soften: gating act4 behind act3 removes act4's stages from the score unless act3
+//   is itself finishable. If that ever drops the count below the floor, the honest
+//   move is to make the earlier act completable (or to have the PO rule the gate
+//   wrong) - never to stop counting the gate.
 //
 //   NOT-YET-AUTHORED IS NOT A CASE 2 FAILURE. A stage with no completion source is
 //   counted (it lowers <n>) and listed in the ledger; it does not fail Case 2. What
@@ -332,8 +352,15 @@ namespace DeNelle.Editor.Regression
             var sb = new StringBuilder();
             sb.AppendLine("--- QUEST COMPLETABILITY (WO-854) --- " + tally);
             foreach (var q in ctx.Quests)
+            {
+                string why = q.EntryLive
+                    ? (string.IsNullOrEmpty(q.RequiresQuestId) ? "" : "  [after " + q.RequiresQuestId + "]")
+                    : (q.EntryUngated && !string.IsNullOrEmpty(q.RequiresQuestId)
+                        ? "  [GATED behind " + q.RequiresQuestId + "; " + q.SourcedPrefix + " sourced]"
+                        : "  [NOT ENTERABLE]");
                 sb.AppendLine("  " + q.Id + ": " + q.CompletablePrefix + "/" + q.Stages.Count +
-                              " completable" + (q.EntryLive ? "" : "  [NOT ENTERABLE]"));
+                              " completable" + why);
+            }
             if (failures.Count > 0)
             {
                 sb.AppendLine("FAILURES x" + failures.Count + ":");
@@ -384,8 +411,22 @@ namespace DeNelle.Editor.Regression
         {
             public string Id = "";
             public string Title = "";
+            /// <summary>The quest that must be completed first, or empty.</summary>
+            public string RequiresQuestId = "";
             public List<StageRec> Stages = new List<StageRec>();
+            /// <summary>Case 1 layer (a): the board offers this quest (or a StartQuest author
+            /// names it), ignoring any prerequisite.</summary>
+            public bool EntryUngated;
+            /// <summary>Case 1 layer (b): OFFERED and its prerequisite chain is satisfiable.
+            /// Resolved after Case 2 has sourced every quest, because the gate asks whether the
+            /// prerequisite is fully COMPLETABLE, which is Case 2's answer.</summary>
             public bool EntryLive;
+            /// <summary>The run of SOURCED stages from index 0, computed with no reference to
+            /// reachability. Sourcing (Case 2) and reachability (Case 1) are deliberately
+            /// separate: the score is their product, so a gated quest reports "0 of n, gated"
+            /// instead of n bogus "blocked ordinally" lines.</summary>
+            public int SourcedPrefix;
+            /// <summary>What this quest actually contributes: SourcedPrefix when reachable, else 0.</summary>
             public int CompletablePrefix;
         }
 
@@ -480,6 +521,7 @@ namespace DeNelle.Editor.Regression
                 {
                     Id = Str(o["id"]),
                     Title = Str(o["title"]),
+                    RequiresQuestId = Str(o["requiresQuestId"]).Trim(),
                 };
                 if (string.IsNullOrEmpty(q.Id))
                 {
@@ -574,6 +616,22 @@ namespace DeNelle.Editor.Regression
                 else
                     notes.Add("QuestCatalog load path agrees with the raw file (" + liveQuests + " quests, " +
                               liveStages + " stages)");
+
+                // Same reasoning, one field deeper. A prerequisite the DTO does not map loads as
+                // null, so the board offers every act at once while the file claims an order --
+                // the gate would be authored, shipped and inert, which is the exact failure mode
+                // the count cross-check above exists to catch.
+                foreach (var q in ctx.Quests)
+                {
+                    if (string.IsNullOrEmpty(q.RequiresQuestId)) continue;
+                    string mapped = ReadRequiresQuestId(DeNelle.Core.Quests.QuestCatalog.FindQuest(q.Id));
+                    if (string.Equals((mapped ?? "").Trim(), q.RequiresQuestId, StringComparison.Ordinal)) continue;
+                    failures.Add("[catalog-shape] quest '" + q.Id + "' authors requiresQuestId '" +
+                                 q.RequiresQuestId + "' but the REAL load path reads '" +
+                                 (mapped == null ? "<no such DTO field>" : mapped) + "' - QuestDef is not " +
+                                 "carrying the prerequisite, so the gate is inert data and every act is " +
+                                 "startable at once no matter what the file says.");
+                }
             }
             catch (Exception ex)
             {
@@ -903,7 +961,8 @@ namespace DeNelle.Editor.Regression
         private static void Case1_EntryLive(Ctx ctx, List<string> failures, List<string> notes)
         {
             string board = ReadText(RumorBoardSrc, failures);
-            bool boardRendersAll = false;
+            bool boardOffers = false;
+            bool boardHonoursPrereq = false;
 
             if (board != null)
             {
@@ -911,42 +970,144 @@ namespace DeNelle.Editor.Regression
                 bool enumeratesCatalog = Regex.IsMatch(code, @"foreach\s*\(\s*var\s+\w+\s+in\s+catalog\s*\)");
                 bool addsAvailable = code.IndexOf("_available.Add(", StringComparison.Ordinal) >= 0;
                 bool acceptStarts = Regex.IsMatch(code, @"_backend\s*\.\s*StartQuest\s*\(");
-                bool hasPrereqGate = code.IndexOf("requiresQuestId", StringComparison.Ordinal) >= 0;
+                boardHonoursPrereq = code.IndexOf("RequiresQuestId", StringComparison.Ordinal) >= 0;
 
-                boardRendersAll = enumeratesCatalog && addsAvailable && acceptStarts && !hasPrereqGate;
-                if (boardRendersAll)
-                    notes.Add("entry route: RumorBoardVM.Rebuild renders every non-completed catalog quest with " +
-                              "NO prerequisite gate and Accept calls StartQuest, so all " + ctx.Quests.Count +
-                              " quests are enterable (QuestDef has no prerequisite field - act ordering is not " +
-                              "enforced anywhere)");
+                boardOffers = enumeratesCatalog && addsAvailable && acceptStarts;
+                if (boardOffers)
+                    notes.Add("entry route: RumorBoardVM.Rebuild walks the catalog and Accept calls StartQuest, " +
+                              "so every quest whose prerequisite is satisfied is offered (prereq-gate honoured=" +
+                              boardHonoursPrereq + ")");
                 else
-                    notes.Add("RumorBoardVM no longer renders the whole catalog ungated (enumerates=" +
-                              enumeratesCatalog + " adds=" + addsAvailable + " accept-starts=" + acceptStarts +
-                              " prereq-gate=" + hasPrereqGate + ") - falling back to per-quest StartQuest authorship");
+                    notes.Add("RumorBoardVM no longer offers the catalog (enumerates=" + enumeratesCatalog +
+                              " adds=" + addsAvailable + " accept-starts=" + acceptStarts +
+                              ") - falling back to per-quest StartQuest authorship");
             }
+
+            // The data promising an order the board does not enforce is the defect this case now
+            // pins: without the gate, the TERMINAL act is startable on a fresh save and whatever
+            // it unlocks stops being a reward.
+            int authoredGates = 0;
+            foreach (var q in ctx.Quests) if (!string.IsNullOrEmpty(q.RequiresQuestId)) authoredGates++;
+            if (authoredGates > 0 && board != null && !boardHonoursPrereq)
+                failures.Add("[entry-live] quests.json authors " + authoredGates + " requiresQuestId " +
+                             "prerequisite(s) but " + RumorBoardSrc + " never reads RequiresQuestId - the board " +
+                             "offers every act at once, so the ordering the data promises is fiction and the last " +
+                             "act's rewards are a first-session freebie. Gate the Available list on it.");
+            if (authoredGates == 0)
+                notes.Add("no quest carries a requiresQuestId, so the prerequisite chain is unexercised - the " +
+                          "walk below is armed for the moment one is authored");
 
             bool boardOpenable = ctx.SourceLiterals.Contains("OpenRumorBoard")
                               || FileContains(ModulesRoot, "PanelId.RumorBoard");
             if (!boardOpenable)
             {
                 failures.Add("[entry-live] nothing under " + ModulesRoot + " opens PanelId.RumorBoard - the board " +
-                             "that is the ONLY ungated entry to all " + ctx.Quests.Count + " quests cannot be " +
+                             "that is the ONLY entry to all " + ctx.Quests.Count + " quests cannot be " +
                              "reached, so no quest can be accepted. Restore an opener (HUD button or the " +
                              "OpenRumorBoard dialogue verb).");
-                boardRendersAll = false;
+                boardOffers = false;
             }
 
             foreach (var q in ctx.Quests)
             {
-                if (boardRendersAll) { q.EntryLive = true; continue; }
+                if (boardOffers) { q.EntryUngated = true; continue; }
                 bool authored = DialogueAuthorsVerb(ctx, "StartQuest", q.Id) || ctx.SourceLiterals.Contains(q.Id);
-                q.EntryLive = authored;
+                q.EntryUngated = authored;
                 if (!authored)
                     failures.Add("[entry-live] quest '" + q.Id + "' has NO way in: the rumor board no longer " +
-                                 "renders the catalog ungated and no dialogue or source authors StartQuest for it. " +
-                                 "A quest nothing can start is dead content - either restore the board's ungated " +
+                                 "offers the catalog and no dialogue or source authors StartQuest for it. " +
+                                 "A quest nothing can start is dead content - either restore the board's " +
                                  "render or author a StartQuest for this id.");
             }
+            // Layer (b) -- the prerequisite walk -- runs at the END of Case 2, because it asks
+            // whether a prerequisite is fully COMPLETABLE and only Case 2 knows that.
+        }
+
+        /// <summary>
+        /// Case 1 layer (b). Turns SOURCING (Case 2's per-quest SourcedPrefix) plus OFFERING
+        /// (layer (a)'s EntryUngated) into the final score, by walking each quest's
+        /// requiresQuestId chain: a quest is reachable when it is offered AND either has no
+        /// prerequisite, or its prerequisite is reachable and every one of its stages is
+        /// completable. A quest that is not reachable contributes ZERO -- counting its stages
+        /// would be the oracle asserting a reward is earnable that the gate makes unreachable.
+        ///
+        /// CYCLE SAFETY: the walk marks a quest ON-STACK while resolving it, so re-entering one
+        /// is detected as a cycle, reported once, and collapsed to unreachable - it never
+        /// recurses forever. Memoized (each quest resolves once), so the walk is linear.
+        /// </summary>
+        private static void ResolveEntryChain(Ctx ctx, List<string> failures, List<string> ledger)
+        {
+            var byId = new Dictionary<string, QuestRec>(StringComparer.Ordinal);
+            foreach (var q in ctx.Quests) if (!string.IsNullOrEmpty(q.Id)) byId[q.Id] = q;
+
+            var state = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var q in ctx.Quests) ResolveReachable(q, byId, state, failures);
+
+            foreach (var q in ctx.Quests)
+            {
+                q.CompletablePrefix = q.EntryLive ? q.SourcedPrefix : 0;
+                ctx.Completable += q.CompletablePrefix;
+                ctx.QuestFullyCompletable[q.Id] =
+                    q.EntryLive && q.Stages.Count > 0 && q.SourcedPrefix == q.Stages.Count;
+
+                if (q.EntryLive || q.Stages.Count == 0) continue;
+                if (!q.EntryUngated)
+                    ledger.Add(q.Id + " contributes 0 of " + q.Stages.Count +
+                               " stages: the quest is not enterable");
+                else
+                    ledger.Add(q.Id + " contributes 0 of " + q.Stages.Count + " stages (" + q.SourcedPrefix +
+                               " of them ARE sourced): it is gated behind prerequisite quest '" +
+                               q.RequiresQuestId + "', which is not itself reachable and fully completable - " +
+                               "finish that chain and these stages start counting");
+            }
+        }
+
+        private const int WalkUnvisited = 0, WalkOnStack = 1, WalkResolved = 2;
+
+        private static bool ResolveReachable(QuestRec q, Dictionary<string, QuestRec> byId,
+                                             Dictionary<string, int> state, List<string> failures)
+        {
+            int st;
+            if (state.TryGetValue(q.Id, out st))
+            {
+                if (st != WalkOnStack) return q.EntryLive;
+                failures.Add("[entry-live] prerequisite CYCLE through quest '" + q.Id + "' - following " +
+                             "requiresQuestId leads back to it, so every quest in the loop waits on one that " +
+                             "waits on it and NONE of them can ever be offered. Break the cycle.");
+                q.EntryLive = false;
+                state[q.Id] = WalkResolved;
+                return false;
+            }
+            state[q.Id] = WalkOnStack;
+
+            bool live = q.EntryUngated;
+            string prereq = q.RequiresQuestId ?? "";
+            if (live && prereq.Length > 0)
+            {
+                QuestRec p;
+                if (string.Equals(prereq, q.Id, StringComparison.Ordinal))
+                {
+                    failures.Add("[entry-live] quest '" + q.Id + "' names ITSELF as its requiresQuestId - it can " +
+                                 "never be offered, because it can only be offered once it is completed.");
+                    live = false;
+                }
+                else if (!byId.TryGetValue(prereq, out p))
+                {
+                    failures.Add("[entry-live] quest '" + q.Id + "' requires quest '" + prereq + "' which is NOT " +
+                                 "in quests.json - QuestService.IsCompleted answers false forever, so the gate " +
+                                 "never opens and the quest is dead content. Fix the id or drop the gate.");
+                    live = false;
+                }
+                else
+                {
+                    bool prereqReachable = ResolveReachable(p, byId, state, failures);
+                    live = prereqReachable && p.Stages.Count > 0 && p.SourcedPrefix == p.Stages.Count;
+                }
+            }
+
+            q.EntryLive = live;
+            state[q.Id] = WalkResolved;
+            return live;
         }
 
         // =====================================================================
@@ -968,8 +1129,12 @@ namespace DeNelle.Editor.Regression
                 var pool = AdvanceNodesFor(ctx, q.Id, failures, notes);
                 int poolCursor = 0;
 
+                // SOURCING ONLY. Reachability (is this quest offered, is its prerequisite
+                // finishable) is Case 1's job and is multiplied in by ResolveEntryChain below,
+                // so an unreachable quest reports one honest "gated" ledger line instead of a
+                // per-stage "blocked ordinally" line that names the wrong cause.
                 var usedKeys = new Dictionary<string, int>(StringComparer.Ordinal);
-                bool prefixOpen = q.EntryLive;
+                bool prefixOpen = true;
                 int prefix = 0;
 
                 for (int i = 0; i < q.Stages.Count; i++)
@@ -1074,18 +1239,18 @@ namespace DeNelle.Editor.Regression
                                    "behind an earlier stage that has none - it can never become current");
                 }
 
-                if (!q.EntryLive && q.Stages.Count > 0)
-                    ledger.Add(q.Id + " contributes 0 stages: the quest is not enterable");
-
-                q.CompletablePrefix = prefix;
-                ctx.Completable += prefix;
-                ctx.QuestFullyCompletable[q.Id] = q.Stages.Count > 0 && prefix == q.Stages.Count;
+                q.SourcedPrefix = prefix;
 
                 if (poolCursor < pool.Count)
                     notes.Add("quest '" + q.Id + "' has " + (pool.Count - poolCursor) + " more AdvanceQuest " +
                               "node(s) than it has stages - surplus advance authors are a no-op once the quest " +
                               "completes");
             }
+
+            // Every quest is now sourced, so the prerequisite chain can be resolved and the score
+            // taken. This is Case 1 layer (b) and it MUST run last: it asks whether a prerequisite
+            // is fully completable, which is only knowable after the loop above.
+            ResolveEntryChain(ctx, failures, ledger);
         }
 
         /// <summary>Distinct, reachable, openable dialogue nodes that author AdvanceQuest for a
@@ -1684,6 +1849,18 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Helpers
         // =====================================================================
+
+        /// <summary>The prerequisite the RUNTIME's QuestDef carries for a quest, read by
+        /// reflection so this oracle still compiles (and still reports honestly) if the field is
+        /// absent from the DTO. Null means the DTO has no such field at all - which is itself the
+        /// defect Case 0 reports, since the authored gate would then be inert.</summary>
+        private static string ReadRequiresQuestId(object questDef)
+        {
+            if (questDef == null) return null;
+            var f = questDef.GetType().GetField("RequiresQuestId", BindingFlags.Public | BindingFlags.Instance);
+            if (f == null) return null;
+            return f.GetValue(questDef) as string;
+        }
 
         private static bool DialogueAuthorsVerb(Ctx ctx, string verb, string questId)
         {

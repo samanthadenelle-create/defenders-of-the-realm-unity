@@ -361,7 +361,12 @@ namespace DeNelle.Village
             if (FindAnyObjectByType<TutorialFlow>() != null) return;
             var go = new GameObject("TutorialFlow");
             go.AddComponent<TutorialFlow>();
-            go.AddComponent<TutorialSignalAdapters>();   // Village-side real-event → bus adapters
+            // WO-854 Silo E (2026-08-04): the signal adapters are NOT added here any more.
+            // TutorialSignalAdapters now runs its own RuntimeInitializeOnLoadMethod bootstrap,
+            // because this arm path returns early on ff.tutorialv2 OFF and on an enemy-owned hub -
+            // which meant every wave/build/arena signal existed only while the FTUE was armed, and
+            // story-quest stages that complete off those signals silently inherited the flag.
+            // Adding the component here again would stand up a SECOND emitter host on a latching bus.
             go.AddComponent<TutorialWorldAnchors>();     // world.sylas / world.gate_direction resolvers
             FlowTrace.Step("Tutorial", $"Bootstrap({reason}): TutorialFlow armed in hub '{scene}'.");
         }

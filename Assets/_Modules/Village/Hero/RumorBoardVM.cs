@@ -11,6 +11,10 @@
 // re-renders on Changed, and routes taps to Accept/Track/SetTab — it never reads
 // QuestService / QuestCatalog / DailyQuestService itself.
 //
+// Also owns the PREREQUISITE gate: a quest whose QuestDef.RequiresQuestId names a quest the
+// player has not completed is kept out of Available and refused by Accept, which is what makes
+// the Forgemasters act chain (act1 -> act2 -> act3 -> act4) an order instead of a suggestion.
+//
 // PURE C#: no UnityEngine UI types; unit-testable over a fake IRumorBoardBackend (§2c).
 // =============================================================================
 
@@ -178,8 +182,16 @@ namespace DeNelle.Village.Hero
         {
             if (string.IsNullOrEmpty(id)) return;
             if (_backend == null || !_backend.Ready) { Status = "Quests aren't ready yet."; Raise(); return; }
-            _backend.StartQuest(id);
             var def = FindDef(id);
+            // The Available list already hides a gated quest, but the refusal lives here too so
+            // no caller (a stale row, a test, a future view) can start an act out of order.
+            if (def != null && !PrerequisiteMet(def))
+            {
+                Status = "Not yet: finish " + CatalogTitle(def.RequiresQuestId) + " first.";
+                Raise();
+                return;
+            }
+            _backend.StartQuest(id);
             string name = def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : id;
             Status = "Accepted: " + name + ".";
             // The backend raises Changed on a successful start (-> Rebuild); rebuild defensively
@@ -220,6 +232,32 @@ namespace DeNelle.Village.Hero
         private QuestDef FindDef(string id) =>
             id != null && _byId.TryGetValue(id, out var d) ? d : null;
 
+        /// <summary>True when the quest carries no requiresQuestId, or when the quest it names
+        /// is already COMPLETED. This is what enforces act ordering (forgemasters_act1 -> act2
+        /// -> act3 -> act4); without it every act, including the terminal one that mints the
+        /// aegis legendaries, is startable on a fresh save.</summary>
+        private bool PrerequisiteMet(QuestDef def)
+        {
+            string prereq = def != null ? def.RequiresQuestId : null;
+            if (string.IsNullOrEmpty(prereq)) return true;
+            prereq = prereq.Trim();
+            if (prereq.Length == 0) return true;
+            return _backend != null && _backend.IsCompleted(prereq);
+        }
+
+        /// <summary>Display title for any catalog quest id (not just the tab-filtered ones the
+        /// board indexed), so a refusal names the quest the player has to finish rather than a
+        /// raw id. Falls back to the id when the catalog cannot answer.</summary>
+        private string CatalogTitle(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "the quest before it";
+            var catalog = _backend != null ? _backend.Catalog : null;
+            if (catalog != null)
+                foreach (var q in catalog)
+                    if (q != null && q.Id == id && !string.IsNullOrEmpty(q.Title)) return q.Title;
+            return id;
+        }
+
         private void Rebuild()
         {
             _active.Clear();
@@ -247,6 +285,12 @@ namespace DeNelle.Village.Hero
                     continue;
                 }
                 if (_backend.IsCompleted(def.Id)) continue;   // done — off the board
+                // A quest whose requiresQuestId names an unfinished quest stays off the board
+                // entirely (see PrerequisiteMet). Hidden rather than shown locked: the rumor
+                // board's card has no lock affordance: RumorBoardPanel renders an available row
+                // from (id, title, hook, "[New]") and never reads ItemVM.Locked/LockReason, so a
+                // locked row would look exactly like an acceptable one.
+                if (!PrerequisiteMet(def)) continue;
                 _available.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true));
             }
         }

@@ -35,8 +35,17 @@
 //
 // Sources that spawn late (TowerPlacementSystem self-bootstraps; BattleArena
 // stages on first encounter) are subscribed by a 1 Hz discovery tick — no
-// per-frame Find churn. Added alongside TutorialFlow by its Bootstrap, so it
-// only exists when ff.tutorialv2 is ON.
+// per-frame Find churn.
+//
+// LIFECYCLE (WO-854 Silo E, 2026-08-04): this component boots ITSELF, from its own
+// RuntimeInitializeOnLoadMethod, into a DontDestroyOnLoad host. It used to be added
+// only by TutorialFlow.TryArm, which returns early when ff.tutorialv2 is off and
+// refuses to arm in an enemy-owned hub - so every wave / build / arena signal on the
+// bus existed ONLY while the FTUE was armed. Story-quest stages now complete off
+// those same ids (QuestStage.completeOn -> StoryQuestSignalBridge), so quest
+// completion would have silently inherited a tutorial feature flag. The bus is a
+// game spine, so its emitters boot like one. TutorialFlow no longer adds the
+// component; this file is the ONE owner of the adapter host.
 // =============================================================================
 
 using DeNelle.Core.Diagnostics;
@@ -56,6 +65,9 @@ namespace DeNelle.Village
         /// until costs move to catalog data (BuildMenu.cs "Week 6" note).</summary>
         private const int CheapestTowerCrystals = 120;
 
+        /// <summary>The one live adapter host. Guards the bootstrap against a second stack.</summary>
+        private static TutorialSignalAdapters s_instance;
+
         private float _nextDiscoverAt;
         private TowerPlacementSystem _tps;
         private BuildMenu _buildMenu;
@@ -64,6 +76,48 @@ namespace DeNelle.Village
         private EchoService _echo;
         private bool _economyHooked;
         private bool _affordRaised;   // session guard; per-save one-shot lives in TutorialFlow
+
+        /// <summary>
+        /// Stands the adapter host up once per process, on any scene, with no feature
+        /// flag and no hub check - the signal bus is game-wide, not tutorial-wide.
+        /// Idempotent three ways: it returns on a live static instance, it returns when
+        /// an instance already exists in the loaded scenes, and Awake destroys any
+        /// duplicate component that reaches it anyway.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (s_instance != null) return;
+            var existing = FindAnyObjectByType<TutorialSignalAdapters>();
+            if (existing != null) { s_instance = existing; return; }
+
+            var go = new GameObject("TutorialSignalAdapters");
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            s_instance = go.AddComponent<TutorialSignalAdapters>();
+            FlowTrace.Step("Tutorial", "TutorialSignalAdapters bootstrapped standalone " +
+                "(DontDestroyOnLoad) - the wave/build/arena/echo signal bus no longer depends on " +
+                "ff.tutorialv2 or on TutorialFlow arming.");
+        }
+
+        private void Awake()
+        {
+            // One owner. A second component (a hand-added one, or a stale scene object)
+            // would double-raise every signal onto a latching bus.
+            if (s_instance != null && s_instance != this)
+            {
+                FlowTrace.Warn("Tutorial", "a second TutorialSignalAdapters was added - destroying the " +
+                    "duplicate so the bus keeps exactly one emitter host.");
+                enabled = false;   // keeps OnEnable from subscribing before Destroy lands
+                Destroy(this);
+                return;
+            }
+            s_instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (s_instance == this) s_instance = null;
+        }
 
         private void OnEnable()
         {

@@ -363,6 +363,7 @@
       "id": "forgemasters_act2",
       "type": "main",
       "title": "The Old Fire",
+      "requiresQuestId": "forgemasters_act1",
       "stages": [
         {
           "stageId": "steel-truth",
@@ -402,6 +403,7 @@
       "id": "forgemasters_act3",
       "type": "endgame",
       "title": "What Was Lost",
+      "requiresQuestId": "forgemasters_act2",
       "stages": [
         {
           "stageId": "gather-components",
@@ -425,6 +427,7 @@
       "id": "forgemasters_act4",
       "type": "endgame",
       "title": "The Reforging",
+      "requiresQuestId": "forgemasters_act3",
       "stages": [
         {
           "stageId": "the-choice",
