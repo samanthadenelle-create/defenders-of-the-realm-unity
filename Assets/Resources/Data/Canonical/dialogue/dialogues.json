@@ -1,5 +1,5 @@
 {
- "version": 4,
+ "version": 5,
  "speakers": [
   {
    "name": "Mother Wren",
@@ -520,11 +520,11 @@
      "lines": [
       {
        "speaker": "Mother Wren",
-       "text": "The grain comes slow in the Dimming, Keeper - but it comes. Drive the dark back and the fields will answer."
+       "text": "Come in out of the wind, dearie. There is bread, and there is always a chair."
       },
       {
        "speaker": "Mother Wren",
-       "text": "Stop by the build menu when you've crystal to spare and we'll raise what this mill can yield."
+       "text": "Get my stones turning again. Empty bellies, empty walls - it has never been more complicated than that."
       }
      ]
     }
@@ -551,11 +551,11 @@
      "lines": [
       {
        "speaker": "Old Pell",
-       "text": "Timber for the walls, timber for the fires. The forest gives what the Heart can spare, and no more."
+       "text": "Mind where you put your boots, Keeper. Young roots under there, and they have had a hard century."
       },
       {
        "speaker": "Old Pell",
-       "text": "Care to grow the cut? The upgrade's yours to call when the coin's in hand."
+       "text": "The grove I grew up in has gone grey to the bark. Lift whatever is sitting on it and I will get the saws singing again."
       }
      ]
     }
@@ -702,11 +702,11 @@
      "lines": [
       {
        "speaker": "Borin Emberhand",
-       "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do."
+       "text": "Emberhand. Yes, that Emberhand. Mind the broken hilt on the anvil - it does not move."
       },
       {
        "speaker": "Borin Emberhand",
-       "text": "Take up what the line needs."
+       "text": "A thousand honest swords, Keeper. Not one great one. That is the bargain I keep."
       }
      ],
      "options": [
@@ -1366,7 +1366,7 @@
   },
   {
    "id": "village_elder",
-   "_note": "Quest cast (2026-08-03). Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. TEXT IS A PLACEHOLDER - swap in the owner-approved voice lines from docs/narrative/QUEST_CAST_VOICES_2026-08-03.md.",
+   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. Lines below are that doc's greeting + quest-give, which is exactly its own meet-elder mapping. NOT installed (no slot - this dialogue has one ungated node, so a state-specific line would play at the wrong time): the in-progress nudge, the turn-in and the idle-repeat. Owner Question 3 (is the Elder also Warden Alric / does he get a proper name; and Sylas already covers this same welcome beat via tut_meet_sylas) stays OPEN - neither line below names him or contradicts Sylas, so neither depends on the answer.",
    "startNode": "talk",
    "nodes": [
     {
@@ -1374,7 +1374,11 @@
      "lines": [
       {
        "speaker": "Village Elder",
-       "text": "PLACEHOLDER LINE - awaiting owner-approved copy. Quest elarion.welcome, stage meet-elder."
+       "text": "You came. I have kept a place at these roots a long while, child."
+      },
+      {
+       "speaker": "Village Elder",
+       "text": "The horns will sound before dusk. Go down to the gate and let the Folk see who holds it."
       }
      ]
     }
@@ -1382,7 +1386,7 @@
   },
   {
    "id": "fenn_wildmane",
-   "_note": "Quest cast (2026-08-03). Seated at the pet-house by QuestCastNpcInjector. Addressed by quests.json vendor.stable / stage train-ability. TEXT IS A PLACEHOLDER - swap in the owner-approved voice lines from docs/narrative/QUEST_CAST_VOICES_2026-08-03.md.",
+   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the pet-house by QuestCastNpcInjector - no stable structure exists. Addressed by quests.json vendor.stable / stage train-ability. Lines below are that doc's greeting + its train-ability give; both are deliberately neutral on Owner Question 1 (are Fenn's beasts Echoes or a second companion track), which is still OPEN. The 'stalls' in the greeting are corroborated by quests.json petbond.icewolf ('Fenn Wildmane will make it a warm stall'). HELD, pending Question 1: the turn-in line ('walked in behind you on its own four feet') asserts a quadruped, but quests.json vendor.stable/tame-beast now reads 'Track a wild echo' and the echo roster includes winged forms (Mirewing, Glimmermoth). ALSO NOT installed: the quest-give (tame-beast completes on 'arena', not a talk, so it has no node) and the put-to-work beat (that stage now targets the Echo Warden at pet-house, not Fenn).",
    "startNode": "talk",
    "nodes": [
     {
@@ -1390,7 +1394,11 @@
      "lines": [
       {
        "speaker": "Fenn Wildmane",
-       "text": "PLACEHOLDER LINE - awaiting owner-approved copy. Quest vendor.stable, stage train-ability."
+       "text": "Stand still a moment. Not for my sake - for the ones watching you out of the stalls."
+      },
+      {
+       "speaker": "Fenn Wildmane",
+       "text": "It already knows how to fight, Keeper. What it does not know is when you want it to."
       }
      ]
     }
