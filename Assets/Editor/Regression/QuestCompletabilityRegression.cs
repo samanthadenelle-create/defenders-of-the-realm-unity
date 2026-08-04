@@ -210,7 +210,7 @@ namespace DeNelle.Editor.Regression
 
         /// <summary>Stages proven completable as of the last SHIPPED phase. This only
         /// ever goes UP. Raise it in the SAME commit that raises the real count.</summary>
-        private const int MinCompletableStages = 55;  // WO-854 P3+P4 (2026-08-04): owner ruled RETARGET, Silo C sourced 55. ONLY EVER GOES UP - backsliding below this is a hard failure.
+        private const int MinCompletableStages = 63;  // WO-854 final wave (2026-08-04): all 63 stages sourced. ONLY EVER GOES UP - any backslide is a hard failure.
 
         /// <summary>The stage count the program was scoped against (24 quests / 63
         /// stages). Drift is a NOTE, not a failure -- content may legitimately grow --

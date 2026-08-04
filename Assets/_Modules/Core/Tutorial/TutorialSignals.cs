@@ -46,6 +46,14 @@ namespace DeNelle.Core.Tutorial
         public const string DialogueEndedPrefix = "dialogue.ended:";   // + dialogue id
         public const string HeroReachedPrefix   = "hero.reached:";     // + anchor id
         public const string PanelOpenedPrefix   = "panel.opened:";     // + PanelId
+        /// <summary>WO-854 Silo E per-species bond completion: "pet.bonded:" + the
+        /// pets.json species id (e.g. "pet.bonded:ice-wolf") -- raised by
+        /// DeNelle.Pets.PetAcquisitionService.Acquire once a NEW species enters the
+        /// roster, so a quest stage can gate on bonding a SPECIFIC companion. Lives
+        /// here (not beside the completion DTO) because this is the emitter's own
+        /// vocabulary: DeNelle.Core.Quests.QuestCompletion.PetBondedPrefix aliases
+        /// this constant so the raiser and the matcher share one literal.</summary>
+        public const string PetBondedPrefix     = "pet.bonded:";       // + pets.json species id
         // Contextual triggers (spec CREATIVE SCOPE) — sources noted per adapter.
         public const string CanAffordUpgrade = "economy.can_afford_upgrade";
         public const string EchoBornSecond   = "echo.born:2";

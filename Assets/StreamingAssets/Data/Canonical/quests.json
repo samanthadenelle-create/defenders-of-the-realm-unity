@@ -466,7 +466,8 @@
           "objectiveText": "Bond the Flame Pup - its hearth fire quickens what the fields give back.",
           "reward": { "crystals": 0, "food": 30, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "flame-pup", "count": 1 }
         }
       ]
     },
@@ -496,7 +497,8 @@
           "objectiveText": "Bond the Ice Wolf - its frost hide turns a blow meant for the Heart of Elarion.",
           "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
         }
       ]
     },
@@ -526,7 +528,8 @@
           "objectiveText": "Bond the Ice Wolf - its bite leaves the cold behind in the wound.",
           "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
         }
       ]
     },
@@ -556,7 +559,8 @@
           "objectiveText": "Bond the Flame Pup - its bite sets the enemy alight and the burn lingers.",
           "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "flame-pup", "count": 1 }
         }
       ]
     },
@@ -586,7 +590,8 @@
           "objectiveText": "Bond the Aether Sprite - its light eases what the mire left behind.",
           "reward": { "crystals": 0, "food": 0, "magic": 15, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
         }
       ]
     },
@@ -616,7 +621,8 @@
           "objectiveText": "Bond the Aether Sprite - it scents richer crystal than any hand can find.",
           "reward": { "crystals": 60, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
         }
       ]
     },
@@ -638,7 +644,8 @@
           "objectiveText": "The freed Ice Wolf bonds at once - it will carry, and it will cover.",
           "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
         }
       ]
     },
@@ -668,7 +675,8 @@
           "objectiveText": "Bond the Aether Sprite - its aura lightens every ability you spend.",
           "reward": { "crystals": 100, "food": 0, "magic": 50, "grantItemId": "" },
           "requiresFlag": "",
-          "grantsKeystone": false
+          "grantsKeystone": false,
+          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
         }
       ]
     }

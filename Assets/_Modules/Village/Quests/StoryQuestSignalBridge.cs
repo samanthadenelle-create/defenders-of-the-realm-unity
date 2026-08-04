@@ -25,6 +25,14 @@
 //   * "dialogueCommand" -- the legacy path; the dialogue calls AdvanceQuest itself,
 //                         so this bridge stays out of the way entirely.
 //
+// AND ONE KIND THAT CAN BE ALREADY-TRUE WHEN IT ARMS: "pet". The bond signal fires
+// once per species ever (PetAcquisitionService.Acquire is idempotent), and the FTUE
+// spends that one firing on the starter pet before any quest exists -- so a stage
+// naming the species the player started with would wait forever. SatisfyAlreadyBondedPets
+// below settles that case at arm time. It is the mirror image of the latch discipline:
+// the latch guards against a signal that fired TOO EARLY to be meant for this stage;
+// this guards against one that fired too early to ever come again.
+//
 // Self-bootstraps via RuntimeInitializeOnLoadMethod into a DontDestroyOnLoad
 // object, mirroring QuestRewardBridge's lifecycle.
 // =============================================================================
@@ -70,6 +78,11 @@ namespace DeNelle.Village
         private readonly List<string> _matched = new List<string>();
         private readonly List<string> _stale = new List<string>();
         private readonly List<string> _flagReady = new List<string>();
+        // Quests whose freshly-armed "pet" stage names a species the roster ALREADY holds.
+        // Collected during the arm walk and advanced after it, so AdvanceQuest never runs
+        // while prog.Active is being enumerated -- the same discipline EvaluateFlagStages
+        // uses for its own out-of-band completions.
+        private readonly List<string> _petAlreadyBonded = new List<string>();
 
         // Advancing a quest pays its reward, which moves the wallet, which raises
         // "economy.can_afford_upgrade" back onto this same bus. Dispatch must therefore
@@ -147,6 +160,9 @@ namespace DeNelle.Village
         /// for any stage that just became current. Drops entries for quests that are no
         /// longer active. Idempotent: a quest already armed on the same stage is skipped,
         /// so the latch is cleared exactly once per stage.
+        ///
+        /// Also settles the ONE condition that can be already-true the moment it is armed:
+        /// see SatisfyAlreadyBondedPets below.
         /// </summary>
         private void RearmActiveStages()
         {
@@ -154,6 +170,8 @@ namespace DeNelle.Village
             if (prog == null || prog.Active == null) return;
             var svc = QuestService.Instance;
             if (svc == null) return;
+
+            _petAlreadyBonded.Clear();
 
             // Forget quests that left the Active ledger (completed or abandoned).
             _stale.Clear();
@@ -207,7 +225,74 @@ namespace DeNelle.Village
                     FlowTrace.Step("Quest",
                         $"armed '{questId}' stage '{stage?.StageId}' -> awaiting '{signal}' " +
                         $"(latch cleared, {cond.RequiredCount} firing(s) needed).");
+
+                // The pet bond is the one kind whose condition can ALREADY be true here.
+                if (cond.NormalizedKind == QuestCompletion.KindPet && OwnsPetSpecies(cond.TargetId))
+                    _petAlreadyBonded.Add(questId);
             }
+
+            SatisfyAlreadyBondedPets(svc);
+        }
+
+        /// <summary>
+        /// Completes any stage just armed on completeOn {kind:"pet"} whose species the player
+        /// ALREADY owns.
+        ///
+        /// WHY THIS EXISTS. PetAcquisitionService.Acquire is idempotent per species: its
+        /// Owns(species) guard returns before the roster write, so pet.bonded:&lt;species&gt; is
+        /// raised on a FIRST bond and never again. The FTUE grants a starter pet through that
+        /// same Acquire long before any rumor-board quest can be accepted, so every quest
+        /// targeting whichever species the player started with would await a signal that has
+        /// already had its only chance to fire -- permanently uncompletable. Satisfying it at
+        /// arm time is the fix that keeps ONE emitter: the alternatives (a second event path,
+        /// or making Acquire re-raise on an already-owned species) would have the game assert
+        /// a bond that did not just happen.
+        ///
+        /// WHY IT CANNOT FIRE FALSELY:
+        ///   * Arming only ever happens for a quest's CURRENT stage, so every earlier stage of
+        ///     that quest was already completed by its own source -- ordinality is preserved.
+        ///   * The arm walk is guarded by _armedAt (same stage + beat = skipped), so this is
+        ///     evaluated exactly ONCE per stage-becoming-current, not once per poll.
+        ///   * It is mutually exclusive with the bus path: Owns() false means we do nothing and
+        ///     the real Raise completes the stage normally; Owns() true is precisely the state
+        ///     in which that Raise can no longer happen.
+        ///   * RearmActiveStages already returned unless GameState.Quests exists, so the roster
+        ///     Owns() reads is a loaded save, never a not-yet-restored blank. PetAcquisitionService
+        ///     bootstraps at BeforeSceneLoad and this bridge at AfterSceneLoad, so the service is
+        ///     up before the first arm.
+        /// Advancing here rather than inside the arm loop keeps AdvanceQuest out of the
+        /// prog.Active enumeration it would mutate.
+        /// </summary>
+        private void SatisfyAlreadyBondedPets(QuestService svc)
+        {
+            if (_petAlreadyBonded.Count == 0) return;
+            for (int i = 0; i < _petAlreadyBonded.Count; i++)
+            {
+                string questId = _petAlreadyBonded[i];
+                var stage = svc?.GetStage(questId);
+                var cond = stage?.CompleteOn;
+                if (cond == null) continue;
+                FlowTrace.Step("Quest",
+                    $"'{questId}' stage '{stage.StageId}' awaits pet species '{cond.TargetId}' which the roster " +
+                    "ALREADY holds -- the bond signal fired before this stage could arm and cannot fire twice, " +
+                    "so the condition is satisfied at arm time.");
+                Advance(questId, stage.StageId, "pet.already_bonded");
+            }
+            _petAlreadyBonded.Clear();
+        }
+
+        /// <summary>
+        /// True when the pet roster already holds this species. Asks
+        /// DeNelle.Pets.PetAcquisitionService.Owns -- the SAME check whose idempotence guard
+        /// decides whether Acquire raises pet.bonded -- so the two can never disagree about
+        /// whether the signal is still available to this stage. Village references DeNelle.Pets
+        /// in its asmdef; the call is null-conditional, and a missing service reads as
+        /// "not owned", which leaves the ordinary bus path in charge.
+        /// </summary>
+        private static bool OwnsPetSpecies(string species)
+        {
+            if (string.IsNullOrEmpty(species)) return false;
+            return DeNelle.Pets.PetAcquisitionService.Instance?.Owns(species.Trim()) == true;
         }
 
         // -- Bus matching ------------------------------------------------------

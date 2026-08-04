@@ -43,7 +43,6 @@ using System;
 using System.Collections.Generic;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Core.Quests;
 using DeNelle.Core.Tutorial;
 using UnityEngine;
 
@@ -269,12 +268,20 @@ namespace DeNelle.Pets
             // the species is already owned - so the id fires exactly once per NEW bond, never on a
             // panel open and never twice.
             //
-            // The id is composed from QuestCompletion.PetBondedPrefix - the SAME constant
-            // QuestCompletion.ToSignalId() uses to compose what a completeOn {kind:"pet"} stage
-            // awaits - so the emitter and the matcher cannot drift apart. def.Species is the
-            // catalog's own species string (PetCatalog.FindBySpecies matched it by ordinal
-            // equality above), so the token is byte-identical to the pets.json id.
-            TutorialSignals.Raise(QuestCompletion.PetBondedPrefix + def.Species);
+            // The id is composed from TutorialSignals.PetBondedPrefix, which
+            // QuestCompletion.PetBondedPrefix aliases - so the raiser and the completeOn
+            // {kind:"pet"} matcher share ONE literal and cannot drift apart. The constant
+            // sits on TutorialSignals because that is the type the emitter scan reflects:
+            // a Raise argument built from any other type's constant is invisible to it.
+            // def.Species is the catalog's own species string (PetCatalog.FindBySpecies
+            // matched it by ordinal equality above), so the token is byte-identical to the
+            // pets.json id.
+            //
+            // Fires only on a FIRST bond (the Owns() guard returns above otherwise). The
+            // "player already owns the target species" case is therefore NOT this method's
+            // to cover - StoryQuestSignalBridge satisfies such a stage at ARM time instead,
+            // because re-raising here would assert a bond that did not just happen.
+            TutorialSignals.Raise(TutorialSignals.PetBondedPrefix + def.Species);
 
             PetAcquired?.Invoke(species);
             Changed?.Invoke();

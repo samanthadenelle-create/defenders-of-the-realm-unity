@@ -71,17 +71,23 @@ namespace DeNelle.Core.Quests
         public const string KindReach           = "reach";
         public const string KindFlag            = "flag";
         public const string KindDialogueCommand = "dialoguecommand";
+        // KindPet is LIVE too (WO-854 final wave): PetAcquisitionService.Acquire raises
+        // pet.bonded:<species> on every new bond.
+        public const string KindPet        = "pet";
         // Emitter NOT built yet (Silo E / WO-827) -- composed here so authoring and
         // the oracle share one grammar, but nothing Raises these ids yet:
-        public const string KindPet        = "pet";
         public const string KindUpgrade    = "upgrade";
         public const string KindPopulation = "population";
         public const string KindRegion     = "region";
 
-        // Signal prefixes for the four not-yet-emitted kinds. They live here rather
-        // than in TutorialSignals because no emitter references them yet; Silo E
-        // promotes each one into TutorialSignals when it lands the matching Raise.
-        public const string PetBondedPrefix          = "pet.bonded:";
+        // Signal prefixes. A prefix lives in TutorialSignals once an emitter raises it
+        // and is ALIASED here, so one literal keeps one owner; the rest stay local
+        // until Silo E / WO-827 lands the matching Raise and promotes them.
+        //
+        // "pet.bonded:" is promoted (WO-854 final wave): PetAcquisitionService.Acquire
+        // raises TutorialSignals.PetBondedPrefix + species, so the constant belongs to
+        // the emitter's vocabulary and this row points at it rather than repeating it.
+        public const string PetBondedPrefix          = DeNelle.Core.Tutorial.TutorialSignals.PetBondedPrefix;
         public const string StructureUpgradedPrefix  = "structure.upgraded:";
         public const string PopulationThresholdPrefix = "population.threshold:";
         public const string RegionClearedPrefix      = "region.cleared:";
@@ -130,8 +136,11 @@ namespace DeNelle.Core.Quests
 
         /// <summary>
         /// True when something in the shipped build actually Raises this kind's signal.
-        /// The four false rows are Silo E / WO-827 work; the oracle reports a stage
+        /// The remaining false rows are Silo E / WO-827 work; the oracle reports a stage
         /// authored against them as unreachable rather than scoring it completable.
+        /// KindPet moved into the live group when PetAcquisitionService.Acquire started
+        /// raising TutorialSignals.PetBondedPrefix (WO-854 final wave) -- leaving it
+        /// false would make the bridge log a working stage as "armed but unreachable".
         /// </summary>
         public static bool IsEmitterLive(string kind)
         {
@@ -146,6 +155,7 @@ namespace DeNelle.Core.Quests
                 case KindReach:
                 case KindFlag:
                 case KindDialogueCommand:
+                case KindPet:
                     return true;
                 default:
                     return false;
