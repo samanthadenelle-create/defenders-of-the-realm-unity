@@ -39,6 +39,13 @@
 //      which DISCARDS IEconomy.TrySpend's bool, then placed with prepaid:true even when
 //      the ledger DECLINED — a live free-tower path. The spend is now
 //      BuildMenuVM.TrySpendBuild, whose bool decides whether the placement happens.
+//
+// 2026-08-04 (owner ruling: "fix the build menu to place the tower picked") — THE PICK NOW
+// REACHES THE PLACEMENT. WO-861 left the tower rows real but the placement pinned to the
+// const BuildMenuVM.PlacedTowerResourcePath = "Towers/DevTower": picking "Archer Tower"
+// charged the Archer Tower's catalog price, printed DevTower's 2s raise time, and raised a
+// DevTower. Both reads are now keyed on the selected row's id —
+// BuildMenuVM.PlacedTowerDataFor(id) / BuildSecondsFor(id).
 // =============================================================================
 
 using System;
@@ -366,7 +373,10 @@ namespace DeNelle.Village
             if (cost.iron > 0)     top = AddCostRow("Iron",     cost.iron,     _vm.MaterialCount("iron"),     top);
             if (cost.food > 0)     top = AddCostRow("Food",     cost.food,     _vm.MaterialCount("food"),     top);
 
-            int buildSeconds = _vm.BuildSeconds;
+            // The raise time of the SELECTED tower's own asset — the same TowerData
+            // OnConfirmBuild hands to the placement system, so the printed time is the
+            // time the player will actually wait (this read was pinned to DevTower's 2s).
+            int buildSeconds = _vm.BuildSecondsFor(selection.Id);
             if (buildSeconds > 0)
                 MakeText(_bodyHost, "Build time: " + FormatTime(buildSeconds), 13,
                     ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
@@ -397,13 +407,15 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Arms the canonical tower def for tap-to-place (the placement pipeline is shared)
+        /// Arms the PICKED tower's def for tap-to-place (the placement pipeline is shared)
         /// AFTER the spend has actually landed.
         ///
         /// WO-861 ORDER OF OPERATIONS (owner AC: "insufficient wood -> placement blocked and
         /// resources unchanged"):
         ///   1. re-check affordability on the LIVE ledger (the button state can be stale);
-        ///   2. resolve the TowerData FIRST, so a missing asset can never charge the player;
+        ///   2. resolve the PICKED row's TowerData FIRST, so a missing asset can never charge
+        ///      the player (2026-08-04: this resolve was pinned to Towers/DevTower, so the row
+        ///      chosen on the screen decided only the PRICE, never the tower that went up);
         ///   3. spend through BuildMenuVM.TrySpendBuild — which HONOURS IEconomy.TrySpend's
         ///      bool. Previously this called BuildModeController.ChargeLedger (which DISCARDS
         ///      that bool) and then placed with prepaid:true regardless, so a DECLINED spend
@@ -423,10 +435,14 @@ namespace DeNelle.Village
                 return;
             }
 
-            var data = _vm.PlacedTowerData;
+            // The PICKED row's own TowerData (2026-08-04 owner ruling). This used to read a
+            // const pinned to Towers/DevTower, so every build — Archer, Ballista, Spire —
+            // raised a DevTower. Still resolved BEFORE the spend, so a missing asset can
+            // never charge the player.
+            var data = _vm.PlacedTowerDataFor(option.Id);
             if (data == null)
             {
-                SetStatus("Tower definition asset missing (Towers/DevTower).", isError: true);
+                SetStatus("Tower definition asset missing for the " + option.DisplayName + ".", isError: true);
                 return;
             }
 
@@ -446,9 +462,20 @@ namespace DeNelle.Village
             // placements THIS menu initiated (subscribed by OnboardingIntegrator +
             // TutorialSignalAdapters).
             HookPlacementRelay(TowerPlacementSystem.Instance);
-            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
+            // ECONOMY FIX 2026-08-04 — hand over the EXACT cost `cost` that TrySpendBuild just
+            // deducted (the catalog's multi-axis repo.cost), so a right-click cancel refunds
+            // that and only that. It used to receive nothing and refund the TowerData asset's
+            // `cost` field as CRYSTALS: pay tower_ground_archer's 70 wood + 40 iron (ZERO
+            // crystals), cancel, collect the asset's crystal number instead — an unbounded
+            // resource-to-crystal converter, repeatable forever.
+            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true, prepaidCost: cost);
             Close();   // hide the menu so the world click lands the placement
-            SetStatus($"Click a clear tile to raise the {option.DisplayName}.");
+            // Name the tower that is ACTUALLY being raised (data.towerName), not the row that
+            // was tapped. They are the same string for every row with an authored TowerData;
+            // where they differ, the player is told which tower is going up rather than being
+            // promised the one the fallback could not supply.
+            SetStatus("Click a clear tile to raise the " +
+                      DeNelle.Village.UI.PlacedTowerListVM.PrettifyTowerName(data.towerName) + ".");
         }
 
         // ── WO-T1: BuildingPlaced relay (menu-initiated placements) ───────────

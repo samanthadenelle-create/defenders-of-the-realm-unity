@@ -19,6 +19,10 @@
 //     cached "Tower"/"Building" layer mask (Issue 9).
 //   • LEGACY input only: Input.GetMouseButtonDown(0) / Input.mousePosition
 //     (Clarifications Confirmed) — NOT UnityEngine.InputSystem.
+//
+// ECONOMY FIX 2026-08-04 (P0): the prepaid escrow is the caller's ACTUAL
+// DeNelle.Core.Catalog.ResourceCost, not a re-derived int of TowerData.cost paid
+// back in crystals. See the _prepaidCost field comment for the exploit it closes.
 // =============================================================================
 
 using System;
@@ -27,6 +31,10 @@ using DeNelle.Core.Data;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Progression;
 using DeNelle.Core.State;
+// Aliased on purpose: DeNelle.Village ALSO declares a ResourceCost (EconomyService's),
+// and an enclosing-namespace type would silently win over a using-directive import.
+// The catalog/repo cost — the one the build menu actually charges — is the Core one.
+using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
 namespace DeNelle.Village
 {
@@ -53,12 +61,22 @@ namespace DeNelle.Village
         private MaterialPropertyBlock _markerPropertyBlock;
         private bool _placing;
 
-        // WO-131 — when true, the caller (BuildMenu.OnConfirmBuild) ALREADY deducted
-        // the crystal cost from GameState.Resources.Crystals (the single spend site),
-        // so this system must NOT charge again. If the player cancels the placement
-        // before landing it, the prepaid cost is REFUNDED to the same store.
-        private bool _prepaid;
-        private int  _prepaidCost;
+        // WO-131 — when true, the caller (BuildMenu.OnConfirmBuild) ALREADY charged the
+        // build cost through the ledger (the single spend site), so this system must NOT
+        // charge again. If the player cancels the placement before landing it, EXACTLY
+        // what the caller charged is REFUNDED — nothing more, nothing less.
+        //
+        // ECONOMY FIX 2026-08-04 (P0 exploit). This escrow used to be a single INT taken
+        // off TowerData.cost and refunded as CRYSTALS. The menu path never charges
+        // TowerData.cost — it charges the CATALOG's multi-axis repo.cost (Archer Tower =
+        // 70 wood + 40 iron, ZERO crystals) — so pay-in-wood/iron then right-click-cancel
+        // paid out crystals: an unbounded resource-to-crystal converter on the scarcest
+        // currency in the game. The FREE tutorial tower (StartPlacing with prepaid:true and
+        // NO charge at all) minted 50 crystals from nothing, repeatable forever. The escrow
+        // is now the ACTUAL ResourceCost the caller charged, and a caller that charged
+        // nothing gets nothing back.
+        private bool     _prepaid;
+        private CoreCost _prepaidCost;
 
         // --- Overlap test (pre-allocated; no per-frame GC) -----------------------
         private readonly Collider[] _overlapBuffer = new Collider[16];
@@ -119,24 +137,32 @@ namespace DeNelle.Village
         /// </summary>
         /// <param name="data">The tower type to place.</param>
         /// <param name="prepaid">
-        /// WO-131 — true when the caller already deducted the crystal cost
+        /// WO-131 — true when the caller already charged the build cost
         /// (BuildMenu.OnConfirmBuild is the single spend site). When prepaid, this
         /// system neither charges on placement nor gates the cursor on affordability;
-        /// it only validates geometry/skill. A cancelled prepaid placement is refunded.
-        /// When false (legacy / direct callers), the system charges
-        /// <see cref="TowerData.cost"/> on placement as before — now routed through
-        /// the unified GameState crystal store rather than the old Wood pool.
+        /// it only validates geometry/skill. A cancelled prepaid placement is refunded
+        /// <paramref name="prepaidCost"/>. When false (legacy / direct callers), the
+        /// system charges <see cref="TowerData.cost"/> on placement as before — routed
+        /// through the unified GameState crystal store.
         /// </param>
-        public void StartPlacing(TowerData data, bool prepaid = false)
+        /// <param name="prepaidCost">
+        /// ECONOMY FIX 2026-08-04 — what the caller ACTUALLY charged, so a cancel refunds
+        /// exactly that and never a re-derived number. The caller MUST pass what it spent;
+        /// this system can no longer guess (guessing <see cref="TowerData.cost"/>-as-crystals
+        /// is precisely the exploit this parameter closes). The default (all-zero) means
+        /// NOTHING was charged — the free tutorial tower — so a cancel refunds NOTHING.
+        /// Ignored entirely when <paramref name="prepaid"/> is false.
+        /// </param>
+        public void StartPlacing(TowerData data, bool prepaid = false, CoreCost prepaidCost = default)
         {
-            FlowTrace.Step("Build", $"TowerPlacement.StartPlacing prepaid={prepaid}, data='{data?.towerName ?? "<null>"}'");
+            FlowTrace.Step("Build", $"TowerPlacement.StartPlacing prepaid={prepaid} cost={Describe(prepaidCost)}, data='{data?.towerName ?? "<null>"}'");
             if (data == null) return;
             CancelPlacing();   // drop any in-flight marker first (refunds nothing — _prepaid cleared)
 
             _selectedTower = data;
             _placing = true;
             _prepaid = prepaid;
-            _prepaidCost = prepaid ? data.cost : 0;
+            _prepaidCost = prepaid ? prepaidCost : default;
 
             _currentMarker = BuildMarker();
             _markerRenderer = _currentMarker.GetComponentInChildren<Renderer>();
@@ -144,19 +170,34 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Abort the current placement and tear down the ghost marker. If the cost
-        /// was prepaid by the caller (WO-131) and never spent on a tower, REFUND it
-        /// to the same GameState crystal store so a cancelled build is free.
+        /// THE refund rule for a cancelled placement (ECONOMY FIX 2026-08-04): give back
+        /// EXACTLY the <see cref="CoreCost"/> the caller charged, and NOTHING when nothing
+        /// was charged (the free tutorial tower) or when the placement was never prepaid
+        /// (that path charges only on commit, so a cancel owes nothing). Pure + public so
+        /// the edit-mode regression can assert the rule without a play session.
+        /// </summary>
+        public static CoreCost RefundForCancel(bool prepaid, CoreCost prepaidCost)
+            => prepaid ? prepaidCost : default;
+
+        /// <summary>
+        /// Abort the current placement and tear down the ghost marker. If a cost was
+        /// prepaid by the caller (WO-131) and never spent on a tower, REFUND exactly that
+        /// multi-resource cost through the ledger so a cancelled build is a true no-op.
         /// </summary>
         public void CancelPlacing()
         {
-            if (_prepaid && _prepaidCost > 0)
-            {
-                // Refund to the single source of truth (Resources.Crystals).
-                GameStateService.Instance?.AddCrystals(_prepaidCost);
-            }
+            CoreCost refund = RefundForCancel(_prepaid, _prepaidCost);
             _prepaid = false;
-            _prepaidCost = 0;
+            _prepaidCost = default;
+
+            if (!refund.IsZero)
+            {
+                // The SAME refund idiom the sell / cancel-move paths use: the persisted
+                // multi-resource ledger (EconomyService.Grant), with the crystal wallet as
+                // the service-less fallback. Never a hand-rolled crystal grant.
+                BuildModeController.RefundLedger(refund);
+                FlowTrace.Step("Build", $"TowerPlacement.CancelPlacing refunded prepaid {Describe(refund)}.");
+            }
 
             if (_currentMarker != null) Destroy(_currentMarker);
             _currentMarker = null;
@@ -251,6 +292,19 @@ namespace DeNelle.Village
             return true;
         }
 
+        /// <summary>Compact cost string for the flow trace (skips zero slots) — so a capture
+        /// shows WHAT was escrowed/refunded, not just that a refund happened.</summary>
+        private static string Describe(CoreCost c)
+        {
+            if (c.IsZero) return "nothing";
+            string s = string.Empty;
+            if (c.wood     > 0) s += (s.Length > 0 ? "+" : string.Empty) + c.wood     + "w";
+            if (c.food     > 0) s += (s.Length > 0 ? "+" : string.Empty) + c.food     + "f";
+            if (c.iron     > 0) s += (s.Length > 0 ? "+" : string.Empty) + c.iron     + "i";
+            if (c.crystals > 0) s += (s.Length > 0 ? "+" : string.Empty) + c.crystals + "c";
+            return s;
+        }
+
         /// <summary>Snap a world point to the build grid (keeps Y from the hit).</summary>
         private Vector3 SnapToGrid(Vector3 p)
         {
@@ -322,10 +376,10 @@ namespace DeNelle.Village
                 svc.AddCrystals(-_selectedTower.cost);   // negative = spend; persisted + HUD-synced
             }
 
-            // The cost is now consumed by a real placement — clear the prepaid flag
-            // BEFORE CancelPlacing() so the teardown does NOT refund a placed tower.
+            // The cost is now consumed by a real placement — clear the escrow BEFORE
+            // CancelPlacing() so the teardown does NOT refund a placed tower.
             _prepaid = false;
-            _prepaidCost = 0;
+            _prepaidCost = default;
 
             // DEF-76 — towers no longer pop in instantly. The queue raises them over
             // buildTime (scaffolding + worker VFX + progress bar) and calls

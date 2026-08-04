@@ -39,6 +39,17 @@
 //                        BuildMenu previously called BuildModeController.ChargeLedger, which
 //                        DISCARDS TrySpend's return, then placed with prepaid:true -- a live
 //                        free-tower path when the real ledger refused. Gone.
+//
+// 2026-08-04 (owner ruling: "fix the build menu to place the tower picked") -- THE PICK NOW
+// REACHES THE PLACEMENT. WO-861 made the ROWS real (catalog ids, catalog names, catalog prices)
+// but left the placement pinned to a const, `PlacedTowerResourcePath = "Towers/DevTower"`, that
+// every build loaded: the player picked "Archer Tower" and a DevTower went up, with DevTower's
+// 2s raise time printed on the screen. The selection was never carried past the price. It is
+// carried now: <see cref="PlacedTowerDataFor"/> / <see cref="BuildSecondsFor"/> take the picked
+// row's id and resolve THAT row's authored TowerData out of Resources/Towers, and the const is
+// demoted to <see cref="FallbackTowerResourcePath"/> -- reached only by a catalog row nobody has
+// authored a TowerData for, and TRACED when it is, because that case still raises a tower other
+// than the one the player picked.
 // =============================================================================
 
 using System;
@@ -92,10 +103,25 @@ namespace DeNelle.Village
         /// <summary>How many catalog tower rows the Build-Tower radio offers (layout fits four).</summary>
         public const int MaxTowerOptions = 4;
 
-        /// <summary>The TowerData asset the menu-initiated placement actually raises (DEF-76 —
-        /// TowerConstructionQueue times the raise off its <c>buildTime</c>). Resolved HERE so the
-        /// View performs no Resources.Load of its own.</summary>
-        public const string PlacedTowerResourcePath = "Towers/DevTower";
+        /// <summary>Resources folder holding the authored <see cref="DeNelle.Core.Data.TowerData"/>
+        /// assets (ArcherTower / FrostTower / MageTower / DevTower).</summary>
+        public const string TowerResourceFolder = "Towers";
+
+        /// <summary>
+        /// The TowerData raised when the picked catalog row has NO authored asset of its own.
+        ///
+        /// 2026-08-04 (owner ruling "fix the build menu to place the tower picked"): this path was
+        /// a const named PlacedTowerResourcePath that EVERY menu-initiated placement loaded, so the
+        /// player picked "Archer Tower" and a DevTower went up. It survived WO-861: that pass
+        /// replaced the View's invented TowerVariantDef table with REAL catalog rows (real ids, real
+        /// names, real prices) but left the placement side pinned to the one asset the pre-catalog
+        /// menu had always raised — the stopgap the retired code documented as "the chosen element
+        /// is remembered for when the variant system goes live". The rows went live; the placement
+        /// did not follow. <see cref="PlacedTowerDataFor"/> now resolves the picked row's own asset
+        /// and only lands here when the catalog offers a tower no TowerData has been authored for,
+        /// so a placement can never resolve to nothing.
+        /// </summary>
+        public const string FallbackTowerResourcePath = "Towers/DevTower";
 
         private readonly IEconomy _economy;
         private readonly int _fallbackCrystals;
@@ -107,8 +133,10 @@ namespace DeNelle.Village
         private bool _disposed;
 
         private List<TowerBuildOption> _towerOptions;
-        private DeNelle.Core.Data.TowerData _placedTowerData;
-        private bool _placedTowerDataResolved;
+        private DeNelle.Core.Data.TowerData[] _towerAssets;
+        private bool _towerAssetsLoaded;
+        private readonly Dictionary<string, DeNelle.Core.Data.TowerData> _placedTowerByRow
+            = new Dictionary<string, DeNelle.Core.Data.TowerData>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>The shared placed-tower list VM (owns the FindObjectsByType&lt;Tower&gt; poll).</summary>
         public PlacedTowerListVM Towers { get; }
@@ -224,9 +252,12 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Re-read the tower rows from the catalog (call after a late CatalogBootstrap).</summary>
+        /// <summary>Re-read the tower rows from the catalog (call after a late CatalogBootstrap).
+        /// Drops the per-row TowerData cache with them: the rows a late bootstrap brings in carry
+        /// different ids and display names, which is what the asset match is keyed on.</summary>
         public void RefreshTowerOptions()
         {
+            _placedTowerByRow.Clear();
             var built = new List<TowerBuildOption>(MaxTowerOptions);
             var rows = CatalogRegistry.OfType(CatalogType.Tower);
             if (rows != null)
@@ -264,30 +295,166 @@ namespace DeNelle.Village
             return list[0];
         }
 
-        /// <summary>The TowerData asset a menu-initiated placement raises. Resolved once; null when
-        /// the asset is missing (the View reports that instead of charging).</summary>
-        public DeNelle.Core.Data.TowerData PlacedTowerData
+        // ── The picked row -> the TowerData that actually gets raised ─────────
+
+        /// <summary>One authored TowerData asset offered to <see cref="ResolveTowerAssetName"/>:
+        /// its file name and the display name authored inside it.</summary>
+        public readonly struct TowerAssetCandidate
         {
-            get
+            /// <summary>The .asset file name, e.g. "ArcherTower".</summary>
+            public readonly string AssetName;
+            /// <summary>The authored <c>TowerData.towerName</c>, e.g. "Archer Tower".</summary>
+            public readonly string TowerName;
+
+            public TowerAssetCandidate(string assetName, string towerName)
             {
-                if (!_placedTowerDataResolved)
-                {
-                    _placedTowerDataResolved = true;
-                    _placedTowerData = Resources.Load<DeNelle.Core.Data.TowerData>(PlacedTowerResourcePath);
-                }
-                return _placedTowerData;
+                AssetName = assetName;
+                TowerName = towerName;
             }
         }
 
-        /// <summary>Seconds the placed tower body takes to raise (TowerConstructionQueue reads the
-        /// SAME field). 0 when the asset is missing — never a made-up duration.</summary>
-        public int BuildSeconds
+        /// <summary>Shortest distinguishing token a catalog id may be matched on. "DevTower" reduces
+        /// to "dev" (3), which stays UNDER this floor on purpose: the fallback asset is never allowed
+        /// to win a token match and claim a row that named a different tower.</summary>
+        private const int MinTowerToken = 4;
+
+        /// <summary>
+        /// Which authored TowerData asset is the catalog row's own tower, or null when none of them
+        /// is (the caller then falls back to <see cref="FallbackTowerResourcePath"/>). Pure — it takes
+        /// the candidate names rather than loading them, so the mapping is testable without Resources.
+        ///
+        /// Two passes, in order, so the strongest evidence always wins:
+        ///   1. the row's display name IS the asset's authored tower name (or its file name), compared
+        ///      with case + spacing + punctuation removed: "Archer Tower" == ArcherTower.towerName;
+        ///   2. the row's catalog id or display name CONTAINS the asset's distinguishing token — the
+        ///      file name with the word "tower" removed ("ArcherTower" -> "archer"), which is how the
+        ///      id "tower_ground_archer" resolves to ArcherTower.
+        /// </summary>
+        public static string ResolveTowerAssetName(string catalogId, string displayName,
+            IReadOnlyList<TowerAssetCandidate> candidates)
         {
-            get
+            if (candidates == null || candidates.Count == 0) return null;
+
+            string wantedName = Normalize(displayName);
+            string wantedId   = Normalize(catalogId);
+
+            if (wantedName.Length > 0)
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    var c = candidates[i];
+                    if (string.IsNullOrEmpty(c.AssetName)) continue;
+                    if (wantedName == Normalize(c.TowerName) || wantedName == Normalize(c.AssetName))
+                        return c.AssetName;
+                }
+
+            for (int i = 0; i < candidates.Count; i++)
             {
-                var d = PlacedTowerData;
-                return d != null ? Mathf.Max(0, Mathf.RoundToInt(d.buildTime)) : 0;
+                var c = candidates[i];
+                if (string.IsNullOrEmpty(c.AssetName)) continue;
+                string token = DistinguishingToken(c.AssetName);
+                if (token.Length < MinTowerToken) continue;
+                if (wantedId.Contains(token) || wantedName.Contains(token)) return c.AssetName;
             }
+            return null;
+        }
+
+        /// <summary>Lowercase letters and digits only — so "Archer Tower", "archer_tower" and
+        /// "ArcherTower" all compare equal.</summary>
+        private static string Normalize(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            var sb = new System.Text.StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>The asset name with the word "tower" stripped: "ArcherTower" -> "archer". That
+        /// leftover is what identifies the tower inside a catalog id such as "tower_ground_archer",
+        /// where the word "tower" itself carries no information.</summary>
+        private static string DistinguishingToken(string assetName)
+        {
+            string n = Normalize(assetName);
+            return n.Replace("tower", string.Empty);
+        }
+
+        /// <summary>The authored TowerData assets in <see cref="TowerResourceFolder"/>, loaded once.</summary>
+        private DeNelle.Core.Data.TowerData[] TowerAssets()
+        {
+            if (!_towerAssetsLoaded)
+            {
+                _towerAssetsLoaded = true;
+                _towerAssets = Resources.LoadAll<DeNelle.Core.Data.TowerData>(TowerResourceFolder);
+            }
+            return _towerAssets;
+        }
+
+        /// <summary>
+        /// The TowerData a menu-initiated placement of <paramref name="towerId"/> raises — the PICKED
+        /// row's own authored asset (DEF-76: TowerConstructionQueue times the raise off its
+        /// <c>buildTime</c>, and Tower.Initialize reads its name, stats and upgrade ladder from it).
+        /// Falls back to <see cref="FallbackTowerResourcePath"/> for a catalog row no TowerData has
+        /// been authored for, so a placement never resolves to nothing; that fallback is TRACED,
+        /// because it means the player is about to raise a tower other than the one they picked.
+        /// Null only when even the fallback asset is missing (the View reports that instead of charging).
+        /// </summary>
+        public DeNelle.Core.Data.TowerData PlacedTowerDataFor(string towerId)
+        {
+            string key = towerId ?? string.Empty;
+            if (_placedTowerByRow.TryGetValue(key, out var cached)) return cached;
+            var resolved = ResolvePlacedTowerData(key);
+            _placedTowerByRow[key] = resolved;
+            return resolved;
+        }
+
+        private DeNelle.Core.Data.TowerData ResolvePlacedTowerData(string towerId)
+        {
+            // Nothing picked at all -> the fallback, with nothing to warn about: there is no row
+            // whose tower we could have failed to raise.
+            if (string.IsNullOrEmpty(towerId))
+                return Resources.Load<DeNelle.Core.Data.TowerData>(FallbackTowerResourcePath);
+
+            // The catalog row carries the display name the player tapped, which is the strongest
+            // thing to match on. When the row is unknown (the catalog has not been bootstrapped)
+            // the id ALONE is still matched, so a known tower id resolves its asset instead of
+            // quietly becoming a DevTower.
+            var option = TowerOptionFor(towerId);
+            string rowId    = !option.IsEmpty ? option.Id : towerId;
+            string rowLabel = !option.IsEmpty ? option.DisplayName : towerId;
+
+            var assets = TowerAssets();
+            if (assets != null && assets.Length > 0 && !string.IsNullOrEmpty(rowId))
+            {
+                var candidates = new List<TowerAssetCandidate>(assets.Length);
+                for (int i = 0; i < assets.Length; i++)
+                    if (assets[i] != null)
+                        candidates.Add(new TowerAssetCandidate(assets[i].name, assets[i].towerName));
+
+                string picked = ResolveTowerAssetName(rowId, rowLabel, candidates);
+                if (!string.IsNullOrEmpty(picked))
+                    for (int i = 0; i < assets.Length; i++)
+                        if (assets[i] != null && string.Equals(assets[i].name, picked, StringComparison.Ordinal))
+                            return assets[i];
+            }
+
+            var fallback = Resources.Load<DeNelle.Core.Data.TowerData>(FallbackTowerResourcePath);
+            if (!string.IsNullOrEmpty(rowId))
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Build",
+                    $"BuildMenuVM: catalog tower '{rowId}' ({rowLabel}) has no authored TowerData in " +
+                    $"Resources/{TowerResourceFolder} - falling back to {FallbackTowerResourcePath} " +
+                    $"('{(fallback != null ? fallback.towerName : "<missing>")}'), so the raised tower is NOT the picked one.");
+            return fallback;
+        }
+
+        /// <summary>Seconds the picked tower's body takes to raise (TowerConstructionQueue reads the
+        /// SAME field off the SAME asset). 0 when the asset is missing — never a made-up duration.</summary>
+        public int BuildSecondsFor(string towerId)
+        {
+            var d = PlacedTowerDataFor(towerId);
+            return d != null ? Mathf.Max(0, Mathf.RoundToInt(d.buildTime)) : 0;
         }
 
         /// <summary>

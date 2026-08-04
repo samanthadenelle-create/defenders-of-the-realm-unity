@@ -2843,8 +2843,13 @@ namespace DeNelle.Village
             return false;
         }
 
-        /// <summary>Refund the cost through the ledger (Grant). No-op for a free cost.</summary>
-        private static void RefundLedger(DeNelle.Core.Catalog.ResourceCost cost)
+        /// <summary>
+        /// Refund the cost through the ledger (Grant). No-op for a free cost. PUBLIC since
+        /// 2026-08-04: TowerPlacementSystem's cancelled-placement refund routes through this
+        /// SAME idiom rather than hand-rolling a crystal grant (which is how a cancelled
+        /// wood+iron build paid out crystals). One refund site, one behaviour.
+        /// </summary>
+        public static void RefundLedger(DeNelle.Core.Catalog.ResourceCost cost)
         {
             if (cost.IsZero) return;
             var econ = EconomyService.Instance;

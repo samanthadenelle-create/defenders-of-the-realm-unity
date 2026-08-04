@@ -712,7 +712,11 @@ namespace DeNelle.Village
             tps.OnTowerPlaced += OnTutorialTowerPlaced;
 
             TowerData tower = ResolveTutorialTower();
-            tps.StartPlacing(tower, prepaid: true);   // FREE — no cost charged
+            // FREE — nothing was charged, so `prepaidCost` is DEFAULT (all-zero) and a
+            // cancelled tutorial placement refunds EXACTLY ZERO. Before 2026-08-04 the
+            // placement system re-derived the escrow from TowerData.cost, so cancelling
+            // this free tower minted 50 crystals from nothing, repeatable forever.
+            tps.StartPlacing(tower, prepaid: true, prepaidCost: default);
         }
 
         private void OnTutorialTowerPlaced(TowerData data)

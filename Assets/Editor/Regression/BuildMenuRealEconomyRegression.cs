@@ -56,6 +56,23 @@
 //                          hardcoded resource balance.
 //   6 [tryspend-honoured]  GENERAL source-lint: no spend path anywhere discards
 //                          IEconomy.TrySpend's bool return.
+//   7 [cancel-refund]      THE P0 EXPLOIT (2026-08-04). A build -> cancel round trip over
+//                          the REAL spend (TrySpendBuild) and the REAL refund rule
+//                          (TowerPlacementSystem.RefundForCancel) is EXACTLY neutral, 100
+//                          times over; a FREE (zero-cost) prepaid placement refunds NOTHING.
+//   8 [prepaid-escrow]     GENERAL source-lint for the same class of bug: the placement
+//                          system may not RE-DERIVE what the caller paid, its cancel path
+//                          may not hand-roll a crystal grant, and no call site may start a
+//                          prepaid placement without declaring the cost it charged.
+//
+// DEFECT 3 (2026-08-04, cases 7 + 8) THE MINTING CANCEL. TowerPlacementSystem escrowed a
+//          single int copied off TowerData.cost and, on right-click cancel, refunded it as
+//          CRYSTALS. The menu path never charges TowerData.cost -- it charges the catalog's
+//          multi-axis repo.cost (Archer Tower = 70 wood + 40 iron, ZERO crystals) -- so
+//          pay-then-cancel converted wood and iron into the scarcest currency in the game,
+//          without limit. The FREE tutorial tower (prepaid:true, charged nothing) minted 50
+//          crystals out of nothing, repeatable forever. Case 8 FAILS against the pre-fix
+//          tree and names the offending lines; case 7 pins the corrected behaviour.
 //
 // EXPECT CASE 6 TO FAIL UNTIL BuildModeController.ChargeLedger IS PATCHED. That
 // method is the remaining offender in the tree (it is lane-fenced away from the
@@ -84,6 +101,8 @@ namespace DeNelle.Editor.Regression
     {
         private const string CatalogRelPath = "Data/Canonical/structures-catalog.json";
         private const string BuildMenuSrc   = "Assets/_Modules/Village/Buildings/UI/BuildMenu.cs";
+        private const string PlacementSrc   = "Assets/_Modules/Village/Buildings/TowerPlacementSystem.cs";
+        private const string TutorialSrc    = "Assets/_Modules/Village/Tutorial/TutorialDirector.cs";
 
         /// <summary>The literals the retired BuildMenu.GetMaterialCount stub returned.</summary>
         private const int RetiredFakeWood  = 20;
@@ -153,6 +172,8 @@ namespace DeNelle.Editor.Regression
                 CaseFundedSpend(failures, log);
                 CaseNoFakeWallet(failures, log);
                 CaseTrySpendHonoured(failures, log);
+                CaseCancelRefund(failures, log);
+                CasePrepaidEscrow(failures, log);
             }
             catch (Exception ex)
             {
@@ -163,8 +184,10 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "BUILDMENU ECONOMY OK - the build menu reads the live ledger (no 20/5 literals), " +
                          "prices every tower from the catalog, blocks an unaffordable placement without moving a " +
-                         "single resource, debits exactly the cost when funded, and no spend path in the tree " +
-                         "discards TrySpend's return.";
+                         "single resource, debits exactly the cost when funded, no spend path in the tree " +
+                         "discards TrySpend's return, a cancelled build refunds EXACTLY what it charged (and a " +
+                         "free placement refunds nothing), and no call site arms a prepaid placement without " +
+                         "declaring the cost it paid.";
                 Debug.Log("BUILDMENU_ECONOMY_OK\n" + log);
                 return true;
             }
@@ -511,6 +534,289 @@ namespace DeNelle.Editor.Regression
                     log.AppendLine("  [funded-spend] '" + cheapest.Id + "' " + Describe(cost) + " debited exactly, ledger drained to " + funded.Describe() + " OK");
             }
             vm.Dispose();
+        }
+
+        // =====================================================================
+        //  CASE 7 [cancel-refund] -- THE P0 MINTING CANCEL (2026-08-04).
+        //
+        //  Owner acceptance: "a cancelled build returns EXACTLY what it charged,
+        //  and a build that charged nothing returns nothing."
+        //
+        //  Driven over the PRODUCTION rule TowerPlacementSystem.RefundForCancel --
+        //  the exact expression CancelPlacing hands to the ledger -- plus the REAL
+        //  spend (BuildMenuVM.TrySpendBuild) and the REAL Core->Economy cost mapping
+        //  (BuildModeController.ToEconomy). Nothing here is a re-implementation.
+        //
+        //  FIDELITY NOTE: the MonoBehaviour teardown around the rule (marker Destroy)
+        //  needs a play session; the rule itself does not, and the rule is where the
+        //  money moved. What is NOT claimed: the right-click input edge.
+        // =====================================================================
+        private static void CaseCancelRefund(List<string> failures, StringBuilder log)
+        {
+            var probe = MakeVm(new FakeLedger());
+            var options = probe.TowerOptions;
+            if (options == null || options.Count == 0)
+            {
+                failures.Add("[cancel-refund] no tower rows to cancel - case 2 already reported the cause");
+                probe.Dispose();
+                return;
+            }
+            var cheapest = options[0];
+            probe.Dispose();
+
+            // (7a) Per-row identity: refund == charge, axis for axis, for EVERY offered
+            // tower. The crystal axis is called out separately because that is the axis
+            // the defect invented out of the other three.
+            foreach (var opt in options)
+            {
+                CoreCost charged = opt.Cost;
+                CoreCost refund  = TowerPlacementSystem.RefundForCancel(true, charged);
+                if (!SameCost(refund, charged))
+                    failures.Add("[cancel-refund] cancelling a prepaid '" + opt.Id + "' charged " + Describe(charged) +
+                                 " refunds " + Describe(refund) + " - a cancel must return the cost that was CHARGED, " +
+                                 "never a re-derived one");
+                if (charged.crystals == 0 && refund.crystals != 0)
+                    failures.Add("[cancel-refund] cancelling '" + opt.Id + "' (charged " + Describe(charged) +
+                                 " - ZERO crystals) paid out " + refund.crystals + " CRYSTALS: currency the player " +
+                                 "never spent, minted by a cancel. This is the unbounded resource-to-crystal converter.");
+                log.AppendLine("  [cancel-refund] " + opt.Id + " charge " + Describe(charged) + " -> cancel refund " + Describe(refund));
+            }
+
+            // (7b) THE ROUND TRIP, 100x. The exploit's whole point was that repetition
+            // was profitable, so repeat it: charge the cheapest tower through the real
+            // spend, then apply the real cancel refund. The ledger must read EXACTLY
+            // what it started at - on every axis, every iteration.
+            CoreCost cost = cheapest.Cost;
+            if (cost.IsZero)
+            {
+                failures.Add("[cancel-refund] the cheapest tower '" + cheapest.Id + "' costs NOTHING - the round trip " +
+                             "cannot be constructed (case 2 already reported the free-tower row)");
+            }
+            else
+            {
+                const int Cycles = 100;
+                var wallet = new FakeLedger
+                {
+                    Wood     = cost.wood     + 1000,
+                    Iron     = cost.iron     + 1000,
+                    Food     = cost.food     + 1000,
+                    Crystals = cost.crystals + 1000,
+                };
+                string start = wallet.Describe();
+                var vm = MakeVm(wallet);
+                for (int i = 0; i < Cycles; i++)
+                {
+                    string why;
+                    if (!vm.TrySpendBuild(cost, out why))
+                    {
+                        failures.Add("[cancel-refund] the funded round trip could not charge cycle " + i + " of " + Cycles +
+                                     " (" + (why ?? "<no reason>") + ") - the wallet drained, which itself means the " +
+                                     "refund is NOT returning what was charged");
+                        break;
+                    }
+                    wallet.Grant(BuildModeController.ToEconomy(TowerPlacementSystem.RefundForCancel(true, cost)));
+                }
+                if (wallet.Describe() != start)
+                    failures.Add("[cancel-refund] " + Cycles + " build-then-cancel cycles on '" + cheapest.Id + "' (" +
+                                 Describe(cost) + ") moved the wallet " + start + " -> " + wallet.Describe() +
+                                 " - a cancelled build must be economically NEUTRAL. A wallet that GREW here is a " +
+                                 "live currency printer.");
+                else
+                    log.AppendLine("  [cancel-refund] " + Cycles + " build->cancel cycles on '" + cheapest.Id + "' left the wallet at " +
+                                   wallet.Describe() + " (unchanged) OK");
+                vm.Dispose();
+            }
+
+            // (7c) THE TUTORIAL CASE. TutorialDirector arms a FREE tower with prepaid:true
+            // and charges nothing at all, so its cancel must return nothing at all. The
+            // pre-fix system refunded TowerData.cost in crystals here - from an empty spend.
+            CoreCost freeRefund = TowerPlacementSystem.RefundForCancel(true, default(CoreCost));
+            if (!freeRefund.IsZero)
+                failures.Add("[cancel-refund] cancelling a PREPAID-BUT-FREE placement (the tutorial tower - nothing was " +
+                             "ever charged) refunds " + Describe(freeRefund) + " - that currency is created from nothing " +
+                             "and the step is repeatable forever");
+            var tutorialWallet = new FakeLedger();
+            string tutorialStart = tutorialWallet.Describe();
+            tutorialWallet.Grant(BuildModeController.ToEconomy(freeRefund));
+            if (tutorialWallet.Describe() != tutorialStart)
+                failures.Add("[cancel-refund] the free tutorial tower's cancel moved an EMPTY wallet " + tutorialStart +
+                             " -> " + tutorialWallet.Describe());
+            else
+                log.AppendLine("  [cancel-refund] free tutorial tower: cancel refunds nothing, empty wallet stays " +
+                               tutorialWallet.Describe() + " OK");
+
+            // (7d) The NON-prepaid path is untouched: it charges on commit, so a cancel
+            // owes nothing no matter what cost is handed in.
+            CoreCost notPrepaid = TowerPlacementSystem.RefundForCancel(false, cost);
+            if (!notPrepaid.IsZero)
+                failures.Add("[cancel-refund] a NON-prepaid placement (the legacy path charges on commit, not on arm) " +
+                             "refunded " + Describe(notPrepaid) + " on cancel - it never paid anything to get back");
+        }
+
+        // =====================================================================
+        //  CASE 8 [prepaid-escrow] -- GENERAL source-lint, the class of bug.
+        //  Case 7 pins the RULE; this stops the three ways the rule gets bypassed:
+        //    (a) the placement system RE-DERIVING what the caller paid instead of
+        //        being told (the original defect: it read TowerData.cost);
+        //    (b) the cancel path hand-rolling a crystal grant instead of refunding
+        //        the charged multi-resource cost through the ledger;
+        //    (c) a call site arming a PREPAID placement without declaring what it
+        //        charged - which forces (a) back into existence.
+        //  FAILS against the pre-fix tree and names the offending lines.
+        // =====================================================================
+        private static readonly Regex StartPlacingDecl = new Regex(
+            "void\\s+StartPlacing\\s*\\(([^)]*)\\)", RegexOptions.Compiled);
+        private static readonly Regex StartPlacingCall = new Regex(
+            "\\.\\s*StartPlacing\\s*\\(([^)]*)\\)", RegexOptions.Compiled);
+        private static readonly Regex TrySpendBuildCall = new Regex(
+            "TrySpendBuild\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*,", RegexOptions.Compiled);
+        private static readonly Regex PrepaidCostArg = new Regex(
+            "prepaidCost\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)", RegexOptions.Compiled);
+        private static readonly Regex EscrowFromAsset = new Regex(
+            "prepaidCost\\s*=\\s*[^;]*\\bdata\\s*\\.\\s*cost\\b", RegexOptions.Compiled);
+        private static readonly Regex ZeroPrepaidArg = new Regex(
+            "prepaidCost\\s*:\\s*(default|new\\s+[A-Za-z0-9_.]*Cost\\s*\\(\\s*\\))", RegexOptions.Compiled);
+        private static readonly Regex PrepaidTrueArg = new Regex(
+            "prepaid\\s*:\\s*true", RegexOptions.Compiled);
+
+        private static void CasePrepaidEscrow(List<string> failures, StringBuilder log)
+        {
+            // -- (a) + (b): the placement system itself ---------------------------
+            string tpsSrc = ReadSource(PlacementSrc);
+            if (tpsSrc == null)
+            {
+                failures.Add("[prepaid-escrow] cannot read " + PlacementSrc + " - the escrow lint could not run at all");
+            }
+            else
+            {
+                string tps = StripCommentsAndStrings(tpsSrc);
+
+                Match decl = StartPlacingDecl.Match(tps);
+                if (!decl.Success)
+                {
+                    failures.Add("[prepaid-escrow] TowerPlacementSystem.StartPlacing declaration not found (renamed?) - " +
+                                 "the prepaid contract is unverifiable");
+                }
+                else
+                {
+                    string parms = Squash(decl.Groups[1].Value);
+                    if (parms.IndexOf("Cost", StringComparison.Ordinal) < 0)
+                        failures.Add("[prepaid-escrow] " + PlacementSrc + ":" + LineOf(tps, decl.Index) +
+                                     " StartPlacing(" + parms + ") takes NO ResourceCost - a prepaid placement can then " +
+                                     "only GUESS what the caller charged, which is exactly the defect (it guessed " +
+                                     "TowerData.cost and paid it back in crystals)");
+
+                    string startBody = BodyAfter(tps, decl.Index + decl.Length);
+                    if (startBody != null && EscrowFromAsset.IsMatch(startBody))
+                        failures.Add("[prepaid-escrow] " + PlacementSrc + ":" + LineOf(tps, decl.Index) +
+                                     " RE-DERIVES the prepaid escrow from the tower asset ('" +
+                                     Squash(EscrowFromAsset.Match(startBody).Value) + "') instead of recording what the " +
+                                     "caller actually charged - the asset's cost is not the price the menu took");
+                }
+
+                int cancelAt = tps.IndexOf("void CancelPlacing", StringComparison.Ordinal);
+                string cancelBody = cancelAt >= 0 ? BodyAfter(tps, cancelAt) : null;
+                if (cancelBody == null)
+                {
+                    failures.Add("[prepaid-escrow] TowerPlacementSystem.CancelPlacing body not found (renamed?) - the " +
+                                 "refund path is unverifiable");
+                }
+                else if (cancelBody.Contains("AddCrystals"))
+                {
+                    failures.Add("[prepaid-escrow] " + PlacementSrc + ":" + LineOf(tps, cancelAt) +
+                                 " CancelPlacing grants CRYSTALS directly (AddCrystals) - a cancelled build must return " +
+                                 "the multi-resource cost that was CHARGED, through the ledger " +
+                                 "(BuildModeController.RefundLedger). Handing crystals to a player who paid in wood and " +
+                                 "iron is a currency converter, not a refund.");
+                }
+                else
+                {
+                    log.AppendLine("  [prepaid-escrow] CancelPlacing refunds through the ledger, no direct crystal grant OK");
+                }
+            }
+
+            // -- (c) GENERAL: every prepaid call site declares what it paid --------
+            int prepaidSites = 0;
+            foreach (string path in EnumerateSources())
+            {
+                if (IsSelf(path)) continue;
+                string src = ReadSource(path);
+                if (src == null) continue;
+                string code = StripCommentsAndStrings(src);
+                foreach (Match m in StartPlacingCall.Matches(code))
+                {
+                    string args = Squash(m.Groups[1].Value);
+                    if (!PrepaidTrueArg.IsMatch(args)) continue;   // charges on commit - nothing escrowed
+                    prepaidSites++;
+                    if (args.IndexOf("prepaidCost", StringComparison.Ordinal) < 0)
+                        failures.Add("[prepaid-escrow] " + path + ":" + LineOf(code, m.Index) +
+                                     " arms a PREPAID placement without declaring the cost it charged: 'StartPlacing(" +
+                                     args + ")'. The placement system cannot refund a cancel correctly unless the caller " +
+                                     "passes what it actually paid (default = paid nothing).");
+                }
+            }
+            if (prepaidSites == 0)
+                failures.Add("[prepaid-escrow] found ZERO prepaid StartPlacing call sites - the sweep is not reaching the " +
+                             "build menu / tutorial any more, so this lint is passing vacuously");
+            log.AppendLine("  [prepaid-escrow] " + prepaidSites + " prepaid StartPlacing call site(s) swept");
+
+            // -- The BUILD MENU must prepay the SAME local it charged --------------
+            string bmSrc = ReadSource(BuildMenuSrc);
+            if (bmSrc == null)
+            {
+                failures.Add("[prepaid-escrow] cannot read " + BuildMenuSrc + " - the charge/refund match could not run");
+            }
+            else
+            {
+                string bm = StripCommentsAndStrings(bmSrc);
+                Match spend = TrySpendBuildCall.Match(bm);
+                Match call  = StartPlacingCall.Match(bm);
+                if (!spend.Success || !call.Success)
+                {
+                    failures.Add("[prepaid-escrow] BuildMenu no longer shows a TrySpendBuild spend followed by a " +
+                                 "StartPlacing arm - the charge/refund pairing is unverifiable");
+                }
+                else
+                {
+                    string charged = spend.Groups[1].Value;
+                    Match arg = PrepaidCostArg.Match(Squash(call.Groups[1].Value));
+                    if (!arg.Success)
+                        failures.Add("[prepaid-escrow] BuildMenu:" + LineOf(bm, call.Index) + " charges '" + charged +
+                                     "' then arms the placement WITHOUT passing it - the cancel refund cannot match the charge");
+                    else if (!string.Equals(arg.Groups[1].Value, charged, StringComparison.Ordinal))
+                        failures.Add("[prepaid-escrow] BuildMenu:" + LineOf(bm, call.Index) + " CHARGES '" + charged +
+                                     "' but prepays '" + arg.Groups[1].Value + "' - the refund would not match the charge");
+                    else
+                        log.AppendLine("  [prepaid-escrow] BuildMenu charges '" + charged + "' and prepays the same value OK");
+                }
+            }
+
+            // -- The TUTORIAL tower is FREE, so it must prepay a ZERO cost ---------
+            string tutSrc = ReadSource(TutorialSrc);
+            if (tutSrc == null)
+            {
+                failures.Add("[prepaid-escrow] cannot read " + TutorialSrc + " - the free-tower check could not run");
+            }
+            else
+            {
+                string tut = StripCommentsAndStrings(tutSrc);
+                Match call = StartPlacingCall.Match(tut);
+                if (!call.Success)
+                {
+                    log.AppendLine("  [prepaid-escrow] TutorialDirector no longer arms a placement - free-tower check skipped");
+                }
+                else
+                {
+                    string args = Squash(call.Groups[1].Value);
+                    if (!ZeroPrepaidArg.IsMatch(args))
+                        failures.Add("[prepaid-escrow] " + TutorialSrc + ":" + LineOf(tut, call.Index) +
+                                     " arms the FREE tutorial tower with 'StartPlacing(" + args + ")' - it charges the " +
+                                     "player NOTHING, so it must prepay a ZERO cost (default). Anything else means " +
+                                     "cancelling the tutorial tower pays out currency that was never spent.");
+                    else
+                        log.AppendLine("  [prepaid-escrow] TutorialDirector prepays a ZERO cost for the free tower ('" + args + "') OK");
+                }
+            }
         }
 
         // =====================================================================
