@@ -2,7 +2,7 @@
 
 **App:** Echoes of Elarion (a chapter of Defenders of the Realm)
 **Publisher:** DeNelle Studios
-**Contact:** SUPPORT_EMAIL_PLACEHOLDER
+**Contact:** support.EoA@icloud.com
 **Effective date:** 4 August 2026
 
 ---
@@ -125,7 +125,7 @@ GDPR, under which member states set a digital-consent age between 13 and 16 — 
 instead, and the game is not directed to anyone under it.
 
 The game does not ask for your age and has no age gate. If you believe a child has provided us with personal
-data, contact us at SUPPORT_EMAIL_PLACEHOLDER and we will delete it.
+data, contact us at support.EoA@icloud.com and we will delete it.
 
 ## 8. Your choices & rights
 
@@ -134,7 +134,7 @@ data, contact us at SUPPORT_EMAIL_PLACEHOLDER and we will delete it.
 - **Turn off the bug-report screenshot.** The screenshot toggle is on the report form, and nothing is sent
   until you press Submit.
 - **Clear your local save** through your device's app settings.
-- **Ask us to delete your data.** Contact SUPPORT_EMAIL_PLACEHOLDER with your wallet address, the email you
+- **Ask us to delete your data.** Contact support.EoA@icloud.com with your wallet address, the email you
   signed up with, or your report/session id, and we will delete the cloud save, analytics, diagnostic and
   bug-report records associated with it.
 
@@ -160,4 +160,4 @@ will be published here before the version that makes the change ships.
 
 ## 11. Contact
 
-DeNelle Studios — SUPPORT_EMAIL_PLACEHOLDER
+DeNelle Studios — support.EoA@icloud.com

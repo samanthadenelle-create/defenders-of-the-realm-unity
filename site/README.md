@@ -22,7 +22,7 @@ and are marked `noindex`. That is on purpose: the page is not publishable yet.
       exact title she is putting on the listing and whether the series label appears as a
       subtitle. → remove `OWNER_CONFIRM_STORE_TITLE` in `index.html`.
 - [ ] **Support email** — a studio/support inbox the owner is OK publishing.
-      **Never the owner's personal HP address.** → replace `SUPPORT_EMAIL_PLACEHOLDER`
+      **Never the owner's personal HP address.** → replace `support.EoA@icloud.com`
       in `index.html` with a `mailto:` link.
 - [ ] **Description copy** — the About/What-you-do text is a draft written only from systems
       that exist in the build. Owner approves or rewrites.
