@@ -2,7 +2,8 @@
 // BuildEconomyRegression — headless oracle for the BUILD MODE + BUILD ECONOMY
 // data spine (structures-catalog.json → CatalogRegistry → StructureFactory /
 // BuildModeController cost boundary → PlacementGrid math → BaseLayout replay →
-// BuildTimerConfig (WO-172/612) → damage-states.json (WO-672 D)).
+// BuildTimerConfig (WO-172/612) → damage-states.json (WO-672 D) → the
+// CatalogBootstrap.RegisterFallback ⇄ catalog parity gate on the JSON-failure path).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (editor-only). Style/contract mirrors the
 // other Run(out reason) oracles wired into DataRegression.RunAll:
@@ -122,6 +123,10 @@ namespace DeNelle.Editor
                 // -- 11. WO-855 -- tower spam softcap + the build-tier fix ----------------
                 CheckTowerSoftcap(entries, created, failures, log);
                 CheckBuildTierDerivation(entries, failures, log);
+
+                // -- 12. FALLBACK/CATALOG PARITY -- the JSON-load-FAILURE path must ship
+                //        the SAME content as the catalog it exists to mirror.
+                CheckFallbackParity(entries, failures, log);
             }
             catch (System.Exception ex)
             {
@@ -1153,6 +1158,173 @@ namespace DeNelle.Editor
             log.AppendLine($"  [build-tier] maxDurationSeconds {cfg.maxDurationSeconds / 3600f:0.#}h clamp holds through tier {top + 3} OK");
         }
 
+        // =====================================================================
+        //  12. FALLBACK / CATALOG PARITY
+        //  ---------------------------------------------------------------------
+        //  CatalogBootstrap.RegisterFallback is the JSON-load-FAILURE path: when
+        //  structures-catalog.json cannot be read, its hardcoded rows ARE the game's
+        //  content. Nothing asserted that those rows matched the catalog they mirror,
+        //  so they drifted silently and REPEATEDLY:
+        //    - placement.footprint 2.5 vs the catalog's 1.75   (fixed 0ac59581)
+        //    - visualPrefabPath "PatriciaLight/tower2" -- art from the Defend-the-Tower
+        //      module REMOVED 2026-06-09 -- on two of the three rows
+        //    - displayName "Wizard Tower" vs "Ballista", damage 20 vs 30, mustSitOn
+        //      WallWalk vs Ground, and every cost/upgrade/visual-tier field simply absent
+        //  A player who hits the failure path would get a different-looking, differently
+        //  priced, differently placeable town and nobody would know.
+        //
+        //  METHOD: this is a REAL-OBJECT comparison, not a source-text lint. It invokes
+        //  the private RegisterFallback through reflection against a cleared registry,
+        //  snapshots the CatalogEntry objects it actually constructs, restores the
+        //  registry, then walks EVERY public field of CatalogEntry / RepoProps /
+        //  PlacementRules / OrientationFix (and their arrays + nested structs) by
+        //  reflection against the parsed catalog row. Reflection over the field graph --
+        //  rather than a fixed field list -- means a field added to RepoProps tomorrow is
+        //  covered the day it lands, with no edit here.
+        //
+        //  BLIND SPOTS (deliberate, stated):
+        //    - OrientationFix.note is EXCLUDED: it is human annotation, not behaviour.
+        //    - JSON keys with no C# field (the catalog's "_bug22" comment key and its
+        //      stray top-level "canHitAir") are invisible to both sides -- the production
+        //      parse drops them via MissingMemberHandling.Ignore, so parity here matches
+        //      what the game actually loads, which is the property that matters.
+        //    - A fallback row whose id is absent from the catalog is FAILED, not deleted.
+        // =====================================================================
+        private static readonly HashSet<string> FallbackParityIgnoredFields =
+            new HashSet<string> { "note" };
+
+        private static void CheckFallbackParity(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
+        {
+            var method = typeof(CatalogBootstrap).GetMethod(
+                "RegisterFallback", BindingFlags.NonPublic | BindingFlags.Static);
+            if (method == null)
+            {
+                failures.Add("[fallback-parity] CatalogBootstrap.RegisterFallback is not reflectable (renamed/removed) -- " +
+                             "the JSON-failure path is UNGUARDED and free to drift from the catalog again");
+                return;
+            }
+
+            // Snapshot + restore the live registry: earlier gates hydrated it and later
+            // suites read it, so this gate must leave it byte-for-byte as it found it.
+            var snapshot = new List<CatalogEntry>(CatalogRegistry.All());
+            List<CatalogEntry> fallbackRows = null;
+            try
+            {
+                CatalogRegistry.Clear();
+                method.Invoke(null, null);
+                fallbackRows = new List<CatalogEntry>(CatalogRegistry.All());
+            }
+            catch (System.Exception ex)
+            {
+                var inner = ex.InnerException ?? ex;
+                failures.Add($"[fallback-parity] RegisterFallback threw: {inner.GetType().Name}: {inner.Message}");
+            }
+            finally
+            {
+                CatalogRegistry.Clear();
+                foreach (var e in snapshot) CatalogRegistry.Register(e);
+            }
+
+            if (fallbackRows == null) return;
+            if (fallbackRows.Count == 0)
+            {
+                failures.Add("[fallback-parity] RegisterFallback registered ZERO entries -- " +
+                             "a JSON load failure would leave the build palette EMPTY");
+                return;
+            }
+
+            var byId = new Dictionary<string, CatalogEntry>();
+            foreach (var e in entries)
+                if (e != null && !string.IsNullOrEmpty(e.id)) byId[e.id] = e;
+
+            int before = failures.Count;
+            foreach (var fb in fallbackRows)
+            {
+                if (fb == null || string.IsNullOrEmpty(fb.id))
+                {
+                    failures.Add("[fallback-parity] RegisterFallback registered a null / id-less entry");
+                    continue;
+                }
+                if (!byId.TryGetValue(fb.id, out var cat))
+                {
+                    failures.Add($"[fallback-parity] fallback row '{fb.id}' has NO counterpart in structures-catalog.json -- " +
+                                 "the failure path would offer a structure the loaded game does not have");
+                    continue;
+                }
+                CompareFallbackValue(fb.id, "", fb, cat, failures, 0);
+            }
+
+            int drift = failures.Count - before;
+            if (drift == 0)
+                log.AppendLine($"  [fallback-parity] all {fallbackRows.Count} RegisterFallback row(s) field-equal to their " +
+                               "structures-catalog.json counterparts OK");
+            else
+                log.AppendLine($"  [fallback-parity] {drift} field divergence(s) across {fallbackRows.Count} fallback row(s)");
+        }
+
+        /// <summary>
+        /// Reflective deep field-compare of a fallback value against its catalog value.
+        /// Reports id + dotted field path + BOTH values on every divergence.
+        /// </summary>
+        private static void CompareFallbackValue(string id, string path, object fb, object cat,
+                                                 List<string> failures, int depth)
+        {
+            if (depth > 6) return;   // the CatalogEntry graph is 4 deep; the cap is a cycle guard
+
+            if (fb == null && cat == null) return;
+            if (fb == null || cat == null)
+            {
+                failures.Add($"[fallback-parity] '{id}' {path}: fallback {FmtParity(fb)} vs catalog {FmtParity(cat)}");
+                return;
+            }
+
+            var t = fb.GetType();
+            if (t != cat.GetType())
+            {
+                failures.Add($"[fallback-parity] '{id}' {path}: type mismatch ({t.Name} vs {cat.GetType().Name})");
+                return;
+            }
+
+            if (t == typeof(float) || t == typeof(double))
+            {
+                double a = System.Convert.ToDouble(fb), b = System.Convert.ToDouble(cat);
+                if (System.Math.Abs(a - b) > 0.0001)
+                    failures.Add($"[fallback-parity] '{id}' {path}: fallback {a} vs catalog {b}");
+                return;
+            }
+
+            if (t.IsPrimitive || t.IsEnum || t == typeof(string))
+            {
+                if (!fb.Equals(cat))
+                    failures.Add($"[fallback-parity] '{id}' {path}: fallback {FmtParity(fb)} vs catalog {FmtParity(cat)}");
+                return;
+            }
+
+            if (t.IsArray)
+            {
+                var a = (System.Array)fb;
+                var b = (System.Array)cat;
+                if (a.Length != b.Length)
+                {
+                    failures.Add($"[fallback-parity] '{id}' {path}: fallback has {a.Length} element(s), catalog has {b.Length}");
+                    return;
+                }
+                for (int i = 0; i < a.Length; i++)
+                    CompareFallbackValue(id, $"{path}[{i}]", a.GetValue(i), b.GetValue(i), failures, depth + 1);
+                return;
+            }
+
+            foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (FallbackParityIgnoredFields.Contains(f.Name)) continue;
+                string child = path.Length == 0 ? f.Name : path + "." + f.Name;
+                CompareFallbackValue(id, child, f.GetValue(fb), f.GetValue(cat), failures, depth + 1);
+            }
+        }
+
+        private static string FmtParity(object v) =>
+            v == null ? "<null>" : (v is string s ? $"\"{s}\"" : v.ToString());
+
         /// <summary>Flat basket total of a cost (all four slots) -- the comparison scalar for the softcap gates.</summary>
         private static int Total(CoreCost c) => c.wood + c.food + c.iron + c.crystals;
 
@@ -1165,7 +1337,7 @@ namespace DeNelle.Editor
             {
                 reason = "BUILD ECONOMY OK — catalog parse/ids + dual-copy + cost sanity + tier-monotonic upgrades " +
                          "+ tower contract + placement math + 50% sell refund + BaseLayout replay (data + real factory) " +
-                         "+ build-timer curve + damage-states thresholds all hold";
+                         "+ build-timer curve + damage-states thresholds + fallback/catalog parity all hold";
                 Debug.Log("BUILDECON_OK\n" + log);
                 return true;
             }

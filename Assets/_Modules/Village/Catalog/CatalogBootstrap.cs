@@ -1,29 +1,31 @@
-// =============================================================================
-// CatalogBootstrap — populates the CatalogRegistry at startup (WO-148 P0 fix).
+﻿// =============================================================================
+// CatalogBootstrap â€” populates the CatalogRegistry at startup (WO-148 P0 fix).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// THE P0: CatalogRegistry (DeNelle.Core.Catalog) had ZERO Register() callers —
+// THE P0: CatalogRegistry (DeNelle.Core.Catalog) had ZERO Register() callers â€”
 // it was empty at runtime, so OfType()/Get() returned nothing and the catalog
 // data path was unproven. This registrar fills it, so StructureFactory + future
 // build-mode UI have real "buckets" to read.
 //
 // DATA-DRIVEN (Build Mode S3): the catalog content is no longer hardcoded C#.
-// It is loaded from a canonical JSON row-set —
+// It is loaded from a canonical JSON row-set â€”
 //   Assets/StreamingAssets/Data/Canonical/structures-catalog.json   (source)
 //   Assets/Resources/Data/Canonical/structures-catalog.json         (WebGL copy, WINS)
-// — through DeNelle.Core.CanonicalJson (Resources.Load first, WebGL-safe; the
+// â€” through DeNelle.Core.CanonicalJson (Resources.Load first, WebGL-safe; the
 // proven pattern CosmeticCatalog / PetCatalog / Theme already use). Adding a
 // wall / mine / gate / tower is now a JSON row, not a code change.
 //
-// A tiny hardcoded fallback (the two proven placement=role towers) registers ONLY
-// if the JSON fails to load/parse, so the build palette is never empty.
+// A tiny hardcoded fallback (the three tower rows) registers ONLY if the JSON
+// fails to load/parse, so the build palette is never empty. It MUST stay a
+// field-for-field MIRROR of those rows in structures-catalog.json â€” see the
+// banner on RegisterFallback; BuildEconomyRegression gate 12 enforces it.
 //
 // Pattern mirrors WaveSystemBridgeBootstrap / AudioBootstrap: a
 // [RuntimeInitializeOnLoadMethod] that Clear()s then registers, guarded so a
 // domain-reload-off second Play re-registers cleanly. behaviorId strings resolve
 // to Village components in StructureFactory.AttachBehavior (the Core/Village
-// boundary — a switch, no reflection).
+// boundary â€” a switch, no reflection).
 // =============================================================================
 
 using System.Collections.Generic;
@@ -41,7 +43,8 @@ namespace DeNelle.Village
     /// at startup by LOADING structures-catalog.json (data-driven). Idempotent
     /// across play sessions (Clear-then-register), so it survives domain-reload-off
     /// like the other bootstrappers. Falls back to a tiny hardcoded set only if the
-    /// JSON cannot be loaded, so the palette is never empty.
+    /// JSON cannot be loaded, so the palette is never empty â€” that hardcoded set is a
+    /// field-for-field MIRROR of its structures-catalog.json rows (see RegisterFallback).
     /// </summary>
     public static class CatalogBootstrap
     {
@@ -66,17 +69,17 @@ namespace DeNelle.Village
             if (loaded > 0)
             {
                 Debug.Log($"[CatalogBootstrap] Registered {CatalogRegistry.Count} catalog " +
-                          $"entrie(s) from structures-catalog.json — data-driven path is live.");
+                          $"entrie(s) from structures-catalog.json â€” data-driven path is live.");
                 // Owner-dialed poses saved by the Orient tool overlay the shipped data
-                // (local wins — the 2026-07-08 "save locally" directive; gear-offsets pattern).
+                // (local wins â€” the 2026-07-08 "save locally" directive; gear-offsets pattern).
                 StructureOrientationLocalStore.ApplyAll();
                 return;
             }
 
-            // JSON missing / empty / unparseable — keep the palette alive with the
+            // JSON missing / empty / unparseable â€” keep the palette alive with the
             // two proven placement=role towers so the build path never dead-ends.
             RegisterFallback();
-            Debug.LogWarning($"[CatalogBootstrap] structures-catalog.json unavailable — " +
+            Debug.LogWarning($"[CatalogBootstrap] structures-catalog.json unavailable â€” " +
                              $"registered {CatalogRegistry.Count} hardcoded fallback entrie(s).");
         }
 
@@ -135,95 +138,168 @@ namespace DeNelle.Village
             return count;
         }
 
-        // ── Hardcoded fallback — the two proven placement=role towers ──────────
+        // â•â•â• Hardcoded fallback â€” the three tower rows â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        //
+        // âš  THIS METHOD MUST MIRROR structures-catalog.json, FIELD FOR FIELD. âš 
+        //
+        // It is the JSON-load-FAILURE path: when the catalog cannot be read, these rows
+        // ARE the game's content. Every value that drifts from its catalog counterpart
+        // silently SHIPS DIFFERENT CONTENT on that path â€” a different model, a different
+        // price, a different footprint â€” and nobody sees it until a player hits the
+        // failure path in the wild. Historic drifts caught here: footprint 2.5 vs the
+        // catalog's 1.75 (commit 0ac59581) and visualPrefabPath "PatriciaLight/tower2",
+        // art from the Defend-the-Tower module DELETED on 2026-06-09.
+        //
+        // When you edit a tower row in structures-catalog.json, edit it HERE in the same
+        // breath. BuildEconomyRegression gate 12 ("[fallback-parity]") reflects over these
+        // constructed rows and fails the build on ANY field divergence, so drift is now a
+        // red gate rather than a silent content swap.
+        //
         // Used ONLY when the JSON cannot be loaded, so the palette is never empty.
         private static void RegisterFallback()
         {
-            // Ground Archer Tower — short range, fast, CANNOT hit air.
+            // Ground Archer Tower â€” short range, fast, CANNOT hit air.
+            // MIRRORS: structures-catalog.json entry "tower_ground_archer".
             CatalogRegistry.Register(new CatalogEntry
             {
                 id          = "tower_ground_archer",
                 displayName = "Archer Tower",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "PatriciaLight/tower2",
+                // Tribal/castle ladder (bug22 resolution 2026-07-06). NOT PatriciaLight â€”
+                // that module was REMOVED 2026-06-09; only the orphan tower2 asset remains.
+                visualPrefabPath = "Structures/Tower_Castle_Round",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
                     buildCost  = 100,
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 90, food = 0, iron = 40, crystals = 0 },
+                    maxLevel   = 3,
+                    upgradeCost = new[]
+                    {
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 108, food = 0, iron =  48, crystals = 0 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 225, food = 0, iron = 100, crystals = 0 },   // L2â†’L3
+                    },
+                    upgradeVisualPath = new[]
+                    {
+                        "Structures/Tower_Castle_Square",   // L2
+                        "Structures/Tower_Medieval_Big",    // L3
+                    },
                     navSurface = NavSurfaceKind.Blocker,
-                    // MIRROR THE CATALOG: every value in this fallback must match the
-                    // tower_ground_archer row in structures-catalog.json — a drifted fallback
-                    // silently ships a different-sized tower whenever the JSON fails to load.
-                    heightMul = 1.2f,    // owner 2026-08-05: archer tower = 1.2 × base (4 m) = 4.8 m (was 1.25)
+                    heightMul = 1.2f,    // owner 2026-08-05: archer tower = 1.2 Ã— base (4 m) = 4.8 m
                     range = 14f, damage = 6f, fireRate = 2.5f,
                     canHitAir = false, element = DamageElement.None,
                     projectileStyle = "bolt",   // owner 2026-07-08: arrows, not pellets
                     placement = new PlacementRules
                     {
                         mustSitOn = PlacementSurface.Ground,
-                        footprint = 1.75f, noOverlap = true, checkAffordable = true,   // matches catalog (was a drifted 2.5)
+                        footprint = 1.75f, noOverlap = true, checkAffordable = true,
                     },
+                },
+                orientation = new OrientationFix
+                {
+                    corrected = false, manual = false,
+                    euler  = new[] { 0f, 0f, 0f },
+                    offset = new[] { 0f, 0f, 0f },
+                    scale  = 1f,
+                    note   = "mirrors the catalog row (zeroed â€” polyperfect _M prefabs are upright)",
                 },
             });
 
-            // Wall Wizard Tower — long range, slower, HITS AIR, wall-top only.
+            // Ballista (catalog id is still the legacy "tower_wall_wizard") â€” long range,
+            // slowest fire, heaviest PHYSICAL single hit, HITS AIR. Owner ruling 2026-07-08:
+            // the model IS a ballista and it is GROUND-placed, not wall-walk.
+            // MIRRORS: structures-catalog.json entry "tower_wall_wizard".
             CatalogRegistry.Register(new CatalogEntry
             {
                 id          = "tower_wall_wizard",
-                displayName = "Wizard Tower",
+                displayName = "Ballista",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "PatriciaLight/tower2",
+                visualPrefabPath = "Structures/WizardTower_1",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
                     buildCost  = 150,
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 60, food = 0, iron = 30, crystals = 70 },
+                    maxLevel   = 3,
+                    upgradeCost = new[]
+                    {
+                        new DeNelle.Core.Catalog.ResourceCost { wood =  72, food = 0, iron = 36, crystals =  84 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 75, crystals = 175 },   // L2â†’L3
+                    },
                     navSurface = NavSurfaceKind.Blocker,
-                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 5)
-                    // Owner 2026-07-08 tower-identity ladder: the Ballista is the SNIPER —
-                    // longest range of the three, slowest fire, heaviest PHYSICAL single hit
-                    // (55 m map-wide range + Aether were the pre-ladder values).
-                    range = 22f, damage = 20f, fireRate = 0.5f,
+                    heightMul = 1.25f,   // WO-764: tower = 1.25 Ã— base
+                    range = 22f, damage = 30f, fireRate = 0.5f,
                     canHitAir = true, element = DamageElement.None,
                     projectileStyle = "bolt",
                     placement = new PlacementRules
                     {
-                        mustSitOn = PlacementSurface.WallWalk,
-                        footprint = 2f, noOverlap = true,
-                        requiresSupport = true, checkAffordable = true,
+                        mustSitOn = PlacementSurface.Ground,
+                        footprint = 1.4f, noOverlap = true, checkAffordable = true,
                     },
+                },
+                orientation = new OrientationFix
+                {
+                    // manual=true so the auto baker never re-tips it; the Tripo fbx needs
+                    // the standard X-90 to stand up. Without this the fallback ships a
+                    // ballista lying on its side.
+                    corrected = false, manual = true,
+                    euler  = new[] { -90f, 0f, 0f },
+                    offset = new[] { 0f, 0f, 0f },
+                    scale  = 1f,
+                    note   = "mirrors the catalog row (manual X-90 â€” the Tripo fbx stands upright with it)",
                 },
             });
 
-            // Arcane Spire (WO-113) — slow-firing AoE MAGIC tower: every shot blasts a
+            // Arcane Spire (WO-113) â€” slow-firing AoE MAGIC tower: every shot blasts a
             // radius around the impact for Aether damage + a Slow debuff. Ground-placed,
             // crystal-heavy cost. The optional aoeRadius / slowSeconds / splashFraction
             // tune the blast (the ArcaneTower component falls back to its own defaults
             // when a field is 0).
+            // MIRRORS: structures-catalog.json entry "tower_arcane_spire".
             CatalogRegistry.Register(new CatalogEntry
             {
                 id          = "tower_arcane_spire",
                 displayName = "Arcane Spire",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "Structures/Tower_Medieval_Big",
+                visualPrefabPath  = "Structures/ArcaneSpire_1",
+                // WO-707: the Tripo albedo lives outside the fbm folder, so it must be
+                // FORCED on or the spire renders pure white.
+                visualTexturePath = "Structures/ArcaneSpire_Albedo",
                 repo = new RepoProps
                 {
                     behaviorId = "ArcaneTower",
                     buildCost  = 200,
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 40, food = 0, iron = 40, crystals = 85 },
+                    maxLevel   = 3,
+                    upgradeCost = new[]
+                    {
+                        new DeNelle.Core.Catalog.ResourceCost { wood =  48, food = 0, iron =  48, crystals = 102 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 100, food = 0, iron = 100, crystals = 212 },   // L2â†’L3
+                    },
+                    upgradeVisualPath  = new[] { "Structures/ArcaneSpire_2",        "Structures/ArcaneSpire_3" },
+                    upgradeTexturePath = new[] { "Structures/ArcaneSpire_2_Albedo", "Structures/ArcaneSpire_3_Albedo" },
                     navSurface = NavSurfaceKind.Blocker,
-                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 6)
-                    range = 16f, damage = 16f, fireRate = 0.6f,   // owner 2026-07-08: mid-range zone caster
+                    heightMul = 1.25f,   // WO-764: tower = 1.25 Ã— base
+                    range = 16f, damage = 20f, fireRate = 0.6f,   // owner 2026-07-08: mid-range zone caster
                     canHitAir = true, element = DamageElement.Aether,
                     projectileStyle = "spell",
                     aoeRadius = 6f, slowSeconds = 2.5f, splashFraction = 0.7f,
-                    maxLevel = 3,
                     placement = new PlacementRules
                     {
                         mustSitOn = PlacementSurface.Ground,
-                        footprint = 3f, noOverlap = true, checkAffordable = true,
+                        footprint = 2.1f, noOverlap = true, checkAffordable = true,
                     },
+                },
+                orientation = new OrientationFix
+                {
+                    corrected = false, manual = true,
+                    euler  = new[] { 0f, 0f, 0f },
+                    offset = new[] { 0f, 0f, 0f },
+                    scale  = 1f,
+                    note   = "mirrors the catalog row (owner 2026-07-08 'needs 0 0 0'; manual so the baker never re-tips it)",
                 },
             });
         }
