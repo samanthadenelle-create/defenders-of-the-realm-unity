@@ -483,6 +483,102 @@ namespace DeNelle.Village
         /// (the ONE shortfall message authority, shared with Build Mode).</summary>
         public string ShortfallFor(CoreCost cost) => BuildModeController.ShortfallMessage(cost);
 
+        // ── Player-facing lines (WO-878: assembled HERE, never in the View) ───
+        //
+        // The View is layout + render only. Every string below used to be built inside
+        // BuildMenu: the per-axis cost rows, the build-time line, the five-way upgrade
+        // availability switch and the level/damage/range preview were all string-assembled in
+        // presentation, which is how a View ends up "computing" what the VM owns. They read
+        // the SAME live ledger (MaterialCount) and the SAME quote the CTA gates on, so the
+        // number the player reads and the number the spend enforces can never diverge.
+
+        /// <summary>
+        /// One ASCII line stating what a build costs AND what is on hand, per axis:
+        /// "Wood: 70 (+250), Iron: 40 (-12)". Zero axes are omitted. The +/- mark is the
+        /// TEXT encoding of affordability - the owner is red/green colourblind, so a colour
+        /// may only ever reinforce a state that is already spelled out.
+        /// </summary>
+        public string CostSummaryFor(CoreCost cost)
+        {
+            if (cost.IsZero) return "Costs nothing.";
+            var sb = new System.Text.StringBuilder(64);
+            AppendAxis(sb, "Crystals", cost.crystals, MaterialCount("crystals"));
+            AppendAxis(sb, "Wood",     cost.wood,     MaterialCount("wood"));
+            AppendAxis(sb, "Iron",     cost.iron,     MaterialCount("iron"));
+            AppendAxis(sb, "Food",     cost.food,     MaterialCount("food"));
+            return sb.Length > 0 ? sb.ToString() : "Costs nothing.";
+        }
+
+        private static void AppendAxis(System.Text.StringBuilder sb, string label, int required, int have)
+        {
+            if (required <= 0) return;
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(label).Append(": ").Append(DeNelle.Core.UI.ElarionUi.CompactNumber(required))
+              .Append(" (").Append(have >= required ? "+" : "-")
+              .Append(DeNelle.Core.UI.ElarionUi.CompactNumber(have)).Append(')');
+        }
+
+        /// <summary>
+        /// The second preview line on the Build screen: how long the PICKED tower's own asset
+        /// takes to raise (the same field TowerConstructionQueue times the raise off) plus its
+        /// catalog stats. Never a made-up duration - a missing asset simply drops that half.
+        /// </summary>
+        public string BuildDetailLineFor(TowerBuildOption option)
+        {
+            if (option.IsEmpty) return string.Empty;
+            int seconds = BuildSecondsFor(option.Id);
+            string time = seconds > 0 ? "Build time: " + FormatDuration(seconds) : string.Empty;
+            string stats = $"dmg {option.Damage:0.#}, range {option.Range:0.#}m";
+            return time.Length > 0 ? time + "  -  " + stats : stats;
+        }
+
+        /// <summary>The Build CTA's label: the verb when it can be paid for, the concrete reason
+        /// when it cannot. The button STATES its state; the grey face only reinforces it.</summary>
+        public string BuildCtaLabelFor(TowerBuildOption option)
+        {
+            if (option.IsEmpty) return "Build";
+            return CanAfford(option.Cost) ? "Build" : ShortfallFor(option.Cost);
+        }
+
+        /// <summary>Line 1 of the upgrade preview - the price, or the reason there is no price.
+        /// Five distinct states, because "cost == 0" collapsed a free upgrade, a maxed tower, a
+        /// tower still being raised and an un-authored level into one developer-facing note.</summary>
+        public string UpgradeCostLineFor(UpgradeQuote quote)
+        {
+            switch (quote.Availability)
+            {
+                case UpgradeAvailability.NotBuilt: return "The crew is still raising this tower.";
+                case UpgradeAvailability.Maxed:    return $"Fully upgraded - Lvl {quote.Level} of {quote.MaxLevel}.";
+                case UpgradeAvailability.Free:     return "Costs nothing - the next level is free.";
+                case UpgradeAvailability.Unpriced: return "This tower cannot be upgraded any further.";
+                default:                           return CostSummaryFor(quote.Cost);
+            }
+        }
+
+        /// <summary>Line 2 of the upgrade preview - what the upgrade actually buys. Empty for a
+        /// tower still under construction: it has no stats, and "0 dmg / 0m" is a fabricated
+        /// reading rather than a real one.</summary>
+        public string UpgradeStatLineFor(UpgradeQuote quote)
+        {
+            if (!quote.HasStats) return string.Empty;
+            return quote.HasNextLevel
+                ? $"Lvl {quote.Level} to {quote.Level + 1}:  dmg {quote.NowDamage:0.#} to {quote.NextDamage:0.#}," +
+                  $"  range {quote.NowRange:0.#}m to {quote.NextRange:0.#}m"
+                : $"Now:  dmg {quote.NowDamage:0.#},  range {quote.NowRange:0.#}m";
+        }
+
+        /// <summary>The Upgrade CTA's label - same colourblind law as the Build CTA.</summary>
+        public string UpgradeCtaLabelFor(UpgradeQuote quote)
+            => quote.CanUpgradeNow ? "Upgrade" : ShortfallFor(quote.Cost);
+
+        /// <summary>Formats seconds as "Xm Ys" (or "Ys" under a minute). ASCII only.</summary>
+        public static string FormatDuration(int seconds)
+        {
+            if (seconds < 0) seconds = 0;
+            int m = seconds / 60, s = seconds % 60;
+            return m > 0 ? $"{m}m {s}s" : $"{s}s";
+        }
+
         // ── Commands ──────────────────────────────────────────────────────────
 
         /// <summary>

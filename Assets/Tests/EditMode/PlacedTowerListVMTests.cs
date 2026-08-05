@@ -142,5 +142,32 @@ namespace DeNelle.Tests.EditMode
 
             vm.Dispose();
         }
+
+        // WO-880 — the manager row used to print a FABRICATED "Lv 1 (rng 0, dmg 0)" for exactly
+        // this tower, because the View read Tower.CurrentLevel/CurrentRange/CurrentDamage off the
+        // scene object and those return 0f while _data is null (Tower.cs:185-216). The VM now
+        // composes the row and says what is actually true.
+        [Test]
+        public void manager_row_for_an_unbuilt_tower_says_building_instead_of_zero_stats()
+        {
+            var t = NewTower("Tower_Archer");
+            var vm = new PlacedTowerListVM(() => new[] { t });
+
+            Assert.That(vm.Rows.Count, Is.EqualTo(1));
+            var row = vm.Rows[0];
+            Assert.That(row.Built, Is.False);
+            Assert.That(row.StatsKnown, Is.False, "no TowerData => no stat source => nothing to print");
+
+            string label = vm.ManagerRowFor(row, 1);
+            Assert.That(label, Is.EqualTo("Tower 1  -  (building)"));
+            Assert.That(label, Does.Not.Contain("rng 0"));
+            Assert.That(label, Does.Not.Contain("dmg 0"));
+
+            vm.SelectRow(row);
+            Assert.That(vm.CanUpgradeSelected, Is.False, "a tower still being raised cannot be upgraded");
+            Assert.That(vm.DetailLine, Does.Not.Contain("rng"), "the footer must not invent stats either");
+
+            vm.Dispose();
+        }
     }
 }

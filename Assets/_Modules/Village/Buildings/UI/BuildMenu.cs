@@ -10,7 +10,7 @@
 //
 // Screens (WO-31 flow preserved):
 //   Root         — Build Tower / Upgrade Tower / Repair Wall / Manage Towers /
-//                  Build Mode (Obsidian button rows; Close = the chrome's ONE
+//                  Build Mode (Obsidian verb grid; Close = the chrome's ONE
 //                  shared Close per obsidian-panel-chrome canon)
 //   BuildTower   — catalog-tower radio + REAL costs vs the REAL ledger + Build
 //                  (WO-131 prepaid spend, WO-861 verified: the spend must SUCCEED)
@@ -23,8 +23,8 @@
 //     for menu-initiated placements (WO-T1); OnboardingIntegrator +
 //     TutorialSignalAdapters subscribe.
 //   • WO-131 single authoritative spend (OnConfirmBuild, prepaid: true).
-//   • New: routes through the PanelManager modal arbiter ("Build") like every
-//     other kit modal — battle-lock may reject an open (revert + stay hidden).
+//   • Routes through the PanelManager modal arbiter ("Build") like every other kit
+//     modal — battle-lock may reject an open (revert + stay hidden).
 //
 // WO-861 (owner Tier 0, 2026-08-02) — TWO live economy defects removed from THIS View:
 //   1. THE FAKE WALLET. A private GetMaterialCount(id) returned the literals wood=20 /
@@ -46,6 +46,26 @@
 // charged the Archer Tower's catalog price, printed DevTower's 2s raise time, and raised a
 // DevTower. Both reads are now keyed on the selected row's id —
 // BuildMenuVM.PlacedTowerDataFor(id) / BuildSecondsFor(id).
+//
+// WO-878 (2026-08-05) — THE OVERLAP. Every band on this screen was a FRACTION OF THE BODY
+// ZONE, and that zone is ~423-430 reference px on a landscape canvas (see the derivation in
+// BuildMenuLayout), not the ~780 the panel looks like. So the root verb rows resolved to
+// 41 px, "< Back" to 50 px, the Upgrade CTA to 54 px and each info row to 34 px — all far
+// under ElarionUiKit.MinTouchPx (112). ClampMinTouch then grew every one of them
+// SYMMETRICALLY ABOUT ITS CENTRE after layout, so they ate their neighbours: the five root
+// verbs (48.9 px stride, 112 px grown) sliced one another's labels, "< Back" grew through
+// the "UPGRADE TOWER" title, and the Upgrade CTA grew up into the cost/preview text.
+//
+// THE LAYOUT IS NOW A FIXED-REFERENCE-PIXEL BAND LADDER (BuildMenuLayout), the
+// LeaderboardPanel / SettingsController precedent:
+//   sub-screen:  [nav 112: "< Back" | title] gap [content: scroll well, 112 px rows]
+//                gap [action 112: cost line / preview line | primary CTA]
+//   root:        [2-column verb grid, 112 px cells]
+//   footer zone: [status hint | Crystals readout]   (the frame's designed wallet strip)
+// Every band that carries a button is authored AT the touch floor, so ClampMinTouch is a
+// provable no-op; every text band is a whole TMP line box and is fit-guarded, so it can
+// neither clip nor spill. And every player-facing STRING now comes from BuildMenuVM — the
+// View lays out and renders, it computes nothing.
 // =============================================================================
 
 using System;
@@ -74,8 +94,9 @@ namespace DeNelle.Village
 
         // ── Kit modal (lazy-built on first Open) ─────────────────────────────
         private ElarionUiKit.ObsidianModal _modal;
-        private Transform _bodyHost;          // frame body drop-zone — screens rebuild here
-        private TextMeshProUGUI _statusLabel; // footer strip — status / placement hints
+        private Transform _bodyHost;           // frame body drop-zone — screens rebuild here
+        private TextMeshProUGUI _statusLabel;  // footer strip — status / placement hints
+        private TextMeshProUGUI _balanceLabel; // footer strip — the wallet readout
 
         private bool _isOpen;
 
@@ -208,8 +229,12 @@ namespace DeNelle.Village
         {
             if (_modal != null && _modal.canvas != null) return;
 
+            // WO-878: the panel is authored from BuildMenuLayout (0.92 of the canvas height).
+            // At the old 0.80 the close-band reservation left a body of only ~357 reference px,
+            // which cannot seat a touch-floor nav band, a touch-floor action band and a list.
             _modal = ElarionUiKit.BuildObsidianModal("BuildMenuUI", "Build",
-                new Vector2(0.20f, 0.10f), new Vector2(0.80f, 0.90f), Close,
+                new Vector2(BuildMenuLayout.ModalXMin, BuildMenuLayout.ModalYMin),
+                new Vector2(BuildMenuLayout.ModalXMax, BuildMenuLayout.ModalYMax), Close,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "hammer");
 
             var layout = _modal.chrome.layout;
@@ -217,12 +242,19 @@ namespace DeNelle.Village
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
-            // Footer strip carries the status / placement-hint line.
+            // The frame's footer strip is the designed WALLET / ACTION band (FrameLayout doc),
+            // and the kit has already re-seated it clear of the shared Close. It carries the two
+            // persistent read-outs — the status hint (left) and the balance (right) — side by
+            // side, so neither competes with the body ladder for the body's ~423 px.
             var footHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer
                 : _modal.chrome.content.transform;
-            _statusLabel = MakeText(footHost, "", 13, ElarionUi.ParchmentDim, FontStyles.Italic,
-                TextAlignmentOptions.Center, new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
+            _statusLabel = MakeText(footHost, "", ElarionUi.FontMicro, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.Left, new Vector2(0.02f, 0f), new Vector2(0.60f, 1f));
+            ElarionUiKit.FitBlock(_statusLabel, ElarionUi.FontFloorMobile);
+            _balanceLabel = MakeText(footHost, "", ElarionUi.FontLabel, ElarionUi.Gilt, FontStyles.Bold,
+                TextAlignmentOptions.Right, new Vector2(0.62f, 0f), new Vector2(0.98f, 1f));
+            ElarionUiKit.FitSingleLine(_balanceLabel, ElarionUi.FontFloorMobile);
 
             _modal.canvas.SetActive(false);   // built hidden; Open shows it
         }
@@ -233,8 +265,9 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Rebuilds the body for the current <see cref="_screen"/> (WO-31 three-screen
-        /// flow). All screens rebuild into the frame's body drop-zone; the crystal
-        /// balance readout tops every screen.
+        /// flow). All screens rebuild into the frame's body drop-zone as FIXED-PIXEL
+        /// bands (BuildMenuLayout); the wallet readout lives in the footer strip and is
+        /// only re-texted, never rebuilt.
         /// </summary>
         public void Render()
         {
@@ -243,8 +276,8 @@ namespace DeNelle.Village
                 Destroy(_bodyHost.GetChild(i).gameObject);
 
             // WO-697: balance through the ONE kit formatter (compact >= 10k).
-            MakeText(_bodyHost, "Crystals: " + ElarionUi.CompactNumber(CrystalBalance), 14, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.Right, new Vector2(0.06f, 0.955f), new Vector2(0.94f, 1f));
+            if (_balanceLabel != null)
+                _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(CrystalBalance);
 
             switch (_screen)
             {
@@ -257,42 +290,53 @@ namespace DeNelle.Village
         // ── Root chooser ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// The top-level chooser: Obsidian button rows — Build Tower / Upgrade
-        /// Tower / Repair Wall / Manage Towers / Build Mode. (No Close row — the
-        /// chrome's ONE shared Close covers it.)
+        /// The top-level chooser: a fixed-pixel Obsidian verb GRID — Build Tower /
+        /// Upgrade Tower / Repair Wall / Manage Towers / Build Mode. (No Close cell —
+        /// the chrome's ONE shared Close covers it.)
+        ///
+        /// Two columns, not one: five verbs at the 112 px touch floor need 592 px stacked
+        /// and the body is ~423-430 px. The old single column asked 0.115 of the body per
+        /// row (41 px), which ClampMinTouch grew to 112 px about each row's centre — a
+        /// 63 px overlap per row, which is the label-slicing in the 2026-08-04 capture.
         /// </summary>
         private void RenderRoot()
         {
-            float top = 0.93f;
-            AddRow("Build Tower", ElarionUiKit.ObsidianButtonColor.Yellow,
-                () => { _screen = MenuScreen.BuildTower; Render(); }, ref top);
-            AddRow("Upgrade Tower", ElarionUiKit.ObsidianButtonColor.Gray,
-                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; _upgradeListScrollPos = 1f; Render(); }, ref top);
-            AddRow("Repair Wall", ElarionUiKit.ObsidianButtonColor.Gray, OnRepairWall, ref top);
-            AddRow("Manage Towers", ElarionUiKit.ObsidianButtonColor.Gray, () =>
+            AddRootCell(0, "Build Tower", ElarionUiKit.ObsidianButtonColor.Yellow,
+                () => { _screen = MenuScreen.BuildTower; Render(); });
+            AddRootCell(1, "Upgrade Tower", ElarionUiKit.ObsidianButtonColor.Gray,
+                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; _upgradeListScrollPos = 1f; Render(); });
+            AddRootCell(2, "Repair Wall", ElarionUiKit.ObsidianButtonColor.Gray, OnRepairWall);
+            AddRootCell(3, "Manage Towers", ElarionUiKit.ObsidianButtonColor.Gray, () =>
             {
                 Close();
                 DeNelle.Village.UI.TowerManagerPanel.Instance?.Show();
-            }, ref top);
+            });
             // WO-108 — the CREATE verb: enter the player Build Mode (catalog palette +
             // grid placement + persisted BaseLayout). EnsureExists() self-installs the
             // controller; Enter() freezes waves + shows the palette.
-            AddRow("Build Mode", ElarionUiKit.ObsidianButtonColor.Gray, () =>
+            AddRootCell(4, "Build Mode", ElarionUiKit.ObsidianButtonColor.Gray, () =>
             {
                 Close();
                 BuildModeController.EnsureExists().Enter();
-            }, ref top);
+            });
         }
 
-        /// <summary>One full-width Obsidian row, stacked downward from <paramref name="top"/>.</summary>
-        private void AddRow(string label, ElarionUiKit.ObsidianButtonColor color,
-            Action onClick, ref float top)
+        /// <summary>One verb cell of the root grid: a FIXED <see cref="BuildMenuLayout.RootCellPx"/>
+        /// band (== the touch floor, so the kit's post-layout floor guard is a no-op) at the
+        /// cell's row, filled edge to edge by the Obsidian button.</summary>
+        private void AddRootCell(int index, string label, ElarionUiKit.ObsidianButtonColor color, Action onClick)
         {
-            const float rowH = 0.115f, gap = 0.022f;
-            ElarionUiKit.BuildObsidianButton(_bodyHost, label,
+            int row = index / BuildMenuLayout.RootColumns;
+            int col = index % BuildMenuLayout.RootColumns;
+            float colW = 1f / BuildMenuLayout.RootColumns;
+            float xMin = col * colW + BuildMenuLayout.RootCellPadFrac;
+            float xMax = (col + 1) * colW - BuildMenuLayout.RootCellPadFrac;
+            float topPx = row * (BuildMenuLayout.RootCellPx + BuildMenuLayout.BandGapPx);
+
+            var cell = PxBandFromTop(_bodyHost, "RootCell" + index, xMin, xMax, topPx, BuildMenuLayout.RootCellPx);
+            ElarionUiKit.BuildObsidianButton(cell, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, color,
-                new Vector2(0.08f, top - rowH), new Vector2(0.92f, top), onClick);
-            top -= rowH + gap;
+                Vector2.zero, Vector2.one, onClick);
         }
 
         private void OnRepairWall()
@@ -301,109 +345,130 @@ namespace DeNelle.Village
             SetStatus("Restoring the nearest damaged wall section.");
         }
 
-        // HEIGHT IS LOAD-BEARING (2026-08-04). The kit fits every button label with
-        // ElarionUiKit.FitSingleLine, which auto-sizes down to FontFloor and then ELLIPSISES.
-        // When the button rect is shorter than one line box at that floor, TMP lays out no line
-        // at all and the button renders as a blank slab with NO LABEL. At the old 0.08 of the
-        // body this row measured ~35 canvas units against a ~40-unit floor line box, so "< Back"
-        // was invisible in every capture and on any aspect where the scaler shrinks the body. The
-        // play-mode min-touch guard papered over it by growing the rect after layout (and does not
-        // run in edit mode at all); the rect is now authored tall enough to carry its own label.
-        private const float BackButtonHeight = 0.14f;
+        // ── Shared sub-screen bands ──────────────────────────────────────────
 
-        /// <summary>The "Back" row shown on every sub-screen; returns to Root.</summary>
-        private float AddBackButton()
+        /// <summary>
+        /// The top band of a sub-screen: "&lt; Back" and the screen title SIDE BY SIDE in one
+        /// touch-floor band. Both were previously stacked fractions (0.14 of the body = 50 px
+        /// for the button, a 0.05 slab for the title), so the button grew 31 px past each edge
+        /// and swallowed the title — "UPGRADE TOWER clips the Back corner" in the WO-878 report.
+        /// Horizontally disjoint rects in one fixed band cannot do that.
+        /// </summary>
+        private void AddNavBand(string title)
         {
-            const float bottom = 0.845f;
-            ElarionUiKit.BuildObsidianButton(_bodyHost, "< Back",
+            var nav = PxBandFromTop(_bodyHost, "NavBand", 0f, 1f, 0f, BuildMenuLayout.NavBandPx);
+            ElarionUiKit.BuildObsidianButton(nav, "< Back",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, bottom), new Vector2(0.38f, bottom + BackButtonHeight),
+                new Vector2(0f, 0f), new Vector2(BuildMenuLayout.BackWidthFrac, 1f),
                 () => { _screen = MenuScreen.Root; _selectedTowerForUpgrade = null; Disarm(); Render(); });
-            return 0.825f;   // content starts below the back row
+
+            var label = MakeText(nav, title, ElarionUi.FontHead, ElarionUi.Gilt, FontStyles.Bold,
+                TextAlignmentOptions.Left,
+                new Vector2(BuildMenuLayout.TitleLeftFrac, 0f), new Vector2(1f, 1f));
+            ElarionUiKit.FitSingleLine(label, ElarionUi.FontFloorMobile);
+        }
+
+        /// <summary>The bottom band of a sub-screen: the two preview lines on the left and the
+        /// primary CTA on the right. FIXED pixels and disjoint from the content band above by
+        /// <see cref="BuildMenuLayout.BandGapPx"/> — the cost/preview text can no longer land on
+        /// the button, which is the WO-878 defect.</summary>
+        private Transform AddActionBand()
+            => PxBandFromBottom(_bodyHost, "ActionBand", 0f, 1f, 0f, BuildMenuLayout.ActionBandPx);
+
+        /// <summary>The two VM-authored preview lines inside the action band. Each is exactly half
+        /// the band (56 px — a whole line box at the fonts they render) and fit-guarded, so a long
+        /// string wraps-and-truncates inside its own half instead of spilling into the other.</summary>
+        private void AddInfoLines(Transform band, string line1, string line2)
+        {
+            if (band == null) return;
+            var top = MakeText(band, line1 ?? string.Empty, ElarionUi.FontLabel, ElarionUi.Parchment,
+                FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0f, 0.5f), new Vector2(BuildMenuLayout.InfoWidthFrac, 1f));
+            ElarionUiKit.FitBlock(top, ElarionUi.FontFloorMobile);
+
+            var bottom = MakeText(band, line2 ?? string.Empty, ElarionUi.FontMicro, ElarionUi.ParchmentDim,
+                FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0f, 0f), new Vector2(BuildMenuLayout.InfoWidthFrac, 0.5f));
+            ElarionUiKit.FitBlock(bottom, ElarionUi.FontFloorMobile);
+        }
+
+        /// <summary>The scrolling content band between the nav and action bands — it absorbs
+        /// whatever the two fixed rungs leave over (never less than one row at any landscape
+        /// aspect). Rows are fixed-pixel cells inside the KIT scroll zone, so an unbounded list
+        /// scrolls instead of truncating (WO-795) and no row can be squeezed under the floor.</summary>
+        private ElarionUiKit.ScrollZoneHandle AddContentScroll()
+        {
+            var band = PxStretchBand(_bodyHost, "ContentBand", 0f, 1f,
+                BuildMenuLayout.ContentTopInsetPx, BuildMenuLayout.ContentBottomInsetPx);
+            return ElarionUiKit.MakeScrollZone(band, BuildMenuLayout.RowGapPx, 4);
+        }
+
+        /// <summary>One fixed-height row cell inside a kit scroll zone. The zone's layout group
+        /// runs with childControlHeight OFF (kit note), so the cell keeps exactly this height.</summary>
+        private static Transform AddScrollRow(Transform content, string name, float heightPx)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(content, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(0f, heightPx);
+            return go.transform;
         }
 
         // ── Build Tower screen ────────────────────────────────────────────────
 
         /// <summary>
-        /// Catalog-tower radio + the selected row's REAL catalog cost (ASCII +/- marks —
-        /// glyphs are missing from the TMP font) against the REAL on-hand ledger + the
-        /// real raise time + a Build button disabled when the live wallet can't cover it.
-        /// WO-861: every number here is VM data; the View authors none of them.
+        /// Catalog-tower radio (scroll well, touch-floor rows) + the selected row's REAL catalog
+        /// cost against the REAL on-hand ledger + the real raise time + a Build button that STATES
+        /// why it is dead when the live wallet cannot cover it. WO-861: every number here is VM
+        /// data; WO-878: every player-facing STRING is too — the View authors none of them.
         /// </summary>
         private void RenderBuildTower()
         {
-            float top = AddBackButton();
-
-            MakeText(_bodyHost, "BUILD TOWER", 16, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.Left, new Vector2(0.08f, top - 0.05f), new Vector2(0.92f, top));
-            top -= 0.06f;
-
             var options = _vm != null ? _vm.TowerOptions : null;
             if (options == null || options.Count == 0)
             {
                 // No fabricated fallback row: an unbootstrapped catalog is reported, not invented.
-                MakeText(_bodyHost, "No tower rows in the catalog - nothing can be priced.", 14,
-                    ElarionUi.Danger, FontStyles.Italic, TextAlignmentOptions.Center,
-                    new Vector2(0.08f, top - 0.08f), new Vector2(0.92f, top));
+                AddNavBand("BUILD TOWER");
+                var empty = AddActionBand();
+                AddInfoLines(empty, "No tower rows in the catalog - nothing can be priced.", string.Empty);
                 return;
             }
 
             var selection = _vm.TowerOptionFor(_selectedTowerId);
             _selectedTowerId = selection.Id;
 
+            // Content first, chrome after: later siblings paint on top, so the two fixed bands
+            // are the last word even if a future edit lets the well grow.
+            var well = AddContentScroll();
             foreach (var opt in options)
             {
-                const float rowH = 0.075f, gap = 0.012f;
                 bool selected = string.Equals(opt.Id, _selectedTowerId, StringComparison.OrdinalIgnoreCase);
                 string captured = opt.Id;
-                ElarionUiKit.BuildObsidianButton(_bodyHost,
+                var row = AddScrollRow(well.content, "TowerOption", BuildMenuLayout.RowPx);
+                ElarionUiKit.BuildObsidianButton(row,
                     (selected ? "> " : "") + opt.DisplayName,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.10f, top - rowH), new Vector2(0.90f, top),
+                    Vector2.zero, Vector2.one,
                     () => { _selectedTowerId = captured; Render(); });
-                top -= rowH + gap;
             }
-            top -= 0.02f;
+
+            AddNavBand("BUILD TOWER");
+            var band = AddActionBand();
+            AddInfoLines(band, _vm.CostSummaryFor(selection.Cost), _vm.BuildDetailLineFor(selection));
 
             var cost = selection.Cost;
-            if (cost.crystals > 0) top = AddCostRow("Crystals", cost.crystals, _vm.MaterialCount("crystals"), top);
-            if (cost.wood > 0)     top = AddCostRow("Wood",     cost.wood,     _vm.MaterialCount("wood"),     top);
-            if (cost.iron > 0)     top = AddCostRow("Iron",     cost.iron,     _vm.MaterialCount("iron"),     top);
-            if (cost.food > 0)     top = AddCostRow("Food",     cost.food,     _vm.MaterialCount("food"),     top);
-
-            // The raise time of the SELECTED tower's own asset — the same TowerData
-            // OnConfirmBuild hands to the placement system, so the printed time is the
-            // time the player will actually wait (this read was pinned to DevTower's 2s).
-            int buildSeconds = _vm.BuildSecondsFor(selection.Id);
-            if (buildSeconds > 0)
-                MakeText(_bodyHost, "Build time: " + FormatTime(buildSeconds), 13,
-                    ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                    new Vector2(0.10f, top - 0.045f), new Vector2(0.90f, top));
-
             bool canBuild = _vm.CanAfford(cost);
-            var btn = ElarionUiKit.BuildObsidianButton(_bodyHost, "Build",
+            // COLOURBLIND LAW: the label carries the state ("Not enough Wood (70)"); the grey
+            // face only reinforces it.
+            var btn = ElarionUiKit.BuildObsidianButton(band, _vm.BuildCtaLabelFor(selection),
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canBuild ? ElarionUiKit.ObsidianButtonColor.Green
                          : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.12f),
+                new Vector2(BuildMenuLayout.CtaLeftFrac, 0f), new Vector2(1f, 1f),
                 () => OnConfirmBuild(selection));
-            btn.interactable = canBuild;
-        }
-
-        /// <summary>Cost line: "Label: required" + a "+/- have" mark (ASCII — no glyphs in TMP).</summary>
-        private float AddCostRow(string label, int required, int have, float top)
-        {
-            const float rowH = 0.045f;
-            bool ok = have >= required;
-            // WO-697: cost/have numbers through the ONE kit formatter (compact >= 10k).
-            MakeText(_bodyHost, label + ": " + ElarionUi.CompactNumber(required), 13, ElarionUi.Parchment, FontStyles.Normal,
-                TextAlignmentOptions.Left, new Vector2(0.10f, top - rowH), new Vector2(0.62f, top));
-            MakeText(_bodyHost, (ok ? "+ " : "- ") + ElarionUi.CompactNumber(have), 13,
-                ok ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
-                TextAlignmentOptions.Right, new Vector2(0.62f, top - rowH), new Vector2(0.90f, top));
-            return top - rowH - 0.008f;
+            if (btn != null) btn.interactable = canBuild;
         }
 
         /// <summary>
@@ -512,12 +577,6 @@ namespace DeNelle.Village
 
         // ── Upgrade Tower screen ──────────────────────────────────────────────
 
-        // WO-795: fixed pixel row height for the tower-list scroll well (matches the
-        // RumorBoardPanel / JewelerPanelMvvm pattern rows).
-        private const float UpgradeRowPixelH = 96f;
-        // Lower edge of the list band; the upgrade info block renders BELOW this,
-        // OUTSIDE the scroll well (the old truncation boundary, now a hard band).
-        private const float UpgradeInfoTop = 0.40f;
         // Scroll position persisted across Render() rebuilds — selecting a row
         // re-renders the whole body, which would otherwise snap the list to the top.
         private float _upgradeListScrollPos = 1f;   // 1 = top (uGUI normalized)
@@ -527,16 +586,13 @@ namespace DeNelle.Village
         /// row level matches the tower's actual <c>CurrentLevel</c>. Selecting one
         /// shows its upgrade info; the Upgrade button routes through the single
         /// cost-enforced <see cref="Tower.TryUpgrade"/>. WO-795: the list lives in a
-        /// ScrollRect well — an unbounded tower list scrolls instead of truncating.
+        /// scroll well — an unbounded tower list scrolls instead of truncating. WO-878:
+        /// the well is a fixed-pixel band between the nav and action bands, and its rows
+        /// sit AT the touch floor (they were 96 px, which the floor guard grew by 8 px on
+        /// each side — exactly consuming the inter-row spacing).
         /// </summary>
         private void RenderUpgradeTower()
         {
-            float top = AddBackButton();
-
-            MakeText(_bodyHost, "UPGRADE TOWER", 16, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.Left, new Vector2(0.08f, top - 0.05f), new Vector2(0.92f, top));
-            top -= 0.06f;
-
             // WO-127 root cause: enumerate LIVE Tower components (the type whose
             // _currentLevel actually upgrades), not the separate Building type whose
             // serialized Level never mutates. MVVM Silo C: the placed-tower scan lives in
@@ -551,48 +607,9 @@ namespace DeNelle.Village
             if (_selectedTowerForUpgrade == null || !stillPresent)
                 _selectedTowerForUpgrade = null;
 
-            // ── WO-795 scroll well (RumorBoardPanel Open() / JewelerPanelMvvm
-            // BuildRecipeScrollWell pattern): Viewport = near-invisible Image drag
-            // catcher + RectMask2D + ScrollRect; Content = top-anchored
-            // VerticalLayoutGroup + ContentSizeFitter. The info block stays OUTSIDE
-            // the well, anchored below UpgradeInfoTop.
             float restoreScrollPos = _upgradeListScrollPos;
-
-            var viewportGo = new GameObject("TowerListViewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewportGo.transform.SetParent(_bodyHost, false);
-            var vpr = viewportGo.GetComponent<RectTransform>();
-            vpr.anchorMin = new Vector2(0.10f, UpgradeInfoTop + 0.02f);
-            vpr.anchorMax = new Vector2(0.90f, top);
-            vpr.offsetMin = Vector2.zero;
-            vpr.offsetMax = Vector2.zero;
-            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
-
-            var contentGo = new GameObject("TowerListContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-            contentGo.transform.SetParent(viewportGo.transform, false);
-            var cr = contentGo.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0f, 1f);
-            cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot     = new Vector2(0.5f, 1f);
-            cr.offsetMin = Vector2.zero;
-            cr.offsetMax = Vector2.zero;
-            var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
-            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
-            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
-            vlg.spacing = 8f;
-            // Bottom pad = one row so the last tower scrolls fully clear of the mask.
-            vlg.padding = new RectOffset(0, 0, 0, (int)UpgradeRowPixelH + 8);
-            var csf = contentGo.GetComponent<ContentSizeFitter>();
-            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
-            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-
-            var scroll = viewportGo.GetComponent<ScrollRect>();
-            scroll.viewport = vpr;
-            scroll.content  = cr;
-            scroll.horizontal = false;
-            scroll.vertical   = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 25f;
-            scroll.onValueChanged.AddListener(_ => _upgradeListScrollPos = scroll.verticalNormalizedPosition);
+            var well = AddContentScroll();
+            well.scroll.onValueChanged.AddListener(_ => _upgradeListScrollPos = well.scroll.verticalNormalizedPosition);
 
             bool any = false;
             foreach (var t in towers)
@@ -611,12 +628,8 @@ namespace DeNelle.Village
                 string label = DeNelle.Village.UI.PlacedTowerListVM.FormatMenuRow(
                     _vm.Towers.DisplayNameFor(t), _vm.Towers.LevelOf(t), selected, _vm.Towers.IsBuilt(t));
                 Tower captured = t;
-                // WO-795: fixed-height LayoutElement host; the obsidian button fills it
-                // (row internals unchanged — label / colors / click as before).
-                var rowHost = new GameObject("TowerRow", typeof(RectTransform), typeof(LayoutElement));
-                rowHost.transform.SetParent(contentGo.transform, false);
-                rowHost.GetComponent<LayoutElement>().preferredHeight = UpgradeRowPixelH;
-                ElarionUiKit.BuildObsidianButton(rowHost.transform, label,
+                var row = AddScrollRow(well.content, "TowerRow", BuildMenuLayout.RowPx);
+                ElarionUiKit.BuildObsidianButton(row, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
@@ -626,92 +639,46 @@ namespace DeNelle.Village
             }
             if (!any)
             {
-                var emptyHost = new GameObject("EmptyRow", typeof(RectTransform), typeof(LayoutElement));
-                emptyHost.transform.SetParent(contentGo.transform, false);
-                emptyHost.GetComponent<LayoutElement>().preferredHeight = 60f;
-                MakeText(emptyHost.transform, "No towers placed yet.", 14, ElarionUi.ParchmentDim,
-                    FontStyles.Italic, TextAlignmentOptions.Center,
+                var emptyRow = AddScrollRow(well.content, "EmptyRow", BuildMenuLayout.RowPx);
+                var note = MakeText(emptyRow, "No towers placed yet.", ElarionUi.FontLabel,
+                    ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
                     Vector2.zero, Vector2.one);
+                ElarionUiKit.FitSingleLine(note, ElarionUi.FontFloorMobile);
             }
 
             // Restore the scroll position across a selection re-render (layout must be
             // computed first, or the normalized set is a no-op on a zero-height content).
             Canvas.ForceUpdateCanvases();
-            scroll.verticalNormalizedPosition = restoreScrollPos;
+            well.scroll.verticalNormalizedPosition = restoreScrollPos;
 
-            if (_selectedTowerForUpgrade != null)
-                BuildUpgradeInfoBlock(_selectedTowerForUpgrade, UpgradeInfoTop - 0.02f);
+            AddNavBand("UPGRADE TOWER");
+            BuildUpgradeActionBand(_selectedTowerForUpgrade);
         }
 
-        // Two info rows sit between the list band and the Upgrade CTA. The band is short, so the
-        // budget is spent on TWO legible lines rather than four sub-legible ones: line 1 is the
-        // price (or why there is no price), line 2 is what the upgrade actually buys.
-        private const float UpgradeInfoRowHeight = 0.095f;
-        private const float UpgradeCtaBottom     = 0.02f;
-        private const float UpgradeCtaTop        = 0.17f;   // see BackButtonHeight: a short rect renders a blank button
-
         /// <summary>
-        /// WO-127: upgrade info + a REAL upgrade action for the selected live tower.
+        /// WO-127: upgrade info + a REAL upgrade action for the selected live tower, laid into
+        /// the one fixed action band (preview left, CTA right — they cannot overlap).
         /// The Upgrade button calls the single cost-enforced <see cref="Tower.TryUpgrade"/>
         /// (never the free Upgrade — tower-upgrade consolidation, owner 2026-06-27; the
         /// canonical surface remains the proximity HUD context button) and appears ONLY when
         /// that transaction could actually succeed — never at <see cref="Tower.MaxLevel"/>, on a
         /// tower still under construction, or on a level with no authored cost row.
         /// </summary>
-        private void BuildUpgradeInfoBlock(Tower t, float top)
+        private void BuildUpgradeActionBand(Tower t)
         {
+            var band = AddActionBand();
+            if (t == null || _vm == null)
+            {
+                AddInfoLines(band, "Pick a tower to see what its next level costs.", string.Empty);
+                return;
+            }
+
             // WO-861: the REAL price Tower.TryUpgrade charges — the next level's upgradeCost on
-            // wood AND iron AND crystals — against the REAL on-hand ledger.
-            //
-            // 2026-08-04: this block used to test "price is zero" and, on a hit, print the
-            // developer note "Upgrade cost not authored for this tower." to the PLAYER. Zero is
-            // not one state: a tower still being raised has no data at all, a maxed tower has no
-            // next level, an authored-at-zero level really is free (Tower.TryUpgrade charges
-            // nothing and succeeds), and only a MISSING row is genuinely un-authored. The VM now
-            // returns which of those it is, and each gets its own player-facing line.
-            var quote = _vm != null ? _vm.UpgradeQuoteFor(t) : default;
-
-            string costLine;
-            switch (quote.Availability)
-            {
-                case BuildMenuVM.UpgradeAvailability.NotBuilt:
-                    costLine = "The crew is still raising this tower.";
-                    break;
-                case BuildMenuVM.UpgradeAvailability.Maxed:
-                    costLine = $"Fully upgraded - Lvl {quote.Level} of {quote.MaxLevel}.";
-                    break;
-                case BuildMenuVM.UpgradeAvailability.Free:
-                    costLine = "Costs nothing - the next level is free.";
-                    break;
-                case BuildMenuVM.UpgradeAvailability.Unpriced:
-                    costLine = "This tower cannot be upgraded any further.";
-                    break;
-                case BuildMenuVM.UpgradeAvailability.Priced:
-                default:
-                    costLine = "Cost: " + ElarionUi.CompactNumber(quote.Cost.wood) + " wood, "
-                             + ElarionUi.CompactNumber(quote.Cost.iron) + " iron, "
-                             + ElarionUi.CompactNumber(quote.Cost.crystals) + " crystals";
-                    break;
-            }
-            MakeText(_bodyHost, costLine, ElarionUi.FontMicro,
-                ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0.10f, top - UpgradeInfoRowHeight), new Vector2(0.90f, top));
-            top -= UpgradeInfoRowHeight;
-
-            // Line 2 — the live stats. Only printed once the tower is built: an unbuilt tower has
-            // no stats, and "0 dmg / 0m" is a fabricated reading, not a real one. When a next
-            // level exists this shows the BEFORE -> AFTER pair, which is what the old line claimed
-            // to be ("Result: Lvl 2/3") while actually printing the current level's numbers.
-            if (quote.HasStats)
-            {
-                string statLine = quote.HasNextLevel
-                    ? $"Lvl {quote.Level} to {quote.Level + 1}:  dmg {quote.NowDamage:0.#} to {quote.NextDamage:0.#}," +
-                      $"  range {quote.NowRange:0.#}m to {quote.NextRange:0.#}m"
-                    : $"Now:  dmg {quote.NowDamage:0.#},  range {quote.NowRange:0.#}m";
-                MakeText(_bodyHost, statLine, ElarionUi.FontMicro,
-                    ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                    new Vector2(0.10f, top - UpgradeInfoRowHeight), new Vector2(0.90f, top));
-            }
+            // wood AND iron AND crystals — against the REAL on-hand ledger. WO-878: the five-way
+            // availability switch that used to assemble those lines HERE now lives in the VM
+            // (UpgradeCostLineFor / UpgradeStatLineFor) — this View only places them.
+            var quote = _vm.UpgradeQuoteFor(t);
+            AddInfoLines(band, _vm.UpgradeCostLineFor(quote), _vm.UpgradeStatLineFor(quote));
 
             // No CTA when tapping it could not possibly succeed — Tower.TryUpgrade refuses an
             // unbuilt tower (Uninitialized), a maxed one (Maxed) and an un-authored level
@@ -721,12 +688,11 @@ namespace DeNelle.Village
             // COLOURBLIND LAW: the button STATES why it is dead ("Not enough Iron (100)"), so the
             // green/grey face is reinforcement, never the only signal.
             bool canUpgrade = quote.CanUpgradeNow;
-            var cta = ElarionUiKit.BuildObsidianButton(_bodyHost,
-                canUpgrade ? "Upgrade" : _vm.ShortfallFor(quote.Cost),
+            var cta = ElarionUiKit.BuildObsidianButton(band, _vm.UpgradeCtaLabelFor(quote),
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canUpgrade ? ElarionUiKit.ObsidianButtonColor.Green
                            : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.26f, UpgradeCtaBottom), new Vector2(0.74f, UpgradeCtaTop), () =>
+                new Vector2(BuildMenuLayout.CtaLeftFrac, 0f), new Vector2(1f, 1f), () =>
                 {
                     var res = _selectedTowerForUpgrade != null
                         ? _selectedTowerForUpgrade.TryUpgrade()
@@ -755,13 +721,9 @@ namespace DeNelle.Village
         // that the player SAW as their balance and the Build button gated on, and that was
         // never deducted. Balances, affordability and the spend all live in BuildMenuVM now,
         // reading IEconomy — the one GameState-backed ledger.
-
-        /// <summary>Formats seconds as "Xm Ys" (or "Ys" under a minute).</summary>
-        private static string FormatTime(int seconds)
-        {
-            int m = seconds / 60, s = seconds % 60;
-            return m > 0 ? $"{m}m {s}s" : $"{s}s";
-        }
+        //
+        // DELETED (WO-878): FormatTime — the duration string is VM output
+        // (BuildMenuVM.FormatDuration), like every other player-facing line on this screen.
 
         private void SetStatus(string message, bool isError = false)
         {
@@ -784,6 +746,64 @@ namespace DeNelle.Village
         /// falling back to the standalone-test local value when the menu is closed / no service.
         /// This View reads only VM data.</summary>
         public int CrystalBalance => _vm != null ? _vm.Crystals : _localCrystalBalance;
+
+        // ── FIXED-REFERENCE-PIXEL BANDS (WO-878) ──────────────────────────────
+        // The anti-overlap primitive, verbatim from the LeaderboardPanel px-ladder precedent.
+        // A band's HEIGHT is set in canvas-local units via offsetMin/offsetMax; on a
+        // CanvasScaler'd canvas those units ARE reference px — the same unit
+        // ElarionUiKit.MinTouchPx (112) is expressed in. So a band authored at the floor is
+        // provably at the floor on every screen size, ClampMinTouch has nothing to grow, and
+        // no band can be pushed into its neighbour. x stays fractional: horizontal room is
+        // never the constraint on this panel (the body is ~1450 ref px wide).
+
+        /// <summary>Band pinned to the TOP of <paramref name="parent"/>: <paramref name="topPx"/>
+        /// down from the top edge, <paramref name="heightPx"/> tall (reference px).</summary>
+        private static Transform PxBandFromTop(Transform parent, string name,
+            float xMin, float xMax, float topPx, float heightPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 1f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMax = new Vector2(0f, -topPx);
+            rt.offsetMin = new Vector2(0f, -(topPx + heightPx));
+            return rt.transform;
+        }
+
+        /// <summary>Band pinned to the BOTTOM of <paramref name="parent"/>: <paramref name="bottomPx"/>
+        /// up from the bottom edge, <paramref name="heightPx"/> tall (reference px).</summary>
+        private static Transform PxBandFromBottom(Transform parent, string name,
+            float xMin, float xMax, float bottomPx, float heightPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 0f);
+            rt.anchorMax = new Vector2(xMax, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.offsetMin = new Vector2(0f, bottomPx);
+            rt.offsetMax = new Vector2(0f, bottomPx + heightPx);
+            return rt.transform;
+        }
+
+        /// <summary>Band that STRETCHES the parent's full height minus fixed px insets top and
+        /// bottom — it absorbs whatever the fixed rungs leave over.</summary>
+        private static Transform PxStretchBand(Transform parent, string name,
+            float xMin, float xMax, float topInsetPx, float bottomInsetPx)
+        {
+            var rt = NewBand(parent, name);
+            rt.anchorMin = new Vector2(xMin, 0f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(0f, bottomInsetPx);
+            rt.offsetMax = new Vector2(0f, -topInsetPx);
+            return rt.transform;
+        }
+
+        private static RectTransform NewBand(Transform parent, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            return go.GetComponent<RectTransform>();
+        }
 
         // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────
 
