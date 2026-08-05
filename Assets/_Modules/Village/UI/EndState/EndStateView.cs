@@ -116,20 +116,36 @@ namespace DeNelle.Village.UI
             }
             else
             {
-                // Full end-state modal, sized to the VM's content (no cavernous empty space).
-                float half = PanelHalfHeight(vm);
-                var modal = ElarionUiKit.BuildObsidianModal("EndState", vm.Title,
+                // Full end-state modal, sized to the VM's content in REAL PIXELS.
+                //
+                // OWNER F8 2026-08-05 ("the text is too compacted"): the panel used to be built at a
+                // GUESSED fictional-unit size and then grown ~2x by a post-hoc extension block. Every
+                // fraction reservation inside it — the kit's close-band reservation, the header band,
+                // the CTA floor-raise — had already been computed against the PRE-growth panel and was
+                // never recomputed, so the body zone kept a fraction sized for a panel half as tall and
+                // the content got ~17% of the panel. Build the CANVAS FIRST (BuildObsidianModal's own
+                // three steps, inlined — canvas + scrim + panel) so the panel height can be SOLVED
+                // against ElarionUiKit.PostScaleCanvasHeight BEFORE the frame exists. The panel is then
+                // built ONCE at its final size and never resized: nothing can desynchronise.
+                canvas = ElarionUiKit.BuildModalCanvas("EndState", 31000);
+                var mc = canvas.GetComponent<Canvas>();
+                if (mc != null) mc.overrideSorting = true;
+                ElarionUiKit.Scrim(canvas.transform, null);   // pure raycast-blocker — no second way out
+                float half = PanelHalfHeight(vm, ElarionUiKit.PostScaleCanvasHeight(canvas.transform));
+                chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
                     new Vector2(0.22f, 0.53f - half), new Vector2(0.78f, 0.53f + half),   // WO-433: narrower victory panel (was 0.08/0.92)
-                    onClose: null,   // scrim stays a pure raycast-blocker — no second way out
+                    onClose: null,   // no second way out
                     frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
-                canvas = modal.canvas;
-                chrome = modal.chrome;
             }
 
             // Owner button law: an end-state has exactly ONE way out (the primary button).
-            // Hide the factory's shared Close chip. KIT CHANGE REPORTED: BuildObsidianPanel
-            // withClose:false would make this first-class instead of hide-after-build.
+            // Hide the factory's shared Close chip.
+            // LOAD-BEARING: Bind's owned geometry pass RECLAIMS the kit's close-band reservation
+            // on the strength of this line. Re-enabling the Close here without reverting that
+            // pass would put the Close underneath the CTA. (A kit-level withClose:false would make
+            // this first-class instead of hide-after-build — reported, deliberately not done here:
+            // an ElarionUiKit signature change has game-wide blast radius.)
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
             var view = canvas.AddComponent<EndStateView>();
@@ -153,20 +169,43 @@ namespace DeNelle.Village.UI
             return view;
         }
 
-        /// <summary>Content-sized panel half-height (fraction of screen) from the VM.</summary>
-        private static float PanelHalfHeight(EndStateVM vm)
+        // ── PANEL GEOMETRY LAW (owner F8 2026-08-05) ──────────────────────────────
+        // ONE stack, all fractions of THE SAME (final) panel height, top to bottom:
+        //   [0.985 .. 0.820]  header band  — one FontTitle(88) line, ~101px line box
+        //   [0.805 .. floor]  BODY WELL    — owns every VM band (this is what must fit)
+        //   [floor .. ctaTop] CtaGapY      — the guaranteed gap; bands never share pixels
+        //   [ctaTop.. 0.045]  the canonical 360x132 CTA, seated in the RECLAIMED CLOSE BAND
+        //                     (this screen HIDES the shared Close — see Show, below).
+        // The CTA is a FIXED 132 reference px, so it is subtracted in PIXELS, never as a
+        // fraction: that is precisely the unit mix-up that produced the compressed screen.
+        private const float HeaderY0  = 0.820f;   // was 0.760 — 0.225 of the panel for ONE title line
+        private const float HeaderY1  = 0.985f;
+        private const float BodyTopY  = 0.805f;   // body top clears the header band
+        private const float CtaBandY0 = 0.045f;   // CTA bottom edge (the freed close band's lower edge)
+        private const float CtaGapY   = 0.020f;   // matches the kit's own body/close gap
+        /// <summary>Panel fraction available to the body well once the header, the gap and the
+        /// CTA BAND ORIGIN are taken; the CTA's own 132 px come off in pixels.</summary>
+        private const float BodyFracOfPanel = BodyTopY - CtaBandY0 - CtaGapY;   // 0.740
+        /// <summary>Panel may span 0.03..0.97 of the screen (the old grownHalf 0.47 clamp).</summary>
+        private const float MaxPanelHalf = 0.47f;
+        private const float MinPanelHalf = 0.14f;
+
+        /// <summary>Deterministic body-well height in reference px for the OWNED geometry path
+        /// (0 = not owned; BuildBody then measures). Set by the geometry pass in Bind.</summary>
+        private float _wellPx;
+
+        /// <summary>Content-sized panel HALF-height (fraction of screen), solved in REAL PIXELS.
+        /// The old body of this method summed fictional "units" (2.4 for an emblem, 1.1 per
+        /// subtitle line...) and multiplied by 0.021 — a number with no relationship to the
+        /// pixel-sized bands BuildBody actually lays out, which is why the panel was always the
+        /// wrong size and needed the post-hoc extension that desynchronised every fraction.
+        /// Invert the real layout law instead: wellPx = BodyFracOfPanel * panelPx - CanonCtaHeight,
+        /// so panelPx = (RequiredBodyPx + CanonCtaHeight) / BodyFracOfPanel.</summary>
+        private static float PanelHalfHeight(EndStateVM vm, float canvasH)
         {
-            float units = 0.6f;                            // header/footer breathing room
-            if (vm.Emblem != null) units += 2.4f;
-            // Owner F8 flag_04 ("death panel elements overlap"): the subtitle was budgeted
-            // ONE line's worth (1.1) regardless of length, so the 3-line death message
-            // overflowed its band — shield icon over line 1, Try Again over lines 2-3.
-            // Budget the band per WRAPPED LINE so the panel grows to fit the message.
-            if (!string.IsNullOrEmpty(vm.Subtitle)) units += 1.1f * SubtitleLines(vm.Subtitle);
-            if (vm.Stars >= 0) units += 1.0f;
-            if (vm.TimeSeconds >= 0f) units += 0.8f;
-            units += vm.Spoils.Count * 1.0f;
-            return Mathf.Clamp(0.055f + units * 0.021f, 0.12f, 0.36f);   // WO-433: raise height clamp (was 0.33)
+            if (canvasH < 100f) canvasH = 1920f;   // headless / no scaler — the kit's own fallback
+            float panelPx = (RequiredBodyPx(vm) + ElarionUiKit.CanonCtaHeight) / BodyFracOfPanel;
+            return Mathf.Clamp(panelPx / (2f * canvasH), MinPanelHalf, MaxPanelHalf);
         }
 
         /// <summary>Estimated WRAPPED line count for the subtitle at FontBody inside the
@@ -203,8 +242,68 @@ namespace DeNelle.Village.UI
             // other FrameCore screen is affected. Anchors are fractions of panel height, so the
             // splash scales with the panel; the title authors up to 88 and FitSingleLine already
             // bounds it — we only give it ROOM, never shrink the font.
-            if (chrome.layout != null && chrome.layout.header != null)
+            //
+            // OWNED GEOMETRY PASS (full modal only). One place stamps header / CTA band / body
+            // well, all against the SAME measured panel height, BEFORE anything is built into
+            // them. Replaces the three desynchronised reservations the owner felt as compaction.
+            bool ownGeometry = !vm.Compact && chrome.layout != null
+                               && chrome.layout.header != null
+                               && chrome.layout.body != null
+                               && chrome.layout.footer != null
+                               && chrome.root != null;
+            if (ownGeometry)
             {
+                // Panel height the DETERMINISTIC way (ElarionUiKit.cs:1014-1018): reading a live
+                // rect on the canvas's creation frame returns RAW SCREEN pixels because the
+                // CanvasScaler has not applied yet. PostScaleCanvasHeight x the panel's own anchor
+                // span gives the height the fraction anchors will really resolve against.
+                var rootRt = (RectTransform)chrome.root.transform;
+                float panelFracH = Mathf.Max(0.05f, rootRt.anchorMax.y - rootRt.anchorMin.y);
+                float panelPx = ElarionUiKit.PostScaleCanvasHeight(chrome.root.transform) * panelFracH;
+                float ctaBandH = ElarionUiKit.CanonCtaHeight / Mathf.Max(1f, panelPx);
+                float bodyFloor = CtaBandY0 + ctaBandH + CtaGapY;
+
+                // Header: 0.760-0.985 was ~0.225 of the panel — far more than ONE FontTitle(88)
+                // line needs, and every px of it came out of the body.
+                var hdr = chrome.layout.header;
+                hdr.anchorMin = new Vector2(hdr.anchorMin.x, HeaderY0);
+                hdr.anchorMax = new Vector2(hdr.anchorMax.x, HeaderY1);
+                hdr.offsetMin = new Vector2(hdr.offsetMin.x, 0f);
+                hdr.offsetMax = new Vector2(hdr.offsetMax.x, 0f);
+
+                // RECLAIM THE DEAD CLOSE BAND (the recipe already merged for
+                // FoundingChoiceController.cs:177-188). The kit reserves room at the bottom of
+                // EVERY framed panel for the ONE shared Close (BuildObsidianPanel's close-band
+                // reservation, ElarionUiKit.cs:582-647): it relocates the footer band ABOVE the
+                // Close box and raises the body floor above that. THIS screen HIDES the Close
+                // (owner button law — one way out; see Show), so the whole reservation is dead
+                // space. Seat the CTA in the freed band and drop the body floor onto it.
+                // VALID ONLY BECAUSE THE CLOSE IS HIDDEN — do not re-enable the Close without
+                // reverting this pass.
+                var ftr = chrome.layout.footer;
+                ftr.anchorMin = new Vector2(ftr.anchorMin.x, CtaBandY0);
+                ftr.anchorMax = new Vector2(ftr.anchorMax.x, CtaBandY0 + ctaBandH);
+                ftr.offsetMin = new Vector2(ftr.offsetMin.x, 0f);
+                ftr.offsetMax = new Vector2(ftr.offsetMax.x, 0f);
+
+                var bdy = chrome.layout.body;
+                bdy.anchorMin = new Vector2(bdy.anchorMin.x, bodyFloor);
+                bdy.anchorMax = new Vector2(bdy.anchorMax.x, BodyTopY);
+                bdy.offsetMin = new Vector2(bdy.offsetMin.x, 0f);
+                bdy.offsetMax = new Vector2(bdy.offsetMax.x, 0f);
+
+                // The well height is now KNOWN in reference px — hand it to BuildBody instead of
+                // letting it re-measure a creation-frame rect.
+                _wellPx = (BodyTopY - bodyFloor) * panelPx;
+                Canvas.ForceUpdateCanvases();
+                FlowTrace.Step("EndState",
+                    $"geometry: panel={panelPx:0}px (frac {panelFracH:0.###}) header {HeaderY0:0.###}-{HeaderY1:0.###} " +
+                    $"body {bodyFloor:0.###}-{BodyTopY:0.###} = {_wellPx:0}px cta band {CtaBandY0:0.###}-{CtaBandY0 + ctaBandH:0.###} " +
+                    $"need={RequiredBodyPx(vm):0}px");
+            }
+            else if (chrome.layout != null && chrome.layout.header != null)
+            {
+                // Compact banner (and any layout without a footer zone): unchanged splash header.
                 var hdr = chrome.layout.header;
                 hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.760f);   // was ~0.900
                 hdr.anchorMax = new Vector2(hdr.anchorMax.x, 0.985f);   // was ~0.972
@@ -285,7 +384,16 @@ namespace DeNelle.Village.UI
                 // CTA size is law — so the BAND must grow to contain it: when the pinned button
                 // exceeds the footer band, raise the band's top and lift the reward well above
                 // it (gap preserved).
-                if (!hasFooterZone)
+                // OWNED GEOMETRY: the CTA band above was sized to EXACTLY CanonCtaHeight and the
+                // body floor already sits CtaGapY above its top, so neither compensation can have
+                // anything to do — and both of them re-derive fractions from creation-frame rects,
+                // which is what made the reservations drift apart in the first place. Skip them.
+                if (ownGeometry)
+                {
+                    FlowTrace.Step("EndState",
+                        $"CTA seated in the reclaimed close band (need={need:0}px, band=={ElarionUiKit.CanonCtaHeight:0}px) - no floor-raise required");
+                }
+                else if (!hasFooterZone)
                 {
                     float wellH = well.rect.height;
                     if (wellH > 1f && need > footer.rect.height - 4f)
@@ -344,15 +452,19 @@ namespace DeNelle.Village.UI
                     : "compact banner: primary CTA suppressed (auto-dismiss/tap)");
             }
 
-            // F8-35 ("characters still overlap, extend panel"): the reward well is laid out
-            // in PIXELS now (each row owns a fixed row height — see BuildBody), so the well
-            // must be at least RequiredBodyPx tall. The old fraction-weight layout simply
-            // divided whatever space was left after the close-band reservation + the CTA
-            // floor-raise, squeezing 11+ units of content into ~150px — every label/value
-            // overprinted the next row. Measure the well and EXTEND the panel (grow the
-            // frame root's Y anchors; every zone is fraction-anchored so the whole chrome
-            // scales, and the fixed-px CTA/close bands become MORE generous, never less).
-            if (chrome.root != null)
+            // POST-HOC PANEL EXTENSION — DELETED for the full modal (owner F8 2026-08-05).
+            // It grew the frame root ~2x AFTER the kit's close-band reservation, the header band
+            // and the CTA floor-raise had all been computed against the pre-growth panel, and it
+            // recomputed NONE of them. That desynchronisation IS the compressed screen: the body
+            // zone kept a fraction sized for the small panel, so the well resolved to ~17% of a
+            // 907px panel and BuildBody scaled every band to 0.363. The full modal is now solved
+            // to its final size in Show (PanelHalfHeight) and stamped once by the owned geometry
+            // pass above — there is nothing left to extend.
+            //
+            // The COMPACT banner keeps its downward growth: it is a different screen (the F8-45
+            // wave damage report) whose frame is deliberately pinned by its TOP edge, and it does
+            // not run the owned geometry pass.
+            if (vm.Compact && chrome.root != null)
             {
                 Canvas.ForceUpdateCanvases();
                 float wellPx = rewardWell.rect.height;
@@ -360,39 +472,21 @@ namespace DeNelle.Village.UI
                 if (wellPx > 1f && needPx > wellPx + 1f)
                 {
                     var rootRt = (RectTransform)chrome.root.transform;
-                    if (vm.Compact)
+                    // F8-45 (wave damage report): the compact banner's fixed 0.30h frame
+                    // was sized for the row-less wave-clear splash; a spoils report inside
+                    // it would only uniform-compress (BuildBody's scale<1 fallback) into
+                    // unreadable ~13px rows — the F8-35 class. Grow DOWNWARD (top edge
+                    // held at its splash anchor) just enough for the content; the world
+                    // stays non-blocked (no scrim) and a row-less banner is unchanged.
+                    float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
+                    float hNow = y1 - y0;
+                    float grownH = Mathf.Min(y1 - 0.08f, hNow * (needPx / wellPx));
+                    if (grownH > hNow + 0.001f)
                     {
-                        // F8-45 (wave damage report): the compact banner's fixed 0.30h frame
-                        // was sized for the row-less wave-clear splash; a spoils report inside
-                        // it would only uniform-compress (BuildBody's scale<1 fallback) into
-                        // unreadable ~13px rows — the F8-35 class. Grow DOWNWARD (top edge
-                        // held at its splash anchor) just enough for the content; the world
-                        // stays non-blocked (no scrim) and a row-less banner is unchanged.
-                        float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
-                        float hNow = y1 - y0;
-                        float grownH = Mathf.Min(y1 - 0.08f, hNow * (needPx / wellPx));
-                        if (grownH > hNow + 0.001f)
-                        {
-                            rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, y1 - grownH);
-                            Canvas.ForceUpdateCanvases();
-                            FlowTrace.Step("EndState",
-                                $"compact banner extended down for damage report: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px h {hNow:0.###}->{grownH:0.###}");
-                        }
-                    }
-                    else
-                    {
-                        float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
-                        float halfNow = (y1 - y0) * 0.5f;
-                        float grownHalf = Mathf.Min(0.47f, halfNow * (needPx / wellPx));
-                        if (grownHalf > halfNow + 0.001f)
-                        {
-                            float cy = Mathf.Clamp((y0 + y1) * 0.5f, 0.03f + grownHalf, 0.97f - grownHalf);
-                            rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, cy - grownHalf);
-                            rootRt.anchorMax = new Vector2(rootRt.anchorMax.x, cy + grownHalf);
-                            Canvas.ForceUpdateCanvases();
-                            FlowTrace.Step("EndState",
-                                $"panel extended for content: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px half {halfNow:0.###}->{grownHalf:0.###}");
-                        }
+                        rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, y1 - grownH);
+                        Canvas.ForceUpdateCanvases();
+                        FlowTrace.Step("EndState",
+                            $"compact banner extended down for damage report: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px h {hNow:0.###}->{grownH:0.###}");
                     }
                 }
             }
@@ -424,11 +518,17 @@ namespace DeNelle.Village.UI
         // shorter than the total after the panel extension hit its clamp, all bands
         // compress by one uniform factor and the labels' FitSingleLine shrink-to-fit
         // keeps the text inside its band (never overprinting a sibling).
-        private const float EmblemPx  = 80f;
-        private const float SubLinePx = 54f;   // per wrapped subtitle line (FontBody 50)
-        private const float StarsPx   = 34f;
-        private const float TimePx    = 44f;   // FontLabel 40 bold — its OWN row, clear of the subtitle/stars
-        private const float RowPx     = 56f;   // one spoils row (FontBody 50 + plate inset)
+        //
+        // OWNER F8 2026-08-05: EVERY constant here except the emblem was SMALLER than the fixed
+        // content it has to seat, so even at scale 1.0 the band overflowed onto its neighbour —
+        // the stars printed through the Time line and the row icons hung off their plates. Each
+        // one is now >= its own content's fixed size (and the emblem, which was the only
+        // over-budgeted band, gives its surplus back):
+        private const float EmblemPx  = 64f;   // 80 -> 64: the emblem scales, it never needed 80
+        private const float SubLinePx = 60f;   // 54 -> 60: FontBody 50 line box is ~57.5px
+        private const float StarsPx   = 48f;   // 34 -> 48: seats the 45-deg diamond's rotated bbox
+        private const float TimePx    = 48f;   // 44 -> 48: FontLabel 40 bold line box is ~46px
+        private const float RowPx     = 64f;   // 56 -> 64: seats the fixed 40px icon + plate inset
         private const float BandGapPx = 8f;
 
         /// <summary>Total body-well pixels the VM's bands demand (drives the panel extension).</summary>
@@ -483,9 +583,14 @@ namespace DeNelle.Village.UI
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
-                    l.enableAutoSizing = true;                       // shrink-to-fit guard only —
-                    l.fontSizeMax = ElarionUi.FontBody;              // never grows past the kit size
-                    l.fontSizeMin = ElarionUi.FontBody * 0.66f;
+                    // OWNER F8 2026-08-05 (the subtitle painted over the emblem above it): the raw
+                    // enableAutoSizing path below does NOT set an overflow mode, and TMP's default
+                    // Overflow RENDERS OUTSIDE THE RECT — so once the band was shorter than the
+                    // wrapped copy the text simply escaped upward. FitBlock is the kit's bounded
+                    // block fitter: normal wrap + bounded auto-size + TextOverflowModes.Truncate
+                    // (ElarionUiKitObsidian.cs:2609-2623), so the copy is now STRUCTURALLY unable
+                    // to paint on a sibling. With SubLinePx 60 >= the 50pt line box it never has to.
+                    ElarionUiKit.FitBlock(l);
                     l.raycastTarget = false;
                     Track(l.gameObject, 0.14f, 1f);
                 }));
@@ -517,13 +622,22 @@ namespace DeNelle.Village.UI
             // do all bands compress by one uniform factor — logged, never silent.
             if (bands.Count == 0) return;
             Canvas.ForceUpdateCanvases();
-            float wellH = body.rect.height;
+            // OWNED GEOMETRY: use the well height the geometry pass SOLVED, not a creation-frame
+            // rect read (that returns raw screen px before the CanvasScaler applies —
+            // ElarionUiKit.cs:1014-1018). Compact banners still measure, as before.
+            float wellH = _wellPx > 1f ? _wellPx : body.rect.height;
             float totalPx = BandGapPx * (bands.Count - 1);
             foreach (var b in bands) totalPx += b.px;
             float scale = wellH > 1f && totalPx > wellH ? wellH / totalPx : 1f;
+            // ERROR, not a warning (owner F8 2026-08-05). Compression means EVERY band resolves
+            // BELOW its own content's fixed size — the subtitle under its line box, the diamonds
+            // under their rotated bbox, the rows under their icon. A screen that ships like that
+            // is broken, and a Warn is exactly how it shipped unnoticed. Fail is loud, and the F8
+            // harness captures it.
             if (scale < 1f)
-                FlowTrace.Warn("EndState",
-                    $"body rows compressed to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} (panel extension clamped)");
+                FlowTrace.Fail("EndState",
+                    $"body rows COMPRESSED to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} " +
+                    "- the panel hit its screen-height clamp; every band is now below its own content size");
             float y = 0f;
             foreach (var (px, build) in bands)
             {
@@ -594,7 +708,12 @@ namespace DeNelle.Village.UI
                 rt.anchorMax = new Vector2(0.035f, 0.5f);
                 rt.pivot = new Vector2(0f, 0.5f);
                 rt.anchoredPosition = Vector2.zero;
-                rt.sizeDelta = new Vector2(40f, 40f);
+                // OWNER F8 2026-08-05 (icons floating off their bars): the 40px square is
+                // vertically CENTRED, so in a row plate that resolved to 18.7px it spilled
+                // ~10.6px above AND below the bar. 40 is still the size we want — RowPx 64
+                // seats it natively — but clamp it to the host band so a compressed row can
+                // never put the icon outside its own plate again.
+                rt.sizeDelta = Vector2.one * Mathf.Min(40f, host.rect.height * 0.80f);
             }
             // F8-35: label left / value right, each FIT to ONE line in its own column —
             // "Equipped" wrapped to "Equipp/d" and long gear names spilled into the value
@@ -624,6 +743,13 @@ namespace DeNelle.Village.UI
             rowRt.anchorMin = Vector2.zero; rowRt.anchorMax = Vector2.one;
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
 
+            // OWNER F8 2026-08-05 (the rating printed THROUGH the "Time 0:14" line): each pip is a
+            // 45-degree ROTATED square, so its axis-aligned bounding box is side * sqrt(2). The old
+            // CONSTANT 26 therefore occupied 36.8px inside a band that had resolved to 12.3px — it
+            // could only overprint its neighbours. Size the pip from the BAND so the rotated box
+            // always fits: side = h * 0.72 / sqrt(2)  =>  bbox = h * 0.72.
+            float pip = Mathf.Max(8f, host.rect.height * 0.72f / 1.414f);
+
             for (int i = 0; i < 3; i++)
             {
                 var go = new GameObject("Star" + i, typeof(Image));
@@ -635,7 +761,7 @@ namespace DeNelle.Village.UI
                 float cx = 0.5f + (i - 1) * 0.13f;
                 rt.anchorMin = new Vector2(cx, 0.5f);
                 rt.anchorMax = new Vector2(cx, 0.5f);
-                rt.sizeDelta = new Vector2(26f, 26f);
+                rt.sizeDelta = new Vector2(pip, pip);
                 rt.localRotation = Quaternion.Euler(0f, 0f, 45f);   // diamond
             }
             Track(rowGo, 0.18f, 1f);

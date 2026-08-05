@@ -142,7 +142,14 @@ namespace DeNelle.Village.UI
             if (iron > 0)
                 vm.Spoils.Add(new SpoilRowVM
                 {
-                    Icon = ItemIconCatalog.ForConsumable("iron_ore_ingot", "Iron Ore"),
+                    // NO ItemIconCatalog lookup here (owner F8 2026-08-05: "it's only some
+                    // triangles" / the Iron row painted an opaque cream BOX). ForConsumable
+                    // ("iron_ore_ingot","Iron Ore") keyword-matched into a JPEG sprite sheet —
+                    // a .jpg carries NO alpha, so the sub-sprite rendered as a solid cream plate
+                    // instead of an icon. Leave Icon null exactly like the raid loot rows below:
+                    // EndStateView.BuildSpoilRow then resolves the CONCEPT icon from the label
+                    // ("iron" -> currency/currency_iron, concept-icons.json:201-204), which is a
+                    // real PNG with alpha — the same path "Wood" already renders through.
                     Label = "Iron", Amount = "+" + ElarionUi.CompactNumber(iron),
                 });
             if (!string.IsNullOrEmpty(gearName))
