@@ -1,6 +1,16 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **908**. **782–859 + 900–907 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **909**. **782–859 + 900–908 CONSUMED.**
+> - **908** = **Side menu: duplicate gear icon + wrong icon formatting.** Owner felt-test on the Seeker
+>   (2670x1200): the left-side menu expands correctly, but TWO gear glyphs render in two different
+>   styles — a gold/tan boxed gear seated on the **Music** row and overhanging the panel's left border,
+>   and a grey outline gear drawn on top of the **"S" in "Settings"**. One icon, one style, seated in
+>   its row. ⚠ Suspect the fraction-band / `ClampMinTouch` centre-grow class that broke WO-852/868/865
+>   and both founding screens on 08-05 — check for a fraction-positioned band FIRST. Screenshot attached
+>   in-repo at `docs/qa/screens/2026-08-05/gear-menu-double-icon.png`. Owner is routing this to the UI
+>   team. File `WORK_ORDER_908_gear_menu_duplicate_icon.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 908 → 909 in the SAME edit as the 908 mint — the rule that broke five times on 08-02.)*
 > - **907** = **Elemental affinity — towers, enemies, and a match bonus that is never a lock.** Owner:
 >   *"each tower could land a different affinity"*, *"they could both apply"* (visual AND damage), and —
 >   asked whether enemies carry an element — *"they don't yet but should."* ⚠ **Governing rule is the
