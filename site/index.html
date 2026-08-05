@@ -5,27 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Echoes of Elarion — DeNelle Studios</title>
 <meta name="description" content="Echoes of a Forgotten Civilization. A town-building and defense game from DeNelle Studios. Coming to the Solana dApp Store (Seeker).">
-<meta name="robots" content="noindex, nofollow">
-<!-- ^ noindex is deliberate while the page still carries placeholders.
-     REMOVE this robots tag as part of the pre-deploy checklist in site/README.md. -->
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-
-<!-- =========================================================================
-     PRE-DEPLOY BANNER — DELETE THIS ENTIRE <div> BEFORE ANY PRODUCTION DEPLOY.
-     It exists so a page carrying unresolved placeholders cannot ship quietly.
-     ========================================================================= -->
-<div class="predeploy-banner">
-  <strong>&#9888; NOT READY TO PUBLISH &mdash; SCREENSHOTS MISSING</strong>
-  Resolved 2026-08-04: store title (from canon-strings.json) and the public support
-  address (support.EoA@icloud.com). Still open: <strong>no approved screenshots</strong>
-  &mdash; eight capture frames were reviewed and none is fit for a page a store reviewer
-  visits (one reads "Upgrade cost not authored for this tower", another leaks an internal
-  content id, others show a debug button and an exploded mesh). Marketing copy is also
-  unapproved. <code>/privacy</code> IS complete and publishable; this landing page is the
-  one holding the site back. Delete this banner once real screenshots land.
-</div>
 
 <header class="hero">
   <div class="wrap">
@@ -109,40 +91,22 @@
   </section>
 
   <!-- ====================================================================
-       SCREENSHOTS — intentionally EMPTY.
+       SCREENSHOTS — the section is REMOVED, not left as empty slots.
        Reviewed the full headless capture set (Builds/ui-capture/, Builds/UICaps/)
-       on 2026-08-04: every frame carries debug overlays, clipped/overlapping
-       text, empty states or unauthored placeholder data. None is fit for a
-       public page. Slots are left at the game's true 2340x1080 capture ratio so
-       approved frames drop straight in.
-       TO FILL: copy the approved PNGs into site/assets/ and replace each <li>
-       with <li><img src="/assets/<name>.png" width="2340" height="1080"
-       alt="..." loading="lazy"></li>. Local files only — never hotlink.
+       on 2026-08-04: every frame carried debug overlays, clipped text, empty
+       states or unauthored placeholder data ("Upgrade cost not authored for this
+       tower", a leaked internal content id, a debug button, an exploded mesh).
+       None is fit for a page a store reviewer visits.
+
+       An honest page with no screenshot section reads as minimal. A page with
+       three "SLOT — EMPTY" placeholders reads as unfinished, which is worse in
+       front of a reviewer. So the section is gone until real frames exist.
+
+       TO RESTORE: copy approved PNGs into site/assets/ and re-add a
+       <section class="wrap" id="screens"> with
+       <li><img src="/assets/<name>.png" width="2340" height="1080" alt="..."
+       loading="lazy"></li> per shot. Local files only — never hotlink.
        ==================================================================== -->
-  <section class="wrap" id="screens">
-    <h2>Screens</h2>
-    <ul class="shots">
-      <li>
-        <div class="shot">
-          <b>&#9888; SCREENSHOT SLOT 1 &mdash; EMPTY</b>
-          <span>No approved marketing frame yet. Every image in the current headless
-                capture set shows debug overlays or placeholder data.</span>
-        </div>
-      </li>
-      <li>
-        <div class="shot">
-          <b>&#9888; SCREENSHOT SLOT 2 &mdash; EMPTY</b>
-          <span>2340 &times; 1080 landscape.</span>
-        </div>
-      </li>
-      <li>
-        <div class="shot">
-          <b>&#9888; SCREENSHOT SLOT 3 &mdash; EMPTY</b>
-          <span>2340 &times; 1080 landscape.</span>
-        </div>
-      </li>
-    </ul>
-  </section>
 
   <!-- ====================================================================
        SUPPORT — the owner's personal address must NEVER appear here or
@@ -151,7 +115,7 @@
   <section class="wrap support" id="support">
     <h2>Support</h2>
     <p>Questions, bug reports or data requests:</p>
-    <p><span class="placeholder">support.EoA@icloud.com</span></p>
+    <p><a href="mailto:support.EoA@icloud.com">support.EoA@icloud.com</a></p>
   </section>
 
 </main>

@@ -112,11 +112,20 @@ dumps and the founding sequence, which starts at **0 wood / 0 iron**. It is the 
 that is not safe to ship unsupervised, so it was deliberately held for owner review rather than folded
 into an autonomous implementation pass.
 
-**Open question Phase F must answer (raised by the WO-859 analysis, owner call):** WO-857 §4.3 offers
-*"clamp+lose with warn (CoC model)"* — **that is not the CoC model.** CoC storages *refuse*, and the
-collector keeps holding. Recommend **hold-back where a holder exists** (Collect banks
-`min(pending, headroom)`, remainder stays in the collector) and **clamp-and-warn only where no holder
-exists** (Echo Dump, raid loot, quest rewards).
+**✅ RULED (owner, 2026-08-04): CLAMP AND WARN.** Overflow is lost, and the player is warned. This is
+WO-857 §4.3 as originally written, and it applies **everywhere** — including where a holder exists.
+
+For the record, because the reasoning should survive the decision: the WO-859 analysis argued this is
+not literally the CoC model (CoC storages *refuse*, and the collector keeps holding), and recommended
+hold-back where a holder exists with clamp-and-warn only where none does (Echo Dump, raid loot, quest
+rewards). **The owner considered that and ruled clamp-and-warn uniformly.** One rule everywhere is
+simpler to reason about, simpler to signal, and cannot produce the confusing half-state where some
+overflow survives and some does not.
+
+**Implementation consequence — do not lose this:** the warn is now load-bearing, because it is the
+*only* thing standing between the player and silently vaporised resources. It must fire on every
+clamped grant, it must name the resource, and it must not be swallowed (§12). A clamp that loses
+resources without telling the player is the defect this ruling is one line away from.
 
 **Also blocking Phase F:** WO-837 step 1 has **not shipped** — `lumberyard` is still in
 `BuildModeController.FoundingKit` (`:2697-2704`), contradicting the WO-837 ruling and

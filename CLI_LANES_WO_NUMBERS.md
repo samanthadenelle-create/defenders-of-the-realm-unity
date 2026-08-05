@@ -1,6 +1,6 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **902**. **782–859 + 900/901 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-04 (CLI / Grok): main line next free = **904**. **782–859 + 900–903 CONSUMED.**
 >
 > ### ⛔ THE MAIN LINE HAS COLLIDED WITH THE UI-SEAT BLOCK — READ BEFORE MINTING
 > The main line consumed 859 and the next number, 860, is **inside the UI seat's reserved 860–899**
@@ -8,6 +8,13 @@
 > **jumps to 900+**; the UI seat keeps 860–899 (next free 864). Any main-line mint below 900 from here
 > is a guaranteed collision. Owner ratification of a permanent main-line range is now overdue.
 >
+> - **903** = **Storage pallet fill stacks (SMALL)** — lumberyard/foundry/silo show logs/ingots/sacks
+>   as bank fill rises (~5% steps); reuse CollectorStackView/prop catalog. No economy rewrite.
+>   File `WORK_ORDER_903_storage_pallet_fill_stacks.md`. **READY.**
+> - **902** = **Archer Tower medieval castle visuals (Option A)** — retire Tribal T1–T3 for
+>   `tower_ground_archer`; L1 `Tower_Castle_Round` → L2 `Tower_Castle_Square` → L3 `Tower_Medieval_Big`.
+>   Catalog dual-copy + mirror Square into Resources if missing. No combat rewrite.
+>   File `WORK_ORDER_902_archer_tower_medieval_castle_visuals.md`. **READY.**
 > - **901** = **THE COLLECTOR LOOP (umbrella)** — owner directive "consolidate those into one idea and
 >   implement". One idea: *your town keeps producing while you are away, into containers that visibly
 >   fill to a cap and then stop, and storage raises what the town can hold.* Folds 857/858/859/900 into
