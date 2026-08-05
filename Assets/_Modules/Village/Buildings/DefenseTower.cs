@@ -78,6 +78,40 @@ namespace DeNelle.Village
         // targeting and travel logic are untouched.
         public string ProjectileStyle = null;
 
+        // CATALOG IDENTITY (WO-870). The structures-catalog entries[].id this tower was built
+        // from ("tower_ground_archer" / "tower_wall_wizard" / "tower_siege_tower" / ...), set by
+        // StructureFactory.AttachBehaviorImpl. Used ONLY to select owner-tagged per-tower VFX
+        // keys in ProjectileKeyFor - NEVER for gameplay (range / damage / fire rate / targeting
+        // all stay data-driven off RepoProps). Null on a garrison turret or any tower not built
+        // through the catalog, which simply falls through to the element/style mapping.
+        public string CatalogId = null;
+
+        // ---------------------------------------------------------------------
+        // RANGE-DERIVED PROJECTILE SIZING (owner 2026-08-04: "make sure they are sized
+        // appropriately for distance and not stupidly large or tiny").
+        // Tower ranges span 14 m (Archer) to 36 m (Sky Ballista) - 2.6x - so one fixed
+        // scale cannot be right for all of them. THE RULE: a travelling projectile should
+        // read as roughly this fraction of its own flight path, so it looks the same at
+        // every tower range. 0.06 * 14 = 0.84 m at the Archer; 0.06 * 36 = 2.16 m at the
+        // Sky Ballista. Same shape as the DEF-208 / WO-751 repo.visualHeight fit-to-height
+        // pass: MEASURE the authored art, NORMALIZE it, then scale by the gameplay number
+        // (every owner-tagged pick in VfxManualPicks.json is authored at scale 1.0, so the
+        // size cannot be read off the picks - it has to be derived).
+        // ---------------------------------------------------------------------
+        private const float ProjectileVisualFraction = 0.06f;
+
+        // Clamp band on the derived scale - stops a pathological measurement (a prefab
+        // authored at 0.01 m, or at 40 m) from shipping a speck or a comet.
+        private const float ProjectileFitMin = 0.35f;
+        private const float ProjectileFitMax = 3.0f;
+
+        // Authored world size of each CODE-BUILT primitive visual below, so each is
+        // normalized against its OWN authored size and all three land near targetSize:
+        // pellet = a 0.4 m sphere, bolt = a ~1.1 m shaft, spell orb = a 0.5 m sphere.
+        private const float PelletAuthoredSize = 0.4f;
+        private const float BoltAuthoredSize   = 1.1f;
+        private const float SpellAuthoredSize  = 0.5f;
+
         /// <summary>Resolved projectile visual archetype (see <see cref="ProjectileStyle"/>).</summary>
         private enum BoltStyle { Pellet, Bolt, Spell }
         private BoltStyle _style;
@@ -860,12 +894,28 @@ namespace DeNelle.Village
             GameObject bolt = null;
             Guard.Try("DefenseTower", $"spawn {kind} projectile", () =>
             {
+                // Range-derived target size: this shot should read as ProjectileVisualFraction
+                // of its own flight path, so a 14 m archer arrow and a 36 m ballista spear look
+                // equally legible from the same camera. Range (not EffectiveRange) is the
+                // catalog number, so the visual does not shimmy as perks/elevation move the reach.
+                float targetSize   = ProjectileVisualFraction * Mathf.Max(1f, Range);
+                float authoredSize = PelletAuthoredSize;
+
                 switch (ResolveStyle())
                 {
-                    case BoltStyle.Bolt:  bolt = BuildBoltVisual();  break;
-                    case BoltStyle.Spell: bolt = BuildSpellVisual(); break;
-                    default:              bolt = BuildPelletVisual(); break;
+                    case BoltStyle.Bolt:  bolt = BuildBoltVisual();  authoredSize = BoltAuthoredSize;  break;
+                    case BoltStyle.Spell: bolt = BuildSpellVisual(); authoredSize = SpellAuthoredSize; break;
+                    default:              bolt = BuildPelletVisual(); authoredSize = PelletAuthoredSize; break;
                 }
+
+                // Normalize the CODE-BUILT primitive against its own authored size, so the
+                // pellet / bolt / spell orb all land near targetSize instead of the bolt being
+                // a speck at range 36. Same clamp band as the Hovl fit below. Travel speed,
+                // damage and targeting are untouched - this is the visual root scale only.
+                float primFit = Mathf.Clamp(targetSize / Mathf.Max(0.0001f, authoredSize),
+                                            ProjectileFitMin, ProjectileFitMax);
+                bolt.transform.localScale = bolt.transform.localScale * primFit;
+
                 bolt.transform.position = muzzle;
                 // Face the target immediately so the first rendered frame of an elongated
                 // bolt already lies along the flight line (ProjectileMover re-faces per frame).
@@ -881,8 +931,26 @@ namespace DeNelle.Village
                 VFXHandle boltFx = null;
                 if (!string.IsNullOrEmpty(projKey))
                 {
+                    // FIT-TO-RANGE: measure the owner-tagged prefab once, then scale it so it
+                    // reads at targetSize. The picks are all authored at scale 1.0, so passing
+                    // 0f (row DefaultScale) shipped every tower the same size regardless of range.
+                    float measured = VFXManager.MeasureKeyVisualSize(projKey);
+                    float fit      = VFXManager.ResolveFitScale(projKey, targetSize,
+                                                                ProjectileFitMin, ProjectileFitMax);
+                    // CAPTURED DATA (owner asked to see the numbers): one line per tower+key with
+                    // the range, the derived target, what the prefab actually measured, and the
+                    // scale that shipped. If measured=0 the fit falls back to 1.0 and VFXManager
+                    // has already warned which key could not be measured.
+                    // The Once key carries the measured/unmeasured state so a very first shot fired
+                    // before VFXManager finished loading its catalog (measured=0 -> fit 1.0) does
+                    // not BURN the trace slot: the first genuinely measured shot still reports.
+                    FlowTrace.Once("DefenseTower", $"projfit:{CatalogId ?? name}:{projKey}:{(measured > 0f ? "m" : "u")}",
+                        $"projectile FIT '{projKey}' on tower '{CatalogId ?? name}': range={Range:0.#}m " +
+                        $"fraction={ProjectileVisualFraction:0.###} targetSize={targetSize:0.###}m " +
+                        $"measuredPrefab={measured:0.###}m -> fitScale={fit:0.###} " +
+                        $"(band {ProjectileFitMin:0.##}..{ProjectileFitMax:0.##}, primitive x{primFit:0.###}).");
                     boltFx = VFXManager.PlayKey(projKey, muzzle, bolt.transform.rotation, null,
-                                                BoltColor, 0f, 0f, bolt.transform);
+                                                BoltColor, fit, 0f, bolt.transform);
                 }
                 string impactKey = ImpactKeyFor(Element);
                 var impactType = ImpactVfxFor(Element);
@@ -984,6 +1052,13 @@ namespace DeNelle.Village
             // Muzzle / cast only. Travelling Hovl projectile + impact-on-arrive are owned by
             // SpawnProjectileVisual (owner VfxManualPicks wire) so spell/bolt/pellet all share
             // one land beat — no double impact flash at fire time.
+            //
+            // DELIBERATELY *NOT* RANGE-SCALED (owner ruling, WO-870): a muzzle flash / cast burst
+            // belongs to the TOWER, not to the flight path - it is read at the tower's own scale
+            // right where the player is looking, so growing it with range would just make a long-
+            // range tower's barrel look oversized. Only the TRAVELLING projectile is fitted to
+            // range (see ProjectileVisualFraction in SpawnProjectileVisual). Same for the impact
+            // burst, which is sized by what it hits. Do not fold these into that constant.
             if (ResolveStyle() == BoltStyle.Spell)
             {
                 VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
@@ -1050,6 +1125,20 @@ namespace DeNelle.Village
         /// </summary>
         private string ProjectileKeyFor(DamageElement element, BoltStyle style)
         {
+            // OWNER-TAGGED PER-TOWER PICKS FIRST (the owner tags the key; this maps it VERBATIM).
+            // Needed because several towers are indistinguishable by (element, style, tier,
+            // airOnly) alone: the ground Archer (range 14) and the Ballista (range 22) are BOTH
+            // bolt / None / not-airOnly, so the Ballista used to borrow the archer's per-tier
+            // arrow. Catalog identity is the only thing that tells them apart.
+            string ownerTagged = OwnerTaggedProjectileKey(CatalogId);
+            if (!string.IsNullOrEmpty(ownerTagged))
+            {
+                FlowTrace.Once("DefenseTower", $"projtag:{CatalogId}",
+                    $"owner-tagged projectile: tower '{CatalogId}' -> key '{ownerTagged}' " +
+                    "(per-tower table; overrides the element/style mapping).");
+                return ownerTagged;
+            }
+
             if (style == BoltStyle.Bolt || AirOnly)
             {
                 switch (element)
@@ -1088,6 +1177,29 @@ namespace DeNelle.Village
                 case DamageElement.Ice:    return "ArcherTower-Ice_Projectile";
                 case DamageElement.Aether: return "ARcaneTower_Projectile";
                 default:                   return "ArcherTower_Projectile";
+            }
+        }
+
+        /// <summary>
+        /// OWNER-TAG TABLE: catalog entry id -> the projectile VFX key the owner tagged for
+        /// THAT tower. One row per owner tag, mapped verbatim - never a creative substitution.
+        /// Returns null when the tower has no tag, which falls through to the element/style
+        /// mapping above (the legacy behaviour, byte-for-byte).
+        ///
+        /// DELIBERATELY ABSENT (do not fill these in without an owner tag):
+        ///   tower_siege_tower  (Sky Ballista, range 36, bolt/airOnly) - UNTAGGED. It keeps its
+        ///                      existing AirOnly ranger-spear fallthrough. Do NOT borrow the
+        ///                      Ballista's or the Archer's pick for it; it awaits an owner tag.
+        ///   tower_catapult     (range 28) - authored but not wired to the build menu; the owner
+        ///                      intends it as future OFFENSIVE siege content. Wire nothing.
+        /// </summary>
+        private static string OwnerTaggedProjectileKey(string catalogId)
+        {
+            switch (catalogId)
+            {
+                // Ballista (owner 2026-08-04: "Use the SimpleCast projectile for the ballista").
+                case "tower_wall_wizard": return "SimpleCast_Projectile";
+                default:                  return null;
             }
         }
 

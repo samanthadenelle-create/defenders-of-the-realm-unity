@@ -475,6 +475,153 @@ namespace DeNelle.Village
             return ng;
         }
 
+        // =====================================================================
+        // FIT-TO-SIZE (WO-870) - measure the authored art, then normalize it.
+        // ---------------------------------------------------------------------
+        // WHY: every owner-tagged projectile row in Assets/Editor/VfxManualPicks.json
+        // carries scale 1.0 - the owner tags the KEY, not a per-key size. So a caller
+        // that needs a key to read at a specific WORLD size (a tower projectile that
+        // must look the same at range 14 and at range 36) cannot read that size off
+        // the picks; it has to MEASURE the prefab and derive the scale. Same shape as
+        // the DEF-208 / WO-751 repo.visualHeight fit-to-height pass on catalog items:
+        // measure -> normalize -> scale by the gameplay number, never trust authored scale.
+        //
+        // Measurement is per-PREFAB (never a playing instance) and cached per key, so
+        // it costs one reflection-free component walk once per process and is a plain
+        // dictionary hit from then on - safe to call from a fire hot-loop.
+        // =====================================================================
+
+        // key -> measured authored visual size in world units (0 = unknown/unmeasurable).
+        private static readonly Dictionary<string, float> _hovlMeasuredSize
+            = new Dictionary<string, float>();
+
+        // Keys already warned about as unmeasurable, so the warn path stays allocation-free
+        // after the first call (string interpolation only happens once per bad key).
+        private static readonly HashSet<string> _hovlFitWarned = new HashSet<string>();
+
+        /// <summary>
+        /// Measured authored visual size (world units) of a catalogued key's PREFAB, or 0
+        /// when the key is unknown / the catalog is not ready / nothing measurable was found.
+        /// Cached per key (measured ONCE per process) so this is safe on a hot loop. Never
+        /// throws - a failed measure is logged by Guard and reported as 0.
+        /// </summary>
+        public static float MeasureKeyVisualSize(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return 0f;
+            if (_hovlMeasuredSize.TryGetValue(key, out float cached)) return cached;
+
+            float measured = 0f;
+            string prefabName = "<none>";
+            Guard.Try("VFXManager", "measure hovl key '" + key + "'", () =>
+            {
+                var mgr = Instance;
+                if (mgr == null) return;                       // manager not booted yet - retry next call
+                mgr.EnsureHovlCatalog();
+                if (mgr._hovlCatalog == null) return;
+                if (!mgr._hovlCatalog.TryGet(key, out var row)) return;
+                if (row.Prefab == null) return;
+                prefabName = row.Prefab.name;
+                measured = MeasurePrefabVisualSize(row.Prefab);
+            });
+
+            // Only cache a real measurement: a 0 from "manager not booted yet" must not be
+            // frozen in for the rest of the process (the first fire can precede VFXManager).
+            if (measured > 0f)
+            {
+                _hovlMeasuredSize[key] = measured;
+                FlowTrace.Once("VFXManager", "hovl-measure:" + key,
+                    $"MeasureKeyVisualSize('{key}') -> prefab '{prefabName}' authored visual size {measured:0.###} m.");
+            }
+            return measured;
+        }
+
+        /// <summary>
+        /// Uniform scale that makes <paramref name="key"/>'s prefab read at roughly
+        /// <paramref name="targetWorldSize"/> world units, clamped into
+        /// [<paramref name="minScale"/>, <paramref name="maxScale"/>]. Returns 1f (the
+        /// authored size, unchanged) when the prefab cannot be measured - and says so once
+        /// via FlowTrace, so an unmeasurable prefab SELF-REPORTS instead of silently
+        /// shipping at 1.0.
+        /// </summary>
+        public static float ResolveFitScale(string key, float targetWorldSize, float minScale, float maxScale)
+        {
+            if (targetWorldSize <= 0f) return 1f;
+
+            float measured = MeasureKeyVisualSize(key);
+            if (measured <= 0f)
+            {
+                if (!string.IsNullOrEmpty(key) && _hovlFitWarned.Add(key))
+                    FlowTrace.Once("VFXManager", "hovl-fit-nomeasure:" + key,
+                        $"ResolveFitScale('{key}'): prefab could not be measured (no key / no prefab / no " +
+                        $"ParticleSystem or mesh bounds) - falling back to scale 1.0 for a requested " +
+                        $"{targetWorldSize:0.###} m. Check the catalog row for this key.");
+                return 1f;
+            }
+
+            float lo = Mathf.Min(minScale, maxScale);
+            float hi = Mathf.Max(minScale, maxScale);
+            if (hi <= 0f) return 1f;
+            return Mathf.Clamp(targetWorldSize / measured, lo, hi);
+        }
+
+        /// <summary>
+        /// Max authored visual extent of a prefab: the largest particle start size across
+        /// every child ParticleSystem, and the largest mesh bounds diagonal across every
+        /// child MeshRenderer / mesh-mode ParticleSystemRenderer - times the prefab root's
+        /// own localScale (largest axis). Editor-safe, allocation-heavy but called ONCE per key.
+        /// </summary>
+        private static float MeasurePrefabVisualSize(GameObject prefab)
+        {
+            if (prefab == null) return 0f;
+            float size = 0f;
+
+            foreach (var ps in prefab.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                if (ps == null) continue;
+                var main = ps.main;
+                float start;
+                switch (main.startSize.mode)
+                {
+                    case ParticleSystemCurveMode.Constant:
+                    case ParticleSystemCurveMode.TwoConstants:
+                        // NOTE: in constant mode the MinMaxCurve constant ALREADY carries the
+                        // curve multiplier (startSizeMultiplier is an alias of it) - multiplying
+                        // the two would square the size, so we take the constant alone.
+                        start = main.startSize.constantMax;
+                        if (start <= 0f) start = main.startSize.constant;
+                        break;
+                    default:
+                        // Curve modes: the constant is meaningless; the multiplier IS the world size.
+                        start = main.startSizeMultiplier;
+                        break;
+                }
+                if (start > size) size = start;
+            }
+
+            foreach (var mr in prefab.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                float d = mf.sharedMesh.bounds.size.magnitude;
+                if (d > size) size = d;
+            }
+
+            foreach (var pr in prefab.GetComponentsInChildren<ParticleSystemRenderer>(true))
+            {
+                if (pr == null) continue;
+                var mesh = pr.mesh;                       // null unless the renderer is in Mesh mode
+                if (mesh == null) continue;
+                float d = mesh.bounds.size.magnitude;
+                if (d > size) size = d;
+            }
+
+            var ls = prefab.transform.localScale;
+            float axis = Mathf.Max(Mathf.Abs(ls.x), Mathf.Max(Mathf.Abs(ls.y), Mathf.Abs(ls.z)));
+            if (axis <= 0f) axis = 1f;
+            return size * axis;
+        }
+
         // A Hovl VFX object must carry at least one ParticleSystem (or visible Renderer) to be
         // seen. Traced Once per key so a bad catalog prefab self-reports in the break-log.
         private static void VerifyHovlHasParticles(GameObject go, string key)

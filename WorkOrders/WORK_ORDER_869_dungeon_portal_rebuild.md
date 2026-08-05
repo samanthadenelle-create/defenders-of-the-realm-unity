@@ -34,6 +34,9 @@ scoped to a set the portal isn't in) and **widen it so this class cannot ship ag
 it exists to catch buys false confidence — worse than none. This is a required deliverable of the WO.
 
 ## 4. Use the EXISTING aura VFX — author NONE
+**Browse the owned VFX library FIRST — `docs/asset-inventory/04_vfx_spells_audio.md`** (Mirza Beig 564 prefabs incl.
+portals; Spells Pack 466 incl. aura/portal-adjacent effects). We wire only ~38 of ~1,000 owned VFX — the portal
+aura is already in there; nothing is authored.
 The aura already ships: **`Mirza Beig / Particle Systems / Ultimate VFX / Prefabs / Loop/`** —
 `pf_vfx-ult_demo_psys_loop_ghostPortal`, `…_ghostPortal2`, `…_portalBlue`, `…_portalBlueTutorial`, `…_portalOrange`.
 **Use these; do NOT author new VFX.** Route through the existing **`VFXManager`** (pooled, quality-gated) — do NOT

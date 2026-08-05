@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -70,6 +71,7 @@ namespace DeNelle.Village
         private Renderer[] _archRenderers;
         private MaterialPropertyBlock _archMpb;
         private MeshRenderer _haloPlane;          // brighter additive core/halo behind glowPlane
+        private Vector2 _haloBaseSize = new Vector2(3.4f, 4.6f);  // fitted in EnsureVisuals; the breathing swell scales THIS
         private Material _haloMat;                // owned instance, cached
         private Material _glowMat;                // cached glowPlane material instance
         private float _glowLevel = 0f;            // 0 = idle, 1 = active (smoothed)
@@ -129,9 +131,103 @@ namespace DeNelle.Village
             UpdateGlow();
         }
 
+        // -------------------------------------------------------------------------
+        // WO-869: THE BLUE BLOCKS. This is the second half of the owner's Seeker capture
+        // (docs/ui-review/2026-08-04-seeker/08-portal-magenta.png) - the solid blue-violet
+        // rectangles sitting inside the magenta arch, which the review read as "a second set
+        // of broken materials". They were not broken materials. They are THESE TWO QUADS
+        // (PortalGlowPlane, and the larger PortalHaloPlane behind it) rendering FULLY OPAQUE.
+        //
+        // PROVEN CAUSE, from the URP shader contract: `_Surface` and `_Blend` are ShaderGUI
+        // properties. Writing them on a runtime-created material changes NOTHING about render
+        // state - in the editor it is `LitGUI.SetMaterialKeywords` that reads them and writes
+        // the ACTUAL state, and that GUI never runs at runtime. So this material kept URP
+        // Unlit's defaults (_SrcBlend=One, _DstBlend=Zero, _ZWrite=1) and drew as an opaque
+        // slab. The alpha 0.4 in idleGlowColor was simply discarded. Same defect in the halo
+        // and in BuildCheapVortex.
+        //
+        // FIX: write the REAL state - _SrcBlend/_DstBlend/_ZWrite + the keyword + the RenderType
+        // tag + the transparent queue. This is not a new idea in this repo: VFXManager.
+        // ConfigureUrpParticleBlend already does exactly this for the pooled particle path, and
+        // it is the proven precedent. One shared helper so glow, halo and vortex cannot drift.
+        // -------------------------------------------------------------------------
+
+        // URP fixed-function blend factors (UnityEngine.Rendering.BlendMode values).
+        private const int BLEND_ONE       = 1;
+        private const int BLEND_SRC_ALPHA = 5;
+
+        /// <summary>
+        /// Put <paramref name="m"/> into genuine TRANSPARENT-ADDITIVE render state. Sets the
+        /// state URP actually reads at runtime, not just the ShaderGUI-facing _Surface/_Blend
+        /// floats (which alone leave the material opaque - the WO-869 blue-block bug).
+        /// </summary>
+        private static void ConfigureAdditive(Material m)
+        {
+            if (m == null) return;
+            // Keep the GUI-facing values coherent for anyone inspecting the material...
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);   // 1 = Transparent
+            if (m.HasProperty("_Blend"))   m.SetFloat("_Blend", 2f);     // 2 = Additive
+            // ...but THESE are what actually make it transparent at runtime.
+            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", BLEND_SRC_ALPHA);
+            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", BLEND_ONE);
+            if (m.HasProperty("_ZWrite"))   m.SetFloat("_ZWrite", 0f);
+            if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 0f);
+            // Double-sided: the rebuilt arch is a walk-THROUGH threshold with two pillar rings,
+            // so the hero routinely sees it from behind. A back-face-culled quad would make the
+            // portal surface vanish from one side, which is the opposite of a landmark.
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+            m.doubleSidedGI = true;
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;   // 3000
+        }
+
+        // -- The threshold surface, FITTED to whatever arch it is attached to -----
+        // WO-869 rebuilt the arch (wider + taller + two depth rings), so the old hardcoded
+        // 2.4 x 3.6 quad at y=2.0 is the wrong size and the wrong place - it would sit low and
+        // narrow inside a 3.6 x 6 m opening. Measure the host's own arch renderers and fit to
+        // them, so this controller stays generic and the arch geometry can be retuned freely
+        // without ever coming back here. Falls back to the historical numbers when there are
+        // no arch renderers to measure (a bare DungeonPortal with no built frame).
+        private Vector3 _thresholdCentreLocal = new Vector3(0f, 2.0f, 0f);
+        private Vector2 _thresholdSize        = new Vector2(2.4f, 3.6f);
+
+        private void MeasureThreshold()
+        {
+            if (_archRenderers == null || _archRenderers.Length == 0) return;
+            bool any = false;
+            Bounds b = default;
+            foreach (var r in _archRenderers)
+            {
+                if (r == null) continue;
+                if (!any) { b = r.bounds; any = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            if (!any) return;
+
+            // Local-space centre of the opening: horizontally centred on the frame, and at
+            // roughly 45% of its height (the visual middle of a doorway sits below the
+            // geometric middle once the lintel/keystone mass is included).
+            Vector3 localCentre = transform.InverseTransformPoint(b.center);
+            _thresholdCentreLocal = new Vector3(0f, Mathf.Max(0.5f, b.size.y * 0.45f), 0f);
+            // Fill the opening but stay inside the pillars/lintel so the frame still frames it.
+            _thresholdSize = new Vector2(Mathf.Max(0.5f, b.size.x * 0.78f),
+                                         Mathf.Max(0.5f, b.size.y * 0.72f));
+            FlowTrace.Step("Portal",
+                $"MeasureThreshold: arch bounds size={b.size} -> threshold size={_thresholdSize} " +
+                $"at localY={_thresholdCentreLocal.y:0.00} (localCentre.y={localCentre.y:0.00}).");
+        }
+
         // ── DEF-100: build interior glow + light + cheap vortex if not wired ─────
         private void EnsureVisuals()
         {
+            // WO-869: collect + measure the arch FIRST so the threshold surface can be fitted
+            // to it (the old code collected renderers last and hardcoded the quad size).
+            CollectArchRenderers();
+            MeasureThreshold();
+
             // Interior glow quad — additive URP/Unlit transparent, deep-violet idle.
             if (glowPlane == null)
             {
@@ -140,9 +236,11 @@ namespace DeNelle.Village
                 var qcol = quad.GetComponent<Collider>();
                 if (qcol != null) Destroy(qcol);
                 quad.transform.SetParent(transform, false);
-                // Fill the arch interior, lifted to mid-arch height, facing outward (+Z).
-                quad.transform.localPosition = new Vector3(0f, 2.0f, 0.02f);
-                quad.transform.localScale = new Vector3(2.4f, 3.6f, 1f);
+                // Suspended at the CENTRE of the threshold (z=0, between the two pillar rings)
+                // so it reads as a surface hanging inside a doorway, not a decal stuck on the
+                // front face of a frame. That placement is what sells "this leads somewhere".
+                quad.transform.localPosition = _thresholdCentreLocal;
+                quad.transform.localScale = new Vector3(_thresholdSize.x, _thresholdSize.y, 1f);
 
                 glowPlane = quad.GetComponent<MeshRenderer>();
                 glowPlane.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -155,15 +253,17 @@ namespace DeNelle.Village
                                     ?? Shader.Find("Sprites/Default");
                 if (glowShader != null)
                 {
-                    var mat = new Material(glowShader);
-                    // URP/Unlit transparent setup (Surface=Transparent, Blend=Additive).
-                    if (mat.HasProperty("_Surface"))  mat.SetFloat("_Surface", 1f);  // transparent
-                    if (mat.HasProperty("_Blend"))    mat.SetFloat("_Blend", 1f);    // additive
-                    mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                    mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    var mat = new Material(glowShader) { name = "PortalThreshold_Additive" };
+                    ConfigureAdditive(mat);   // WO-869: real transparent state, not just _Surface/_Blend
                     if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", idleGlowColor);
                     if (mat.HasProperty("_Color"))     mat.SetColor("_Color", idleGlowColor);
                     glowPlane.sharedMaterial = mat;
+                }
+                else
+                {
+                    FlowTrace.Warn("Portal",
+                        "EnsureVisuals: no URP Unlit/Particles-Unlit/Sprites shader resolvable - the portal " +
+                        "threshold quad keeps its DEFAULT material, which renders as an opaque block under URP.");
                 }
             }
 
@@ -203,10 +303,12 @@ namespace DeNelle.Village
                 var hcol = halo.GetComponent<Collider>();
                 if (hcol != null) Destroy(hcol);
                 halo.transform.SetParent(transform, false);
-                // Slightly behind the glow plane, larger so its soft edge bleeds past
-                // the arch interior like a halo.
-                halo.transform.localPosition = new Vector3(0f, 2.0f, -0.05f);
-                halo.transform.localScale = new Vector3(3.4f, 4.6f, 1f);
+                // Just behind the threshold surface and larger, so its soft edge bleeds past the
+                // opening like a halo. Fitted to the measured arch (WO-869) - the old hardcoded
+                // 3.4 x 4.6 was sized for the retired 1.8 x 4 m stick frame.
+                halo.transform.localPosition = _thresholdCentreLocal + new Vector3(0f, 0f, -0.07f);
+                _haloBaseSize = new Vector2(_thresholdSize.x * 1.40f, _thresholdSize.y * 1.28f);
+                halo.transform.localScale = new Vector3(_haloBaseSize.x, _haloBaseSize.y, 1f);
 
                 _haloPlane = halo.GetComponent<MeshRenderer>();
                 _haloPlane.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -217,19 +319,15 @@ namespace DeNelle.Village
                                     ?? Shader.Find("Sprites/Default");
                 if (haloShader != null)
                 {
-                    _haloMat = new Material(haloShader);
-                    if (_haloMat.HasProperty("_Surface")) _haloMat.SetFloat("_Surface", 1f);  // transparent
-                    if (_haloMat.HasProperty("_Blend"))   _haloMat.SetFloat("_Blend", 1f);    // additive
-                    _haloMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                    _haloMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    _haloMat = new Material(haloShader) { name = "PortalHalo_Additive" };
+                    ConfigureAdditive(_haloMat);   // WO-869: this quad was the LARGER blue block
                     _haloPlane.sharedMaterial = _haloMat;
                 }
             }
 
-            // Collect the arch frame renderers ONCE (everything except our own VFX
-            // children + the prompt) so UpdateGlow can pulse their emission via a
-            // shared MPB — never instantiating the shared 264 arch material.
-            CollectArchRenderers();
+            // The arch renderers were collected + measured at the top of this method (WO-869),
+            // so UpdateGlow can pulse their emission via a shared MPB - never instantiating the
+            // shared 264 arch material.
             _archMpb ??= new MaterialPropertyBlock();
             // Cache the glow-plane material instance once (reading .material clones it
             // on first touch; we keep the reference so we never re-clone per frame).
@@ -299,9 +397,10 @@ namespace DeNelle.Village
                                  ?? Shader.Find("Sprites/Default");
                 if (pShader != null)
                 {
-                    var pmat = new Material(pShader);
-                    if (pmat.HasProperty("_Surface")) pmat.SetFloat("_Surface", 1f);
-                    if (pmat.HasProperty("_Blend"))   pmat.SetFloat("_Blend", 1f); // additive
+                    // WO-869: same opaque-quad defect as the glow/halo planes - _Surface/_Blend
+                    // alone left these particles drawing as solid billboard squares.
+                    var pmat = new Material(pShader) { name = "PortalVortex_Additive" };
+                    ConfigureAdditive(pmat);
                     if (pmat.HasProperty("_BaseColor")) pmat.SetColor("_BaseColor", new Color(0.55f, 0.15f, 1f, 1f));
                     psr.sharedMaterial = pmat;
                 }
@@ -329,9 +428,14 @@ namespace DeNelle.Village
             foreach (var r in GetComponentsInChildren<MeshRenderer>(true))
             {
                 if (r == null) continue;
-                // Skip our own code-built glow plane (and any obvious VFX child).
-                if (r == glowPlane) continue;
-                if (r.gameObject.name == "PortalGlowPlane" || r.gameObject.name == "PortalVortex") continue;
+                // Skip our own code-built VFX children. WO-869 added PortalHaloPlane to this
+                // list: it was missing, and now that the predicate above is the full authority
+                // (not three name tests) a device that cannot compile URP/Unlit would have had
+                // its additive halo "recovered" into an OPAQUE violet Lit slab - i.e. the guard
+                // would have recreated the very blue-block artefact this WO is removing.
+                if (r == glowPlane || r == _haloPlane) continue;
+                if (r.gameObject.name == "PortalGlowPlane" || r.gameObject.name == "PortalVortex"
+                    || r.gameObject.name == "PortalHaloPlane") continue;
 
                 var mats = r.sharedMaterials;
                 if (mats == null) continue;
@@ -339,20 +443,45 @@ namespace DeNelle.Village
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var m = mats[i];
-                    if (m == null || m.shader == null) continue;
-                    string sn = m.shader.name;
-                    bool isMagentaError = sn == "Hidden/InternalErrorShader";
-                    bool isNonUrpStandard = sn == "Standard" || sn.StartsWith("Legacy Shaders/");
-                    if (!isMagentaError && !isNonUrpStandard) continue;
+                    // WO-869 - THE ANDROID BLIND SPOT, and the most likely reason this fixer
+                    // waved the Seeker's magenta arch straight through.
+                    //
+                    // The old test compared the shader NAME against three literals (the internal
+                    // error shader, Standard, and the Legacy prefix) - and nothing else:
+                    // NAME-ONLY, with no `!shader.isSupported` branch and no null-material
+                    // branch. A shader that compiles in the Editor but FAILS to compile against
+                    // the device graphics API KEEPS ITS NAME - so on the phone it is still called
+                    // "Universal Render Pipeline/Lit", sails past all three name tests, and renders
+                    // MAGENTA anyway. That is exactly the editor-fine / device-magenta split the
+                    // owner captured. A NULL material slot has the same outcome (URP draws the
+                    // engine default = magenta) and `m == null -> continue` skipped it entirely.
+                    //
+                    // MagentaGuard.IsBrokenShader is the SINGLE AUTHORITY for this predicate and
+                    // it has both branches. Its own docstring warns that local copies drift, names
+                    // the two that already had (GhostPreview, EquipmentController) - both since
+                    // deleted - and ShaderPredicateSingleAuthorityRegression exists to catch a
+                    // third. This file was that third copy. It now calls the authority.
+                    if (m == null || DeNelle.Core.MagentaGuard.IsBrokenShader(m.shader))
+                    {
+                        FlowTrace.Once("Portal", $"arch-broken:{r.name}:{i}",
+                            $"DEF-94/WO-869: arch slot {i} on '{r.name}' is broken - material=" +
+                            $"'{(m != null ? m.name : "NULL")}' shader=" +
+                            $"'{(m != null && m.shader != null ? m.shader.name : "NULL")}' supported=" +
+                            $"{(m != null && m.shader != null ? m.shader.isSupported.ToString() : "n/a")} -> recovering to URP/Lit violet.");
+                    }
+                    else continue;
 
                     var nm = new Material(urpLit);
-                    nm.name = (m.name ?? "Portal") + " (URP DEF-94)";
+                    // `m` may legitimately be NULL now (a null slot is one of the magenta
+                    // classes the widened test above deliberately catches) - everything that
+                    // reads the source is null-guarded from here down.
+                    nm.name = ((m != null ? m.name : null) ?? "Portal") + " (URP DEF-94)";
                     if (nm.HasProperty("_BaseColor")) nm.SetColor("_BaseColor", violet);
                     if (nm.HasProperty("_Color"))     nm.SetColor("_Color", violet);
                     // Carry a basecolor texture across if the source had one.
                     Texture tex = null;
-                    if (m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
-                    if (tex == null && m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
+                    if (m != null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
+                    if (tex == null && m != null && m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
                     if (tex != null)
                     {
                         if (nm.HasProperty("_BaseMap")) nm.SetTexture("_BaseMap", tex);
@@ -424,8 +553,13 @@ namespace DeNelle.Village
                     var r = _archRenderers[i];
                     if (r == null) continue;
                     r.GetPropertyBlock(_archMpb);
-                    // Keep the 264 violet BASE; only ramp EMISSION so colour stays on-identity.
-                    _archMpb.SetColor(BaseColor, ArchBaseColor(ArcaneViolet));
+                    // WO-869: this used to ALSO write _BaseColor here, every frame. A
+                    // MaterialPropertyBlock overrides the material value, so that write silently
+                    // killed DungeonWorldPortalSpawner.ApplyDim - the fog-of-war reveal that is
+                    // supposed to keep an UNDISCOVERED portal at UndiscoveredDim (0.12) and fade
+                    // it up when the hero finds it. Every portal rendered full-bright violet from
+                    // frame 0 instead, so "stumble on a hidden arch" was not actually hidden.
+                    // Only EMISSION is ramped here now; BASE COLOUR belongs to the discovery layer.
                     _archMpb.SetColor(EmissionColor, emissive);
                     r.SetPropertyBlock(_archMpb);
                 }
@@ -460,7 +594,7 @@ namespace DeNelle.Village
             {
                 // Gentle breathing swell (±6% near hero) so the halo feels alive.
                 float swell = 1f + (wave - 0.5f) * 0.12f * (0.5f + _glowLevel);
-                _haloPlane.transform.localScale = new Vector3(3.4f * swell, 4.6f * swell, 1f);
+                _haloPlane.transform.localScale = new Vector3(_haloBaseSize.x * swell, _haloBaseSize.y * swell, 1f);
             }
         }
 

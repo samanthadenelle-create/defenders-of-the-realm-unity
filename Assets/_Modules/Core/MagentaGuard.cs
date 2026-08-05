@@ -30,6 +30,7 @@
 // exception halts the WebGL player).
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -43,6 +44,82 @@ namespace DeNelle.Core
         private static Shader _terrainLit;
         private static bool _hooked;
         private static readonly HashSet<string> _floorSeen = new HashSet<string>();
+
+        // -- WO-869 WIDENING #1: DEFERRED RE-SWEEP (the timing blind spot) ------------
+        // PROVEN BY THE DUNGEON PORTAL (owner Seeker capture 2026-08-04, 08-portal-magenta.png):
+        // Sweep() is a ONE-TIME Object.FindObjectsByType<Renderer>() snapshot taken on
+        // AfterSceneLoad + sceneLoaded. But this project is full of builders that place their
+        // objects SECONDS LATER, because they wait on something: DungeonWorldPortalSpawner
+        // re-tries placement every PlaceRetryInterval (1s) until the OuterWorld scene AND a
+        // baked NavMesh exist; the townsfolk / outpost / POI injectors do the same. Every one
+        // of those objects is built AFTER the last sceneLoaded fired, so the snapshot sweep was
+        // STRUCTURALLY BLIND to it and any magenta on it stayed magenta forever. That is the
+        // exact class the raid-troop miss documented at the SweepGameObject seam below - it was
+        // fixed there for ONE caller (VisualFactory.Skin) instead of for the class.
+        //
+        // FIX: after each scene load, run a small BOUNDED ladder of follow-up sweeps. Cheap
+        // (a handful of scans over a scene's renderers, then it stops forever for that load),
+        // and it needs no cooperation from the builders - which is the point, since requiring
+        // every future builder to remember a call is how this recurred.
+        private static readonly float[] DeferredSweepDelays = { 1.0f, 3.0f, 8.0f };
+        private static GameObject _driverGo;
+
+        // -- WO-869 WIDENING #2: PROTECTED PRIMITIVE ART (the "cure is worse" blind spot) --
+        // The SECOND reason the guard missed the portal, and the more dangerous one: the portal
+        // arch is built from GameObject.CreatePrimitive(PrimitiveType.Cube). So even on a sweep
+        // that DID see it, IsPrimitivePlaceholder() returns true and the scene sweep (which runs
+        // hideStrayPrimitives:true) would have set r.enabled = false - DELETING THE DUNGEON
+        // ENTRANCE from the player's view rather than fixing its colour. "Portal is invisible"
+        // is strictly worse than "portal is magenta": the whole feature is "stumble on a glowing
+        // arch", and an invisible arch cannot be stumbled on OR reported.
+        //
+        // The primitive-hide heuristic is still right for its real target (stray placeholder
+        // pills), so it stays - but it is now OPT-OUT-able. A builder that legitimately composes
+        // art out of primitives registers its subtree here, and the sweep RECOVERS those
+        // renderers (fresh URP/Lit) instead of hiding them. Explicit registration, not another
+        // guessing heuristic: a heuristic is what produced this blind spot.
+        private static readonly HashSet<int> _protectedArt = new HashSet<int>();
+
+        /// <summary>
+        /// Declare that every renderer under <paramref name="root"/> is DELIBERATE ART even if it
+        /// is built from Unity primitives, so the magenta sweep RECOVERS it (repaints to a fresh
+        /// URP/Lit) instead of HIDING it as a stray placeholder pill. Idempotent; safe to call on
+        /// a subtree that is still being assembled (register after the renderers exist).
+        /// <para/>
+        /// Call this from any runtime builder that composes visible art out of CreatePrimitive
+        /// (the dungeon portal arch is the founding case, WO-869). Never call it on a genuine
+        /// placeholder - hiding those is the behaviour we want to keep.
+        /// </summary>
+        /// <param name="root">Subtree root. Null = no-op.</param>
+        /// <param name="owner">The registering builder, e.g. "DungeonWorldPortalSpawner.BuildArch" -
+        /// printed in the recovery trace so the source self-identifies.</param>
+        public static void ProtectPrimitiveArt(GameObject root, string owner)
+        {
+            if (root == null) return;
+            try
+            {
+                var rends = root.GetComponentsInChildren<Renderer>(true);
+                if (rends == null) return;
+                int added = 0;
+                foreach (var r in rends)
+                {
+                    if (r == null) continue;
+                    if (_protectedArt.Add(r.gameObject.GetInstanceID())) added++;
+                }
+                if (added > 0)
+                    FlowTrace.Step("MagentaGuard",
+                        $"ProtectPrimitiveArt: {added} renderer(s) under '{root.name}' registered as deliberate " +
+                        $"primitive art by '{owner}' - the sweep will RECOVER them, never hide them.");
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("MagentaGuard", $"ProtectPrimitiveArt('{owner}') threw: {e.Message} - subtree left unprotected.");
+            }
+        }
+
+        /// <summary>True when this renderer was registered via <see cref="ProtectPrimitiveArt"/>.</summary>
+        private static bool IsProtectedArt(Renderer r)
+            => r != null && _protectedArt.Count > 0 && _protectedArt.Contains(r.gameObject.GetInstanceID());
 
         // ── RUNTIME-SPAWN SEAM (magenta raid troops, owner 2026-08-02) ───────────────
         // PROVEN CAUSE: Init is [RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + sceneLoaded,
@@ -92,9 +169,69 @@ namespace DeNelle.Core
             SceneManager.sceneLoaded += OnSceneLoaded;
             // sceneLoaded does NOT fire for the scene already active at boot — sweep it now.
             Sweep("boot");
+            ScheduleDeferredSweeps("boot");
         }
 
-        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => Sweep(scene.name);
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            Sweep(scene.name);
+            ScheduleDeferredSweeps(scene.name);
+        }
+
+        // -- WO-869 widening #1 - the bounded follow-up ladder ------------------------
+        // Runs Sweep() again at +1s / +3s / +8s after a load so objects built by the
+        // "wait for the scene + a baked NavMesh, THEN place" builders are actually SEEN.
+        // Bounded and self-terminating: three extra scans per load, then nothing. Each
+        // Sweep is already idempotent (recovered materials are URP/Lit and skip), so the
+        // repeats cost a renderer walk and change nothing when everything is healthy.
+        private static void ScheduleDeferredSweeps(string sceneName)
+        {
+            try
+            {
+                var driver = EnsureDriver();
+                if (driver == null)
+                {
+                    FlowTrace.Warn("MagentaGuard",
+                        $"ScheduleDeferredSweeps('{sceneName}'): no driver - late-built objects will only be " +
+                        "covered by the per-object SweepGameObject seam.");
+                    return;
+                }
+                driver.StartCoroutine(DeferredSweepRoutine(sceneName));
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("MagentaGuard", $"ScheduleDeferredSweeps('{sceneName}') threw: {e.Message}");
+            }
+        }
+
+        private static IEnumerator DeferredSweepRoutine(string sceneName)
+        {
+            float previous = 0f;
+            for (int i = 0; i < DeferredSweepDelays.Length; i++)
+            {
+                float wait = DeferredSweepDelays[i] - previous;
+                previous = DeferredSweepDelays[i];
+                if (wait > 0f) yield return new WaitForSeconds(wait);
+                Sweep($"{sceneName}+{DeferredSweepDelays[i]:0.#}s");
+            }
+        }
+
+        // A single hidden DontDestroyOnLoad host so the static guard can run coroutines.
+        // Created on demand; survives scene loads so one host serves every load.
+        private static MonoBehaviour EnsureDriver()
+        {
+            if (_driverGo != null)
+            {
+                var existing = _driverGo.GetComponent<MagentaGuardDriver>();
+                if (existing != null) return existing;
+            }
+            _driverGo = new GameObject("[MagentaGuardDriver]") { hideFlags = HideFlags.HideAndDontSave };
+            Object.DontDestroyOnLoad(_driverGo);
+            return _driverGo.AddComponent<MagentaGuardDriver>();
+        }
+
+        /// <summary>Coroutine host for the static guard's deferred sweeps. No state of its own.</summary>
+        private sealed class MagentaGuardDriver : MonoBehaviour { }
 
         private static void Sweep(string sceneName)
         {
@@ -411,7 +548,13 @@ namespace DeNelle.Core
                 // tinted CreatePrimitive capsule (TroopFactory.cs ~:96) — hiding it would turn "troop
                 // rendered as a blue pill" into "troop is invisible but still fights", a strictly worse
                 // bug. The scene sweep keeps the hide; a spawn-seam primitive is recovered instead.
-                if (brokenMat != null && hideStrayPrimitives && IsPrimitivePlaceholder(r))
+                //
+                // WO-869: ...UNLESS the subtree was registered via ProtectPrimitiveArt. The dungeon
+                // portal arch IS three CreatePrimitive cubes, so the unguarded hide would have made
+                // the dungeon entrance INVISIBLE rather than fixed its colour - a strictly worse bug
+                // than the magenta it was hunting. A protected renderer falls through to the normal
+                // recovery below and gets a fresh URP/Lit instead.
+                if (brokenMat != null && hideStrayPrimitives && IsPrimitivePlaceholder(r) && !IsProtectedArt(r))
                 {
                     r.enabled = false;
                     hiddenStray++;
@@ -420,6 +563,11 @@ namespace DeNelle.Core
                         $"mesh='{MeshName(r)}' material '{brokenMat.name}' dead-shader '{deadShader}' - built-in primitive, not real art.");
                     continue;
                 }
+                if (brokenMat != null && hideStrayPrimitives && IsPrimitivePlaceholder(r) && IsProtectedArt(r))
+                    FlowTrace.Once("MagentaGuard", $"protected:{HierarchyPath(r.transform)}",
+                        $"PROTECTED primitive art '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
+                        $"is MAGENTA (material '{brokenMat.name}', dead-shader '{deadShader}') - RECOVERING it " +
+                        "instead of hiding it (ProtectPrimitiveArt). Fix at source.");
 
                 // Real art that merely lost its shader (or its whole material): recover each unique
                 // broken source to a FRESH URP/Lit (carrying colour/albedo/emission) and ASSIGN it into

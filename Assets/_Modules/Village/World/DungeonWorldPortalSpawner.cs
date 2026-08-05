@@ -79,8 +79,11 @@ namespace DeNelle.Village.World
                  "NavMesh. Once placed, this stops re-trying.")]
         public float PlaceRetryInterval = 1.0f;
 
-        [Tooltip("Visual height of the placeholder portal arch (metres).")]
-        public float PortalHeight = 4f;
+        [Tooltip("Height of the portal arch opening in metres (the keystone sits ~1.1 m above this). " +
+                 "WO-869: raised 4 -> 6 so the arch reads as a landmark from across the field at " +
+                 "2340x1080, not a thin frame you only notice up close. The hero is ~1.8 m, so 6 m " +
+                 "is roughly three hero-heights of clear opening.")]
+        public float PortalHeight = 6f;
 
         // ── Authored world placements (owner ruling 2026-07-13) ─────────────
         // "Portals are NOT in town — portals are wherever in the world we want",
@@ -179,6 +182,10 @@ namespace DeNelle.Village.World
             public Color[] BaseColors;
             public float FadeT;       // 0..1 reveal progress (1 = done)
             public VFXHandle GateVfx; // looping magic-circle rune ring at the arch base (null until attached)
+            // WO-869 threshold aura. Held so the WO-753 one-owner teardown can Stop() it -
+            // an orphaned looping portal aura with no portal under it is the exact bug that
+            // rule exists to prevent. Stays null until the owner tags the key (see below).
+            public VFXHandle ThresholdVfx;
         }
 
         private readonly List<Portal> _portals = new List<Portal>();
@@ -406,21 +413,86 @@ namespace DeNelle.Village.World
             // gets its arcane rune-ring immediately so it reads as an active gateway on
             // load; a fresh (undiscovered) portal blooms it on when the hero finds it
             // (Discover()), preserving the fog-of-war reveal.
-            if (entry.Discovered) AttachGateVfx(entry);
+            if (entry.Discovered) { AttachGateVfx(entry); AttachThresholdAura(entry); }
+
+            // WO-869 belt-and-braces: recover this portal's materials RIGHT NOW rather than
+            // waiting for the guard's next deferred sweep. SweepGameObject is the per-object
+            // seam (hideStrayPrimitives:false, so it repaints and never hides), and the arch is
+            // already registered as protected art above.
+            DeNelle.Core.MagentaGuard.SweepGameObject(root, "DungeonWorldPortalSpawner.BuildPortal");
 
             FlowTrace.Step("DungeonPortals",
                 $"BuildPortal: '{def.ResolveName()}' portal committed at {pos} " +
                 $"(discovered={entry.Discovered}, liveRenderers={liveRenderers}).");
         }
 
-        // Two posts + a lintel, tinted with the dungeon accent. Returns the renderers so the
-        // discovery layer can dim/restore them. Colliders stripped (the trigger is the only one).
+        // =====================================================================
+        // THE THRESHOLD ARCH (WO-869 REBUILD, owner 2026-08-04: "we need that portal to
+        // look way better ... the point is the whole thing needs redone").
+        // ---------------------------------------------------------------------
+        // WHAT WAS WRONG (owner Seeker capture docs/ui-review/2026-08-04-seeker/08-portal-magenta.png):
+        // the old arch was TWO 0.3 m sticks and a flat bar - a rectangle drawn in the air,
+        // 1.8 m wide and 4 m tall, with ZERO depth. Nothing about it said "this leads
+        // somewhere": no ground it stood on, no threshold to cross, no near/far face, and
+        // at 2340x1080 across an open field it read as a thin frame, not a landmark.
+        //
+        // THE REBUILD, and why each part earns its place:
+        //   PLINTH (2 stepped slabs) - the portal is PLANTED. A landmark you navigate toward
+        //     needs a footprint on the ground; the upper step is also the floor you cross,
+        //     which is what turns a frame into a THRESHOLD.
+        //   TWO PILLAR RINGS (front + back, 1.8 m apart in Z) - this is the single most
+        //     important change. Depth is what makes an opening read as a way INTO somewhere
+        //     rather than a picture frame: you see the near pillars, the far pillars behind
+        //     them, and a lit surface suspended between. One ring can never do that.
+        //   STEPPED PILLARS (base drum / shaft / capital) - a varying silhouette survives
+        //     distance. A constant-width stick reads as a line; a stepped column still reads
+        //     as architecture when it is 40 m away and 30 px tall.
+        //   LINTEL PER RING + CORNICE + KEYSTONE - gives the top a PEAK instead of a flat bar,
+        //     so the shape is identifiable against the skyline from across the field.
+        // The active threshold SURFACE and the aura are owned by PortalVFXController, which
+        // now fits itself to this arch's real bounds (so this geometry can be retuned freely).
+        //
+        // Still 100% code-built primitives: NO .unity scene edit, NO new art asset, NO bake
+        // (CLAUDE.md section 3). Cost is ~18 cube renderers sharing ONE material, so they
+        // SRP-batch - for the single landmark that is the entrance to a whole pillar.
+        // =====================================================================
+
+        // Half-width of the walk-through opening. 1.8 m half = a 3.6 m doorway: the hero is
+        // ~1.8 m, so it reads as something you walk INTO rather than squeeze past.
+        private const float ArchHalfWidth = 1.8f;
+        // Half-depth: the two pillar rings sit at +/- this, i.e. a 1.8 m deep threshold.
+        private const float ArchHalfDepth = 0.9f;
+        // Pillar cross-section.
+        private const float PillarThickness = 0.45f;
+
+        /// <summary>
+        /// Build the threshold arch (see the block comment above). Returns every renderer so the
+        /// discovery layer can dim/restore them. Colliders stripped - the sphere trigger on the
+        /// root is the only collider, so the player can walk through the opening.
+        /// </summary>
         private Renderer[] BuildArch(Transform parent, float h, Color accent)
         {
-            Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
+            // MAGENTA ROOT CAUSE (WO-869): this used a RAW Shader.Find, which returns NULL in a
+            // stripped player build - and when it did, `mat` stayed null, MakeBox's
+            // `if (mat != null)` skipped the assignment, and the cube kept Unity's DEFAULT
+            // material, which under URP renders MAGENTA. That is the pink arch in the Seeker
+            // capture, and the old unlit-sprite-shader fallback behind it only ever made it
+            // worse (an unlit sprite shader on a 3D arch). MagentaGuard.ResolveUrpLitShader is
+            // the ROBUST resolver written for exactly this: it falls back to BORROWING a URP/Lit
+            // shader off a material already live in the loaded scene, which is guaranteed to be
+            // in the build because it is serialized in a built scene.
+            Shader lit = DeNelle.Core.MagentaGuard.ResolveUrpLitShader();
+            FlowTrace.Step("DungeonPortals",
+                $"BuildArch: URP/Lit resolved={(lit != null)} via MagentaGuard.ResolveUrpLitShader " +
+                $"(rawShaderFind={(Shader.Find("Universal Render Pipeline/Lit") != null)}) - " +
+                "a false rawShaderFind with a true resolve IS the magenta cause, captured.");
             if (lit == null)
-                FlowTrace.Warn("DungeonPortals", "BuildArch: URP/Lit shader not found — arch will use the fallback material (may render untinted).");
-            Material mat = lit != null ? new Material(lit) : null;
+                FlowTrace.Fail("DungeonPortals",
+                    "BuildArch: NO URP/Lit shader resolvable - the arch will render with Unity's default " +
+                    "material, which is MAGENTA under URP. Add 'Universal Render Pipeline/Lit' to " +
+                    "GraphicsSettings AlwaysIncludedShaders.");
+
+            Material mat = lit != null ? new Material(lit) { name = "PortalArch_URP" } : null;
             if (mat != null)
             {
                 mat.EnableKeyword("_EMISSION");
@@ -430,26 +502,87 @@ namespace DeNelle.Village.World
                 Color archBase = PortalVFXController.ArchBaseColor(accent);
                 if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", archBase);
                 if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", PortalVFXController.ArchEmissionColor(accent));
+                if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 0f);   // URP: 0 = Opaque
+                if (mat.HasProperty("_ZWrite"))  mat.SetFloat("_ZWrite", 1f);
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
             }
 
-            var list = new List<Renderer>(3);
-            list.Add(MakeBox(parent, new Vector3(-0.9f, h * 0.5f, 0f), new Vector3(0.3f, h, 0.3f), mat));
-            list.Add(MakeBox(parent, new Vector3(0.9f, h * 0.5f, 0f), new Vector3(0.3f, h, 0.3f), mat));
-            list.Add(MakeBox(parent, new Vector3(0f, h + 0.15f, 0f), new Vector3(2.1f, 0.3f, 0.3f), mat));
+            float hw = ArchHalfWidth;
+            float dz = ArchHalfDepth;
+            float pt = PillarThickness;
+            float pillarX = hw + pt * 0.5f;             // pillar centre, just outside the opening
+            float outerW  = (pillarX + pt * 0.5f) * 2f; // full frame width including pillars
+            float outerD  = dz * 2f + pt;               // full frame depth including both rings
+
+            var list = new List<Renderer>(18);
+
+            // 1) PLINTH - two stepped slabs. Plants the portal and gives the threshold a floor.
+            list.Add(MakeBox(parent, "Arch_PlinthLower", new Vector3(0f, 0.175f, 0f),
+                             new Vector3(outerW + 1.2f, 0.35f, outerD + 1.0f), mat));
+            list.Add(MakeBox(parent, "Arch_PlinthUpper", new Vector3(0f, 0.50f, 0f),
+                             new Vector3(outerW + 0.4f, 0.30f, outerD + 0.3f), mat));
+
+            // 2) FOUR PILLARS in two depth rings - the read of DEPTH lives here.
+            float drumH    = 0.50f;
+            float capH     = 0.40f;
+            float drumTop  = 0.65f + drumH;                       // plinth top (0.65) + drum
+            float capBase  = h - capH;
+            float shaftH   = Mathf.Max(0.6f, capBase - drumTop);   // never inverts on a small h
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    float x = pillarX * sx;
+                    float z = dz * sz;
+                    list.Add(MakeBox(parent, "Arch_PillarBase", new Vector3(x, 0.65f + drumH * 0.5f, z),
+                                     new Vector3(pt * 1.6f, drumH, pt * 1.6f), mat));
+                    list.Add(MakeBox(parent, "Arch_PillarShaft", new Vector3(x, drumTop + shaftH * 0.5f, z),
+                                     new Vector3(pt, shaftH, pt), mat));
+                    list.Add(MakeBox(parent, "Arch_PillarCapital", new Vector3(x, capBase + capH * 0.5f, z),
+                                     new Vector3(pt * 1.5f, capH, pt * 1.5f), mat));
+                }
+            }
+
+            // 3) A LINTEL ACROSS EACH RING - closes each ring into its own arch, so the
+            //    silhouette is two nested openings, not one flat frame.
+            for (int sz = -1; sz <= 1; sz += 2)
+                list.Add(MakeBox(parent, "Arch_Lintel", new Vector3(0f, h + 0.225f, dz * sz),
+                                 new Vector3(outerW + 0.3f, 0.45f, pt * 1.3f), mat));
+
+            // 4) CORNICE + KEYSTONE - ties the two rings together and gives the top a PEAK,
+            //    which is what makes the shape identifiable against the sky at distance.
+            list.Add(MakeBox(parent, "Arch_Cornice", new Vector3(0f, h + 0.60f, 0f),
+                             new Vector3(outerW + 0.8f, 0.30f, outerD + 0.4f), mat));
+            list.Add(MakeBox(parent, "Arch_Keystone", new Vector3(0f, h + 1.10f, 0f),
+                             new Vector3(0.90f, 0.90f, pt * 1.6f), mat));
+
+            // WO-869: tell MagentaGuard these primitives are DELIBERATE ART. Without this the
+            // scene sweep classifies every Cube as a stray placeholder pill and DISABLES it -
+            // which would turn "magenta portal" into "no portal at all", a strictly worse bug
+            // (the feature is literally "stumble on a glowing arch"). Registered here, after the
+            // renderers exist, so the guard's very next sweep recovers rather than hides them.
+            DeNelle.Core.MagentaGuard.ProtectPrimitiveArt(parent != null ? parent.gameObject : null,
+                                                          "DungeonWorldPortalSpawner.BuildArch");
+
             return list.ToArray();
         }
 
-        private static Renderer MakeBox(Transform parent, Vector3 localPos, Vector3 scale, Material mat)
+        private static Renderer MakeBox(Transform parent, string name, Vector3 localPos, Vector3 scale, Material mat)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "Arch";
+            go.name = name;
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col); // arch shouldn't block movement; the trigger is the only collider
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPos;
             go.transform.localScale = scale;
             var r = go.GetComponent<Renderer>();
-            if (mat != null && r != null) r.sharedMaterial = mat;
+            if (r != null)
+            {
+                if (mat != null) r.sharedMaterial = mat;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                r.receiveShadows = true;
+            }
             return r;
         }
 
@@ -470,6 +603,7 @@ namespace DeNelle.Village.World
                     // Release the pooled rune-ring loop back to the shared VFX pool so a
                     // torn-down portal never leaves an orphaned looping effect behind.
                     p?.GateVfx?.Stop(true);
+                    p?.ThresholdVfx?.Stop(true);   // WO-753: no aura outlives its portal
                     _portals.RemoveAt(i);
                     continue;
                 }
@@ -501,6 +635,7 @@ namespace DeNelle.Village.World
             // Bloom the arcane rune ring on as the hero finds it -- the discovery reads
             // as the gateway "activating" (owner felt-test: make the entrance magical).
             AttachGateVfx(p);
+            AttachThresholdAura(p);
             Debug.Log($"[DungeonWorldPortals] Hero discovered a hidden dungeon portal (key {p.Key}).");
         }
 
@@ -541,6 +676,61 @@ namespace DeNelle.Village.World
                 (p.GateVfx != null
                     ? $"spawned at ({mistPos.x:F1}, {mistPos.y:F1}, {mistPos.z:F1}) (loop held) -- soft aura now spills out of the portal base."
                     : "no-op (VFXManager/catalog not ready or key unauthored -- regen the Hovl catalog) -- procedural glow remains."));
+        }
+
+        // =====================================================================
+        // WO-869 THRESHOLD AURA - routing WIRED, prefab pick HELD for the owner.
+        // ---------------------------------------------------------------------
+        // The WO asks for an aura from the shipped Mirza Beig Ultimate VFX pack, and the pack
+        // does contain exactly five portal loops (verified on disk, and the inventory doc
+        // docs/asset-inventory/04_vfx_spells_audio.md independently counts "portal x5"):
+        //     pf_vfx-ult_demo_psys_loop_ghostPortal
+        //     pf_vfx-ult_demo_psys_loop_ghostPortal2
+        //     pf_vfx-ult_demo_psys_loop_portalBlue
+        //     pf_vfx-ult_demo_psys_loop_portalBlueTutorial
+        //     pf_vfx-ult_demo_psys_loop_portalOrange
+        //
+        // WHICH ONE IS NOT MINE TO DECIDE. The standing owner directive is: the OWNER tags the
+        // VFX key in the Caster, the CLI maps key -> hook VERBATIM, and an UNTAGGED hook is HELD,
+        // never filled by whatever looks right (memory: vfx-map-owner-tags-no-creative-pick).
+        // None of the five is tagged in Assets/Editor/VfxManualPicks.json today, and the owner's
+        // 2026-08-04 relaxation covered the "projectile" category for TOWERS - not the portal.
+        //
+        // So the SEAM is fully built and the pick is the only thing missing: the moment the owner
+        // tags a row with this key, the aura lights up with no further code change. Until then
+        // PlayKey is a clean no-op and the rebuilt geometry + PP_GroundFog mist carry the read.
+        private const string ThresholdAuraKey = "Portal_Threshold_Aura";
+        // Sized to the 2*ArchHalfWidth opening so a tagged prefab fills the threshold rather than
+        // being lost inside it - retune once a real prefab is behind the key.
+        private const float ThresholdAuraScale = ArchHalfWidth * 2f;
+
+        private void AttachThresholdAura(Portal p)
+        {
+            if (p == null || p.Root == null) return;
+            if (p.ThresholdVfx != null) return;   // already holding the loop (idempotent)
+
+            // Centre of the opening, between the two pillar rings - the surface you cross.
+            Vector3 thresholdPos = p.Root.position + p.Root.up * (PortalHeight * 0.5f);
+            p.ThresholdVfx = VFXManager.PlayKey(
+                ThresholdAuraKey, thresholdPos, p.Root.rotation, p.Root,
+                null, ThresholdAuraScale);
+
+            if (p.ThresholdVfx != null)
+            {
+                FlowTrace.Step("Portal",
+                    $"AttachThresholdAura: '{ThresholdAuraKey}' aura spawned at the threshold centre " +
+                    $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) scale={ThresholdAuraScale:0.0} (loop held).");
+                return;
+            }
+
+            // Section 12: say WHY it is absent, and say it once, with the shortlist - so this reads as a
+            // deliberate HOLD in a capture rather than a broken effect someone re-debugs later.
+            FlowTrace.Once("Portal", "threshold-aura-untagged",
+                $"AttachThresholdAura: key '{ThresholdAuraKey}' is NOT catalogued - the aura is HELD, " +
+                "awaiting an owner tag in the VfxCaster (owner tags, CLI maps verbatim). Shortlist from the " +
+                "owned Mirza Beig Ultimate VFX pack: pf_vfx-ult_demo_psys_loop_ghostPortal, ghostPortal2, " +
+                "portalBlue, portalBlueTutorial, portalOrange. Routing is wired - tagging the key is the only " +
+                "step left. The rebuilt arch + PP_GroundFog mist carry the read meanwhile.");
         }
 
         private static void ApplyDim(Portal p, float brightness)

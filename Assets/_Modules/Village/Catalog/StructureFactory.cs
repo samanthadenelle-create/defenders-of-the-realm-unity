@@ -698,6 +698,11 @@ namespace DeNelle.Village
                     // VISUAL style ("pellet"|"bolt"|"spell"; null = pellet). Data-driven —
                     // the component resolves + instruments the string itself.
                     t.ProjectileStyle = r.projectileStyle;
+                    // CATALOG IDENTITY (WO-870): the entries[].id this tower was built from.
+                    // Presentation only - DefenseTower uses it solely to look up owner-tagged
+                    // per-tower projectile VFX keys (the Archer and the Ballista are otherwise
+                    // indistinguishable: both bolt / None / ground). Never a gameplay input.
+                    t.CatalogId = entry.id;
                     break;
                 }
 

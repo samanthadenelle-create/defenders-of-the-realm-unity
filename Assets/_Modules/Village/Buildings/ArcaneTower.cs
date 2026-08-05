@@ -422,7 +422,8 @@ namespace DeNelle.Village
             // legacy Casting_Fire_2 (null-safe no-op if the key/prefab is missing). Reads by
             // MOTION (violet gather-and-flash) so it's colorblind-legible; BlastColor is a hint.
             // TIER ESCALATION: scale the cast by the upgrade tier so a maxed spire winds up bigger.
-            // Owner VfxManualPicks: SimpleCast_Cast (muzzle) + ARcaneTower_Projectile (travel).
+            // Owner VfxManualPicks: SimpleCast_Cast (muzzle). The TRAVEL hook is HELD awaiting an
+            // Aether-matching tag (owner 2026-08-04 "Aether wins") - see the block at FireBlast.
             Guard.Try("TowerVfx", "arcane muzzle cast", () =>
                 VFXManager.PlayKey("SimpleCast_Cast", muzzle, default, null, BlastColor, VfxScale));
             FlowTrace.Throttle("TowerVfx", $"arcane-fire:{GetInstanceID()}", 1f,
@@ -461,13 +462,41 @@ namespace DeNelle.Village
                 // travelling shot reads as an arcane projectile in motion (colorblind-legible by its
                 // TRAIL/MOTION, not tint). Loop keys return a VFXHandle — Stop() it on arrival so the
                 // trail doesn't linger after detonation. Null-safe if the key/prefab is missing.
-                // Owner pick ARcaneTower_Projectile (Buff orange shot) — level 2+ can layer
-                // ArcaneTower-Baselevel pink bolt via tier; base always uses the arcane pick.
-                string travelKey = _vfxLevel >= 2
-                    ? "ArcaneTower-Baselevel_Projectile"
-                    : "ARcaneTower_Projectile";
-                var boltFx = VFXManager.PlayKey(travelKey, muzzle, default, null,
-                                                BlastColor, 0f, 0f, bolt.transform);
+                // -- OWNER RULING 2026-08-04, FINAL: this hook is HELD, awaiting a tag ---------
+                // The ruling history matters, because it is the reason this deliberately spawns
+                // NO travelling effect rather than falling back to something:
+                //   1. Earlier tonight: "fireball can go from arcane tower" -> FireballTower_Projectile
+                //      was wired here for every tier, retiring the old two-rung ladder.
+                //   2. Then WO-872's audit found this tower deals AETHER damage but RENDERS FIRE,
+                //      and ruled the visual must match the damage. An orange fireball is exactly
+                //      the Fire visual that ruling exists to remove, so the two rulings asked
+                //      opposite things of this one tower.
+                //   3. Owner resolved it: "Aether wins, retire the fireball mapping, and use
+                //      fireball in casting magic from DPS mages."
+                //
+                // So tower_arcane_spire now has NO tagged projectile: its element is Aether and no
+                // Aether-looking pick is tagged for it. Per the standing VFX law the owner tags the
+                // key and the CLI maps it VERBATIM - an untagged hook is HELD, never filled with
+                // whatever looks aetheric. That explicitly rules out Arcane_Projectile and the two
+                // retired ARcaneTower_Projectile / ArcaneTower-Baselevel_Projectile rows.
+                //
+                // The fireball rows are NOT dead - they are REASSIGNED to the hero magic-cast lane
+                // (WO-875). They stay authored in VfxManualPicks.json + the catalog; this file just
+                // stops referencing them. Do not "restore" any of it here.
+                //
+                // The shot still reads: the code-built emissive orb above flies, and the pooled
+                // Impact_ExplosionAether detonation lands in ApplyBlast. Only the travelling trail
+                // is absent, and it lights up with no code change the moment a key is tagged.
+                string travelKey = null;   // HELD - see the block above. Do NOT substitute a pick.
+                if (string.IsNullOrEmpty(travelKey))
+                    FlowTrace.Once("TowerVfx", "arcane-travel-untagged",
+                        "ArcaneTower travelling-projectile hook is HELD: tower_arcane_spire deals Aether " +
+                        "but has NO owner-tagged Aether projectile (owner 2026-08-04 'Aether wins, retire " +
+                        "the fireball mapping'). No effect is substituted by design - tag a key in the " +
+                        "VfxCaster and this lights up with no code change. Orb + Aether detonation still play.");
+                var boltFx = !string.IsNullOrEmpty(travelKey)
+                    ? VFXManager.PlayKey(travelKey, muzzle, default, null, BlastColor, 0f, 0f, bolt.transform)
+                    : null;
 
                 // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys, taking
                 // its visual child with it). The AoE blast VFX (pooled Impact_ExplosionAether) +
