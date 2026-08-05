@@ -24,6 +24,11 @@
 //   / Particles / UI shaders are left untouched. Each unique material is processed once and
 //   already-URP materials are skipped, so repeated loads are no-ops.
 //
+// WHAT IT DELIBERATELY DOES *NOT* TOUCH (2026-08-05): an EMPTY material slot on a
+//   ParticleSystemRenderer whose other slot(s) hold a real material — that is the vendor
+//   particle/trail pair, not a break (see IsVendorParticleNullSlot). The guard's own
+//   "recovery" there was a shipped visual regression, not a fix.
+//
 // Mirrors GroundZFightFixer's lifecycle: [RuntimeInitializeOnLoadMethod(AfterSceneLoad)]
 // + SceneManager.sceneLoaded re-arm (the player boots into Title and reaches gameplay
 // scenes later), every entry point wrapped in try/catch (an uncaught sceneLoaded
@@ -529,11 +534,16 @@ namespace DeNelle.Core
                 // material draws with the engine default = MAGENTA (the same visible defect as a
                 // stripped shader), so the old `m != null &&` detection silently skipped the very
                 // case it was written to catch.
+                // ...EXCEPT on a ParticleSystemRenderer that carries a real material in another
+                // slot — there an empty slot is the VENDOR TRAIL CONVENTION, not a break. See
+                // IsVendorParticleNullSlot: this is the F8 2026-08-05 false positive, and the
+                // "recovery" it triggered was itself the shipped regression.
+                bool particleTrailConvention = IsVendorParticleNullSlot(r, mats);
                 Material brokenMat = null;
                 bool anyOffender = false;
                 foreach (var m in mats)
                 {
-                    if (m == null) { anyOffender = true; continue; }
+                    if (m == null) { if (!particleTrailConvention) anyOffender = true; continue; }
                     if (IsBrokenShader(m.shader)) { brokenMat = m; anyOffender = true; break; }
                 }
                 if (!anyOffender) continue;
@@ -579,20 +589,36 @@ namespace DeNelle.Core
                 {
                     var m = work[mi];
                     bool nullSlot = m == null;
+                    // Vendor trail-only particle slot: leave it EMPTY. Assigning anything here is the
+                    // white-blob regression, and there is nothing to recover — no art is missing.
+                    if (nullSlot && particleTrailConvention) continue;
                     if (!nullSlot && !IsBrokenShader(m.shader)) continue;
 
                     Material fresh;
                     if (nullSlot)
                     {
-                        // One shared white URP/Lit for every empty slot in the process. Re-created if a
-                        // previous scene unload destroyed it (Unity fake-null).
+                        // ALL-NULL ParticleSystemRenderer — a genuine defect (nothing at all to draw),
+                        // but URP/Lit is NEVER the right paint for a particle pass: opaque lit geometry
+                        // where a soft additive quad belongs is how a ground rune became a white blob.
+                        // This file resolves only URP/Lit + URP/Terrain/Lit — no particle shader — so
+                        // REPORT it at error severity and leave the slots alone. Fix at source (assign
+                        // the pack's particle material), which the probe line names exactly.
+                        if (r is ParticleSystemRenderer)
+                        {
+                            if (_nullSlotSeen.Add(HierarchyPath(r.transform) + "#" + mi))
+                                Probe(context, r, mi, null, wasRecovered: false);
+                            continue;
+                        }
+                        // Mesh / SkinnedMesh null slot — unchanged: one shared white URP/Lit for every
+                        // empty slot in the process. Re-created if a previous scene unload destroyed it
+                        // (Unity fake-null).
                         if (_nullSlotFresh == null)
                             _nullSlotFresh = new Material(_lit) { name = "NullSlot_MagentaFix" };
                         fresh = _nullSlotFresh;
                         if (_nullSlotSeen.Add(HierarchyPath(r.transform) + "#" + mi))
                         {
                             recovered++;
-                            ProbeFail(context, r, mi, null);
+                            Probe(context, r, mi, null, wasRecovered: true);
                         }
                     }
                     else if (!_freshFor.TryGetValue(m, out fresh) || fresh == null)
@@ -603,12 +629,19 @@ namespace DeNelle.Core
                         fresh = BuildRecoveredMaterial(m);   // fresh URP/Lit, once per unique source
                         _freshFor[m] = fresh;
                         recovered++;
-                        ProbeFail(context, r, mi, m);
+                        Probe(context, r, mi, m, wasRecovered: true);
                         // WARN (not Fail): this line is a RECOVERY (the material was fixed in place), not a
                         // failure, and it fired ~8x per castle load — flooding the errors-only break-log and
-                        // masking the owner's real F8 flags. Demoted to Warn so it stays in Player.log for
-                        // diagnosis (with the EXACT object, so the source can still be fixed at root) but no
-                        // longer trips the F8 error capture. Recovery behavior unchanged.
+                        // masking the owner's real F8 flags.
+                        //
+                        // 2026-08-05: the de-flood NEVER ACTUALLY WORKED. This Warn was only the SECOND of
+                        // two lines per offender — the companion probe line above still went out through
+                        // FlowTrace.Fail, so every recovery kept landing in the errors-only break-log
+                        // anyway (that is how the Hovl false positive reached the owner's F8 capture as an
+                        // ERROR). Probe() now takes wasRecovered and picks the severity itself: a recovered,
+                        // understood case logs at WARN (Player.log only, still naming the exact object so
+                        // the source can be fixed at root); a genuine UNRECOVERED break still logs at FAIL
+                        // and still trips the F8 capture. Recovery behavior unchanged.
                         FlowTrace.Warn("MagentaGuard",
                             $"recovered MAGENTA renderer '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') " +
                             $"material '{m.name}' dead-shader '{(m.shader != null ? m.shader.name : "<null>")}' " +
@@ -626,24 +659,66 @@ namespace DeNelle.Core
         /// source material (or per null slot), so a body respawned 20x names itself once and the
         /// errors-only break-log is not flooded.
         /// <para/>
+        /// SEVERITY MATCHES OUTCOME (2026-08-05): <paramref name="wasRecovered"/> true = the slot was
+        /// repainted, so this is an understood, already-handled case and logs at WARN (Player.log only,
+        /// out of the errors-only F8 break-log). False = we could NOT recover it and the defect is
+        /// still on screen, so it stays at FAIL and still trips the F8 capture. Before this the line
+        /// was unconditionally Fail, which is why the comment at the recovery site claimed a de-flood
+        /// that had never taken effect.
+        /// <para/>
         /// class= splits the five magenta causes so a capture says WHICH one to fix at source:
         ///   M1 shader stripped from the build (null / Hidden/InternalErrorShader)
         ///   M2 material slot is NULL (dangling GUID / never assigned)
         ///   M3 Built-in pipeline shader (Standard / Specular setup / Legacy) under URP
         ///   M5 shader present + named but !isSupported (failed to compile on-device)
+        /// <para/>
+        /// On a NULL slot the shader/supported columns are hardcoded placeholders, NOT measurements —
+        /// there is no shader to interrogate. Never read `supported=false` on an M2 line as evidence
+        /// of a shader problem (that misread is what made the Hovl trail slot look like a real break).
         /// </summary>
-        private static void ProbeFail(string cause, Renderer r, int slot, Material m)
+        private static void Probe(string cause, Renderer r, int slot, Material m, bool wasRecovered)
         {
             var sh = m != null ? m.shader : null;
             string matName = m != null ? m.name : "NULL";
             string shName = sh != null ? sh.name : "NULL";
-            string supported = sh != null ? sh.isSupported.ToString() : "false";
-            FlowTrace.Fail("MagentaProbe",
-                $"FAIL cause={cause} obj='{HierarchyPath(r.transform)}' slot={slot} " +
-                $"material='{matName}' shader='{shName}' supported={supported} class={ClassifyMagenta(m)}");
+            string supported = sh != null ? sh.isSupported.ToString() : "n/a";
+            string line =
+                $"{(wasRecovered ? "RECOVERED" : "FAIL")} cause={cause} obj='{HierarchyPath(r.transform)}' slot={slot} " +
+                $"material='{matName}' shader='{shName}' supported={supported} class={ClassifyMagenta(m)}";
+            if (wasRecovered) FlowTrace.Warn("MagentaProbe", line);
+            else FlowTrace.Fail("MagentaProbe", line);
         }
 
-        /// <summary>Which of the five magenta classes this material is (see <see cref="ProbeFail"/>).</summary>
+        // -- VENDOR PARTICLE / TRAIL CONVENTION (F8 false positive, 2026-08-05) ------------
+        // PROVEN AT SOURCE, "Assets/Hovl Studio/Magic circles/Prefabs/Loop version/Magic circle
+        // electro loop.prefab" (ParticleSystemRenderer &199707102822579710, GameObject
+        // 'ElectricyCenter'): m_Materials is [ {fileID: 0}, Trail21cg.mat ]. On a
+        // ParticleSystemRenderer slot 0 is the PARTICLE material and slot 1 is the TRAIL material,
+        // so a trail-only system leaves slot 0 LITERALLY EMPTY by vendor design. That is an empty
+        // slot, not a dangling GUID — no art is missing and nothing renders magenta, because with
+        // no particle material there is simply nothing drawn for the particle pass. 28 of the 261
+        // Hovl prefabs ship this pattern.
+        //
+        // The guard used to call that slot an offender and assign the shared OPAQUE URP/Lit
+        // ("NullSlot_MagentaFix") into it. The assignment sat OUTSIDE the dedupe, so it was
+        // unconditional and STUCK in the built player: the aura's ground rune shipped to Android as
+        // a WHITE OPAQUE BLOB. The "recovery" was the real regression; the reported break was not
+        // real. IsBrokenShader deliberately passes Particles shaders — but the null-slot branch
+        // short-circuited before that whitelist was ever consulted, so it never protected particles.
+        //
+        // THE TEST: on a ParticleSystemRenderer a null slot is LEGITIMATE as long as some OTHER slot
+        // holds a valid material (that is the particle/trail pair). An ALL-null particle renderer has
+        // nothing to draw at all and IS still a genuine defect — it is reported, never repainted.
+        // Mesh / SkinnedMesh renderers are untouched by this: their null slots stay real offenders.
+        private static bool IsVendorParticleNullSlot(Renderer r, Material[] mats)
+        {
+            if (!(r is ParticleSystemRenderer) || mats == null) return false;
+            foreach (var m in mats)
+                if (m != null) return true;   // some OTHER slot is valid -> the empty one is by design
+            return false;                     // every slot null -> a real defect, keep reporting it
+        }
+
+        /// <summary>Which of the five magenta classes this material is (see <see cref="Probe"/>).</summary>
         private static string ClassifyMagenta(Material m)
         {
             if (m == null) return "M2";
