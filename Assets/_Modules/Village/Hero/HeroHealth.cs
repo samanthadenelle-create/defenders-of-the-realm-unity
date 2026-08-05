@@ -838,9 +838,19 @@ namespace DeNelle.Village
             Vector3 target = _spawnPosition;
             if (target == Vector3.zero)
             {
-                var heart = FindAnyObjectByType<HeartController>();
-                if (heart != null)
-                    target = heart.transform.position + heart.transform.forward * 4f;
+                // OWNER RULING 2026-08-05 ("don't spawn inside the tree like we have since day one"):
+                // heart.position + forward*4 resolves to (0,0,16) — 4 m from the trunk CENTRE, the
+                // deepest-inside value in the codebase. Prefer HubSpawnInjector's tree-edge + 2 m,
+                // navmesh-seated point; keep the old expression as the fallback so nothing regresses
+                // when the injector has not run (non-hub scene / renderers or navmesh missing).
+                if (DeNelle.Village.World.HubSpawnInjector.TryGetHubSpawn(out Vector3 hubSpawn))
+                    target = hubSpawn;
+                else
+                {
+                    var heart = FindAnyObjectByType<HeartController>();
+                    if (heart != null)
+                        target = heart.transform.position + heart.transform.forward * 4f;
+                }
             }
 
             // ── OWNER F8 seq 638/640: "dead in air" + "on death respawned where i died not
@@ -864,9 +874,19 @@ namespace DeNelle.Village
             if ((target - transform.position).sqrMagnitude < MinRespawnMoveM * MinRespawnMoveM)
             {
                 Vector3 fallback = ResolveTownSpawn();
-                var heart = FindAnyObjectByType<HeartController>();
-                if ((fallback - transform.position).sqrMagnitude < MinRespawnMoveM * MinRespawnMoveM && heart != null)
-                    fallback = heart.transform.position + heart.transform.forward * 4f;
+                if ((fallback - transform.position).sqrMagnitude < MinRespawnMoveM * MinRespawnMoveM)
+                {
+                    // Same owner ruling as above: heart.forward*4 is (0,0,16), INSIDE the canopy.
+                    // Tree-edge + 2 m first; the old heart-relative expression stays as the fallback.
+                    if (DeNelle.Village.World.HubSpawnInjector.TryGetHubSpawn(out Vector3 hubSpawn))
+                        fallback = hubSpawn;
+                    else
+                    {
+                        var heart = FindAnyObjectByType<HeartController>();
+                        if (heart != null)
+                            fallback = heart.transform.position + heart.transform.forward * 4f;
+                    }
+                }
 
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Respawn",
                     "in-place respawn target " + target + " is within " + MinRespawnMoveM + "m of the death spot " +
@@ -890,7 +910,11 @@ namespace DeNelle.Village
         {
             var marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
             if (marker == null) marker = GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
-            if (marker != null) return marker.transform.position;
+            if (marker != null) return marker.transform.position;   // HubSpawnInjector repoints this at runtime
+            // No marker: prefer the injector's resolved tree-edge point over the raw courtyard-centre
+            // literal — (0, liftY, 0) is 12 m from the trunk centre and INSIDE the canopy (owner ruling
+            // 2026-08-05). Falls back to the literal when the injector has not run (non-hub scene).
+            if (DeNelle.Village.World.HubSpawnInjector.TryGetHubSpawn(out Vector3 hubSpawn)) return hubSpawn;
             float liftY = UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f);
             return new Vector3(0f, liftY, 0f);
         }

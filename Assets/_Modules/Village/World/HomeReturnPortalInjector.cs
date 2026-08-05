@@ -151,8 +151,15 @@ namespace DeNelle.Village.World
             // fleet's own courtyard warp uses ((0, liftY, 0); HeroLocomotion.WarpTo re-samples
             // onto the courtyard navmesh from there). liftY mirrors CastleHubBuilder's
             // PlayerPrefs-tunable island raise.
+            // OWNER RULING 2026-08-05: (0, liftY, 0) is 12 m from the trunk centre and INSIDE the
+            // tree's >=16 m canopy — landing here is landing in the tree. Prefer HubSpawnInjector's
+            // tree-edge + 2 m, navmesh-seated hub point. requireCurrentScene:false because this is
+            // deliberately a point in the hub scene we are travelling TO (this legacy two-scene path
+            // authors from OUTSIDE the hub). Falls back to the old literal when it has not resolved.
             float liftY = PlayerPrefs.GetFloat("castle.liftY", 3f);
-            var courtyard = new Vector3(0f, liftY, 0f);
+            Vector3 courtyard;
+            if (!HubSpawnInjector.TryGetHubSpawn(out courtyard, requireCurrentScene: false))
+                courtyard = new Vector3(0f, liftY, 0f);
             string hubTarget = DeNelle.Core.SceneRouter.Castle;   // merged: the active scene itself
 
             int built = 0;
