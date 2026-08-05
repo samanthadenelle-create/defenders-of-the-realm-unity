@@ -4,15 +4,27 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// While BuildTimerService.IsBuilding(key): renderers are dimmed, the DefenseTower
-// behavior is disabled (a tower under construction does not fire), and a small
-// world-space countdown floats above the piece. On JobCompleted (or the offline
-// sweep having already finished the job) the visual reveals: colors restore,
-// behavior re-enables, this component removes itself.
+// While BuildTimerService.IsBuilding(key): renderers are dimmed, EVERY combat
+// behaviour on the piece is disabled (a structure under construction does not
+// fight), and a small world-space countdown floats above the piece. On JobCompleted
+// (or the offline sweep having already finished the job) the visual reveals: colors
+// restore, behaviours re-enable, this component removes itself.
 //
 // Self-healing: reveal is driven BOTH by the JobCompleted event and by an
 // IsBuilding() check each Update — a missed event (scene churn, load order)
 // can delay the reveal by at most one frame, never strand a ghost scaffold.
+//
+// -- 2026-08-04: THE SCAFFOLD ONLY SILENCED HALF THE TOWERS -------------------
+// This file gated exactly ONE component type -- DefenseTower -- so the AoE
+// ArcaneTower (catalog row 'tower_arcane_spire', behaviorId "ArcaneTower") acquired
+// targets and detonated blasts for its ENTIRE build timer. The owner's own F8
+// capture (logs/f8-inbox/LATEST_CAPTURE.md, 2026-08-04 21:29) is the proving data:
+// five [Flow:BuildTimerUI] 'tower_arcane_spire@..' scaffolds ticking at
+// remaining=270s while [Flow:HUD] reports wave=True -- i.e. 4.5 minutes of free
+// defence per spire. The exploit was worth 15 s before WO-855 Phase 4 derived the
+// build tier from the cost basket; that change stretched the same hole by up to 18x.
+// SilenceCombat/RestoreCombat below now cover every combat family a placed
+// structure can carry. See SilenceCombat for what is deliberately left alone.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -35,7 +47,13 @@ namespace DeNelle.Village
         private string _key;
         private readonly List<Renderer> _renderers = new List<Renderer>();
         private readonly List<Color[]> _originalColors = new List<Color[]>();
-        private Behaviour _disabledTower;
+
+        /// <summary>The combat behaviours this scaffold SILENCED for the duration of the build
+        /// job. Only ones that were live at Bind are recorded, so Reveal restores the exact prior
+        /// state (see <see cref="SilenceCombat"/>). Replaces the single DefenseTower-only
+        /// `_disabledTower` field that let every Arcane Spire fight through its timer.</summary>
+        private readonly List<Behaviour> _silenced = new List<Behaviour>();
+
         private TextMeshPro _label;
 
         // Owner 2026-07-24: the CALM "work in progress" tell — the owner-tagged
@@ -145,10 +163,9 @@ namespace DeNelle.Village
                 }
             });
 
-            // A tower under construction does not fire (walls keep blocking — scaffold
-            // is still physically there; only the ACTIVE behavior pauses).
-            _disabledTower = GetComponentInChildren<DefenseTower>(true);
-            if (_disabledTower != null) _disabledTower.enabled = false;
+            // A structure under construction does not fight (walls keep blocking -- the scaffold
+            // is still physically there; only the ACTIVE behaviours pause).
+            SilenceCombat();
 
             Guard.Try("Build", "scaffold label", () =>
             {
@@ -177,6 +194,129 @@ namespace DeNelle.Village
             if (svc != null) svc.JobCompleted += OnJobCompleted;
             FlowTrace.Step("Build", $"under-construction armed for '{_key}'"
                 + (_upgradeLoop != null ? " (circling upgrade loop held)." : " (upgrade loop no-op — key/catalog not ready)."));
+        }
+
+        // =====================================================================
+        //  The construction GATE -- one place decides whether a structure may act
+        // =====================================================================
+
+        /// <summary>
+        /// A structure with an in-flight build job does NOT fight. Silences EVERY combat
+        /// behaviour family a placed structure can carry -- not just <see cref="DefenseTower"/>:
+        ///
+        ///   * <see cref="DefenseTower"/> -- the single-target archer / wall-wizard / siege /
+        ///     catapult tower (behaviorId "DefenseTower"; four catalog rows). The ONLY family
+        ///     this method used to cover.
+        ///   * <see cref="ArcaneTower"/> -- the AoE arcane spire (behaviorId "ArcaneTower",
+        ///     catalog row 'tower_arcane_spire'). THE 2026-08-04 DEFECT: a spire ran its full
+        ///     Acquire/FireBlast loop through the whole build timer because
+        ///     GetComponentInChildren&lt;DefenseTower&gt;() returns null on it. Proven by the
+        ///     owner's F8 capture (five spires at remaining=270s during a live wave).
+        ///   * <see cref="TowerCombat"/> -- the fire loop of the OTHER tower family
+        ///     (Tower.EnsureCombat). Not reachable from BuildModeController placement today,
+        ///     but a gate must never half-cover a type split -- that is how this bug happened.
+        ///
+        /// Only behaviours that were ENABLED are recorded, so <see cref="RestoreCombat"/>
+        /// restores the exact prior state and can never switch on something deliberately off.
+        ///
+        /// DELIBERATELY NOT SILENCED:
+        ///   * <c>Tower</c> itself -- its OnEnable/OnDisable maintain the live tower registry the
+        ///     HUD counts (Tower.cs), so disabling the component would miscount the town's
+        ///     towers. TowerCombat above is the thing that actually fires.
+        ///   * WallSegment / Gate -- a scaffold is still physically there; walls must keep
+        ///     blocking and keep their "Structure" LoS layer, or towers shoot through the site.
+        ///   * Every economy behaviour (CrystalMine / ResourceCollector / HealingFountain).
+        ///     They share this defect but are owned by other lanes -- reported, not fixed here.
+        ///
+        /// A structure with NO scaffold (a baked arena/garrison tower, an EnemyOwned turret,
+        /// the prepaid tutorial tower) never reaches this method at all: the gate is opt-in by
+        /// attachment, so those paths are byte-identical to before.
+        /// </summary>
+        private void SilenceCombat()
+        {
+            _silenced.Clear();
+            CollectEnabled<DefenseTower>(_silenced);
+            CollectEnabled<ArcaneTower>(_silenced);
+            CollectEnabled<TowerCombat>(_silenced);
+
+            for (int i = 0; i < _silenced.Count; i++) _silenced[i].enabled = false;
+
+            // Sec.12 proving line: a capture must show the tower WITHHOLDING FIRE and why, so
+            // "the queued tower still shot me" can never be diagnosed by theory again.
+            if (_silenced.Count > 0)
+                FlowTrace.Step("BuildGate",
+                    $"'{_key}' UNDER CONSTRUCTION -> WITHHOLDING FIRE on '{name}': silenced " +
+                    $"{_silenced.Count} combat behaviour(s) [{Describe(_silenced)}]. It cannot acquire, " +
+                    "fire or damage until the build job completes.");
+            else
+                FlowTrace.Step("BuildGate",
+                    $"'{_key}' UNDER CONSTRUCTION on '{name}': no combat behaviour to silence " +
+                    "(non-combat structure) -- dim + countdown only.");
+        }
+
+        /// <summary>
+        /// Release the gate: re-enable exactly what <see cref="SilenceCombat"/> silenced, so a
+        /// completed tower engages from THIS frame with no relaunch. Components destroyed with
+        /// the structure in the meantime are skipped (never a null-deref on teardown).
+        /// </summary>
+        private void RestoreCombat()
+        {
+            if (_silenced.Count == 0) return;
+            int restored = 0;
+            for (int i = 0; i < _silenced.Count; i++)
+            {
+                var b = _silenced[i];
+                if (b == null) continue;   // torn down with the structure while building
+                b.enabled = true;
+                restored++;
+            }
+            FlowTrace.Step("BuildGate",
+                $"'{_key}' BUILD COMPLETE -> FIRE RELEASED on '{name}': re-enabled {restored}/" +
+                $"{_silenced.Count} combat behaviour(s) [{Describe(_silenced)}]. Engages this frame.");
+            _silenced.Clear();
+        }
+
+        /// <summary>Append every ENABLED <typeparamref name="T"/> in this hierarchy (inactive
+        /// objects included) to <paramref name="into"/>.</summary>
+        private void CollectEnabled<T>(List<Behaviour> into) where T : Behaviour
+        {
+            var found = GetComponentsInChildren<T>(true);
+            if (found == null) return;
+            for (int i = 0; i < found.Length; i++)
+                if (found[i] != null && found[i].enabled) into.Add(found[i]);
+        }
+
+        /// <summary>Comma-joined type names, for the trace lines above.</summary>
+        private static string Describe(List<Behaviour> list)
+        {
+            if (list == null || list.Count == 0) return "none";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append(list[i] != null ? list[i].GetType().Name : "<destroyed>");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// THE one readable answer to "is this structure still under construction?" -- DERIVED,
+        /// never stored: true iff <paramref name="host"/> carries a live scaffold whose job the
+        /// Obsidian queue still reports in flight (<see cref="BuildTimerService.IsBuilding"/>,
+        /// which covers a RUNNING job and one still waiting in the FIFO pending queue alike).
+        ///
+        /// There is no second notion of "is this built" anywhere: the queue owns the fact, this
+        /// component owns the key, and everything else asks here. A baked scene tower, an
+        /// EnemyOwned garrison turret and a finished build all carry no scaffold, so they answer
+        /// false -- which is exactly why they are unaffected by the gate.
+        /// </summary>
+        public static bool IsUnderConstruction(GameObject host)
+        {
+            if (host == null) return false;
+            var scaffold = host.GetComponentInChildren<UnderConstructionVisual>(true);
+            if (scaffold == null) return false;
+            var svc = BuildTimerService.Instance;
+            return svc != null && svc.IsBuilding(scaffold._key);
         }
 
         /// <summary>
@@ -212,7 +352,14 @@ namespace DeNelle.Village
             if (job.StructureId == _key) Reveal();
         }
 
-        private void Reveal()
+        /// <summary>
+        /// Construction finished: restore the albedo, RELEASE the combat gate
+        /// (<see cref="RestoreCombat"/>), drop the countdown + the circling loop, and remove
+        /// this component. Driven by the JobCompleted event and by the Update self-heal; PUBLIC
+        /// so a headless regression can drive the completed-tower case without a play session
+        /// (there is no other way in -- the event needs a live BuildTimerService).
+        /// </summary>
+        public void Reveal()
         {
             Guard.Try("Build", "scaffold reveal", () =>
             {
@@ -228,14 +375,27 @@ namespace DeNelle.Village
                         if (saved[m] != default) mats[m].SetColor(prop, saved[m]);
                     }
                 }
-                if (_disabledTower != null) _disabledTower.enabled = true;
-                if (_label != null) Destroy(_label.gameObject);
+                RestoreCombat();
+                if (_label != null) DestroyHost(_label.gameObject);
             });
             // Stop the circling loop IMMEDIATELY on completion so it can't linger under the
             // UpgradeStructureComplete_Aura fireworks the upgrade-apply path fires this same beat.
             StopUpgradeLoop();
             FlowTrace.Step("Build", $"construction complete — revealed '{_key}'");
-            Destroy(this);
+            DestroyHost(this);
+        }
+
+        /// <summary>
+        /// Destroy that also works OUTSIDE play mode. UnityEngine.Object.Destroy THROWS in edit
+        /// mode ("Destroy may not be called from edit mode"), which would abort the reveal
+        /// half-done for any headless edit-mode caller. Play mode is untouched -- it takes the
+        /// deferred Destroy exactly as before.
+        /// </summary>
+        private static void DestroyHost(UnityEngine.Object obj)
+        {
+            if (obj == null) return;
+            if (Application.isPlaying) Destroy(obj);
+            else DestroyImmediate(obj);
         }
 
         private void OnDestroy()
