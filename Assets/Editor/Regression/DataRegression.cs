@@ -450,6 +450,14 @@ namespace DeNelle.Editor
             // answers stay deliberately different (player seam = liveness, enemy seam = +PlayerOwned) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-targetable suite", () => { if (!DeNelle.Editor.Regression.StructureTargetableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-targetable] " + r); });
 
+            // --- PHANTOM COLLECTOR INCOME (2026-08-04): an empty town must earn ZERO. The
+            // harvest tick's only guard was `GetLevel(id) < 1`, and GetLevel defaults to 1
+            // and never asks whether the building exists, so all three resource buildings
+            // paid out from t=0 - straight to the wallet, uncapped, no Collect tap. Pins the
+            // existence gate (WO-834 everBuiltStructureIds / a live collector), the deleted
+            // direct-grant fallback, and the zero-seed founding bootstrap it must not break ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-income suite", () => { if (!DeNelle.Editor.Regression.CollectorIncomeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-income] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

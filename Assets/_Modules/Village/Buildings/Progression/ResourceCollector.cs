@@ -33,7 +33,21 @@ namespace DeNelle.Village.Buildings.Progression
         public string BuildingId => _buildingId;
         public string SourceId => _buildingId;
         public HarvestResource Resource => ResolveResource();
-        public bool IsActive => IsAlive && !_broken && ResourceBuildingState.GetLevel(_buildingId) > 1;
+
+        /// <summary>
+        /// A standing, unbroken collector is PRODUCING. The retired
+        /// <c>GetLevel(_buildingId) &gt; 1</c> clause was removed 2026-08-04: it predates
+        /// (this file has carried it since creation) the owner's 2026-07-13 evening ruling
+        /// already recorded in <see cref="ResourceBuildingHarvester"/> - "LEVEL 1 PRODUCES:
+        /// CoC-style, a placed collector earns from the moment it stands". Levels start at 1
+        /// (<see cref="ResourceBuildingState.GetLevel"/> defaults to 1), so the clause made
+        /// EVERY freshly placed collector accrue ZERO until its first paid upgrade, while an
+        /// UNPLACED building silently paid the wallet through the harvester's direct-grant
+        /// fallback - placing a collector strictly REDUCED income. With that phantom fallback
+        /// removed, this is now the only accrual gate, so the retired rule would have zeroed
+        /// all collector income and dead-locked the zero-seed founding bootstrap.
+        /// </summary>
+        public bool IsActive => IsAlive && !_broken;
         public bool CanAccrue => IsActive;
         public double PendingAmount => _pending;
         public bool IsBroken => _broken;

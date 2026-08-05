@@ -23,8 +23,48 @@
 // no scene-file edit is needed. A single global cadence is intentional: the three
 // resource buildings are global upgradeable economy nodes (CoC-style), not placed
 // world props — matching how the panel already treats them by id.
+//
+// -----------------------------------------------------------------------------
+// PHANTOM COLLECTOR INCOME - the 2026-08-04 correctness gate.
+// -----------------------------------------------------------------------------
+// MEASURED DEFECT: Update() iterated ALL THREE OrderedIds unconditionally. The
+// only guard was `GetLevel(id) < 1`, and ResourceBuildingState.GetLevel is
+// `PlayerPrefs.GetInt(key, 1)` clamped to >= 1 (ResourceBuildingState.cs:63-69) -
+// it DEFAULTS TO 1 and never asks whether the building exists, so `level < 1` is
+// unreachable. An EMPTY town therefore earned farm + lumbermill + forge income
+// from t=0, and because no ResourceCollector was registered it fell through to the
+// direct-grant branch below: UNCAPPED and AUTO-BANKED, bypassing the capped
+// pending pool, the manual Collect tap and the siege-loot risk that are the whole
+// CoC collector design. Post-WO-855 that free baseline is ~720 wood + 936 food +
+// 432 iron per hour for a town with nothing in it. PLACING the collector made
+// income strictly WORSE.
+//
+// THE GATE: a per-id tick now requires the building to ACTUALLY EXIST, proven by
+// the persisted WO-834 ledger `GameState.EverBuiltStructureIds` (save v36, written
+// at the placement commit seam BuildModeController.cs:1892 and by the
+// StrategicPlacementMigration template grant, StrategicPlacementMigration.cs:340-343)
+// OR by a live registered ResourceCollector. The rule is a PURE static
+// (<see cref="MayHarvest"/>) exactly like WO-834's StructureSingleton
+// .MayBakedTwinSurface, so it is decidable headless without a scene.
+//
+// THE DIRECT-GRANT FALLBACK IS REMOVED (not merely existence-gated). Ruling:
+//   1. `EverBuiltStructureIds` is MONOTONIC by design (GameState.cs:518-521,
+//      WO-843) - selling or losing a collector never removes the id. An
+//      existence-gated direct grant would therefore keep PAYING for a SOLD or
+//      SIEGE-DESTROYED collector, contradicting WO-753 ("destroyed = build fresh
+//      at full cost"). Only a LIVE registered collector proves "standing".
+//   2. Its stated purpose ("collector not wired yet") no longer exists: a resource
+//      building comes into being ONLY by placement, and placement attaches the
+//      ResourceCollector in the same breath (StructureFactory.cs:744-751).
+//   3. The harvester bootstraps in EVERY non-enemy gameplay scene
+//      (BuildingUpgradePanelMvvmBootstrap.cs:75), so the fallback also auto-banked
+//      full town income while the player was off in a dungeon.
+//   4. A standing building whose collector component is missing is a WIRING BUG,
+//      not a balance case. Paying money to paper over it is the silent failure
+//      CLAUDE.md sec.12 forbids - it is now a throttled FlowTrace.Warn instead.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DeNelle.Village.Buildings.Progression
@@ -33,7 +73,9 @@ namespace DeNelle.Village.Buildings.Progression
     /// Drives the per-level auto-harvest tick for the three resource buildings,
     /// consuming the upgrade ladder's HarvestInterval (speed) + effective yield
     /// (size). Self-contained MonoBehaviour; one instance, auto-spawned with the
-    /// upgrade panel. Crediting flows through <see cref="ResourceLedger.Credit"/>.
+    /// upgrade panel. A tick pays out ONLY into the live collector's capped pending
+    /// pool (<c>ResourceCollector.Accrue</c>) and only for a building the existence
+    /// gate (<see cref="MayHarvest"/>) proves was actually built.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class ResourceBuildingHarvester : MonoBehaviour
@@ -44,11 +86,20 @@ namespace DeNelle.Village.Buildings.Progression
         // ResourceBuildingProgression.OrderedIds.
         private float[] _elapsed;
 
+        // Last observed existence-gate verdict per id, parallel to OrderedIds.
+        // -1 = not yet evaluated, 0 = closed (never built), 1 = open. EDGE-logged
+        // only (the ResourceCollector._lastLoggedAccrualScale pattern) so a capture
+        // shows the gate flipping without a per-frame spam wall.
+        private int[] _lastGate;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
-            _elapsed = new float[ResourceBuildingProgression.OrderedIds.Length];
+            int n = ResourceBuildingProgression.OrderedIds.Length;
+            _elapsed = new float[n];
+            _lastGate = new int[n];
+            for (int i = 0; i < n; i++) _lastGate[i] = -1;
         }
 
         private void OnDestroy()
@@ -61,6 +112,7 @@ namespace DeNelle.Village.Buildings.Progression
             // No service yet (Title / HeroSelect) → nothing to credit; skip cheaply.
             var ids = ResourceBuildingProgression.OrderedIds;
             if (_elapsed == null || _elapsed.Length != ids.Length) return;
+            if (_lastGate == null || _lastGate.Length != ids.Length) return;
 
             float dt = Time.deltaTime;
             for (int i = 0; i < ids.Length; i++)
@@ -68,6 +120,27 @@ namespace DeNelle.Village.Buildings.Progression
                 string id = ids[i];
                 var def = ResourceBuildingProgression.Find(id);
                 if (def == null) continue;
+
+                // -- EXISTENCE GATE (2026-08-04, phantom collector income) ----------
+                // BEFORE the level read, because GetLevel DEFAULTS TO 1 and can never
+                // report "this building does not exist" (ResourceBuildingState.cs:63-69).
+                // A never-built id accrues NOTHING - not even elapsed time, so a town
+                // founded an hour into the session cannot bank a phantom backlog.
+                var collector = ResourceCollectorRegistry.Get(id);
+                bool gateOpen = MayHarvest(CatalogIdsForBuilding(id), EverBuiltIds(), collector != null);
+                if (_lastGate[i] != (gateOpen ? 1 : 0))
+                {
+                    _lastGate[i] = gateOpen ? 1 : 0;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Harvest",
+                        $"existence gate {(gateOpen ? "OPEN" : "CLOSED")} for '{id}' " +
+                        $"(liveCollector={(collector != null ? "yes" : "no")}, everBuilt=[{EverBuiltJoined()}]) - " +
+                        (gateOpen ? "this id may tick" : "NEVER BUILT, so it earns nothing (phantom-income gate)"));
+                }
+                if (!gateOpen)
+                {
+                    _elapsed[i] = 0f;   // no banked backlog for a building that does not exist
+                    continue;
+                }
 
                 // SUPERSEDED 2026-07-13 evening (owner "agree"): LEVEL 1 PRODUCES —
                 // CoC-style, a placed collector earns from the moment it stands
@@ -120,30 +193,106 @@ namespace DeNelle.Village.Buildings.Progression
                         $"harvestRate x{1f + rateBonus:0.###} applied to resource-building tick (WO-676 Provider's Bond).");
                 }
 
-                var collector = ResourceCollectorRegistry.Get(id);
+                // THE ONLY PAYOUT PATH: the live collector's capped pending pool
+                // (WO-663 CoC spine). The player banks it with a Collect tap; a siege
+                // can steal what is uncollected. The old uncapped auto-banking direct
+                // grant that used to live here is REMOVED - see the file header for the
+                // ruling (monotonic ledger cannot see a sold/destroyed collector; a
+                // missing component is a wiring bug, not an income case).
                 if (collector != null)
                 {
                     collector.Accrue(amount);
                     continue;
                 }
 
-                // Pre-bootstrap fallback: direct grant when collector not wired yet.
-                var econ = EconomyService.Instance;
-                if (econ != null)
-                {
-                    switch (def.Yields)
-                    {
-                        case HarvestResource.Wood:     econ.Grant(wood: amount);     break;
-                        case HarvestResource.Iron:     econ.Grant(iron: amount);     break;
-                        case HarvestResource.Food:     econ.Grant(food: amount);     break;
-                        case HarvestResource.Crystals: econ.Grant(crystals: amount); break;
-                    }
-                }
-                else
-                {
-                    ResourceLedger.Credit(def.Yields, amount);
-                }
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("Harvest", "no-live-collector-" + id, 10f,
+                    $"'{id}' is in the ever-built ledger but NO ResourceCollector is registered - " +
+                    $"{amount} {def.Yields} WITHHELD this tick (a standing building with no collector " +
+                    "component is a wiring bug; income is never granted straight to the wallet).");
             }
+        }
+
+        // =====================================================================
+        //  THE EXISTENCE RULE (pure - WO-834 MayBakedTwinSurface pattern)
+        // =====================================================================
+
+        /// <summary>
+        /// PURE existence rule for one resource building's harvest tick. True when the
+        /// building may produce at all:
+        /// <list type="bullet">
+        /// <item>a LIVE registered <see cref="ResourceCollector"/> is standing for it
+        /// (the strongest possible proof - it exists right now); or</item>
+        /// <item>one of its collector CATALOG ids is in the persisted WO-834
+        /// <c>GameState.EverBuiltStructureIds</c> ledger (OrdinalIgnoreCase).</item>
+        /// </list>
+        /// Everything else - an empty town, a building the player has never placed - is
+        /// FALSE and earns nothing. No world/service reads, so the check-in oracle can
+        /// pin the truth table headless.
+        /// </summary>
+        public static bool MayHarvest(IReadOnlyList<string> collectorCatalogIds,
+                                      IReadOnlyList<string> everBuiltIds,
+                                      bool liveCollectorPresent)
+        {
+            if (liveCollectorPresent) return true;
+            if (collectorCatalogIds == null || everBuiltIds == null) return false;
+            for (int i = 0; i < collectorCatalogIds.Count; i++)
+            {
+                string want = collectorCatalogIds[i];
+                if (string.IsNullOrEmpty(want)) continue;
+                for (int j = 0; j < everBuiltIds.Count; j++)
+                    if (string.Equals(everBuiltIds[j], want, System.StringComparison.OrdinalIgnoreCase))
+                        return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The COLLECTOR catalog ids that stand for a bare progression building id
+        /// ("farm" -> "collector_farm"). Resolved from the catalog's
+        /// <c>repo.collectorBuildingId</c> across the Collector type - the same
+        /// resolution StructureFactory / ResourceCollector.CatalogCapacity use, so the
+        /// gate agrees with placement.
+        /// <para>
+        /// The bare id is deliberately NOT a candidate: `lumbermill` / `forge` also
+        /// exist as separate GameplayBuilding storefront rows in structures-catalog.json,
+        /// so accepting the bare id would let building the Forge STOREFRONT open the
+        /// forge COLLECTOR's harvest gate. When the registry is empty (catalog not
+        /// loaded yet) we fall back to the "collector_" naming convention rather than
+        /// stranding a genuinely-placed collector.
+        /// </para>
+        /// </summary>
+        public static List<string> CatalogIdsForBuilding(string buildingId)
+        {
+            var result = new List<string>(2);
+            if (string.IsNullOrEmpty(buildingId)) return result;
+
+            foreach (var e in DeNelle.Core.Catalog.CatalogRegistry.OfType(
+                         DeNelle.Core.Catalog.CatalogType.Collector))
+            {
+                if (e == null || string.IsNullOrEmpty(e.id)) continue;
+                string bid = (e.repo != null && !string.IsNullOrEmpty(e.repo.collectorBuildingId))
+                    ? e.repo.collectorBuildingId : e.id;
+                if (string.Equals(bid, buildingId, System.StringComparison.OrdinalIgnoreCase)
+                    && !result.Contains(e.id))
+                    result.Add(e.id);
+            }
+
+            if (result.Count == 0) result.Add("collector_" + buildingId);   // catalog not loaded
+            return result;
+        }
+
+        /// <summary>The persisted WO-834 ever-built ledger (empty when there is no state).</summary>
+        private static IReadOnlyList<string> EverBuiltIds()
+        {
+            var s = DeNelle.Core.State.GameStateService.Instance?.State;
+            return s?.EverBuiltStructureIds ?? (IReadOnlyList<string>)System.Array.Empty<string>();
+        }
+
+        /// <summary>Ledger contents for the edge-triggered gate trace (never per-frame).</summary>
+        private static string EverBuiltJoined()
+        {
+            var ids = EverBuiltIds();
+            return ids.Count == 0 ? "<empty>" : string.Join(",", ids);
         }
     }
 }
