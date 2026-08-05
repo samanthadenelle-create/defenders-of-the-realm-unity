@@ -48,6 +48,11 @@ namespace DeNelle.HUD
         private Button _lockOnButton;
         private Button _fullResetButton;
         private float _fullResetArmedUntil;   // two-tap confirm window (owner 2026-07-08 full reset)
+
+        // Queue time-skip (owner 2026-08-04). The label of this button IS the state
+        // readout — same idiom as _lockOnButton — so the accumulated skip is always
+        // visible without adding a widget type to this panel.
+        private Button _timeSkipButton;
 #endif
 
         // Reflection handles — resolved lazily on first show.
@@ -234,6 +239,46 @@ namespace DeNelle.HUD
             scroll.Add(Button("+25 Wisdom (talents)",         () => OnGiveWisdom(25)));
             scroll.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
             scroll.Add(Button("Trigger next wave",            OnTriggerWave));
+            // ── QUEUE TIME-SKIP (owner 2026-08-04) ───────────────────────────
+            // "A speed timer for testing building queues ... but NOT impact the battle
+            // timer." WO-855 Phase 4 made structure builds tier-scaled (30s / 1.5m /
+            // 4.5m / 13.5m / 40m / 2h, barracks up to 8h) so waiting them out is no
+            // longer a testing strategy. These push TimeSource.NowUnixMs forward via
+            // DevClock; they are ADDITIVE (tap +10 min six times = +1h) and the fourth
+            // button's LABEL shows the running total and clears it.
+            //
+            // Time.timeScale is deliberately NOT touched — that is the thing the owner
+            // ruled out, because it WOULD speed up combat.
+            //
+            // !! WHAT A SKIP ALSO MOVES — it is not only the build queue. TimeSource is
+            // the shared wall-clock seam, so every offline-accrual consumer advances too:
+            //   • Obsidian queues (Builder/Train/Research)  — THE TARGET; due jobs
+            //     complete on the next sweep and pending jobs cascade into free slots.
+            //   • OfflineHarvestService  — PAYS that much offline node/settlement/pet
+            //     income on the next claim (capped by OfflineCapSeconds).
+            //   • EchoService            — fills the Echo silo, clamped to its 4h cap.
+            //   • ResourceCollector      — PAYS that much into each collector's pending
+            //     pool (WO-859 away catch-up), clamped by its capacity cap.
+            //   • TroopRecoveryService   — HEALS wounded troops by that much (roster
+            //     availability between raids; never in-battle pacing).
+            // So a wallet/roster that jumps after a skip is EXPECTED, not a bug. The
+            // full enumeration + the save-safety assessment live in the header of
+            // Assets/_Modules/Core/Diagnostics/DevClock.cs — read it before filing.
+            //
+            // !! RESET CAVEAT: a job ENQUEUED while skipped keeps a FinishMs beyond real
+            // time, so after a Reset it looks stalled for that long. Safe order:
+            // enqueue at real time → skip → let it finish → reset. Reset is FlowTrace
+            // .Warn'd so a capture always explains a rewound clock.
+            //
+            // COMBAT IS SAFE, verified at source 2026-08-04: WaveManager, RaidScoring,
+            // ATBCombatManager, BattleController, EnemyBrain and HeroHealth contain ZERO
+            // TimeSource references — they all run on Time.deltaTime / Time.time.
+            // DevTimeSkipRegression pins that so a refactor can't silently change it.
+            scroll.Add(Button("Queue time-skip  +1 min",      () => OnDevTimeSkip(60d * 1000d)));
+            scroll.Add(Button("Queue time-skip  +10 min",     () => OnDevTimeSkip(600d * 1000d)));
+            scroll.Add(Button("Queue time-skip  +1 hour",     () => OnDevTimeSkip(3600d * 1000d)));
+            _timeSkipButton = Button(TimeSkipLabel(), OnResetDevTimeSkip);
+            scroll.Add(_timeSkipButton);
             scroll.Add(Button("VFX Parade",                   OnVfxParade));
             // WO-577: in-game Seating Editor (Offset Forge slice 2) — dial weapon/shield
             // attachment offsets live on the equipped hero, save to offsets.json.
@@ -420,6 +465,12 @@ namespace DeNelle.HUD
             if (open) PanelMgr.NotifyOpened(_panelHandle);
             else PanelMgr.NotifyClosed(_panelHandle);
             if (open) SetStatus("Ready.");
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            // Re-sync the queue time-skip readout every time the panel opens: the skip is
+            // process-global (DevClock) and may have been moved from the F10 DevPanel or a
+            // headless oracle since this panel was last shown.
+            if (open && _timeSkipButton != null) _timeSkipButton.text = TimeSkipLabel();
+#endif
             FlowTrace.Step("UI", $"DevPanel (AdminOverlay) {(open ? "shown" : "hidden")} — " +
                 $"display={_overlay.style.display.value} picking={_overlay.pickingMode} timeScale={Time.timeScale}");
         }
@@ -600,6 +651,47 @@ namespace DeNelle.HUD
             if (_lockOnButton != null) _lockOnButton.text = LockOnLabel();
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) ff.lockon = " + (on ? "ON" : "OFF"));
             SetStatus("Lock-On " + (on ? "ON" : "OFF") + " (live next frame) - re-engage or move to feel the camera change.");
+        }
+
+        // ── Queue time-skip (owner 2026-08-04) ───────────────────────────────
+        // Pushes DeNelle.Village.TimeSource.NowUnixMs forward so the Obsidian build/
+        // train/research queues resolve without a real-time wait. Driven through
+        // DeNelle.Core.Diagnostics.DevClock (NOT reflection): the HUD asmdef references
+        // DeNelle.Core, and DevClock lives there precisely so this panel can reach the
+        // clock seam legally. See the button block in BuildUi() for the full list of
+        // what else a skip moves, and DevClock.cs for the authoritative treatment.
+
+        /// <summary>Button label that doubles as the live skip readout (Lock-On idiom).</summary>
+        private static string TimeSkipLabel()
+        {
+            return DevClock.SkipMs > 0d
+                ? "Queue clock: +" + DevClock.DescribeCurrent() + "   (TAP TO RESET)"
+                : "Queue clock: real time   (nothing to reset)";
+        }
+
+        /// <summary>Adds <paramref name="deltaMs"/> to the dev queue-clock skip (additive).</summary>
+        private void OnDevTimeSkip(double deltaMs)
+        {
+            double total = DeNelle.Core.Diagnostics.DevClock.Add(deltaMs);
+            if (_timeSkipButton != null) _timeSkipButton.text = TimeSkipLabel();
+            FlowTrace.Step("UI",
+                $"DevPanel (AdminOverlay) queue time-skip +{DevClock.Describe(deltaMs)} -> total {DevClock.Describe(total)}");
+            SetStatus($"Queue clock +{DevClock.Describe(deltaMs)} (total +{DevClock.Describe(total)}). " +
+                      "Build/train/research jobs due within it complete on the next sweep. " +
+                      "Combat + wave timers are UNAFFECTED (they run on engine time). " +
+                      "Offline income + troop recovery also advance - that is expected.");
+        }
+
+        /// <summary>Clears the dev queue-clock skip (back to the real device clock).</summary>
+        private void OnResetDevTimeSkip()
+        {
+            double cleared = DeNelle.Core.Diagnostics.DevClock.Reset();
+            if (_timeSkipButton != null) _timeSkipButton.text = TimeSkipLabel();
+            FlowTrace.Step("UI", $"DevPanel (AdminOverlay) queue time-skip RESET (cleared {DevClock.Describe(cleared)})");
+            SetStatus(cleared > 0d
+                ? $"Queue clock reset (cleared +{DevClock.Describe(cleared)}). Accrual stamps self-heal on the " +
+                  "next tick; a job ENQUEUED while skipped keeps its skewed finish time and may look stalled."
+                : "Queue clock was already at real time - nothing to reset.");
         }
 
         private void OnGiveCrystals(int delta)

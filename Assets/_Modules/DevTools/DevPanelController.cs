@@ -161,6 +161,10 @@ namespace DeNelle.DevTools
         private int _levelInput = 10;
         private string _modifierJson = "";   // WO-430 — dev modifier-override JSON paste
 
+        // Queue time-skip readout button (owner 2026-08-04). Its LABEL carries the
+        // accumulated skip, so the state is visible without a new widget type.
+        private Button _timeSkipButton;
+
         // ── God-mode / instant-win toggles ───────────────────────────────────
         // DevTools owns these flags; the integrator reads them from gameplay
         // (see the integrator notes at the foot of this file). They are static
@@ -759,6 +763,46 @@ namespace DeNelle.DevTools
             AddToggleButton(waves, "Instant-win wave: ON", "Instant-win wave: OFF",
                 () => InstantWinWave, ToggleInstantWinWave);
 
+            // ── QUEUE TIME-SKIP (owner 2026-08-04) ───────────────────────────
+            // "A speed timer for testing building queues ... but NOT impact the battle
+            // timer." WO-855 Phase 4 made structure builds tier-scaled (30s / 1.5m /
+            // 4.5m / 13.5m / 40m / 2h, barracks up to 8h), so waiting them out is no
+            // longer a testing strategy. These push TimeSource.NowUnixMs forward; they
+            // are ADDITIVE (tap +10 min six times = +1h) and the last button's LABEL
+            // shows the running total and clears it.
+            //
+            // Time.timeScale is deliberately NOT touched — that is the one thing the
+            // owner ruled out, because it WOULD speed up combat.
+            //
+            // !! WHAT A SKIP ALSO MOVES — it is not only the build queue. TimeSource is
+            // the shared wall-clock seam, so every offline-accrual consumer advances:
+            //   • Obsidian queues (Builder/Train/Research)  — THE TARGET; due jobs
+            //     complete on the next sweep, pending jobs cascade into free slots.
+            //   • OfflineHarvestService  — PAYS that much offline node/settlement/pet
+            //     income on the next claim (capped by OfflineCapSeconds).
+            //   • EchoService            — fills the Echo silo, clamped to its 4h cap.
+            //   • ResourceCollector      — PAYS that much into each collector's pending
+            //     pool (WO-859 away catch-up), clamped by its capacity cap.
+            //   • TroopRecoveryService   — HEALS wounded troops by that much (roster
+            //     availability between raids; never in-battle pacing).
+            // A wallet/roster that jumps after a skip is EXPECTED, not a bug. Full
+            // enumeration + save-safety assessment: Core/Diagnostics/DevClock.cs header.
+            //
+            // !! RESET CAVEAT: a job ENQUEUED while skipped keeps a FinishMs beyond real
+            // time and looks stalled for that long after a Reset. Safe order: enqueue at
+            // real time → skip → let it finish → reset. Reset is FlowTrace.Warn'd.
+            //
+            // COMBAT IS SAFE, verified at source 2026-08-04: WaveManager, RaidScoring,
+            // ATBCombatManager, BattleController, EnemyBrain and HeroHealth contain ZERO
+            // TimeSource references — all engine time. Pinned by DevTimeSkipRegression.
+            var queueClock = AddGroup("Queue time-skip (build/train/research)");
+            AddButton(queueClock, "+1 min", () => DevTimeSkip(60d * 1000d));
+            AddButton(queueClock, "+10 min", () => DevTimeSkip(600d * 1000d));
+            AddButton(queueClock, "+1 hour", () => DevTimeSkip(3600d * 1000d));
+            // The reset button's LABEL is the live readout of the accumulated skip
+            // (same idiom AdminOverlay uses for Lock-On) — no new widget type needed.
+            _timeSkipButton = AddButton(queueClock, TimeSkipLabel(), ResetDevTimeSkip);
+
             // ── SCENE ────────────────────────────────────────────────────────
             var scene = AddGroup("Scene jump");
             AddButton(scene, "Title", () => JumpScene(SceneRouter.Title));
@@ -838,6 +882,44 @@ namespace DeNelle.DevTools
             int wiredButtons = _groupList != null
                 ? _groupList.Query<Button>().ToList().Count : 0;
             FlowTrace.Step("UI", $"DevPanel action groups built — wired {wiredButtons} buttons");
+        }
+
+        // =====================================================================
+        //  Actions — QUEUE TIME-SKIP (owner 2026-08-04)
+        // =====================================================================
+        // Drives DeNelle.Village.TimeSource's dev skip (stored in Core's DevClock so
+        // the live Settings→Dev-tools panel can reach it too). Additive; forward-only;
+        // FlowTrace'd on every change; compiled out of release twice over (this whole
+        // assembly is defineConstraint'd, and DevClock's backing field is #if-gated).
+
+        /// <summary>Live readout of the accumulated queue-clock skip, used as a button label.</summary>
+        private static string TimeSkipLabel()
+        {
+            return DeNelle.Core.Diagnostics.DevClock.SkipMs > 0d
+                ? "Queue clock: +" + DeNelle.Core.Diagnostics.DevClock.DescribeCurrent() + "  (TAP TO RESET)"
+                : "Queue clock: real time (nothing to reset)";
+        }
+
+        /// <summary>Pushes the queue wall-clock forward by <paramref name="deltaMs"/>.</summary>
+        private void DevTimeSkip(double deltaMs)
+        {
+            double total = DeNelle.Village.TimeSource.AddDevSkipMs(deltaMs);
+            if (_timeSkipButton != null) _timeSkipButton.text = TimeSkipLabel();
+            SetStatus($"Queue clock +{DeNelle.Core.Diagnostics.DevClock.Describe(deltaMs)} " +
+                      $"(total +{DeNelle.Core.Diagnostics.DevClock.Describe(total)}). Build/train/research jobs " +
+                      "due within it complete on the next sweep. Combat + wave timers UNAFFECTED. " +
+                      "Offline income + troop recovery also advance — expected, not a bug.");
+        }
+
+        /// <summary>Clears the accumulated queue-clock skip (back to the device clock).</summary>
+        private void ResetDevTimeSkip()
+        {
+            double cleared = DeNelle.Village.TimeSource.ResetDevSkip();
+            if (_timeSkipButton != null) _timeSkipButton.text = TimeSkipLabel();
+            SetStatus(cleared > 0d
+                ? $"Queue clock reset (cleared +{DeNelle.Core.Diagnostics.DevClock.Describe(cleared)}). Accrual " +
+                  "stamps self-heal on the next tick; a job ENQUEUED while skipped keeps its skewed finish time."
+                : "Queue clock was already at real time — nothing to reset.");
         }
 
         /// <summary>Nudges the hero locomotion-cadence knob (stride-polish, 2026-07-02).</summary>
@@ -1125,7 +1207,10 @@ namespace DeNelle.DevTools
             var eco = EconomyService.Instance;
             if (eco != null)
             {
-                eco.GrantSpendable(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
+                // WO-857 Phase F: this is the "fill the tank so I can test something else" button —
+                // it must NOT be storage-gated, or a dev top-up silently becomes baseCap and the
+                // toast the real economy owes the player fires on a tool action. Uncapped by intent.
+                eco.GrantSpendableUncapped(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
                 eco.AddCoins(50000);   // Gold — the shop/sell wallet (GameState.Resources.Coins); raises ResourcesChanged so the HUD gold readout updates.
             }
             else
@@ -1416,7 +1501,7 @@ namespace DeNelle.DevTools
                 {
                     // Make sure a dev raid always has bodies: top up resources, then train.
                     var eco = EconomyService.Instance;
-                    if (eco != null) eco.GrantSpendable(wood: 5000, food: 5000, iron: 5000);
+                    if (eco != null) eco.GrantSpendableUncapped(wood: 5000, food: 5000, iron: 5000);   // WO-857: dev raid setup, not player income — never storage-gated
                     int f = DeNelle.Village.TroopDialogueCommands.Train("troop-footman", 4);
                     int a = DeNelle.Village.TroopDialogueCommands.Train("troop-archer", 3);
                     SetStatus($"Auto-trained {f} footman + {a} archer for the raid.");

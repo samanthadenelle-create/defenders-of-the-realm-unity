@@ -301,6 +301,11 @@ namespace DeNelle.Editor
             if (!AegisSetReachabilityRegression.Run(out var aegisReason)) failures.Add(aegisReason); else log.AppendLine("[aegis] " + aegisReason);
             if (!BuildingUpgradeRegression.Run(out var buildUpgReason)) failures.Add(buildUpgReason); else log.AppendLine("[build-upgrade] " + buildUpgReason);
             if (!OfflineHarvestRegression.Run(out var offlineReason)) failures.Add(offlineReason); else log.AppendLine("[offline-harvest] " + offlineReason);
+            // --- Dev queue time-skip (owner 2026-08-04): the skip is exact/additive/resettable,
+            //     isolated from the WO-120 ServerOffsetMs lane, forward-only, release-stripped —
+            //     and, the load-bearing one, COMBAT STILL READS NO TimeSource (so it can never
+            //     warp the battle timer, which is the owner's whole constraint). ---
+            if (!DevTimeSkipRegression.Run(out var devSkipReason)) failures.Add(devSkipReason); else log.AppendLine("[dev-time-skip] " + devSkipReason);
             if (!VillageEconomyRegression.Run(out var villEconReason)) failures.Add(villEconReason); else log.AppendLine("[village-econ] " + villEconReason);
             if (!ArenaCatalogRegression.Run(out var arenaCatReason)) failures.Add(arenaCatReason); else log.AppendLine("[arena-cat] " + arenaCatReason);
             if (!CompanionRosterRegression.Run(out var compRosterReason)) failures.Add(compRosterReason); else log.AppendLine("[companion-roster] " + compRosterReason);
@@ -450,6 +455,16 @@ namespace DeNelle.Editor
             // answers stay deliberately different (player seam = liveness, enemy seam = +PlayerOwned) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-targetable suite", () => { if (!DeNelle.Editor.Regression.StructureTargetableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-targetable] " + r); });
 
+            // --- THE QUEUED TOWER THAT FOUGHT (owner F8, 2026-08-04): a structure with an
+            // in-flight build job must not acquire, fire or damage. The WO-612 scaffold silenced
+            // exactly ONE component type (DefenseTower), so 'tower_arcane_spire' -> ArcaneTower
+            // slipped the gate entirely and defended live waves for its whole timer -- five spires
+            // at remaining=270s in the owner's own capture, a hole WO-855 Phase 4 stretched from
+            // 15s to up to 2h. Pins: the gate silences EVERY combat family, Reveal restores exactly
+            // what it silenced, baked/EnemyOwned towers with no scaffold stay untouched, and the
+            // job key survives the save round trip so a pending tower reloads inert ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "under-construction-gate suite", () => { if (!DeNelle.Editor.Regression.UnderConstructionGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[under-construction-gate] " + r); });
+
             // --- PHANTOM COLLECTOR INCOME (2026-08-04): an empty town must earn ZERO. The
             // harvest tick's only guard was `GetLevel(id) < 1`, and GetLevel defaults to 1
             // and never asks whether the building exists, so all three resource buildings
@@ -457,6 +472,16 @@ namespace DeNelle.Editor
             // existence gate (WO-834 everBuiltStructureIds / a live collector), the deleted
             // direct-grant fallback, and the zero-seed founding bootstrap it must not break ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-income suite", () => { if (!DeNelle.Editor.Regression.CollectorIncomeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-income] " + r); });
+
+            // --- TOWN BANK CAP (WO-857 / WO-901 Phase F, 2026-08-04): the first UPPER clamp ever
+            // put on EconomyService.Grant -- the single path every income source in the game flows
+            // through. Get it wrong and resources silently vanish or a fresh save soft-locks, so this
+            // suite is the permission gate (ARCHITECTURE_PRINCIPLES §2c): crystals+coins uncapped BY
+            // DESIGN, baseCap can never resolve to 0, a fresh 0-wood/0-iron save can still found and
+            // buy, a spend is never upper-clamped, every clamped grant EMITS THE WARN (the only thing
+            // between the player and vaporised resources), capacity scales with container level,
+            // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
