@@ -12,6 +12,11 @@
 //     purely from vm.* and never touches DailyQuestService / DailyQuestCatalog.
 //   * owns the row SELECTION (which quest the detail card inspects) as VM state +
 //     a Select(id) command; the View only renders vm.SelectedId.
+//   * WO-879: owns the SINGLE EMPTY-STATE (EmptyState: Active + Headline + Detail),
+//     produced ONCE in Rebuild. The View used to decide emptiness AND author the copy
+//     itself, in TWO places (a dark-well italic line + a parchment detail card), which
+//     is why the 2026-08-04 capture showed the same message twice in two mismatched
+//     chromes. IsEmpty is now a PROJECTION of that one fact, never a second computation.
 //
 // The reward AUTO-DISPENSES on completion (DEF-223 bridge) so there is NO claim
 // command. A free-reroll command is exposed for completeness (the service caps it
@@ -59,6 +64,35 @@ namespace DeNelle.HUD
             }
         }
 
+        /// <summary>
+        /// WO-879 — the panel's ONE empty-state fact. The VM produces it (exactly once, in
+        /// <see cref="Rebuild"/>); the View renders it in exactly ONE place and NEVER decides
+        /// emptiness or authors the copy itself. <see cref="Active"/> false => there are quests
+        /// and the strings are empty, so a View that renders it unconditionally shows nothing.
+        /// </summary>
+        public readonly struct EmptyStateInfo
+        {
+            /// <summary>True when the panel has nothing to list — the View shows the empty panel.</summary>
+            public readonly bool Active;
+            /// <summary>The one headline. ASCII only (shipped TMP font).</summary>
+            public readonly string Headline;
+            /// <summary>The one supporting line under the headline.</summary>
+            public readonly string Detail;
+            public EmptyStateInfo(bool active, string headline, string detail)
+            {
+                Active = active;
+                Headline = headline ?? "";
+                Detail = detail ?? "";
+            }
+        }
+
+        // The ONE authored empty-state copy. It lives in the VM, not in a View, so it can
+        // never be re-typed into a second column with different wording (the WO-879 defect:
+        // the View said "No daily quests today." on the left and "No daily quests today /
+        // Fresh quests arrive with the new day." on the right).
+        private const string EmptyHeadlineText = "No daily quests today";
+        private const string EmptyDetailText   = "Fresh quests arrive with the new day.";
+
         private readonly ISource _source;
         private readonly Action _onClose;
         private readonly Action _changedHandler;
@@ -71,6 +105,7 @@ namespace DeNelle.HUD
         private readonly Dictionary<string, RewardInfo> _rewardById = new Dictionary<string, RewardInfo>();
 
         private string _selectedId;
+        private EmptyStateInfo _empty;   // WO-879: computed ONCE per Rebuild; the single source
 
         public static DailyQuestVM CreateDefault(Action onClose)
             => new DailyQuestVM(new ServiceSource(), onClose);
@@ -105,11 +140,34 @@ namespace DeNelle.HUD
         /// <summary>One tile per daily quest (Name = resolved label, Equipped = Completed). Never null.</summary>
         public IReadOnlyList<ItemVM> Quests => _quests;
 
-        /// <summary>True when today's set is empty (View shows the "no daily quests" empty state).</summary>
-        public bool IsEmpty => _quests.Count == 0;
+        /// <summary>
+        /// WO-879 — the SINGLE empty-state the View renders. Produced once per Rebuild; the
+        /// View reads Headline/Detail from here and renders them in ONE place, in one chrome.
+        /// </summary>
+        public EmptyStateInfo EmptyState => _empty;
+
+        /// <summary>True when today's set is empty. A PROJECTION of <see cref="EmptyState"/> —
+        /// deliberately NOT a second `_quests.Count == 0` computation, so emptiness has exactly
+        /// one producer (WO-879: two producers is how the message rendered twice).</summary>
+        public bool IsEmpty => _empty.Active;
 
         /// <summary>The quest the detail card inspects (defaults to the first quest).</summary>
         public string SelectedId => _selectedId;
+
+        /// <summary>
+        /// The quest tile the detail card inspects. The VM owns the lookup so the View never
+        /// re-derives "is there a selection" (that derivation was the View's SECOND empty-state
+        /// branch, WO-879). Invariant, pinned by the suite: while <see cref="Quests"/> is
+        /// non-empty this ALWAYS returns true — Rebuild seats a default and Select rejects
+        /// unknown ids, so a "nothing selected" prompt is unreachable and is not a state.
+        /// </summary>
+        public bool TryGetSelected(out ItemVM item)
+        {
+            item = default;
+            if (string.IsNullOrEmpty(_selectedId)) return false;
+            foreach (var q in _quests) if (q.Id == _selectedId) { item = q; return true; }
+            return false;
+        }
 
         /// <summary>"2 / 5" progress-toward-target line for a quest id.</summary>
         public string ProgressText(string id) =>
@@ -188,6 +246,12 @@ namespace DeNelle.HUD
             // Keep the selection if still valid; else default to the first quest.
             if (string.IsNullOrEmpty(_selectedId) || !Contains(_selectedId))
                 _selectedId = _quests.Count > 0 ? _quests[0].Id : null;
+
+            // WO-879 — THE ONE SITE that decides emptiness. Nothing else in the VM and
+            // nothing at all in the View may re-decide it or re-author this copy.
+            _empty = _quests.Count == 0
+                ? new EmptyStateInfo(true, EmptyHeadlineText, EmptyDetailText)
+                : new EmptyStateInfo(false, "", "");
 
             Raise();
         }

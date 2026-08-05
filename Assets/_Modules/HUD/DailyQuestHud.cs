@@ -29,6 +29,19 @@
 // and raises Changed). View-side memory is presentation-only: _celebrated
 // (completion toast fires exactly once per quest, owner WO-35).
 //
+// WO-879 (2026-08-05) — THE EMPTY STATE IS THE VM's, RENDERED ONCE. The 2026-08-04
+// capture (Builds/ui-capture/DailyQuestHud_2340x1080.png) showed the same message
+// TWICE in two mismatched chromes: an italic line in the dark list well AND a
+// parchment detail card, with ~half the panel dead black. Root cause: the View both
+// DECIDED emptiness and AUTHORED the copy, at two call sites. Now the VM produces
+// ONE EmptyStateInfo (Active + Headline + Detail) and this View renders it in ONE
+// place — the detail well, WIDENED across the whole body while empty (the dark list
+// well is switched off, so there is no dead-black half and no second chrome). The
+// former "Select a quest" prompt is gone too: it was the View re-deriving selection
+// state, and the VM's invariant (a non-empty set always has a valid selection) makes
+// it unreachable — vm.TryGetSelected owns that lookup now.
+// Empty-state bands are FIXED reference pixels, never a fraction of the well.
+//
 // Toggled on-demand by the TOWN ACTIONS "Quests" button (WO-411, via Toggle());
 // hidden while any modal is open (modal stand-down discipline).
 // =============================================================================
@@ -52,9 +65,25 @@ namespace DeNelle.HUD
         private Transform _rowHost;      // WO-795 ScrollRect Content; quest rows rebuilt into it
         private ScrollRect _scroll;      // the quest-list scroller (built once in EnsureBuilt)
 
+        // WO-879: the two body wells as RectTransforms + their AS-BUILT anchors, so the
+        // empty state can collapse the split into ONE well and restore it exactly.
+        private RectTransform _listRt;
+        private RectTransform _detailRt;
+        private Vector2 _listAnchorMin, _listAnchorMax;
+        private Vector2 _detailAnchorMin, _detailAnchorMax;
+        private bool _collapsedForEmpty;
+
         // One quest row in reference px (1080x1920 canvas). MinTouchPx keeps the tap
         // target legal (WO-795: fixed-height layout rows replace anchored fractions).
         private const float RowPx = ElarionUiKit.MinTouchPx;
+
+        // WO-879 empty-state bands — FIXED reference px on the 1080x1920 canvas, NEVER a
+        // fraction of the well. A fraction band shrinks with the well and TMP culls the
+        // line whole (the WO-841 / WO-852 failure class). Each band is at least one TMP
+        // line box (~1.25em) at the font it renders, so neither line can ever be clipped.
+        public const float EmptyHeadlinePx = 64f;   // >= FontBody  50 * 1.25 = 62.5
+        public const float EmptyDetailPx   = 50f;   // >= FontLabel 40 * 1.25 = 50
+        public const float EmptyGapPx      = 12f;
         // Quests we've already celebrated, so a toast fires only on the FIRST time
         // a quest reaches Completed (owner WO-35: "expected something on completion").
         private readonly HashSet<string> _celebrated = new HashSet<string>();
@@ -150,6 +179,14 @@ namespace DeNelle.HUD
                 : MakeZone(_chrome.content.transform, "DetailWell",
                     new Vector2(0.52f, 0.24f), new Vector2(0.95f, 0.86f));
 
+            // WO-879: remember the AS-BUILT well anchors (the kit's close-band reservation
+            // may already have raised their floors) so the empty state can span the body and
+            // the quest state can restore the split exactly — no re-derived fractions here.
+            _listRt   = _listHost   as RectTransform;
+            _detailRt = _detailHost as RectTransform;
+            if (_listRt != null)   { _listAnchorMin   = _listRt.anchorMin;   _listAnchorMax   = _listRt.anchorMax; }
+            if (_detailRt != null) { _detailAnchorMin = _detailRt.anchorMin; _detailAnchorMax = _detailRt.anchorMax; }
+
             // WO-795 scroll well (RumorBoardPanel recipe): Viewport (near-invisible Image
             // drag-catcher + RectMask2D) filling the list well; Content = top-anchored
             // VerticalLayoutGroup + ContentSizeFitter. Rows are fixed-height LayoutElement
@@ -203,17 +240,14 @@ namespace DeNelle.HUD
 
             var quests = _vm.Quests;
 
-            if (_vm.IsEmpty)
+            // WO-879 — the VM owns the empty-state; the View asks ONCE and renders ONCE.
+            // No emptiness test, no empty copy and no second call site live in this View.
+            var empty = _vm.EmptyState;
+            CollapseWellsForEmpty(empty.Active);
+
+            if (empty.Active)
             {
-                var none = ElarionUiKit.Label(_rowHost, "No daily quests today.",
-                    0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                    TextAlignmentOptions.Center, 0.05f, 0.95f);
-                none.fontStyle = FontStyles.Italic;
-                ElarionUiKit.FitBlock(none, ElarionUi.FontFloorMobile);
-                // _rowHost is layout-driven now; give the notice a row-sized slot.
-                none.gameObject.AddComponent<LayoutElement>().preferredHeight = RowPx;
-                ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "No daily quests today",
-                    "Fresh quests arrive with the new day.");
+                BuildEmptyState(empty);
             }
             else
             {
@@ -245,15 +279,10 @@ namespace DeNelle.HUD
                         item.Equipped ? ElarionUi.Affordable : ElarionUi.ParchmentDim);
                 }
 
-                // Detail (parchment well, right — the WO-693 shared compact card).
-                ItemVM sel = default;
-                bool found = false;
-                foreach (var item in quests)
-                    if (item.Id == _vm.SelectedId) { sel = item; found = true; break; }
-                if (found) BuildDetail(sel);
-                else
-                    ElarionUiKit.BuildParchmentDetailEmpty(_detailHost, "Select a quest",
-                        "Tap a quest to inspect its progress and rewards.");
+                // Detail (parchment well, right — the WO-693 shared compact card). The VM owns
+                // the selection lookup (WO-879); the View no longer re-derives it, so there is
+                // no second, View-authored empty state hiding in this branch.
+                if (_vm.TryGetSelected(out var sel)) BuildDetail(sel);
             }
 
             // Fire a completion toast the first time each quest reaches Completed.
@@ -268,6 +297,90 @@ namespace DeNelle.HUD
                 if (_initialized) ShowCompletionToast(item.Name);
             }
             _initialized = true;
+        }
+
+        // ── WO-879 empty state: ONE panel, one chrome, fixed-pixel bands ──────────
+        //
+        // Layout only — every string comes from the VM's single EmptyStateInfo. The block
+        // is a fixed-pixel stack centred in the (widened) parchment well: a headline band
+        // and a detail band, each at least one TMP line box tall. Nothing here decides
+        // WHETHER the panel is empty; Repaint asked the VM once.
+        private void BuildEmptyState(DailyQuestVM.EmptyStateInfo empty)
+        {
+            if (_detailHost == null) return;
+
+            var block = new GameObject("EmptyState",
+                typeof(RectTransform), typeof(VerticalLayoutGroup));
+            block.transform.SetParent(_detailHost, false);
+            var brt = block.GetComponent<RectTransform>();
+            // Centre-anchored, FIXED height = the sum of its bands (never a well fraction).
+            brt.anchorMin = new Vector2(0.06f, 0.5f);
+            brt.anchorMax = new Vector2(0.94f, 0.5f);
+            brt.pivot = new Vector2(0.5f, 0.5f);
+            brt.anchoredPosition = Vector2.zero;
+            bool hasDetail = !string.IsNullOrEmpty(empty.Detail);
+            brt.sizeDelta = new Vector2(0f,
+                EmptyHeadlinePx + (hasDetail ? EmptyGapPx + EmptyDetailPx : 0f));
+
+            var vlg = block.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.childAlignment = TextAnchor.MiddleCenter;
+            vlg.spacing = EmptyGapPx;
+
+            var head = ElarionUiKit.Label(EmptyBand(block.transform, "EmptyHeadline", EmptyHeadlinePx),
+                empty.Headline, 0f, 1f, ElarionUiKit.ParchmentInkDim, ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            ElarionUiKit.FitSingleLine(head, ElarionUi.FontFloorMobile);
+
+            if (!hasDetail) return;
+            var body = ElarionUiKit.Label(EmptyBand(block.transform, "EmptyDetail", EmptyDetailPx),
+                empty.Detail, 0f, 1f, ElarionUiKit.ParchmentInkDim, ElarionUi.FontLabel,
+                TextAlignmentOptions.Center, 0f, 1f);
+            body.fontStyle = FontStyles.Italic;
+            ElarionUiKit.FitSingleLine(body, ElarionUi.FontFloorMobile);
+        }
+
+        // A fixed-height band host inside the empty-state stack (px, not a fraction).
+        private static Transform EmptyBand(Transform parent, string name, float px)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = px;
+            le.minHeight = px;
+            return go.transform;
+        }
+
+        // While empty there is ONE well, not two: the dark quest list is switched off (no
+        // dead-black half, no place for a second message to appear) and the parchment well
+        // spans the union of both as-built rects, so the single empty panel is centred on
+        // the whole body in ONE chrome. Restoring flips both back verbatim.
+        private void CollapseWellsForEmpty(bool empty)
+        {
+            if (_detailRt == null) return;
+            if (_collapsedForEmpty == empty && _listRt != null &&
+                _listRt.gameObject.activeSelf == !empty) return;
+            _collapsedForEmpty = empty;
+
+            if (_listRt != null) _listRt.gameObject.SetActive(!empty);
+
+            if (empty && _listRt != null)
+            {
+                _detailRt.anchorMin = new Vector2(
+                    Mathf.Min(_listAnchorMin.x, _detailAnchorMin.x),
+                    Mathf.Min(_listAnchorMin.y, _detailAnchorMin.y));
+                _detailRt.anchorMax = new Vector2(
+                    Mathf.Max(_listAnchorMax.x, _detailAnchorMax.x),
+                    Mathf.Max(_listAnchorMax.y, _detailAnchorMax.y));
+            }
+            else
+            {
+                _detailRt.anchorMin = _detailAnchorMin;
+                _detailRt.anchorMax = _detailAnchorMax;
+            }
+            _detailRt.offsetMin = Vector2.zero;
+            _detailRt.offsetMax = Vector2.zero;
         }
 
         // ── Parchment detail card (WO-693 grammar: name + flavor -> REWARDS -> PROGRESS) ──

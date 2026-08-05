@@ -102,6 +102,84 @@ namespace DeNelle.Tests.EditMode
             Assert.That(vm.Quests.Count, Is.EqualTo(0));
         }
 
+        // ── WO-879: the VM owns the SINGLE empty-state; the View renders what it says ──
+
+        [Test]
+        public void empty_state_is_one_vm_fact_carrying_its_own_copy()
+        {
+            using var vm = new DailyQuestVM(new FakeSource(), null);
+
+            var empty = vm.EmptyState;
+            Assert.That(empty.Active, Is.True, "an empty set must raise the VM's empty-state");
+            Assert.That(empty.Headline, Is.Not.Null.And.Not.Empty,
+                "the empty-state COPY belongs to the VM - a View that has to type its own headline " +
+                "is how WO-879 shipped the message twice in two chromes");
+            Assert.That(empty.Detail, Is.Not.Null.And.Not.Empty, "the supporting line is the VM's too");
+            Assert.That(vm.IsEmpty, Is.EqualTo(empty.Active),
+                "IsEmpty must be a PROJECTION of the one empty-state fact, not a second computation");
+        }
+
+        [Test]
+        public void empty_state_is_inactive_and_blank_while_quests_exist()
+        {
+            using var vm = new DailyQuestVM(TwoQuests(), null);
+
+            var empty = vm.EmptyState;
+            Assert.That(empty.Active, Is.False, "a populated set must not raise the empty-state");
+            Assert.That(empty.Headline, Is.Empty,
+                "with quests present the empty copy must be BLANK, so a View that renders the fact " +
+                "unconditionally draws nothing (one render path, never a stale second message)");
+            Assert.That(empty.Detail, Is.Empty);
+            Assert.That(vm.IsEmpty, Is.False);
+        }
+
+        [Test]
+        public void empty_state_flips_with_the_source_and_stays_a_single_fact()
+        {
+            var src = TwoQuests();
+            using var vm = new DailyQuestVM(src, null);
+            Assert.That(vm.EmptyState.Active, Is.False);
+
+            src.Quests.Clear();
+            src.RaiseChanged();
+
+            Assert.That(vm.EmptyState.Active, Is.True, "clearing the source must raise the empty-state");
+            Assert.That(vm.IsEmpty, Is.True, "IsEmpty and EmptyState.Active can never disagree");
+            using (var bornEmpty = new DailyQuestVM(new FakeSource(), null))
+                Assert.That(vm.EmptyState.Headline, Is.EqualTo(bornEmpty.EmptyState.Headline),
+                    "the empty headline is one authored constant, identical on every path");
+            Assert.That(vm.SelectedId, Is.Null);
+            Assert.That(vm.TryGetSelected(out _), Is.False, "no selection exists while empty");
+        }
+
+        [Test]
+        public void try_get_selected_always_resolves_while_quests_exist()
+        {
+            var src = TwoQuests();
+            using var vm = new DailyQuestVM(src, null);
+
+            // THE invariant that makes the View's old "Select a quest" empty-state unreachable:
+            // a non-empty set ALWAYS has a resolvable selection, so the View needs exactly one
+            // empty branch (the VM's), not two.
+            Assert.That(vm.TryGetSelected(out var first), Is.True);
+            Assert.That(first.Id, Is.EqualTo("q1"));
+
+            vm.Select("q2");
+            Assert.That(vm.TryGetSelected(out var second), Is.True);
+            Assert.That(second.Id, Is.EqualTo("q2"));
+
+            vm.Select("nope");
+            Assert.That(vm.TryGetSelected(out var stillSecond), Is.True,
+                "a rejected Select must never leave the VM without a selection");
+            Assert.That(stillSecond.Id, Is.EqualTo("q2"));
+
+            src.Quests.RemoveAt(1);          // the selected quest disappears
+            src.RaiseChanged();
+            Assert.That(vm.TryGetSelected(out var reseated), Is.True,
+                "rebuild must re-seat the selection, never leave a non-empty set unselected");
+            Assert.That(reseated.Id, Is.EqualTo("q1"));
+        }
+
         [Test]
         public void reroll_delegates_to_source()
         {

@@ -1,7 +1,8 @@
 // =============================================================================
 // HelpMenu — the Settings/Help modal reachable from the HUD gear button.
-// Surfaces: Report Bug (WO-596 BugReportView), Controls, Reset Hero & Pet,
-// Dev tools (dev builds only), Credits.
+// Surfaces whatever HelpMenuVM offers: Report Bug (WO-596 BugReportView),
+// Controls, Reset Hero & Pet, Credits — plus Dev Tools + the gated dev grant in
+// dev builds only. The list itself is VM state; see WO-882 below.
 // -----------------------------------------------------------------------------
 // WO-F conversion (2026-07-03, coverage matrix row #44): UIDocument/UITK panel
 // -> code-built uGUI on the Obsidian master frame (BuildObsidianModal: Blink
@@ -13,6 +14,23 @@
 // AdminOverlay handoff kept: "Dev tools" lends AdminOverlay a runtime
 // PanelSettings (AdminOverlay is still UITK); we synthesize one on demand now
 // that this menu no longer renders through a UIDocument itself.
+//
+// WO-882 (2026-08-05) - THE BLANK THIRD BUTTON. This file is now VIEW ONLY:
+//   * The ENTRY LIST moved to HelpMenuVM. The View walks vm.Entries and stamps one
+//     kit row per entry; it does NOT decide which rows exist and it must never
+//     skip/guard an entry itself (skipping in the View leaves the unavailable entry
+//     in the model for the next consumer). Adding a row means adding a CANDIDATE in
+//     the VM - HelpMenuEntryRegression fails the gate on a literal row here.
+//   * The well is snapped to WHOLE rows (ScrollWellRowSnap) + a fixed-pixel
+//     "showing N of M" hint band. Measured from the WO-882 capture: the mask cut
+//     row 3 at 36 of its 146 px, so the button drew but its centred label did not -
+//     a tappable box with no text. Half-rows are now impossible.
+//   * The old "Dev Tools" label override forced ElarionUi.Ink (near-black, 0.14/
+//     0.10/0.06) onto the label. That was written when Yellow meant a GOLD face;
+//     since 2026-07-16 ObsidianButtonSpriteName resolves EVERY colour to the grey
+//     plate, so the override painted dark ink on a dark grey button - a second,
+//     genuinely label-less row. Dropped: the kit owns label ink (Parchment).
+//   * TMP strings are ASCII-only (the toast bullets + em dash rendered as tofu).
 // =============================================================================
 
 using System;
@@ -33,6 +51,24 @@ namespace DeNelle.HUD
         private ElarionUiKit.ToastParts _toast;
         private float _toastUntil;
 
+        // ── WO-882 view state: the VM owns WHAT is listed, these own HOW it lays out ──
+        private HelpMenuVM _vm;
+        private RectTransform _stack;          // the kit button column (ScrollRect content)
+        private ScrollWellRowSnap _wellSnap;   // keeps the well a whole number of rows tall
+        private TMPro.TMP_Text _moreHint;      // fixed-pixel "showing N of M" band
+
+        /// <summary>Fixed row height in canvas units - the kit CTA height, already >= MinTouchPx.</summary>
+        public static readonly float RowHeightPx = ElarionUiKit.CanonCtaHeight;
+
+        /// <summary>Fixed gap between rows - matches ElarionUiKit.BuildButtonColumn's default.</summary>
+        public const float RowGapPx = 18f;
+
+        /// <summary>Fixed hint band height. >= one FontLabel line box (40 * 1.25 = 50).</summary>
+        public const float HintBandPx = 52f;
+
+        /// <summary>Fixed breathing gap between the well's snapped bottom and the hint band.</summary>
+        public const float HintGapPx = 8f;
+
         // DEF-212 modal arbiter handle. The Help menu is a full-screen modal, so it
         // MUST route through PanelManager like every other panel — otherwise it stacks
         // over open content and its scrim can trap the player.
@@ -47,6 +83,12 @@ namespace DeNelle.HUD
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            if (_vm != null)
+            {
+                _vm.Changed -= OnEntriesChanged;
+                _vm.Dispose();
+                _vm = null;
+            }
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
@@ -70,14 +112,13 @@ namespace DeNelle.HUD
         // SECURITY (store-hardening Path A, S1): the 5-tap dev resource-grant is compile-STRIPPED from
         // release (non-Development) builds so a public/store APK cannot self-grant unlimited resources.
         // Preserved in Editor/Development builds so the owner keeps the on-phone dev grant while developing.
+        // WO-882: the tap COUNTER + the unlock rule moved into HelpMenuVM.TapTitle (they
+        // are state). Only the persistence KEY stays here - the VM is UnityEngine-free and
+        // reads/writes the pref through MenuHost (IHost.DevUnlockPersisted).
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         private const string DevUnlockPref = "dotr.devunlock";
-        private int _titleTaps;
-        private float _lastTitleTapTime;
-        private UnityEngine.UI.Button _grantResourcesBtn;   // uGUI (UIElements.Button also in scope)
-
-        private static bool DevUnlocked => PlayerPrefs.GetInt(DevUnlockPref, 0) == 1;
 #endif
+
         public PanelSettings ActivePanelSettings
         {
             get
@@ -172,42 +213,44 @@ namespace DeNelle.HUD
             wellScroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
             wellScroll.scrollSensitivity = 25f;
             FlowTrace.Step("UI", "HelpMenu: button column wrapped in ScrollRect well (WO-795) bodyIsZone=" + bodyIsZone);
-            ElarionUiKit.AddColumnButton(stack, "Report a Bug",
-                ElarionUiKit.ObsidianButtonColor.Gray, OnReportBug);
-            ElarionUiKit.AddColumnButton(stack, "Controls",
-                ElarionUiKit.ObsidianButtonColor.Gray, OnShowControls);
-            ElarionUiKit.AddColumnButton(stack, "Reset Hero & Pet",
-                ElarionUiKit.ObsidianButtonColor.Red, OnResetProgress);
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-            // SECURITY (LB-11 / E-DEVTOOLS): "Dev tools" opens AdminOverlay — compile-stripped from
-            // release. Force dark Ink on the label (luminance law) wherever the build put it.
-            var devBtn = ElarionUiKit.AddColumnButton(stack, "Dev Tools",
-                ElarionUiKit.ObsidianButtonColor.Yellow, OnOpenDevTools);
-            if (devBtn != null)
+
+            // -- WO-882: whole-row snap. The mask must never cut ACROSS a row (a clipped
+            // row draws its plate but not its centred label = a blank button). Fixed
+            // pixels, never a fraction of the parent. --------------------------------
+            _wellSnap = wellGo.AddComponent<ScrollWellRowSnap>();
+            _wellSnap.rowHeightPx = RowHeightPx;
+            _wellSnap.rowGapPx = RowGapPx;
+            _wellSnap.reserveBottomPx = 0f;
+
+            // -- WO-882: fixed-pixel "there is more below" band, pinned to the well's
+            // ORIGINAL bottom anchor line (the snap only raises the well above it). --
+            _moreHint = ElarionUiKit.Label(body, "", 0f, 0f, ElarionUi.ParchmentDim,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
+                wellRt.anchorMin.x, wellRt.anchorMax.x);
+            var hintRt = _moreHint.rectTransform;
+            hintRt.anchorMin = new Vector2(wellRt.anchorMin.x, wellRt.anchorMin.y);
+            hintRt.anchorMax = new Vector2(wellRt.anchorMax.x, wellRt.anchorMin.y);
+            hintRt.pivot = new Vector2(0.5f, 0f);
+            hintRt.anchoredPosition = Vector2.zero;
+            hintRt.sizeDelta = new Vector2(0f, HintBandPx);
+            _moreHint.raycastTarget = false;
+            _moreHint.gameObject.SetActive(false);
+
+            // -- WO-882: the VM owns the entry list; this View only stamps it. --------
+            _stack = stack;
+            if (_vm == null)
             {
-                var devLbls = devBtn.GetComponentsInChildren<TMPro.TMP_Text>(true);
-                if ((devLbls == null || devLbls.Length == 0) && devBtn.transform.parent != null)
-                    devLbls = devBtn.transform.parent.GetComponentsInChildren<TMPro.TMP_Text>(true);
-                if (devLbls != null)
-                    foreach (var t in devLbls) t.color = ElarionUi.Ink;
+                _vm = HelpMenuVM.CreateDefault(new MenuHost(this));
+                _vm.Changed += OnEntriesChanged;
             }
-            FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Obsidian card)");
-#endif
-            ElarionUiKit.AddColumnButton(stack, "Credits",
-                ElarionUiKit.ObsidianButtonColor.Gray, OnShowCredits);
+            BuildRows();
 
-            // Hidden dev unlock (owner 2026-07-12): "Grant Resources" + the 5-tap title unlock exist in
-            // Editor/Development builds only — SECURITY (store-hardening Path A, S1): compile-STRIPPED from
-            // release so a public/store APK cannot self-grant unlimited resources (grant grants ONLY
-            // resources; AdminOverlay itself was already release-locked at LB-11).
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-            _grantResourcesBtn = ElarionUiKit.AddColumnButton(stack, "Grant Resources (dev)",
-                ElarionUiKit.ObsidianButtonColor.Yellow, OnGrantResources);
-            if (_grantResourcesBtn != null)
-                _grantResourcesBtn.gameObject.SetActive(DevUnlocked);
-
-            // 5-tap counter on the card TITLE (a TMP Graphic — it carries the Button
-            // directly; no extra widget). Window resets after 3s of no taps.
+            // Hidden dev unlock (owner 2026-07-12): 5 taps on the card TITLE (a TMP Graphic
+            // — it carries the Button directly; no extra widget). The counter + window now
+            // live in HelpMenuVM.TapTitle; revealing the grant row is a VM rebuild, not a
+            // SetActive on a row the View pre-built. SECURITY (store-hardening Path A, S1):
+            // compile-STRIPPED from release so a public/store APK has no unlock path at all.
             if (_modal.chrome != null && _modal.chrome.title != null)
             {
                 _modal.chrome.title.raycastTarget = true;
@@ -229,7 +272,88 @@ namespace DeNelle.HUD
             trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
             _toast.card.SetActive(false);
 
+            // Snap + hint WHILE the canvas is still active — the headless UI capture
+            // (UICaptureLaunch.CaptureHelpMenu) only calls EnsureBuilt, never SetOpen, so
+            // this is the one pass it gets. ScrollWellRowSnap re-runs on every later
+            // dimension change (both capture aspects, device rotation).
+            RefreshWell();
+
             _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
+        }
+
+        // ── WO-882 row rendering — the View stamps EXACTLY what the VM offers ─────
+
+        /// <summary>Re-stamp the button column from <c>vm.Entries</c>. No entry is filtered,
+        /// skipped or guarded here: an entry the View cannot render is one the VM must not
+        /// have emitted (HelpMenuVM.Entry.IsRenderable).</summary>
+        private void BuildRows()
+        {
+            if (_stack == null || _vm == null) return;
+
+            for (int i = _stack.childCount - 1; i >= 0; i--)
+            {
+                var child = _stack.GetChild(i).gameObject;
+                child.transform.SetParent(null, false);   // detach NOW so the VLG stops counting it
+                // The headless UI capture builds this modal in EDIT mode, where Destroy is illegal.
+                if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
+            }
+
+            var entries = _vm.Entries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                ElarionUiKit.AddColumnButton(_stack, entry.Label,
+                    entry.Danger ? ElarionUiKit.ObsidianButtonColor.Red
+                                 : ElarionUiKit.ObsidianButtonColor.Gray,
+                    entry.Command);
+            }
+
+            FlowTrace.Step("UI", "HelpMenu: " + entries.Count + " entr(ies) stamped from HelpMenuVM (dev context="
+                + _vm.IsDevContext + ", dev unlocked=" + _vm.DevUnlocked + ")");
+        }
+
+        /// <summary>Snap the well to whole rows, then text-encode how much is off-screen.
+        /// Two passes: measure without a reserve, and only pay for the hint band when the
+        /// list actually overflows.</summary>
+        private void RefreshWell()
+        {
+            if (_wellSnap == null || _vm == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            if (_stack != null) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_stack);
+
+            _wellSnap.reserveBottomPx = 0f;
+            _wellSnap.Snap(true);
+
+            int total = _vm.Entries.Count;
+            // VisibleRows stays 0 until a layout pass resolves the well - never claim
+            // "showing 0 of N" off an unmeasured rect; the next open re-runs this.
+            bool overflows = _wellSnap.VisibleRows > 0 && total > _wellSnap.VisibleRows;
+            if (overflows)
+            {
+                _wellSnap.reserveBottomPx = HintBandPx + HintGapPx;
+                _wellSnap.Snap(true);
+                overflows = _wellSnap.VisibleRows > 0 && total > _wellSnap.VisibleRows;
+            }
+
+            if (_moreHint == null) return;
+            if (overflows)
+            {
+                // Text-encoded state (never colour alone), ASCII only.
+                _moreHint.text = "Showing " + _wellSnap.VisibleRows + " of " + total + " - drag the list for more";
+                _moreHint.gameObject.SetActive(true);
+            }
+            else
+            {
+                _moreHint.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>The VM changed its entry list (e.g. the dev unlock opened a row) — re-stamp.</summary>
+        private void OnEntriesChanged()
+        {
+            BuildRows();
+            RefreshWell();
         }
 
         // ── Actions ────────────────────────────────────────────────────────────
@@ -252,6 +376,7 @@ namespace DeNelle.HUD
             // is unchanged, so the handle's Close callback won't recurse.
             if (open) PanelManager.NotifyOpened(_panelHandle);
             else PanelManager.NotifyClosed(_panelHandle);
+            if (open) RefreshWell();   // re-snap + refresh the hint at the live screen size
             FlowTrace.Step("UI", $"Settings {(open ? "shown" : "hidden")} — kit modal active={_modal.canvas.activeSelf} timeScale={Time.timeScale}");
         }
 
@@ -266,7 +391,9 @@ namespace DeNelle.HUD
 
         private void OnShowControls()
         {
-            ShowToast("Controls — WASD/Arrows/dpad: move • 1/2/3/4 + face buttons: cast Q/W/E/R • Build button: tower placement • F: interact • Esc: pause");
+            // ASCII-ONLY (WO-882): the em dash + bullet glyphs rendered as tofu boxes on device.
+            ShowToast("Controls - WASD/Arrows/dpad: move | 1/2/3/4 + face buttons: cast Q/W/E/R "
+                    + "| Build button: tower placement | F: interact | Esc: pause");
         }
 
         private void OnShowCredits()
@@ -285,20 +412,19 @@ namespace DeNelle.HUD
         // SECURITY (store-hardening Path A, S1): the 5-tap dev unlock + resource grant are stripped from
         // release builds (see the guarded call sites + fields above). Preserved in Editor/Development.
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-        /// <summary>5-tap title counter (owner 2026-07-12): five taps inside a rolling 3s
-        /// window flips the persisted dev unlock and reveals the Grant Resources row.</summary>
+        /// <summary>Title tap (owner 2026-07-12). The 5-tap COUNTER + the rolling window are
+        /// VM state (HelpMenuVM.TapTitle); the View only forwards the tap and the clock.
+        /// The VM raises Changed on unlock, which re-stamps the rows.</summary>
         private void OnTitleTapped()
         {
-            if (Time.unscaledTime - _lastTitleTapTime > 3f) _titleTaps = 0;
-            _lastTitleTapTime = Time.unscaledTime;
-            _titleTaps++;
-            if (_titleTaps < 5 || DevUnlocked) return;
-
-            PlayerPrefs.SetInt(DevUnlockPref, 1);
-            PlayerPrefs.Save();
-            if (_grantResourcesBtn != null) _grantResourcesBtn.gameObject.SetActive(true);
-            FlowTrace.Step("UI", "HelpMenu: dev unlock flipped ON (5-tap title) — Grant Resources revealed.");
-            ShowToast("Dev actions unlocked.");
+            if (_vm == null) return;
+            bool was = _vm.DevUnlocked;
+            _vm.TapTitle(Time.unscaledTime);
+            if (!was && _vm.DevUnlocked)
+            {
+                FlowTrace.Step("UI", "HelpMenu: dev unlock flipped ON (5-tap title) - Grant Resources offered by the VM.");
+                ShowToast("Dev actions unlocked.");
+            }
         }
 
         /// <summary>
@@ -314,12 +440,12 @@ namespace DeNelle.HUD
             var instProp = ecoType?.GetProperty("Instance",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
             var eco = instProp?.GetValue(null);
-            if (eco == null) { ShowToast("Grant failed — economy not alive yet."); return; }
+            if (eco == null) { ShowToast("Grant failed - economy not alive yet."); return; }
 
             var grant = ecoType.GetMethod("GrantSpendable",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
-            if (grant == null) { ShowToast("Grant failed — GrantSpendable not found."); return; }
+            if (grant == null) { ShowToast("Grant failed - GrantSpendable not found."); return; }
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 
             var addCoins = ecoType.GetMethod("AddCoins",
@@ -339,10 +465,10 @@ namespace DeNelle.HUD
             try
             {
                 var t = System.Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
-                if (t == null) { ShowToast("Reset failed — GameStateService missing."); return; }
+                if (t == null) { ShowToast("Reset failed - GameStateService missing."); return; }
                 var instance = t.GetProperty("Instance",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
-                if (instance == null) { ShowToast("Reset failed — service not alive."); return; }
+                if (instance == null) { ShowToast("Reset failed - service not alive."); return; }
                 var reset = t.GetMethod("ResetToNewGame",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 reset?.Invoke(instance, null);
@@ -352,18 +478,18 @@ namespace DeNelle.HUD
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                 if (goHero != null)
                 {
-                    ShowToast("Reset — heading back to Hero Select…");
+                    ShowToast("Reset - heading back to Hero Select...");
                     goHero.Invoke(null, null);
                 }
                 else
                 {
-                    ShowToast("Reset done — restart the game to redo selection.");
+                    ShowToast("Reset done - restart the game to redo selection.");
                 }
             }
             catch (System.Exception ex)
             {
                 Debug.LogWarning("[HelpMenu] Reset failed: " + ex.Message);
-                ShowToast("Reset failed — see log.");
+                ShowToast("Reset failed - see log.");
             }
         }
 
@@ -386,7 +512,7 @@ namespace DeNelle.HUD
             {
                 FlowTrace.Warn("UI", "DevPanel open FAILED — AdminOverlay.TryBuild returned false " +
                     "(no PanelSettings in this scene; dev tools went nowhere)");
-                ShowToast("Dev tools unavailable — no UI panel settings in this scene.");
+                ShowToast("Dev tools unavailable - no UI panel settings in this scene.");
                 return;
             }
             FlowTrace.Step("UI", "DevPanel built — opening AdminOverlay");
@@ -402,6 +528,57 @@ namespace DeNelle.HUD
             _toast.label.text = message;
             _toast.card.SetActive(true);
             _toastUntil = Time.unscaledTime + 5f;
+        }
+
+        // ── WO-882: the VM's Unity-side seam ─────────────────────────────────────
+        // HelpMenuVM references NO UnityEngine type, so the dev CONTEXT and the
+        // persisted unlock reach it through here. Command bodies just forward to the
+        // View's existing handlers; the two dev commands are compile-stripped inside
+        // (the interface members stay so the release build still implements IHost).
+        private sealed class MenuHost : HelpMenuVM.IHost
+        {
+            private readonly HelpMenu _menu;
+            public MenuHost(HelpMenu menu) { _menu = menu; }
+
+            public bool IsDevContext
+            {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                get { return true; }
+#else
+                get { return false; }
+#endif
+            }
+
+            public bool DevUnlockPersisted
+            {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                get { return PlayerPrefs.GetInt(DevUnlockPref, 0) == 1; }
+                set { PlayerPrefs.SetInt(DevUnlockPref, value ? 1 : 0); PlayerPrefs.Save(); }
+#else
+                get { return false; }
+                set { }
+#endif
+            }
+
+            public void ReportBug() { if (_menu != null) _menu.OnReportBug(); }
+            public void ShowControls() { if (_menu != null) _menu.OnShowControls(); }
+            public void ShowCredits() { if (_menu != null) _menu.OnShowCredits(); }
+            public void ResetProgress() { if (_menu != null) _menu.OnResetProgress(); }
+            public void CloseMenu() { if (_menu != null) _menu.Close(); }
+
+            public void OpenDevTools()
+            {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                if (_menu != null) _menu.OnOpenDevTools();
+#endif
+            }
+
+            public void GrantResources()
+            {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+                if (_menu != null) _menu.OnGrantResources();
+#endif
+            }
         }
     }
 }

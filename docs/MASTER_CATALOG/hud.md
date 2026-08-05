@@ -283,7 +283,14 @@ inner class as the SOLE live singleton-resolution site, EditMode-tested
   has exactly two `ResolveLabel` hits, both in this file.
 - **DailyQuestHud.cs (367) + Bootstrap (70)** — WO-714 QUESTS master-detail view
   (rows well + shared parchment detail card), WO-795 ScrollRect well, binds
-  DailyQuestVM, view-local `_celebrated` toast memory only. Bootstrap spawns it
+  DailyQuestVM, view-local `_celebrated` toast memory only. **WO-879 (2026-08-05):
+  the EMPTY STATE is one `DailyQuestVM.EmptyState` fact (Active + Headline + Detail,
+  assigned at the single site in `Rebuild`; `IsEmpty` projects it) rendered ONCE by
+  the View — it used to render twice (dark-well line + parchment card) with the copy
+  authored in the View. While empty the list well is switched off and the parchment
+  well spans the body (fixed-pixel bands `EmptyHeadlinePx`/`EmptyDetailPx`); the
+  "Select a quest" prompt is gone (`vm.TryGetSelected` owns the lookup). Oracle:
+  `DailyQuestEmptyStateRegression` [daily-quest-empty].** Bootstrap spawns it
   HIDDEN per scene with a hero (reflection hero-find `:62-68`), suppressed in
   enemy-owned raid scenes (WO-550, `:34-38`). **Opener risk**: its header still says
   the TOWN ACTIONS "Quests" button toggles it (WO-411), but the kit's Quests button
