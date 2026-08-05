@@ -1,6 +1,26 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-04 (CLI / Grok): main line next free = **904**. **782–859 + 900–903 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **906**. **782–859 + 900–905 CONSUMED.**
+> - **905** = **"Manage" — one screen for every upgrade, sorted by what you can afford.** Owner: a Manage
+>   section under Bag showing all three rails with drill-in, because *"not sure what they can afford"*.
+>   ⚠ **The content tabs and the queue channels CROSS**: Defensive structures AND Building upgrades both
+>   run on the **Builder** channel and share one rail; troop upgrades are Research. **V1 ships THREE tabs**
+>   (defensive / buildings / troops); weapons + armor are FUTURE and have **no queue at all** —
+>   `GearProgression.Improve` is instant ("instant V1 — no job/channel"), the only sink costing resources
+>   but no time. **Deliverable, not a side effect: the always-on queue panel comes OFF the play HUD once
+>   Manage is reachable — Manage first, removal second.** Rationale worth keeping: discoverability by
+>   walking is not discoverability. Drill-in reuses the EXISTING `BuildingUpgradePanelMvvm` (83 KB,
+>   already registered); do not build a second upgrade panel.
+>   File `WORK_ORDER_905_manage_screen_upgrade_browser.md`. **SPEC — depends on WO-864's rail component.**
+> - **904** = **Fortification: upgradeable walls AND gates.** Walls already upgrade (`wall_wood`/`wall_stone`
+>   author `maxLevel:3` + a 2-rung `upgradeCost`) and WO-853 made them damageable — but **`gate_stone`
+>   authors NO `maxLevel` and NO `upgradeCost`**, so the verb answers `1 >= 1` and toasts "Max tier
+>   reached" on a fresh gate. A perimeter is only as strong as its weakest authored point; a raider walks
+>   the door while the reinforced walls stand untouched. **Blocked on raid-steal by design** — fortification
+>   before there is anything to lose is a cost with no reason to pay it.
+>   File `WORK_ORDER_904_fortification_walls_and_gates.md`. **SPEC.**
+>
+> *(banner bumped 904 → 906 in the SAME edit as the 904 + 905 mint)*
 >
 > ### ⛔ THE MAIN LINE HAS COLLIDED WITH THE UI-SEAT BLOCK — READ BEFORE MINTING
 > The main line consumed 859 and the next number, 860, is **inside the UI seat's reserved 860–899**
