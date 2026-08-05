@@ -53,9 +53,17 @@ namespace DeNelle.Editor
         private static readonly KitPrefab[] KitPrefabs =
         {
             // --- already copied / verified (keep) ---
-            new KitPrefab("Tower_Medieval_Wood",       "Medieval_M"),  // tower_ground_archer L1
-            new KitPrefab("Tower_Castle_Round",        "Medieval_M"),  // tower_ground_archer L2
-            new KitPrefab("Tower_Medieval_Big",        "Medieval_M"),  // tower_wall_wizard
+            // WO-902 (owner, Option A, 2026-08-04): tower_ground_archer's ladder is now
+            // Castle_Round (L1) -> Castle_Square (L2) -> Medieval_Big (L3). The Tribal ladder
+            // it replaced is retired, and Tower_Medieval_Wood stays REJECTED by owner ruling.
+            // These three MUST be registered here: /Assets/Resources/Structures/ is gitignored
+            // (.gitignore:121), so the mirror is regenerated from the pack rather than committed.
+            // A prefab hand-copied into that folder works locally and is MISSING on a fresh
+            // clone -- which is how the archer ladder would silently fall back to a placeholder.
+            new KitPrefab("Tower_Medieval_Wood",       "Medieval_M"),  // retired from the archer ladder; kept for other consumers
+            new KitPrefab("Tower_Castle_Round",        "Medieval_M"),  // tower_ground_archer L1 (WO-902)
+            new KitPrefab("Tower_Castle_Square",       "Medieval_M"),  // tower_ground_archer L2 (WO-902)
+            new KitPrefab("Tower_Medieval_Big",        "Medieval_M"),  // tower_ground_archer L3 (WO-902) + tower_wall_wizard
             new KitPrefab("Windmill_Medieval",         "Medieval_M"),  // mill
             new KitPrefab("Wall_Medieval_Wood",        "Medieval_M"),  // wall_wood
             new KitPrefab("Wall_Medieval_Stone",       "Medieval_M"),  // wall_stone

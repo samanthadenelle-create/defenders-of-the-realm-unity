@@ -1,1365 +1,1365 @@
 {
- "version": 6,
- "notes": "Build-mode structure catalog \u2014 DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md \u00a74). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior \u2014 only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
- "entries": [
-  {
-   "id": "tower_ground_archer",
-   "displayName": "Archer Tower",
-   "type": "Tower",
-   "kind": "Cell",
-   "_bug22": "RESOLVED 2026-07-06: owner-correct Tribal ladder honored \u2014 Tower_Tribal_Tier1..3 mirrored into Resources/Structures via CatalogPrefabImporter (_T root support added) and wired as visualPrefabPath + upgradeVisualPath. Historical context: was Tower_Medieval_Wood (lumber pile), then round-keep placeholders.",
-   "visualPrefabPath": "Structures/Tower_Tribal_Tier1",
-   "repo": {
-    "behaviorId": "DefenseTower",
-    "buildCost": 100,
-    "cost": {
-     "wood": 90,
-     "food": 0,
-     "iron": 40,
-     "crystals": 0
+  "version": 6,
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
+  "entries": [
+    {
+      "id": "tower_ground_archer",
+      "displayName": "Archer Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "_bug22": "RESOLVED 2026-07-06: owner-correct Tribal ladder honored — Tower_Tribal_Tier1..3 mirrored into Resources/Structures via CatalogPrefabImporter (_T root support added) and wired as visualPrefabPath + upgradeVisualPath. Historical context: was Tower_Medieval_Wood (lumber pile), then round-keep placeholders.",
+      "visualPrefabPath": "Structures/Tower_Castle_Round",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 100,
+        "cost": {
+          "wood": 90,
+          "food": 0,
+          "iron": 40,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 108,
+            "food": 0,
+            "iron": 48,
+            "crystals": 0
+          },
+          {
+            "wood": 225,
+            "food": 0,
+            "iron": 100,
+            "crystals": 0
+          }
+        ],
+        "upgradeVisualPath": [
+          "Structures/Tower_Castle_Square",
+          "Structures/Tower_Medieval_Big"
+        ],
+        "navSurface": "Blocker",
+        "heightMul": 1.25,
+        "range": 14.0,
+        "damage": 6.0,
+        "fireRate": 2.5,
+        "canHitAir": false,
+        "element": "None",
+        "projectileStyle": "bolt",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 1.75,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      },
+      "canHitAir": false
     },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 360,
-      "food": 0,
-      "iron": 160,
-      "crystals": 0
-     },
-     {
-      "wood": 720,
-      "food": 0,
-      "iron": 320,
-      "crystals": 0
-     }
-    ],
-    "upgradeVisualPath": [
-     "Structures/Tower_Tribal_Tier2",
-     "Structures/Tower_Tribal_Tier3"
-    ],
-    "navSurface": "Blocker",
-    "heightMul": 1.25,
-    "range": 14.0,
-    "damage": 6.0,
-    "fireRate": 2.5,
-    "canHitAir": false,
-    "element": "None",
-    "projectileStyle": "bolt",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 1.75,
-     "noOverlap": true,
-     "checkAffordable": true
+    {
+      "id": "tower_wall_wizard",
+      "displayName": "Ballista",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/WizardTower_1",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 150,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 30,
+          "crystals": 70
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 72,
+            "food": 0,
+            "iron": 36,
+            "crystals": 84
+          },
+          {
+            "wood": 150,
+            "food": 0,
+            "iron": 75,
+            "crystals": 175
+          }
+        ],
+        "navSurface": "Blocker",
+        "heightMul": 1.25,
+        "range": 22.0,
+        "damage": 30.0,
+        "fireRate": 0.5,
+        "canHitAir": true,
+        "element": "None",
+        "projectileStyle": "bolt",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 1.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual — owner ruling 2026-07-08: the model IS a ballista (renamed); Tripo fbx stands upright with the standard X-90 (supersedes the dialed (0,45,-90)). Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
+      },
+      "canHitAir": true
+    },
+    {
+      "id": "tower_siege_tower",
+      "displayName": "Sky Ballista (Anti-Air)",
+      "description": "Wall-mounted spear thrower — fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Ballista",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 140,
+        "cost": {
+          "wood": 160,
+          "food": 0,
+          "iron": 90,
+          "crystals": 20
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 192,
+            "food": 0,
+            "iron": 108,
+            "crystals": 24
+          },
+          {
+            "wood": 400,
+            "food": 0,
+            "iron": 225,
+            "crystals": 50
+          }
+        ],
+        "navSurface": "Blocker",
+        "heightMul": 0.75,
+        "range": 36.0,
+        "damage": 20.0,
+        "fireRate": 1.5,
+        "canHitAir": true,
+        "airOnly": true,
+        "element": "None",
+        "projectileStyle": "bolt",
+        "placement": {
+          "mustSitOn": "WallWalk",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      }
+    },
+    {
+      "id": "tower_catapult",
+      "displayName": "Catapult",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Catapult",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 180,
+        "cost": {
+          "wood": 100,
+          "food": 0,
+          "iron": 80,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 120,
+            "food": 0,
+            "iron": 96,
+            "crystals": 0
+          },
+          {
+            "wood": 250,
+            "food": 0,
+            "iron": 200,
+            "crystals": 0
+          }
+        ],
+        "navSurface": "Blocker",
+        "heightMul": 0.75,
+        "range": 28.0,
+        "damage": 24.0,
+        "fireRate": 0.8,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.45,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      }
+    },
+    {
+      "id": "wall_wood",
+      "displayName": "Wooden Palisade",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Wall_Medieval_Wood",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 40,
+        "cost": {
+          "wood": 20,
+          "food": 0,
+          "iron": 0,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 20,
+            "food": 0,
+            "iron": 20,
+            "crystals": 0
+          },
+          {
+            "wood": 15,
+            "food": 0,
+            "iron": 45,
+            "crystals": 0
+          }
+        ],
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Wall_Wood_Horizontal_3x3m' not found — no correction computed"
+      }
+    },
+    {
+      "id": "wall_stone",
+      "displayName": "Stone Wall",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Wall_Medieval_Stone",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 90,
+        "cost": {
+          "wood": 30,
+          "food": 0,
+          "iron": 60,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 30,
+            "food": 0,
+            "iron": 40,
+            "crystals": 0
+          },
+          {
+            "wood": 30,
+            "food": 0,
+            "iron": 70,
+            "crystals": 0
+          }
+        ],
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Wall_Medieval_Stone' not found — no correction computed"
+      }
+    },
+    {
+      "id": "gate_stone",
+      "displayName": "Stone Gate",
+      "type": "Gate",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Gate_Medieval_Medium",
+      "repo": {
+        "behaviorId": "Gate",
+        "buildCost": 120,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 50,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.8,
+          "noOverlap": true,
+          "minDistanceFromGate": 8.0,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Gate_Medieval_Medium' not found — no correction computed"
+      }
+    },
+    {
+      "id": "mine_crystal",
+      "displayName": "Crystal Mine",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Well",
+      "repo": {
+        "behaviorId": "CrystalMine",
+        "buildCost": 200,
+        "cost": {
+          "wood": 80,
+          "food": 0,
+          "iron": 50,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 240,
+            "food": 0,
+            "iron": 150,
+            "crystals": 0
+          },
+          {
+            "wood": 560,
+            "food": 0,
+            "iron": 350,
+            "crystals": 0
+          }
+        ],
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/House_Medieval_Small' not found — no correction computed"
+      }
+    },
+    {
+      "id": "fountain_healing",
+      "displayName": "Wellspring of Elarion",
+      "type": "Support",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Well",
+      "repo": {
+        "behaviorId": "HealingFountain",
+        "npcModel": "Cleric",
+        "buildCost": 150,
+        "cost": {
+          "wood": 150,
+          "food": 60,
+          "iron": 100,
+          "crystals": 40
+        },
+        "maxLevel": 3,
+        "upgradeVisualPath": [
+          "",
+          ""
+        ],
+        "navSurface": "Blocker",
+        "singleton": true,
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "Wellspring of Elarion support heal fountain; visual reuses Structures/Well until fountain meshes exist"
+      }
+    },
+    {
+      "id": "deco_torch",
+      "displayName": "Wall Torch",
+      "type": "Decoration",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Torche_Wall",
+      "repo": {
+        "behaviorId": null,
+        "buildCost": 10,
+        "cost": {
+          "wood": 5,
+          "food": 0,
+          "iron": 0,
+          "crystals": 0
+        },
+        "navSurface": "None",
+        "placement": {
+          "mustSitOn": "AnyTerrain",
+          "footprint": 1.0,
+          "noOverlap": false,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Torche_Wall' not found — no correction computed"
+      }
+    },
+    {
+      "id": "pet-house",
+      "displayName": "Echo Hollow",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/PetHouse2",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Druid",
+        "singleton": true,
+        "bakedTwins": [
+          "EchoHollow_Pets_RoamingArea"
+        ],
+        "buildCost": 120,
+        "cost": {
+          "wood": 80,
+          "food": 0,
+          "iron": 30,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 4.9,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          270.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (PetHouse2: pitch -90 / roll 270, sizeM 7); ported WO-707 after the owner's F8 showed the Hollow ghost lying on its side -- manual:true"
+      }
+    },
+    {
+      "id": "workshop",
+      "displayName": "Forge",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Forge",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Engineer",
+        "buildCost": 100,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 40,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        },
+        "singleton": true,
+        "bakedTwins": [
+          "Blacksmith_Weapons_Storefront"
+        ]
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          180.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90 / roll 180); ported WO-707 -- manual:true so no tool overwrites it"
+      }
+    },
+    {
+      "id": "market",
+      "displayName": "Store",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/store",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Hoarder",
+        "buildCost": 110,
+        "cost": {
+          "wood": 70,
+          "food": 0,
+          "iron": 30,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        },
+        "singleton": true,
+        "bakedTwins": [
+          "Marketplace_Monetization"
+        ]
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          90.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
+      }
+    },
+    {
+      "id": "mill",
+      "displayName": "Mill",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Windmill_Medieval",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Farmer_B",
+        "singleton": true,
+        "buildCost": 100,
+        "cost": {
+          "wood": 70,
+          "food": 0,
+          "iron": 20,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      }
+    },
+    {
+      "id": "lumbermill",
+      "displayName": "Sawmill",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/Watermill_Medieval",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "buildCost": 90,
+        "cost": {
+          "wood": 50,
+          "food": 0,
+          "iron": 40,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      }
+    },
+    {
+      "id": "forge",
+      "displayName": "Armorer",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/armorer",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Barbarian",
+        "singleton": true,
+        "bakedTwins": [
+          "Forge_Armor_Storefront"
+        ],
+        "buildCost": 130,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 70,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 4.9,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          90.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
+      }
+    },
+    {
+      "id": "armorer",
+      "displayName": "Blacksmith",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/House_Medieval_Medium",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "BlackKnight",
+        "singleton": true,
+        "buildCost": 130,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 70,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "WO-673 additive row (L4 vendor anchor): the Blacksmith storefront as a player-placeable GameplayBuilding -- vendor structureId 'armorer' (StructureFactory maps blacksmith->BuildingType.Armorer); visual reuses House_Medieval_Medium like its workshop/forge siblings"
+      }
+    },
+    {
+      "id": "jeweler",
+      "displayName": "Jeweler",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/jeweler",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Tiefling",
+        "singleton": true,
+        "bakedTwins": [
+          "Jeweler_Gems_Storefront"
+        ],
+        "buildCost": 120,
+        "cost": {
+          "wood": 50,
+          "food": 0,
+          "iron": 40,
+          "crystals": 30
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          110.4
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (pitch -90 / roll 110.4); ported WO-707 -- manual:true. Swap-table ABSOLUTE scale 5.4/3.77/3.6 NOT portable (catalog scales multiply the footprint fit) -- size rides the fit; owner Orient trim if it reads small."
+      }
+    },
+    {
+      "id": "arcane-tower",
+      "displayName": "Cathedral of Magic",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/arcane tower",
+      "visualTexturePath": "Structures/ArcaneTower_Albedo",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Mage",
+        "singleton": true,
+        "bakedTwins": [
+          "ArcaneTower_MagicUpgrades"
+        ],
+        "buildCost": 140,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 60,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "heightMul": 1.25,
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 8.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 12 -> footprint fit, pitch -90, texPath forced -- FBX material lost its map link); ported WO-707 -- manual:true so no tool overwrites it. Swap posY -0.6 sink intentionally dropped: ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
+      },
+      "canHitAir": true
+    },
+    {
+      "id": "tower_arcane_spire",
+      "displayName": "Arcane Spire",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/ArcaneSpire_1",
+      "visualTexturePath": "Structures/ArcaneSpire_Albedo",
+      "repo": {
+        "behaviorId": "ArcaneTower",
+        "buildCost": 200,
+        "cost": {
+          "wood": 40,
+          "food": 0,
+          "iron": 40,
+          "crystals": 85
+        },
+        "maxLevel": 3,
+        "upgradeCost": [
+          {
+            "wood": 48,
+            "food": 0,
+            "iron": 48,
+            "crystals": 102
+          },
+          {
+            "wood": 100,
+            "food": 0,
+            "iron": 100,
+            "crystals": 212
+          }
+        ],
+        "upgradeVisualPath": [
+          "Structures/ArcaneSpire_2",
+          "Structures/ArcaneSpire_3"
+        ],
+        "upgradeTexturePath": [
+          "Structures/ArcaneSpire_2_Albedo",
+          "Structures/ArcaneSpire_3_Albedo"
+        ],
+        "navSurface": "Blocker",
+        "heightMul": 1.25,
+        "range": 16.0,
+        "damage": 20.0,
+        "fireRate": 0.6,
+        "canHitAir": true,
+        "element": "Aether",
+        "projectileStyle": "spell",
+        "aoeRadius": 6.0,
+        "slowSeconds": 2.5,
+        "splashFraction": 0.7,
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.1,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual — owner 2026-07-08 'needs 0 0 0' (local overlay save 01:47Z agrees): after the Tripo extraction reimport ArcaneSpire_1 stands natively; the earlier (-90,90,90) double-rotated it. manual=true kept so the auto baker never re-tips it."
+      },
+      "canHitAir": true
+    },
+    {
+      "id": "collector_farm",
+      "displayName": "Farm",
+      "type": "Collector",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/farm",
+      "repo": {
+        "behaviorId": "ResourceCollector",
+        "npcModel": "Farmer_A",
+        "collectorBuildingId": "farm",
+        "heightMul": 1.4,
+        "capacity": 7500,
+        "buildCost": 90,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 20,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 5.6,
+          "noOverlap": true,
+          "checkAffordable": true
+        },
+        "singleton": true,
+        "bakedTwins": [
+          "Windmill_Food_Storefront"
+        ]
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          212.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, pitch -90 / roll 212); ported WO-707 -- manual:true so no tool overwrites it. Roll 212 is 32deg off-axis: catalog fits the RAW bounds while the swap fit the ROTATED bounds, so size may read slightly larger -- trim via Orient tool if felt"
+      }
+    },
+    {
+      "id": "collector_lumbermill",
+      "displayName": "Lumbermill",
+      "type": "Collector",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/lumbermill",
+      "repo": {
+        "behaviorId": "ResourceCollector",
+        "npcModel": "Ranger",
+        "collectorBuildingId": "lumbermill",
+        "capacity": 5760,
+        "buildCost": 90,
+        "cost": {
+          "wood": 40,
+          "food": 20,
+          "iron": 30,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 4.9,
+          "noOverlap": true,
+          "checkAffordable": true
+        },
+        "singleton": true,
+        "bakedTwins": [
+          "Lumbermill_Wood_Storefront"
+        ]
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90); ported WO-707 -- manual:true so no tool overwrites it. Swap posY +1.5 lift intentionally dropped: it compensated the BAKED root's y; ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
+      }
+    },
+    {
+      "id": "collector_forge",
+      "displayName": "Forge",
+      "type": "Collector",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/House_Medieval_Medium",
+      "repo": {
+        "behaviorId": "ResourceCollector",
+        "collectorBuildingId": "forge",
+        "capacity": 3456,
+        "buildCost": 120,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 60,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+      }
+    },
+    {
+      "id": "lumberyard",
+      "displayName": "Lumberyard",
+      "type": "Resource",
+      "kind": "Cell",
+      "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed. | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "visualPrefabPath": "Structures/GenericContainer",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "storageCapacity": 500,
+        "storageResource": "wood",
+        "buildCost": 80,
+        "cost": {
+          "wood": 50,
+          "food": 0,
+          "iron": 20,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
+      }
+    },
+    {
+      "id": "foundry",
+      "displayName": "Foundry",
+      "type": "Resource",
+      "kind": "Cell",
+      "_note": "WO-707 storage container: stores Iron. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "visualPrefabPath": "Structures/GenericContainer",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "storageCapacity": 500,
+        "storageResource": "iron",
+        "buildCost": 100,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 30,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
+      }
+    },
+    {
+      "id": "silo",
+      "displayName": "Silo",
+      "type": "Resource",
+      "kind": "Cell",
+      "_note": "WO-707 storage container: stores Grain/food. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "visualPrefabPath": "Structures/GenericContainer",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "storageCapacity": 500,
+        "storageResource": "food",
+        "buildCost": 80,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 15,
+          "crystals": 0
+        },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.38,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
+      }
+    },
+    {
+      "id": "barracks",
+      "displayName": "Barracks",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "Structures/barracks",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "npcModel": "Paladin_with_Helmet",
+        "buildCost": 120,
+        "cost": {
+          "wood": 150,
+          "food": 0,
+          "iron": 80,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 5.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        },
+        "singleton": true,
+        "bakedTwins": [
+          "CastleBarracks"
+        ]
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": true,
+        "euler": [
+          -90.0,
+          0.0,
+          180.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "WO-812: the army train hub, placeable at last (the hub redesign never re-added it). Pitch -90 matches the Tripo fbx family (workshop/forge); Orient-tool trim if felt. FIRST place is FREE via the 2026-07-24 first-of-each-type freebie lane (non-tower building); singleton so no doubles vs a legacy baked CastleBarracks. Train entry = the drillmaster (BarracksNpcInjector anchors to baked OR placed instance) + BuildingInteractable panel; progression stays BarracksService level, not structure tier."
+      }
+    },
+    {
+      "id": "repair_default",
+      "displayName": "Repair Default",
+      "type": "Decoration",
+      "kind": "Cell",
+      "_note": "Repair-economy DATA row (owner ruling 2026-07-11), NOT a buildable structure: no visualPrefabPath (regressions skip it) and type Decoration maps to no build verb in build-categories.json, so it never appears in a palette. WallRepairController prices repair as damage-fraction x a structure's own catalog build cost in materials (wood/iron/food; crystals never charged); a structure with no materials cost row anywhere (runtime stations like the Apothecary, harvest sites) falls back to THIS row's repo.cost. Destroyed = 100% fraction = full cost = the Rebuild price. Keep the Resources + StreamingAssets copies byte-equal.",
+      "repo": {
+        "behaviorId": null,
+        "buildCost": 0,
+        "cost": {
+          "wood": 30,
+          "food": 0,
+          "iron": 15,
+          "crystals": 0
+        },
+        "navSurface": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 1.0,
+          "noOverlap": false,
+          "checkAffordable": false
+        }
+      }
     }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   },
-   "canHitAir": false
-  },
-  {
-   "id": "tower_wall_wizard",
-   "displayName": "Ballista",
-   "type": "Tower",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/WizardTower_1",
-   "repo": {
-    "behaviorId": "DefenseTower",
-    "buildCost": 150,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 30,
-     "crystals": 70
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 240,
-      "food": 0,
-      "iron": 120,
-      "crystals": 280
-     },
-     {
-      "wood": 480,
-      "food": 0,
-      "iron": 240,
-      "crystals": 560
-     }
-    ],
-    "navSurface": "Blocker",
-    "heightMul": 1.25,
-    "range": 22.0,
-    "damage": 30.0,
-    "fireRate": 0.5,
-    "canHitAir": true,
-    "element": "None",
-    "projectileStyle": "bolt",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 1.4,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "manual \u2014 owner ruling 2026-07-08: the model IS a ballista (renamed); Tripo fbx stands upright with the standard X-90 (supersedes the dialed (0,45,-90)). Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
-   },
-   "canHitAir": true
-  },
-  {
-   "id": "tower_siege_tower",
-   "displayName": "Sky Ballista (Anti-Air)",
-   "description": "Wall-mounted spear thrower \u2014 fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
-   "type": "Tower",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Ballista",
-   "repo": {
-    "behaviorId": "DefenseTower",
-    "buildCost": 140,
-    "cost": {
-     "wood": 160,
-     "food": 0,
-     "iron": 90,
-     "crystals": 20
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 640,
-      "food": 0,
-      "iron": 360,
-      "crystals": 80
-     },
-     {
-      "wood": 1280,
-      "food": 0,
-      "iron": 720,
-      "crystals": 160
-     }
-    ],
-    "navSurface": "Blocker",
-    "heightMul": 0.75,
-    "range": 36.0,
-    "damage": 20.0,
-    "fireRate": 1.5,
-    "canHitAir": true,
-    "airOnly": true,
-    "element": "None",
-    "projectileStyle": "bolt",
-    "placement": {
-     "mustSitOn": "WallWalk",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   }
-  },
-  {
-   "id": "tower_catapult",
-   "displayName": "Catapult",
-   "type": "Tower",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Catapult",
-   "repo": {
-    "behaviorId": "DefenseTower",
-    "buildCost": 180,
-    "cost": {
-     "wood": 100,
-     "food": 0,
-     "iron": 80,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 400,
-      "food": 0,
-      "iron": 320,
-      "crystals": 0
-     },
-     {
-      "wood": 800,
-      "food": 0,
-      "iron": 640,
-      "crystals": 0
-     }
-    ],
-    "navSurface": "Blocker",
-    "heightMul": 0.75,
-    "range": 28.0,
-    "damage": 24.0,
-    "fireRate": 0.8,
-    "canHitAir": false,
-    "element": "None",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.45,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   }
-  },
-  {
-   "id": "wall_wood",
-   "displayName": "Wooden Palisade",
-   "type": "Wall",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Wall_Medieval_Wood",
-   "repo": {
-    "behaviorId": "WallSegment",
-    "buildCost": 40,
-    "cost": {
-     "wood": 20,
-     "food": 0,
-     "iron": 0,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 20,
-      "food": 0,
-      "iron": 20,
-      "crystals": 0
-     },
-     {
-      "wood": 15,
-      "food": 0,
-      "iron": 45,
-      "crystals": 0
-     }
-    ],
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "prefab 'polyperfect/Wall_Wood_Horizontal_3x3m' not found \u2014 no correction computed"
-   }
-  },
-  {
-   "id": "wall_stone",
-   "displayName": "Stone Wall",
-   "type": "Wall",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Wall_Medieval_Stone",
-   "repo": {
-    "behaviorId": "WallSegment",
-    "buildCost": 90,
-    "cost": {
-     "wood": 30,
-     "food": 0,
-     "iron": 60,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 30,
-      "food": 0,
-      "iron": 40,
-      "crystals": 0
-     },
-     {
-      "wood": 30,
-      "food": 0,
-      "iron": 70,
-      "crystals": 0
-     }
-    ],
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "prefab 'polyperfect/Wall_Medieval_Stone' not found \u2014 no correction computed"
-   }
-  },
-  {
-   "id": "gate_stone",
-   "displayName": "Stone Gate",
-   "type": "Gate",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Gate_Medieval_Medium",
-   "repo": {
-    "behaviorId": "Gate",
-    "buildCost": 120,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 50,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.8,
-     "noOverlap": true,
-     "minDistanceFromGate": 8.0,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "prefab 'polyperfect/Gate_Medieval_Medium' not found \u2014 no correction computed"
-   }
-  },
-  {
-   "id": "mine_crystal",
-   "displayName": "Crystal Mine",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Well",
-   "repo": {
-    "behaviorId": "CrystalMine",
-    "buildCost": 200,
-    "cost": {
-     "wood": 80,
-     "food": 0,
-     "iron": 50,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 240,
-      "food": 0,
-      "iron": 150,
-      "crystals": 0
-     },
-     {
-      "wood": 560,
-      "food": 0,
-      "iron": 350,
-      "crystals": 0
-     }
-    ],
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "prefab 'polyperfect/House_Medieval_Small' not found \u2014 no correction computed"
-   }
-  },
-  {
-   "id": "fountain_healing",
-   "displayName": "Wellspring of Elarion",
-   "type": "Support",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Well",
-   "repo": {
-    "behaviorId": "HealingFountain",
-    "npcModel": "Cleric",
-    "buildCost": 150,
-    "cost": {
-     "wood": 150,
-     "food": 60,
-     "iron": 100,
-     "crystals": 40
-    },
-    "maxLevel": 3,
-    "upgradeVisualPath": [
-     "",
-     ""
-    ],
-    "navSurface": "Blocker",
-    "singleton": true,
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "Wellspring of Elarion support heal fountain; visual reuses Structures/Well until fountain meshes exist"
-   }
-  },
-  {
-   "id": "deco_torch",
-   "displayName": "Wall Torch",
-   "type": "Decoration",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Torche_Wall",
-   "repo": {
-    "behaviorId": null,
-    "buildCost": 10,
-    "cost": {
-     "wood": 5,
-     "food": 0,
-     "iron": 0,
-     "crystals": 0
-    },
-    "navSurface": "None",
-    "placement": {
-     "mustSitOn": "AnyTerrain",
-     "footprint": 1.0,
-     "noOverlap": false,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "prefab 'polyperfect/Torche_Wall' not found \u2014 no correction computed"
-   }
-  },
-  {
-   "id": "pet-house",
-   "displayName": "Echo Hollow",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/PetHouse2",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Druid",
-    "singleton": true,
-    "bakedTwins": [
-     "EchoHollow_Pets_RoamingArea"
-    ],
-    "buildCost": 120,
-    "cost": {
-     "wood": 80,
-     "food": 0,
-     "iron": 30,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 4.9,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     270.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (PetHouse2: pitch -90 / roll 270, sizeM 7); ported WO-707 after the owner's F8 showed the Hollow ghost lying on its side -- manual:true"
-   }
-  },
-  {
-   "id": "workshop",
-   "displayName": "Forge",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Forge",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Engineer",
-    "buildCost": 100,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 40,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "Blacksmith_Weapons_Storefront"
-    ]
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     180.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90 / roll 180); ported WO-707 -- manual:true so no tool overwrites it"
-   }
-  },
-  {
-   "id": "market",
-   "displayName": "Store",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/store",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Hoarder",
-    "buildCost": 110,
-    "cost": {
-     "wood": 70,
-     "food": 0,
-     "iron": 30,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "Marketplace_Monetization"
-    ]
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     90.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
-   }
-  },
-  {
-   "id": "mill",
-   "displayName": "Mill",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Windmill_Medieval",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Farmer_B",
-    "singleton": true,
-    "buildCost": 100,
-    "cost": {
-     "wood": 70,
-     "food": 0,
-     "iron": 20,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   }
-  },
-  {
-   "id": "lumbermill",
-   "displayName": "Sawmill",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/Watermill_Medieval",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "buildCost": 90,
-    "cost": {
-     "wood": 50,
-     "food": 0,
-     "iron": 40,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   }
-  },
-  {
-   "id": "forge",
-   "displayName": "Armorer",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/armorer",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Barbarian",
-    "singleton": true,
-    "bakedTwins": [
-     "Forge_Armor_Storefront"
-    ],
-    "buildCost": 130,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 70,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 4.9,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     90.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it"
-   }
-  },
-  {
-   "id": "armorer",
-   "displayName": "Blacksmith",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Medium",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "BlackKnight",
-    "singleton": true,
-    "buildCost": 130,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 70,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "WO-673 additive row (L4 vendor anchor): the Blacksmith storefront as a player-placeable GameplayBuilding -- vendor structureId 'armorer' (StructureFactory maps blacksmith->BuildingType.Armorer); visual reuses House_Medieval_Medium like its workshop/forge siblings"
-   }
-  },
-  {
-   "id": "jeweler",
-   "displayName": "Jeweler",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/jeweler",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Tiefling",
-    "singleton": true,
-    "bakedTwins": [
-     "Jeweler_Gems_Storefront"
-    ],
-    "buildCost": 120,
-    "cost": {
-     "wood": 50,
-     "food": 0,
-     "iron": 40,
-     "crystals": 30
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     110.4
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (pitch -90 / roll 110.4); ported WO-707 -- manual:true. Swap-table ABSOLUTE scale 5.4/3.77/3.6 NOT portable (catalog scales multiply the footprint fit) -- size rides the fit; owner Orient trim if it reads small."
-   }
-  },
-  {
-   "id": "arcane-tower",
-   "displayName": "Cathedral of Magic",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/arcane tower",
-   "visualTexturePath": "Structures/ArcaneTower_Albedo",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Mage",
-    "singleton": true,
-    "bakedTwins": [
-     "ArcaneTower_MagicUpgrades"
-    ],
-    "buildCost": 140,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 60,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "heightMul": 1.25,
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 8.4,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 12 -> footprint fit, pitch -90, texPath forced -- FBX material lost its map link); ported WO-707 -- manual:true so no tool overwrites it. Swap posY -0.6 sink intentionally dropped: ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
-   },
-   "canHitAir": true
-  },
-  {
-   "id": "tower_arcane_spire",
-   "displayName": "Arcane Spire",
-   "type": "Tower",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/ArcaneSpire_1",
-   "visualTexturePath": "Structures/ArcaneSpire_Albedo",
-   "repo": {
-    "behaviorId": "ArcaneTower",
-    "buildCost": 200,
-    "cost": {
-     "wood": 40,
-     "food": 0,
-     "iron": 40,
-     "crystals": 85
-    },
-    "maxLevel": 3,
-    "upgradeCost": [
-     {
-      "wood": 160,
-      "food": 0,
-      "iron": 160,
-      "crystals": 340
-     },
-     {
-      "wood": 320,
-      "food": 0,
-      "iron": 320,
-      "crystals": 680
-     }
-    ],
-    "upgradeVisualPath": [
-     "Structures/ArcaneSpire_2",
-     "Structures/ArcaneSpire_3"
-    ],
-    "upgradeTexturePath": [
-     "Structures/ArcaneSpire_2_Albedo",
-     "Structures/ArcaneSpire_3_Albedo"
-    ],
-    "navSurface": "Blocker",
-    "heightMul": 1.25,
-    "range": 16.0,
-    "damage": 20.0,
-    "fireRate": 0.6,
-    "canHitAir": true,
-    "element": "Aether",
-    "projectileStyle": "spell",
-    "aoeRadius": 6.0,
-    "slowSeconds": 2.5,
-    "splashFraction": 0.7,
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.1,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "manual \u2014 owner 2026-07-08 'needs 0 0 0' (local overlay save 01:47Z agrees): after the Tripo extraction reimport ArcaneSpire_1 stands natively; the earlier (-90,90,90) double-rotated it. manual=true kept so the auto baker never re-tips it."
-   },
-   "canHitAir": true
-  },
-  {
-   "id": "collector_farm",
-   "displayName": "Farm",
-   "type": "Collector",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/farm",
-   "repo": {
-    "behaviorId": "ResourceCollector",
-    "npcModel": "Farmer_A",
-    "collectorBuildingId": "farm",
-    "heightMul": 1.4,
-    "capacity": 1000,
-    "buildCost": 90,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 20,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 5.6,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "Windmill_Food_Storefront"
-    ]
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     212.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, pitch -90 / roll 212); ported WO-707 -- manual:true so no tool overwrites it. Roll 212 is 32deg off-axis: catalog fits the RAW bounds while the swap fit the ROTATED bounds, so size may read slightly larger -- trim via Orient tool if felt"
-   }
-  },
-  {
-   "id": "collector_lumbermill",
-   "displayName": "Lumbermill",
-   "type": "Collector",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/lumbermill",
-   "repo": {
-    "behaviorId": "ResourceCollector",
-    "npcModel": "Ranger",
-    "collectorBuildingId": "lumbermill",
-    "capacity": 800,
-    "buildCost": 90,
-    "cost": {
-     "wood": 40,
-     "food": 20,
-     "iron": 30,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 4.9,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "Lumbermill_Wood_Storefront"
-    ]
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90); ported WO-707 -- manual:true so no tool overwrites it. Swap posY +1.5 lift intentionally dropped: it compensated the BAKED root's y; ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
-   }
-  },
-  {
-   "id": "collector_forge",
-   "displayName": "Forge",
-   "type": "Collector",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Medium",
-   "repo": {
-    "behaviorId": "ResourceCollector",
-    "collectorBuildingId": "forge",
-    "capacity": 600,
-    "buildCost": 120,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 60,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": false,
-    "euler": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
-   }
-  },
-  {
-   "id": "lumberyard",
-   "displayName": "Lumberyard",
-   "type": "Resource",
-   "kind": "Cell",
-   "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed. | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
-   "visualPrefabPath": "Structures/GenericContainer",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "storageCapacity": 500,
-    "storageResource": "wood",
-    "buildCost": 80,
-    "cost": {
-     "wood": 50,
-     "food": 0,
-     "iron": 20,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
-   }
-  },
-  {
-   "id": "foundry",
-   "displayName": "Foundry",
-   "type": "Resource",
-   "kind": "Cell",
-   "_note": "WO-707 storage container: stores Iron. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
-   "visualPrefabPath": "Structures/GenericContainer",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "storageCapacity": 500,
-    "storageResource": "iron",
-    "buildCost": 100,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 30,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
-   }
-  },
-  {
-   "id": "silo",
-   "displayName": "Silo",
-   "type": "Resource",
-   "kind": "Cell",
-   "_note": "WO-707 storage container: stores Grain/food. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
-   "visualPrefabPath": "Structures/GenericContainer",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "storageCapacity": 500,
-    "storageResource": "food",
-    "buildCost": 80,
-    "cost": {
-     "wood": 60,
-     "food": 0,
-     "iron": 15,
-     "crystals": 0
-    },
-    "maxLevel": 3,
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 2.38,
-     "noOverlap": true,
-     "checkAffordable": true
-    }
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     0.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
-   }
-  },
-  {
-   "id": "barracks",
-   "displayName": "Barracks",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/barracks",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "Paladin_with_Helmet",
-    "buildCost": 120,
-    "cost": {
-     "wood": 150,
-     "food": 0,
-     "iron": 80,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 5.0,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "CastleBarracks"
-    ]
-   },
-   "orientation": {
-    "corrected": false,
-    "manual": true,
-    "euler": [
-     -90.0,
-     0.0,
-     180.0
-    ],
-    "offset": [
-     0.0,
-     0.0,
-     0.0
-    ],
-    "scale": 1.0,
-    "note": "WO-812: the army train hub, placeable at last (the hub redesign never re-added it). Pitch -90 matches the Tripo fbx family (workshop/forge); Orient-tool trim if felt. FIRST place is FREE via the 2026-07-24 first-of-each-type freebie lane (non-tower building); singleton so no doubles vs a legacy baked CastleBarracks. Train entry = the drillmaster (BarracksNpcInjector anchors to baked OR placed instance) + BuildingInteractable panel; progression stays BarracksService level, not structure tier."
-   }
-  },
-  {
-   "id": "repair_default",
-   "displayName": "Repair Default",
-   "type": "Decoration",
-   "kind": "Cell",
-   "_note": "Repair-economy DATA row (owner ruling 2026-07-11), NOT a buildable structure: no visualPrefabPath (regressions skip it) and type Decoration maps to no build verb in build-categories.json, so it never appears in a palette. WallRepairController prices repair as damage-fraction x a structure's own catalog build cost in materials (wood/iron/food; crystals never charged); a structure with no materials cost row anywhere (runtime stations like the Apothecary, harvest sites) falls back to THIS row's repo.cost. Destroyed = 100% fraction = full cost = the Rebuild price. Keep the Resources + StreamingAssets copies byte-equal.",
-   "repo": {
-    "behaviorId": null,
-    "buildCost": 0,
-    "cost": {
-     "wood": 30,
-     "food": 0,
-     "iron": 15,
-     "crystals": 0
-    },
-    "navSurface": "None",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 1.0,
-     "noOverlap": false,
-     "checkAffordable": false
-    }
-   }
-  }
- ]
+  ]
 }
