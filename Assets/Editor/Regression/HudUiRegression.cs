@@ -35,6 +35,27 @@
 //      root (the wiard.jpg-typo class: referenced-but-missing silently blanks
 //      an icon). Existing misses are baselined as tracked debt; a NEW missing
 //      path FAILS naming file + path.
+//   5. SAFE-AREA CORNER (WO-868) — the screen-anchored "Connect Wallet" /
+//      "Sign in with Pi" corner button must stay INSIDE Screen.safeArea. Proven
+//      defect (docs/ui-review/2026-08-04-seeker/01-title-screen.png, a 1:1 Seeker
+//      screencap at 2670x1200): the button measured 300 x 112 px with its top
+//      edge at y = -10 — CLIPPED off the top of the screen — because the holder
+//      used a raw 16-px inset (~6 dp) and a 60-px height that the kit touch floor
+//      then grew symmetrically by 26 px per side. This case pins both halves
+//      headlessly: (a) SafeAreaInset's PURE math keeps the resulting rect inside
+//      the safe area at 2340x1080 (cutout AND no-cutout) and at the captured
+//      2670x1200, and (b) PiSignInController still routes through
+//      SafeAreaInset.ApplyTopRight and still sizes its holder at the touch floor.
+//   6. COMBAT HUD COMPOSITION (WO-867) — the 2026-08-04 Seeker review's combat-HUD
+//      defects, each pinned to the data that PROVED it: the mirrored Blink plates
+//      are whole atlas PAGES (so their measured crop rects need their PNG size +
+//      spriteMode pinned); TargetNameplate.prefab authors every child at an
+//      absolute offset for a 480x130 root plus an always-on ragged BossTarget
+//      frame (so the composed-plate child names, the ComposeTargetPlate call and
+//      the one cross-file anchor it derives from are pinned); CastBar1.prefab's
+//      root sprite GUID is dangling and paints a WHITE quad unguarded; and the
+//      right-edge touch sizes are RECOMPUTED from HudAreasHost/HudKitController's
+//      own numbers at 2340x1080 rather than from a copied figure.
 //
 // SOURCE-LINT family (same as UiObsidianConformanceRegression / CompileGate's
 // NUL scan): reads .cs text + asset folders, runs no PlayMode, never throws.
@@ -201,6 +222,8 @@ namespace DeNelle.Editor
                 CheckUiDocumentFence(modulesDir, failures, notes);
                 CheckKitConformance(failures, notes);
                 CheckResourcePaths(modulesDir, failures, notes);
+                CheckSafeAreaCorner(failures, notes);
+                CheckCombatHudComposition(failures, notes);
             }
             catch (Exception ex)
             {
@@ -214,7 +237,8 @@ namespace DeNelle.Editor
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join(" ; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths all green" + noteStr;
+                reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths, " +
+                         "safe-area corner, combat-hud composition all green" + noteStr;
                 Debug.Log(reason);
                 return true;
             }
@@ -492,6 +516,485 @@ namespace DeNelle.Editor
             notes.Add("resources: " + totalLiterals + " literal path(s) checked, " + baselineMisses +
                       " known-missing tracked as debt" + extra);
         }
+
+        // =====================================================================
+        // CHECK 5 — SAFE-AREA CORNER (WO-868, the clipped "Connect Wallet")
+        // =====================================================================
+
+        // The corner button's authored size (PiSignInController.BuildButton): a fixed
+        // 300-px width for the longest label, height AT the kit touch floor so
+        // ClampMinTouch has nothing to grow (the growth is what pushed it off-screen).
+        private const float CornerButtonWidthPx = 300f;
+
+        // The oracle owns this floor DELIBERATELY — asserting the placed rect against
+        // SafeAreaInset.EdgeMarginPx would be tautological (shrink the constant and the
+        // assertion shrinks with it; proven by a negative-control run 2026-08-04 that
+        // passed with the margin back at the defective 16 px). 32 device px is the
+        // absolute minimum that is not "flush" on a ~2.7x-density phone; the measured
+        // WO-868 defect was 16.
+        private const float MinEdgeMarginPx = 32f;
+
+        // Landscape 2340x1080 (the Seeker figure the UI review specs against) plus the
+        // surface the 2026-08-04 screencap actually reported (2670x1200, 1:1).
+        // Each row: label, screen w/h, safeArea. A landscape cutout eats one SHORT edge,
+        // so the right-hand inset is the one that can clip this button.
+        private static readonly object[][] SafeAreaCases =
+        {
+            //            label                          w     h     safeArea
+            new object[] { "2340x1080 no cutout",        2340, 1080, new Rect(0f,   0f, 2340f, 1080f) },
+            new object[] { "2340x1080 right cutout 84",  2340, 1080, new Rect(0f,   0f, 2256f, 1080f) },
+            new object[] { "2340x1080 left cutout 84",   2340, 1080, new Rect(84f,  0f, 2256f, 1080f) },
+            new object[] { "2340x1080 top+right gesture",2340, 1080, new Rect(0f,  48f, 2256f, 1010f) },
+            new object[] { "2670x1200 captured surface", 2670, 1200, new Rect(0f,   0f, 2670f, 1200f) },
+        };
+
+        private static void CheckSafeAreaCorner(List<string> failures, List<string> notes)
+        {
+            // --- 5a. PURE MATH: the placed rect never leaves the safe area. --------
+            var size = new Vector2(CornerButtonWidthPx, ElarionUiKit.MinTouchPx);
+            int cases = 0;
+            foreach (var row in SafeAreaCases)
+            {
+                string label = (string)row[0];
+                int w = (int)row[1];
+                int h = (int)row[2];
+                var safe = (Rect)row[3];
+                cases++;
+
+                Rect r = SafeAreaInset.TopRightScreenRect(safe, w, h, size);
+
+                if (r.xMin < safe.xMin || r.xMax > safe.xMax || r.yMin < safe.yMin || r.yMax > safe.yMax)
+                    failures.Add("SAFE-AREA CORNER — the wallet/sign-in button rect " + RectStr(r) +
+                                 " escapes Screen.safeArea " + RectStr(safe) + " at " + label +
+                                 " (WO-868: this is the clipped 'Connect Wallet' defect — the corner must be " +
+                                 "placed from Screen.safeArea, never a raw pixel inset)");
+
+                // The rect must also clear the SCREEN edges — a device that reports no
+                // cutout (safeArea == full screen) must still get a real breathing
+                // margin, or the button reads flush like the raw -16 px did.
+                float rightGap = w - r.xMax;
+                float topGap = h - r.yMax;
+                if (rightGap < MinEdgeMarginPx || topGap < MinEdgeMarginPx)
+                    failures.Add("SAFE-AREA CORNER — at " + label + " the button sits " + rightGap.ToString("0.#") +
+                                 " px from the right screen edge and " + topGap.ToString("0.#") +
+                                 " px from the top; the floor is " + MinEdgeMarginPx.ToString("0.#") +
+                                 " px (the measured WO-868 defect was 16 px, which reads as flush and lands in " +
+                                 "the rounded-corner / cutout band)");
+
+                // Touch floor: an on-screen-but-untappable button is the same defect.
+                if (r.width < ElarionUiKit.MinTouchPx || r.height < ElarionUiKit.MinTouchPx)
+                    failures.Add("SAFE-AREA CORNER — button rect " + RectStr(r) + " is below MinTouchPx (" +
+                                 ElarionUiKit.MinTouchPx.ToString("0.#") + ") at " + label);
+            }
+
+            // The helper's own fixed-pixel margin may never be shrunk back toward flush.
+            if (SafeAreaInset.EdgeMarginPx < MinEdgeMarginPx)
+                failures.Add("SAFE-AREA CORNER — SafeAreaInset.EdgeMarginPx is " +
+                             SafeAreaInset.EdgeMarginPx.ToString("0.#") + " px, below the " +
+                             MinEdgeMarginPx.ToString("0.#") + " px floor; a shrunken margin re-creates the " +
+                             "flush-to-edge corner WO-868 fixed (the defect measured 16 px)");
+
+            // --- 5b. SOURCE LAW: the corner still routes through the helper. ------
+            const string cornerSrc = "_Modules/Core/Platform/PiSignInController.cs";
+            string cornerPath = Path.Combine(Application.dataPath, cornerSrc.Replace('/', Path.DirectorySeparatorChar));
+            string src = File.Exists(cornerPath) ? SafeRead(cornerPath, notes) : null;
+            if (src == null)
+            {
+                notes.Add("safe-area corner: Assets/" + cornerSrc + " unreadable — source law skipped");
+            }
+            else
+            {
+                if (src.IndexOf("SafeAreaInset.ApplyTopRight", StringComparison.Ordinal) < 0)
+                    failures.Add("SAFE-AREA CORNER — Assets/" + cornerSrc + " no longer calls " +
+                                 "SafeAreaInset.ApplyTopRight: the corner button is being placed by hand again " +
+                                 "(WO-868 regressed — a raw inset ignores the device cutout)");
+
+                if (Regex.IsMatch(src, @"anchoredPosition\s*=\s*new\s+Vector2\s*\(\s*-\s*\d"))
+                    failures.Add("SAFE-AREA CORNER — Assets/" + cornerSrc + " re-introduces a hard-coded negative " +
+                                 "anchoredPosition inset; the top-right corner is owned by SafeAreaInset");
+
+                if (src.IndexOf("ElarionUiKit.MinTouchPx", StringComparison.Ordinal) < 0)
+                    failures.Add("SAFE-AREA CORNER — Assets/" + cornerSrc + " no longer sizes the corner holder at " +
+                                 "ElarionUiKit.MinTouchPx: a sub-floor holder gets grown SYMMETRICALLY by " +
+                                 "ClampMinTouch and pushes back off the top of the screen (the measured -10 px)");
+            }
+
+            notes.Add("safe-area corner: " + cases + " resolution/cutout case(s) verified against SafeAreaInset (margin " +
+                      SafeAreaInset.EdgeMarginPx.ToString("0.#") + " px, size " +
+                      CornerButtonWidthPx.ToString("0.#") + "x" + ElarionUiKit.MinTouchPx.ToString("0.#") + ")");
+        }
+
+        // =====================================================================
+        // CHECK 6 — COMBAT HUD COMPOSITION (WO-867)
+        // ---------------------------------------------------------------------
+        // Three defect classes from the 2026-08-04 Seeker review, each pinned to
+        // the DATA that proved it rather than to a screenshot:
+        //
+        //   6a RAGGED / TORN EDGES — nameplate_party.png, nameplate_bar.png and
+        //      target_core.png are whole ATLAS PAGES imported `spriteMode: 1`
+        //      (Single). Drawn Image.Type.Simple they paint every unrelated element
+        //      parked on the same texture: a loose grey rock chunk (party, x>=1137),
+        //      a torn stone fringe (target_core, y 299..386 top-down) and a dead
+        //      transparent tail (bar, x>=2347). ElarionUiKit.PlatePageSprite draws
+        //      the MEASURED sub-rect instead. Those rects are hard numbers against
+        //      the committed PNG size, so this check pins the PNG dimensions + the
+        //      spriteMode: a re-import that changes either silently crops the WRONG
+        //      region, and must fail here rather than on a device.
+        //
+        //   6b THE ENEMY PLATE AS ONE UNIT — TargetNameplate.prefab authors every
+        //      child CENTRE-anchored at ABSOLUTE offsets for a 480x130 root, plus a
+        //      GridLayoutGroup with a FIXED 374.3x31 cell, plus an always-active
+        //      BossTarget ragged frame. Stretched to the HUD area those pieces drift
+        //      apart (the "four disconnected pieces"). ComposeTargetPlate re-lays
+        //      them in fixed-pixel bands. This check pins the child names it composes
+        //      by, that it is still called, and the ONE cross-file constant it is
+        //      derived from (HudKitController's TitleRow611 bottom anchor 0.72).
+        //
+        //   6c THE WHITE CAST BAR — CastBar1.prefab's root Image points at sprite
+        //      guid c217dc4a3df342c42acde576290a6310, which resolves to NOTHING in
+        //      this project; uGUI paints a null-sprite Image as a flat WHITE quad
+        //      (03-town.png). BuildCastBar must run the no-silent-white guard.
+        //
+        //   6d TOUCH FLOOR on the right-edge controls — recomputed from the REAL
+        //      source numbers (HudAreasHost's ActionRail rect + HudKitController's
+        //      Pill611*/MedallionPerPillH) at 2340x1080, not from a copied figure.
+        // =====================================================================
+
+        /// <summary>Committed page geometry the kit's crop fractions were MEASURED against.
+        /// Row: resources-relative png path, width, height.</summary>
+        private static readonly object[][] AtlasPagePins =
+        {
+            new object[] { "Assets/Resources/RpgUi/hud/nameplate_party.png", 1280, 299 },
+            new object[] { "Assets/Resources/RpgUi/hud/nameplate_bar.png",   2611, 116 },
+            new object[] { "Assets/Resources/RpgUi/hud/target_core.png",     1427, 386 },
+        };
+
+        /// <summary>Children ComposeTargetPlate resolves BY NAME on the mirrored prefab. A rename
+        /// in a re-mirror makes FindDeep return null and the plate silently un-composes.</summary>
+        private static readonly string[] TargetPlateChildren =
+        {
+            "TargetName", "StatBars", "TargetIcon", "HealthBackground", "ManaBackground", "BossTarget",
+        };
+
+        /// <summary>The TitleRow611 bottom anchor in HudKitController that
+        /// ElarionUiKit.TargetTitleReservePx is derived from — see ComposeTargetPlate.</summary>
+        private const float TitleRow611BottomAnchor = 0.72f;
+
+        private static void CheckCombatHudComposition(List<string> failures, List<string> notes)
+        {
+            string kitObsidian = ReadAsset("_Modules/Core/UI/ElarionUiKitObsidian.cs", notes);
+            string kitNameplate = ReadAsset("_Modules/Core/UI/ElarionUiKitNameplate.cs", notes);
+            string kitCore = ReadAsset("_Modules/Core/UI/ElarionUiKit.cs", notes);
+            string hudKit = ReadAsset("_Modules/HUD/Kit/HudKitController.cs", notes);
+            string areasHost = ReadAsset("_Modules/HUD/Kit/HudAreasHost.cs", notes);
+            string echoFeedback = ReadAsset("_Modules/Village/Harvest/EchoUnlockFeedback.cs", notes);
+
+            // --- 6a. ATLAS-PAGE PINS + the crop routing. --------------------------
+            int pagesPinned = 0;
+            foreach (var row in AtlasPagePins)
+            {
+                string rel = (string)row[0];
+                int expW = (int)row[1], expH = (int)row[2];
+                string full = Path.Combine(Application.dataPath, rel.Substring("Assets/".Length)
+                                                                   .Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(full))
+                {
+                    failures.Add("ATLAS PAGE — " + rel + " is missing; ElarionUiKit.PlatePageSprite crops it by " +
+                                 "a MEASURED pixel fraction and cannot verify the region without it");
+                    continue;
+                }
+                int w, h;
+                if (!TryReadPngSize(full, out w, out h))
+                {
+                    notes.Add("atlas page: could not read PNG header for " + rel + " — size pin skipped");
+                    continue;
+                }
+                pagesPinned++;
+                if (w != expW || h != expH)
+                    failures.Add("ATLAS PAGE — " + rel + " is now " + w + "x" + h + " (pinned " + expW + "x" + expH +
+                                 "). ElarionUiKit.PlatePageSprite's crop rect is a FRACTION measured against the " +
+                                 "pinned size, so it now crops the WRONG region and the ragged/torn edge art can " +
+                                 "reappear (WO-867). Re-measure the rect in _platePageRects and update this pin.");
+
+                string meta = full + ".meta";
+                if (File.Exists(meta))
+                {
+                    string m = SafeRead(meta, notes);
+                    if (m != null && !Regex.IsMatch(m, @"^\s*spriteMode:\s*1\s*$", RegexOptions.Multiline))
+                        failures.Add("ATLAS PAGE — " + rel + " is no longer imported spriteMode: 1 (Single). " +
+                                     "PlatePageSprite's sub-rect math assumes the sprite covers the whole texture; " +
+                                     "with Multiple, Resources.Load returns a sub-sprite and the crop is wrong.");
+                }
+            }
+            if (kitNameplate != null && kitNameplate.IndexOf("PlatePageSprite", StringComparison.Ordinal) < 0)
+                failures.Add("RAGGED EDGE — ElarionUiKitNameplate.cs no longer routes the hero/Heart plate through " +
+                             "ElarionUiKit.PlatePageSprite: it draws the whole nameplate_party atlas page again, " +
+                             "which paints the loose grey rock chunk at the right end of every plate (WO-867).");
+            if (kitObsidian != null && kitObsidian.IndexOf("PlatePageSprite", StringComparison.Ordinal) < 0)
+                failures.Add("RAGGED EDGE — ElarionUiKitObsidian.cs no longer defines/uses PlatePageSprite: the " +
+                             "target_core torn stone fringe and the nameplate page artifacts come back (WO-867).");
+
+            // --- 6b. THE ENEMY PLATE COMPOSES AS ONE UNIT. -----------------------
+            const string targetPrefab = "Assets/Resources/RpgUi/prefabs/TargetNameplate.prefab";
+            string prefabFull = Path.Combine(Application.dataPath,
+                targetPrefab.Substring("Assets/".Length).Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(prefabFull))
+            {
+                notes.Add("target plate: " + targetPrefab + " absent — the kit falls back to MODE 2 (constructed), " +
+                          "which composes its own plate; prefab-child pins skipped");
+            }
+            else
+            {
+                string prefab = SafeRead(prefabFull, notes) ?? "";
+                foreach (var child in TargetPlateChildren)
+                    if (!Regex.IsMatch(prefab, @"m_Name:\s*" + Regex.Escape(child) + @"\s*$", RegexOptions.Multiline))
+                        failures.Add("TARGET PLATE — " + targetPrefab + " no longer contains a '" + child +
+                                     "' GameObject. ElarionUiKit.ComposeTargetPlate resolves it BY NAME; a miss " +
+                                     "means that piece keeps its authored ABSOLUTE offset (sized for a 480x130 " +
+                                     "root) and drifts out of the stretched plate — the WO-867 defect.");
+            }
+
+            if (kitObsidian != null)
+            {
+                if (kitObsidian.IndexOf("ComposeTargetPlate(pf, h", StringComparison.Ordinal) < 0)
+                    failures.Add("TARGET PLATE — BuildTargetFrame's prefab path no longer calls ComposeTargetPlate: " +
+                                 "the enemy nameplate reverts to four disconnected pieces (WO-867).");
+                if (kitObsidian.IndexOf("DeactivateChild(pf.transform, \"bosstarget\")", StringComparison.Ordinal) < 0)
+                    failures.Add("TARGET PLATE — ComposeTargetPlate no longer deactivates BossTarget. That child " +
+                                 "ships m_IsActive:1 and draws the 397x412 nameplate_boss TORN frame at a fixed " +
+                                 "off-plate offset — the ragged grey/gold shard over the enemy plate (WO-867).");
+                if (kitObsidian.IndexOf("PlatePageSprite(RpgUiCatalog.HudTargetCore)", StringComparison.Ordinal) < 0)
+                    failures.Add("TARGET PLATE — the plate face is no longer drawn from the CROPPED target_core " +
+                                 "body. target_core.png is a 1427x386 COMPOSITE page (portrait socket + ornate " +
+                                 "strip + plate body + a TORN STONE FRINGE at y 299..386); drawn whole and " +
+                                 "stretched, the fringe is the ragged edge over the enemy plate (WO-867).");
+                if (!Regex.IsMatch(kitObsidian, @"GetComponent<LayoutGroup>\s*\(\s*\)"))
+                    failures.Add("TARGET PLATE — ComposeTargetPlate no longer disables the prefab's LayoutGroup. " +
+                                 "StatBars carries a GridLayoutGroup with a FIXED 374.3x31 cell, which is why the " +
+                                 "green/blue HP bar rendered as an island offset to the right of the plate (WO-867).");
+            }
+
+            if (hudKit != null)
+            {
+                // ComposeTargetPlate reserves (1 - 0.72) * TargetPlatePx of the plate top for the
+                // name+Lv row HudKitController builds. That file belongs to another lane, so the
+                // coupling is pinned here instead of duplicated there.
+                var m = Regex.Match(hudKit, @"rowRt\.anchorMin\s*=\s*new\s+Vector2\s*\(\s*[\d.]+f\s*,\s*([\d.]+)f\s*\)");
+                if (!m.Success)
+                    notes.Add("target plate: could not locate HudKitController's TitleRow611 anchorMin — " +
+                              "the TargetTitleReservePx derivation is unverified this run");
+                else
+                {
+                    float bottom;
+                    if (float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out bottom)
+                        && Mathf.Abs(bottom - TitleRow611BottomAnchor) > 0.001f)
+                        failures.Add("TARGET PLATE — HudKitController's TitleRow611 bottom anchor moved to " +
+                                     bottom.ToString("0.###") + " (was " + TitleRow611BottomAnchor.ToString("0.###") +
+                                     "). ElarionUiKit.TargetTitleReservePx (32 ref px) is DERIVED from it as " +
+                                     "(1 - anchor) * TargetPlatePx; the HP band will now collide with the name/Lv " +
+                                     "row. Re-derive TargetTitleReservePx and update this pin (WO-867).");
+                }
+            }
+
+            // --- 6c. NO SILENT WHITE on the cast bar. ----------------------------
+            if (kitObsidian != null)
+            {
+                int guardCalls = Regex.Matches(kitObsidian, @"GuardSpriteNullImages\s*\(\s*pf").Count;
+                if (guardCalls < 2)
+                    failures.Add("WHITE CAST BAR — only " + guardCalls + " prefab path(s) in ElarionUiKitObsidian.cs " +
+                                 "call GuardSpriteNullImages(pf, ...). BuildTargetFrame AND BuildCastBar both bind " +
+                                 "mirrored prefabs whose sprite GUIDs are DANGLING; an unguarded null-sprite Image " +
+                                 "renders as a flat WHITE QUAD (docs/ui-review/2026-08-04-seeker/03-town.png).");
+            }
+            int dangling = CountDanglingPrefabSprites(notes);
+            if (dangling > 0)
+                notes.Add("mirrored RpgUi prefabs carry " + dangling + " dangling sprite ref(s) — each is a white " +
+                          "quad unless its kit builder runs GuardSpriteNullImages");
+
+            // --- 6d. TOUCH FLOOR, recomputed from the owning source numbers. -----
+            Vector4 rail;
+            if (areasHost != null && TryParseAreaRect(areasHost, "ActionRail", out rail))
+            {
+                // HudAreasHost canvas: 1080x1920 reference, ScreenMatchMode MatchWidthOrHeight 0.5.
+                const float refW = 1080f, refH = 1920f, match = 0.5f;
+                const float screenW = 2340f, screenH = 1080f;   // the Seeker figure the review specs against
+                float scale = Mathf.Pow(screenW / refW, 1f - match) * Mathf.Pow(screenH / refH, match);
+                float canvasW = screenW / scale, canvasH = screenH / scale;
+
+                float railW = (rail.z - rail.x) * canvasW;
+                float railH = (rail.w - rail.y) * canvasH;
+
+                float y0 = ParseConst(hudKit, "Pill611Y0", 0.02f);
+                float y1 = ParseConst(hudKit, "Pill611Y1", 0.30f);
+                float perPill = ParseConst(hudKit, "MedallionPerPillH", 0.9f);
+                float pillH = (y1 - y0) * railH;
+                float medallion = perPill * pillH;
+
+                notes.Add("touch measure @" + screenW + "x" + screenH + " (canvas " + canvasW.ToString("0.#") + "x" +
+                          canvasH.ToString("0.#") + " ref units): ActionRail " + railW.ToString("0.#") + "x" +
+                          railH.ToString("0.#") + ", attack pill height " + pillH.ToString("0.#") +
+                          ", ability medallion " + medallion.ToString("0.#") + " (floor " +
+                          ElarionUiKit.MinTouchPx.ToString("0.#") + ")");
+
+                if (medallion < ElarionUiKit.MinTouchPx)
+                {
+                    // The arc geometry lives in HudKitController (another lane's file). The kit
+                    // compensates with a fixed MinTouchPx hit-area child; that compensation is what
+                    // this gate holds, because without it the medallions are genuinely untappable.
+                    if (kitCore == null || kitCore.IndexOf("EnsureTouchFloorArea(slot)", StringComparison.Ordinal) < 0)
+                        failures.Add("TOUCH FLOOR — ability medallions resolve to " + medallion.ToString("0.#") +
+                                     " ref px at " + screenW + "x" + screenH + ", " +
+                                     (ElarionUiKit.MinTouchPx - medallion).ToString("0.#") + " px UNDER MinTouchPx (" +
+                                     ElarionUiKit.MinTouchPx.ToString("0.#") + "), and StyleAsRoundMedallion no " +
+                                     "longer calls EnsureTouchFloorArea — nothing restores the tap target (WO-867).");
+                    else
+                        notes.Add("touch floor: medallion VISUAL is " +
+                                  (ElarionUiKit.MinTouchPx - medallion).ToString("0.#") +
+                                  " px under the floor (geometry owned by HudKitController/CombatArcLayout611); " +
+                                  "the kit's EnsureTouchFloorArea hit-area child restores the 112 px tap target");
+                }
+                if (pillH < ElarionUiKit.MinTouchPx)
+                    notes.Add("touch floor: the attack pill is " + pillH.ToString("0.#") +
+                              " ref px tall (" + (ElarionUiKit.MinTouchPx - pillH).ToString("0.#") +
+                              " under the floor) but " + ((1f - ParseConst(hudKit, "Pill611X0", 0.30f)) * railW)
+                                  .ToString("0.#") + " px wide — reported, not failed: the tap target is comfortable");
+            }
+            else
+            {
+                notes.Add("touch measure: could not parse HudAreasHost's ActionRail rect — right-edge sizing unverified");
+            }
+
+            // --- 6e. The Echoes chip is docked, sized, and the floater is gone. --
+            if (echoFeedback != null)
+            {
+                if (Regex.IsMatch(echoFeedback, @"ToastCard\s*\([^)]*ToastTone\.Info"))
+                    failures.Add("ECHO CHIP — EchoUnlockFeedback.cs re-introduces the free-floating 'Echoes N/M' " +
+                                 "ToastCard. It landed in the ~7 ref-px seam between the HudAreasHost Vitals band " +
+                                 "(0.800..0.985) and HeartStatus band (0.700..0.792), in no band at all, and its " +
+                                 "accentLeft strip is the stray gold rule (WO-867). The count rides the chip.");
+                if (echoFeedback.IndexOf("ElarionUiKit.MinTouchPx", StringComparison.Ordinal) < 0)
+                    failures.Add("ECHO CHIP — EchoUnlockFeedback.cs no longer sizes the Echoes chip at " +
+                                 "ElarionUiKit.MinTouchPx; a sub-floor chip is grown symmetrically by ClampMinTouch " +
+                                 "and drifts out of its docked band (WO-867).");
+                if (echoFeedback.IndexOf("EchoChipBandCentreY", StringComparison.Ordinal) < 0)
+                    failures.Add("ECHO CHIP — EchoUnlockFeedback.cs no longer docks the chip on the named right-column " +
+                                 "band constant; it is free-floating again (WO-867).");
+            }
+
+            notes.Add("combat hud composition: " + pagesPinned + " atlas page(s) pinned, " +
+                      TargetPlateChildren.Length + " target-plate child name(s) verified");
+        }
+
+        /// <summary>Read Assets/&lt;rel&gt; as text (null + note when absent/unreadable).</summary>
+        private static string ReadAsset(string rel, List<string> notes)
+        {
+            string full = Path.Combine(Application.dataPath, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(full)) return SafeRead(full, notes);
+            notes.Add("combat hud composition: Assets/" + rel + " not found — its checks were skipped");
+            return null;
+        }
+
+        /// <summary>PNG IHDR width/height without decoding the image.</summary>
+        private static bool TryReadPngSize(string path, out int width, out int height)
+        {
+            width = height = 0;
+            try
+            {
+                var head = new byte[24];
+                using (var fs = File.OpenRead(path))
+                    if (fs.Read(head, 0, 24) < 24) return false;
+                if (head[0] != 0x89 || head[1] != 0x50 || head[2] != 0x4E || head[3] != 0x47) return false;
+                width  = (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19];
+                height = (head[20] << 24) | (head[21] << 16) | (head[22] << 8) | head[23];
+                return width > 0 && height > 0;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Parse an <c>Add(HudArea.&lt;name&gt;, new Vector2(a,b), new Vector2(c,d));</c> row
+        /// out of HudAreasHost source into (a,b,c,d).</summary>
+        private static bool TryParseAreaRect(string src, string area, out Vector4 rect)
+        {
+            rect = default(Vector4);
+            var m = Regex.Match(src, @"Add\s*\(\s*HudArea\." + Regex.Escape(area) +
+                                     @"\s*,\s*new\s+Vector2\s*\(\s*([\d.]+)f?\s*,\s*([\d.]+)f?\s*\)\s*,\s*" +
+                                     @"new\s+Vector2\s*\(\s*([\d.]+)f?\s*,\s*([\d.]+)f?\s*\)");
+            if (!m.Success) return false;
+            float a, b, c, d;
+            if (!float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out a)) return false;
+            if (!float.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out b)) return false;
+            if (!float.TryParse(m.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out c)) return false;
+            if (!float.TryParse(m.Groups[4].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) return false;
+            rect = new Vector4(a, b, c, d);
+            return true;
+        }
+
+        /// <summary>Read a <c>const float Name = 0.12f;</c> literal out of source (fallback on a miss).</summary>
+        private static float ParseConst(string src, string name, float fallback)
+        {
+            if (src == null) return fallback;
+            var m = Regex.Match(src, @"\b" + Regex.Escape(name) + @"\s*=\s*(-?[\d.]+)f");
+            float v;
+            if (m.Success && float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+                return v;
+            return fallback;
+        }
+
+        /// <summary>Count sprite refs in the mirrored RpgUi prefabs whose GUID resolves to no .meta
+        /// under Assets/Resources or Assets/Blink — each one renders as a white quad unguarded.</summary>
+        private static int CountDanglingPrefabSprites(List<string> notes)
+        {
+            try
+            {
+                string prefabDir = Path.Combine(Application.dataPath, Path.Combine("Resources",
+                                   Path.Combine("RpgUi", "prefabs")));
+                if (!Directory.Exists(prefabDir)) return 0;
+
+                var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var guidRx = new Regex(@"^guid:\s*([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline);
+                foreach (var rootName in new[] { "Resources", "Blink" })
+                {
+                    string root = Path.Combine(Application.dataPath, rootName);
+                    if (!Directory.Exists(root)) continue;
+                    foreach (var meta in Directory.GetFiles(root, "*.meta", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            using (var sr = new StreamReader(meta))
+                            {
+                                for (int i = 0; i < 4; i++)
+                                {
+                                    string line = sr.ReadLine();
+                                    if (line == null) break;
+                                    var gm = guidRx.Match(line);
+                                    if (gm.Success) { known.Add(gm.Groups[1].Value); break; }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                if (known.Count == 0) return 0;
+
+                // NOTE: matched without a literal open-brace character so the repo's naive
+                // brace-balance gate (CLAUDE.md §1) stays green on this file.
+                var spriteRx = new Regex(@"m_Sprite:[^,]*,\s*guid:\s*([0-9a-fA-F]{32})");
+                int miss = 0;
+                foreach (var pf in Directory.GetFiles(prefabDir, "*.prefab", SearchOption.TopDirectoryOnly))
+                {
+                    string text = SafeRead(pf, notes);
+                    if (text == null) continue;
+                    foreach (Match m in spriteRx.Matches(text))
+                        if (!known.Contains(m.Groups[1].Value)) miss++;
+                }
+                return miss;
+            }
+            catch { return 0; }
+        }
+
+        private static string RectStr(Rect r)
+            => "[x " + r.xMin.ToString("0.#") + ".." + r.xMax.ToString("0.#") +
+               ", y " + r.yMin.ToString("0.#") + ".." + r.yMax.ToString("0.#") + "]";
 
         // =====================================================================
         // Helpers

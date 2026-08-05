@@ -94,7 +94,15 @@ namespace DeNelle.Core.UI
 
             var rootImg = rootGo.GetComponent<Image>();
             rootImg.raycastTarget = false;
-            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudNameplateParty);
+            // WO-867 — THE RAGGED EDGE ON THE HERO + HEART PLATES.
+            // nameplate_party.png is 1280x299 imported `spriteMode: 1` (Single), i.e. ONE sprite
+            // over the WHOLE atlas page. Measured off the committed PNG: the plate body ends at
+            // x=1136 (light border 1132..1136) and x>=1137 is a LOOSE grey/brown rock chunk parked
+            // on the same page. Drawing the page Image.Type.Simple therefore painted that chunk at
+            // the right end of every plate — the "grey jagged shape that reads as a broken sprite"
+            // in 03-town.png / 06-combat-hud.png. It is NOT damage styling; it is the wrong rect.
+            // PlatePageSprite draws the measured plate sub-rect (§1.10b in ElarionUiKitObsidian).
+            var plateSprite = PlatePageSprite(RpgUiCatalog.HudNameplateParty);
             if (plateSprite != null)
             {
                 rootImg.sprite = plateSprite;
@@ -231,7 +239,12 @@ namespace DeNelle.Core.UI
             // animating Filled fill can never spill past the bar edge (belt-and-braces with the
             // StatBars mask). The background Image is the mask graphic; the fill child is clipped.
             bgGo.AddComponent<RectMask2D>();
-            var barBg = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudNameplateBar);
+            // WO-867: nameplate_bar.png is likewise a whole 2611x116 page whose art stops at
+            // x=2346 — the last ~10% is fully transparent, so the drawn bar background silently
+            // ended short of its own rect. Draw the measured bar sub-rect so the row's background
+            // reaches its right inset cleanly (the 8% end-cap inset below is unchanged — it is a
+            // felt-verified value for the FILL's pointed cap, a different sprite).
+            var barBg = PlatePageSprite(RpgUiCatalog.HudNameplateBar);
             if (barBg != null)
             {
                 bgImg.sprite = barBg;

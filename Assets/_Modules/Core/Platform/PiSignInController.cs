@@ -251,17 +251,37 @@ namespace DeNelle.Core.Platform
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 5000;
+            // WO-868: this corner is authored in DEVICE PIXELS (fixed-pixel bands, never
+            // fractions of parent) and SafeAreaInset works in screen px, so pin the scaler
+            // to 1:1 explicitly instead of relying on the CanvasScaler default. The
+            // 2026-08-04 Seeker capture measured the button at exactly 300 px wide for a
+            // 300-unit sizeDelta, confirming this is already the live behaviour.
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.scaleFactor = 1f;
 
             var holder = new GameObject("PiSignInButton", typeof(RectTransform));
             holder.transform.SetParent(canvasGo.transform, false);
             var rt = holder.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(1f, 1f);
-            rt.anchoredPosition = new Vector2(-16f, -16f);
             // Owner 2026-07-16 ("Sign in wit..." truncated on web): 220px clipped "Sign in with Pi"
             // to an ellipsis. Widen to fit the full label; the TMP label auto-sizes (below) so it
             // never truncates under either skin ("Connect Wallet" is shorter and also fits).
-            rt.sizeDelta = new Vector2(300f, 60f);
+            //
+            // WO-868 HEIGHT = MinTouchPx, not 60. PROVEN from the device capture
+            // (docs/ui-review/2026-08-04-seeker/01-title-screen.png, 1:1 @ 2670x1200): the
+            // visible box measured 300 x 112 with its top edge OFF-SCREEN at y = -10. The kit
+            // touch floor (ElarionUiKit.ClampMinTouch) grows a sub-floor button SYMMETRICALLY
+            // ABOUT ITS CENTRE, so a 60-px holder silently became 112 and pushed 26 px past the
+            // holder on EVERY side — the same growth that broke the Echo picker (WO-852). Author
+            // the holder AT the floor so the guard has nothing to grow and the rect stays where
+            // the safe-area math put it.
+            rt.sizeDelta = new Vector2(300f, ElarionUiKit.MinTouchPx);
+            // WO-868 SAFE AREA: was a raw anchoredPosition of (-16,-16) — ~6 dp on the Seeker,
+            // which reads as flush AND sits inside the rounded-corner / camera-cutout band, so
+            // "Connect Wallet" was clipped off the top-right corner. ApplyTopRight sets the
+            // anchors + pivot + position from Screen.safeArea (so it adapts to ANY cutout) plus
+            // a fixed-pixel margin, and re-fits on rotation / resolution change.
+            SafeAreaInset.ApplyTopRight(rt);
 
             // WO-603: under the Solana/$SKR skin this corner is a wallet-connect entry, not Pi sign-in.
             // The full wallet-connect flow lives in DeNelle.Wallet (Core cannot reference it) and is a

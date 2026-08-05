@@ -3057,6 +3057,44 @@ namespace DeNelle.Core.UI
                                      ElarionUi.FontMicro, TextAlignmentOptions.Center, 0f, 1f, bold: true);
                 keyLabel.raycastTarget = false;
             }
+
+            // WO-867: the arc lays these out at ~93.7 ref px — 18.3 under the 112 touch floor.
+            // See EnsureTouchFloorArea for the measurement and why the rect itself is not grown.
+            EnsureTouchFloorArea(slot);
+        }
+
+        /// <summary>
+        /// WO-867 TOUCH FLOOR for a slot whose VISUAL size is owned by an external layout pass.
+        /// MEASURED shortfall (2340x1080 landscape, CanvasScaler 1080x1920 match 0.5 => 2119.6 x
+        /// 978.3 reference units): the ActionRail area is 0.780..0.995 x / 0.040..0.420 y => 455.7
+        /// x 371.8 ref px; CombatArcLayout611 sizes each ability medallion at
+        /// MedallionPerPillH(0.9) * (Pill611Y1 - Pill611Y0)(0.28) * 371.8 = <b>93.7 ref px</b> —
+        /// 18.3 px UNDER <see cref="MinTouchPx"/> (112).
+        /// That arc geometry lives in HudKitController.cs (another lane's file, not editable from
+        /// this work order), and it rewrites sizeDelta on every re-layout, so growing the rect here
+        /// would just be overwritten. Instead the slot gets a TRANSPARENT, raycast-only HIT AREA
+        /// child at the touch floor: uGUI bubbles the pointer event up to the slot's Button, so the
+        /// tap target meets 112 px while the drawn medallion keeps the arc's size. Idempotent.
+        /// </summary>
+        public static void EnsureTouchFloorArea(ActionSlotHandle slot)
+        {
+            if (slot == null || slot.root == null) return;
+            if (slot.root.transform.Find("TouchFloor") != null) return;   // idempotent
+
+            var go = new GameObject("TouchFloor", typeof(Image));
+            go.transform.SetParent(slot.root.transform, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(MinTouchPx, MinTouchPx);   // FIXED reference px, not a fraction
+            rt.anchoredPosition = Vector2.zero;
+
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0f);   // invisible
+            img.sprite = SolidSprite;                // non-null so uGUI raycasts the full rect
+            img.raycastTarget = true;
+            go.transform.SetAsFirstSibling();        // never draws over the icon/badge
         }
 
         /// <summary>WO-611 SOFT under-glow cooldown driver (owner pick over a hard clock sweep). Set by

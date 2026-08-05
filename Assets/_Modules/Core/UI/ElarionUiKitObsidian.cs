@@ -1143,6 +1143,11 @@ namespace DeNelle.Core.UI
             }
         }
 
+        /// <summary>Fixed height of the cast telegraph band, reference px (the pack's authored
+        /// Cast_Bar height is 56; 48 keeps it inside the 0.02..0.30 slice of the TargetInfo area
+        /// it is mounted in at 2340x1080 while staying above the FontLabel line height).</summary>
+        public const float CastBarPx = 48f;
+
         /// <summary>
         /// A cast/telegraph bar on the Cast_Bar_{1..3} art (§1.7). Prefab-mode ("CastBar1..3") first;
         /// constructed uses the DOC-MEASURED geometry (frame 800x56, fill 507x22 centred — the pack's
@@ -1164,6 +1169,42 @@ namespace DeNelle.Core.UI
                     EnforceFillContract(pfFill);
                     h.root = pf;
                     h.fill = pfFill;
+
+                    // WO-867 — THE WHITE CAST BAR (docs/ui-review/2026-08-04-seeker/03-town.png:
+                    // "Hollow Skirmisher: Arcane Orb" on a white box over the enemy plate).
+                    // PROVEN from the prefab bytes, not inferred: CastBar1.prefab's root Image
+                    // carries m_Sprite guid c217dc4a3df342c42acde576290a6310 and its fill carries
+                    // 5a9145d0c5bfe2644a947ba4ce7fe5db — NEITHER guid resolves to any .meta in
+                    // this project (the mirror dropped the textures). Unity deserializes a
+                    // dangling ref as sprite==null, and uGUI paints a null-sprite Image as a flat
+                    // quad at m_Color (1,1,1,1) — a WHITE BOX. The no-silent-white law already
+                    // existed (GuardSpriteNullImages) but was only wired into BuildTargetFrame.
+                    GuardSpriteNullImages(pf, pf.GetComponent<Image>(), RpgUiCatalog.HudBarCast1);
+
+                    // The prefab's fill is a CENTRE-anchored fixed 507x22 inside an 800x56 root;
+                    // InstantiateBlinkPrefab stretches the root, so the fill stayed a fixed island.
+                    // Re-anchor it to the pack's own measured fractions (same numbers MODE 2 uses).
+                    Vector4 pfFrac;
+                    if (!TryParamRect("CastBar" + style, "fill", out pfFrac))
+                        pfFrac = new Vector4(0.183f, 0.304f, 0.817f, 0.696f);
+                    var pfrt = (RectTransform)pfFill.transform;
+                    if (pfrt.parent == pf.transform)
+                    {
+                        pfrt.anchorMin = new Vector2(pfFrac.x, pfFrac.y);
+                        pfrt.anchorMax = new Vector2(pfFrac.z, pfFrac.w);
+                        pfrt.pivot = new Vector2(0.5f, 0.5f);
+                        pfrt.offsetMin = Vector2.zero; pfrt.offsetMax = Vector2.zero;
+                    }
+
+                    // FIXED-PIXEL BAND (WO-841/852) pinned to the BOTTOM of the supplied rect —
+                    // the telegraph is a constant-height strip, never a fraction of the area.
+                    var crt = (RectTransform)pf.transform;
+                    crt.anchorMin = anchorMin;
+                    crt.anchorMax = new Vector2(anchorMax.x, anchorMin.y);
+                    crt.pivot = new Vector2(0.5f, 0f);
+                    crt.sizeDelta = new Vector2(0f, CastBarPx);
+                    crt.anchoredPosition = Vector2.zero;
+
                     h.label = FindDeep<TMP_Text>(pf.transform, "text", "label", "name")
                               ?? Label(pf.transform, "", 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
                                        TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
@@ -1650,6 +1691,7 @@ namespace DeNelle.Core.UI
                     h.level = FindDeep<TMP_Text>(pf.transform, "level");
                     h.extra = null;
                     GuardSpriteNullImages(pf, h.plate);   // no-silent-white law (F8-31)
+                    ComposeTargetPlate(pf, h, anchorMin, anchorMax);   // WO-867 — ONE composed unit
                     h.Clear();
                     return h;
                 }
@@ -1665,7 +1707,9 @@ namespace DeNelle.Core.UI
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             h.root = go;
             h.plate = go.GetComponent<Image>();
-            var core = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudTargetCore);
+            // WO-867: the mirrored target_core is a whole atlas page (portrait socket + name
+            // strip + plate + a torn stone fringe). Draw the MEASURED plate body only (§1.10b).
+            var core = PlatePageSprite(RpgUiCatalog.HudTargetCore);
             if (core != null)
             {
                 h.plate.sprite = core;
@@ -1688,30 +1732,221 @@ namespace DeNelle.Core.UI
             return h;
         }
 
+        // ---------------------------------------------------------------------
+        // WO-867 — COMPOSE the prefab target plate into ONE unit.
+        // ---------------------------------------------------------------------
+        // PROVEN from the prefab bytes (Assets/Resources/RpgUi/prefabs/
+        // TargetNameplate.prefab), not from reading the render:
+        //   root TargetNameplate  anchor 0.5/0.5, sizeDelta 480x130   <- authored size
+        //   TargetName            anchor 0.5/0.5, size 259x26,  pos (+48.9, +49.6)
+        //   StatBars              anchor 0.5/0.5, size 374x63,  pos (+48.6,  -1.8)
+        //                         + GridLayoutGroup, FIXED m_CellSize 374.3 x 31
+        //   TargetIcon            anchor 0.5/0.5, size  90x90,  pos (-191.1, -0.8)
+        //   BossTarget  m_IsActive: 1  sprite nameplate_boss (a 397x412 RAGGED
+        //                         grey/gold torn frame) at size 150x135, pos (-218.8,-1.2)
+        //   RareTarget  m_IsActive: 0
+        // Every child is CENTRE-anchored at an ABSOLUTE pixel offset authored for a
+        // 480x130 root — but InstantiateBlinkPrefab STRETCHES the root to the HUD
+        // area (~930 x 115 ref px at 2340x1080). The offsets do not scale, so the
+        // name, the black plate, the bar island and the level drift apart: that IS
+        // the "four disconnected pieces" defect, and the always-on BossTarget IS the
+        // ragged shard overlapping them.
+        //
+        // The composition below is authored in FIXED PIXELS off the plate's TOP edge
+        // (WO-841/852 law: never a fraction of parent for a content band), and the
+        // plate itself is pinned to a fixed-pixel height so that the two bands
+        // HudKitController owns (its TitleRow611 at 0.72..0.97 y and its lock badge
+        // at 0.02..0.34 y — that file is another lane's, not editable here) resolve
+        // to DETERMINISTIC pixel bands instead of aspect-dependent slivers.
+        // HudUiRegression pins that 0.72 so a change there fails the gate loudly.
+
+        /// <summary>Fixed height of the composed target plate, reference px. Sized to sit inside the
+        /// TargetInfo area's frame band (0.35..1 of a 0.660..0.840 area ≈ 114 ref px at 2340x1080)
+        /// while clearing the enemyBuffRow band (0..0.38 of the same area).</summary>
+        public const float TargetPlatePx = 108f;
+
+        /// <summary>Top reserve the title row occupies, reference px — derived from the 0.72 bottom
+        /// anchor HudKitController's TitleRow611 uses: (1 - 0.72) * TargetPlatePx ≈ 30.2, rounded up
+        /// so the HP band can never collide with the name/level row.</summary>
+        private const float TargetTitleReservePx = 32f;
+
+        /// <summary>Gap between the title reserve and the HP band, reference px.</summary>
+        private const float TargetBandGapPx = 4f;
+
+        /// <summary>HP band height, reference px (>= the FontLabel line height the value text uses).</summary>
+        private const float TargetHpBandPx = 30f;
+
+        /// <summary>Left edge of the content column — clear of the portrait column HudKitController
+        /// re-anchors to 0.03..0.21 x, and of the kit's own MODE-2 portrait.</summary>
+        private const float TargetContentX0 = 0.24f;
+
+        /// <summary>Right edge of the content column (inside the plate's drawn border).</summary>
+        private const float TargetContentX1 = 0.985f;
+
+        /// <summary>WO-867: turn the four drifting prefab pieces into ONE composed plate — a
+        /// fixed-pixel plate band, the rank-frame decorations off, the portrait in a left column,
+        /// and ONE full-width HP bar (with an ASCII cur/max readout) under the title reserve.
+        /// Presentation only: no binding, no model, no combat logic.</summary>
+        private static void ComposeTargetPlate(GameObject pf, TargetFrameHandle h,
+                                               Vector2 anchorMin, Vector2 anchorMax)
+        {
+            if (pf == null || h == null) return;
+            Guard.Try("UiKit", "compose target plate", () =>
+            {
+                var rt = (RectTransform)pf.transform;
+
+                // 1. THE PLATE IS ONE FIXED-PIXEL BAND pinned to the top of the supplied rect.
+                //    Horizontal extent still stretches with the area (widths may reflow; the
+                //    BANDS may not).
+                rt.anchorMin = new Vector2(anchorMin.x, anchorMax.y);
+                rt.anchorMax = anchorMax;
+                rt.pivot = new Vector2(0.5f, 1f);
+                rt.sizeDelta = new Vector2(0f, TargetPlatePx);
+                rt.anchoredPosition = Vector2.zero;
+
+                // 1a. THE PLATE FACE IS THE CROPPED PLATE BODY, not the whole page. The prefab's
+                //     root Image points at target_core (guid 79fc07a1…), a 1427x386 COMPOSITE page:
+                //     portrait socket (x 0..288) + ornate strip (x 462..1251, y 0..91) + plate body
+                //     (x 289..1426, y 92..298) + a TORN STONE FRINGE (y 299..386). Drawn Simple and
+                //     stretched, all four render at once — the "ragged/torn edge graphic overlapping
+                //     the assembly". §1.10b draws the measured body only.
+                if (h.plate != null)
+                {
+                    var body = PlatePageSprite(RpgUiCatalog.HudTargetCore);
+                    if (body != null) { h.plate.sprite = body; h.plate.type = Image.Type.Simple; }
+                }
+
+                // 2. RANK-FRAME DECORATIONS OFF. BossTarget ships m_IsActive:1 and draws the
+                //    397x412 nameplate_boss torn frame at a fixed off-plate offset — the ragged
+                //    grey/gold shard in 06-combat-hud.png. Nothing drives rank on this handle,
+                //    so both frames are decorative noise.
+                DeactivateChild(pf.transform, "bosstarget");
+                DeactivateChild(pf.transform, "raretarget");
+
+                // 3. PORTRAIT COLUMN — fixed fraction of the now-fixed plate, aspect-true, so it
+                //    can never leave the plate at any width (HudKitController re-asserts the same
+                //    intent under CombatHud611; the values agree, so it is idempotent).
+                var icon = FindDeep<Image>(pf.transform, "targeticon", "portrait", "icon");
+                if (icon != null)
+                {
+                    var irt = (RectTransform)icon.transform;
+                    irt.anchorMin = new Vector2(0.03f, 0.14f);
+                    irt.anchorMax = new Vector2(0.21f, 0.86f);
+                    irt.pivot = new Vector2(0.5f, 0.5f);
+                    irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+                    icon.preserveAspect = true;
+                    icon.raycastTarget = false;
+                }
+
+                // 4. NAME — reflow it out of its fixed 259x26 centre-anchored box into the plate's
+                //    content column. HudKitController's TitleRow611 (when CombatHud611 is on)
+                //    re-parents it into a name+Lv row on THESE same fractions; when the flag is
+                //    off this is the whole title row.
+                if (h.name != null)
+                {
+                    var nrt = (RectTransform)h.name.transform;
+                    nrt.anchorMin = new Vector2(TargetContentX0, 0.72f);
+                    nrt.anchorMax = new Vector2(TargetContentX1, 0.97f);
+                    nrt.pivot = new Vector2(0.5f, 0.5f);
+                    nrt.offsetMin = Vector2.zero; nrt.offsetMax = Vector2.zero;
+                    h.name.alignment = TextAlignmentOptions.MidlineLeft;
+                    FitSingleLine(h.name);          // §1.14 — long titles ellipsize, never spill
+                }
+
+                // 5. THE BAR ISLAND -> ONE FULL-WIDTH HP BAND. Kill the fixed-cell GridLayoutGroup
+                //    (m_CellSize 374.3x31 is why the green/blue bars rendered as an island offset
+                //    to the right of the black plate) and stretch the rows across the column.
+                var statBars = FindDeep<RectTransform>(pf.transform, "statbars");
+                if (statBars != null)
+                {
+                    var grid = statBars.GetComponent<LayoutGroup>();
+                    if (grid != null) { grid.enabled = false; UnityEngine.Object.Destroy(grid); }
+                    var fitter = statBars.GetComponent<ContentSizeFitter>();
+                    if (fitter != null) { fitter.enabled = false; UnityEngine.Object.Destroy(fitter); }
+
+                    statBars.anchorMin = new Vector2(TargetContentX0, 1f);
+                    statBars.anchorMax = new Vector2(TargetContentX1, 1f);
+                    statBars.pivot = new Vector2(0.5f, 1f);
+                    statBars.sizeDelta = new Vector2(0f, TargetHpBandPx);
+                    statBars.anchoredPosition = new Vector2(0f, -(TargetTitleReservePx + TargetBandGapPx));
+                }
+
+                // 5a. Health row fills the band edge-to-edge; the fill is its 2px-inset child, so
+                //     bar and fill END TOGETHER by construction (no more offset fill).
+                var hpBg = FindDeep<Image>(pf.transform, "healthbackground");
+                if (hpBg != null) StretchToParent(hpBg.transform as RectTransform);
+
+                // 5b. MANA ROW OFF. TargetFrameHandle has no mp field, so nothing ever drives it —
+                //     it sat permanently full and read as a second, meaningless bar in the stack.
+                DeactivateChild(pf.transform, "manabackground");
+
+                // 6. TEXT-ENCODED HP (colour is NOT a state channel — the owner is red/green
+                //    colourblind). The prefab path had no value label at all, so enemy HP was
+                //    conveyed by bar colour + length alone. BarHandle.SetValue now writes an
+                //    ASCII "cur/max" over the bar ATOMICALLY with the fill.
+                if (h.hp != null && h.hp.valueLabel == null && h.hp.track != null)
+                {
+                    var v = Label(h.hp.track, "", 0f, 1f, ElarionUi.Parchment,
+                                  ElarionUi.FontMicro, TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                    v.outlineColor = new Color32(10, 10, 14, 200);
+                    v.outlineWidth = 0.14f;
+                    v.raycastTarget = false;
+                    FitSingleLine(v);
+                    v.transform.SetAsLastSibling();
+                    h.hp.valueLabel = v;
+                }
+
+                FlowTrace.Step("UiKit", "BuildTargetFrame: composed ONE " + TargetPlatePx +
+                                        "px plate (rank frames off, mana off, HP band " +
+                                        TargetHpBandPx + "px, ASCII hp readout)");
+            });
+        }
+
+        /// <summary>Deactivate the first descendant whose name matches <paramref name="fragment"/>
+        /// (case/space/underscore-insensitive). No-op when absent.</summary>
+        private static void DeactivateChild(Transform root, string fragment)
+        {
+            var t = FindDeep<Transform>(root, fragment);
+            if (t != null && t.gameObject.activeSelf) t.gameObject.SetActive(false);
+        }
+
+        /// <summary>Stretch a RectTransform to fill its parent with zero insets.</summary>
+        private static void StretchToParent(RectTransform rt)
+        {
+            if (rt == null) return;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+        }
+
         /// <summary>No-silent-white law (F8-31): a mirrored prefab with a dangling sprite GUID
         /// deserializes as sprite==null and uGUI paints the Image as a flat tinted RECTANGLE —
-        /// the "white target frame". After binding a prefab, sweep its whole subtree: any Image
-        /// left with a null sprite is re-bound from RpgUiCatalog on a role match (the root plate
-        /// → hud/target_core) or DISABLED loudly — never rendered as a silent white quad.</summary>
-        private static void GuardSpriteNullImages(GameObject root, Image plate)
+        /// the "white target frame" (and, WO-867, the WHITE CAST BAR in 03-town.png: CastBar1.prefab's
+        /// root Image points at guid c217dc4a3df342c42acde576290a6310, which resolves to NOTHING in
+        /// this project). After binding a prefab, sweep its whole subtree: any Image left with a null
+        /// sprite is re-bound from RpgUiCatalog on a role match (the root plate →
+        /// <paramref name="plateSpriteName"/>, default hud/target_core) or DISABLED loudly — never
+        /// rendered as a silent white quad.</summary>
+        private static void GuardSpriteNullImages(GameObject root, Image plate, string plateSpriteName = null)
         {
             if (root == null) return;
+            string plateName = string.IsNullOrEmpty(plateSpriteName) ? RpgUiCatalog.HudTargetCore : plateSpriteName;
             var images = root.GetComponentsInChildren<Image>(true);
             for (int i = 0; i < images.Length; i++)
             {
                 var img = images[i];
                 if (img == null || img.sprite != null) continue;
 
-                // Role match: the root plate gets the committed target-core art.
+                // Role match: the root plate gets the committed art for its widget family.
                 if (img == plate)
                 {
-                    var core = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudTargetCore);
+                    var core = PlatePageSprite(plateName);
                     if (core != null)
                     {
                         img.sprite = core;
                         img.type = Image.Type.Simple;   // ornate core — never slice
                         FlowTrace.Warn("UiKit", "sprite-null plate Image " + ImagePath(root.transform, img.transform)
-                                              + " re-bound to hud/target_core — dangling ref");
+                                              + " re-bound to hud/" + plateName + " - dangling ref");
                         continue;
                     }
                 }
@@ -1730,6 +1965,103 @@ namespace DeNelle.Core.UI
             for (var p = t.parent; p != null && p != root.parent; p = p.parent)
                 path = p.name + "/" + path;
             return path;
+        }
+
+        // =====================================================================
+        // §1.10b ATLAS-PAGE CROP — the "ragged / torn edge" fix (WO-867).
+        // ---------------------------------------------------------------------
+        // PROVEN, not inferred (device captures docs/ui-review/2026-08-04-seeker/
+        // 03-town.png + 06-combat-hud.png, plus the source PNGs + their .meta):
+        // several Blink HUD plates were mirrored into Resources/RpgUi/hud as whole
+        // ATLAS PAGES with `spriteMode: 1` (Single) — one sprite covering the ENTIRE
+        // texture. Drawing them Image.Type.Simple therefore renders every unrelated
+        // element parked on the same page, which is exactly the "grey jagged shape
+        // that reads as a broken sprite" the review flagged:
+        //
+        //   nameplate_party.png 1280x299 — plate body ends at x=1136 (its light
+        //     border is 1132..1136); x>=1137 is a LOOSE grey/brown rock chunk.
+        //     That chunk is the ragged edge on the hero AND Heart plates.
+        //   target_core.png 1427x386 — a composite page: a portrait socket square
+        //     (x 0..288, y 51..339), an ornate name strip (x 462..1251, y 0..91),
+        //     the plate body (x 289..1426, y 92..298) and a TORN STONE FRINGE
+        //     (y 299..386). The fringe is the ragged edge over the enemy plate.
+        //   nameplate_bar.png 2611x116 — the bar art stops at x=2346; the last
+        //     ~10% of the page is fully transparent, so the drawn bar silently
+        //     ends short of its own rect.
+        //
+        // FIX: draw the MEASURED sub-rect, not the page. Sprite.Create over the
+        // page texture works on a non-readable texture (no GetPixels), costs one
+        // sprite per page for the process lifetime, and needs no re-import — so it
+        // is WebGL/mobile safe and does not touch the shared art pipeline.
+        // Every rect below is MEASURED off the committed PNG (alpha + luminance
+        // column/row scan), never eyeballed; HudUiRegression pins the page
+        // dimensions so a re-import that changes them FAILS the gate instead of
+        // silently cropping the wrong region.
+        // =====================================================================
+
+        /// <summary>Measured usable sub-rect of a mirrored atlas PAGE, in page fractions
+        /// (x, y, w, h) with Unity's BOTTOM-LEFT origin. Absent name => draw the page whole.</summary>
+        private static readonly Dictionary<string, Vector4> _platePageRects =
+            new Dictionary<string, Vector4>(StringComparer.Ordinal)
+            {
+                // plate body + ornate strip; drops the loose rock at x>=1137.
+                { RpgUiCatalog.HudNameplateParty, new Vector4(0f, 0f, 1137f / 1280f, 1f) },
+                // bar art only; drops the transparent tail at x>=2347.
+                { RpgUiCatalog.HudNameplateBar,   new Vector4(0f, 0f, 2347f / 2611f, 1f) },
+                // plate body only; drops the portrait socket, the ornate strip AND the
+                // torn stone fringe (top-down y 92..298 -> bottom-left y 88..294).
+                { RpgUiCatalog.HudTargetCore,     new Vector4(289f / 1427f, 88f / 386f,
+                                                              1138f / 1427f, 206f / 386f) },
+            };
+
+        /// <summary>Page-crop cache (one Sprite per page name, process lifetime).</summary>
+        private static readonly Dictionary<string, Sprite> _platePageCrops =
+            new Dictionary<string, Sprite>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Resolve a HUD plate sprite, CROPPED to its measured usable sub-rect when the mirrored
+        /// asset is a whole atlas page (see §1.10b). Identical to
+        /// <c>RpgUiCatalog.Get(RoleHud, name)</c> for every page with no registered rect, and
+        /// falls back to the uncropped page (never null-out a plate) if Sprite.Create fails.
+        /// </summary>
+        public static Sprite PlatePageSprite(string hudSpriteName)
+        {
+            var page = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, hudSpriteName);
+            if (page == null || string.IsNullOrEmpty(hudSpriteName)) return page;
+
+            Vector4 frac;
+            if (!_platePageRects.TryGetValue(hudSpriteName, out frac)) return page;
+
+            Sprite cached;
+            if (_platePageCrops.TryGetValue(hudSpriteName, out cached) && cached != null) return cached;
+
+            var cropped = Guard.Try("UiKit", "crop atlas page " + hudSpriteName, () =>
+            {
+                var tex = page.texture;
+                if (tex == null) return null;
+                var src = page.rect;                       // spriteMode Single => the whole texture
+                var rect = new Rect(
+                    src.x + src.width  * Mathf.Clamp01(frac.x),
+                    src.y + src.height * Mathf.Clamp01(frac.y),
+                    Mathf.Max(1f, src.width  * Mathf.Clamp01(frac.z)),
+                    Mathf.Max(1f, src.height * Mathf.Clamp01(frac.w)));
+                // Clamp inside the texture — a re-imported/atlassed page must never throw.
+                rect.width  = Mathf.Min(rect.width,  tex.width  - rect.x);
+                rect.height = Mathf.Min(rect.height, tex.height - rect.y);
+                if (rect.width < 1f || rect.height < 1f) return null;
+                return Sprite.Create(tex, rect, new Vector2(0.5f, 0.5f),
+                                     page.pixelsPerUnit, 0, SpriteMeshType.FullRect);
+            }, null);
+
+            if (cropped == null)
+            {
+                FlowTrace.Warn("UiKit", "PlatePageSprite: could not crop '" + hudSpriteName +
+                                        "' - drawing the whole page (ragged-edge art may show)");
+                return page;
+            }
+            cropped.name = page.name + "_plate";
+            _platePageCrops[hudSpriteName] = cropped;
+            return cropped;
         }
 
         /// <summary>Which nameplate flavour to build (§1.10).</summary>
@@ -1822,11 +2154,15 @@ namespace DeNelle.Core.UI
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             h.root = go;
             h.plate = go.GetComponent<Image>();
-            var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleHud,
+            // WO-867: PlatePageSprite, not the raw catalog — nameplate_party / nameplate_bar are
+            // whole atlas PAGES and drawing them Simple paints the loose rock chunk / transparent
+            // tail parked on the same texture (§1.10b). nameplate_enemy_bg is a clean full-page
+            // black bar and is returned unchanged.
+            var plateSprite = PlatePageSprite(
                 friendly ? RpgUiCatalog.HudNameplateParty
                          : kind == NameplateKind.Neutral ? RpgUiCatalog.HudNameplateBar
                          : RpgUiCatalog.HudNameplateEnemyBg);
-            if (plateSprite == null) plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudNameplateBar);
+            if (plateSprite == null) plateSprite = PlatePageSprite(RpgUiCatalog.HudNameplateBar);
             if (plateSprite != null)
             {
                 h.plate.sprite = plateSprite;

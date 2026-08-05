@@ -12,12 +12,20 @@
 //
 // FIX (this file): a feedback surface INDEPENDENT of the hidden harvest panel,
 // subscribing to EchoService.EchoUnlocked (carries the new count):
-//   1. a persistent, compact "Echoes N/M" PIP (top-left), visible during defense,
-//      that updates on every EchoService.Changed / EchoUnlocked;
+//   1. a persistent "Echoes N/M" COUNT that updates on every EchoService.Changed /
+//      EchoUnlocked. WO-867 (2026-08-04): this used to be a free-floating ToastCard
+//      pinned at (20,-150) top-left, which landed in the ~7 ref-px seam BETWEEN the
+//      HudAreasHost Vitals band (0.800..0.985) and HeartStatus band (0.700..0.792) --
+//      "Echoes 1/6 floats between the plates with a stray gold rule" in the
+//      2026-08-04 Seeker review. The card is GONE; the count now rides the ONE
+//      right-column Echoes chip (item 4), a real fixed-pixel band;
 //   2. an unmissable CENTER banner ("A new Echo has joined Elarion!  (N/M)") on its
 //      own overlay canvas -- colorblind-safe (text + a scale pop-in, not hue), and
 //   3. a positive unlock SFX (GameSfx.PlayLevelUp -> the rising-chime reward burst,
-//      routed through CoreServices.Audio, null-guarded).
+//      routed through CoreServices.Audio, null-guarded);
+//   4. the persistent "Echoes N/M" CHIP on the right column, docked in the one free
+//      band HudAreasHost leaves between ActionRail (tops 0.420) and QueueStatus
+//      (bottoms 0.530), at a FIXED MinTouchPx height. Opens the Echo roster.
 //
 // REUSE, not greenfield: the banner + pip are built from the ONE shared obsidian
 // ElarionUiKit.ToastCard (DeNelle.Core.UI) -- the same surface GearGrantToast uses --
@@ -43,8 +51,18 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class EchoUnlockFeedback : MonoBehaviour
     {
-        private Text _pipLabel;
+        /// <summary>WO-867: vertical centre of the ONE free band on HudAreasHost's right column —
+        /// between ActionRail's top (0.420) and QueueStatus's bottom (0.530).</summary>
+        private const float EchoChipBandCentreY = 0.475f;
+
+        /// <summary>WO-867: chip width, reference px — fits "Echoes 6/6" on one line at the kit's
+        /// button label size without wrapping. Height is <see cref="ElarionUiKit.MinTouchPx"/>.</summary>
+        private const float EchoChipWidthPx = 220f;
+
         private GameObject _pipCanvas;
+        /// <summary>The right-column Echoes chip's label — carries the word AND the count
+        /// ("Echoes 3/6"), so state is text-encoded and there is ONE Echoes surface (WO-867).</summary>
+        private TMP_Text _chipLabel;
 
         // Founding-echo teaching queue (WO: wire founding-echo teaching): TRUE while the
         // founding card is DUE but deferred behind Build Mode or a menu scene. Re-evaluated
@@ -256,14 +274,29 @@ namespace DeNelle.Village
             });
         }
 
-        // -- persistent pip (logic -> view) ---------------------------------------
+        // -- persistent count (logic -> view) -------------------------------------
+        // WO-867: the count no longer has a surface of its own. It is written onto the
+        // ONE right-column Echoes chip (see BuildPetBoxButton), so there is a single
+        // Echoes entry point instead of a floating card plus a separate button.
         private void RefreshPip()
         {
             var svc = EchoService.Instance;
-            if (svc == null || _pipLabel == null) return;
-            _pipLabel.text = $"Echoes  {svc.EchoCount}/{svc.MaxEchoes}";
+            if (svc == null || _chipLabel == null) return;
+            _chipLabel.text = $"Echoes {svc.EchoCount}/{svc.MaxEchoes}";   // ASCII only
         }
 
+        // WO-867 — "Echoes 1/6" WAS A FLOATER.
+        // Measured from the device captures (docs/ui-review/2026-08-04-seeker/
+        // 03-town.png + 06-combat-hud.png) and from the two owning layouts:
+        //   • the old pip was an ElarionUiKit.ToastCard pinned at (20, -150), 230x56,
+        //     on THIS canvas -- i.e. 150..206 ref px from the top of the screen;
+        //   • HudAreasHost puts Vitals at 0.800..0.985 y (its bottom lands ~196 ref px
+        //     from the top at 2340x1080) and HeartStatus at 0.700..0.792 (its top lands
+        //     ~203 ref px from the top).
+        // So the card sat in the ~7 px seam BETWEEN the hero plate and the Heart plate,
+        // in no band at all, and its ToastCard `accentLeft: true` strip is the "stray
+        // gold rule" the review flagged. The card is retired: the count now rides the
+        // Echoes chip, which is a real fixed-pixel band on the right column.
         private void BuildPip()
         {
             var go = new GameObject("EchoCountPip");
@@ -278,21 +311,6 @@ namespace DeNelle.Village
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
-
-            // Shared obsidian toast card (Info tone) -- never raycast-blocks. Compact,
-            // top-left, below the resource row so the count reads during defense.
-            var parts = ElarionUiKit.ToastCard(go.transform, ElarionUiKit.ToastTone.Info,
-                                               accentLeft: true, align: TextAnchor.MiddleCenter);
-            _pipLabel = parts.label;
-            var crt = (RectTransform)parts.card.transform;
-            crt.anchorMin = new Vector2(0f, 1f);
-            crt.anchorMax = new Vector2(0f, 1f);
-            crt.pivot = new Vector2(0f, 1f);
-            crt.anchoredPosition = new Vector2(20f, -150f);
-            crt.sizeDelta = new Vector2(230f, 56f);
-            if (_pipLabel != null) { _pipLabel.fontSize = 22; _pipLabel.text = "Echoes  1/6"; }
-            else
-                FlowTrace.Warn("Echo", "EchoCountPip: ToastCard returned a null label -- the count will not render.");
         }
 
         // -- Pet-box entry point (owner 2026-07-17: "add the pet box somewhere") ---
@@ -317,7 +335,7 @@ namespace DeNelle.Village
             // GameObject/Image/Button assembly, no per-caller styling. Style1/Gray = the
             // quiet obsidian face standardized across the HUD (matches ObsidianCloseButton).
             var btn = ElarionUiKit.BuildObsidianButton(
-                _pipCanvas.transform, "Echoes",
+                _pipCanvas.transform, "Echoes 1/6",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
                 onClick: () =>
@@ -326,6 +344,11 @@ namespace DeNelle.Village
                     EchoRoster.Open();
                 });
             if (btn == null) return;
+            // WO-867: the chip is the ONE Echoes surface — word + count on one face, so the
+            // count is text-encoded and no longer needs a card of its own. RefreshPip rewrites it.
+            _chipLabel = btn.GetComponentInChildren<TMP_Text>();
+            if (_chipLabel == null)
+                FlowTrace.Warn("Echo", "Echoes chip: no TMP label — the Echo count will not render.");
 
             // Owner 2026-07-24 felt-test placement, preserved: RIGHT screen edge, vertically
             // centred (the LEFT edge is the HudKit gear slide-dock, so RIGHT is the free edge).
@@ -336,8 +359,15 @@ namespace DeNelle.Village
             var rt = btn.transform as RectTransform;
             if (rt != null)
             {
-                rt.anchorMin = new Vector2(1f, 0.5f);
-                rt.anchorMax = new Vector2(1f, 0.5f);
+                // WO-867 — DOCK IT IN A REAL BAND ON THE RIGHT COLUMN.
+                // HudAreasHost reserves 0.780..0.995 x for the right column and leaves exactly one
+                // free vertical band there: between ActionRail's top (0.420) and QueueStatus's
+                // bottom (0.530) — ~107.6 ref px at 2340x1080 (canvas 1080x1920, match 0.5 =>
+                // 2119.6 x 978.3 ref units). Anchor the chip on that band's centre (0.475) at a
+                // FIXED 112-px height, so it occupies 0.418..0.532 and collides with neither
+                // neighbour at any aspect. Fixed pixels, never a fraction of parent.
+                rt.anchorMin = new Vector2(1f, EchoChipBandCentreY);
+                rt.anchorMax = new Vector2(1f, EchoChipBandCentreY);
                 rt.pivot = new Vector2(1f, 0.5f);
                 // SAFE-AREA INSET (measured off the headless capture 2026-07-30): the old raw
                 // -16f resolved to only ~18 device px at 2340x1080 (~7 dp, ~1.15mm on the Seeker)
@@ -349,7 +379,10 @@ namespace DeNelle.Village
                 // PadPanel, never a raw literal (WO-779 spacing rule).
                 // TODO(WO-779 s5.6): replace with the shared Screen.safeArea helper once it exists.
                 rt.anchoredPosition = new Vector2(-(ElarionUi.PadPanel * 3f), 0f);  // 54 ref px right-edge inset
-                rt.sizeDelta = new Vector2(120f, 120f);        // >= MinTouchPx (112) -- comfortable tap target
+                // "Echoes 6/6" needs a wider face than the old square; height stays AT the touch
+                // floor so ClampMinTouch has nothing to grow (the growth is what pushed WO-868's
+                // corner button off-screen).
+                rt.sizeDelta = new Vector2(EchoChipWidthPx, ElarionUiKit.MinTouchPx);
             }
             ElarionUiKit.ClampMinTouch(btn);                   // kit touch floor guard (never shrinks)
         }
