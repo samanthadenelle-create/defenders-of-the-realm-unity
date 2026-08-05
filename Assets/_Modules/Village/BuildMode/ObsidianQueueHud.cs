@@ -22,6 +22,14 @@
 // clipping; sell-time Instant / Ad-skip / Buy-slot buttons call the existing
 // BuildTimerService APIs (no new economy logic).
 //
+// WO-864 (2026-08-03): the vertical ASCII job rows are GONE. Each channel now renders
+// its own titled CoC-style CARD RAIL via the shared DeNelle.Core.UI.QueueRailView —
+// the SAME component the always-on HUD Builders panel hosts, so the two surfaces can
+// never show a different queue visual. This view owns only the chrome (header, +slot,
+// the per-channel Instant/Ad action rows); the rail owns card anatomy, empty-slot
+// cards, stack badges and its own cheap tick. The 1s Refresh() tick is REMOVED: it
+// used to destroy and rebuild every row once a second (WO-836 cheap-tick lesson).
+//
 // PLAYER-FACING NAMING: "Builders" / "Training" / "Research" — never "Obsidian".
 // COLOURBLIND-SAFE: text + ASCII leading markers (">" running / "..." queued /
 // "-" free) — no color-only state encoding, and no non-ASCII glyphs (LiberationSans
@@ -51,12 +59,15 @@ namespace DeNelle.Village
     {
         private const float LineHeightPx = 30f;
         private const float ActionRowHeightPx = 56f;
-        private const float HeaderHeightPx = 34f;
+        // 66, not the old 34: the header label renders at ElarionUi.FontBody (50), whose line
+        // box is ~60px — in a 34px row TMP culled the descenders, which the 2026-08-03 headless
+        // capture showed as "BUILDERS 1/2 busy" with its bottoms sliced off. Fixed-pixel band
+        // sized off the FONT, per the WO-841 lesson.
+        private const float HeaderHeightPx = 66f;
 
         private GameObject _modal;
         private RectTransform _listContent;   // MakeScrollZone content (layout.body host)
         private bool _open;
-        private float _nextTick;
         private PanelHandle _panelHandle;
 
         // The three canonical channels + their player-facing labels.
@@ -103,14 +114,11 @@ namespace DeNelle.Village
             if (_instance == this) _instance = null;
         }
 
-        // Live countdown repaint while open.
-        private void Update()
-        {
-            if (!_open) return;
-            if (Time.unscaledTime < _nextTick) return;
-            _nextTick = Time.unscaledTime + 1f;
-            Refresh();
-        }
+        // WO-864: NO 1s repaint here any more. The old tick called Refresh() every second,
+        // which destroyed and rebuilt EVERY row — per-second layout churn for text that only
+        // needed its digits changed (the WO-836 cheap-tick lesson). Countdowns now live on
+        // QueueRailView cards, which update their own timer TEXT and rebuild only when the
+        // queue SHAPE moves. This view repaints on QueueChanged + on open, and nothing else.
 
         /// <summary>
         /// Public static entry the HUD (or tests/regression) can call to open/close the
@@ -194,36 +202,37 @@ namespace DeNelle.Village
                 return;
             }
 
-            double now = TimeSource.NowUnixMs();
+            // WO-864: THREE separate, visually-distinct queues — each channel gets its OWN
+            // titled rail (own header, own row of cards, own +slot), never one merged list.
+            // The rail is the SHARED DeNelle.Core.UI.QueueRailView, the same component the
+            // always-on HUD Builders panel hosts, so the two surfaces cannot disagree about
+            // what the queue looks like. This view supplies the chrome; the rail owns the
+            // cards, the empty-slot placeholders, the stack badges and its own cheap tick.
+            var opts = QueueRailView.Options.Default;
+            float railH = QueueRailView.HeightOf(opts);
+
             foreach (var (id, label) in Channels)
             {
                 var active = svc.ActiveJobsOf(id);
                 var pending = svc.PendingJobsOf(id);
                 int slots = svc.SlotCount(id);
 
-                // Channel header + Buy-slot CTA.
+                // Channel header + Buy-slot CTA. NO TIMER here — the card owns the
+                // countdown, and printing it in both places is exactly the double-timer
+                // the owner reported on 2026-08-03.
                 string header = $"{label}   {active.Count}/{slots} busy" +
                                 (pending.Count > 0 ? $"   ({pending.Count} queued)" : "");
                 AddChannelHeader(header, id);
 
-                // Active slots — running jobs (or an empty free slot). ASCII-only status
-                // markers (LiberationSans SDF has no ▶/○/… glyphs → they render as tofu):
-                // ">" = running, "-" = free slot, "..." = queued. Colourblind-safe via text.
-                for (int i = 0; i < slots; i++)
-                {
-                    if (i < active.Count)
-                    {
-                        var job = active[i];
-                        AddJobRow("> " + FormatJobLine(job, now, queued: false), job, svc, isActive: true);
-                    }
-                    else
-                        AddTextRow("   - free", LineHeightPx, new Color(0.70f, 0.70f, 0.76f, 1f), bold: false);
-                }
+                var railRow = MakeRowHost("Rail_" + id, railH);
+                QueueRailView.Build((RectTransform)railRow.transform, id, opts);
 
-                // Pending FIFO strip.
-                for (int i = 0; i < pending.Count; i++)
-                    AddTextRow("   ... " + FormatJobLine(pending[i], now, queued: true),
-                        LineHeightPx, new Color(0.82f, 0.82f, 0.88f, 1f), bold: false);
+                // Sell-time actions stay reachable as a per-channel action row (WO-864 §3):
+                // one row per ACTIVE job that actually offers Instant or Ad. Cards are
+                // raycast-off decoration, so the buttons remain the only tap targets and
+                // nothing on the rail can swallow a tap.
+                for (int i = 0; i < active.Count; i++)
+                    AddJobActionRow(active[i], svc);
             }
         }
 
@@ -244,28 +253,22 @@ namespace DeNelle.Village
                 () => OnBuySlot(channel));
         }
 
-        private void AddJobRow(string lineText, BuildJobData job, BuildTimerService svc, bool isActive)
+        // One ACTIVE job's sell-time actions. Renders nothing at all when the job offers
+        // neither (Train/Research jobs never resolve InstantFinish by structureId), so an
+        // idle channel adds no empty rows.
+        private void AddJobActionRow(BuildJobData job, BuildTimerService svc)
         {
-            bool showSell = isActive && job.StartMs > 0;
-            int price = 0;
-            bool adOk = false;
-            if (showSell && svc != null)
-            {
-                // InstantFinish/AdSkip only resolve Builder jobs via structureId — price>0
-                // gates the Instant button so Train/Research never show a false Instant CTA.
-                price = svc.InstantFinishPrice(job.StructureId);
-                adOk = svc.CanWatchAdToSkip(job.StructureId);
-            }
+            if (job.StartMs <= 0 || svc == null) return;
 
-            bool hasActions = showSell && (price > 0 || adOk);
-            float h = hasActions ? ActionRowHeightPx : LineHeightPx;
-            var row = MakeRowHost("Job", h);
+            // InstantFinish/AdSkip only resolve Builder jobs via structureId — price>0
+            // gates the Instant button so Train/Research never show a false Instant CTA.
+            int price = svc.InstantFinishPrice(job.StructureId);
+            bool adOk = svc.CanWatchAdToSkip(job.StructureId);
+            if (price <= 0 && !adOk) return;
 
-            var col = new Color(0.88f, 0.88f, 0.92f, 1f);
-            float textX1 = hasActions ? 0.52f : 0.98f;
-            AddStretchLabel(row.transform, "   " + lineText, col, bold: false, x0: 0.02f, x1: textX1);
-
-            if (!hasActions) return;
+            var row = MakeRowHost("JobActions", ActionRowHeightPx);
+            AddStretchLabel(row.transform, "   " + FormatJobTarget(job),
+                new Color(0.88f, 0.88f, 0.92f, 1f), bold: false, x0: 0.02f, x1: 0.52f);
 
             string sid = job.StructureId;
             float x = 0.54f;
@@ -302,6 +305,11 @@ namespace DeNelle.Village
             le.preferredHeight = height;
             le.minHeight = height;
             le.flexibleWidth = 1f;
+            // MakeScrollZone's column runs childControlHeight=FALSE (kit rows carry their own
+            // height), so the row's OWN rect is what positions it — set it explicitly or a
+            // tall row (the card rail) collapses to zero and its cards render off-parent.
+            var rt = (RectTransform)go.transform;
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, height);
             return go;
         }
 

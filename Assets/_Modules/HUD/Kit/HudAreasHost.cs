@@ -108,9 +108,12 @@ namespace DeNelle.HUD.Kit
             Add(HudArea.HeartStatus, new Vector2(0.010f, 0.700f), new Vector2(0.330f, 0.792f));
             // WO-778: Builders/Training chip — right column, below System (.88), above the
             // ActionRail top (.42); the only occupant of this free band (no collision).
-            // Taller since 2026-07-30: top band = the Builders summary button, the rest =
-            // the WC3-style 5-deep queue rows (plate hides when empty, so an idle HUD
-            // shows only the original chip-sized button). Clear of ActionRail (tops 0.420).
+            // WO-864 (2026-08-03): the occupant is now a MinTouchPx summary button over a
+            // QueueRailView card rail, BOTH laid out in FIXED PIXELS off the top of this
+            // band (112 + 6 + 200 = 318 ref px, inside the ~328 this band resolves to at
+            // 2340x1080). Nothing inside is a fraction of the band any more, so leftover
+            // height is transparent rather than the old full-height dark rows plate that
+            // reserved five rows to show one job. Still clear of ActionRail (tops 0.420).
             Add(HudArea.QueueStatus, new Vector2(0.780f, 0.530f), new Vector2(0.995f, 0.865f));
             Add(HudArea.Feedback,    Vector2.zero,                Vector2.one);
 

@@ -108,6 +108,7 @@ namespace DeNelle.Editor
                 count += CaptureBuildMenuUpgradeTower();
                 count += CaptureRumorBoard();
                 count += CaptureRealmMap();
+                count += CaptureQueueRail();         // WO-864: the CoC queue card rail
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -1352,6 +1353,184 @@ namespace DeNelle.Editor
         //  point a throwaway camera at a RenderTexture, force a synchronous layout +
         //  TMP mesh rebuild, render, and read the pixels back.
         // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
+        //  Panel: the WO-864 queue CARD RAIL, in BOTH of its hosts, driven by a
+        //  synthetic ObsidianQueueGate snapshot that reproduces the owner's live
+        //  2026-08-03 Seeker screen exactly: 1 of 2 builders busy on
+        //  tower_arcane_spire with 193s left (so the idle slot MUST draw a visible
+        //  "FREE" card), 3 identical footman trains queued (so they MUST collapse
+        //  to one card with an x3 badge), and an idle Research channel.
+        //  Shot at 2340x1080 -- the device resolution, landscape-only.
+        // ---------------------------------------------------------------------
+        private static int CaptureQueueRail()
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                PublishQueueFixture();
+
+                canvasGo = new GameObject("~UICapQueueRail", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+                var canvas = canvasGo.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 4000;
+                var scaler = canvasGo.GetComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1080f, 1920f);   // HudAreasHost's scaler
+                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+                scaler.matchWidthOrHeight = 0.5f;
+
+                // A dark backdrop so the rail's own plate/contrast reads honestly in the PNG.
+                var bg = new GameObject("Backdrop", typeof(Image));
+                bg.transform.SetParent(canvasGo.transform, false);
+                var bgrt = (RectTransform)bg.transform;
+                bgrt.anchorMin = Vector2.zero; bgrt.anchorMax = Vector2.one;
+                bgrt.offsetMin = Vector2.zero; bgrt.offsetMax = Vector2.zero;
+                bg.GetComponent<Image>().color = new Color(0.13f, 0.15f, 0.12f, 1f);
+
+                // (1) THE ALWAYS-ON HUD SURFACE — the exact HudArea.QueueStatus band
+                //     geometry (0.780-0.995 x, 0.530-0.865 y) the owner is looking at.
+                var band = MakeAreaMount(canvasGo.transform, "Area_QueueStatus",
+                    new Vector2(0.780f, 0.530f), new Vector2(0.995f, 0.865f));
+                var chipBand = MakePixelBand(band, "ChipBand", 0f, ElarionUiKit.MinTouchPx, 4f);
+                ElarionUiKit.BuildObsidianButton(chipBand, "Builders 1/2 | Training 1",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    Vector2.zero, Vector2.one, null);
+                var railMount = MakePixelBand(band, "QueueRailMount",
+                    ElarionUiKit.MinTouchPx + 6f, 240f, 2f);
+                QueueRailView.Build(railMount, DeNelle.Core.Jobs.ChannelId.Builder,
+                    QueueRailView.Options.Default);
+
+                // (2) THE MODAL SURFACE — three stacked rails, one per channel, in the
+                //     Work Queue modal's body footprint. Same component, so any visual
+                //     disagreement between the two surfaces would show up side by side.
+                var modal = MakeAreaMount(canvasGo.transform, "Area_WorkQueueBody",
+                    new Vector2(0.29f, 0.21f), new Vector2(0.71f, 0.79f));
+                var modalBg = new GameObject("ModalPlate", typeof(Image));
+                modalBg.transform.SetParent(modal, false);
+                var mrt = (RectTransform)modalBg.transform;
+                mrt.anchorMin = Vector2.zero; mrt.anchorMax = Vector2.one;
+                mrt.offsetMin = Vector2.zero; mrt.offsetMax = Vector2.zero;
+                modalBg.GetComponent<Image>().color = new Color(0.035f, 0.033f, 0.038f, 0.98f);
+
+                float railH = QueueRailView.HeightOf(QueueRailView.Options.Default);
+                float y = 8f;
+                foreach (DeNelle.Core.Jobs.ChannelId ch in new[]
+                {
+                    DeNelle.Core.Jobs.ChannelId.Builder,
+                    DeNelle.Core.Jobs.ChannelId.Train,
+                    DeNelle.Core.Jobs.ChannelId.Research,
+                })
+                {
+                    var head = MakePixelBand(modal, "Head_" + ch, y, 60f, 8f);
+                    var lbl = head.gameObject.AddComponent<TextMeshProUGUI>();
+                    ElarionUiKit.EnsureFont(lbl);
+                    var st = ObsidianQueueGate.Status;
+                    lbl.text = ObsidianQueueGate.WorkQueueStatus.LabelOf(ch) + "   " +
+                               st.BusyOf(ch) + "/" + st.SlotsOf(ch) + " busy";
+                    lbl.fontSize = ElarionUi.FontLabel;
+                    lbl.color = ElarionUi.Gilt;
+                    lbl.fontStyle = FontStyles.Bold;
+                    lbl.alignment = TextAlignmentOptions.MidlineLeft;
+                    y += 60f;
+
+                    var mount = MakePixelBand(modal, "Rail_" + ch, y, railH, 8f);
+                    QueueRailView.Build(mount, ch, QueueRailView.Options.Default);
+                    y += railH + 10f;
+                }
+
+                Canvas.ForceUpdateCanvases();
+                if (RenderCanvasToPng(canvasGo, OutDir + "QueueCardRail_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "QueueCardRail_1920x1080.png", 1920, 1080)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] queue rail capture threw: " + e);
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+            return saved;
+        }
+
+        // The owner's live screen, as data. Publishing through the REAL Core seam means
+        // the capture exercises the same path the game does -- no view-only fixture.
+        private static void PublishQueueFixture()
+        {
+            var s = new ObsidianQueueGate.WorkQueueStatus
+            {
+                Available = true,
+                BuilderBusy = 1, BuilderSlots = 2, BuilderQueued = 1,
+                TrainBusy = 1, TrainSlots = 2, TrainQueued = 3,
+                ResearchBusy = 0, ResearchSlots = 1, ResearchQueued = 0,
+                SoonestRemainingSec = 193,
+                Entries = new[]
+                {
+                    new ObsidianQueueGate.QueueEntry
+                    {
+                        Label = "Arcane Spire", Verb = "BUILD", JobId = "tower_arcane_spire@15_7",
+                        RemainingSec = 193, Queued = false, StackCount = 1,
+                    },
+                    new ObsidianQueueGate.QueueEntry
+                    {
+                        Label = "Stone Wall -> L2", Verb = "UPGRADE", JobId = "wall_stone@3_4",
+                        TargetTier = 2, RemainingSec = -1, Queued = true, StackCount = 1,
+                    },
+                },
+                TrainEntries = new[]
+                {
+                    new ObsidianQueueGate.QueueEntry
+                    {
+                        Label = "Footman", Verb = "TRAIN", JobId = "barracks-train:troop-footman:a1",
+                        IconRole = RpgUiCatalog.RoleIcons, IconKey = "icon_sword",
+                        RemainingSec = 42, Queued = false, StackCount = 1,
+                    },
+                    new ObsidianQueueGate.QueueEntry
+                    {
+                        Label = "Footman", Verb = "TRAIN", JobId = "barracks-train:troop-footman:b1",
+                        IconRole = RpgUiCatalog.RoleIcons, IconKey = "icon_sword",
+                        RemainingSec = -1, Queued = true, StackCount = 3,
+                    },
+                },
+                ResearchEntries = Array.Empty<ObsidianQueueGate.QueueEntry>(),
+            };
+            ObsidianQueueGate.PublishStatus(s);
+        }
+
+        private static RectTransform MakeAreaMount(Transform parent, string name, Vector2 aMin, Vector2 aMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
+
+        private static RectTransform MakePixelBand(RectTransform parent, string name,
+            float yFromTopPx, float heightPx, float insetX)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(-insetX * 2f, heightPx);
+            rt.anchoredPosition = new Vector2(0f, -yFromTopPx);
+            return rt;
+        }
+
         private static bool RenderCanvasToPng(GameObject canvasGo, string path, int w, int h)
         {
             if (canvasGo == null) return false;

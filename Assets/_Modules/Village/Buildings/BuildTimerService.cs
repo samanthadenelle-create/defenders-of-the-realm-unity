@@ -673,34 +673,152 @@ namespace DeNelle.Village
                     ? -1
                     : (int)System.Math.Max(0.0, (soonest - now) / 1000.0);
 
-                // WC3 QUEUE VIEW (owner 2026-07-30 "show like 5 deep Queued"): the Builder
-                // channel's jobs by name — active first (with countdown), then the waiting
-                // line in order. Capped at 7 (2 crews + 5 visible queued); the chip renders 5.
-                var bAct = ActiveJobsOf(ChannelId.Builder);
-                var bPend = PendingJobsOf(ChannelId.Builder);
-                int n = System.Math.Min(7, bAct.Count + bPend.Count);
-                if (n > 0)
-                {
-                    s.Entries = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[n];
-                    int w = 0;
-                    for (int i = 0; i < bAct.Count && w < n; i++, w++)
-                        s.Entries[w] = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
-                        {
-                            Label = PrettyJobLabel(bAct[i].StructureId),
-                            RemainingSec = (int)System.Math.Max(0.0, (bAct[i].FinishMs - now) / 1000.0),
-                            Queued = false
-                        };
-                    for (int i = 0; i < bPend.Count && w < n; i++, w++)
-                        s.Entries[w] = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
-                        {
-                            Label = PrettyJobLabel(bPend[i].StructureId),
-                            RemainingSec = -1,
-                            Queued = true
-                        };
-                }
+                // CARD-RAIL VIEW (WO-864; supersedes the WO-778 text rows): every channel
+                // publishes its jobs active-first, then the waiting line in order. The
+                // extra card fields (verb / icon / stack) are resolved HERE, once per
+                // publish, so the always-on HUD rail, the Work Queue modal and any future
+                // Manage screen render the SAME card from the SAME data and can never
+                // disagree. Still pure presentation marshalling — no timer/economy logic.
+                s.Entries = BuildEntries(ChannelId.Builder, now);
+                s.TrainEntries = BuildEntries(ChannelId.Train, now);
+                s.ResearchEntries = BuildEntries(ChannelId.Research, now);
             }
             DeNelle.Core.UI.ObsidianQueueGate.PublishStatus(s);
             PublishArmyStatus();
+        }
+
+        // WO-864: one channel's card list — ACTIVE jobs first (each owns a slot and a live
+        // countdown), then the FIFO waiting line. Identical PENDING troop trains collapse to
+        // ONE card carrying an "xN" badge (the CoC "Barbarian x5" read) instead of N cards
+        // that say the same word. Active jobs never collapse — each is a real running slot.
+        // FREE slots are NOT published here: the view derives them from SlotCount, so a
+        // channel that grows a slot needs no publisher change.
+        private const int MaxPublishedCards = 24;   // sanity bound; the rail tails the rest
+
+        private System.Collections.Generic.List<DeNelle.Core.UI.ObsidianQueueGate.QueueEntry> _entryBuf
+            = new System.Collections.Generic.List<DeNelle.Core.UI.ObsidianQueueGate.QueueEntry>();
+
+        private DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[] BuildEntries(ChannelId channel, double now)
+        {
+            var act = ActiveJobsOf(channel);
+            var pend = PendingJobsOf(channel);
+            _entryBuf.Clear();
+
+            for (int i = 0; i < act.Count && _entryBuf.Count < MaxPublishedCards; i++)
+            {
+                var e = MakeEntry(act[i]);
+                e.RemainingSec = (int)System.Math.Max(0.0, (act[i].FinishMs - now) / 1000.0);
+                e.Queued = false;
+                _entryBuf.Add(e);
+            }
+
+            int firstPending = _entryBuf.Count;
+            for (int i = 0; i < pend.Count && _entryBuf.Count < MaxPublishedCards; i++)
+            {
+                var e = MakeEntry(pend[i]);
+                e.RemainingSec = -1;
+                e.Queued = true;
+
+                // Collapse into an earlier PENDING card of the same stack key, if any.
+                string key = StackKey(pend[i].StructureId);
+                int merged = -1;
+                if (key != null)
+                    for (int j = firstPending; j < _entryBuf.Count; j++)
+                        if (string.Equals(StackKey(_entryBuf[j].JobId), key, System.StringComparison.Ordinal))
+                        { merged = j; break; }
+
+                if (merged >= 0)
+                {
+                    var m = _entryBuf[merged];
+                    m.StackCount++;
+                    _entryBuf[merged] = m;
+                }
+                else _entryBuf.Add(e);
+            }
+
+            return _entryBuf.ToArray();
+        }
+
+        // A card record for one job: player-facing name + the VERB (owner ruling 2026-08-03 —
+        // the card is built on the verb; art is the enhancement) + the icon route.
+        private static DeNelle.Core.UI.ObsidianQueueGate.QueueEntry MakeEntry(BuildJobData job)
+        {
+            string label = ObsidianQueueHud.FormatJobTarget(job);
+            if (string.IsNullOrEmpty(label)) label = PrettyJobLabel(job.StructureId);
+            // The stack badge carries the count, so drop the "x1" the label suffixes onto trains.
+            if (label.EndsWith(" x1", System.StringComparison.Ordinal))
+                label = label.Substring(0, label.Length - 3);
+
+            var e = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+            {
+                Label = label,
+                Verb = CardVerb(job.JobKind),
+                JobId = job.StructureId,
+                TargetTier = job.TargetTier,
+                StackCount = 1,
+                Free = false,
+            };
+
+            // Troops have NO portraits on disk (measured 0/7) but every TroopDef carries an
+            // iconId that DOES exist under RpgUi/icons — that route is the only thing that
+            // gets a troop card any art at all.
+            string troopId = TroopIdOfJob(job);
+            if (!string.IsNullOrEmpty(troopId))
+            {
+                var def = TroopCatalog.Find(troopId);
+                if (def != null && !string.IsNullOrEmpty(def.IconId))
+                {
+                    e.IconRole = DeNelle.Core.UI.RpgUiCatalog.RoleIcons;
+                    e.IconKey = def.IconId;
+                }
+            }
+            return e;
+        }
+
+        /// <summary>ASCII uppercase card verb. Never a raw enum name.</summary>
+        private static string CardVerb(JobKind kind)
+        {
+            switch (kind)
+            {
+                case JobKind.Build:
+                case JobKind.TowerBuild:      return "BUILD";
+                case JobKind.Repair:          return "REPAIR";
+                case JobKind.TrainTroop:      return "TRAIN";
+                case JobKind.UnlockTier:      return "UNLOCK";
+                case JobKind.LearnMagic:      return "LEARN";
+                case JobKind.Upgrade:
+                case JobKind.TowerUpgrade:
+                case JobKind.WallUpgrade:
+                case JobKind.BarracksUpgrade:
+                case JobKind.TroopUpgrade:    return "UPGRADE";
+                default:                      return "WORK";
+            }
+        }
+
+        // The troop a job targets ("barracks-train:troop-footman:9f2c41ab" -> "troop-footman"),
+        // or null when the job is not troop-shaped.
+        private static string TroopIdOfJob(BuildJobData job)
+        {
+            string id = job.StructureId ?? "";
+            if (id.StartsWith(BarracksService.TrainPrefix, System.StringComparison.Ordinal))
+            {
+                var parts = id.Split(':');
+                return parts.Length >= 2 ? parts[1] : null;
+            }
+            if (id.StartsWith(BarracksService.TroopUpgradePrefix, System.StringComparison.Ordinal))
+                return id.Substring(BarracksService.TroopUpgradePrefix.Length);
+            return null;
+        }
+
+        // Jobs that are INTERCHANGEABLE collapse onto one card. Only troop trains qualify:
+        // every structure job is unique by its "@cell" suffix, so collapsing those would hide
+        // real work. Returns null for anything that must stay its own card.
+        private static string StackKey(string structureId)
+        {
+            if (string.IsNullOrEmpty(structureId)) return null;
+            if (!structureId.StartsWith(BarracksService.TrainPrefix, System.StringComparison.Ordinal)) return null;
+            var parts = structureId.Split(':');
+            return parts.Length >= 2 ? (parts[0] + ":" + parts[1]) : null;
         }
 
         // Full-army gate (owner ruling: HUD Raids button greys unless the army is full

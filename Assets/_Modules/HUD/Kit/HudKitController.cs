@@ -121,8 +121,7 @@ namespace DeNelle.HUD.Kit
         private HudCompassWidget _compass;
         // WO-778: persistent Builders/Training status chip (CoC-feel; polls ObsidianQueueGate.Status).
         private TMP_Text _queueChipLabel;
-        private TMP_Text _queueRowsLabel;     // WC3 queue rows under the chip (owner 2026-07-30)
-        private GameObject _queueRowsPlate;   // hidden while the Builder line is empty
+        private QueueRailView _queueRail;     // WO-864: the CoC card rail replaces the WC3 text rows
         private int _queueStatusVersion = -1;
 
         // model subscriptions (for teardown)
@@ -675,20 +674,27 @@ namespace DeNelle.HUD.Kit
         // remaining timer, tap opens the WORK QUEUE panel (same gate as the Work button).
         // Player copy: "Builders"/"Training" — never "Obsidian". ASCII-only, text-encoded
         // state (never colour-only). BuildObsidianButton carries the MinTouchPx floor.
+        // WO-864: the QueueStatus band is now a summary BUTTON over a CoC-style CARD RAIL.
+        // Both are laid out in FIXED PIXELS off the top of the band — never as fractions of
+        // it. That is the fix for the owner's 2026-08-03 capture, where the rows plate was
+        // 62% of a tall band and therefore reserved five rows' worth of dark plate to show
+        // one job, leaving a large empty region (WO-841/WO-852 fraction-band lesson).
+        private const float QueueChipHeightPx = ElarionUiKit.MinTouchPx;   // 112 — the tap floor
+        private const float QueueChipGapPx = 6f;
+
         private void BuildQueueStatusChip(Transform pool)
         {
-            // Root fills the (now taller) QueueStatus area: summary BUTTON pinned to the
-            // TOP band, the WC3-style queue rows hanging below it (owner 2026-07-30
-            // "show whats in the queue ... like 5 deep Queued, like in war craft 3").
             var root = new GameObject("QueueStatusChip", typeof(RectTransform));
             root.transform.SetParent(pool, false);
             var rrt = (RectTransform)root.transform;
             rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
-            var chip = ElarionUiKit.BuildObsidianButton(root.transform, "Builders",
+            // Summary button — a fixed MinTouchPx band pinned to the top of the area.
+            var chipBand = PixelBand(rrt, "ChipBand", 0f, QueueChipHeightPx, 4f);
+            var chip = ElarionUiKit.BuildObsidianButton(chipBand, "Builders",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, 0.68f), new Vector2(0.98f, 0.98f), () =>
+                Vector2.zero, Vector2.one, () =>
                 {
                     FlowTrace.Step("HudKit", "queue chip tapped -> ObsidianQueueGate.RequestToggle");
                     ObsidianQueueGate.RequestToggle();
@@ -700,69 +706,46 @@ namespace DeNelle.HUD.Kit
                 _queueChipLabel.overflowMode = TextOverflowModes.Ellipsis;
             }
 
-            // The queue rows: one left-aligned text block on a dim obsidian plate, hidden
-            // while the queue is empty. Text-encoded state (">" working / "-" queued),
-            // never colour-only; raycast off so it never eats taps.
-            var plate = new GameObject("QueueRows", typeof(Image));
-            plate.transform.SetParent(root.transform, false);
-            var prt = (RectTransform)plate.transform;
-            prt.anchorMin = new Vector2(0.02f, 0.02f); prt.anchorMax = new Vector2(0.98f, 0.64f);
-            prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
-            var pimg = plate.GetComponent<Image>();
-            pimg.color = new Color(0.07f, 0.065f, 0.06f, 0.82f);
-            pimg.raycastTarget = false;
-            ElarionUiKit.ApplyRounded(pimg);
-
-            _queueRowsLabel = ElarionUiKit.Label(plate.transform, "", 0.04f, 0.96f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.96f);
-            _queueRowsLabel.raycastTarget = false;
-            _queueRowsPlate = plate;
-            plate.SetActive(false);
+            // The Builder card rail. The SHARED component (DeNelle.Core.UI.QueueRailView) —
+            // the Work Queue modal hosts the very same one, so the two surfaces can never
+            // show a different queue visual. This host supplies only the mount; the rail
+            // owns its own chrome, card anatomy and cheap tick.
+            var railMount = PixelBand(rrt, "QueueRailMount",
+                QueueChipHeightPx + QueueChipGapPx, 240f, 2f);
+            _queueRail = QueueRailView.Build(railMount, DeNelle.Core.Jobs.ChannelId.Builder,
+                QueueRailView.Options.Default);
 
             Register("queueStatusChip", WrapAsWidget("queueStatusChip", root));
         }
 
-        // Up to 5 WC3-style rows: "> Barracks 9m30s" (working) / "- Arcane Spire" (queued),
-        // plus a "+N more" tail when the line is deeper than the view. Empty string = hide.
-        private static string FormatQueueRows(ObsidianQueueGate.WorkQueueStatus s)
+        /// <summary>A FIXED-PIXEL-height band pinned to the top of <paramref name="parent"/>.
+        /// The kit's anchor helpers take fractions; queue chrome must not (WO-841).</summary>
+        private static RectTransform PixelBand(RectTransform parent, string name,
+            float yFromTopPx, float heightPx, float insetX)
         {
-            if (!s.Available || s.Entries == null || s.Entries.Length == 0) return "";
-            var sb = new System.Text.StringBuilder();
-            int shown = 0;
-            for (int i = 0; i < s.Entries.Length && shown < 5; i++, shown++)
-            {
-                var e = s.Entries[i];
-                if (sb.Length > 0) sb.Append('\n');
-                if (e.Queued) sb.Append("- ").Append(e.Label);
-                else
-                {
-                    int sec = System.Math.Max(0, e.RemainingSec);
-                    int h = sec / 3600, m = (sec % 3600) / 60, r = sec % 60;
-                    string t = h > 0 ? (h + "h " + m + "m") : (m > 0 ? (m + "m " + r + "s") : (r + "s"));
-                    sb.Append("> ").Append(e.Label).Append("  ").Append(t);
-                }
-            }
-            int extra = s.Entries.Length - shown;
-            if (extra > 0) sb.Append("\n+").Append(extra).Append(" more");
-            return sb.ToString();
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(-insetX * 2f, heightPx);
+            rt.anchoredPosition = new Vector2(0f, -yFromTopPx);
+            return rt;
         }
 
-        // "Builders 1/2" + newline + shortest remaining ("9m 30s" / "idle"), plus a
-        // Training count when troops are cooking. All ASCII (no middot — glyph law).
+        // "Builders 1/2" (+ " | Training N"). NO TIMER — WO-864 bug 1: the chip used to
+        // print the soonest countdown AND the job row printed the same value right under
+        // it, so the owner saw "3m 13s" twice, stacked. Exactly ONE surface owns a
+        // countdown now, and it is the card that the countdown belongs to.
         private static string FormatQueueChip(ObsidianQueueGate.WorkQueueStatus s)
         {
             if (!s.Available) return "Builders";
-            string line1 = "Builders " + s.BuilderBusy + "/" + s.BuilderSlots;
-            string line2;
-            if (s.SoonestRemainingSec < 0) line2 = "idle";
-            else
-            {
-                int sec = s.SoonestRemainingSec;
-                int h = sec / 3600, m = (sec % 3600) / 60, r = sec % 60;
-                line2 = h > 0 ? (h + "h " + m + "m") : (m > 0 ? (m + "m " + r + "s") : (r + "s"));
-            }
-            if (s.TrainBusy > 0) line2 += " | Training " + s.TrainBusy;
-            return line1 + "\n" + line2;
+            string line = "Builders " + s.BuilderBusy + "/" + s.BuilderSlots;
+            // "Train", not "Training": at 1920x1080 the longer word ellipsized to
+            // "Trainin..." in the 2026-08-03 capture. The counts are the load-bearing part.
+            if (s.TrainBusy > 0) line += " | Train " + s.TrainBusy;
+            return line;
         }
 
         // WO-432: Heart of Elarion status cluster — a tree-of-life glyph + "Elarion" caption
@@ -1762,13 +1745,8 @@ namespace DeNelle.HUD.Kit
                 {
                     _queueStatusVersion = qs.Version;
                     _queueChipLabel.text = FormatQueueChip(qs);
-                    // WC3 queue rows under the chip — plate hidden when the line is empty.
-                    if (_queueRowsLabel != null)
-                    {
-                        string rows = FormatQueueRows(qs);
-                        _queueRowsLabel.text = rows;
-                        if (_queueRowsPlate != null) _queueRowsPlate.SetActive(rows.Length > 0);
-                    }
+                    // The card rail (WO-864) is self-driving off the same published Version
+                    // and repaints only when the queue SHAPE moves — nothing to do here.
                 }
             }
 

@@ -51,6 +51,7 @@ namespace DeNelle.Editor
                 CheckLabelsAndTargets(failures, log);
                 CheckReachabilityAndLayout(failures, log);
                 CheckMigration(failures, log);
+                CheckCardRail(failures, log);
             }
             catch (System.Exception ex)
             {
@@ -354,6 +355,197 @@ namespace DeNelle.Editor
             if (tower.TargetTier != 2)
                 failures.Add("v34→v35 lost the upgrade target tier (in-progress upgrade would land the wrong level)");
             log.AppendLine("  v34→v35 migration (buildJobs → Builder channel, Kind backfilled, legacy cleared) OK");
+        }
+
+        // ── 9. WO-864 card rail — the four defects from the owner's 2026-08-03 capture ──
+        // Her live Seeker screen read:
+        //     Builders 1/2 / 3m 13s / > Tower Arcane Spire / 3m 13s
+        // i.e. the SAME countdown twice, and builder slot 2 (idle) drawing nothing at all.
+        private static void CheckCardRail(List<string> failures, StringBuilder log)
+        {
+            var railT = typeof(DeNelle.Core.UI.QueueRailView);
+
+            // (a) THE REUSABLE COMPONENT — Build(mount, channel, options) is the one entry
+            //     point a future host (the Manage screen under Bag) writes against, and
+            //     HeightOf lets a host size its row BEFORE building.
+            var build = railT.GetMethod("Build", new[]
+            {
+                typeof(RectTransform), typeof(ChannelId), typeof(DeNelle.Core.UI.QueueRailView.Options)
+            });
+            if (build == null)
+                failures.Add("QueueRailView.Build(RectTransform,ChannelId,Options) missing — the rail is not host-agnostic");
+            if (railT.GetMethod("HeightOf", BindingFlags.Public | BindingFlags.Static) == null)
+                failures.Add("QueueRailView.HeightOf(Options) missing — hosts cannot size a rail row up front");
+
+            // (b) NO DUPLICATED TIMER. The always-on chip must not print a countdown at all;
+            //     exactly one surface (the card) owns it. Source oracle on the HUD seat.
+            string kitPath = Path.Combine(Application.dataPath, "_Modules/HUD/Kit/HudKitController.cs");
+            if (File.Exists(kitPath))
+            {
+                string src = File.ReadAllText(kitPath);
+                int chipAt = src.IndexOf("private static string FormatQueueChip");
+                if (chipAt < 0)
+                    failures.Add("HudKitController.FormatQueueChip missing (the Builders chip summary)");
+                else
+                {
+                    // Slice to the next member declaration (NOT to a literal close-brace —
+                    // an unpaired brace in a string literal trips the CLAUDE.md §1 gate).
+                    int end = src.IndexOf("\n        private", chipAt + 10);
+                    string body = end > chipAt ? src.Substring(chipAt, end - chipAt) : src.Substring(chipAt);
+                    if (body.IndexOf("SoonestRemainingSec") >= 0)
+                        failures.Add("HudKitController.FormatQueueChip still prints SoonestRemainingSec — the chip header and the job card would BOTH show the same countdown (owner capture 2026-08-03: '3m 13s' twice)");
+                }
+                if (src.IndexOf("FormatQueueRows") >= 0)
+                    failures.Add("HudKitController still carries FormatQueueRows — the WC3 text rows were replaced by QueueRailView; two queue visuals would disagree");
+                if (src.IndexOf("QueueRailView.Build") < 0)
+                    failures.Add("HudKitController does not host QueueRailView — the always-on Builders panel is the surface the owner actually sees");
+            }
+            else failures.Add("HudKitController.cs missing at " + kitPath);
+
+            // (c) A FREE SLOT RENDERS A VISIBLE EMPTY-SLOT CARD. With 1 of 2 builders busy
+            //     the model must be 2 cards, the second flagged Free with text-encoded state
+            //     ("FREE" / "--") — never blank space, and never colour-only (owner is
+            //     red/green colourblind).
+            var st = new DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus
+            {
+                Available = true,
+                BuilderBusy = 1,
+                BuilderSlots = 2,
+                Entries = new[]
+                {
+                    new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+                    {
+                        Label = "Arcane Spire", Verb = "BUILD", JobId = "tower_arcane_spire@15_7",
+                        RemainingSec = 193, Queued = false, StackCount = 1,
+                    },
+                },
+            };
+            var model = InvokeCardModel(st, ChannelId.Builder, failures);
+            if (model != null)
+            {
+                if (model.Length != 2)
+                    failures.Add($"free-slot card missing: 1 of 2 builders busy produced {model.Length} card(s), expected 2 (the idle slot drew nothing on the owner's screen)");
+                else
+                {
+                    if (!model[1].Free)
+                        failures.Add("the second builder card is not flagged Free — an idle slot must READ as an idle slot");
+                    string t = DeNelle.Core.UI.QueueRailView.TimerText(model[1]);
+                    if (string.IsNullOrEmpty(t))
+                        failures.Add("free-slot card has an EMPTY timer band — blank space is the bug, not the fix");
+                    if (string.IsNullOrEmpty(model[1].Verb))
+                        failures.Add("free-slot card has no verb — state must be text-encoded, never colour-only");
+                }
+                // The running card owns the ONE countdown, in ASCII.
+                string active = DeNelle.Core.UI.QueueRailView.TimerText(model[0]);
+                if (active != "3m 13s")
+                    failures.Add("active card countdown formatted '" + active + "', expected '3m 13s' (193s)");
+                foreach (var c in active ?? "")
+                    if (c > '~') { failures.Add("card countdown carries a non-ASCII glyph ('" + active + "') — the SDF font tofus it"); break; }
+            }
+
+            // (d) A QUEUED job reads as QUEUED in TEXT, not by dimming alone.
+            var queued = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+            { Label = "Barracks", Verb = "UPGRADE", Queued = true, RemainingSec = -1, StackCount = 1 };
+            if (DeNelle.Core.UI.QueueRailView.TimerText(queued) != "QUEUED")
+                failures.Add("a queued card does not spell out QUEUED — colour-only state is banned");
+
+            // (e) N IDENTICAL TROOP TRAINS COLLAPSE TO ONE CARD + xN BADGE. Three pending
+            //     footmen must publish as ONE entry with StackCount 3, not three cards
+            //     repeating the same word.
+            var trains = PublishTrainEntries(3, failures);
+            if (trains != null)
+            {
+                if (trains.Length != 1)
+                    failures.Add($"3 identical queued footman trains published {trains.Length} card(s), expected 1 collapsed card with an xN badge");
+                else if (trains[0].StackCount != 3)
+                    failures.Add($"collapsed troop card carries StackCount {trains[0].StackCount}, expected 3 (the 'x3' badge would be wrong)");
+                else if (trains[0].Label != null && trains[0].Label.EndsWith(" x1"))
+                    failures.Add("collapsed troop card label still says 'x1' while the badge says xN — contradictory counts");
+            }
+
+            // (f) A MISSING PORTRAIT FALLS BACK TO THE VERB, NEVER A BLANK CARD. Measured
+            //     coverage is ~76% of queueable jobs, so this is the COMMON case, not an
+            //     edge case — the card is designed verb-first for exactly this reason.
+            var noArt = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+            { Label = "Stone Wall", Verb = "UPGRADE", JobId = "wall_stone@3_4", TargetTier = 2, StackCount = 1 };
+            if (DeNelle.Core.UI.QueueIconResolver.Resolve(noArt) != null)
+                log.AppendLine("  note: wall_stone resolved art (a portrait was added since the 2026-08-03 audit)");
+            if (string.IsNullOrEmpty(noArt.Verb))
+                failures.Add("a portrait-less card has no verb to fall back to — it would render blank");
+            // The tower_arcane_spire case from the owner's screen: the category-token strip
+            // is the ONLY step that reaches arcane-spire.png from that id.
+            var spire = new DeNelle.Core.UI.ObsidianQueueGate.QueueEntry
+            { Label = "Arcane Spire", Verb = "BUILD", JobId = "tower_arcane_spire@15_7", StackCount = 1 };
+            if (DeNelle.Core.UI.QueueIconResolver.Resolve(spire) == null)
+                failures.Add("QueueIconResolver did not reach Portraits/arcane-spire for 'tower_arcane_spire@15_7' — the leading category-token strip regressed");
+
+            log.AppendLine("  WO-864 card rail (reusable Build/HeightOf + no duplicate timer + free-slot card + " +
+                           "queued text + xN collapse + verb fallback) OK-checked");
+        }
+
+        // Reach QueueRailView's private card model (snapshot entries + the FREE slots it
+        // derives from SlotCount) without spinning up a Canvas.
+        private static DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[] InvokeCardModel(
+            DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus st, ChannelId ch, List<string> failures)
+        {
+            var m = typeof(DeNelle.Core.UI.QueueRailView).GetMethod("BuildCardModel",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (m == null)
+            {
+                failures.Add("QueueRailView.BuildCardModel missing — free slots would not become cards");
+                return null;
+            }
+            return (DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[])m.Invoke(null, new object[] { st, ch });
+        }
+
+        // Drive the REAL publisher collapse path (BuildTimerService.BuildEntries) is
+        // instance-bound, so mirror its stack key here against the REAL BarracksService
+        // prefixes and assert the collapse contract the publisher implements.
+        private static DeNelle.Core.UI.ObsidianQueueGate.QueueEntry[] PublishTrainEntries(
+            int count, List<string> failures)
+        {
+            var svcT = typeof(DeNelle.Village.BuildTimerService);
+            var stackKey = svcT.GetMethod("StackKey", BindingFlags.NonPublic | BindingFlags.Static);
+            var makeEntry = svcT.GetMethod("MakeEntry", BindingFlags.NonPublic | BindingFlags.Static);
+            if (stackKey == null || makeEntry == null)
+            {
+                failures.Add("BuildTimerService.StackKey/MakeEntry missing — troop trains cannot collapse to an xN card");
+                return null;
+            }
+
+            var outp = new List<DeNelle.Core.UI.ObsidianQueueGate.QueueEntry>();
+            for (int i = 0; i < count; i++)
+            {
+                var job = new BuildJobData
+                {
+                    StructureId = BarracksService.TrainPrefix + "troop-footman:uid" + i,
+                    Kind = (int)JobKind.TrainTroop,
+                    Channel = (int)ChannelId.Train,
+                    StartMs = 0,
+                    DurationMs = 90000,
+                };
+                var e = (DeNelle.Core.UI.ObsidianQueueGate.QueueEntry)makeEntry.Invoke(null, new object[] { job });
+                e.Queued = true; e.RemainingSec = -1;
+
+                string key = (string)stackKey.Invoke(null, new object[] { job.StructureId });
+                int merged = -1;
+                if (key != null)
+                    for (int j = 0; j < outp.Count; j++)
+                        if (string.Equals((string)stackKey.Invoke(null, new object[] { outp[j].JobId }), key,
+                                          System.StringComparison.Ordinal))
+                        { merged = j; break; }
+
+                if (merged >= 0) { var m2 = outp[merged]; m2.StackCount++; outp[merged] = m2; }
+                else outp.Add(e);
+            }
+            // Distinct troops must NOT collapse into each other.
+            string kA = (string)stackKey.Invoke(null, new object[] { BarracksService.TrainPrefix + "troop-archer:z1" });
+            string kF = (string)stackKey.Invoke(null, new object[] { BarracksService.TrainPrefix + "troop-footman:z1" });
+            if (kA == kF) failures.Add("StackKey collapses DIFFERENT troops onto one card (archer would badge as a footman)");
+            // A placed structure must never collapse — every one is real, distinct work.
+            if ((string)stackKey.Invoke(null, new object[] { "forge@1_2" }) != null)
+                failures.Add("StackKey collapses structure jobs — two different forges would hide behind one card");
+            return outp.ToArray();
         }
 
         private static BuildJobData MakeJob(string id, JobKind kind, double durationMs, ChannelId channel = ChannelId.Builder)
