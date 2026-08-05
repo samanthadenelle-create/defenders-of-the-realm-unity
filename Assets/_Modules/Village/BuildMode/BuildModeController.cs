@@ -2096,6 +2096,19 @@ namespace DeNelle.Village
 
             EnsureSelectionUi();
             ShowSelectionPanel(ps);
+
+            // OWNER 2026-08-04 ("when i select to upgrade should minimize the selection bar"):
+            // minimize-on-select was only ever wired to the ARM-TO-PLACE path (:2042). Selecting
+            // a PLACED structure routes through CancelArmed(), which deliberately calls
+            // _palette.Expand() to restore the carousel on disarm — correct for disarming, but it
+            // meant picking a building to upgrade actively RE-OPENED the full shop over the map,
+            // on top of the selection panel the player just asked for. Collapse it here, AFTER
+            // CancelArmed has had its say, so the two do not fight. ClearSelection() expands it
+            // back, keeping select/deselect symmetric with arm/disarm.
+            var selEntry = CatalogRegistry.Get(ps.itemId);
+            string selLabel = selEntry != null && !string.IsNullOrEmpty(selEntry.displayName)
+                ? selEntry.displayName : ps.itemId;
+            _palette?.Collapse(selLabel);
         }
 
         /// <summary>
@@ -2128,9 +2141,16 @@ namespace DeNelle.Village
         private void ClearSelection()
         {
             if (_movingSelected) CancelMove();
+            bool had = _selected != null;
             if (_selected != null) _selected.SetHighlighted(false);
             _selected = null;
             _selectionUi?.Hide();
+
+            // Symmetry with the collapse in SelectStructure: deselecting restores the carousel,
+            // exactly as disarming does. Guarded on `had` so a no-op ClearSelection (it is called
+            // defensively before a re-select) cannot expand the shop back open a frame after
+            // SelectStructure just collapsed it.
+            if (had) _palette?.Expand();
         }
 
         /// <summary>
