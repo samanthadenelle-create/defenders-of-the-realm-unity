@@ -1,3 +1,25 @@
+> ## DEPLOYED 2026-08-05 - both URLs are LIVE and PUBLIC
+>
+> | Field the Publisher Portal asks for | URL |
+> |---|---|
+> | **Website** | `https://echoes-of-elarion.vercel.app/` |
+> | **Privacy policy** | `https://echoes-of-elarion.vercel.app/privacy` |
+>
+> Vercel project `echoes-of-elarion` (`prj_rnbaJwN6CsuNGuRLtagf6oMFO3sY`), production target,
+> deliberately SEPARATE from the `api/` backend project per section 3.
+>
+> ⚠ **Vercel SSO protection was ENABLED on creation** (`all_except_custom_domains`) and had to be turned
+> OFF. Left on, a store reviewer hits a Vercel login wall instead of the policy - which would fail the
+> listing while every internal check passed. **Re-check this after any project recreate.**
+>
+> Both URLs fetched and verified publicly readable with no auth wall. Pre-deploy fixes applied first:
+> the NOT-READY banner and the three empty screenshot slots removed (empty slots read as unfinished to a
+> reviewer - worse than a minimal page), `noindex` removed from both pages, and the support address
+> un-wrapped from `class="placeholder"`/`class="tofill"`, which rendered the real email as an alarm-red
+> error chip with a warning glyph in all five places.
+>
+> **Still owed (owner):** approved screenshots. The section is REMOVED rather than left as empty slots;
+> restore it per the comment in `site/index.html` when real frames exist.
 # WORK ORDER 863 — Vercel one-pager + hosted privacy policy (dApp Store listing URLs)
 
 **Status:** READY TO IMPLEMENT
