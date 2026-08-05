@@ -12,8 +12,19 @@
 // pending set, plan cost) lives in HeroSkillTreeVM — the View never reads game
 // state (ui-mvvm-binding-seam rule).
 //
+// WO-865 (2026-08-04, from the real Seeker capture 07-skills-panel.png): the panel
+// body is laid out as DISJOINT FIXED-PIXEL BANDS, never fractions of the body well.
+// See the geometry block below the field list for the arithmetic that proves why —
+// in one line: FrameTalent's body resolves to ~493 px tall at 2340x1080, the action
+// row was a 0.065 fraction of it (32 px), and ElarionUiKit.ClampMinTouch then grew
+// each button to the 112 px touch floor SYMMETRICALLY, straight over the graph well
+// and the quick-swap slots. Same failure class as WO-841 / WO-852. The stack now is
+//   columns region (graph well + ability band | detail column)  /  action row
+// and the node graph lives on a fixed-pixel lattice inside a RectMask2D scroll well
+// with a reserved row for the "Universal - any class" band.
+//
 // WO-676 §B (owner-approved icon-only redesign, 2026-07-11): nodes are ICON-ONLY
-// ~96px plates carrying exactly ONE state affordance — cost pip (unlockable),
+// plates carrying exactly ONE state affordance — cost pip (unlockable),
 // −n pip + ring (planned), check stamp (owned), dim (locked). ALL name/desc/state
 // text lives in the right-hand detail column. Wisdom is a CurrencyChip (top-right);
 // the plan summary folds into the CONFIRM label ("CONFIRM n · −cost"); quick-swap
@@ -21,10 +32,10 @@
 // persistent text strips outside the graph. Colorblind law: every state carries a
 // shape/stamp/pip, never hue alone (dim = luminance, pips/stamps = shape+text).
 //
-// Code-built uGUI ONLY (no UXML — §8). Edge geometry uses a fixed-size content
-// rect (CW×CH px) so rotated connector images are deterministic at build time
-// (no dependence on a layout pass). The content scrolls (owner: one scrollable
-// canvas, Knight + Shared, no pagination yet).
+// Code-built uGUI ONLY (no UXML — §8). Edge geometry uses a fixed-pixel content
+// rect (sized in RebuildGraph from the authored bounds) so rotated connector images
+// are deterministic at build time (no dependence on a layout pass). The content
+// scrolls (owner: one scrollable canvas, Knight + Shared, no pagination yet).
 //
 // OWNER F8 2026-07-11 (minimal pass): node FACES are deliberately MINIMAL — a flat
 // obsidian plate + thin gilt line border, small tinted-down icon ("remove the
@@ -77,13 +88,155 @@ namespace DeNelle.Village.Talents
 
         private PanelHandle _panelHandle;
 
-        // Fixed graph canvas size (px). Edge lines are rotated images positioned in
-        // this space — a definite size keeps geometry exact without a layout pass.
-        private const float CW = 1400f;
-        private const float CH = 1040f;
-        private const float NodeSize = 96f;   // §B.1 icon-only plates (was 132 text-stacked)
+        // =====================================================================
+        // WO-865 FIXED-PIXEL BAND GEOMETRY (reference px on the 1080x1920 modal
+        // canvas). NEVER a fraction of the parent -- that is the documented root
+        // cause of WO-841 / WO-852 and of every defect in the 2026-08-04 Seeker
+        // capture (docs/ui-review/2026-08-04-seeker/07-skills-panel.png).
+        //
+        // PROVING ARITHMETIC (2340x1080, the capture's device):
+        //   scaler 1080x1920 match 0.5 -> scale 1.1040 -> canvas local 2119.6x978.3
+        //   panel 0.07,0.05-0.93,0.95  -> 1822.9 x 880.5
+        //   FrameTalent body after the shared-Close band reservation -> 1695 x 493 px.
+        //   The OLD footer band was 0.070..0.135 OF THAT BODY = 32 px. The kit touch
+        //   floor (ElarionUiKit.ClampMinTouch, MinTouchPx 112) then grew every action
+        //   button SYMMETRICALLY ABOUT ITS CENTRE by +-40 px, so its top reached
+        //   106.6 px while the graph well's floor sat at 0.165*493 = 81.4 px. That
+        //   25 px of growth is why Cancel / CONFIRM / Respec painted OVER the grid and
+        //   over quick-slots 3 and 4, and why slot 4 vanished under Respec entirely.
+        //
+        // Every band below is a FIXED pixel height >= its own touch/line-box floor, so
+        // the stack is disjoint by construction at ANY aspect ratio. The only
+        // fraction left is the LEFT/RIGHT column split (a width, never a text band).
+        // =====================================================================
+
+        /// <summary>Inset from the body well's edges (ref px).</summary>
+        public const float BodyPadPx = 6f;
+        /// <summary>Gap between two stacked fixed-pixel bands (ref px).</summary>
+        public const float BandGapPx = 8f;
+        /// <summary>The bottom action row (Cancel / Respec / CONFIRM). Buttons are tappable, so
+        /// the band IS the kit touch floor -- ClampMinTouch can then never grow one past it.</summary>
+        public const float ActionRowPx = ElarionUiKit.MinTouchPx;
+        /// <summary>The ability (quick-swap) band. Slots are tap targets, so this is >= the touch
+        /// floor; it is a little taller than the floor because the tile stacks TWO fixed line
+        /// boxes (slot numeral + a two-line ability name).</summary>
+        public const float AbilityRowPx = 132f;
+        /// <summary>A graph node plate. Nodes are BUTTONS, so they carry the touch floor too
+        /// (they were 96 px -- below the floor -- before WO-865).</summary>
+        public const float NodeSizePx = ElarionUiKit.MinTouchPx;
+
+        /// <summary>Right column: the WISDOM currency chip band.</summary>
+        public const float WisdomBandPx = 52f;
+        /// <summary>Right column: the "SELECTED TALENT" caption band (FontMicro 32 -> line ~40).</summary>
+        public const float DetailHeadPx = 40f;
+        /// <summary>Right column: the talent NAME band (FontTitle, fitted; line box floor 40).</summary>
+        public const float DetailNamePx = 60f;
+        /// <summary>Right column: the state / "Requires ..." band (FontMicro 32 -> line ~40).</summary>
+        public const float DetailStatePx = 42f;
+
+        /// <summary>Ability tile: the slot numeral line box -- a WHOLE line box at the kit
+        /// FontFloor (30 x 1.25 = 37.5), never the 34 px that only just misses it.</summary>
+        public const float SlotKeyBandPx = 38f;
+        /// <summary>Ability tile: the ability-name box -- TWO whole FontFloor line boxes, because
+        /// the longest catalog name ("Suppressing Volley") needs to wrap to read in full inside a
+        /// ~250 px tile. The old band was 23 px (0.5 of a 47 px fraction tile), i.e. below ONE
+        /// line box, which is what ellipsized "Emberbrand Throw" to "Emberbrand Thro".</summary>
+        public const float SlotNameBandPx = 80f;
+        /// <summary>Ability tile: pad above the numeral / below the name (ref px).</summary>
+        public const float SlotPadPx = 6f;
+
+        /// <summary>The "Universal - any class" section band's own line box (FontMicro+2 -> line ~44).</summary>
+        public const float SectionBandPx = 46f;
+        /// <summary>Clear air above and below the section band's label.</summary>
+        public const float SectionGapPx = 14f;
+        /// <summary>The MINIMUM node-row pitch across the section band: one node plate plus the
+        /// band's own reserved row. RebuildGraph shifts every node authored BELOW the band down
+        /// by whatever is missing, so a node plate can never paint over the label again
+        /// (the capture's "Univers[icon]y class": band y 0.965 vs shared row y 0.98 were 15.6 px
+        /// apart with 96 px plates, and nodes are built after the band).</summary>
+        public const float SectionClearPx = NodeSizePx + SectionGapPx * 2f + SectionBandPx;
+
+        /// <summary>Graph lattice: reference px per 1.0 of authored node X. Sized so the tightest
+        /// authored column gap (0.12 on the shared row) still clears a node plate.</summary>
+        public const float GraphUnitWpx = 1180f;
+        /// <summary>Graph lattice: reference px per 1.0 of authored node Y.</summary>
+        public const float GraphUnitHpx = 780f;
+        /// <summary>Graph content padding: half a node plate plus air, so the extreme nodes are
+        /// wholly INSIDE the scroll content and are never sliced at the mask edge at rest.</summary>
+        public const float GraphPadPx = NodeSizePx * 0.5f + 16f;
+
+        /// <summary>Authored Y the "Universal - any class" band divides the graph at.</summary>
+        public const float SectionBandY = 0.965f;
+
+        // ── The only FRACTIONS left in the layout: the column split and the in-tile text
+        // insets. Both are WIDTHS, never a text band's height -- the class of failure the
+        // fixed-pixel law exists to stop is a band too short for its own line box.
+        /// <summary>Right edge of the graph column, as a fraction of the columns region.</summary>
+        public const float GraphColumnX1 = 0.615f;
+        /// <summary>Left edge of the detail column, as a fraction of the columns region.</summary>
+        public const float DetailColumnX0 = 0.640f;
+        /// <summary>Gap between two ability slot tiles, as a fraction of the ability band.</summary>
+        public const float SlotGapFrac = 0.012f;
+        /// <summary>Side inset of the ability-name label inside its tile (fraction of the tile).</summary>
+        public const float SlotTextInsetFrac = 0.03f;
+        /// <summary>Side inset of every label in the detail column (fraction of the column).</summary>
+        public const float DetailTextInsetFrac = 0.03f;
+
+        // Graph lattice origin + the section band's reserved-row shift, recomputed from the VM's
+        // authored nodes on every rebuild (fixed PIXELS derived from data -- never a parent fraction).
+        private float _minX, _maxX, _minY, _maxY;
+        private float _bandShiftPx;
+        private float _bandCentrePy;
+        private bool _bandPlaced;
 
         public bool IsOpen => _ui != null;
+
+        // ── fixed-pixel band pins (the WO-832 §4 / WO-841 / WO-852 pattern) ──────
+        // Re-hang a control on its parent's TOP or BOTTOM edge with a FIXED ref-pixel
+        // band; X anchors/offsets are preserved. A band pinned this way never scales
+        // with the pane and can never under-height its own line box.
+
+        private static void PinBandFromTop(RectTransform rt, float topPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 1f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, -(topPx + heightPx));
+            rt.offsetMax = new Vector2(rt.offsetMax.x, -topPx);
+        }
+
+        private static void PinBandFromBottom(RectTransform rt, float bottomPx, float heightPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 0f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 0f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, bottomPx);
+            rt.offsetMax = new Vector2(rt.offsetMax.x, bottomPx + heightPx);
+        }
+
+        /// <summary>Stretch a control between FIXED pixel insets from its parent's top and bottom
+        /// edges. The flexible middle of a band stack -- its extent is still decided by pixels.</summary>
+        private static void PinRegion(RectTransform rt, float bottomPx, float topPx)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 0f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
+            rt.offsetMin = new Vector2(rt.offsetMin.x, bottomPx);
+            rt.offsetMax = new Vector2(rt.offsetMax.x, -topPx);
+        }
+
+        /// <summary>A transparent full-width layout host under <paramref name="parent"/>, spanning
+        /// the x fractions given. Vertical seat is set afterwards by one of the pins above.</summary>
+        private static RectTransform BandHost(Transform parent, string name, float x0, float x1)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(x0, 0f);
+            rt.anchorMax = new Vector2(x1, 1f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
 
         // ── Registration (mirror BuildingUpgradePanelMvvm) ────────────────────────
 
@@ -219,6 +372,21 @@ namespace DeNelle.Village.Talents
             ClearContent();
             if (_graphContent == null || _vm == null) return;
 
+            // WO-865 step 1 — the FIXED-PIXEL lattice. Authored x/y (0..1) are normalised to the
+            // authored MINIMUM and scaled by a fixed px-per-unit, so the scroll content is an exact
+            // pixel rect at every aspect. No leading dead space, no fraction of the viewport.
+            MeasureGraphBounds();
+
+            // WO-865 step 2 — the section band's RESERVED ROW. Everything authored below the band
+            // is pushed down by exactly the pixels missing from a clear row, so a node plate can
+            // never paint over the "Universal - any class" label again.
+            _bandShiftPx = ComputeBandShiftPx();
+
+            float contentW = GraphPadPx * 2f + (_maxX - _minX) * GraphUnitWpx;
+            float contentH = GraphPadPx * 2f + (_maxY - _minY) * GraphUnitHpx + _bandShiftPx;
+            _graphContent.sizeDelta = new Vector2(contentW, contentH);
+            _graphContent.anchoredPosition = Vector2.zero;   // rest = flush top-LEFT, never mid-plate
+
             // Lookup id -> node + pixel centre, for the prerequisite connectors.
             var center = new Dictionary<string, Vector2>(64);
             var nodeById = new Dictionary<string, SkillNodeVM>(64);
@@ -229,12 +397,81 @@ namespace DeNelle.Village.Talents
             DrawEdges(_vm.Nodes, center, nodeById);
             DrawEdges(_vm.Shared, center, nodeById);
 
-            // Section divider (above the shared band) — WO-675 crown-glyph band grammar.
-            BuildSectionBand("Universal - any class", 0.965f);
+            // Section divider (above the shared band) — WO-675 crown-glyph band grammar, now
+            // seated in the middle of the row the shift above reserved for it.
+            if (_bandPlaced) BuildSectionBand("Universal - any class", _bandCentrePy, contentW);
 
             // Nodes on top.
             foreach (var n in _vm.Nodes) BuildGraphNode(n, center);
             foreach (var n in _vm.Shared) BuildGraphNode(n, center);
+        }
+
+        // Authored x/y bounds across BOTH lists (the lattice origin). Defaults match
+        // CollectPositions so an unset (-1) node lands at the same 0.5/0.5 centre.
+        private void MeasureGraphBounds()
+        {
+            _minX = _minY = 1f; _maxX = _maxY = 0f;
+            bool any = false;
+            any |= AccumulateBounds(_vm.Nodes);
+            any |= AccumulateBounds(_vm.Shared);
+            if (!any) { _minX = _minY = 0f; _maxX = _maxY = 1f; }
+            if (_maxX < _minX) _maxX = _minX;
+            if (_maxY < _minY) _maxY = _minY;
+        }
+
+        private bool AccumulateBounds(IReadOnlyList<SkillNodeVM> list)
+        {
+            if (list == null) return false;
+            bool any = false;
+            foreach (var n in list)
+            {
+                if (string.IsNullOrEmpty(n.Id)) continue;
+                float x = n.X >= 0f ? n.X : 0.5f;
+                float y = n.Y >= 0f ? n.Y : 0.5f;
+                if (x < _minX) _minX = x;
+                if (x > _maxX) _maxX = x;
+                if (y < _minY) _minY = y;
+                if (y > _maxY) _maxY = y;
+                any = true;
+            }
+            return any;
+        }
+
+        // How many pixels the rows BELOW the section band must move down so the band's label
+        // gets a whole clear row. Computed from the data (never a hard-coded guess): the raw
+        // pitch between the last row above the band and the first row below it, versus the
+        // SectionClearPx floor (one node plate + the band + air on both sides).
+        private float ComputeBandShiftPx()
+        {
+            _bandPlaced = false;
+            float lastAbove = float.NegativeInfinity, firstBelow = float.PositiveInfinity;
+            ScanBandRows(_vm.Nodes, ref lastAbove, ref firstBelow);
+            ScanBandRows(_vm.Shared, ref lastAbove, ref firstBelow);
+            if (float.IsNegativeInfinity(lastAbove) || float.IsPositiveInfinity(firstBelow))
+                return 0f;   // nothing on one side of the band — no row to reserve
+
+            float rawPitch = (firstBelow - lastAbove) * GraphUnitHpx;
+            float shift = Mathf.Max(0f, SectionClearPx - rawPitch);
+
+            // The band sits at the midpoint of the cleared gap: below the plate bottom of the
+            // last row above, above the plate top of the (already shifted) first row below.
+            float abovePlateBottom = -(GraphPadPx + (lastAbove - _minY) * GraphUnitHpx) - NodeSizePx * 0.5f;
+            float belowPlateTop = -(GraphPadPx + (firstBelow - _minY) * GraphUnitHpx) - shift + NodeSizePx * 0.5f;
+            _bandCentrePy = (abovePlateBottom + belowPlateTop) * 0.5f;
+            _bandPlaced = true;
+            return shift;
+        }
+
+        private static void ScanBandRows(IReadOnlyList<SkillNodeVM> list, ref float lastAbove, ref float firstBelow)
+        {
+            if (list == null) return;
+            foreach (var n in list)
+            {
+                if (string.IsNullOrEmpty(n.Id)) continue;
+                float y = n.Y >= 0f ? n.Y : 0.5f;
+                if (y <= SectionBandY) { if (y > lastAbove) lastAbove = y; }
+                else { if (y < firstBelow) firstBelow = y; }
+            }
         }
 
         private void CollectPositions(IReadOnlyList<SkillNodeVM> list,
@@ -272,17 +509,24 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        // px centre for an authored (x,y): content anchored top-CENTRE, y grows down.
-        // Shifted down by NodeSize/2 (matching the content top pad) so the top-tier row
-        // is fully inside the padded content rect and the bottom-tier row clears the base.
-        private Vector2 CenterPx(float x, float y) => new Vector2((x - 0.5f) * CW, -(y * CH) - NodeSize * 0.5f);
+        // px centre for an authored (x,y): content anchored top-LEFT, y grows down. Normalised to
+        // the authored minimum and padded by GraphPadPx (>= half a node plate), so the extreme
+        // rows/columns sit WHOLLY inside the content rect and are never sliced mid-plate at rest.
+        // Rows below the section band carry the reserved-row shift.
+        private Vector2 CenterPx(float x, float y)
+        {
+            float px = GraphPadPx + (x - _minX) * GraphUnitWpx;
+            float py = -(GraphPadPx + (y - _minY) * GraphUnitHpx);
+            if (y > SectionBandY) py -= _bandShiftPx;
+            return new Vector2(px, py);
+        }
 
         private void BuildEdge(Vector2 a, Vector2 b, bool live)
         {
             var go = new GameObject("Edge", typeof(Image));
             go.transform.SetParent(_graphContent, false);
             var r = go.GetComponent<RectTransform>();
-            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0.5f, 0.5f);
             Vector2 mid = (a + b) * 0.5f;
             float len = Vector2.Distance(a, b);
@@ -300,15 +544,17 @@ namespace DeNelle.Village.Talents
 
         // Section divider band (WO-675 §2 grammar shared with the upgrade panel): crown
         // glyph + small gilt label + a thin gilt rule running the rest of the row.
-        private void BuildSectionBand(string text, float y)
+        private void BuildSectionBand(string text, float centrePy, float contentW)
         {
             var host = new GameObject("SectionBand", typeof(RectTransform));
             host.transform.SetParent(_graphContent, false);
             var r = (RectTransform)host.transform;
-            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0.5f, 0.5f);
-            r.sizeDelta = new Vector2(CW * 0.92f, 36f);
-            r.anchoredPosition = new Vector2(0f, -(y * CH) - NodeSize * 0.5f);
+            // FIXED-PIXEL band height (was 36 against a font-34 line box of ~44 — the band
+            // could not seat its own line, the ObsidianQueueHud.HeaderHeightPx failure class).
+            r.sizeDelta = new Vector2(contentW * 0.92f, SectionBandPx);
+            r.anchoredPosition = new Vector2(contentW * 0.5f, centrePy);
 
             // Crown glyph (sprite-first, hidden on miss — the rule+label still carry the band).
             Sprite crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, RpgUiCatalog.CrownTier1);
@@ -326,8 +572,10 @@ namespace DeNelle.Village.Talents
                 cImg.raycastTarget = false;
             }
 
+            // Widened 0.40 -> 0.46: "Universal - any class" at FontMicro+2 needs ~393 px and the
+            // old cell resolved to ~386 — it was one glyph from ellipsizing its own band label.
             var label = ElarionUiKit.Label(host.transform, text, 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.MidlineLeft, 0.038f, 0.40f, bold: true);
+                ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.MidlineLeft, 0.038f, 0.46f, bold: true);
             label.raycastTarget = false;
             ElarionUiKit.FitSingleLine(label);
 
@@ -335,7 +583,7 @@ namespace DeNelle.Village.Talents
             var rule = new GameObject("Rule", typeof(Image));
             rule.transform.SetParent(host.transform, false);
             var rr = (RectTransform)rule.transform;
-            rr.anchorMin = new Vector2(0.41f, 0.5f); rr.anchorMax = new Vector2(1f, 0.5f);
+            rr.anchorMin = new Vector2(0.47f, 0.5f); rr.anchorMax = new Vector2(1f, 0.5f);
             rr.offsetMin = new Vector2(0f, -0.75f); rr.offsetMax = new Vector2(0f, 0.75f);
             var rImg = rule.GetComponent<Image>();
             rImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f);
@@ -353,10 +601,11 @@ namespace DeNelle.Village.Talents
             var go = new GameObject("Node_" + node.Id, typeof(Image), typeof(Button));
             go.transform.SetParent(_graphContent, false);
             var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = c;
-            rt.sizeDelta = new Vector2(NodeSize, NodeSize);
+            // A node is a BUTTON — it carries the kit touch floor (was 96 px, below it).
+            rt.sizeDelta = new Vector2(NodeSizePx, NodeSizePx);
 
             var img = go.GetComponent<Image>();
             // OWNER F8 2026-07-11 ("remove the background image and just a simple icon with the
@@ -562,82 +811,107 @@ namespace DeNelle.Village.Talents
             Transform panel = bodyHost;
             _headerLabel = chrome.title;
 
-            // §B.2 — Wisdom wallet = the ONE CurrencyChip (top-right of the body zone;
-            // tag "WISDOM" guarantees identity even if the icon art is absent).
-            // Owner F8 2026-07-11: widened (0.76 → 0.70) — the old width truncated the
-            // tag to "WISD..."; "WISDOM 1,016" must fit on one line.
-            _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.70f, 0.855f), new Vector2(0.955f, 0.915f), tag: "WISDOM");
+            // ── WO-865: THE BAND STACK ────────────────────────────────────────────
+            // Three DISJOINT fixed-pixel regions, seated from the body well's own edges.
+            // Nothing can float over anything else because nothing shares a pixel:
+            //
+            //   [ columns region ]  <- stretch between fixed insets
+            //        left  : graph scroll well  (+ its own ability band at the foot)
+            //        right : wisdom / selected talent / description / state
+            //   [ action row    ]  <- fixed ActionRowPx, pinned to the body floor
+            //
+            // The ability band lives INSIDE the left column rather than spanning the body:
+            // the body well is only ~493 px tall at 2340x1080, and a full-width ability band
+            // would starve the description column to a single line. In the left column each
+            // of the four slots still gets ~255 x 112 px — enough for "Emberbrand Throw" at
+            // the FontFloor, which is the truncation the capture showed.
+
+            var actionRow = BandHost(panel, "ActionRowBand", 0f, 1f);
+            PinBandFromBottom(actionRow, BodyPadPx, ActionRowPx);
+
+            var columns = BandHost(panel, "ColumnsRegion", 0f, 1f);
+            PinRegion(columns, BodyPadPx + ActionRowPx + BandGapPx, BodyPadPx);
+
+            var leftCol = BandHost(columns, "GraphColumn", 0f, GraphColumnX1);
+            var rightCol = BandHost(columns, "DetailColumn", DetailColumnX0, 1f);
+
+            var abilityBand = BandHost(leftCol, "AbilityBand", 0f, 1f);
+            PinBandFromBottom(abilityBand, 0f, AbilityRowPx);
+            _quickRoot = abilityBand.gameObject;
+
+            var graphWell = BandHost(leftCol, "GraphWell", 0f, 1f);
+            PinRegion(graphWell, AbilityRowPx + BandGapPx, 0f);
 
             // (The old "Equip" button that opened a second loadout screen is GONE — the
-            // quick-swap row below folds that assign flow into THIS screen, owner 2026-06-28.)
+            // quick-swap band below folds that assign flow into THIS screen, owner 2026-06-28.)
 
-            BuildScrollGraph(panel);
-            BuildDetailAndQuickSwap(panel);
-            BuildFooter(panel);
+            BuildScrollGraph(graphWell);
+            BuildDetailColumn(rightCol);
+            BuildActionRow(actionRow);
         }
 
-        // The right-hand column: a SELECTED-talent detail strip (name + description +
-        // state) over a QUICK-SWAP row (slots 1-4). Browse → select → read → confirm →
-        // assign, all on one screen (no second loadout panel).
-        private void BuildDetailAndQuickSwap(Transform panel)
+        // The right-hand column: WISDOM chip, then the SELECTED-talent detail strip
+        // (name + description + state). Browse → select → read → confirm → assign, all on
+        // one screen (no second loadout panel; the quick-swap band lives under the graph).
+        //
+        // Every row here is a FIXED-PIXEL band pinned off the column's own top/bottom edge.
+        // The description is the only flexible row, and even it is bounded by pixel insets.
+        private void BuildDetailColumn(RectTransform col)
         {
-            const float colX0 = 0.675f, colX1 = 0.955f;
-            const float txX0 = 0.69f, txX1 = 0.94f;
+            const float txX0 = DetailTextInsetFrac, txX1 = 1f - DetailTextInsetFrac;
 
-            // Right-column host. The frame supplies the chrome (UI canon §4: no per-screen wells) —
-            // so this is now a TRANSPARENT layout host, not a self-styled dark plate, to avoid
-            // double-framing inside the body zone. It still groups the detail strip + quick-swap row.
-            var detailBg = ElarionUiKit.AddImage(panel, "DetailHost",
-                new Vector2(colX0, 0.40f), new Vector2(colX1, 0.84f),
-                new Color(0f, 0f, 0f, 0f));
-            var dbImg = detailBg.GetComponent<Image>();
-            if (dbImg != null) dbImg.raycastTarget = false;
+            // §B.2 — Wisdom wallet = the ONE CurrencyChip (top of the detail column;
+            // tag "WISDOM" guarantees identity even if the icon art is absent).
+            _wisdomChip = ElarionUiKit.CurrencyChip(col, ElarionUiKit.CurrencyKind.Wisdom,
+                new Vector2(0.28f, 1f), new Vector2(1f, 1f), tag: "WISDOM");
+            if (_wisdomChip != null && _wisdomChip.root != null)
+                PinBandFromTop((RectTransform)_wisdomChip.root.transform, 0f, WisdomBandPx);
+
+            // Fixed-pixel row plan for the column (offsets from ITS top / ITS bottom):
+            float headTop = WisdomBandPx + BandGapPx;
+            float nameTop = headTop + DetailHeadPx + 4f;
+            float descTop = nameTop + DetailNamePx + 6f;
+            float descBottom = 4f + DetailStatePx + BandGapPx;
 
             // Two ALTERNATIVE folds (eyes-sweep 2026-07-06 fix): the empty-state prompt
-            // and the selected-talent detail share the strip's bands but live under
-            // separate full-rect hosts — RenderDetail activates exactly ONE. Children
-            // keep their panel-fraction anchors (the hosts span the whole body zone).
-            _detailGroup = MakeGroupHost(panel, "DetailGroup");
-            _emptyGroup = MakeGroupHost(panel, "EmptyStateGroup");
+            // and the selected-talent detail share the column's bands but live under
+            // separate full-rect hosts — RenderDetail activates exactly ONE.
+            _detailGroup = MakeGroupHost(col, "DetailGroup");
+            _emptyGroup = MakeGroupHost(col, "EmptyStateGroup");
             _detailGroup.SetActive(false);   // empty-state is the default fold until a node is selected
 
-            var selHeader = ElarionUiKit.Label(_detailGroup.transform, "SELECTED TALENT", 0.805f, 0.835f, ElarionUi.Gilt,
+            var selHeader = ElarionUiKit.Label(_detailGroup.transform, "SELECTED TALENT", 0f, 1f, ElarionUi.Gilt,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            PinBandFromTop(selHeader.rectTransform, headTop, DetailHeadPx);
             ElarionUiKit.FitSingleLine(selHeader);
 
-            _detailName = ElarionUiKit.Label(_detailGroup.transform, "", 0.745f, 0.805f, ElarionUi.Parchment,
+            _detailName = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f, ElarionUi.Parchment,
                 ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            PinBandFromTop(_detailName.rectTransform, nameTop, DetailNamePx);
             ElarionUiKit.FitSingleLine(_detailName);   // long talent names shrink/ellipsize, never spill
 
-            _detailDesc = ElarionUiKit.Label(_detailGroup.transform, "",
-                0.475f, 0.735f, ElarionUi.Parchment, ElarionUi.FontLabel,
+            _detailDesc = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f,
+                ElarionUi.Parchment, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
+            PinRegion(_detailDesc.rectTransform, descBottom, descTop);
             ElarionUiKit.FitBlock(_detailDesc);        // wraps + truncates inside its band
 
-            _detailState = ElarionUiKit.Label(_detailGroup.transform, "", 0.41f, 0.465f, ElarionUi.Affordable,
+            _detailState = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f, ElarionUi.Affordable,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            PinBandFromBottom(_detailState.rectTransform, 4f, DetailStatePx);
             ElarionUiKit.FitSingleLine(_detailState);
 
             // Empty-state fold — SAME bands, rendered INSTEAD of the detail fold.
-            var emptyTitle = ElarionUiKit.Label(_emptyGroup.transform, "Select a talent", 0.745f, 0.805f,
+            var emptyTitle = ElarionUiKit.Label(_emptyGroup.transform, "Select a talent", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            PinBandFromTop(emptyTitle.rectTransform, nameTop, DetailNamePx);
             ElarionUiKit.FitSingleLine(emptyTitle);
             var emptyBody = ElarionUiKit.Label(_emptyGroup.transform,
                 "Tap any node to read what it does before you confirm.",
-                0.475f, 0.735f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
+            PinRegion(emptyBody.rectTransform, descBottom, descTop);
             ElarionUiKit.FitBlock(emptyBody);
-
-            // Quick-swap slot row (always visible — outside both folds). §B.4: the caption
-            // + hint strips are GONE — slots keep their numerals; the detail state line
-            // carries the "tap a slot (1-4)" hint; action feedback is a toast.
-            _quickRoot = new GameObject("QuickSwapRow", typeof(RectTransform));
-            _quickRoot.transform.SetParent(panel, false);
-            var qr = _quickRoot.GetComponent<RectTransform>();
-            qr.anchorMin = new Vector2(colX0 + 0.008f, 0.165f);
-            qr.anchorMax = new Vector2(colX1 - 0.008f, 0.375f);
-            qr.offsetMin = Vector2.zero; qr.offsetMax = Vector2.zero;
         }
 
         // Full-rect transparent layout host — children keep their fractional anchors;
@@ -653,13 +927,14 @@ namespace DeNelle.Village.Talents
         }
 
         // The scrollable graph viewport (mask) + fixed-size content (nodes/edges).
+        // The host is the WO-865 graph well — a fixed-pixel region of the left column, so
+        // this scroll area simply fills it and the RectMask2D clips at the well's edges.
         private void BuildScrollGraph(Transform panel)
         {
             var areaGo = new GameObject("GraphScroll", typeof(RectTransform), typeof(ScrollRect));
             areaGo.transform.SetParent(panel, false);
             var ar = areaGo.GetComponent<RectTransform>();
-            // Left ~62% of the panel; the right column is the detail + quick-swap strip.
-            ar.anchorMin = new Vector2(0.045f, 0.165f); ar.anchorMax = new Vector2(0.655f, 0.84f);
+            ar.anchorMin = Vector2.zero; ar.anchorMax = Vector2.one;
             ar.offsetMin = Vector2.zero; ar.offsetMax = Vector2.zero;
 
             var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D), typeof(Image));
@@ -687,14 +962,14 @@ namespace DeNelle.Village.Talents
             var contentGo = new GameObject("GraphContent", typeof(RectTransform));
             contentGo.transform.SetParent(viewportGo.transform, false);
             _graphContent = contentGo.GetComponent<RectTransform>();
-            _graphContent.anchorMin = _graphContent.anchorMax = new Vector2(0.5f, 1f);
-            _graphContent.pivot = new Vector2(0.5f, 1f);
-            // Pad the scroll content by a full node on top+bottom so the FIRST and LAST
-            // tier rows (authored at y≈0 / y≈1) aren't half-clipped by the viewport — a
-            // node's centre sits at y*CH and its plate extends ±NodeSize/2, which fell
-            // outside a CH-tall content rect (bottom green row was clipped). CenterPx +
-            // BuildSectionBand shift down by NodeSize/2 to sit inside this padded rect.
-            _graphContent.sizeDelta = new Vector2(CW, CH + NodeSize);
+            // TOP-LEFT anchored + pivoted (was centre-anchored). Centring a content rect WIDER
+            // than the mask is exactly what sliced a node plate off BOTH frame edges in the
+            // 2026-08-04 capture. Flush top-left + GraphPadPx of padding means the rest position
+            // always shows whole plates at the leading edges; the trailing edge peeks, which is
+            // the scroll affordance. RebuildGraph sizes the rect in exact pixels.
+            _graphContent.anchorMin = _graphContent.anchorMax = new Vector2(0f, 1f);
+            _graphContent.pivot = new Vector2(0f, 1f);
+            _graphContent.sizeDelta = new Vector2(GraphUnitWpx, GraphUnitHpx);
             _graphContent.anchoredPosition = Vector2.zero;
 
             var scroll = areaGo.GetComponent<ScrollRect>();
@@ -707,48 +982,76 @@ namespace DeNelle.Village.Talents
             scroll.scrollSensitivity = 28f;
         }
 
-        // CONFIRM / Cancel / Respec (§B.2 — no plan-summary strip; the plan folds into
-        // the CONFIRM label, "CONFIRM n · −cost", written by Render).
-        private void BuildFooter(Transform panel)
+        // Cancel / Respec / CONFIRM (§B.2 — no plan-summary strip; the plan folds into
+        // the CONFIRM label, "CONFIRM n, -cost", written by Render).
+        //
+        // WO-865 — ONE BUTTON LANGUAGE. The capture showed three chromes in one row: Cancel
+        // plain, CONFIRM with a green pack fill that ran past its own rect and under the
+        // ability list, Respec a light grey box. All three now build through the SAME call
+        // (ButtonKind.Quiet + RpgUiCatalog.ButtonFrame) — the green ButtonConfirm overlay that
+        // produced the bleed is gone. Emphasis, not chrome, marks the primary: CONFIRM gets a
+        // procedural gilt ring (a SHAPE, not a hue — the owner is red/green colourblind), a
+        // wider rect and gilt ink; the state itself is carried by the LABEL TEXT ("CONFIRM"
+        // vs "CONFIRM 2, -40").
+        //
+        // Each button stretches 0..1 inside the fixed ActionRowPx band, so its resolved height
+        // IS MinTouchPx and ClampMinTouch has nothing to grow. That growth — 32 px of fraction
+        // band inflated to 112 — is what put this row on top of the grid.
+        private void BuildActionRow(RectTransform row)
         {
-            _confirmBtn = ElarionUiKit.ButtonPack(panel, "CONFIRM", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.52f, 0.07f), new Vector2(0.80f, 0.135f),
-                () => { if (_vm != null) _vm.ConfirmOrAssign(); },
-                packSpriteName: RpgUiCatalog.Get("button", "button_confirm") != null
-                    ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
-            var confLbl = _confirmBtn != null ? _confirmBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (confLbl != null)
-            {
-                confLbl.color = ElarionUi.Parchment; confLbl.fontStyle = TMPro.FontStyles.Bold;
-                confLbl.outlineColor = new Color32(20, 12, 4, 235); confLbl.outlineWidth = 0.22f;
-            }
-            _confirmLabel = confLbl;
+            const float cancelX0 = 0.020f, cancelX1 = 0.250f;
+            const float respecX0 = 0.270f, respecX1 = 0.560f;
+            const float confirmX0 = 0.620f, confirmX1 = 0.980f;
 
-            _cancelBtn = ElarionUiKit.ButtonPack(panel, "Cancel", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.38f, 0.075f), new Vector2(0.50f, 0.135f),
+            _cancelBtn = ElarionUiKit.ButtonPack(row, "Cancel", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(cancelX0, 0f), new Vector2(cancelX1, 1f),
                 () => { if (_vm != null) _vm.CancelPlan(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
-            var canLbl = _cancelBtn != null ? _cancelBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (canLbl != null) { canLbl.color = ElarionUi.Parchment; canLbl.fontStyle = TMPro.FontStyles.Bold; }
+            StyleActionLabel(_cancelBtn, ElarionUi.Parchment);
 
             // RESPEC — refund this hero's talents for a Crystal cost (owner F8 "no respec option").
             // Surfaces the legacy TalentTreePanel respec on the LIVE MVVM panel via vm.Respec().
-            // Owner F8 2026-07-11: "Respec  300 Crystals" truncated to "Respec 300 Cry..." in
-            // the narrow button — short label ("Respec 300c") + FitSingleLine so it never spills.
             int respecCost = _vm != null ? _vm.RespecCost : HeroSkillTreeVMRespecFallbackCost;
-            _respecBtn = ElarionUiKit.ButtonPack(panel, "Respec " + respecCost + "c", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.815f, 0.075f), new Vector2(0.955f, 0.135f),
+            _respecBtn = ElarionUiKit.ButtonPack(row, "Respec " + respecCost + "c", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(respecX0, 0f), new Vector2(respecX1, 1f),
                 () => { if (_vm != null) _vm.Respec(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
-            var resLbl = _respecBtn != null ? _respecBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (resLbl != null)
-            {
-                resLbl.color = ElarionUi.Parchment; resLbl.fontStyle = TMPro.FontStyles.Bold;
-                ElarionUiKit.FitSingleLine(resLbl);
-            }
+            StyleActionLabel(_respecBtn, ElarionUi.Parchment);
+
+            // PRIMARY emphasis ring — built BEFORE the button so the button's own plate draws
+            // over it and only the rim peeks. Procedural + rect-bounded: it cannot bleed the way
+            // the 9-sliced green pack fill did.
+            var ring = new GameObject("ConfirmEmphasis", typeof(Image));
+            ring.transform.SetParent(row, false);
+            var ringRt = (RectTransform)ring.transform;
+            ringRt.anchorMin = new Vector2(confirmX0, 0f);
+            ringRt.anchorMax = new Vector2(confirmX1, 1f);
+            ringRt.offsetMin = new Vector2(-5f, -5f);
+            ringRt.offsetMax = new Vector2(5f, 5f);
+            var ringImg = ring.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(ringImg);
+            ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
+            ringImg.raycastTarget = false;
+
+            _confirmBtn = ElarionUiKit.ButtonPack(row, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(confirmX0, 0f), new Vector2(confirmX1, 1f),
+                () => { if (_vm != null) _vm.ConfirmOrAssign(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            _confirmLabel = StyleActionLabel(_confirmBtn, ElarionUi.Gilt);
 
             // §B.2 — respec status is a transient toast (see Render), not a persistent strip.
-            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
+            // Close is the SHARED bottom-band Obsidian Close button (WO-554) — no per-panel Close.
+        }
+
+        // One label treatment for the whole action row: bold, fitted, ink by EMPHASIS only.
+        private static TMPro.TextMeshProUGUI StyleActionLabel(Button btn, Color ink)
+        {
+            var lbl = btn != null ? btn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (lbl == null) return null;
+            lbl.color = ink;
+            lbl.fontStyle = TMPro.FontStyles.Bold;
+            ElarionUiKit.FitSingleLine(lbl);   // never spills, never clips ("Respec 300 Cry...")
+            return lbl;
         }
 
         // Display-only fallback if the button is built before the VM binds (cost still comes
@@ -764,6 +1067,12 @@ namespace DeNelle.Village.Talents
 
         // ── Quick-swap row (folds the loadout screen into this panel) ─────────────
 
+        // WO-865 — the ABILITY BAND: ONE row of slot tiles across the graph column, inside a
+        // band that is already AbilityRowPx tall (>= the kit touch floor). The old 2x2
+        // grid sliced a 0.21-of-body host into 1/2 x 1/2 fractions: each tile resolved to ~47 px
+        // (below the touch floor) and its NAME band to ~23 px — under the FontFloor line box, so
+        // "Emberbrand Throw" ellipsized to "Emberbrand Thro" and the touch-floor guard grew the
+        // action buttons straight over slots 3 and 4.
         private void RebuildQuickSlots()
         {
             ClearChildren(_quickRoot);
@@ -773,29 +1082,25 @@ namespace DeNelle.Village.Talents
             int n = slots != null ? slots.Count : 0;
             if (n <= 0) return;
 
-            const int cols = 2;
-            float gapX = 0.04f, gapY = 0.10f;
-            int rows = (n + cols - 1) / cols;
-            float w = (1f - gapX * (cols - 1)) / cols;
-            float h = (1f - gapY * (rows - 1)) / rows;
+            // Horizontal split only — the tile HEIGHT is the band, so it cannot under-run the
+            // touch floor no matter how many slots exist.
+            float gapX = SlotGapFrac;
+            float w = (1f - gapX * (n - 1)) / n;
             bool assignTarget = _vm.SelectedIsAssignable;
             for (int i = 0; i < n; i++)
             {
-                int c = i % cols, r = i / cols;
-                float x0 = c * (w + gapX);
-                float y1 = 1f - r * (h + gapY);
-                float y0 = y1 - h;
-                BuildQuickSlotTile(_quickRoot.transform, slots[i], x0, x0 + w, y0, y1, assignTarget);
+                float x0 = i * (w + gapX);
+                BuildQuickSlotTile(_quickRoot.transform, slots[i], x0, x0 + w, assignTarget);
             }
         }
 
         private void BuildQuickSlotTile(Transform parent, LoadoutSlotVM slot,
-                                        float x0, float x1, float y0, float y1, bool assignTarget)
+                                        float x0, float x1, bool assignTarget)
         {
             var tile = new GameObject("Quick_" + slot.SlotKey, typeof(Image), typeof(Button));
             tile.transform.SetParent(parent, false);
             var rt = tile.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
+            rt.anchorMin = new Vector2(x0, 0f); rt.anchorMax = new Vector2(x1, 1f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
             var img = tile.GetComponent<Image>();
@@ -818,17 +1123,24 @@ namespace DeNelle.Village.Talents
             int idx = slot.SlotIndex;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.AssignSelectedToSlot(idx); });
 
-            var keyLbl = ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.60f, 0.95f, ElarionUi.Gilt,
+            // FIXED-PIXEL line boxes inside the tile: numeral over name, each a whole line.
+            var keyLbl = ElarionUiKit.Label(tile.transform, slot.SlotKey, 0f, 1f, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            PinBandFromTop(keyLbl.rectTransform, SlotPadPx, SlotKeyBandPx);
             ElarionUiKit.FitSingleLine(keyLbl);
 
-            string body = slot.IsEmpty ? (assignTarget ? "tap to set" : "+") : slot.AbilityName;
+            // Text-encoded state (never colour alone — the owner is red/green colourblind):
+            // an empty slot SAYS so.
+            string body = slot.IsEmpty ? (assignTarget ? "tap to set" : "empty") : slot.AbilityName;
             Color bodyColor = slot.IsEmpty
                 ? (assignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim)
                 : ElarionUi.Parchment;
-            var bodyLbl = ElarionUiKit.Label(tile.transform, body, 0.06f, 0.56f, bodyColor,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !slot.IsEmpty);
-            // Ability names wrap + truncate inside their band — never over the slot key.
+            var bodyLbl = ElarionUiKit.Label(tile.transform, body, 0f, 1f, bodyColor,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center,
+                SlotTextInsetFrac, 1f - SlotTextInsetFrac, bold: !slot.IsEmpty);
+            PinBandFromBottom(bodyLbl.rectTransform, SlotPadPx, SlotNameBandPx);
+            // TWO whole FontFloor line boxes in a ~250 px tile: the name WRAPS rather than
+            // ellipsizing, so "Emberbrand Throw" / "Suppressing Volley" read in FULL.
             ElarionUiKit.FitBlock(bodyLbl);
         }
 
