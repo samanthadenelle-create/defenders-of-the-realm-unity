@@ -616,6 +616,9 @@ namespace DeNelle.Village.Arena
                     // clash. For the STONE biomes, retheme the same prefab in place: swap the Ground
                     // to the biome's real stone material + strip the tree silhouettes (rocks stay).
                     RethemeLandscapeForBiome(go, _activeBiome);
+                    // F8 2026-08-05 LEAK 1 (dungeon win -> "the screen went black"): the stage
+                    // prefab carries a SCENE-WIDE sun. Scope it before anything renders.
+                    ScopeStageLights(go);
                 });
                 FlowTrace.Step("BattleArena", "BuildArena: loaded landscape prefab 'Arena/ForestClearingArena'.");
             }
@@ -664,6 +667,84 @@ namespace DeNelle.Village.Arena
             AuditArenaRenderers();
 
             FlowTrace.Step("BattleArena", $"BuildArena: open kite floor {ArenaHalfWidth * 2f}x{ArenaHalfDepth * 2f} at {ArenaCentre} (theme '{theme}', no structures).");
+        }
+
+        // ---------------------------------------------------------------------
+        //  ARENA GLOBALS OWNERSHIP (F8 2026-08-05 — "won a dungeon fight, the screen
+        //  went black with the HUD still visible")
+        //
+        //  It was never a stuck fader: ScreenFader is sortingOrder 10000 (ScreenFader.cs:58)
+        //  vs the HUD kit's 4000 (HudAreasHost.cs:85), so an opaque fader would have BURIED
+        //  the HUD — it didn't. The world was genuinely unlit, because the arena leaks TWO
+        //  SCENE-WIDE globals into whatever scene it stages inside:
+        //    1) the landscape prefab's 'KeyLight' is a DIRECTIONAL light (the ONLY light in
+        //       Resources/Arena/ForestClearingArena.prefab:1491, m_Type:1, intensity 1.05).
+        //       A directional light lights the WHOLE active scene regardless of where the
+        //       stage sits, so for the length of the fight the arena's sun WAS the dungeon's
+        //       sun — and Destroy(stage) on return was the moment it "went black".
+        //    2) ApplyCavernMood writes GLOBAL RenderSettings ambient/fog.
+        //  Both are legitimate in the arena's OWN home (the open world / hub), where the arena
+        //  is the only thing on screen. Inside a composed dungeon they are trespass.
+        //
+        //  The dungeon's darkness is DESIGN, not a defect (Lantern.cs, TorchWardenDress.cs;
+        //  owner 2026-08-05: "add a torch so we can give extremely minimal light till torch").
+        //  So we do NOT raise it, compensate for it, or add a light of our own — we only stop
+        //  leaking ours in. Consequence, and it is the INTENDED one: a dungeon fight now
+        //  renders at the dungeon's authored darkness. How dark "extremely minimal" should be
+        //  is the dungeon's own authoring ticket, not the arena's.
+        // ---------------------------------------------------------------------
+        private static bool StagingInsideForeignScene()
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            string name = scene.name ?? string.Empty;
+            // Follows the established convention for "this is a composed dungeon scene"
+            // (AudioService.cs:971, JupiterSwapBootstrap.cs:133), widened from "Dungeon_" to
+            // "Dungeon" so Dungeon.unity / Dungeon_Demo are covered too.
+            return name.StartsWith("Dungeon", StringComparison.Ordinal);
+        }
+
+        // LEAK 1 FIX. Neutralise the stage's scene-wide sun when the arena stages inside a
+        // scene it does not own.
+        //
+        // WHY DISABLE rather than mask: a cullingMask would be the better answer, but there is
+        // no layer to mask TO. ProjectSettings/TagManager.asset declares layers 0-8 only
+        // (Default/TransparentFX/Ignore Raycast/Tower/Water/UI/Building/Enemy/Structure) —
+        // 9..31 are all empty — and URP's m_RenderingLayers has only "Default", so
+        // renderingLayerMask is no help either. Minting an arena layer means editing
+        // ProjectSettings AND re-layering the whole stage, which would break the stage's
+        // Default-layer MeshCollider contract that ArenaNavMeshBaker bakes over (see the
+        // BuildArena comment above). Intensity/renderMode do not help: a directional light at
+        // ANY intensity is still the scene's sun. So inside a foreign scene the light is simply
+        // switched off; in the arena's own home nothing changes at all.
+        private static void ScopeStageLights(GameObject stageRoot)
+        {
+            if (stageRoot == null) return;
+            Guard.Try("BattleArena", "scope stage lights", () =>
+            {
+                bool foreign = StagingInsideForeignScene();
+                var lights = stageRoot.GetComponentsInChildren<Light>(true);
+                int directional = 0, disabled = 0;
+                for (int i = 0; i < lights.Length; i++)
+                {
+                    var l = lights[i];
+                    if (l == null || l.type != LightType.Directional) continue;
+                    directional++;
+                    if (!foreign || !l.enabled) continue;
+                    l.enabled = false;
+                    disabled++;
+                }
+
+                if (foreign)
+                    FlowTrace.Warn("BattleArena",
+                        $"ScopeStageLights: staging INSIDE '{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' " +
+                        $"(a scene the arena does not own) — DISABLED {disabled}/{directional} stage DIRECTIONAL light(s). " +
+                        "A directional light is scene-wide, so leaving it on made the arena's sun the dungeon's sun and " +
+                        "its teardown the 'screen went black'. The fight now renders at the scene's AUTHORED lighting — " +
+                        "that is the owner's intent (the dark is a built mechanic), not a regression.");
+                else
+                    FlowTrace.Step("BattleArena",
+                        $"ScopeStageLights: arena owns this scene — {directional} stage directional light(s) left ON (unchanged).");
+            });
         }
 
         // ---------------------------------------------------------------------
@@ -1142,6 +1223,28 @@ namespace DeNelle.Village.Arena
         private void ApplyCavernMood()
         {
             if (_moodSaved) return;
+
+            // F8 2026-08-05 LEAK 2 (see the ARENA GLOBALS OWNERSHIP block above). RenderSettings
+            // is GLOBAL to the active scene. In a composed dungeon these five writes stomp the
+            // scene's AUTHORED mood — the dungeon ships ambient 0.05/0.05/0.055 at intensity 0.05
+            // (pitch dark BY DESIGN: Lantern.cs, TorchWardenDress.cs), and this sets 0.18/0.17/0.22
+            // at 0.55, a ~20x lift. RestoreCavernMood then correctly puts the authored values back
+            // on Resolve — which is precisely the beat the owner saw as "the screen went black".
+            // The arena never owned that mood, so it must not borrow it: SKIP.
+            //
+            // SYMMETRY IS STRUCTURAL, not a second gate: skipping here leaves _moodSaved == false,
+            // and RestoreCavernMood's first line is `if (!_moodSaved) return;`. A skipped apply can
+            // therefore NEVER be followed by a restore. That is why the gate lives here and only
+            // here — a duplicated predicate on the restore side could drift and half-apply the pair.
+            if (StagingInsideForeignScene())
+            {
+                FlowTrace.Warn("BattleArena",
+                    $"ApplyCavernMood SKIPPED — staging inside '{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}', " +
+                    "which OWNS its own RenderSettings ambient/fog (authored dark by design). Global mood left untouched; " +
+                    "_moodSaved stays false so RestoreCavernMood is a no-op — apply+restore stay symmetric by construction.");
+                return;
+            }
+
             Guard.Try("BattleArena", "save+apply cavern mood", () =>
             {
                 _savedFog = RenderSettings.fog;
@@ -1164,7 +1267,16 @@ namespace DeNelle.Village.Arena
         // Restore the saved RenderSettings on Resolve so the open world is untouched on return.
         private void RestoreCavernMood()
         {
-            if (!_moodSaved) return;
+            if (!_moodSaved)
+            {
+                // Names the branch so the pairing is PROVABLE from a trace instead of inferred:
+                // nothing was applied (non-cavern theme, or the F8 2026-08-05 foreign-scene skip),
+                // so there is nothing to restore. This is the symmetric half of that gate.
+                FlowTrace.Step("BattleArena",
+                    "RestoreCavernMood: NO-OP — no cavern mood was applied (non-cavern theme, or the " +
+                    "arena skipped it because the scene owns its own RenderSettings). Nothing restored.");
+                return;
+            }
             Guard.Try("BattleArena", "restore cavern mood", () =>
             {
                 RenderSettings.fog = _savedFog;
@@ -1486,17 +1598,160 @@ namespace DeNelle.Village.Arena
             // this note carries the arena context either way.
             DeathTrace.Note($"HERO MOVE REQUESTED: BattleArena.WarpHero {hero.transform.position} -> {pos} (arena stage/return warp)");
 
-            var loco = hero.GetComponent("HeroLocomotion") as MonoBehaviour;
-            if (loco != null)
+            // ── F8 2026-08-05 (owner, live on device): "when i land i could not move at all" /
+            //    "the dungeon is unmovable" — after WINNING a dungeon fight. Owner ruling:
+            //    "IF YOU CANNOT WALK AND NAVIGATE THROUGH THE DUNGEON ITS A FAIL."
+            //
+            //    The arena writes a hero pose into a scene whose MOVER it does not own, and the
+            //    write itself was unsafe on BOTH of that scene's movement components:
+            //
+            //    (a) CharacterController. The dungeon Keeper is driven by DungeonHero's CC, and
+            //        DungeonController re-ENABLES it the instant OnBattleEnded fires
+            //        (DungeonController.cs:1466) — which is the END of Resolve (:OnBattleEnded
+            //        Invoke), i.e. BEFORE this return warp runs (a WIN defers the return behind
+            //        the victory summary for up to 20s). HeroLocomotion.WarpTo then does a RAW
+            //        `transform.position = worldPos` (HeroLocomotion.cs:317) onto a LIVE CC. That
+            //        is not a teleport: the CC caches its own capsule pose and re-asserts /
+            //        depenetrates it, so the hero can land wedged and unable to move. The scene's
+            //        own teleport authority already does the only safe thing — disable the CC,
+            //        move, re-enable (DungeonHero.Teleport, DungeonHero.cs:182-196). The arena
+            //        must do the same for the pose IT writes. The toggle is same-frame, so
+            //        DungeonHero.Update never observes the disabled CC (its own comment,
+            //        DungeonHero.cs:207-208, relies on exactly that).
+            //
+            //    (b) NavMeshAgent. WarpTo unconditionally leaves the agent ENABLED
+            //        (HeroLocomotion.cs:319) — that is correct for a seam warp onto a baked mesh,
+            //        but a dungeon has NO bake, and DungeonController deliberately keeps that
+            //        agent DISABLED so the CC is the sole mover (EnsureSingleDungeonMover,
+            //        DungeonController.cs:816-820). Re-enabling it hands the scene back two live
+            //        movers on one transform. So: snapshot the agent's enabled state before the
+            //        warp and RESTORE it after. Where the agent was already enabled (every
+            //        overworld / seam case) this is byte-identical to today's behaviour; only the
+            //        deliberately-disabled dungeon agent changes, and there it is simply not
+            //        re-enabled behind the scene owner's back.
+            var cc = hero.GetComponent<CharacterController>();
+            bool ccWasEnabled = cc != null && cc.enabled;
+            var agent = hero.GetComponent<NavMeshAgent>();
+            bool agentWasEnabled = agent != null && agent.enabled;
+            if (ccWasEnabled) cc.enabled = false;
+
+            try
             {
-                var warp = loco.GetType().GetMethod("WarpTo", new[] { typeof(Vector3), typeof(Quaternion?) });
-                if (warp != null) { warp.Invoke(loco, new object[] { pos, (Quaternion?)rot }); FlowTrace.Step("BattleArena", $"WarpHero -> {pos}."); return; }
+                var loco = hero.GetComponent("HeroLocomotion") as MonoBehaviour;
+                var warp = loco != null
+                    ? loco.GetType().GetMethod("WarpTo", new[] { typeof(Vector3), typeof(Quaternion?) })
+                    : null;
+                if (warp != null)
+                {
+                    warp.Invoke(loco, new object[] { pos, (Quaternion?)rot });
+                    FlowTrace.Step("BattleArena",
+                        $"WarpHero -> {pos} (mover-safe: cc={(cc == null ? "none" : ccWasEnabled ? "suspended+restored" : "already off")}, " +
+                        $"agent={(agent == null ? "none" : agentWasEnabled ? "enabled" : "kept DISABLED — scene owner's sole-mover rule")}).");
+                }
+                else
+                {
+                    // F8-15: the raw-transform fallback bypasses WarpTo's chokepoint log — attribute it here.
+                    DeathTrace.HeroMoved(hero.transform.position, pos,
+                        "BattleArena.WarpHero", "transform fallback (WarpTo not found)", always: true);
+                    hero.transform.SetPositionAndRotation(pos, rot);
+                    FlowTrace.Warn("BattleArena", "WarpHero: WarpTo not found - used transform fallback.");
+                }
             }
-            // F8-15: the raw-transform fallback bypasses WarpTo's chokepoint log — attribute it here.
-            DeathTrace.HeroMoved(hero.transform.position, pos,
-                "BattleArena.WarpHero", "transform fallback (WarpTo not found)", always: true);
-            hero.transform.SetPositionAndRotation(pos, rot);
-            FlowTrace.Warn("BattleArena", "WarpHero: WarpTo not found - used transform fallback.");
+            finally
+            {
+                // Restore the movers in the order the scene owner expects: agent state first
+                // (so nothing re-acquires a mesh it must not), then the collision body.
+                if (agent != null && agent.enabled != agentWasEnabled) agent.enabled = agentWasEnabled;
+                if (ccWasEnabled && cc != null) cc.enabled = true;
+            }
+        }
+
+        // How far the hero may end up from the pose the arena asked for before we call it a
+        // failed return. Generous enough for a ground-snap / depenetration settle, far tighter
+        // than any of the real strandings seen in the F8 capture.
+        private const float ReturnPoseDriftMeters = 2.5f;
+
+        /// <summary>
+        /// SAFETY NET (owner ruling 2026-08-05: "IF YOU CANNOT WALK AND NAVIGATE THROUGH THE
+        /// DUNGEON ITS A FAIL"). One frame after the return warp — long enough for every other
+        /// writer on the hero transform to have had its say — PROVE the hero actually landed
+        /// where the arena put her, and that she still has a mover that can carry her.
+        ///
+        /// A player who cannot move must never be a SILENT state, so every failure here is a
+        /// FlowTrace.Fail (loud -> break-log) that NAMES what is wrong, and is recovered where
+        /// the arena legitimately can:
+        ///   • DRIFTED  — something else wrote the pose after us (see the report: the ±50 clamp
+        ///     in HeroLocomotion.Update:1085-1090 is one such writer). Re-assert ONCE, mover-safe.
+        ///   • STRANDED — off the navmesh AND with no live CharacterController, i.e. no component
+        ///     left that can move her at all. Sample the nearest valid point and place her there.
+        /// Deliberately NOT treated as a fault: off-mesh WITH a live CharacterController. Every
+        /// dungeon is unbaked, so off-mesh is the NORMAL, correct state there and the CC is the
+        /// real mover — "snapping" her to a navmesh that does not exist would be a fake fix.
+        /// </summary>
+        private static void VerifyReturnPose(Vector3 wanted)
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null)
+            {
+                FlowTrace.Fail("BattleArena",
+                    "RETURN POSE VERIFY: no 'Player'-tagged hero after the return warp — cannot prove the hero landed anywhere.");
+                return;
+            }
+
+            Vector3 got = hero.transform.position;
+            float drift = Vector3.Distance(got, wanted);
+            var cc = hero.GetComponent<CharacterController>();
+            var agent = hero.GetComponent<NavMeshAgent>();
+            bool onMesh = agent != null && agent.enabled && agent.isOnNavMesh;
+            bool ccMover = cc != null && cc.enabled;
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+
+            FlowTrace.Step("BattleArena",
+                $"RETURN POSE VERIFY: scene='{scene}' wanted={wanted} got={got} drift={drift:F2}m " +
+                $"agentOnMesh={onMesh} ccMover={ccMover} (a hero with neither is IMMOBILE).");
+
+            if (drift > ReturnPoseDriftMeters)
+            {
+                FlowTrace.Fail("BattleArena",
+                    $"RETURN POSE DRIFT {drift:F2}m > {ReturnPoseDriftMeters}m — another writer moved the hero " +
+                    $"after the arena's return warp (wanted {wanted}, got {got} in '{scene}'). RE-ASSERTING the " +
+                    "return pose once, mover-safe. If this line repeats, the other writer owns the hero and the " +
+                    "arena cannot win the fight from here — fix the writer, not this net.");
+                WarpHero(wanted, hero.transform.rotation);
+                got = hero.transform.position;
+                onMesh = agent != null && agent.enabled && agent.isOnNavMesh;
+            }
+
+            if (onMesh || ccMover) return;   // she has a mover — nothing to recover
+
+            // No navmesh under her AND no live CharacterController: nothing on this hero can
+            // move her. This is the unrecoverable-by-the-player state; never ship it silently.
+            Vector3 recovered = got;
+            bool sampled = false;
+            Guard.Try("BattleArena", "recover stranded hero to nearest navmesh", () =>
+            {
+                if (NavMesh.SamplePosition(got, out var hit, 25f, NavMesh.AllAreas))
+                {
+                    recovered = hit.position;
+                    sampled = true;
+                }
+            });
+
+            if (sampled)
+            {
+                FlowTrace.Fail("BattleArena",
+                    $"HERO STRANDED after the return: off-mesh with NO live CharacterController @ {got} in '{scene}' — " +
+                    $"nothing could move her. RECOVERED to the nearest navmesh point {recovered} ({Vector3.Distance(got, recovered):F2}m). " +
+                    "This net firing is itself a defect report: the return should never land her mover-less.");
+                WarpHero(recovered, hero.transform.rotation);
+            }
+            else
+            {
+                FlowTrace.Fail("BattleArena",
+                    $"HERO STRANDED after the return and UNRECOVERABLE from here: off-mesh with NO live " +
+                    $"CharacterController @ {got} in '{scene}', and no navmesh within 25m to snap to. The player " +
+                    "cannot move. The scene owner must hand back a mover (or bake) — the arena has no valid pose to give.");
+            }
         }
 
         // LOSE-FLOW: a SAFE return point for a loss — pull back from the engagement spot along the
@@ -2183,8 +2438,24 @@ namespace DeNelle.Village.Arena
             // the pending warp (CancelPendingReturnWarp) BEFORE this coroutine resumes from its
             // fade (OnBattleEnded runs while we are parked at the fade-out yield), so the flag is
             // always observed here. Teardown/revive/camera/fade still run either way.
+            //
+            // F8 2026-08-05 — WHY THIS WARP IS *NOT* SUPPRESSED ON A DUNGEON WIN. It was proposed
+            // that the arena simply skip the warp because DungeonController.SettleEncounter logs
+            // "hero resumes in place" (DungeonController.cs:1371). That log is about the RUN, not
+            // the pose: the victory branch (DungeonController.cs:1368-1372) grants loot and clears
+            // the combat lock and moves NOTHING. The hero is physically at ArenaCentre (5000,0,5000)
+            // when this runs, so suppressing the warp on a WIN would strand her in the void 7km
+            // from the dungeon with the stage just destroyed under her. Suppression stays exactly
+            // what it was built for — the DEFEAT path, where ExitToVillage's scene load is the
+            // thing that repositions her (DungeonController.cs:1356-1364).
             if (!_returnWarpCancelled)
+            {
                 WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
+                // Give every other writer on this transform one frame to have its say, then PROVE
+                // she landed with a working mover (owner: not being able to walk is a hard fail).
+                yield return null;
+                Guard.Try("BattleArena", "verify return pose", () => VerifyReturnPose(returnPos));
+            }
             else
                 FlowTrace.Warn("BattleArena", "return warp SUPPRESSED — a scene exit owns the hero.");
 

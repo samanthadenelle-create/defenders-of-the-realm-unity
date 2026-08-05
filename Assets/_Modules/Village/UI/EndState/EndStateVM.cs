@@ -97,9 +97,12 @@ namespace DeNelle.Village.UI
         /// Battle-arena WIN summary (replaces BattleArenaHud.ShowVictorySummary).
         /// <paramref name="onContinue"/> = the deferred home-return; the view latches it once.
         /// </summary>
+        /// <param name="primaryRoute">FlowTrace route TAG only — never behaviour. Leave null to
+        /// derive it from where the win happened (see <see cref="DefaultVictoryRoute"/>).</param>
         public static EndStateVM FromBattleVictory(int stars, float durationSeconds,
             int xp, int wisdom, int wood, int iron, string gearName,
-            Action onContinue, float autoTimeoutSeconds = 20f, bool perfect = false)
+            Action onContinue, float autoTimeoutSeconds = 20f, bool perfect = false,
+            string primaryRoute = null)
         {
             var vm = new EndStateVM
             {
@@ -112,7 +115,7 @@ namespace DeNelle.Village.UI
                 TimeSeconds = Mathf.Max(0f, durationSeconds),
                 Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
                 PrimaryLabel = "Continue",
-                PrimaryRoute = "return-home",
+                PrimaryRoute = primaryRoute ?? DefaultVictoryRoute(),
                 Primary = onContinue,
                 AutoDismissSeconds = Mathf.Max(1f, autoTimeoutSeconds),
             };
@@ -163,6 +166,30 @@ namespace DeNelle.Village.UI
                     Rarity = 2,
                 });
             return vm;
+        }
+
+        /// <summary>
+        /// The honest default for an arena win's <see cref="PrimaryRoute"/> TAG.
+        ///
+        /// F8 2026-08-05, triage cost: PrimaryRoute is documented on the field above as a
+        /// FlowTrace tag and nothing else — yet <see cref="FromBattleVictory"/> hard-coded
+        /// "return-home" for EVERY arena win, dungeons included. A dungeon win performs no
+        /// return home and no scene load at all: BattleArena warps the hero back to the
+        /// engagement spot IN THE SAME SCENE and DungeonController.SettleEncounter logs "hero
+        /// resumes in place". The trace therefore asserted a route that path was never designed
+        /// to take, and triage went hunting a scene load that does not exist. Make the tag say
+        /// what actually happens.
+        ///
+        /// STRICTLY PRESENTATIONAL: this only picks the string that lands in the FlowTrace line.
+        /// Primary / onContinue / the deferred return are untouched — the win behaves identically
+        /// either way. Scene-name convention matches AudioService.cs:971.
+        /// </summary>
+        private static string DefaultVictoryRoute()
+        {
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name ?? string.Empty;
+            return scene.StartsWith("Dungeon", StringComparison.Ordinal)
+                ? "resume-in-place"
+                : "return-home";
         }
 
         /// <summary>Battle-arena LOSS sting (replaces BattleArenaHud.ShowLossPanel). The

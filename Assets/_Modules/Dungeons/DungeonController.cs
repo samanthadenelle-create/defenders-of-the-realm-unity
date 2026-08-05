@@ -1452,8 +1452,31 @@ namespace DeNelle.Dungeons
             RestoreInjectedHeroMover();
         }
 
+        /// <summary>
+        /// INSTRUMENTATION ONLY (2026-08-05). A capture showed THREE different hero positions
+        /// inside one post-fight settle window — (50,0,50), the warp target (-28,0.08,0), and a
+        /// sampled (-24.2,7.1) — and no one could name which system wrote the last one. This
+        /// handler is the settle window, so dumping the pose on ENTRY and on EVERY EXIT makes
+        /// the next capture self-explaining: whatever moves between the entry and exit lines
+        /// was written by something inside this handler, and whatever differs from the exit
+        /// line was written after it. No logic, ordering or behaviour depends on this.
+        /// </summary>
+        private string HeroPose(string when)
+        {
+            if (_hero == null) return $"{when}=<null>";
+            var cc = _hero.GetComponent<CharacterController>();
+            var ag = _hero.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            string ccState = cc == null ? "<none>" : (cc.enabled ? "LIVE" : "disabled");
+            string agState = ag == null ? "<none>"
+                : (ag.enabled ? (ag.isOnNavMesh ? "on-mesh" : "off-mesh") : "disabled");
+            return $"{when}: pos={_hero.position:F2} rotY={_hero.eulerAngles.y:F1} " +
+                   $"cc={ccState} agent={agState} scene='{_hero.gameObject.scene.name}'";
+        }
+
         private void OnRealtimeBattleEnded(DeNelle.Village.Arena.EncounterParams _, bool won)
         {
+            FlowTrace.Step("Dungeon", $"OnRealtimeBattleEnded ENTRY (won={won}) — {HeroPose("hero")}");
+
             // Restore FPV/iso traversal framing regardless of who launched the fight (a no-op
             // when combat framing was never forced) BEFORE the pending-encounter guard below.
             _cameraRig?.SetCombatFraming(false);
@@ -1467,10 +1490,16 @@ namespace DeNelle.Dungeons
             _heroController?.SetInputEnabled(true);
 
             // Only settle a dungeon encounter WE launched — guards a stray arena event + double-settle.
-            if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
+            if (_runtimeState == null || !_runtimeState.HasPendingEncounter)
+            {
+                FlowTrace.Step("Dungeon", $"OnRealtimeBattleEnded EXIT (no pending encounter — not ours) — {HeroPose("hero")}");
+                return;
+            }
             bool wasBoss = _runtimeState.PendingEncounterIsBoss;
             FlowTrace.Step("Dungeon", $"WO-770.3b: real-time BattleArena ended (won={won}, boss={wasBoss}) — settling.");
             SettleEncounter(won, wasBoss);
+
+            FlowTrace.Step("Dungeon", $"OnRealtimeBattleEnded EXIT (settled, won={won}, boss={wasBoss}) — {HeroPose("hero")}");
         }
 
         /// <summary>

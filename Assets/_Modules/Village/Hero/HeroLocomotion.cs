@@ -272,6 +272,70 @@ namespace DeNelle.Village
         // the off-mesh clamp below to leave the warp frame alone.
         private bool _isTeleporting;
 
+        // ── Playable-bounds clamp OWNERSHIP (dungeon walk-fail P0, owner 2026-08-05) ─────────
+        // The off-mesh ±50 clamp in Update (~:1100) was written for ONE situation: a
+        // castle/overworld hero who has walked off the baked mesh, in a scene whose playable
+        // region really IS ±50 around the origin. It was gated ONLY on "off the navmesh" —
+        // which is also the NORMAL, CORRECT state in two places where this component is not
+        // the mover, so it fired there by construction:
+        //   • DUNGEONS — unbaked scenes where DungeonHero's CharacterController is the sole
+        //     mover. DungeonController.EnsureSingleDungeonMover (:800-833) deliberately
+        //     DISABLES this hero's NavMeshAgent to make that so. The clamp therefore ran every
+        //     frame of every dungeon and wrote transform.position straight onto a LIVE
+        //     CharacterController, racing DungeonHero.Update under default execution order —
+        //     a CC re-asserts/depenetrates on a raw position write. That is the owner's
+        //     "won the fight and then could not move at all".
+        //   • THE STAGED ARENA — BattleArena stages the fight at (5000,0,5000)
+        //     (BattleArena.cs:81) with the agent off-mesh. Clamped to ±50 that is EXACTLY
+        //     (50.00, 0.00, 50.00) — the unattributed ~7km teleport seen in the capture, which
+        //     had no WarpTo line because the clamp, not a warp, wrote it.
+        // Note the x/z clamp was NOT gated on GroundSnapEnabled (only the Y-snap sub-blocks
+        // are), so the dungeon's existing GroundSnapEnabled=false neutralisation never
+        // suppressed it. Both cases are answered by asking WHO OWNS THE TRANSFORM — a
+        // capability check, not a scene-name check, so it generalises to any future mover.
+
+        // ~0.5mm². Below this an assignment is a no-op that only pokes the physics bodies.
+        private const float PositionWriteEpsilonSqr = 2.5e-7f;
+
+        // Cached CharacterController probe. Re-probed while null so it self-heals in BOTH
+        // directions: a CC that arrives when this hero is injected into a dungeon gets picked
+        // up, and a CC destroyed on dungeon teardown falls back to a fresh probe (a destroyed
+        // Unity object compares == null). Same self-heal idiom as ResolveAnimator.
+        private CharacterController _ccProbe;
+
+        // Throttle for the clamp-relocation warning. FlowTrace.Throttle logs at Info level
+        // (Sink.Info, FlowTrace.cs:173); a relocation this large must read as a WARNING, so we
+        // gate FlowTrace.Warn on our own timer rather than downgrade it.
+        private float _nextClampWarnAt;
+
+        /// <summary>
+        /// True when a mover OTHER than this component owns the transform this frame — i.e. a
+        /// live, ENABLED CharacterController sits on the same rig. This is the exact inverse of
+        /// the guard DungeonHero.Update already keeps (DungeonHero.cs:209-219 — it skips its
+        /// whole movement step while its CC is disabled, because "the arena owns the hero"), so
+        /// the two components become mutually exclusive: exactly ONE of them writes this
+        /// transform on any given frame. Deliberately a capability check rather than a
+        /// DungeonHero type check — DeNelle.Dungeons references DeNelle.Village one-way, so
+        /// this assembly cannot see DungeonHero at all.
+        /// </summary>
+        private bool ForeignMoverOwnsTransform()
+        {
+            if (_ccProbe == null) _ccProbe = GetComponent<CharacterController>();
+            return _ccProbe != null && _ccProbe.enabled;
+        }
+
+        /// <summary>
+        /// Assigns <paramref name="p"/> only when it actually differs from the current position.
+        /// An UNCONDITIONAL per-frame write to transform.position is what makes a live
+        /// CharacterController re-assert/depenetrate in the first place — a no-op write must
+        /// cost nothing and touch nothing.
+        /// </summary>
+        private void WritePositionIfChanged(Vector3 p)
+        {
+            if ((transform.position - p).sqrMagnitude > PositionWriteEpsilonSqr)
+                transform.position = p;
+        }
+
         /// <summary>
         /// WO-383 — raised after the hero is warped to a new world position (e.g. a scene
         /// seam). SmartMobileCamera subscribes to snap its seat so it never smooth-chases
@@ -1082,12 +1146,40 @@ namespace DeNelle.Village
             // WO-383: a seam warp (WarpTo) deliberately places the hero past ±50 and onto a
             // separately-baked NavMesh — skip the off-mesh clamp on that frame so the warp
             // isn't yanked back to the castle bounds.
-            if ((_agent == null || !_agent.isOnNavMesh) && !_isTeleporting)
+            // OWNERSHIP GATE (dungeon walk-fail P0, 2026-08-05 — see ForeignMoverOwnsTransform
+            // ~:317 for the full rationale). "Off the navmesh" alone does NOT mean this
+            // component may move the hero, and it does NOT mean the ±50 castle bounds apply:
+            //   • foreignMover  — a live CharacterController (dungeon Keeper) owns the transform.
+            //   • inStagedArena — the fight is staged ~7km out at (5000,0,5000); the home
+            //                     scene's playable bounds are meaningless there, and clamping
+            //                     them yields exactly (50,0,50).
+            // On the overworld both are false, so the condition below reduces to the original
+            // `(_agent == null || !_agent.isOnNavMesh) && !_isTeleporting` — unchanged.
+            bool foreignMover  = ForeignMoverOwnsTransform();
+            bool inStagedArena = DeNelle.Village.Arena.BattleArena.IsArenaPosition(transform.position);
+            if ((_agent == null || !_agent.isOnNavMesh) && !_isTeleporting && !foreignMover && !inStagedArena)
             {
                 var p = transform.position;
                 const float PlayableHalf = 50f;
+                float preX = p.x, preZ = p.z;
                 p.x = Mathf.Clamp(p.x, -PlayableHalf, PlayableHalf);
                 p.z = Mathf.Clamp(p.z, -PlayableHalf, PlayableHalf);
+
+                // OBSERVABILITY: when the clamp actually RELOCATES the hero, name the before/
+                // after and why. A 7km-to-(50,50) jump must never again be a silent,
+                // unattributable teleport in a capture. Exact float compare is intentional —
+                // Mathf.Clamp returns the input bit-identical when it is already in range, so
+                // this is precisely "the clamp changed something". Throttled to 1/sec.
+                if ((preX != p.x || preZ != p.z) && Time.realtimeSinceStartup >= _nextClampWarnAt)
+                {
+                    _nextClampWarnAt = Time.realtimeSinceStartup + 1f;
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("HeroLoco",
+                        $"playable-bounds CLAMP relocated the hero: ({preX:F2},{preZ:F2}) -> ({p.x:F2},{p.z:F2}) " +
+                        $"[±{PlayableHalf} off-mesh guard; agent=" +
+                        $"{(_agent == null ? "<null>" : (_agent.enabled ? "enabled/off-mesh" : "disabled"))}, " +
+                        $"cc={(_ccProbe == null ? "<none>" : (_ccProbe.enabled ? "LIVE" : "disabled"))}, " +
+                        $"scene='{gameObject.scene.name}']");
+                }
 
                 // DEF-147: off-mesh ground-snap / re-bind. The agent goes off-mesh both
                 // when the hero walks off a real edge AND when the rampart lift
@@ -1117,7 +1209,7 @@ namespace DeNelle.Village
                             _fallSpeed = 0f;
                         }
 
-                        transform.position = p;
+                        WritePositionIfChanged(p);   // no-op writes poke the physics bodies
 
                         // Once essentially down at ground, re-bind the AGENT onto the mesh
                         // so it resumes its own height-follow (this also auto-heals the
@@ -1149,7 +1241,7 @@ namespace DeNelle.Village
                     p.y = Mathf.MoveTowards(p.y, 0f, _fallSpeed * Time.deltaTime);
                 }
                 if (p.y <= 0f) { p.y = 0f; _fallSpeed = 0f; }
-                transform.position = p;
+                WritePositionIfChanged(p);   // no-op writes poke the physics bodies
             }
             else
             {
