@@ -420,6 +420,19 @@ namespace DeNelle.DevTools
                 // direct-call oracle). The owner is never the tester (memory never-dragdrop-or-manual).
                 yield return RunPhase("AssertEncounterBattle", AssertEncounterRealPath());
 
+                // DUNGEON LOOP PROBE (owner 2026-08-05, F8 night): the owner had to WALK HER OWN
+                // HERO into the Healer's Cottage to prove the 219924ca combat-components fix. She is
+                // the product owner, not the tester (memory never-dragdrop-or-manual-playtest). This
+                // phase performs that EXACT sequence headless — hub -> resolve the portal at runtime ->
+                // tap the REAL Interact prompt -> reach a scripted encounter -> win it -> survive the
+                // post-victory settle -> walk -> return to the hub — and asserts the five things she
+                // had to check by hand (A combat-capable, B on-mesh, C can actually MOVE, D scene not
+                // black, E no duplicate pose writers). Loads scenes both ways, so it sits inside an
+                // intentional-cross window; it restores the hub before the steward phase runs.
+                _probes?.SetIntentionalCrossPhase(true);
+                yield return RunPhase("AssertDungeonLoop", AssertDungeonLoop());
+                _probes?.SetIntentionalCrossPhase(false);
+
                 // FTUE-1 REGRESSION LOCK (owner 2026-07-13: "I want a regression test to
                 // validate it"): SylasStewardInjector used to DESTROY ITSELF when its 1Hz
                 // poll saw Onboarded=true (which happens on the TITLE screen over a
@@ -645,6 +658,741 @@ namespace DeNelle.DevTools
         {
             if (prev < 0) PlayerPrefs.DeleteKey("ff.overworldencounter");
             else PlayerPrefs.SetInt("ff.overworldencounter", prev);
+        }
+
+        // =====================================================================
+        //  AssertDungeonLoop — DUNGEON_LOOP_PROBE (owner 2026-08-05, F8 night)
+        // ---------------------------------------------------------------------
+        //  WHY THIS EXISTS: to prove the 219924ca combat-components fix the owner
+        //  had to WALK HER OWN HERO into the Healer's Cottage. She is the product
+        //  owner, not the tester (memory never-dragdrop-or-manual-playtest). This
+        //  phase performs that EXACT hand sequence headless:
+        //     hub -> resolve the portal AT RUNTIME -> tap the REAL Interact prompt
+        //     -> reach a scripted encounter -> win it -> survive the post-victory
+        //     settle -> try to WALK -> return to the hub.
+        //
+        //  FIVE ASSERTIONS, each with its OWN Fail text so a failure names itself:
+        //    A  HERO IS COMBAT-CAPABLE. The staged hero carries BOTH
+        //       PlayerAttackController AND HeroHealth. Before 219924ca the composed
+        //       Keeper had NEITHER — it could not damage or be damaged, so the fight
+        //       could never resolve and the player was softlocked. Mirrors the
+        //       proving line "[Flow:HeroEnsure] combat components ensured on
+        //       'Keeper' ... attack=... health=..." (HeroControlEnsurer.cs:469).
+        //       Checked TWICE: on dungeon entry (A1) and at arena staging (A2).
+        //    B  HERO IS ON THE NAVMESH AFTER THE FIGHT. TONIGHT'S LIVE BUG:
+        //         [Flow:Seam] WarpTo sample MISS for (-28.00,0.08,0.00)
+        //                     (no navmesh within 5m) - hero will land OFF-MESH.
+        //         [Flow:Seam] WarpTo post-warp: agent.isOnNavMesh=False
+        //       B1 = the agent was OFF-MESH when the victory warp landed (the
+        //       captured signature). B2 = after the settle NEITHER mover is live
+        //       (agent disabled AND CharacterController disabled) -> pinned hero.
+        //    C  HERO CAN ACTUALLY MOVE. Stronger than B and the thing the owner
+        //       FELT ("could not move at all"): drive the REAL player input seam
+        //       (DeNelle.HUD.Kit.HudMoveInput — the on-screen D-pad, read by BOTH
+        //       movers: HeroLocomotion in the hub, DungeonHero.SampleKitDpadMove in
+        //       the dungeon) in four directions and require a real position delta.
+        //       An on-mesh but PINNED hero passes B and fails here.
+        //    D  THE SCENE IS NOT BLACK AFTER THE FIGHT. Also live tonight: the
+        //       arena stage prefab carries a scene-wide Directional light
+        //       ("KeyLight", ArenaPrefabBuilder.cs:174) that lit the whole dungeon
+        //       during the fight and died with the stage, while ApplyCavernMood
+        //       overwrote global ambient and RestoreCavernMood dropped it ~20x
+        //       (BattleArena.cs:1142/1165). Compares a PRE-fight sample against a
+        //       POST-fight sample — never hard-coded values, so an authored lighting
+        //       change cannot produce a false red. D1 = 'KeyLight' is the active sun
+        //       in a dungeon scene. D2 = ambient did not come back. D3 = every
+        //       directional light died (literally black).
+        //    E  NO DUPLICATE POSE WRITERS. Tonight THREE positions appeared in one
+        //       settle window — (50,0,50) with no WarpTo line, the warp target
+        //       (-28,0.08,0), and the sampled (-24.2,7.1). The hero must land where
+        //       the ARENA claims (EncounterParams.ReturnPosition) or where the
+        //       DUNGEON left him (his pre-fight pose). Landing at neither means a
+        //       third system writes the pose. All four poses are logged either way,
+        //       so the next capture names the writer even when this passes.
+        //
+        //  ASSEMBLY CONSTRAINT (report-worthy): DeNelle.DevTools references
+        //  DeNelle.Village/Core/HUD but NOT DeNelle.Dungeons, so DungeonController /
+        //  DungeonHero / EncounterTrigger / DungeonRuntimeState CANNOT be named here.
+        //  Everything this probe drives goes through Village-side public seams
+        //  (DungeonPortal, MobileInteractButton, BattleArena, HeroLocomotion) plus
+        //  UnityEngine primitives; the one Dungeons-side object it must FIND (the
+        //  scripted encounter trigger) is located by GetType().Name — no
+        //  System.Reflection, no member invocation (§10 stays clean).
+        //
+        //  RUN IT (the fleet cannot reach a dungeon on a full sweep — the 420s
+        //  GlobalCapSeconds expires long before this phase):
+        //    powershell -ExecutionPolicy Bypass -File .\run-autopilot-fleet.ps1 `
+        //        -Count 2 -TimeoutMin 10 -Phases DungeonLoop
+        //  Add -Graphics ONLY if a frame is wanted; this probe asserts no pixels, and
+        //  a -Graphics run rewrites ui-shots (canon: no -Graphics => flat-black frames
+        //  that overwrite real captures).
+        // =====================================================================
+        private const float DungeonMoveDeltaMeters = 0.5f;   // C: "actually moved" floor
+        private const float DungeonPoseToleranceMeters = 6f; // E: how close counts as "landed where claimed"
+
+        private IEnumerator AssertDungeonLoop()
+        {
+            const string Tag = "Auto";
+            string hubScene = ActiveScene();
+
+            EnsureHero("AssertDungeonLoop");
+            if (_hero == null)
+            {
+                _lastDetail = "no hero - skipped";
+                FlowTrace.Warn(Tag, "AssertDungeonLoop: no hero - skipped (EnsureHero named the reason above).");
+                yield break;
+            }
+
+            // ── link 0: RESOLVE THE PORTAL AT RUNTIME ────────────────────────
+            // NEVER hard-code (20.00,0.14,-140.00): DungeonWorldPortalSpawner seats the arch
+            // off an authored table PLUS a navmesh search (and the header there already warns
+            // "if a headless run reports navmesh-seated=False, retune to (16,0,-140)"). A
+            // hard-coded probe would walk to empty ground after any retune and prove nothing.
+            DungeonPortal portal = null;
+            float portalWait = 0f;
+            while (portalWait < 12f)
+            {
+                portal = PickDungeonPortal(_hero.transform.position);
+                if (portal != null) break;
+                portalWait += Time.deltaTime;
+                yield return null;
+            }
+            if (portal == null)
+            {
+                _lastDetail = "no DungeonPortal in world - N/A (skipped)";
+                FlowTrace.Warn(Tag, $"AssertDungeonLoop: no DungeonPortal component anywhere in scene '{hubScene}' within 12s " +
+                    "— DungeonWorldPortalSpawner never seated an arch (no baked navmesh / every authored seat rejected). " +
+                    "Read its [Flow:DungeonPortals] lines in this run; the dungeon loop is UNREACHABLE on foot this session.");
+                yield break;
+            }
+            Vector3 portalPos = portal.transform.position;
+            FlowTrace.Step(Tag, $"AssertDungeonLoop: link 0 PASS — resolved portal '{portal.gameObject.name}' at {portalPos} " +
+                $"(hero {HorizontalDistance(_hero.transform.position, portalPos):0.0}m away, scene '{hubScene}').");
+
+            // ── link 1: REACH THE PORTAL ON FOOT ─────────────────────────────
+            // Real navigation first (SetAutoWalk — the same seam WalkToEachGate uses). The walk
+            // is NOT what this probe is testing, so a stall degrades to a NAMED warp assist
+            // rather than failing the whole dungeon loop.
+            _hero.SetAutoWalk(portal.transform);
+            float walk = 0f;
+            bool walked = false;
+            while (walk < 55f)
+            {
+                if (_hero == null) break;
+                if (HorizontalDistance(_hero.transform.position, portalPos) <= 2.6f) { walked = true; break; }
+                walk += Time.deltaTime;
+                yield return null;
+            }
+            if (_hero != null) _hero.ClearAutoWalk();
+            if (!walked)
+            {
+                if (_hero == null)
+                {
+                    _lastDetail = "hero destroyed during the portal walk";
+                    FlowTrace.Fail(Tag, "AssertDungeonLoop: FAIL at link 1 — the hero was DESTROYED while walking to the portal.");
+                    yield break;
+                }
+                FlowTrace.Warn(Tag, $"AssertDungeonLoop: link 1 DEGRADED — did not reach '{portal.gameObject.name}' on foot within 55s " +
+                    $"(stopped {HorizontalDistance(_hero.transform.position, portalPos):0.0}m short; navmesh gap / blocked path — " +
+                    "AutoPilotProbes SEAM-REACHABLE covers that class). Warping to the arch so the ENTRY assertions still run.");
+                Vector3 near = portalPos;
+                if (UnityEngine.AI.NavMesh.SamplePosition(portalPos, out var ph, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                    near = ph.position;
+                try { _hero.WarpTo(near); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertDungeonLoop: portal WarpTo threw " + ex.Message); }
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+            else
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: link 1 PASS — reached the portal ON FOOT in {walk:0.0}s (no teleport).");
+
+            // ── link 2: ENTER THROUGH THE REAL INTERACT TAP ──────────────────
+            // WO-777 removed the walk-in auto-route: MobileInteractButton.Request ->
+            // InvokeActive() is the SOLE entry path a player has. Drive exactly that.
+            bool tapped = false;
+            float promptWait = 0f;
+            while (promptWait < 6f)
+            {
+                if (MobileInteractButton.IsShowingFor(portal))
+                {
+                    tapped = MobileInteractButton.InvokeActive();
+                    if (tapped) break;
+                }
+                promptWait += Time.deltaTime;
+                yield return null;
+            }
+            if (tapped)
+                FlowTrace.Step(Tag, "AssertDungeonLoop: link 2 — fired the REAL shared Interact prompt (MobileInteractButton.InvokeActive), the player's only entry path.");
+            else
+            {
+                // NAMED degradation, never silent: the entry SEAM is then uncovered by this run,
+                // but the post-entry assertions (the P0 + tonight's bugs) still get their data.
+                string fallbackScene = ResolveDungeonSceneName(portal.gameObject.name);
+                if (string.IsNullOrEmpty(fallbackScene))
+                {
+                    _lastDetail = "Interact prompt never armed AND no loadable dungeon scene";
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 2 — the shared Interact prompt never armed for '{portal.gameObject.name}' " +
+                        "within 6s at the arch AND no 'Dungeon_*' scene could be resolved from its name. The portal is DEAD: a player standing " +
+                        "at this arch has no way in (read the [Flow:DungeonPortal] lines).");
+                    yield break;
+                }
+                FlowTrace.Warn(Tag, $"AssertDungeonLoop: link 2 DEGRADED — the shared Interact prompt never armed within 6s at the arch " +
+                    $"(MobileInteractButton could not build/observe a request headless). The ENTRY SEAM IS NOT COVERED BY THIS RUN. " +
+                    $"Falling back to a direct load of '{fallbackScene}' so the post-entry assertions (A/B/C/D/E) still capture data.");
+                try { SceneManager.LoadScene(fallbackScene); }
+                catch (Exception ex) { FlowTrace.Fail(Tag, $"AssertDungeonLoop: fallback LoadScene('{fallbackScene}') threw — {ex.Message}"); yield break; }
+            }
+
+            float loadWait = 0f;
+            while (loadWait < 30f && !IsDungeonScene(ActiveScene())) { loadWait += Time.deltaTime; yield return null; }
+            string dungeonScene = ActiveScene();
+            if (!IsDungeonScene(dungeonScene))
+            {
+                _lastDetail = $"never entered a dungeon (still '{dungeonScene}')";
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 2 — 30s after the entry tap the active scene is STILL '{dungeonScene}'; " +
+                    "no dungeon ever loaded (SceneRouter.LoadSceneWithFade never completed / the target is not in Build Settings).");
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertDungeonLoop: link 2 PASS — inside dungeon scene '{dungeonScene}' after {loadWait:0.0}s.");
+
+            // Re-resolve the hero: the hub HeroLocomotion was destroyed with the hub, and the
+            // composed dungeon Keeper is injected a beat after the scene becomes active.
+            _hero = null;
+            float heroWait = 0f;
+            while (heroWait < 20f && _hero == null)
+            {
+                _hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+                if (_hero != null) break;
+                heroWait += Time.deltaTime;
+                yield return null;
+            }
+            if (_hero == null)
+            {
+                _lastDetail = $"no hero in '{dungeonScene}'";
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL — entered '{dungeonScene}' but no HeroLocomotion existed within 20s. " +
+                    "The dungeon never provisioned a Keeper; the run is unplayable from the first frame.");
+                yield return ReturnToHub(hubScene);
+                yield break;
+            }
+            GameObject heroGo = _hero.gameObject;
+            FlowTrace.Step(Tag, $"AssertDungeonLoop: dungeon hero '{heroGo.name}' resolved at {heroGo.transform.position} after {heroWait:0.1}s.");
+
+            // ── ASSERTION A1: COMBAT-CAPABLE ON ENTRY ────────────────────────
+            // HeroControlEnsurer attaches both from a polling Watch loop, so give it a window
+            // before concluding. This is the 219924ca P0: without them the Keeper could neither
+            // damage nor be damaged and the fight could never resolve.
+            bool hasAttack = false, hasHealth = false;
+            float combatWait = 0f;
+            while (combatWait < 10f)
+            {
+                hasAttack = heroGo.GetComponent<PlayerAttackController>() != null;
+                hasHealth = heroGo.GetComponent<HeroHealth>() != null;
+                if (hasAttack && hasHealth) break;
+                combatWait += Time.deltaTime;
+                yield return null;
+            }
+            bool failA1 = !(hasAttack && hasHealth);
+            if (failA1)
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL A1 — the dungeon hero '{heroGo.name}' is NOT COMBAT-CAPABLE on entry after 10s: " +
+                    $"attack={(hasAttack ? "present" : "MISSING")} health={(hasHealth ? "present" : "MISSING")}. This is the 219924ca P0 REGRESSED — " +
+                    "the hero stages into the arena unable to damage or be damaged, the fight can never resolve, and the player is SOFTLOCKED. " +
+                    "The proving line that should be in this run is \"[Flow:HeroEnsure] combat components ensured on '" + heroGo.name + "' ... attack=... health=...\".");
+            else
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: A1 PASS — '{heroGo.name}' carries PlayerAttackController + HeroHealth on entry (219924ca holds).");
+
+            // PRE-FIGHT baselines for D (lighting) and E (pose ownership). Sampled on the FIRST
+            // frame the hero exists, because Healer's Cottage spawns him at (-28,0,0) — which is
+            // ALSO garden-hollow-one's triggerPosition (healers-cottage.json), so the first
+            // encounter can fire before this probe takes a single step. If a fight is already
+            // live these baselines are contaminated by the arena, so we record that and soften
+            // the comparisons rather than reporting a false red.
+            var preArena = DeNelle.Village.Arena.BattleArena.Existing;
+            bool preSampleClean = !(preArena != null && preArena.BattleInProgress);
+            var preLight = SampleLighting();
+            Vector3 dungeonPose = heroGo.transform.position;
+            bool dungeonPoseValid = preSampleClean;
+            FlowTrace.Step(Tag, $"AssertDungeonLoop: PRE-FIGHT sample (clean={preSampleClean}) — {preLight}; " +
+                $"dungeon-claimed hero pose {dungeonPose}" +
+                (preSampleClean ? "." : " — A FIGHT WAS ALREADY LIVE on the first hero frame (the spawn point IS an encounter trigger), " +
+                                        "so the D baseline is arena-contaminated and E falls back to the arena's EncounterParams.ReturnPosition, which carries the true pre-fight pose."));
+
+            // ── link 4: REACH A SCRIPTED ENCOUNTER ───────────────────────────
+            // Healer's Cottage authors 4 scripted encounters + a mini-boss. Their triggers live
+            // in DeNelle.Dungeons (unreferenced here), so locate them by GetType().Name and warp
+            // into proximity — the trigger fires on a DISTANCE check in its own Update
+            // (EncounterTrigger.TickScripted), NOT on a physics OnTriggerEnter, so a warp into
+            // range drives the REAL fire path with no bypass.
+            var triggers = FindEncounterTriggers(heroGo.transform.position);
+            if (triggers.Count == 0)
+            {
+                _lastDetail = $"no encounter triggers in '{dungeonScene}'";
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 4 — '{dungeonScene}' contains ZERO EncounterTrigger objects. " +
+                    "The dungeon authored no scripted encounters, or DungeonController never hydrated them from the layout " +
+                    "(read its \"scriptedEncounters=N, miniBoss=...\" line in this run). There is nothing to fight.");
+                yield return ReturnToHub(hubScene);
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertDungeonLoop: link 4 — {triggers.Count} encounter trigger(s) found; walking the list nearest-first.");
+
+            // Capture the settle-entry facts the instant the arena reports the fight over.
+            var arena = DeNelle.Village.Arena.BattleArena.Instance;
+            bool endedFired = false, endedWon = false;
+            Vector3 arenaClaimPose = Vector3.zero;
+            bool arenaClaimValid = false;
+            Vector3 settleEntryPose = Vector3.zero;
+            bool entryAgentEnabled = false, entryOnNavMesh = false;
+            Action<DeNelle.Village.Arena.EncounterParams, bool> onEnded = null;
+            onEnded = (p, won) =>
+            {
+                if (endedFired) return;
+                endedFired = true;
+                endedWon = won;
+                if (p != null) { arenaClaimPose = p.ReturnPosition; arenaClaimValid = true; }
+                if (heroGo != null)
+                {
+                    settleEntryPose = heroGo.transform.position;
+                    var ag = heroGo.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                    entryAgentEnabled = ag != null && ag.enabled;
+                    entryOnNavMesh = entryAgentEnabled && ag.isOnNavMesh;
+                }
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: SETTLE ENTRY — OnBattleEnded(won={won}) arenaClaim={(arenaClaimValid ? arenaClaimPose.ToString() : "<none>")} " +
+                    $"heroPose={settleEntryPose} agentEnabled={entryAgentEnabled} agentOnNavMesh={entryOnNavMesh}.");
+            };
+
+            bool dropped = false;
+            bool failA2 = false;
+            float moveSweepBest = 0f;
+            var postLight = default(LightingSample);
+            Vector3 settleExitPose = Vector3.zero;
+            bool failB1 = false, failB2 = false, failC = false, failD1 = false, failD2 = false, failD3 = false, failE = false;
+            bool returned = false, resolved = false;
+            float returnSeconds = 0f;
+            string moverRegime = "unknown";
+
+            if (arena == null)
+            {
+                _lastDetail = "BattleArena.Instance NULL";
+                FlowTrace.Fail(Tag, "AssertDungeonLoop: FAIL at link 4 — BattleArena.Instance was NULL inside the dungeon; " +
+                    "the real-time combat host never bootstrapped, so no encounter can ever stage.");
+                yield return ReturnToHub(hubScene);
+                yield break;
+            }
+
+            arena.OnBattleEnded += onEnded;
+            try
+            {
+                // The spawn point IS an encounter trigger in Healer's Cottage, so the fight may
+                // already be staging before we take a step. That is the REAL path firing on its
+                // own — accept it rather than warping the hero out of a live encounter.
+                if (arena.BattleInProgress)
+                {
+                    dropped = true;
+                    FlowTrace.Step(Tag, "AssertDungeonLoop: link 4 PASS (immediate) — a scripted encounter had ALREADY fired by the time the hero resolved " +
+                        "(the dungeon's spawn point sits inside the first trigger's radius); no warp needed, the real fire path ran on its own.");
+                }
+
+                // Warp onto each trigger in turn until one fires.
+                foreach (var trig in triggers)
+                {
+                    if (dropped) break;
+                    if (trig == null) continue;
+                    Vector3 tp = trig.transform.position;
+                    try { _hero.WarpTo(tp); }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, $"AssertDungeonLoop: WarpTo('{trig.name}') threw {ex.Message}"); }
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: standing on encounter trigger '{trig.name}' @ {tp} — waiting for its own Update to fire.");
+
+                    float fireWait = 0f;
+                    while (fireWait < 6f)
+                    {
+                        if (arena.BattleInProgress) { dropped = true; break; }
+                        fireWait += Time.deltaTime;
+                        yield return null;
+                    }
+                    if (dropped) break;
+                    FlowTrace.Warn(Tag, $"AssertDungeonLoop: trigger '{trig.name}' did not fire within 6s (already fired this run / combat locked / run not active) — trying the next.");
+                }
+
+                if (!dropped)
+                {
+                    _lastDetail = $"no encounter fired ({triggers.Count} trigger(s) tried)";
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 4 — stood on ALL {triggers.Count} encounter trigger(s) and BattleInProgress never became true. " +
+                        "The dungeon's scripted-encounter chain is DEAD (run never went active / combat lock stuck / LaunchBattle never reached BeginEncounter) — " +
+                        "read the [Flow:Dungeon] \"EncounterTrigger.TickScripted: FIRING\" lines: their absence is the proof.");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertDungeonLoop: link 4 PASS — a scripted encounter FIRED and the arena staged (BattleInProgress=true).");
+
+                // ── ASSERTION A2: COMBAT-CAPABLE AT STAGING ──────────────────
+                // Let the stage build/warp/spawn settle, then re-read on the LIVE staged hero
+                // (a body swap during staging is exactly how the P0 could come back).
+                yield return Wait(4f);
+                var stagedHero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+                GameObject stagedGo = stagedHero != null ? stagedHero.gameObject : heroGo;
+                bool sAttack = stagedGo != null && stagedGo.GetComponent<PlayerAttackController>() != null;
+                bool sHealth = stagedGo != null && stagedGo.GetComponent<HeroHealth>() != null;
+                failA2 = !(sAttack && sHealth);
+                if (failA2)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL A2 — the STAGED hero '{(stagedGo != null ? stagedGo.name : "<null>")}' is NOT COMBAT-CAPABLE inside the arena: " +
+                        $"attack={(sAttack ? "present" : "MISSING")} health={(sHealth ? "present" : "MISSING")}. This is the exact 219924ca softlock: " +
+                        "the hero cannot damage or be damaged, so the encounter can never resolve and the player is stuck in the fight forever.");
+                else
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: A2 PASS — staged hero '{stagedGo.name}' has PlayerAttackController + HeroHealth; this fight CAN resolve.");
+                if (stagedGo != null) heroGo = stagedGo;
+                if (stagedHero != null) _hero = stagedHero;
+
+                // ── link 5: WIN THE ENCOUNTER ────────────────────────────────
+                // Headless cannot drive hero attacks, so kill the staged family through the same
+                // Enemy.Kill() seam AssertEncounterRealPath uses — the WIN path itself is real.
+                int killed = 0;
+                var staged = arena.StagedEnemies;
+                if (staged != null)
+                    for (int i = 0; i < staged.Count; i++)
+                        if (staged[i] != null) { try { staged[i].Kill(); killed++; } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertDungeonLoop: Kill threw " + ex.Message); } }
+                foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>(FindObjectsSortMode.None))
+                    if (e != null && e.gameObject.name.StartsWith("ArenaEnemy_"))
+                    {
+                        // §12: never swallow silently — a Kill that throws is exactly how a fight
+                        // stays unwinnable, and link 5 below would then blame the win gate.
+                        try { e.Kill(); killed++; }
+                        catch (Exception ex) { FlowTrace.Warn(Tag, $"AssertDungeonLoop: Kill('{e.gameObject.name}') threw {ex.Message}"); }
+                    }
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: link 5 — killed {killed} staged combatant(s); waiting for the arena to resolve.");
+
+                float resolveWait = 0f;
+                while (resolveWait < 25f && arena.BattleInProgress) { resolveWait += Time.deltaTime; yield return null; }
+                resolved = !arena.BattleInProgress;
+                if (!resolved)
+                {
+                    _lastDetail = "battle never resolved after the family died";
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 5 — every staged combatant was killed but BattleInProgress stayed TRUE for 25s. " +
+                        "The win gate never fired; the player is locked in a fight with nothing left to kill." +
+                        (failA2 ? " (A2 already failed — a hero that cannot damage is the likely cause.)" : ""));
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: link 5 PASS — battle resolved in {resolveWait:0.0}s (won={endedWon}).");
+                if (!endedWon)
+                    // A DEFEAT settles down a different road: DungeonController.SettleEncounter routes
+                    // ExitToVillage, so the hero LEAVES the dungeon and B/C/D/E would be measured in the
+                    // hub against a dungeon baseline. Say so loudly — the assertions below still run
+                    // (a hero who cannot move in the HUB is just as broken) but the scene changed under them.
+                    FlowTrace.Warn(Tag, "AssertDungeonLoop: the encounter was LOST despite killing every staged combatant " +
+                        "(the hero died first — HeroHealth is live, so this is possible). The dungeon settles a defeat by routing " +
+                        "ExitToVillage, so the post-settle assertions below are measured wherever that landed, not in the dungeon. " +
+                        "Read the verdict's scene field before treating a D/E red as a dungeon defect.");
+
+                // ── link 6: SURVIVE THE POST-VICTORY SETTLE + RETURN ─────────
+                // On a WIN the masked return is DEFERRED behind the victory summary's Continue
+                // tap (~20s softlock-guard timeout headless). Poll the REAL arrival signal —
+                // BattleArena.IsArenaPosition going false means the ~7km return warp landed.
+                float retWait = 0f;
+                while (retWait < 35f)
+                {
+                    if (heroGo == null) break;
+                    if (!DeNelle.Village.Arena.BattleArena.IsArenaPosition(heroGo.transform.position)) { returned = true; break; }
+                    retWait += Time.deltaTime;
+                    yield return null;
+                }
+                returnSeconds = retWait;
+                if (!returned)
+                {
+                    _lastDetail = "hero STRANDED at the far arena after the win";
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL at link 6 — 35s after the victory the hero is STILL inside the ~7km staged arena " +
+                        $"({(heroGo != null ? heroGo.transform.position.ToString() : "<hero destroyed>")}). ReturnHomeWithFade never ran: the player is " +
+                        "stranded in an empty void with the dungeon still loaded — an unrecoverable softlock.");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: link 6 — return warp landed after {returnSeconds:0.0}s; letting the settle finish before asserting.");
+                yield return Wait(3.5f);   // dungeon re-neutralizes its mover + RestoreCavernMood lands
+                settleExitPose = heroGo != null ? heroGo.transform.position : Vector3.zero;
+
+                // ── ASSERTION B: ON THE NAVMESH / A LIVE MOVER ───────────────
+                var agent = heroGo != null ? heroGo.GetComponent<UnityEngine.AI.NavMeshAgent>() : null;
+                var cc = heroGo != null ? heroGo.GetComponent<CharacterController>() : null;
+                bool agentLive = agent != null && agent.enabled && agent.gameObject.activeInHierarchy;
+                bool ccLive = cc != null && cc.enabled && cc.gameObject.activeInHierarchy;
+                bool lateOnMesh = agentLive && agent.isOnNavMesh;
+                moverRegime = agentLive ? (lateOnMesh ? "NavMeshAgent(on-mesh)" : "NavMeshAgent(OFF-MESH)")
+                            : (ccLive ? "CharacterController" : "NONE");
+
+                // B1 — the captured signature: the victory warp landed the agent OFF the mesh.
+                failB1 = entryAgentEnabled && !entryOnNavMesh;
+                if (failB1)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL B1 — the post-victory warp landed the hero OFF THE NAVMESH " +
+                        $"(at settle entry agent.enabled=true, agent.isOnNavMesh=FALSE @ {settleEntryPose}). This is TONIGHT'S captured bug verbatim: " +
+                        "\"[Flow:Seam] WarpTo sample MISS ... (no navmesh within 5m) - hero will land OFF-MESH\" followed by " +
+                        "\"[Flow:Seam] WarpTo post-warp: agent.isOnNavMesh=False\". The arena is warping to a point the dungeon has no navmesh under.");
+                // B2 — after the settle NOTHING can move the hero.
+                failB2 = !agentLive && !ccLive;
+                if (failB2)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL B2 — after the settle the hero has NO LIVE MOVER " +
+                        $"(NavMeshAgent {(agent == null ? "absent" : "disabled")}, CharacterController {(cc == null ? "absent" : "disabled")}) @ {settleExitPose}. " +
+                        "Both movers were stood down and neither was handed back — the hero is PINNED and nothing the player does can move him.");
+                // Late off-mesh in a pure-agent regime is the same felt failure, named separately.
+                if (agentLive && !lateOnMesh)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL B1b — after the settle the NavMeshAgent is ENABLED but agent.isOnNavMesh=FALSE @ {settleExitPose}. " +
+                        "The agent is live on nothing: pathing silently no-ops and the hero cannot walk.");
+                if (!failB1 && !failB2 && !(agentLive && !lateOnMesh))
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: B PASS — a live mover owns the hero after the settle (regime={moverRegime}).");
+
+                // ── ASSERTION C: THE HERO CAN ACTUALLY MOVE ──────────────────
+                // The thing the owner FELT. Drive the REAL player input seam and require a real
+                // delta. Four directions so a wall on one side cannot fake a red.
+                moveSweepBest = 0f;
+                Vector3 moveStart = heroGo != null ? heroGo.transform.position : Vector3.zero;
+                Vector2[] dirs = { Vector2.up, Vector2.right, Vector2.down, Vector2.left };
+                foreach (var d in dirs)
+                {
+                    DeNelle.HUD.Kit.HudMoveInput.Set(d);
+                    float hold = 0f;
+                    while (hold < 1.4f)
+                    {
+                        hold += Time.deltaTime;
+                        if (heroGo != null)
+                        {
+                            float delta = HorizontalDistance(heroGo.transform.position, moveStart);
+                            if (delta > moveSweepBest) moveSweepBest = delta;
+                        }
+                        yield return null;
+                    }
+                    DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+                    yield return null;
+                    if (moveSweepBest >= DungeonMoveDeltaMeters) break;   // proven; stop early
+                }
+                DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+                failC = moveSweepBest < DungeonMoveDeltaMeters;
+                if (failC)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL C — after the victory settle the hero CANNOT MOVE. Drove the real on-screen D-pad seam " +
+                        $"(DeNelle.HUD.Kit.HudMoveInput — read by HeroLocomotion in town and by DungeonHero.SampleKitDpadMove in the dungeon) in 4 directions " +
+                        $"for ~1.4s each and the hero travelled {moveSweepBest:0.00}m (floor {DungeonMoveDeltaMeters:0.0}m). Mover regime = {moverRegime}. " +
+                        "THIS IS THE OWNER'S REPORTED SYMPTOM (\"could not move at all\") reproduced headless. " +
+                        (failB1 || failB2 ? "B already named the mechanism." : "B passed, so the hero is on a live mover and STILL pinned — the input seam or DungeonHero.SetInputEnabled(true) never came back."));
+                else
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: C PASS — hero moved {moveSweepBest:0.00}m on real D-pad input after the settle (regime={moverRegime}).");
+
+                // ── ASSERTION D: THE SCENE IS NOT BLACK ──────────────────────
+                postLight = SampleLighting();
+                // D1 — the arena's stage light became the dungeon's sun (it dies with the stage).
+                failD1 = IsDungeonScene(ActiveScene()) &&
+                         postLight.SunName.IndexOf("KeyLight", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (failD1)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL D1 — the active sun in dungeon scene '{ActiveScene()}' is '{postLight.SunName}' " +
+                        $"(intensity {postLight.SunIntensity:0.00}). That is the ARENA STAGE prefab's scene-wide Directional light " +
+                        "(ArenaPrefabBuilder \"KeyLight\"), not the dungeon's own Directional Light. It lit the whole dungeon during the fight and " +
+                        "DIES WITH THE STAGE — the room goes black the moment the stage is destroyed.");
+                // D3 — literally no directional light left.
+                failD3 = preLight.EnabledDirectionals > 0 && postLight.EnabledDirectionals == 0;
+                if (failD3)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL D3 — every enabled Directional light died across the fight " +
+                        $"(pre={preLight.EnabledDirectionals}, post=0). The dungeon is LITERALLY BLACK after the victory.");
+                // D2 — ambient did not come back to its authored value. Compared PRE vs POST, never
+                // hard-coded, so an authored lighting retune cannot produce a false red.
+                float ambDelta = Mathf.Max(
+                    Mathf.Abs(preLight.Ambient.r - postLight.Ambient.r),
+                    Mathf.Max(Mathf.Abs(preLight.Ambient.g - postLight.Ambient.g),
+                              Mathf.Abs(preLight.Ambient.b - postLight.Ambient.b)));
+                float intensityRatio = postLight.AmbientIntensity <= 0.0001f
+                    ? (preLight.AmbientIntensity <= 0.0001f ? 1f : 999f)
+                    : preLight.AmbientIntensity / postLight.AmbientIntensity;
+                // Only assertable when the PRE sample was taken outside a live fight — otherwise the
+                // baseline is already the arena's cavern mood and the comparison proves nothing.
+                failD2 = preSampleClean && (ambDelta > 0.02f || intensityRatio > 2f || intensityRatio < 0.5f);
+                if (!preSampleClean)
+                    FlowTrace.Warn(Tag, $"AssertDungeonLoop: D2 NOT ASSERTED — the pre-fight ambient baseline was captured while a fight was already live, " +
+                        $"so it is the arena's cavern mood, not the dungeon's authored value. Census only: PRE {preLight} | POST {postLight} " +
+                        $"(max channel delta {ambDelta:0.000}, intensity pre/post {intensityRatio:0.00}x). D1/D3 still assert.");
+                if (failD2)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL D2 — post-fight ambient does NOT match the dungeon's authored pre-fight ambient. " +
+                        $"PRE {preLight} vs POST {postLight} (max channel delta {ambDelta:0.000}, intensity pre/post {intensityRatio:0.00}x). " +
+                        "BattleArena.ApplyCavernMood overwrites RenderSettings.ambientLight/ambientIntensity for the fight and RestoreCavernMood " +
+                        "must put the dungeon's own values back — it did not.");
+                if (!failD1 && !failD2 && !failD3)
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: D PASS — lighting came back to the dungeon's authored values. PRE {preLight} | POST {postLight}.");
+
+                // ── ASSERTION E: NO DUPLICATE POSE WRITERS ───────────────────
+                float dArena = arenaClaimValid ? HorizontalDistance(settleExitPose, arenaClaimPose) : float.MaxValue;
+                float dDungeon = dungeonPoseValid ? HorizontalDistance(settleExitPose, dungeonPose) : float.MaxValue;
+                // Never fail E on no evidence: if NEITHER claim is trustworthy this is a census, not a verdict.
+                bool eAssertable = arenaClaimValid || dungeonPoseValid;
+                failE = eAssertable && dArena > DungeonPoseToleranceMeters && dDungeon > DungeonPoseToleranceMeters;
+                // ALWAYS log all four poses — on a pass this is the census that names the writer
+                // next time; on a fail it is the evidence.
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: POSE CENSUS — dungeonClaim(pre-fight)={(dungeonPoseValid ? dungeonPose.ToString() : "<contaminated: fight already live>")} " +
+                    $"arenaClaim(EncounterParams.ReturnPosition)={(arenaClaimValid ? arenaClaimPose.ToString() : "<no params>")} " +
+                    $"settleEntry={settleEntryPose} settleExit={settleExitPose} | dToArena={(arenaClaimValid ? dArena.ToString("0.00") : "n/a")}m dToDungeon={(dungeonPoseValid ? dDungeon.ToString("0.00") : "n/a")}m " +
+                    $"| entryAgentEnabled={entryAgentEnabled} entryOnNavMesh={entryOnNavMesh} regime={moverRegime}.");
+                if (failE)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: FAIL E — the hero settled at {settleExitPose}, which NEITHER system claims: " +
+                        $"the arena claims {(arenaClaimValid ? arenaClaimPose.ToString() : "<no EncounterParams>")} ({(arenaClaimValid ? dArena.ToString("0.00") + "m away" : "unknown")}) and the dungeon left him at " +
+                        $"{(dungeonPoseValid ? dungeonPose.ToString() + " (" + dDungeon.ToString("0.00") + "m away)" : "<pre-fight pose contaminated>")}, tolerance {DungeonPoseToleranceMeters:0}m. " +
+                        "A THIRD system is writing the hero pose inside the settle window " +
+                        "(tonight three positions appeared in one window: (50,0,50) with NO WarpTo line, the warp target (-28,0.08,0), and the sampled (-24.2,7.1)). " +
+                        "Cross the POSE CENSUS line above with the [Flow:Seam] WarpTo lines and the [Flow:Dungeon] settle lines in this run — the pose with no WarpTo line names the culprit.");
+                else if (!eAssertable)
+                    FlowTrace.Warn(Tag, "AssertDungeonLoop: E NOT ASSERTED — neither the arena (no EncounterParams on OnBattleEnded) nor the dungeon " +
+                        "(pre-fight pose contaminated by an already-live fight) produced a trustworthy claim. The POSE CENSUS above is still captured in full, " +
+                        "so the next run's trace can still name a third pose writer.");
+                else
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: E PASS — the hero settled where a system claims him " +
+                        $"({(dArena <= dDungeon ? "arena return position" : "dungeon pre-fight pose")}, {Mathf.Min(dArena, dDungeon):0.00}m).");
+            }
+            finally
+            {
+                arena.OnBattleEnded -= onEnded;
+                DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+            }
+
+            // ── MARKER + summary row ─────────────────────────────────────────
+            bool pass = !failA1 && !failA2 && !failB1 && !failB2 && !failC && !failD1 && !failD2 && !failD3 && !failE
+                        && dropped && resolved && returned;
+            string verdict =
+                $"DUNGEON_LOOP_PROBE :: dungeon='{dungeonScene}' sceneAtVerdict='{ActiveScene()}' " +
+                $"entered={(tapped ? "real-tap" : "fallback-load")} won={endedWon} baselineClean={preSampleClean} " +
+                $"A_combatCapable={(failA1 || failA2 ? "FAIL" : "PASS")} " +
+                $"B_onNavMesh={(failB1 || failB2 ? "FAIL" : "PASS")} " +
+                $"C_canMove={(failC ? "FAIL" : "PASS")}(delta={moveSweepBest:0.00}m) " +
+                $"D_notBlack={(failD1 || failD2 || failD3 ? "FAIL" : "PASS")} " +
+                $"E_singlePoseWriter={(failE ? "FAIL" : "PASS")} " +
+                $"regime={moverRegime} returnSeconds={returnSeconds:0.0} verdict={(pass ? "PASS" : "FAIL")}";
+            FlowTrace.Step(Tag, verdict);
+            _lastDetail = verdict;
+
+            // Leave the run where it found it so downstream phases are unaffected.
+            yield return ReturnToHub(hubScene);
+        }
+
+        // Return the bot to the hub after the dungeon excursion so the phases queued behind
+        // this one (and WriteSummary) see the scene they expect. Mirrors the popup-recovery reload.
+        private IEnumerator ReturnToHub(string hubScene)
+        {
+            string target = string.IsNullOrEmpty(hubScene) ? TargetScene : hubScene;
+            if (ActiveScene() == target) yield break;
+            FlowTrace.Step("Auto", $"AssertDungeonLoop: returning to hub '{target}' so downstream phases run in the scene they expect.");
+            try { SceneManager.LoadScene(target); }
+            catch (Exception ex) { FlowTrace.Warn("Auto", $"AssertDungeonLoop: hub reload threw {ex.Message}"); yield break; }
+
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < BootTimeout && ActiveScene() != target) yield return null;
+            _hero = null;                       // force EnsureHero to re-resolve the hub hero
+            EnsureHero("AssertDungeonLoop.return");
+        }
+
+        // Pick the dungeon portal to drive. Prefers the Healer's Cottage arch (the owner's
+        // sequence; DungeonWorldPortalSpawner names its roots "DungeonWorldPortal_<id>"), then
+        // any other authored portal, nearest first. RESOLVED AT RUNTIME on purpose — the seat
+        // comes from an authored table plus a navmesh search, so a retune must not break the probe.
+        private static DungeonPortal PickDungeonPortal(Vector3 heroPos)
+        {
+            var all = UnityEngine.Object.FindObjectsByType<DungeonPortal>(FindObjectsSortMode.None);
+            if (all == null || all.Length == 0) return null;
+            DungeonPortal preferred = null, nearest = null;
+            float bestDist = float.MaxValue;
+            foreach (var p in all)
+            {
+                if (p == null) continue;
+                if (preferred == null && p.gameObject.name.IndexOf("Healer", StringComparison.OrdinalIgnoreCase) >= 0)
+                    preferred = p;
+                float d = HorizontalDistance(heroPos, p.transform.position);
+                if (d < bestDist) { bestDist = d; nearest = p; }
+            }
+            return preferred != null ? preferred : nearest;
+        }
+
+        // Resolve the scene a portal routes to from its GameObject name, replicating
+        // DungeonPortal.EnterDungeon's own resolution (verbatim id first, then the legacy
+        // "Dungeon_" prefix). Only used by the NAMED link-2 fallback. "" when nothing loads.
+        private static string ResolveDungeonSceneName(string portalObjectName)
+        {
+            const string Prefix = "DungeonWorldPortal_";
+            string id = portalObjectName != null && portalObjectName.StartsWith(Prefix, StringComparison.Ordinal)
+                ? portalObjectName.Substring(Prefix.Length)
+                : portalObjectName;
+            if (string.IsNullOrEmpty(id)) return string.Empty;
+            try
+            {
+                if (Application.CanStreamedLevelBeLoaded(id)) return id;
+                string prefixed = "Dungeon_" + id;
+                if (Application.CanStreamedLevelBeLoaded(prefixed)) return prefixed;
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "AssertDungeonLoop: scene-name resolve threw " + ex.Message); }
+            return string.Empty;
+        }
+
+        // A dungeon scene by naming convention: the legacy authored form ("Dungeon_HealersCottage")
+        // and the composed GraphDungeonComposer form ("dg_starter_loop").
+        private static bool IsDungeonScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return sceneName.StartsWith("Dungeon_", StringComparison.OrdinalIgnoreCase)
+                || sceneName.StartsWith("dg_", StringComparison.OrdinalIgnoreCase)
+                || sceneName.IndexOf("Dungeon", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        // Locate the dungeon's scripted/boss encounter triggers WITHOUT naming the type:
+        // EncounterTrigger lives in DeNelle.Dungeons, which DeNelle.DevTools does NOT reference.
+        // GetType().Name only — no System.Reflection, no member invocation (§10 stays clean).
+        // Nearest-first so the probe fights the encounter the hero would actually walk into.
+        private static List<MonoBehaviour> FindEncounterTriggers(Vector3 heroPos)
+        {
+            var hits = new List<MonoBehaviour>();
+            try
+            {
+                foreach (var mb in UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+                {
+                    if (mb == null) continue;
+                    string n = mb.GetType().Name;
+                    if (string.Equals(n, "EncounterTrigger", StringComparison.Ordinal) ||
+                        string.Equals(n, "DungeonStubEncounter", StringComparison.Ordinal))
+                        hits.Add(mb);
+                }
+                hits.Sort((a, b) => HorizontalDistance(heroPos, a.transform.position)
+                    .CompareTo(HorizontalDistance(heroPos, b.transform.position)));
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "AssertDungeonLoop: encounter-trigger scan threw " + ex.Message); }
+            return hits;
+        }
+
+        /// <summary>
+        /// DUNGEON_LOOP_PROBE assertion-D unit: what the scene's lighting looks like right now.
+        /// Sampled PRE-fight and POST-settle and compared to each other — never to hard-coded
+        /// numbers — so an authored lighting change cannot produce a false red.
+        /// </summary>
+        private struct LightingSample
+        {
+            public Color Ambient;
+            public float AmbientIntensity;
+            public string SunName;
+            public float SunIntensity;
+            public int EnabledDirectionals;
+            public override string ToString() =>
+                $"ambient=({Ambient.r:0.000},{Ambient.g:0.000},{Ambient.b:0.000}) ambientI={AmbientIntensity:0.000} " +
+                $"sun='{SunName}' sunI={SunIntensity:0.00} enabledDirectionals={EnabledDirectionals}";
+        }
+
+        // The EFFECTIVE sun: RenderSettings.sun when it is live, else the brightest enabled
+        // Directional light in any loaded scene (which is what actually lights the room, and is
+        // exactly how the arena's stage "KeyLight" takes over a dungeon).
+        private static LightingSample SampleLighting()
+        {
+            var s = new LightingSample
+            {
+                Ambient = RenderSettings.ambientLight,
+                AmbientIntensity = RenderSettings.ambientIntensity,
+                SunName = "<none>",
+                SunIntensity = 0f,
+                EnabledDirectionals = 0,
+            };
+            try
+            {
+                Light best = RenderSettings.sun;
+                if (best != null && !best.isActiveAndEnabled) best = null;
+                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                {
+                    if (l == null || l.type != LightType.Directional || !l.isActiveAndEnabled) continue;
+                    s.EnabledDirectionals++;
+                    if (best == null || l.intensity > best.intensity) best = l;
+                }
+                if (best != null) { s.SunName = best.name; s.SunIntensity = best.intensity; }
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "AssertDungeonLoop: lighting sample threw " + ex.Message); }
+            return s;
         }
 
         // =====================================================================
@@ -2652,6 +3400,12 @@ namespace DeNelle.DevTools
                 case "DiagGarrisonRoster": return 45f;
                 case "AssertHeroCrossing": return 18f;
                 case "AssertHeroTurnOnMoveStart": return 12f; // settle-to-idle + ~2s forward-hold trace + restore
+                // DUNGEON_LOOP_PROBE: walk/warp to the portal + fade-load the dungeon + reach a scripted
+                // encounter + stage the arena (~4s) + kill + the full post-victory settle (~8s) + the
+                // 4-direction move sweep (~6s) + the hub reload. Deliberately the longest phase in the
+                // file. NOTE the 420s GlobalCapSeconds: on a FULL sweep this phase sits past the budget,
+                // so run it with --phases=DungeonLoop (see the probe header for the exact command).
+                case "AssertDungeonLoop": return 200f;
                 default:                  return 30f;
             }
         }
