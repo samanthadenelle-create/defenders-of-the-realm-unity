@@ -126,10 +126,18 @@ namespace DeNelle.Village.Quests
                 FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardCrystals} crystals");
             }
 
-            // Food -> the food wallet (Resources.Food). AddFood mirrors AddCrystals.
+            // Food -> the food wallet (Resources.Food).
+            // WO-857 Phase F: a daily-quest payout is EARNED income, the same category as the story
+            // quest rewards QuestRewardBridge already routes through EconomyService.Grant, so it is
+            // subject to the town bank cap (clamp-and-warn, owner ruling WO-901 §5). It used to call
+            // GameStateService.AddFood directly, which is BELOW the cap seam - an unclamped back door
+            // that would have let dailies alone push food past a full bank with no warn. AddFood stays
+            // as the no-EconomyService fallback only (EditMode / headless boots).
             if (reward.RewardFood > 0)
             {
-                GameStateService.Instance?.AddFood(reward.RewardFood);
+                var eco = EconomyService.Instance;
+                if (eco != null) eco.Grant(food: reward.RewardFood);
+                else GameStateService.Instance?.AddFood(reward.RewardFood);
                 FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardFood} food");
             }
 

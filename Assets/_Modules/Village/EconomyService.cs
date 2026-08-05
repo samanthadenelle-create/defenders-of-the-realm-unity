@@ -351,9 +351,49 @@ namespace DeNelle.Village
         /// (GameState.Wood/Iron — the store CanAfford/TrySpend and ResourceLedger all read); the old
         /// pool-plus-mirror double write is gone. Deliberately does NOT Save() on this hot path
         /// (wave rewards / harvest ticks) — persistence rides the next Save; GrantSpendable is the
-        /// persist-now dev seam. Falls back to the in-session pool when no save service exists.</summary>
+        /// persist-now dev seam. Falls back to the in-session pool when no save service exists.
+        ///
+        /// <para>WO-857 / WO-901 Phase F — THE TOWN BANK CAP. Wood/Iron/Food are clamped to the
+        /// storage ceiling (<see cref="DeNelle.Core.Economy.TownBankCapacity"/>): baseCap + the
+        /// storageCapacity of every built lumberyard / foundry / silo. Overflow is LOST and the
+        /// player is WARNED (owner ruling 2026-08-04 — clamp-and-warn, uniformly). CRYSTALS AND
+        /// COINS ARE NEVER CLAMPED — premium currency is uncapped by design. This is the single
+        /// choke every income source in the game flows through; use <see cref="GrantUncapped"/>
+        /// for dev/AutoPilot funding that must not be storage-gated.</para></summary>
         public void Grant(ResourceCost amount)
+            => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.EarnedIncome);
+
+        /// <summary>
+        /// A grant of a quantity the player PAID FOR or was PROMISED AN EXACT NUMBER OF — pack-store
+        /// entitlements, promo-code redemptions, referral payouts, battle-pass tiers. It is NEVER
+        /// clamped by the town bank cap: an advertised quantity always arrives in full.
+        /// <para>WHY THIS EXISTS (2026-08-04): the first cut clamped this path too, and a pack
+        /// advertising 5,000 food delivered 1,920 into a starter wallet — caught by
+        /// PackGrantRegression. That is not balance, it is selling something and not delivering it.
+        /// The owner's clamp-and-warn ruling (WO-901 §5) governs what the player EARNS; storage
+        /// pressure must never become a mechanism that under-delivers a purchase.</para>
+        /// </summary>
+        public void GrantPurchased(ResourceCost amount)
+            => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.PurchasedOrPromised);
+
+        /// <summary>
+        /// DEV / HEADLESS-HARNESS grant that BYPASSES the town bank cap. Identical to
+        /// <see cref="Grant(ResourceCost)"/> in every other respect.
+        /// <para>Exists so the AutoPilot fleet and the dev resource tools can fund a gate they are
+        /// only trying to walk THROUGH, without the storage ceiling turning an infrastructure
+        /// top-up into a test failure (WO-857 §3.3 "dev grant — optional bypass flag for AutoPilot").
+        /// NEVER call this from a player-facing income path: doing so silently re-opens the
+        /// uncapped economy the cap exists to close. For a PAID grant use
+        /// <see cref="GrantPurchased"/> — the intent is different and it is named separately so a
+        /// reader can tell a purchase from a cheat.</para>
+        /// </summary>
+        public void GrantUncapped(ResourceCost amount)
+            => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.DevHarness);
+
+        private void GrantInternal(ResourceCost amount, DeNelle.Core.Economy.BankGrantKind kind)
         {
+            // ONE place decides whether the cap applies at all (Law 5).
+            bool applyBankCap = DeNelle.Core.Economy.TownBankCapacity.IsClampable(kind);
             int wood = Mathf.Max(0, amount.Wood);
             int iron = Mathf.Max(0, amount.Iron);
             if (wood > 0 || iron > 0)
@@ -361,13 +401,34 @@ namespace DeNelle.Village
                 var gsw = GameStateService.Instance;
                 if (gsw != null && gsw.State != null)
                 {
+                    if (applyBankCap)
+                    {
+                        // Clamp against the LIVE total for each axis (the one authority, WO-842).
+                        if (wood > 0)
+                            wood = DeNelle.Core.Economy.TownBankCapacity.ClampGrant(
+                                DeNelle.Core.Economy.BankResource.Wood, gsw.State.Wood, wood, "Grant", out _);
+                        if (iron > 0)
+                            iron = DeNelle.Core.Economy.TownBankCapacity.ClampGrant(
+                                DeNelle.Core.Economy.BankResource.Iron, gsw.State.Iron, iron, "Grant", out _);
+                    }
                     if (wood > 0) gsw.State.Wood = Mathf.Max(0, gsw.State.Wood + wood);
                     if (iron > 0) gsw.State.Iron = Mathf.Max(0, gsw.State.Iron + iron);
                     DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
-                        $"Grant +W{wood} +I{iron} -> GameState Wood={gsw.State.Wood} Iron={gsw.State.Iron} (single wallet, WO-842)");
+                        $"Grant +W{wood} +I{iron} -> GameState Wood={gsw.State.Wood} Iron={gsw.State.Iron} (single wallet, WO-842; kind={kind}, bankCap={applyBankCap})");
                 }
                 else
                 {
+                    // No save service (EditMode / headless boot): the in-session fallback pool IS the
+                    // wallet here, so the cap must be measured against IT, not against a zero GameState.
+                    if (applyBankCap)
+                    {
+                        if (wood > 0)
+                            wood = DeNelle.Core.Economy.TownBankCapacity.ClampGrant(
+                                DeNelle.Core.Economy.BankResource.Wood, _wood, wood, "Grant(fallback)", out _);
+                        if (iron > 0)
+                            iron = DeNelle.Core.Economy.TownBankCapacity.ClampGrant(
+                                DeNelle.Core.Economy.BankResource.Iron, _iron, iron, "Grant(fallback)", out _);
+                    }
                     _wood += wood;
                     _iron += iron;
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
@@ -377,7 +438,19 @@ namespace DeNelle.Village
 
             int food = Mathf.Max(0, amount.Food);
             if (food > 0)
-                GameStateService.Instance?.AddFood(food);           // DEF-121 — GameState-backed grant
+            {
+                if (applyBankCap)
+                    food = DeNelle.Core.Economy.TownBankCapacity.ClampGrant(
+                        DeNelle.Core.Economy.BankResource.Food,
+                        DeNelle.Core.Economy.TownBankCapacity.CurrentOf(DeNelle.Core.Economy.BankResource.Food),
+                        food, "Grant", out _);
+                if (food > 0)
+                    GameStateService.Instance?.AddFood(food);       // DEF-121 — GameState-backed grant
+            }
+            // CRYSTALS + COINS: NEVER upper-clamped. Owner ruling 2026-08-04 (WO-901 §6) — premium /
+            // bottleneck currency is uncapped (CoC precedent: gems uncapped, gold/elixir storage-capped).
+            // TownBankCapacity.UncappableResources is the named enforcement; TownBankCapRegression
+            // case [no-crystal-cap] FAILS the build if a crystal cap is ever introduced.
             int crystals = Mathf.Max(0, amount.Crystals);
             if (crystals > 0)
                 GameStateService.Instance?.AddCrystals(crystals);   // WO-131 — GameState-backed grant
@@ -408,6 +481,40 @@ namespace DeNelle.Village
         public void GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
             Grant(new ResourceCost(wood, food, iron, crystals));
+            var gs = GameStateService.Instance;
+            if (gs != null && gs.State != null && (wood > 0 || iron > 0))
+            {
+                gs.Save();
+                gs.ResourcesChanged.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// <see cref="GrantSpendable"/> for a PAID / ADVERTISED quantity — the pack-store entitlement
+        /// path (PackStoreVM.ApplyPackContents resolves THIS method by name). Never clamped by the
+        /// town bank cap: what the player bought lands in full. See <see cref="GrantPurchased"/>.
+        /// </summary>
+        public void GrantSpendablePurchased(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        {
+            GrantPurchased(new ResourceCost(wood, food, iron, crystals));
+            var gs = GameStateService.Instance;
+            if (gs != null && gs.State != null && (wood > 0 || iron > 0))
+            {
+                gs.Save();
+                gs.ResourcesChanged.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// <see cref="GrantSpendable"/> that BYPASSES the town bank cap — DEV / AutoPilot only.
+        /// See <see cref="GrantUncapped"/> for why this exists and why no player-facing income path
+        /// may call it. Kept as a separate NAME (not a defaulted parameter) so the existing reflected
+        /// <c>GetMethod("GrantSpendable", int,int,int,int)</c> lookups in AdminOverlay /
+        /// OwnerDevToolsOverlay keep resolving to the capped method unchanged.
+        /// </summary>
+        public void GrantSpendableUncapped(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        {
+            GrantUncapped(new ResourceCost(wood, food, iron, crystals));
             var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {

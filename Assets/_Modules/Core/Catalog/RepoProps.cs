@@ -148,9 +148,16 @@ namespace DeNelle.Core.Catalog
         /// WO-707 (owner taxonomy 2026-07-13) — STORAGE CONTAINER capacity. The three
         /// dedicated container buildings (Lumberyard wood / Foundry iron / Silo grain)
         /// hold the village's stock; trade buildings are pure vendor/upgrade shops and
-        /// carry NO storage field. 0 (default) = not a container. Data-only today:
-        /// capacity enforcement + the visible-fill readout land with the WO-672
-        /// damage-to-stores loop. JSON deserializes "storageCapacity" straight in.
+        /// carry NO storage field. 0 (default) = not a container.
+        /// <para>WIRED 2026-08-04 (WO-857 / WO-901 Phase F) — this is no longer data-only. The ONE
+        /// reader is <c>DeNelle.Core.Economy.TownBankCapacity</c>: the town bank ceiling for a
+        /// resource is <c>baseCap + sum(storageCapacity of every BUILT container of that resource,
+        /// scaled by its placed level)</c>, and <c>EconomyService.Grant</c> clamps every income
+        /// source against it. Nothing else may compute capacity from this field —
+        /// TownBankCapRegression case [one-reader] fails the build if it does. The per-container
+        /// visible fill is DERIVED (never stored) via <c>TownBankCapacity.Apportion</c>.</para>
+        /// <para>Still open: the WO-672 damage-to-stores / raid-steal loop has no consumer.</para>
+        /// JSON deserializes "storageCapacity" straight in.
         /// </summary>
         public int storageCapacity = 0;
 
@@ -166,24 +173,47 @@ namespace DeNelle.Core.Catalog
         /// WO-707 targeting ruling (owner, same session): CONTAINERS ONLY are enemy
         /// raid targets — trade/shop buildings never are (a raid can never soft-lock a
         /// vendor/talk-route). A row is a container iff it authors a positive
-        /// <see cref="storageCapacity"/>. TODO(WO-707/WO-672): wire this seam into the
-        /// ff.enemystructureaware sweep (Enemy.SweepForNearestStructure currently
-        /// scores ANY live IDamageableStructure via ISiegeLootTarget) so shops are
-        /// excluded and the container set is the loot-target set.
+        /// <see cref="storageCapacity"/>.
+        /// <para>WIRED 2026-08-04 for CAPACITY only (WO-857 / WO-901 Phase F):
+        /// <c>DeNelle.Core.Economy.TownBankCapacity</c> reads this to decide which BUILT
+        /// structures raise the town bank cap.</para>
+        /// <para>STILL OPEN — TARGETING: wire this seam into the ff.enemystructureaware sweep
+        /// (Enemy.SweepForNearestStructure currently scores ANY live IDamageableStructure via
+        /// ISiegeLootTarget) so shops are excluded and the container set is the loot-target set.
+        /// STILL OPEN — RAID STEAL: nothing debits the town wallet on an enemy action today
+        /// (a siege break only voids a collector's un-banked pending). When that lands it must move
+        /// the ONE authoritative total, never a per-container balance (WO-842); the what-if seam
+        /// for it already exists as <c>TownBankCapacity.Preview</c>.</para>
         /// </summary>
         public bool IsStorageContainer => storageCapacity > 0;
 
         /// <summary>
-        /// COLLECTOR RESERVE capacity (owner creative 2026-07-24, TIGHT collect-loop) — the
-        /// base number of units a resource COLLECTOR (behaviorId "ResourceCollector") holds
-        /// in its pending buffer before it reads FULL, at level 1. ResourceCollector.ComputeCapacity
-        /// reads this when &gt;0 and deepens it +50% per level above 1 (upgrading a collector
-        /// holds more); the STEWARD collectorCap talent still multiplies on top. 0 (default)
-        /// = not authored → the collector falls back to its legacy ~2h-of-production formula.
-        /// Right-sizes the collect loop so collectors actually fill (a farm at ~150/min fills
-        /// 1000 in ~7 min). DESIGNER-TUNABLE DATA — never hardcode the number in C#. Distinct
-        /// from <see cref="storageCapacity"/> (that flags a raidable stock CONTAINER; this sizes
-        /// a collector's pending buffer). JSON deserializes "capacity" straight in.
+        /// COLLECTOR RESERVE capacity - the number of units a resource COLLECTOR (behaviorId
+        /// "ResourceCollector") holds in its pending buffer before it reads FULL, AT LEVEL 1
+        /// WITH ONE ECHO.
+        /// <para>
+        /// WO-859 (2026-08-04): this field is now authored in HOURS, not units.
+        /// <c>ResourceCollector.ComputeCapacity</c> reads it when &gt;0 and multiplies it by
+        /// <c>ThroughputScale</c> - how much the collector produces now versus at level 1 with one
+        /// echo (level yield + interval + the echo GlobalHarvestMultiplier; the harvestRate talent
+        /// is excluded, matching EchoService.SiloCapacity). So HOURS-TO-FULL IS CONSTANT across
+        /// level and echo count, and the number to think in when tuning is
+        /// <c>capacity / yieldPerHour(L1)</c>. Current authoring = 8 HOURS: farm 7500 (936/h),
+        /// lumbermill 5760 (720/h), forge 3456 (432/h) - a twice-a-day check-in rhythm, sitting
+        /// just above the Echo silo's 4h so collectors read as the primary faucet.
+        /// </para>
+        /// <para>
+        /// STALE COMMENT REMOVED (WO-859 sec.6): this doc used to read "a farm at ~150/min fills 1000
+        /// in ~7 min" and the old scale was a flat +50% per level. Both were wrong. Post-WO-855 a
+        /// farm makes 936/HOUR, not ~150/min - the authoring intent was off by ~9.6x - and because
+        /// capacity grew x3 from L1-&gt;L5 while throughput grew x5.6, UPGRADING A COLLECTOR MADE IT
+        /// FILL SOONER. Do not reintroduce a flat level multiplier here or in C#.
+        /// </para>
+        /// The STEWARD collectorCap talent still multiplies on top. 0 (default) = not authored ->
+        /// the collector falls back to its legacy ~2h-of-production formula. DESIGNER-TUNABLE DATA
+        /// - never hardcode the number in C#. Distinct from <see cref="storageCapacity"/> (that
+        /// flags a raidable stock CONTAINER; this sizes a collector's pending buffer). JSON
+        /// deserializes "capacity" straight in.
         /// </summary>
         public int capacity = 0;
 

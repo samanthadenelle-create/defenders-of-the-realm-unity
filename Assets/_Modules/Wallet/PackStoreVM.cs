@@ -241,7 +241,17 @@ namespace DeNelle.Wallet
             FlowTrace.Step("Pack", $"cosmetic '{cosmeticSku}' (pack '{packSku}') registered owned in GlimmerCurrencyService (Owns==true).");
         }
 
-        /// <summary>Wood/Iron/Food/Crystals -> EconomyService.GrantSpendable(int wood,int food,int iron,int crystals) (ECON-01). Persists + raises ResourcesChanged.</summary>
+        /// <summary>
+        /// Wood/Iron/Food/Crystals -> EconomyService.GrantSpendablePurchased(int wood,int food,int
+        /// iron,int crystals) (ECON-01). Persists + raises ResourcesChanged.
+        /// <para>WO-857 Phase F: this MUST resolve the <b>Purchased</b> seam, not the plain
+        /// GrantSpendable. The plain one applies the town bank cap, and a pack advertising 5,000 food
+        /// then delivered only the starter wallet's 1,920 headroom (caught by PackGrantRegression).
+        /// An advertised quantity always arrives in full — see BankGrantKind.PurchasedOrPromised.</para>
+        /// <para>The legacy name is kept as a LAST-RESORT fallback: if the purchased seam is ever
+        /// renamed away, delivering a clamped amount is still better for the player than delivering
+        /// nothing, but it is a FAIL-level event because the pack has under-delivered.</para>
+        /// </summary>
         private static void TryGrantResources(int wood, int food, int iron, int crystals, string packSku)
         {
             var svc = ResolveServiceInstance("DeNelle.Village.EconomyService", out var t);
@@ -250,10 +260,19 @@ namespace DeNelle.Wallet
                 FlowTrace.Fail("Pack", $"grant resources (W{wood}/F{food}/I{iron}/C{crystals}) for '{packSku}' FAILED: EconomyService missing - paid-for resources LOST.");
                 return;
             }
-            var m = t.GetMethod("GrantSpendable", new[] { typeof(int), typeof(int), typeof(int), typeof(int) });
+            var sig = new[] { typeof(int), typeof(int), typeof(int), typeof(int) };
+            var m = t.GetMethod("GrantSpendablePurchased", sig);
             if (m == null)
             {
-                FlowTrace.Fail("Pack", $"grant resources for '{packSku}' FAILED: GrantSpendable(int,int,int,int) not found - paid-for resources LOST.");
+                m = t.GetMethod("GrantSpendable", sig);
+                if (m != null)
+                    FlowTrace.Fail("Pack",
+                        $"grant resources for '{packSku}': GrantSpendablePurchased(int,int,int,int) NOT FOUND - falling back to the " +
+                        "CAPPED GrantSpendable. A paid pack may now UNDER-DELIVER its advertised amounts against the town bank cap.");
+            }
+            if (m == null)
+            {
+                FlowTrace.Fail("Pack", $"grant resources for '{packSku}' FAILED: no GrantSpendablePurchased/GrantSpendable(int,int,int,int) - paid-for resources LOST.");
                 return;
             }
             try { m.Invoke(svc, new object[] { wood, food, iron, crystals }); }

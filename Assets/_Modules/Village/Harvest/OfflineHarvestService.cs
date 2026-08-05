@@ -34,6 +34,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Economy;   // WO-857 Phase F — the town bank cap (this path writes the wallet directly)
 using DeNelle.Core.State;
 using DeNelle.Core.World;
 using DeNelle.Village.UI;
@@ -277,15 +278,27 @@ namespace DeNelle.Village
         // Core can't reference Village, but Village references Core, so writing the
         // GameState resource fields directly is the valid, reflection-free path (the
         // same one MineNode.BankYield uses). Local off-chain currency only — no token mint.
+        //
+        // WO-857 / WO-901 Phase F — this path writes the wallet DIRECTLY (it cannot call
+        // EconomyService.Grant from here for the reason above), so it must apply the town bank
+        // cap itself through the SAME one reader. It is the only real income source in the game
+        // that bypasses the EconomyService choke, and it is the one most likely to overflow:
+        // an away pool banks hours of production in a single frame. Clamp-and-warn (owner ruling
+        // 2026-08-04) — TownBankCapacity.ClampGrant raises the [Flow:Bank] warn and the on-screen
+        // toast for us. Crystals are UNCAPPED by design and pass through untouched.
         private void Grant(OfflineHarvestResult result, GameState state)
         {
-            if (result.Iron > 0) state.Iron += result.Iron;
-            if (result.Wood > 0) state.Wood += result.Wood;
-            if (result.Food > 0)
+            int iron = TownBankCapacity.ClampGrant(BankResource.Iron, state.Iron, result.Iron, "OfflineHarvest", out _);
+            int wood = TownBankCapacity.ClampGrant(BankResource.Wood, state.Wood, result.Wood, "OfflineHarvest", out _);
+            int food = TownBankCapacity.ClampGrant(BankResource.Food, state.Resources.Food, result.Food, "OfflineHarvest", out _);
+
+            if (iron > 0) state.Iron += iron;
+            if (wood > 0) state.Wood += wood;
+            if (food > 0)
             {
                 // Food lives on the wallet struct (Resources.Food) — DEF-121.
                 var bal = state.Resources;
-                bal.Food += result.Food;
+                bal.Food += food;
                 state.Resources = bal;
             }
             if (result.AetherCrystals > 0)
@@ -299,10 +312,16 @@ namespace DeNelle.Village
             // Nudge the resource-changed listeners (HUD wallet) without coupling to HUD.
             GameStateService.Instance?.ResourcesChanged?.Invoke();
 
-            Debug.Log($"[OfflineHarvest] Banked +{result.Iron} iron, +{result.Wood} wood, " +
-                      $"+{result.Food} food, +{result.AetherCrystals} crystals over " +
+            // Report what was actually BANKED (post-bank-cap), and name the accrual separately when
+            // the two differ — a log that shows the pre-clamp number is how a silent loss hides.
+            bool bankTruncated = iron != result.Iron || wood != result.Wood || food != result.Food;
+            Debug.Log($"[OfflineHarvest] Banked +{iron} iron, +{wood} wood, " +
+                      $"+{food} food, +{result.AetherCrystals} crystals over " +
                       $"{Mathf.RoundToInt((float)result.AwaySeconds)}s away" +
-                      (result.WasCapped ? " (capped)." : "."));
+                      (result.WasCapped ? " (away-cap)." : ".") +
+                      (bankTruncated
+                          ? $" BANK FULL - accrued {result.Iron} iron / {result.Wood} wood / {result.Food} food; the surplus was LOST."
+                          : ""));
         }
 
         // =====================================================================

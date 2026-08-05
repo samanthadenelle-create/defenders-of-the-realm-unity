@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "_note": "WO-857 / WO-901 Phase F -- the TOWN BANK cap. baseCap is the non-building BASE STORE every save holds before any storage container exists; a built lumberyard/foundry/silo adds its structures-catalog storageCapacity on top, scaled by levelCapacityMultipliers[level-1]. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (owner ruling 2026-08-04, CoC gems precedent) -- that exemption lives in C# (TownBankCapacity.UncappableResources) and a crystals/coins key here is IGNORED with a warn, never honoured.",
+  "_orderNote": "ORDERING LAW (owner 2026-08-04): 'By capacity. Fill smallest first, so pallets drain last.' Occupancy is a pure function of the one wallet total: containers sort by CAPACITY ASCENDING and fill in that order, so the SMALLEST container fills first and is therefore the LAST to drain. For the owner's stated outcome -- the pallets stay visibly stocked while the base store churns -- the pallets must be the SMALLER containers, i.e. every container's capacity at its MAX level must stay BELOW baseCap. That is why baseCap is 2000 and the containers are 500 x [1,2,3] = 500/1000/1500. Raising storageCapacity above baseCap would silently invert the look (pallets would drain first). Pinned by TownBankCapRegression case [order-intent-pallets-last].",
+  "baseCap": {
+    "wood": 2000,
+    "iron": 2000,
+    "food": 2000
+  },
+  "levelCapacityMultipliers": [1.0, 2.0, 3.0],
+  "overflowWarnCooldownSeconds": 8.0
+}

@@ -145,11 +145,14 @@ namespace DeNelle.Village.Dev
 
             switch (currency)
             {
-                case Currency.Gold:     eco.AddCoins(amount);                 break; // GameState.Resources.Coins
-                case Currency.Wood:     eco.GrantSpendable(wood: amount);     break; // both wallets
-                case Currency.Iron:     eco.GrantSpendable(iron: amount);     break; // both wallets
-                case Currency.Food:     eco.GrantSpendable(food: amount);     break; // GameState-backed
-                case Currency.Crystals: eco.GrantSpendable(crystals: amount); break; // GameState-backed
+                // WO-857 Phase F: a DEV grant is test setup, not player income — it bypasses the town
+                // bank cap (GrantSpendableUncapped) so a +1M tier still lands and the storage-full
+                // toast stays a real-economy signal instead of dev-tool noise.
+                case Currency.Gold:     eco.AddCoins(amount);                         break; // GameState.Resources.Coins (uncapped by design)
+                case Currency.Wood:     eco.GrantSpendableUncapped(wood: amount);     break; // both wallets
+                case Currency.Iron:     eco.GrantSpendableUncapped(iron: amount);     break; // both wallets
+                case Currency.Food:     eco.GrantSpendableUncapped(food: amount);     break; // GameState-backed
+                case Currency.Crystals: eco.GrantSpendableUncapped(crystals: amount); break; // GameState-backed (uncapped by design)
             }
 
             FlowTrace.Step("DevTool", $"granted +{amount} {currency}.");
