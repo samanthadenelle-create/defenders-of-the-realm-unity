@@ -35,6 +35,7 @@
 // =============================================================================
 using System;
 using System.Collections.Generic;
+using System.IO;              // [combo-pays-gold] reads KillComboTracker.cs as source
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
@@ -64,6 +65,7 @@ namespace DeNelle.Editor
             Case(failures, "curve-monotonic",        () => CheckCurve(curve, authoredAsArray, failures, log));
             Case(failures, "yield-is-data",          () => CheckYieldIsDataDriven(failures, log));
             Case(failures, "single-level-authority", () => CheckSingleLevelAuthority(failures, log));
+            Case(failures, "combo-pays-gold",        () => CheckComboPaysGold(failures, log));
 
             reason = Finish(failures, log);
             return failures.Count == 0;
@@ -378,6 +380,61 @@ namespace DeNelle.Editor
                     "set it to fake a pass. The level authority is PlacedStructureData.level -> PlacedStructure.level " +
                     "(the save round-trips it). A component-local level is a SECOND authority; the mine must READ, " +
                     "never own (ARCHITECTURE_PRINCIPLES section 1 / section 2b).");
+        }
+
+        // =====================================================================
+        //  [combo-pays-gold] -- the kill-combo bonus must never mint crystals.
+        //
+        //  Measured 2026-08-04 (docs/ECONOMY_REWARD_MEASUREMENT_2026-08-04.md
+        //  section 5): KillComboTracker granted 25 Aether Crystals at a 5-kill
+        //  streak and 60 more at 8, via a RuntimeInitializeOnLoadMethod that
+        //  self-installs wherever a WaveManager exists. That paid ~1,435 crystals
+        //  per 20-wave run against the DESIGNED boss-drop rate of 3.6 -- roughly
+        //  400x -- which made an undocumented combo bonus ~70% of everything a
+        //  player banked, and broke the WO-830 monetization guard in
+        //  echoes-balance.json ("crystals remain the slowest faucet") that the
+        //  whole WO-855 rebalance was calibrated against.
+        //
+        //  OWNER RULING 2026-08-04: "make it gold." The payoff is KEPT and the
+        //  values are unchanged; only the currency moved. Gold is the currency
+        //  the same measurement found correctly tuned.
+        //
+        //  Scope note, deliberately narrow: this pins the ONE system the owner
+        //  ruled on, by source. A blanket allowlist over every crystal granter
+        //  was considered and rejected -- there are ~20 call sites, most of them
+        //  spends, dev tools or migrations, and such a list would be noisy and
+        //  stale within a week. See the file-level note below for the latent ones.
+        // =====================================================================
+
+        private static void CheckComboPaysGold(List<string> failures, StringBuilder log)
+        {
+            const string rel = "_Modules/Village/Waves/KillComboTracker.cs";
+            string full = Path.Combine(Application.dataPath, rel);
+            if (!File.Exists(full))
+            {
+                failures.Add($"[combo-pays-gold] {rel} not found -- the combo reward source moved; " +
+                             "re-point this guard rather than deleting it.");
+                return;
+            }
+
+            string src = File.ReadAllText(full);
+            bool mintsCrystals = src.Contains("AddCrystals(");
+            bool paysGold      = src.Contains("AddCoins(");
+
+            log.AppendLine($"  [combo-pays-gold] KillComboTracker mints crystals: {mintsCrystals}; pays gold: {paysGold}");
+
+            if (mintsCrystals)
+                failures.Add(
+                    "[combo-pays-gold] KillComboTracker calls AddCrystals again. That was a ~400x " +
+                    "unbudgeted crystal faucet supplying ~70% of banked value and breaking the WO-830 " +
+                    "slowest-faucet guard WO-855 was balanced against. Owner ruled 2026-08-04 that the " +
+                    "combo pays GOLD. Keep the payoff, keep the values, keep the currency.");
+
+            if (!paysGold)
+                failures.Add(
+                    "[combo-pays-gold] KillComboTracker no longer pays gold. The combo bonus was not " +
+                    "deleted by the 2026-08-04 ruling -- it was moved to gold. If the reward is being " +
+                    "removed entirely that is a separate owner decision; retire this case with it.");
         }
 
         // =====================================================================

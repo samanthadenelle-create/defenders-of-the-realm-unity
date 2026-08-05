@@ -8,8 +8,8 @@
 // WO-83:
 //
 //   Tier 1 — 3 kills in 6 s → Combo_Tier1 VFX + Light shake + "COMBO!" text
-//   Tier 2 — 5 kills in 6 s → Combo_Tier2 VFX + Medium shake + "RAMPAGE!" + 25 Crystals
-//   Tier 3 — 8+ kills in 6 s → Combo_Tier2 VFX + Heavy shake + "UNSTOPPABLE!" + 60 Crystals
+//   Tier 2 — 5 kills in 6 s → Combo_Tier2 VFX + Medium shake + "RAMPAGE!" + 25 Gold
+//   Tier 3 — 8+ kills in 6 s → Combo_Tier2 VFX + Heavy shake + "UNSTOPPABLE!" + 60 Gold
 //
 // CombatFeedbackManager owns the raw kill-streak counter and the 8-second decay
 // window. KillComboTracker listens to its OnKillStreakChanged event and fires
@@ -23,6 +23,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;   // FlowTrace — the combo grant is traced, never silently swallowed (§12)
 
 namespace DeNelle.Village
 {
@@ -41,10 +42,21 @@ namespace DeNelle.Village
         private const int Tier2Threshold = 5;
         private const int Tier3Threshold = 8;
 
-        // ── Aether rewards ────────────────────────────────────────────────────
+        // ── Gold rewards (was Aether/Crystals - owner ruling 2026-08-04) ────────────────────────────────────────────────────
 
-        private const int Tier2AetherReward = 25;
-        private const int Tier3AetherReward = 60;
+        // OWNER RULING 2026-08-04 — "make it gold". These were CRYSTAL grants, and measurement
+        // (docs/ECONOMY_REWARD_MEASUREMENT_2026-08-04.md §5) found they paid ~1,435 crystals per
+        // 20-wave run against the DESIGNED boss-drop rate of 3.6 — roughly 400x — making an
+        // undocumented combo bonus ~70% of everything a player banked, and directly contradicting
+        // the WO-830 monetization guard in echoes-balance.json ("crystals remain the slowest
+        // faucet") that WO-855 was balanced around.
+        //
+        // The combo payoff is KEPT and the values are unchanged; only the CURRENCY moved. Gold is
+        // the one currency the same measurement found correctly tuned (it tracks enemy HP at
+        // ~0.084 coin/HP across the whole roster), and at gold weight this is ~1/17th the basket
+        // value it was paying in crystals.
+        private const int Tier2GoldReward = 25;
+        private const int Tier3GoldReward = 60;
 
         // ── Combo text ────────────────────────────────────────────────────────
 
@@ -107,7 +119,7 @@ namespace DeNelle.Village
                 VFXManager.Play(VFXType.Combo_Tier2, heroPos + Vector3.up * 0.5f);
                 CameraShakeBridge.Shake(0.48f, 0.32f);   // Heavy tier
                 ShowComboText("UNSTOPPABLE!", heroPos);
-                GrantAether(Tier3AetherReward);
+                GrantComboGold(Tier3GoldReward);
                 // AudioService.Instance?.PlaySfx(SfxId.Combo3);
             }
             else if (streak >= Tier2Threshold && _lastFiredTier < 2)
@@ -116,7 +128,7 @@ namespace DeNelle.Village
                 VFXManager.Play(VFXType.Combo_Tier2, heroPos);
                 CameraShakeBridge.Shake(0.30f, 0.25f);   // Medium tier
                 ShowComboText("RAMPAGE!", heroPos);
-                GrantAether(Tier2AetherReward);
+                GrantComboGold(Tier2GoldReward);
                 // AudioService.Instance?.PlaySfx(SfxId.Combo2);
             }
             else if (streak >= Tier1Threshold && _lastFiredTier < 1)
@@ -187,13 +199,30 @@ namespace DeNelle.Village
             }
         }
 
-        private static void GrantAether(int amount)
+        /// <summary>
+        /// Award the combo bonus in GOLD (owner ruling 2026-08-04 — see the reward constants above
+        /// for why this is no longer a crystal grant). Gold is the shop/research wallet and is the
+        /// currency the reward measurement found correctly tuned.
+        /// </summary>
+        private static void GrantComboGold(int amount)
         {
-            // CrystalEconomy.AddCrystals is the project's standard award path.
-            if (CrystalEconomy.Instance != null)
+            var econ = EconomyService.Instance;
+            if (econ == null)
             {
-                try { CrystalEconomy.Instance.AddCrystals(amount); }
-                catch { /* best-effort */ }
+                FlowTrace.Warn("Economy", $"combo bonus of {amount} gold dropped - no EconomyService");
+                return;
+            }
+
+            // No silent swallow (§12): a catch that hides a failure is forbidden, because a reward
+            // that quietly stops paying is exactly the class of defect this file just came out of.
+            try
+            {
+                econ.AddCoins(amount);
+                FlowTrace.Once("Economy", "combo-gold", $"combo bonus paid {amount} gold");
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Fail("Economy", $"combo bonus of {amount} gold threw: {e.Message}");
             }
         }
 
