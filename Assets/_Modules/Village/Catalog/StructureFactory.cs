@@ -751,10 +751,16 @@ namespace DeNelle.Village
                     break;
                 }
 
-                // CrystalMine — passive Aether-Crystal generator (banks +1/wave at
-                // L3 via WaveManager.OnWaveCleared). Self-resolves hero/wave/economy
-                // in Start and builds its own placeholder visual when no prefab is
-                // assigned, so a placed mine is a real, upgradeable gameplay object.
+                // CrystalMine - passive Crystal generator. WO-856: it banks crystals on
+                // EVERY cleared wave from LEVEL 1, on the curve buildings.json authors
+                // ("crystal-mine".crystalsPerWave = [2, 4, 7], indexed by level - 1). The
+                // level is READ off the PlacedStructure this root carries (the persisted
+                // per-instance level), never owned by the component; upgrades go through
+                // the BuildMode Upgrade verb charging mine_crystal's repo.upgradeCost.
+                // (The pre-WO-856 comment here claimed "+1/wave at L3" - that gate was
+                // unreachable and the mine had never paid out.) Self-resolves the wave +
+                // economy in Start and builds its own placeholder visual when no prefab
+                // is assigned, so a placed mine is a real, upgradeable gameplay object.
                 case "CrystalMine":
                     root.AddComponent<CrystalMine>();
                     break;

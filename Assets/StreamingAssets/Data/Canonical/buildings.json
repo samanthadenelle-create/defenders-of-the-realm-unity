@@ -12,7 +12,8 @@
     "sourcedFromReactV1": "id, displayName (canon-strings key), descriptionKey (en.json key), model (KayKit medieval mesh name, stripped of the React 'building_*_color' prefix/suffix per village-buildings-overhaul-spec §3), footprint hex size category (derived from §4 scale convention).",
     "authoredDefensible": "hp / maxHp and crystalCost are AUTHORED. React v1 has no per-building HP or build-cost table — its five buildings are FIXED map placements, not player-built, and only towers carry a crystal cost (TOWER_TIER_COSTS = 120 crystals build). Values below were authored: defensive structures (Arcane Tower) sit highest HP+cost; resource/economy buildings (Crystal Mine, Farm) lowest cost so the economy can bootstrap; Workshop/Pet House mid. All are tuning constants the owner may rebalance — flagged in docs/port-notes/week4-buildings.md and surfaced to the integrator. JSON wins over ScriptableObject (port spec Part 4).",
     "footprint": "hex footprint size category — 'small' (1 hex tile), 'medium' (cluster), 'large' (the tall Arcane Tower silhouette). The build menu's hex-tile validity check reads this; large footprints need more clear neighbours.",
-    "displayName": "displayName is a KEY into canon-strings.json, NOT a literal — the build menu resolves it through BuildingCatalog/CanonStrings so the canon names are never typed inline (port spec Part 4)."
+    "displayName": "displayName is a KEY into canon-strings.json, NOT a literal — the build menu resolves it through BuildingCatalog/CanonStrings so the canon names are never typed inline (port spec Part 4).",
+    "crystalsPerWave": "WO-856: the Crystal Mine's per-wave payout CURVE, indexed by (level - 1) and clamped into range: L1=2, L2=4, L3=7. The level comes from PlacedStructure.level (the one persisted per-instance level), NOT from any field on CrystalMine. Rung count must not exceed structures-catalog.json mine_crystal repo.maxLevel: [yield-reachable-at-founding] in BuildingUpgradeRegression fails if it does, or if the first rung is 0 (a structure that delivers nothing at its founding level). A bare scalar here read-migrates to a flat curve."
   },
   "version": 2,
   "buildings": [
@@ -29,7 +30,7 @@
       "buildMenuOrder": 0,
       "isUpgradable": true,
       "upgradeType": "resource",
-      "crystalsPerWave": 1
+      "crystalsPerWave": [ 2, 4, 7 ]
     },
     {
       "id": "farm",

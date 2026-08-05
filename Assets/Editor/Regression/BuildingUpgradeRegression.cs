@@ -36,6 +36,16 @@
 //      case fails BOTH if someone linearises it and if someone inflates it - either way the
 //      change must be deliberate and owner-ruled, never incidental.
 //
+// WO-856 (2026-08-04) added the GENERIC producer guard, sibling to case 9
+// [upgrader-reaches-receiver] and born of the same lesson:
+//   10. [yield-reachable-at-founding] For EVERY catalog row authoring a per-wave /
+//      per-tick yield curve: the FIRST rung must be > 0 (no structure may deliver
+//      nothing at its founding level), Clamp(repo.maxLevel,1,3) must cover the whole
+//      curve (no rungs the upgrade verb cannot reach), and a multi-rung curve must
+//      have some way up (repo.upgradeCost, or a BuildingTierCatalog /
+//      ResourceBuildingProgression ladder). The Crystal Mine failed all three at once
+//      and had never paid a single crystal.
+//
 // Pure data + logic — NO PlayMode, NO GameState — so it runs inside DataRegression.RunAll.
 // Mirrors MonetizationCovenantRegression: public static bool Run(out string reason).
 // =============================================================================
@@ -142,13 +152,15 @@ namespace DeNelle.Editor
             Case(failures, "perk-stack", () => CheckProductionStacks(failures));
             Case(failures, "echo-scaling", () => CheckEchoScaling(failures));
             Case(failures, "upgrader-reaches-receiver", () => CheckUpgraderReachesReceiver(failures));
+            Case(failures, "yield-reachable-at-founding", () => CheckYieldReachableAtFounding(failures));
 
             if (failures.Count == 0)
             {
                 reason = "BUILDING UPGRADE OK — Farm/Lumbermill (5 lvl) + Forge (5 + arcane) curves ascend, " +
                          "speeds monotone, costs terminal at max, only Forge Magic-gated (unlocks arcane_forge); " +
                          "WO-855 faucet bands hold (early/mid/late income, production stacks under +80%, " +
-                         "echo 1->6 scaling inside the WO-709 quadratic band)";
+                         "echo 1->6 scaling inside the WO-709 quadratic band); every authored yield curve " +
+                         "pays at its founding level and stays inside a reachable upgrade ladder";
                 return true;
             }
             reason = $"BUILDING UPGRADE FAIL x{failures.Count}: " + string.Join(" | ", failures);
@@ -334,6 +346,167 @@ namespace DeNelle.Editor
                 if (hadOverride) DeNelle.Core.State.ModifierService.SetOverride(saved);
                 else             DeNelle.Core.State.ModifierService.ClearOverride();
             }
+        }
+
+        // =====================================================================
+        //  Case 10 - [yield-reachable-at-founding] -- the GENERIC guard (WO-856).
+        //
+        //  Same family as [upgrader-reaches-receiver] above: AUTHORED DATA WITH NO
+        //  REACHABLE CONSUMER IS RESOURCES THE PLAYER SPENDS FOR NOTHING.
+        //
+        //  The Crystal Mine shipped with a payout that only fired at level 3, on a
+        //  level nothing could raise, priced at 80 wood + 50 iron. It had never paid
+        //  a crystal. Three laws, swept over EVERY catalog row that authors a
+        //  per-wave / per-tick yield curve, so the next producer cannot repeat it:
+        //
+        //    1. The FIRST rung must be > 0. No structure may deliver nothing at its
+        //       founding level - the player buys it before any upgrade exists.
+        //    2. Clamp(repo.maxLevel, 1, 3) >= curve.Length. No structure may author
+        //       rungs it cannot reach (BuildModeController.MaxLevelFor clamps to 3;
+        //       a 4th rung is decoration).
+        //    3. A multi-rung curve needs SOME upgrade path: repo.upgradeCost with
+        //       curve.Length - 1 entries, or membership in BuildingTierCatalog /
+        //       ResourceBuildingProgression. A ladder with no way up is the same bug
+        //       wearing different clothes.
+        // =====================================================================
+
+        private static readonly string[] BuildingPaths =
+        {
+            "Resources/Data/Canonical/buildings.json",
+            "StreamingAssets/Data/Canonical/buildings.json",
+        };
+
+        private static readonly string[] CatalogPaths =
+        {
+            "Resources/Data/Canonical/structures-catalog.json",
+            "StreamingAssets/Data/Canonical/structures-catalog.json",
+        };
+
+        /// <summary>The per-wave / per-tick yield keys a producer row may author. Any row
+        /// carrying one of these is a FAUCET and falls under the three laws above.</summary>
+        private static readonly string[] YieldCurveKeys =
+        {
+            "crystalsPerWave", "resourcesPerWave", "yieldPerWave", "yieldPerTick",
+        };
+
+        private static void CheckYieldReachableAtFounding(List<string> failures)
+        {
+            foreach (var rel in BuildingPaths)
+            {
+                string path = Path.Combine(Application.dataPath, rel);
+                string tag = rel.StartsWith("StreamingAssets") ? "StreamingAssets" : "Resources";
+                if (!File.Exists(path))
+                {
+                    failures.Add($"[yield-reachable-at-founding] buildings.json missing at '{rel}' (dual-copy broken)");
+                    continue;
+                }
+
+                var buildings = JObject.Parse(File.ReadAllText(path))["buildings"] as JArray;
+                if (buildings == null)
+                {
+                    failures.Add($"[yield-reachable-at-founding] [{tag}] buildings.json has no buildings[]");
+                    continue;
+                }
+
+                foreach (var b in buildings)
+                {
+                    var row = b as JObject;
+                    if (row == null) continue;
+                    string id = (string)row["id"] ?? "<no-id>";
+
+                    foreach (var key in YieldCurveKeys)
+                    {
+                        int[] curve = CurveFrom(row[key]);
+                        if (curve == null) continue;   // key absent / not a curve
+
+                        // LAW 1 - a producer must produce at the level it is founded on.
+                        if (curve.Length == 0 || curve[0] <= 0)
+                        {
+                            failures.Add(
+                                $"[yield-reachable-at-founding] [{tag}] '{id}' authors {key} with a first rung of " +
+                                $"{(curve.Length == 0 ? "nothing" : curve[0].ToString(CultureInfo.InvariantCulture))}. " +
+                                "NO STRUCTURE MAY DELIVER NOTHING AT ITS FOUNDING LEVEL - the player pays the build " +
+                                "cost before any upgrade exists, so a zero first rung is a purchase that does nothing " +
+                                "(WO-856: the Crystal Mine shipped exactly this way and had never paid out).");
+                            continue;
+                        }
+
+                        // The structures-catalog row that carries the ladder. buildings.json links
+                        // to it through "model" (crystal-mine -> mine_crystal); fall back to the id.
+                        string catalogId = (string)row["model"];
+                        JObject repo = FindRepo(catalogId) ?? FindRepo(id);
+                        if (repo == null)
+                        {
+                            // Not a placeable structure - no ladder to reach, laws 2/3 do not apply.
+                            continue;
+                        }
+                        string shownId = !string.IsNullOrEmpty(catalogId) ? catalogId : id;
+
+                        // LAW 2 - never author rungs the upgrade verb cannot reach.
+                        var maxTok = repo["maxLevel"];
+                        int maxLevel = Mathf.Clamp(maxTok != null ? (int)maxTok : 1, 1, 3);
+                        if (maxLevel < curve.Length)
+                        {
+                            failures.Add(
+                                $"[yield-reachable-at-founding] [{tag}] '{id}' authors {curve.Length} {key} rungs but " +
+                                $"'{shownId}' reaches level {maxLevel} (repo.maxLevel " +
+                                $"{(maxTok == null ? "not authored, defaults to 1" : maxTok.ToString())}, clamped 1..3 by " +
+                                "BuildModeController.MaxLevelFor). Rungs above the ceiling are yields no player can " +
+                                "ever collect - and a maxLevel of 1 makes the upgrade verb answer 'Max tier reached.' " +
+                                "on a freshly-built structure.");
+                        }
+
+                        // LAW 3 - a multi-rung curve must have SOME way up.
+                        if (curve.Length <= 1) continue;
+                        var costs = repo["upgradeCost"] as JArray;
+                        bool hasCostTable = costs != null && costs.Count >= curve.Length - 1;
+                        bool hasLadder = DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(id)
+                                      || ResourceBuildingProgression.IsResourceBuilding(id);
+                        if (!hasCostTable && !hasLadder)
+                        {
+                            failures.Add(
+                                $"[yield-reachable-at-founding] [{tag}] '{id}' authors a {curve.Length}-rung {key} " +
+                                $"curve but '{shownId}' has no upgrade path to climb it: repo.upgradeCost carries " +
+                                $"{(costs == null ? 0 : costs.Count)} of the {curve.Length - 1} steps needed, and the id " +
+                                "is in neither BuildingTierCatalog nor ResourceBuildingProgression. Authored data with " +
+                                "no reachable consumer is resources the player spends for nothing.");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>An authored yield curve: an ARRAY verbatim, or a bare SCALAR read-migrated
+        /// to a one-rung flat curve (mirrors CrystalMine.ParseCurve). Null when the token is
+        /// absent or is neither shape.</summary>
+        private static int[] CurveFrom(JToken token)
+        {
+            if (token == null) return null;
+            if (token is JArray rungs)
+            {
+                var curve = new int[rungs.Count];
+                for (int i = 0; i < rungs.Count; i++) curve[i] = (int)rungs[i];
+                return curve;
+            }
+            if (token.Type == JTokenType.Integer || token.Type == JTokenType.Float)
+                return new[] { (int)token };
+            return null;
+        }
+
+        /// <summary>The repo block of a structures-catalog row, from the first copy that has it.</summary>
+        private static JObject FindRepo(string catalogId)
+        {
+            if (string.IsNullOrEmpty(catalogId)) return null;
+            foreach (var rel in CatalogPaths)
+            {
+                string path = Path.Combine(Application.dataPath, rel);
+                if (!File.Exists(path)) continue;
+                var entries = JObject.Parse(File.ReadAllText(path))["entries"] as JArray;
+                if (entries == null) continue;
+                foreach (var e in entries)
+                    if ((string)e["id"] == catalogId) return e["repo"] as JObject;
+            }
+            return null;
         }
 
         // =====================================================================

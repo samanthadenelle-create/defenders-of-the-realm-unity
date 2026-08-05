@@ -2510,10 +2510,15 @@ namespace DeNelle.Village
         /// <see cref="GameStateService.AddCrystals"/> — the exact balance the
         /// BuildMenu spends from and the village HUD top-bar displays (WO-131
         /// follow-up, owner decision (a): "win waves → build towers" on one
-        /// currency the player sees). This deliberately does NOT touch the
-        /// separate AetherCrystals empower pool (CrystalEconomy); every other
-        /// AetherCrystals source (CrystalMine, MineNode, tower-empower, TalentTree,
-        /// BattlePass, Referral, Promo) stays on AetherCrystals.
+        /// currency the player sees). THERE IS ONLY ONE CRYSTAL WALLET (canon fix,
+        /// WO-856 section 12): this comment used to describe a "separate AetherCrystals
+        /// empower pool" - that pool was folded into GameState.Resources.Crystals in
+        /// save v18 (SaveMigrator.MigrateToV18), and CrystalEconomy has been a thin
+        /// facade over the same field ever since (CrystalEconomy.cs:14-19). Every
+        /// crystal source (CrystalMine, MineNode, tower-empower, TalentTree,
+        /// BattlePass, Referral, Promo) and this boss-drop faucet all credit the SAME
+        /// balance. This method stays a SEPARATE FAUCET (boss drops + event bonuses),
+        /// not a separate wallet - do not merge it with the mine's per-wave payout.
         /// Drop chance and ranges are all backend-controlled — no rebuild needed to tune.
         /// </summary>
         private void AwardWaveCrystals(int waveId)

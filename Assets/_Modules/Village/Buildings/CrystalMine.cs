@@ -1,105 +1,112 @@
 // =============================================================================
-// CrystalMine — passive Aether Crystal generator; awards crystals per wave.
+// CrystalMine - passive Crystal generator; awards crystals on every cleared wave.
 // -----------------------------------------------------------------------------
-// Place this component on the "CrystalMine" GameObject in the village scene.
-// The mine has three levels:
+// WO-856 (2026-08-04) - THE MINE NOW ACTUALLY PAYS OUT.
 //
-//   L1 (just built)  — no crystal yield; serves as a presence on the map.
-//   L2               — 50% chance of +1 Crystal per wave.
-//   L3 (max level)   — guaranteed +1 Crystal per wave.
+// What it does now:
+//   * Pays from LEVEL 1. The old "return unless at max level" gate is gone - the
+//     payout scales along an AUTHORED curve instead of switching on at the top.
+//   * The per-wave yield is data, not C#: buildings.json "crystal-mine" authors
+//     "crystalsPerWave": [2, 4, 7], indexed by (level - 1) and clamped into range.
+//     A bare scalar (the pre-WO-856 shape, e.g. 1) READ-MIGRATES to a flat curve
+//     so a hand-edit back to a number degrades instead of throwing.
+//   * The LEVEL is READ, never owned. It comes from the PlacedStructure this
+//     component sits on - the one per-instance level the save spine round-trips
+//     (PlacedStructureData.level -> BaseLayoutLoader -> PlacedStructure.level).
 //
-// Crystal yield fires on WaveManager.OnWaveCleared via CrystalEconomy.AddCrystals.
-// Upgrade cost is paid in Coins from GameStateService. The mine cannot be
-// damaged by enemies (it is not an IDamageableStructure).
+// WHY there is no private level field here (WO-856 section 4, ARCHITECTURE_
+// PRINCIPLES section 1 "one authority per concern"): the mine used to keep a
+// private current-level field that persisted NOWHERE and could only be raised by
+// a legacy Coins F-key prompt. It was a second, invisible level authority - the
+// same failure mode ModifierService records for the windmill/farm split - and it
+// is why a built mine could never reach the level its own payout gate demanded.
+// The mine is a READER: it asks "what level am I?", it never answers it.
+// [single-level-authority] in CrystalProductionRegression reflects for that field
+// by name and FAILS the suite if one is ever reintroduced.
 //
-// Proximity interaction mirrors DungeonPortal / MarketplaceInteractor:
-//   • 0.15 s throttled proximity check.
-//   • "[F] Upgrade Crystal Mine" prompt bubble appears when in range.
-//   • F-key shows a simple upgrade confirm (cost label) via InjectUpgradeUI().
-//   • Escape / ✕ button dismisses.
+// RETIRED in WO-856 section 6 (do not restore): the Coins F-key upgrade path -
+// TryUpgrade / OpenUpgradeUI / InjectUpgradePanel / ShowSimpleUpgradePrompt /
+// ConfirmSimpleUpgrade, the _costL1toL2 / _costL2toL3 fields, the world-space
+// prompt bubble and the MobileInteractButton registration. Its only effect was
+// to increment the deleted private level field, it charged the WRONG currency lane
+// (Coins is the shop/sell wallet; the mine costs Wood+Iron and yields Crystals),
+// and keeping it would leave TWO independent systems able to level one building.
+// The mine upgrades through the ONE canonical surface: the BuildMode selection
+// panel's Upgrade verb, charging structures-catalog.json "mine_crystal"
+// repo.upgradeCost (240W/150I then 560W/350I, deliberately ZERO crystals - see
+// WO-856 section 5: charging crystals to unlock crystal income inverts the loop
+// the mine exists to relieve).
 //
-// Scene setup:
-//   1. Place a GameObject named "CrystalMine" in the village scene.
-//   2. Add this component.
-//   3. Optionally assign L1/L2/L3 visual prefabs. Falls back to a tinted cube.
-//   4. Add it to the same persistent zone as CrystalEconomy so both live in scene.
+// Scene setup: the mine is spawned by StructureFactory from the "mine_crystal"
+// catalog row (behaviorId "CrystalMine"), which is where PlacedStructure comes
+// from. A scene-baked mine with no PlacedStructure honestly reads level 1 and
+// pays the L1 rung - never zero, never a throw.
 // =============================================================================
 
 using System;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
-using UnityEngine.UIElements;
-using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
     [DisallowMultipleComponent]
     public sealed class CrystalMine : MonoBehaviour
     {
-        // ── Inspector ─────────────────────────────────────────────────────────
+        // -- Inspector --------------------------------------------------------
 
         [Header("Levels")]
-        [Tooltip("Visual prefab shown at Level 1. Null → procedural crystal-blue placeholder.")]
+        [Tooltip("Visual prefab shown at Level 1. Null -> procedural crystal-blue placeholder.")]
         [SerializeField] private GameObject _level1Prefab;
         [Tooltip("Visual prefab shown at Level 2.")]
         [SerializeField] private GameObject _level2Prefab;
-        [Tooltip("Visual prefab shown at Level 3 (max level, yielding crystals every wave).")]
+        [Tooltip("Visual prefab shown at Level 3.")]
         [SerializeField] private GameObject _level3Prefab;
 
-        [Tooltip("WO-110: when true, skip building the placeholder/prefab visual — an external " +
+        [Tooltip("WO-110: when true, skip building the placeholder/prefab visual - an external " +
                  "crystal mesh (+ CrystalVisual spin/pulse) is the mine's body. Gameplay unchanged.")]
         [SerializeField] private bool _useExternalVisual = false;
 
-        [Header("Upgrade costs (Coins)")]
-        [Tooltip("Coin cost to upgrade from Level 1 to Level 2.")]
-        [SerializeField] private int _costL1toL2 = 200;
-        [Tooltip("Coin cost to upgrade from Level 2 to Level 3.")]
-        [SerializeField] private int _costL2toL3 = 400;
+        // -- Constants --------------------------------------------------------
 
-        [Header("Proximity")]
-        [SerializeField] private float _promptHeight  = 3.5f;
-        [SerializeField, Min(1f)] private float _activateRadius = 3.5f;
-
-        [Header("UI (optional UIDocument for upgrade panel)")]
-        [Tooltip("Optional UIDocument root. If null, a simple world-space prompt is used.")]
-        [SerializeField] private GameObject _upgradeUiRoot;
-
-        // ── Constants ─────────────────────────────────────────────────────────
-
-        public const int MaxLevel = 3;
-        private const float CheckInterval = 0.15f;
-
-        /// <summary>Historical hard-coded +1@L3 yield — the null-safe fallback when
-        /// buildings.json omits the data-driven "crystalsPerWave" key (SSOT: WO crystal-production).</summary>
+        /// <summary>Null-safe fallback rung used when buildings.json omits/garbles
+        /// "crystalsPerWave" (the historical hard-coded +1). Never zero: a producer
+        /// that produces nothing is the WO-856 defect, not a safe default.</summary>
         private const int DefaultCrystalsPerWave = 1;
 
-        // ── Runtime ───────────────────────────────────────────────────────────
+        // -- Runtime ----------------------------------------------------------
 
-        private int _currentLevel = 1;
-        private Transform _hero;
-        private HeroLocomotion _heroLoco;
-        private bool _heroFound;
-        private bool _isInRange;
-        private bool _uiOpen;
-        private bool _awaitingSimpleConfirm;   // bug-triage P1: gate simple-mode upgrade behind a 2nd, deliberate F press
-        private GameObject _promptGo;
-        private float _nextCheck;
         private WaveManager _wave;
         private GameObject _currentVisual;
-        private int? _crystalsPerWave;         // cached data-driven yield (buildings.json)
+        private int[] _curve;                  // cached data-driven yield curve (buildings.json)
+        private PlacedStructure _placed;
+        private bool _placedResolved;
 
-        public int CurrentLevel => _currentLevel;
-        public bool IsMaxLevel => _currentLevel >= MaxLevel;
+        /// <summary>
+        /// The mine's upgrade level, READ from the PlacedStructure record the save spine
+        /// round-trips (never owned here - WO-856 section 4). Clamped into the authored
+        /// curve's range so an out-of-band level can neither index off the end nor pay 0.
+        /// A mine with no PlacedStructure (scene-baked) honestly reads level 1.
+        /// </summary>
+        private int CurrentLevel
+        {
+            get
+            {
+                if (!_placedResolved)
+                {
+                    _placed = GetComponentInParent<PlacedStructure>();
+                    _placedResolved = true;
+                }
+                int level = _placed != null ? _placed.level : 1;
+                return Mathf.Clamp(level, 1, Mathf.Max(1, Curve().Length));
+            }
+        }
 
-        // ── Lifecycle ─────────────────────────────────────────────────────────
+        // -- Lifecycle --------------------------------------------------------
 
         private void Start()
         {
-            ResolveHero();
             ResolveWave();
             ApplyVisual();
-
-            if (_upgradeUiRoot != null) _upgradeUiRoot.SetActive(false);
         }
 
         private void OnEnable()
@@ -110,108 +117,55 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             UnsubscribeFromWave();
-            if (_uiOpen) CloseUpgradeUI();
-            MobileInteractButton.Release(this);
         }
 
-        private void Update()
-        {
-            if (!_heroFound) { ResolveHero(); return; }
-            if (_hero == null) { _heroFound = false; return; }
-
-            // Build mode: the player is authoring, not interacting — release the shared
-            // button, hide the world bubble, and skip the [F] press. Restored on exit.
-            if (MobileInteractButton.Suppressed)
-            {
-                MobileInteractButton.Release(this);
-                if (_promptGo != null) HidePrompt();
-                return;
-            }
-
-            if (_uiOpen)
-            {
-                // bug-triage P1: simple-mode upgrade now requires a 2nd, deliberate F press
-                // (the first press only opens the confirm bubble; it no longer spends coins).
-                // DEF-203: the shared Interact button mirrors that 2nd press on touch.
-                if (_awaitingSimpleConfirm)
-                    MobileInteractButton.Request(this, "Confirm Upgrade", ConfirmSimpleUpgrade);
-                else
-                    MobileInteractButton.Release(this);
-
-                // Mobile-first: confirm via the shared "Confirm Upgrade" button; the
-                // upgrade panel's own ✕ Close button dismisses. Keyboard F/Escape removed.
-                return;
-            }
-
-            if (Time.time >= _nextCheck)
-            {
-                _nextCheck = Time.time + CheckInterval;
-                float sqr = (_hero.position - transform.position).sqrMagnitude;
-                bool nowIn = sqr <= _activateRadius * _activateRadius;
-                if (nowIn != _isInRange)
-                {
-                    _isInRange = nowIn;
-                    if (_isInRange) ShowPrompt();
-                    else            HidePrompt();
-                }
-            }
-
-            // DEF-203: register the shared on-screen Interact button while in range so
-            // touch/mobile (no keyboard) can open the upgrade UI too. Desktop F unchanged.
-            if (_isInRange)
-                MobileInteractButton.Request(this, "Upgrade Crystal Mine", OpenUpgradeUI);
-            else
-                MobileInteractButton.Release(this);
-
-            // DEF-217: the shared button is the single canonical prompt — drop the
-            // redundant world-space proximity bubble while it is showing. (The separate
-            // confirm-upgrade bubble lives in the _uiOpen branch above and is untouched.)
-            if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
-
-            // Mobile-first: opening the upgrade UI fires through the shared "Upgrade
-            // Crystal Mine" button (requested above). The desktop F-key trigger was removed.
-        }
-
-        /// <summary>Spends coins + applies the simple-mode upgrade, then closes the prompt.
-        /// Shared by the desktop 2nd-F press and the mobile Confirm button (DEF-203).</summary>
-        private void ConfirmSimpleUpgrade()
-        {
-            _awaitingSimpleConfirm = false;
-            TryUpgrade();
-            CloseUpgradeUI();
-        }
-
-        // ── Wave crystal yield ────────────────────────────────────────────────
+        // -- Wave crystal yield -----------------------------------------------
 
         private void OnWaveCleared(int waveId)
         {
-            if (_currentLevel < MaxLevel) return;
-
-            // L3: guaranteed crystal yield. L2 would be 50% — extend here if desired.
+            // WO-856: NO level gate. The mine pays from L1 - the curve is the progression.
             var economy = CrystalEconomy.Instance;
             if (economy == null)
             {
-                Debug.LogWarning("[CrystalMine] CrystalEconomy service not found — no crystal awarded.");
+                Debug.LogWarning("[CrystalMine] CrystalEconomy service not found - no crystal awarded.");
                 return;
             }
-            int yield = CrystalsPerWave();
+
+            int level = CurrentLevel;
+            int yield = CrystalsPerWave(level);
             economy.AddCrystals(yield);
-            Debug.Log($"[CrystalMine] Wave {waveId} cleared — +{yield} Aether Crystal awarded (L3 mine).");
+            Debug.Log($"[CrystalMine] Wave {waveId} cleared - +{yield} Crystals awarded (mine L{level}).");
         }
 
         /// <summary>
-        /// Per-wave crystal yield, read from buildings.json (the <c>crystal-mine</c> entry's
-        /// <c>crystalsPerWave</c> key) so the +1@L3 award is DATA-DRIVEN, not a C# literal.
-        /// Uses the same <see cref="DeNelle.Core.CanonicalJson"/> loader path as
-        /// <see cref="BuildingCatalog"/> (Resources-first, StreamingAssets fallback).
-        /// Null-safe: falls back to <see cref="DefaultCrystalsPerWave"/> (the historical +1)
-        /// when the key or file is absent, so runtime behaviour is unchanged. Cached after first read.
+        /// The per-wave crystal yield at <paramref name="level"/>, read from buildings.json
+        /// (the <c>crystal-mine</c> entry's <c>crystalsPerWave</c> key) so the payout curve is
+        /// DATA, not a C# literal. Indexed by <c>level - 1</c> and clamped into range.
         /// </summary>
-        private int CrystalsPerWave()
+        private int CrystalsPerWave(int level)
         {
-            if (_crystalsPerWave.HasValue) return _crystalsPerWave.Value;
+            int[] curve = Curve();
+            int idx = Mathf.Clamp(level - 1, 0, curve.Length - 1);
+            return curve[idx];
+        }
 
-            int perWave = DefaultCrystalsPerWave;   // fallback preserves historical hard-coded +1@L3
+        /// <summary>
+        /// The authored yield curve, parsed once and cached. Uses the same
+        /// <see cref="DeNelle.Core.CanonicalJson"/> loader path as <see cref="BuildingCatalog"/>
+        /// (Resources-first, StreamingAssets fallback).
+        ///
+        /// READ-MIGRATION (WO-856 section 5, mirrors the CLAUDE.md section 7 read-migrate
+        /// discipline): the key may be an ARRAY (the authored curve) or a bare SCALAR (the
+        /// pre-WO-856 shape). A scalar degrades to a FLAT curve of that value - so a hand-edit
+        /// back to a number keeps paying instead of throwing. Missing / unparseable / empty
+        /// falls back to a flat <see cref="DefaultCrystalsPerWave"/> curve, warned not swallowed
+        /// (CLAUDE.md section 12: no silent failures).
+        /// </summary>
+        private int[] Curve()
+        {
+            if (_curve != null) return _curve;
+
+            int[] parsed = null;
             try
             {
                 string json = DeNelle.Core.CanonicalJson.Read("Data/Canonical/buildings.json");
@@ -222,236 +176,60 @@ namespace DeNelle.Village
                     {
                         foreach (var tok in arr)
                         {
-                            if (tok is JObject o && (string)o["id"] == "crystal-mine")
-                            {
-                                var y = o["crystalsPerWave"];
-                                if (y != null) perWave = (int)y;
-                                break;
-                            }
+                            if (!(tok is JObject o) || (string)o["id"] != "crystal-mine") continue;
+                            parsed = ParseCurve(o["crystalsPerWave"]);
+                            break;
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[CrystalMine] Could not read crystalsPerWave from buildings.json — using default {perWave}. {ex.Message}");
+                Debug.LogWarning("[CrystalMine] Could not read crystalsPerWave from buildings.json - " +
+                                 $"falling back to a flat {DefaultCrystalsPerWave}/wave curve. {ex.Message}");
             }
 
-            _crystalsPerWave = perWave;
-            return perWave;
+            if (parsed == null || parsed.Length == 0)
+                parsed = new[] { DefaultCrystalsPerWave };
+
+            _curve = parsed;
+            return _curve;
         }
 
-        // ── Upgrade ───────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Attempts to upgrade the mine one level. Deducts coins from GameState.
-        /// Returns false if already at max level or coins are insufficient.
-        /// </summary>
-        public bool TryUpgrade()
+        /// <summary>Array -> the curve verbatim; scalar -> a flat curve (read-migration);
+        /// anything else -> null (the caller falls back + warns). Negative rungs clamp to 0.</summary>
+        private static int[] ParseCurve(JToken token)
         {
-            if (_currentLevel >= MaxLevel)
+            if (token == null) return null;
+
+            if (token is JArray rungs)
             {
-                Debug.Log("[CrystalMine] Already at max level.");
-                return false;
+                if (rungs.Count == 0) return null;
+                var curve = new int[rungs.Count];
+                for (int i = 0; i < rungs.Count; i++) curve[i] = Mathf.Max(0, (int)rungs[i]);
+                return curve;
             }
 
-            int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-
-            var svc = GameStateService.Instance;
-            if (svc?.State == null)
+            if (token.Type == JTokenType.Integer || token.Type == JTokenType.Float)
             {
-                Debug.LogWarning("[CrystalMine] GameStateService unavailable.");
-                return false;
+                // READ-MIGRATION: a bare scalar is a FLAT curve, never a throw.
+                return new[] { Mathf.Max(0, (int)token) };
             }
 
-            var res = svc.State.Resources;
-            if (res.Coins < cost)
-            {
-                Debug.Log($"[CrystalMine] Upgrade requires {cost} Coins — have {res.Coins}.");
-                return false;
-            }
-
-            // Deduct coins and save.
-            var r = res;
-            r.Coins -= cost;
-            svc.State.Resources = r;
-            svc.Save();
-
-            _currentLevel++;
-            ApplyVisual();
-
-            // Re-subscribe so the new level is active immediately.
-            SubscribeToWave();
-
-            Debug.Log($"[CrystalMine] Upgraded to Level {_currentLevel}. Coins remaining: {r.Coins}.");
-            return true;
+            return null;
         }
 
-        // ── Upgrade UI ────────────────────────────────────────────────────────
-
-        private void OpenUpgradeUI()
-        {
-            HidePrompt();
-            _uiOpen = true;
-            if (_heroLoco != null) _heroLoco.enabled = false;
-
-            if (_upgradeUiRoot != null)
-            {
-                _upgradeUiRoot.SetActive(true);
-                InjectUpgradePanel();
-            }
-            else
-            {
-                // Simple world-space label showing cost and F/Esc hint.
-                ShowSimpleUpgradePrompt();
-            }
-        }
-
-        private void CloseUpgradeUI()
-        {
-            _uiOpen = false;
-            _awaitingSimpleConfirm = false;
-            if (_upgradeUiRoot != null) _upgradeUiRoot.SetActive(false);
-            if (_heroLoco != null) _heroLoco.enabled = true;
-            MobileInteractButton.Release(this);
-        }
-
-        /// <summary>
-        /// Injects a minimal upgrade panel into the assigned UIDocument root —
-        /// shows current level, upgrade cost, Confirm + Close buttons.
-        /// </summary>
-        private void InjectUpgradePanel()
-        {
-            var doc = _upgradeUiRoot?.GetComponent<UIDocument>();
-            if (doc?.rootVisualElement == null) return;
-
-            var root = doc.rootVisualElement;
-            root.Clear();
-
-            // Outer container.
-            var panel = new VisualElement();
-            panel.style.position       = Position.Absolute;
-            panel.style.top            = 20; panel.style.left  = 20;
-            panel.style.right          = 20; panel.style.bottom = 20;
-            panel.style.backgroundColor = new StyleColor(new Color(0.05f, 0.02f, 0.12f, 0.94f));
-            panel.style.borderTopLeftRadius     = 10;
-            panel.style.borderTopRightRadius    = 10;
-            panel.style.borderBottomLeftRadius  = 10;
-            panel.style.borderBottomRightRadius = 10;
-            panel.style.paddingTop = panel.style.paddingBottom =
-            panel.style.paddingLeft = panel.style.paddingRight = 20;
-            root.Add(panel);
-
-            // Title.
-            var title = new Label("Crystal Mine");
-            title.style.fontSize = 22;
-            title.style.color = new StyleColor(new Color(0.80f, 0.60f, 1.0f));
-            title.style.marginBottom = 12;
-            panel.Add(title);
-
-            // Level display.
-            var levelLbl = new Label($"Current Level: {_currentLevel} / {MaxLevel}");
-            levelLbl.style.fontSize = 15;
-            levelLbl.style.color = new StyleColor(new Color(0.90f, 0.85f, 1.0f));
-            panel.Add(levelLbl);
-
-            // Yield description.
-            string yieldText = _currentLevel switch
-            {
-                1 => "Yields: Nothing yet — upgrade to begin mining.",
-                2 => "Yields: 50% chance of +1 Crystal per wave.",
-                _ => "Yields: +1 Aether Crystal per wave (max level).",
-            };
-            var yieldLbl = new Label(yieldText);
-            yieldLbl.style.fontSize = 13;
-            yieldLbl.style.color = new StyleColor(new Color(0.70f, 0.90f, 0.70f));
-            yieldLbl.style.marginTop = 6;
-            yieldLbl.style.marginBottom = 16;
-            panel.Add(yieldLbl);
-
-            if (!IsMaxLevel)
-            {
-                int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                int coins = (int)(GameStateService.Instance?.State?.Resources.Coins ?? 0);
-                bool canAfford = coins >= cost;
-
-                var costLbl = new Label($"Upgrade cost: {cost} Coins  (you have {coins})");
-                costLbl.style.fontSize = 14;
-                costLbl.style.color = new StyleColor(canAfford
-                    ? new Color(1f, 0.85f, 0.3f)
-                    : new Color(1f, 0.3f, 0.3f));
-                costLbl.style.marginBottom = 12;
-                panel.Add(costLbl);
-
-                var upgradeBtn = new Button(() =>
-                {
-                    if (TryUpgrade()) CloseUpgradeUI();
-                    else InjectUpgradePanel(); // refresh to show updated coins
-                })
-                { text = canAfford ? "Upgrade" : "Need more Coins" };
-                upgradeBtn.SetEnabled(canAfford);
-                StyleButton(upgradeBtn, new Color(0.20f, 0.08f, 0.38f));
-                upgradeBtn.style.marginBottom = 8;
-                panel.Add(upgradeBtn);
-            }
-            else
-            {
-                var maxLbl = new Label("Fully upgraded — harvesting crystals each wave.");
-                maxLbl.style.fontSize = 14;
-                maxLbl.style.color = new StyleColor(new Color(0.80f, 0.60f, 1.0f));
-                maxLbl.style.marginBottom = 12;
-                panel.Add(maxLbl);
-            }
-
-            var closeBtn = new Button(CloseUpgradeUI) { text = "X  Close" };
-            StyleButton(closeBtn, new Color(0.18f, 0.06f, 0.30f));
-            panel.Add(closeBtn);
-        }
-
-        private static void StyleButton(Button btn, Color bgColor)
-        {
-            btn.style.paddingTop = btn.style.paddingBottom = 8;
-            btn.style.paddingLeft = btn.style.paddingRight = 20;
-            btn.style.fontSize = 14;
-            btn.style.backgroundColor = new StyleColor(bgColor);
-            btn.style.color = new StyleColor(new Color(0.95f, 0.88f, 1.0f));
-            btn.style.borderTopLeftRadius     = btn.style.borderTopRightRadius    = 6;
-            btn.style.borderBottomLeftRadius  = btn.style.borderBottomRightRadius = 6;
-        }
-
-        /// <summary>Fallback when no UIDocument is assigned — shows a world-space prompt above the mine.</summary>
-        private void ShowSimpleUpgradePrompt()
-        {
-            if (IsMaxLevel)
-            {
-                _promptGo = BuildBubble("Max Level — crystals active",
-                    _promptHeight + 0.5f,
-                    new Color(0.10f, 0.04f, 0.22f, 0.96f),
-                    new Color(0.70f, 0.50f, 1.0f));
-            }
-            else
-            {
-                int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                _promptGo = BuildBubble($"[ Tap / F ] Confirm Upgrade — {cost} Coins",
-                    _promptHeight + 0.5f,
-                    new Color(0.10f, 0.04f, 0.22f, 0.96f),
-                    new Color(0.70f, 0.50f, 1.0f));
-                // bug-triage P1: show a confirm bubble and wait for a 2nd F press in Update.
-                // Keep _uiOpen true so the standard F-path doesn't re-open. Do NOT spend now.
-                _awaitingSimpleConfirm = true;
-            }
-        }
-
-        // ── Visual ────────────────────────────────────────────────────────────
+        // -- Visual -----------------------------------------------------------
 
         private void ApplyVisual()
         {
             if (_currentVisual != null) Destroy(_currentVisual);
 
-            // WO-110: an external crystal mesh (+ CrystalVisual) is the body — don't build our own.
+            // WO-110: an external crystal mesh (+ CrystalVisual) is the body - don't build our own.
             if (_useExternalVisual) return;
 
-            GameObject prefab = _currentLevel switch
+            int level = CurrentLevel;
+            GameObject prefab = level switch
             {
                 1 => _level1Prefab,
                 2 => _level2Prefab,
@@ -465,13 +243,13 @@ namespace DeNelle.Village
             }
             else
             {
-                _currentVisual = BuildPlaceholder(_currentLevel);
+                _currentVisual = BuildPlaceholder(level);
             }
         }
 
         private GameObject BuildPlaceholder(int level)
         {
-            // Octahedron-ish cluster from overlapping cubes — minimal but readable.
+            // Octahedron-ish cluster from overlapping cubes - minimal but readable.
             var go = new GameObject($"CrystalMineVisual_L{level}");
             go.transform.SetParent(transform, false);
 
@@ -517,81 +295,7 @@ namespace DeNelle.Village
             }
         }
 
-        // ── Prompt bubble ─────────────────────────────────────────────────────
-
-        private void ShowPrompt()
-        {
-            string label = IsMaxLevel
-                ? "Crystal Mine — Active"
-                : $"[ Tap / F ]  Upgrade Mine  (L{_currentLevel}->{_currentLevel + 1})";
-
-            _promptGo = BuildBubble(label, _promptHeight,
-                new Color(0.06f, 0.02f, 0.14f, 0.96f),
-                new Color(0.65f, 0.45f, 1.00f));
-        }
-
-        private void HidePrompt()
-        {
-            if (_promptGo != null) Destroy(_promptGo);
-            _promptGo = null;
-        }
-
-        private GameObject BuildBubble(string text, float localY, Color bgColor, Color outlineColor)
-        {
-            var go = new GameObject("CrystalMinePrompt");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = Vector3.up * localY;
-
-            float charsApprox = Mathf.Max(text.Length, 8);
-            float w = Mathf.Clamp(charsApprox * 0.10f + 0.4f, 1.2f, 4.0f);
-            float h = 0.38f;
-
-            var outline = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            DestroyImmediate(outline.GetComponent<Collider>());
-            outline.transform.SetParent(go.transform, false);
-            outline.transform.localPosition = new Vector3(0f, 0f, 0.012f);
-            outline.transform.localScale    = new Vector3(w + 0.06f, h + 0.06f, 1f);
-            ApplyFlat(outline.GetComponent<Renderer>(), outlineColor);
-
-            var bg = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            DestroyImmediate(bg.GetComponent<Collider>());
-            bg.transform.SetParent(go.transform, false);
-            bg.transform.localPosition = new Vector3(0f, 0f, 0.006f);
-            bg.transform.localScale    = new Vector3(w, h, 1f);
-            ApplyFlat(bg.GetComponent<Renderer>(), bgColor);
-
-            var txtGo = new GameObject("Text");
-            txtGo.transform.SetParent(go.transform, false);
-            txtGo.transform.localScale = Vector3.one * 0.055f;
-            var tm = txtGo.AddComponent<TextMesh>();
-            tm.text = text; tm.fontSize = 96; tm.characterSize = 0.30f;
-            tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center;
-            tm.color = new Color(0.95f, 0.90f, 1.00f);
-
-            var billboard = go.AddComponent<PromptBillboard>();
-            billboard.Camera = Camera.main;
-            return go;
-        }
-
-        private static void ApplyFlat(Renderer renderer, Color colour)
-        {
-            if (renderer == null) return;
-            // WO-395a — same magenta-prompt fix as CrystalMineNode.ApplyFlat. The URP/
-            // built-in unlit shaders return NULL via Shader.Find in a player/WebGL build
-            // (not in the Always-Included list), and the old early-return left the Quad on
-            // Unity's default (legacy Standard) material → magenta under URP. End the chain
-            // in "Sprites/Default" (always shipped) so the prompt never goes pink.
-            Shader s = Shader.Find("Universal Render Pipeline/Unlit")
-                       ?? Shader.Find("Unlit/Color")
-                       ?? Shader.Find("Sprites/Default");
-            if (s == null) return;
-            var mat = new Material(s) { color = colour };
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
-            if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     colour);
-            renderer.sharedMaterial = mat;
-        }
-
-        // ── Wave subscription ─────────────────────────────────────────────────
+        // -- Wave subscription ------------------------------------------------
 
         private void SubscribeToWave()
         {
@@ -614,25 +318,5 @@ namespace DeNelle.Village
             var found = FindObjectsByType<WaveManager>();
             _wave = found.Length > 0 ? found[0] : null;
         }
-
-        // ── Hero resolution ───────────────────────────────────────────────────
-
-        private void ResolveHero()
-        {
-            if (_heroFound) return;
-            var loco = FindAnyObjectByType<HeroLocomotion>();   // bug-triage P2: FindAnyObjectByType is deprecated in Unity 6
-            if (loco == null) return;
-            _hero = loco.transform;
-            _heroLoco = loco;
-            _heroFound = true;
-        }
-
-#if UNITY_EDITOR
-        private void OnDrawGizmosSelected()
-        {
-            Gizmos.color = new Color(0.65f, 0.45f, 1.0f, 0.3f);
-            Gizmos.DrawWireSphere(transform.position, _activateRadius);
-        }
-#endif
     }
 }

@@ -1,5 +1,16 @@
 # WORK ORDER 679 — Crystal economy: earn loop, login streaks, purchasable packs
 
+> **STALE: 2026-08-04 (WO-856).** The faucet table below is wrong on its first row. It calls
+> `CrystalMine` *"LIVE — passive accrual, the only steady faucet"*. **It was not live and never had
+> been.** The payout was gated behind `_currentLevel == MaxLevel` on a private field that persisted
+> nowhere and had no external writer, and `mine_crystal` authored no `maxLevel`/`upgradeCost`, so the
+> BuildMode Upgrade verb answered *"Max tier reached."* on a freshly-built mine. The mine had never
+> paid a single crystal. **WO-856 fixed it:** the level is now read from the persisted
+> `PlacedStructure.level`, and the yield is an authored curve (`buildings.json` `crystal-mine`
+> `crystalsPerWave: [2, 4, 7]`, ~18/36/63 per hour of active wave-fighting). Read that row as
+> *"LIVE as of 2026-08-04"*. The rest of this WO (login streak, crystal packs, the dead-end daily
+> quests) is unaffected and still open. Body frozen per CLAUDE.md §15 — not rewritten.
+
 **Status: SPEC — needs owner pin sign-off, then READY** (owner ask 2026-07-12, from the live
 Forge Enhancements preview: "we pay in crystals — how do we earn crystals? Could crystals be
 earned through consecutive login days / additional purchases?").

@@ -424,6 +424,21 @@
      "iron": 50,
      "crystals": 0
     },
+    "maxLevel": 3,
+    "upgradeCost": [
+     {
+      "wood": 240,
+      "food": 0,
+      "iron": 150,
+      "crystals": 0
+     },
+     {
+      "wood": 560,
+      "food": 0,
+      "iron": 350,
+      "crystals": 0
+     }
+    ],
     "navSurface": "Blocker",
     "placement": {
      "mustSitOn": "Ground",
