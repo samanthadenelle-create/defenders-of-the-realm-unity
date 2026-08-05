@@ -165,9 +165,13 @@ namespace DeNelle.Editor
             // unconditionally by BuildModeController.cs:517/1889/2362.
             "Assets/_Modules/Village/BuildMode/GhostPreview.cs",
             // Diegetic collector fill bar + "N/20" readout + FULL "!" bang
-            // (CollectorStackView.cs:211-289). NOTE: Attach() currently has NO caller
-            // anywhere, so it renders nothing at runtime - separate ticket, not a
-            // reclassification (it is still gameplay presentation, not tooling).
+            // (CollectorStackView.cs:211-289). WO-900 (2026-08-04): the long-standing note here
+            // said "Attach() currently has NO caller anywhere, so it renders nothing at runtime".
+            // That is no longer a note - it is now an ASSERTION (AssertCollectorTellWired below),
+            // because a dead tell is exactly the failure that hid for months: the view was fully
+            // built and simply never called, so a collector capping showed the player nothing.
+            // The file stays on this list as legacy-uGUI debt (it is exempt from the MVVM ratchet
+            // as a world-space diegetic decorator), NOT because it is dead.
             "Assets/_Modules/Village/Buildings/Progression/CollectorStackView.cs",
             // Dead-but-shipping PauseHudButton chip (PauseHudBootstrap.cs:112-225),
             // culled 2026-07-24 into HudKitController's dock and never re-instantiated.
@@ -266,6 +270,10 @@ namespace DeNelle.Editor
                     newOffenders.Add(rel + " -> " + evidence);
             }
 
+            // WO-900: the collector FULL tell must have a live caller (see the AllowList note).
+            string tellViolation = AssertCollectorTellWired(projectRoot);
+            if (tellViolation != null) newOffenders.Add(tellViolation);
+
             // Baseline files that no longer offend (resolved / renamed) — info only.
             var resolved = new List<string>();
             foreach (var b in KnownBaseline)
@@ -297,6 +305,58 @@ namespace DeNelle.Editor
                      " NEW hand-rolled UI file(s) bypass ElarionUiKit (report-only; flip HardFailOnNew to gate): " +
                      offenderList + " (" + summary + ")";
             return true;
+        }
+
+        /// <summary>
+        /// WO-900 - assert the collector FULL tell is actually WIRED, i.e. that
+        /// <c>CollectorStackView.Attach</c> has at least one caller outside its own file.
+        /// <para>
+        /// This exists because the opposite was true for months and only ever got written down as
+        /// a comment. <c>CollectorStackView</c> is a complete, 437-line CoC fill tell - pooled prop
+        /// pile / world-space fill bar, amber near-full band, redundant "N/20" readout, the "!"
+        /// bang, the glint VFX and the one-time "is full" toast - and NOTHING CALLED IT. A collector
+        /// filling to capacity showed the player absolutely nothing; the wallet number simply
+        /// stopped moving. A note in an allow-list cannot fail a gate, so the defect survived every
+        /// run of this suite. An assertion can.
+        /// </para>
+        /// Returns null when wired, or an offender string naming the breakage.
+        /// </summary>
+        private static string AssertCollectorTellWired(string projectRoot)
+        {
+            const string ViewRel = "Assets/_Modules/Village/Buildings/Progression/CollectorStackView.cs";
+            const string Token = "CollectorStackView.Attach";
+
+            string viewFull = Path.Combine(projectRoot, ViewRel.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(viewFull)) return null;   // view deleted: nothing to keep wired
+
+            string modulesDir = Path.Combine(Application.dataPath, "_Modules");
+            string[] files;
+            try { files = Directory.GetFiles(modulesDir, "*.cs", SearchOption.AllDirectories); }
+            catch { return null; }
+
+            foreach (var path in files)
+            {
+                string norm = path.Replace('\\', '/');
+                if (norm.EndsWith("CollectorStackView.cs", StringComparison.OrdinalIgnoreCase)) continue;
+
+                string text;
+                try { text = File.ReadAllText(path); }
+                catch { continue; }
+
+                // Ignore matches that only appear in comments - a comment is what let this rot.
+                foreach (var line in text.Split('\n'))
+                {
+                    string trimmed = line.TrimStart();
+                    if (trimmed.StartsWith("//") || trimmed.StartsWith("*") || trimmed.StartsWith("/*")) continue;
+                    if (trimmed.IndexOf(Token, StringComparison.Ordinal) >= 0) return null;   // wired
+                }
+            }
+
+            return ViewRel + " -> DEAD TELL: CollectorStackView.Attach has NO non-comment caller anywhere under " +
+                   "Assets/_Modules. The entire collector 'I am full' tell (fill bar, amber near-full band, N/20 " +
+                   "readout, '!' bang, glint, full toast) is built but never invoked, so a collector that stops " +
+                   "earning gives the player no signal at all. Wire it at StructureFactory's ResourceCollector " +
+                   "behavior case, right after col.Configure(buildingId)";
         }
     }
 }

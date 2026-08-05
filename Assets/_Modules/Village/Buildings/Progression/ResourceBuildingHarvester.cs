@@ -163,35 +163,12 @@ namespace DeNelle.Village.Buildings.Progression
                 // Roll over (carry the remainder so faster tiers stay accurate).
                 _elapsed[i] -= interval;
 
-                int amount = ResourceBuildingState.CurrentEffectiveYield(id);
+                // ONE authority for "what does one tick of this building pay" - shared with the
+                // WO-859 offline/away catch-up (ResourceCollector.AwayAmount). The multiplier
+                // stack lives in EffectiveYieldPerTick and is deliberately NOT re-implemented
+                // anywhere else, so the away path can never drift from the online path.
+                int amount = EffectiveYieldPerTick(id);
                 if (amount <= 0) continue;
-
-                // WO-709 (owner curve ruling 2026-07-13, quadratic-total): the echo-count
-                // GLOBAL harvest multiplier applies to ALL harvest income — collectors
-                // included — through this one read at the existing accrual choke point
-                // (the WO-676 pattern below). 1 echo = x1 (baseline unchanged); each new
-                // echo amps the entire operation. Null-safe: no EchoService => x1.
-                var echoSvc = EchoService.Instance;
-                if (echoSvc != null && echoSvc.GlobalHarvestMultiplier > 1.0)
-                {
-                    amount = Mathf.RoundToInt(amount * (float)echoSvc.GlobalHarvestMultiplier);
-                    DeNelle.Core.Diagnostics.FlowTrace.Once("Harvest", "echo-global-mult",
-                        $"WO-709 global harvest multiplier x{echoSvc.GlobalHarvestMultiplier:0.#} applied to collector ticks (echoes amp the whole operation).");
-                }
-
-                // WO-676 STEWARD (Provider's Bond): ONE HeroTalentModifiers read at this
-                // existing accrual choke point — `harvestRate` scales the per-tick yield.
-                // StatSum is internally null-safe (no service/tree/nodes => 0), so the
-                // yield is byte-identical to baseline at sum 0. Read only when a tick
-                // actually fires (interval seconds), never per-frame.
-                float rateBonus = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
-                    DeNelle.Village.HeroTalentClassReader.Slug(), "harvestRate");
-                if (rateBonus > 0f)
-                {
-                    amount = Mathf.Max(amount, Mathf.RoundToInt(amount * (1f + rateBonus)));
-                    DeNelle.Core.Diagnostics.FlowTrace.Once("Talent", "building-harvestRate",
-                        $"harvestRate x{1f + rateBonus:0.###} applied to resource-building tick (WO-676 Provider's Bond).");
-                }
 
                 // THE ONLY PAYOUT PATH: the live collector's capped pending pool
                 // (WO-663 CoC spine). The player banks it with a Collect tap; a siege
@@ -210,6 +187,78 @@ namespace DeNelle.Village.Buildings.Progression
                     $"{amount} {def.Yields} WITHHELD this tick (a standing building with no collector " +
                     "component is a wiring bug; income is never granted straight to the wallet).");
             }
+        }
+
+        // =====================================================================
+        //  THE RATE AUTHORITY (WO-859 - shared by the online tick and the away catch-up)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-859 - the units ONE harvest tick of <paramref name="buildingId"/> pays, with the full
+        /// multiplier stack applied, in the order it has always been applied:
+        /// <list type="number">
+        /// <item>the level's effective yield (YieldPerTick x YieldSizeMultiplier x the WO-430
+        /// production perk) - <see cref="ResourceBuildingState.CurrentEffectiveYield"/>;</item>
+        /// <item>the WO-709 echo-count GLOBAL harvest multiplier;</item>
+        /// <item>the WO-676 STEWARD <c>harvestRate</c> talent.</item>
+        /// </list>
+        /// <para>
+        /// EXTRACTED FROM <see cref="Update"/> UNCHANGED. Its whole reason to exist is that
+        /// <see cref="ResourceCollector"/>'s away/offline catch-up needs the SAME number: an offline
+        /// path that re-derived the stack would silently diverge from the online one the first time
+        /// either was retuned, and the player would be paid a different rate for being away than for
+        /// standing there. One authority per concern.
+        /// </para>
+        /// Null-safe throughout (no EchoService => x1, no talent tree => +0), so the value is
+        /// byte-identical to the pre-extraction baseline. 0 for an unknown id.
+        /// </summary>
+        public static int EffectiveYieldPerTick(string buildingId)
+        {
+            int amount = ResourceBuildingState.CurrentEffectiveYield(buildingId);
+            if (amount <= 0) return 0;
+
+            // WO-709 (owner curve ruling 2026-07-13, quadratic-total): the echo-count GLOBAL
+            // harvest multiplier applies to ALL harvest income - collectors included - through
+            // this one read at the accrual choke point. 1 echo = x1 (baseline unchanged); each
+            // new echo amps the entire operation.
+            double echoMult = EchoHarvestMultiplier();
+            if (echoMult > 1.0)
+            {
+                amount = Mathf.RoundToInt(amount * (float)echoMult);
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Harvest", "echo-global-mult",
+                    $"WO-709 global harvest multiplier x{echoMult:0.#} applied to collector ticks (echoes amp the whole operation).");
+            }
+
+            // WO-676 STEWARD (Provider's Bond): `harvestRate` scales the per-tick yield. StatSum
+            // is internally null-safe (no service/tree/nodes => 0), so the yield is byte-identical
+            // to baseline at sum 0. NOTE: this term is deliberately ABSENT from the CAPACITY basis
+            // (ResourceCollector.ThroughputScale) - capacity is `collectorCap`'s seam, not this
+            // one, matching the identical ruling on the Echo silo.
+            float rateBonus = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                DeNelle.Village.HeroTalentClassReader.Slug(), "harvestRate");
+            if (rateBonus > 0f)
+            {
+                amount = Mathf.Max(amount, Mathf.RoundToInt(amount * (1f + rateBonus)));
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Talent", "building-harvestRate",
+                    $"harvestRate x{1f + rateBonus:0.###} applied to resource-building tick (WO-676 Provider's Bond).");
+            }
+
+            return amount;
+        }
+
+        /// <summary>
+        /// The WO-709 echo-count global harvest multiplier, or 1.0 when there is no EchoService.
+        /// One read point shared by <see cref="EffectiveYieldPerTick"/> (the RATE) and
+        /// <see cref="ResourceCollector"/>'s capacity scale (the CAP), so the two can never
+        /// disagree about how much an echo is worth - which is precisely the divergence that made
+        /// a 6-echo collector fill in minutes while its cap stayed on the one-echo basis.
+        /// </summary>
+        public static double EchoHarvestMultiplier()
+        {
+            var echoSvc = EchoService.Instance;
+            if (echoSvc == null) return 1.0;
+            double m = echoSvc.GlobalHarvestMultiplier;
+            return m > 1.0 ? m : 1.0;
         }
 
         // =====================================================================

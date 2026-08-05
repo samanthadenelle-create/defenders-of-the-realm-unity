@@ -25,7 +25,33 @@
 // live registered ResourceCollector, and DELETES the direct-grant fallback so the
 // capped pending pool is the only payout path.
 //
-// SIX CASES:
+// WO-859 / WO-900 (2026-08-04) extended this suite from six cases to thirteen. The new half
+// covers the SECOND defect the first fix missed and the loop built on top of it:
+//
+//   7  [offline-capped]         away accrual shares the ONLINE rate authority
+//                               (EffectiveYieldPerTick), carries an int-overflow guard, and is
+//                               bounded by CAPACITY - the cap actually binds at the authored
+//                               numbers (an hour fits, thirty days does not).
+//   8  [stamp-advances-at-cap]  THE HIGHEST-RISK ONE. The last-accrual stamp write must sit
+//                               OUTSIDE Accrue's `if (_pending > before)` block, or it freezes
+//                               when the pool caps and the next Collect refills instantly from a
+//                               frozen backlog - the capacity cap would then bound nothing.
+//   9  [capacity-hours-stable]  capacity is HOURS: the flat `1 + 0.5*(level-1)` multiplier is
+//                               gone, harvestRate is excluded from the capacity basis, and every
+//                               collector still holds ~8h of level-1 production.
+//   10 [fallback-gated]         P0. EnsureFallbackCollector must consult the ever-built ledger.
+//                               A live collector opens MayHarvest unconditionally, so an
+//                               unconditional DDOL fallback re-opened the phantom-income gate for
+//                               a BLANK TOWN and paid full town income during DUNGEON runs.
+//   11 [no-crystal-faucet]      no collector routes at Crystals (uncapped premium currency).
+//   12 [tell-wired]             CollectorStackView.Attach actually has a caller, the tell stays
+//                               event-driven, the FULL toast is coalesced, and the copy never
+//                               says "Storage" (that word is the town bank's).
+//   13 [configure-rekeys]       MEASURED: AddComponent fires OnEnable before Configure, so every
+//                               collector registered under the default id "farm". Configure must
+//                               re-key the registry.
+//
+// THE ORIGINAL SIX CASES:
 //
 //   1 [gate-live]      Source: the harvester consults the existence rule BEFORE the
 //                      level read, and reads the ever-built ledger. FAILS on the
@@ -82,6 +108,9 @@ namespace DeNelle.Editor.Regression
         private const string HarvesterSrc = "Assets/_Modules/Village/Buildings/Progression/ResourceBuildingHarvester.cs";
         private const string CollectorSrc = "Assets/_Modules/Village/Buildings/Progression/ResourceCollector.cs";
         private const string BuildModeSrc = "Assets/_Modules/Village/BuildMode/BuildModeController.cs";
+        private const string BootstrapSrc = "Assets/_Modules/Village/Buildings/Progression/ResourceCollectorBootstrap.cs";
+        private const string ViewSrc = "Assets/_Modules/Village/Buildings/Progression/CollectorStackView.cs";
+        private const string FactorySrc = "Assets/_Modules/Village/Catalog/StructureFactory.cs";
         private const string StructuresRes = "Assets/Resources/Data/Canonical/structures-catalog.json";
         private const string StructuresSA = "Assets/StreamingAssets/Data/Canonical/structures-catalog.json";
         private const string StepsRes = "Assets/Resources/Data/Canonical/tutorial/tutorial-steps.json";
@@ -106,6 +135,13 @@ namespace DeNelle.Editor.Regression
             Case(failures, "built-earns", () => Case4_BuiltEarns(failures, notes));
             Case(failures, "catalog-map", () => Case5_CatalogMap(failures, notes));
             Case(failures, "founding-flow", () => Case6_FoundingFlow(failures, notes));
+            Case(failures, "offline-capped", () => Case7_OfflineCapped(failures, notes));
+            Case(failures, "stamp-advances-at-cap", () => Case8_StampAdvancesAtCap(failures, notes));
+            Case(failures, "capacity-hours-stable", () => Case9_CapacityHoursStable(failures, notes));
+            Case(failures, "fallback-gated", () => Case10_FallbackGated(failures, notes));
+            Case(failures, "no-crystal-faucet", () => Case11_NoCrystalFaucet(failures, notes));
+            Case(failures, "tell-wired", () => Case12_TellWired(failures, notes));
+            Case(failures, "configure-rekeys", () => Case13_ConfigureRekeys(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count > 0)
@@ -119,7 +155,13 @@ namespace DeNelle.Editor.Regression
                      "ledger, the uncapped auto-banking direct grant is gone (the capped pending pool " +
                      "is the only payout), a built farm earns farm income only, each progression id maps " +
                      "to exactly one Collector catalog row, and the zero-seed founding sequence still " +
-                     "bootstraps (every demanded placement is free and a level-1 collector accrues)" + noteStr;
+                     "bootstraps (every demanded placement is free and a level-1 collector accrues). " +
+                     "AND (WO-859/WO-900): the DDOL fallback collector is gated on the ever-built ledger so it " +
+                     "can no longer back-door the existence gate, away accrual shares the online rate authority " +
+                     "and is bounded by capacity, the last-accrual stamp advances even AT CAP (no frozen " +
+                     "backlog), capacity is expressed in HOURS so fill time is level- and echo-invariant at " +
+                     "~8h, no collector opens a crystal faucet, Configure re-keys the registry, and the " +
+                     "collector FULL tell is wired with a coalesced toast" + noteStr;
             return true;
         }
 
@@ -473,8 +515,404 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  CASE 7 - away accrual is bounded by CAPACITY, and shares the online rate
+        // =====================================================================
+
+        private static void Case7_OfflineCapped(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(CollectorSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            // (a) The away path must NOT re-implement the multiplier stack. It has to call the
+            //     one shared authority the ONLINE tick uses, or the two silently diverge the
+            //     first time either is retuned and the player earns a different rate for being
+            //     away than for standing there.
+            if (code.IndexOf("EffectiveYieldPerTick", StringComparison.Ordinal) < 0)
+                failures.Add("[offline-capped] the collector's away catch-up does not call " +
+                             "ResourceBuildingHarvester.EffectiveYieldPerTick - the offline path is re-deriving the yield " +
+                             "multiplier stack itself, which is exactly how the away rate drifts away from the online rate");
+            if (Regex.IsMatch(code, @"GlobalHarvestMultiplier"))
+                failures.Add("[offline-capped] ResourceCollector reads GlobalHarvestMultiplier directly - the echo term " +
+                             "must come through the shared harvester helper so rate and capacity can never disagree");
+
+            // (b) The int-overflow guard exists and is a CLAMP, not a balance cap.
+            if (code.IndexOf("MaxAwaySeconds", StringComparison.Ordinal) < 0)
+                failures.Add("[offline-capped] no MaxAwaySeconds overflow guard - a tampered/rolled-forward clock could " +
+                             "overflow the int handed to Accrue");
+
+            // (c) Accrue still CLAMPS to Capacity. This is what makes the away window bounded:
+            //     8h, 3 days and 3 weeks must all yield exactly the pool, with no second
+            //     time-based cap anywhere.
+            if (!Regex.IsMatch(code, @"Math\s*\.\s*Min\s*\(\s*cap"))
+                failures.Add("[offline-capped] Accrue no longer clamps pending to the capacity - the per-collector capacity " +
+                             "IS the offline cap, so without this clamp an away window is unbounded");
+
+            // (d) The cap must actually BIND at the authored numbers: an hour of away must fit
+            //     inside the pool while 30 days must not. If both fell on one side of the cap
+            //     the dial would be doing nothing.
+            var caps = CatalogCapacities(failures);
+            if (caps == null) return;
+            foreach (var id in ResourceBuildingProgression.OrderedIds)
+            {
+                if (!caps.TryGetValue(id, out double cap) || cap <= 0.0) continue;
+                double perHour = BaselineYieldPerHour(id);
+                if (perHour <= 0.0) continue;
+
+                if (perHour * 1.0 > cap)
+                    failures.Add("[offline-capped] '" + id + "' fills its whole pool in under an hour (" +
+                                 perHour.ToString("0") + "/h vs cap " + cap.ToString("0") + ") - the away window is so " +
+                                 "short the collector is capped before the player could plausibly return");
+                if (perHour * 24.0 * 30.0 <= cap)
+                    failures.Add("[offline-capped] '" + id + "' does NOT reach its cap in 30 days (" +
+                                 perHour.ToString("0") + "/h vs cap " + cap.ToString("0") + ") - capacity is not bounding " +
+                                 "the away window at all, so offline income is effectively unlimited");
+            }
+        }
+
+        // =====================================================================
+        //  CASE 8 - THE HIGHEST-RISK REGRESSION: the stamp advances even AT CAP
+        // =====================================================================
+        //
+        //  If the last-accrual stamp only moved when pending actually GREW, it would FREEZE the
+        //  moment a collector caps. The player then taps Collect and the very next catch-up
+        //  re-pays the entire frozen backlog instantly - so the capacity cap would bound nothing
+        //  and the away window would be unlimited. The stamp write must therefore sit OUTSIDE
+        //  the `if (_pending > before)` block. This case asserts exactly that, at source.
+
+        private static void Case8_StampAdvancesAtCap(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(CollectorSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            int accrueAt = code.IndexOf("public void Accrue(", StringComparison.Ordinal);
+            if (accrueAt < 0)
+            {
+                failures.Add("[stamp-advances-at-cap] ResourceCollector.Accrue not found - the accrual seam moved; " +
+                             "re-point this oracle (do NOT delete it: it guards the frozen-backlog defect)");
+                return;
+            }
+
+            // Bound the search to Accrue's own body (up to the next member declaration).
+            int endAt = code.IndexOf("public int Collect(", accrueAt, StringComparison.Ordinal);
+            string body = endAt > accrueAt ? code.Substring(accrueAt, endAt - accrueAt) : code.Substring(accrueAt);
+
+            var stamp = Regex.Match(body, @"_lastAccrualMs\s*=\s*TimeSource\s*\.\s*NowUnixMs\s*\(\s*\)");
+            if (!stamp.Success)
+            {
+                failures.Add("[stamp-advances-at-cap] Accrue never advances the last-accrual stamp - every online tick " +
+                             "would leave the stamp stale, so a relaunch would re-pay time the player was already paid for");
+                return;
+            }
+
+            var guard = Regex.Match(body, @"if\s*\(\s*_pending\s*>\s*before\s*\)");
+            if (!guard.Success)
+            {
+                notes.Add("Accrue's `if (_pending > before)` block is gone; the stamp-placement assert below is now " +
+                          "vacuous - re-point this oracle to whatever replaced it");
+                return;
+            }
+
+            if (stamp.Index > guard.Index)
+                failures.Add("[stamp-advances-at-cap] the last-accrual stamp is written AFTER/INSIDE the " +
+                             "`if (_pending > before)` block. At capacity Accrue adds nothing, that branch does not run, " +
+                             "and the stamp FREEZES - so the instant the player taps Collect the next catch-up refills the " +
+                             "pool from a frozen backlog and the capacity cap bounds NOTHING. The write must stay OUTSIDE " +
+                             "the block (WO-859 sec.4, the highest-risk line in the change)");
+
+            // The at-cap branch must also PERSIST the advanced stamp, or a relaunch reads the
+            // pre-cap value off disk and the freeze comes back through the save file.
+            if (!Regex.IsMatch(body, @"else\s*\{[^}]*SaveState\s*\(", RegexOptions.Singleline))
+                failures.Add("[stamp-advances-at-cap] the at-cap branch of Accrue does not SaveState - the stamp advances " +
+                             "in memory but never reaches disk, so a relaunch restores the frozen backlog anyway");
+        }
+
+        // =====================================================================
+        //  CASE 9 - capacity is HOURS: fill time is level- and echo-invariant
+        // =====================================================================
+
+        private static void Case9_CapacityHoursStable(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(CollectorSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            // (a) The flat level multiplier must be GONE. It is what made the curve run backwards:
+            //     capacity x3 from L1->L5 against throughput x5.6, so upgrading a collector
+            //     SHORTENED how long it ran unattended.
+            if (Regex.IsMatch(code, @"1\.0\s*\+\s*0\.5\s*\*\s*System\.Math\.Max\s*\(\s*0\s*,\s*level"))
+                failures.Add("[capacity-hours-stable] ComputeCapacity still scales the authored capacity by the FLAT " +
+                             "`1 + 0.5*(level-1)` multiplier - capacity then grows x3 across the ladder while throughput " +
+                             "grows x5.6, so UPGRADING A COLLECTOR MAKES IT FILL SOONER (the curve runs backwards)");
+            if (code.IndexOf("ThroughputScale", StringComparison.Ordinal) < 0)
+                failures.Add("[capacity-hours-stable] ComputeCapacity does not use a throughput-proportional scale - " +
+                             "hours-to-full will drift with level and echo count instead of staying constant");
+
+            // (b) Capacity must NOT fold in the harvestRate talent. Deliberate, and it mirrors the
+            //     already-shipped identical ruling on the Echo silo: capacity is collectorCap's
+            //     seam, not harvestRate's. Two capacity systems, one rule.
+            var scale = Regex.Match(code, @"ThroughputScale\s*\(\s*\)\s*\{(.*?)\n\s{8}\}", RegexOptions.Singleline);
+            if (scale.Success && scale.Groups[1].Value.IndexOf("harvestRate", StringComparison.Ordinal) >= 0)
+                failures.Add("[capacity-hours-stable] the capacity scale folds in the harvestRate talent - capacity is " +
+                             "collectorCap's seam, not harvestRate's (EchoService.SiloCapacity applies the same rule); " +
+                             "including it makes the two capacity systems disagree");
+
+            // (c) DATA: the authored capacity must still mean ~8 hours of level-1 production for
+            //     every collector. This is what catches a retune that silently changes the loop.
+            var caps = CatalogCapacities(failures);
+            if (caps == null) return;
+
+            const double TargetHours = 8.0;
+            foreach (var id in ResourceBuildingProgression.OrderedIds)
+            {
+                if (!caps.TryGetValue(id, out double cap) || cap <= 0.0)
+                {
+                    failures.Add("[capacity-hours-stable] '" + id + "' authors no repo.capacity - it would fall back to " +
+                                 "the legacy ~2h formula and stop obeying the hours dial");
+                    continue;
+                }
+                double perHour = BaselineYieldPerHour(id);
+                if (perHour <= 0.0)
+                {
+                    failures.Add("[capacity-hours-stable] '" + id + "' has no level-1 production rate - hours-to-full is " +
+                                 "undefined");
+                    continue;
+                }
+                double hours = cap / perHour;
+                if (Math.Abs(hours - TargetHours) > TargetHours * 0.05)
+                    failures.Add("[capacity-hours-stable] '" + id + "' holds " + hours.ToString("0.00") + "h of level-1 " +
+                                 "production (cap " + cap.ToString("0") + " / " + perHour.ToString("0") + " per hour), " +
+                                 "outside 5% of the authored " + TargetHours.ToString("0") + "h target - the collect loop's " +
+                                 "cadence moved; retune repo.capacity or update this target deliberately");
+                else
+                    notes.Add(id + " holds " + hours.ToString("0.00") + "h at L1");
+
+                // (d) Fill time must be level-INVARIANT. Replicates the documented scale basis
+                //     (rate ratio) so a future change that reintroduces a constant multiplier is
+                //     caught numerically as well as at source.
+                var def = ResourceBuildingProgression.Find(id);
+                if (def == null) continue;
+                foreach (int level in new[] { 3, 5 })
+                {
+                    var lv = def.LevelDef(level);
+                    if (lv == null || lv.HarvestInterval <= 0f) continue;
+                    double ratio = (lv.YieldPerTick * Math.Max(0f, lv.YieldSizeMultiplier) * (3600.0 / lv.HarvestInterval))
+                                   / perHour;
+                    if (ratio <= 0.0) continue;
+                    double hoursAtLevel = (cap * ratio) / (perHour * ratio);
+                    if (Math.Abs(hoursAtLevel - hours) > hours * 0.05)
+                        failures.Add("[capacity-hours-stable] '" + id + "' fills in " + hoursAtLevel.ToString("0.00") +
+                                     "h at level " + level + " versus " + hours.ToString("0.00") + "h at level 1 - " +
+                                     "hours-to-full must not move with the upgrade ladder");
+                }
+            }
+        }
+
+        // =====================================================================
+        //  CASE 10 - the fallback collector cannot back-door the existence gate
+        // =====================================================================
+
+        private static void Case10_FallbackGated(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(BootstrapSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            int fn = code.IndexOf("EnsureFallbackCollector(string", StringComparison.Ordinal);
+            if (fn < 0)
+            {
+                failures.Add("[fallback-gated] ResourceCollectorBootstrap.EnsureFallbackCollector not found - re-point " +
+                             "this oracle; it guards the back door that let a BLANK TOWN earn again");
+                return;
+            }
+            string body = code.Substring(fn);
+
+            if (body.IndexOf("HasEverBuilt", StringComparison.Ordinal) < 0)
+                failures.Add("[fallback-gated] EnsureFallbackCollector creates a live ResourceCollector WITHOUT consulting " +
+                             "the WO-834 ever-built ledger. MayHarvest returns true the instant a live collector exists, so " +
+                             "an unconditional fallback re-opens the phantom-income gate for a town with nothing in it - and " +
+                             "accrues full town income while the player is off in a DUNGEON");
+
+            if (code.IndexOf("CatalogIdsForBuilding", StringComparison.Ordinal) < 0)
+                failures.Add("[fallback-gated] the fallback gate does not resolve ids through " +
+                             "ResourceBuildingHarvester.CatalogIdsForBuilding - it must use the SAME resolution the harvest " +
+                             "gate uses, or the two can disagree about what 'built' means");
+        }
+
+        // =====================================================================
+        //  CASE 11 - no collector opens a CRYSTAL faucet (owner ruling, uncapped premium)
+        // =====================================================================
+
+        private static void Case11_NoCrystalFaucet(List<string> failures, List<string> notes)
+        {
+            foreach (var id in ResourceBuildingProgression.OrderedIds)
+            {
+                var def = ResourceBuildingProgression.Find(id);
+                if (def == null) continue;
+                if (def.Yields == HarvestResource.Crystals)
+                    failures.Add("[no-crystal-faucet] progression building '" + id + "' YIELDS Crystals - crystals are the " +
+                                 "UNCAPPED premium currency (owner ruling 2026-08-04, CoC gems precedent); routing a " +
+                                 "collector at them creates an uncapped, offline-accruing premium faucet");
+            }
+
+            string raw = ReadText(StructuresRes, failures);
+            if (raw == null) return;
+            var entries = JObject.Parse(raw)["entries"] as JArray;
+            if (entries == null) return;
+
+            foreach (var e in entries)
+            {
+                string type = (string)e["type"] ?? "";
+                if (!string.Equals(type, "Collector", StringComparison.OrdinalIgnoreCase)) continue;
+                var repo = e["repo"];
+                string storageRes = repo != null ? (string)repo["storageResource"] : null;
+                if (!string.IsNullOrEmpty(storageRes) &&
+                    storageRes.IndexOf("crystal", StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add("[no-crystal-faucet] Collector row '" + (string)e["id"] + "' routes at a crystal resource " +
+                                 "(storageResource='" + storageRes + "') - collectors yield Food/Wood/Iron only");
+            }
+        }
+
+        // =====================================================================
+        //  CASE 12 - the "I am full" tell is actually WIRED (WO-900)
+        // =====================================================================
+        //
+        //  CollectorStackView is a complete 437-line CoC fill tell that sat with ZERO CALLERS
+        //  since it was written: a collector capping showed the player nothing at all and the
+        //  wallet number simply stopped moving. This case is the one that would have caught it.
+
+        private static void Case12_TellWired(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(FactorySrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            int at = code.IndexOf("case \"ResourceCollector\"", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                failures.Add("[tell-wired] StructureFactory has no \"ResourceCollector\" behavior case - re-point this oracle");
+                return;
+            }
+            int end = code.IndexOf("case \"CrystalMine\"", at, StringComparison.Ordinal);
+            string body = end > at ? code.Substring(at, end - at) : code.Substring(at);
+
+            if (body.IndexOf("CollectorStackView.Attach", StringComparison.Ordinal) < 0)
+                failures.Add("[tell-wired] placing a collector does NOT attach CollectorStackView - the entire fill tell " +
+                             "(fill bar, amber near-full band, N/20 readout, the \"!\" bang, the glint and the full toast) " +
+                             "is built but dead, so the player gets no signal at all that a collector has stopped earning");
+
+            // The tell must remain event-driven off StepChanged, never a per-frame model poll.
+            string viewRaw = ReadText(ViewSrc, failures);
+            if (viewRaw != null)
+            {
+                string viewCode = StripComments(viewRaw);
+                if (viewCode.IndexOf("StepChanged", StringComparison.Ordinal) < 0)
+                    failures.Add("[tell-wired] CollectorStackView no longer subscribes to StepChanged - the view must be " +
+                                 "event-driven off the model's single re-render signal, never poll it per frame");
+
+                // Toast spam: three collectors capping in one frame must produce ONE toast.
+                if (!Regex.IsMatch(viewCode, @"static[^\n]*s_pendingFullNames"))
+                    failures.Add("[tell-wired] the FULL toast is not coalesced - ShowFullToast fires per collector, so " +
+                                 "three collectors filling together throw three stacked toasts at the player");
+
+                // WO-900 sec.4 copy law: "Storage" is the town BANK's word (WO-857). The player
+                // must never be shown two different notions of "full".
+                if (viewCode.IndexOf("Storage", StringComparison.Ordinal) >= 0)
+                    failures.Add("[tell-wired] CollectorStackView copy uses the word 'Storage' - that word belongs to the " +
+                                 "town bank (WO-857); collector copy says 'full ... collect it'");
+            }
+        }
+
+        // =====================================================================
+        //  CASE 13 - Configure RE-KEYS the registry (measured 2026-08-04)
+        // =====================================================================
+        //
+        //  MEASURED, not theorised. Headless blank-town capture, three consecutive lines:
+        //      [Flow:Harvest] register id=farm pending=1088/2000   (x3, one per collector)
+        //      [Flow:Harvest] existence gate CLOSED for 'lumbermill' (liveCollector=no, ...)
+        //      [Flow:Harvest] accrue-pending building=forge pending=87/600   (rising in ~12s
+        //                     = the FARM's yield 13 x HpFraction, NOT the forge's 6)
+        //  AddComponent on an ACTIVE GameObject runs Awake+OnEnable synchronously - i.e. BEFORE
+        //  Configure - so every collector registered under the serialized default id "farm".
+        //  Result: lumbermill/forge income was silently WITHHELD by the no-live-collector branch,
+        //  and farm income was paid into the wrong pool and banked as the wrong RESOURCE.
+
+        private static void Case13_ConfigureRekeys(List<string> failures, List<string> notes)
+        {
+            string raw = ReadText(CollectorSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+
+            var cfg = Regex.Match(code, @"public\s+void\s+Configure\s*\([^)]*\)\s*\{(.*?)\n\s{8}\}",
+                                  RegexOptions.Singleline);
+            if (!cfg.Success)
+            {
+                failures.Add("[configure-rekeys] ResourceCollector.Configure not found - re-point this oracle");
+                return;
+            }
+            string body = cfg.Groups[1].Value;
+
+            bool unreg = body.IndexOf("ResourceCollectorRegistry.Unregister", StringComparison.Ordinal) >= 0;
+            bool reg = body.IndexOf("ResourceCollectorRegistry.Register", StringComparison.Ordinal) >= 0;
+            if (!unreg || !reg)
+                failures.Add("[configure-rekeys] Configure does not re-key the collector registry (Unregister then " +
+                             "Register). AddComponent fires OnEnable - and therefore Register - BEFORE Configure runs, so " +
+                             "every collector registers under the serialized default id 'farm': the lumbermill and forge " +
+                             "then have NO live collector and their income is silently withheld, while the farm's tick is " +
+                             "paid into whichever collector registered last and banked as the WRONG RESOURCE. Measured " +
+                             "headless 2026-08-04 ('register id=farm' x3)");
+
+            // Order matters: the stale key can only be dropped while BuildingId still returns it.
+            int unregAt = body.IndexOf("ResourceCollectorRegistry.Unregister", StringComparison.Ordinal);
+            int assignAt = Regex.Match(body, @"_buildingId\s*=\s*buildingId").Index;
+            if (unreg && assignAt > 0 && unregAt > assignAt)
+                failures.Add("[configure-rekeys] Configure unregisters AFTER assigning _buildingId - the registry removes " +
+                             "by CURRENT id, so the stale entry under the old key is orphaned forever and the bug survives");
+        }
+
+        // =====================================================================
         //  Helpers
         // =====================================================================
+
+        /// <summary>repo.capacity per progression building id, read from the canonical catalog.</summary>
+        private static Dictionary<string, double> CatalogCapacities(List<string> failures)
+        {
+            string raw = ReadText(StructuresRes, failures);
+            if (raw == null) return null;
+            var entries = JObject.Parse(raw)["entries"] as JArray;
+            if (entries == null)
+            {
+                failures.Add("[capacity] structures-catalog.json has no 'entries' array");
+                return null;
+            }
+
+            var caps = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in entries)
+            {
+                string type = (string)e["type"] ?? "";
+                if (!string.Equals(type, "Collector", StringComparison.OrdinalIgnoreCase)) continue;
+                var repo = e["repo"];
+                if (repo == null) continue;
+                string bid = (string)repo["collectorBuildingId"];
+                if (string.IsNullOrEmpty(bid)) bid = (string)e["id"];
+                double cap = repo["capacity"] != null ? (double)repo["capacity"] : 0.0;
+                if (!string.IsNullOrEmpty(bid)) caps[bid] = cap;
+            }
+            return caps;
+        }
+
+        /// <summary>
+        /// Units per hour a building produces at LEVEL 1 with one echo and no perks - the fixed
+        /// reference repo.capacity is authored against, so `capacity / this` is hours-to-full.
+        /// </summary>
+        private static double BaselineYieldPerHour(string buildingId)
+        {
+            var def = ResourceBuildingProgression.Find(buildingId);
+            var l1 = def?.LevelDef(1);
+            if (l1 == null || l1.HarvestInterval <= 0f) return 0.0;
+            return l1.YieldPerTick * Math.Max(0f, l1.YieldSizeMultiplier) * (3600.0 / l1.HarvestInterval);
+        }
 
         private static string ReadText(string path, List<string> failures)
         {

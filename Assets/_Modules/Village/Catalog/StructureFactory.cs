@@ -748,6 +748,18 @@ namespace DeNelle.Village
                     string buildingId = !string.IsNullOrEmpty(r != null ? r.collectorBuildingId : null)
                         ? r.collectorBuildingId : entry.id;
                     col.Configure(buildingId);
+
+                    // WO-900 Part A - attach the DIEGETIC FILL VIEW. CollectorStackView is a
+                    // complete, 437-line CoC "I am full" tell (pooled prop pile / world-space fill
+                    // bar, amber near-full band at 85%, redundant "N/20" readout, the "!" bang, the
+                    // glint VFX, the bob, and the one-time "<Building> is full" toast) that has had
+                    // ZERO CALLERS since it was written - so a collector filling up showed the
+                    // player absolutely nothing and the wallet number just stopped moving. This is
+                    // the wiring, not a rebuild. Attach self-skips the origin-parked DDOL logical
+                    // fallback hosts (CollectorStackView.cs:100-102), so only real placed collectors
+                    // get decorated, and it is null-safe. Presentation stays a SEPARATE component
+                    // injected with the model - the gameplay object never builds UI.
+                    DeNelle.Village.Buildings.Progression.CollectorStackView.Attach(col);
                     break;
                 }
 

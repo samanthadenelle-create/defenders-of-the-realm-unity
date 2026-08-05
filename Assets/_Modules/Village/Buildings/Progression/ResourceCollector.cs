@@ -20,6 +20,24 @@ namespace DeNelle.Village.Buildings.Progression
     {
         private const string PendingPrefsPrefix = "dotr.collector.pending.";
         private const string HpPrefsPrefix = "dotr.collector.hp.";
+
+        /// <summary>
+        /// WO-859 - per-collector LAST-ACCRUAL stamp (unix ms), the whole basis of away/offline
+        /// accrual. Deliberately a PlayerPrefs key beside the two this collector already owns:
+        /// pending and HP persist this way, so there is NO GameState field, NO SaveSchema change
+        /// and NO version bump. Stored as a STRING, not a float: unix-ms is ~1.7e12 and a float
+        /// carries only ~7 significant digits, which would quantise the stamp to ~100-second
+        /// buckets and make every catch-up wrong by up to two minutes.
+        /// </summary>
+        private const string LastAccrualPrefsPrefix = "dotr.collector.lastaccrual.";
+
+        /// <summary>
+        /// WO-859 overflow guard (NOT the design cap - capacity is the cap). Purely so a
+        /// tampered/rolled-forward system clock cannot overflow the int handed to
+        /// <see cref="Accrue"/>. Anything past this is clamped; the pool clamps again anyway.
+        /// </summary>
+        private const double MaxAwaySeconds = 30.0 * 24.0 * 3600.0;
+
         private const float DefaultMaxHp = 120f;
         private const float RaidLootFraction = 0.5f;
 
@@ -29,6 +47,15 @@ namespace DeNelle.Village.Buildings.Progression
         private float _hp;
         private double _pending;
         private bool _broken;
+
+        // WO-859 - unix ms of the last time production was ACCOUNTED FOR on this collector.
+        // 0 = never stamped (a fresh collector: seed to now, back-fill nothing).
+        private double _lastAccrualMs;
+
+        // True once Start() has run. Configure() lands BETWEEN OnEnable and Start (AddComponent
+        // fires Awake+OnEnable synchronously, the factory configures on the next line), so the
+        // away catch-up runs in Start where the building id is finally correct - see CatchUpAway.
+        private bool _started;
 
         public string BuildingId => _buildingId;
         public string SourceId => _buildingId;
@@ -124,6 +151,23 @@ namespace DeNelle.Village.Buildings.Progression
                 isSpent: () => !IsActive);
         }
 
+        /// <summary>
+        /// WO-859 - the away/offline catch-up seam. Deliberately <c>Start</c>, not <c>OnEnable</c>:
+        /// <c>AddComponent</c> fires Awake+OnEnable synchronously, and both call sites call
+        /// <see cref="Configure"/> on the NEXT LINE, so an OnEnable catch-up would integrate the
+        /// wrong building's away window (the serialized default "farm") into a collector that is
+        /// about to become the lumbermill - the same ordering trap that produced the measured
+        /// register-as-farm defect documented on <see cref="Configure"/>. Start runs on the first
+        /// frame AFTER Configure, so the id is settled. A scene-unload/reload, a hub->dungeon->hub
+        /// round trip and an app relaunch all DESTROY and re-create the component, so Start is the
+        /// once-per-lifetime hook every away case passes through.
+        /// </summary>
+        private void Start()
+        {
+            _started = true;
+            CatchUpAway();
+        }
+
         private void OnDisable()
         {
             HarvestSourceRegistry.Unregister(this);
@@ -131,13 +175,131 @@ namespace DeNelle.Village.Buildings.Progression
             SaveState();
         }
 
-        /// <summary>Wire from bootstrap when attaching to a hub storefront.</summary>
+        /// <summary>
+        /// WO-859 - pay this collector for the wall-clock it was not being ticked (app closed,
+        /// dungeon, raid: sec.3 rules them ONE case, and keying off the collector's own stamp is what
+        /// collapses them, with no dependence on service ordering or on which scene the harvester
+        /// happens to live in). Pays through the EXISTING <see cref="Accrue"/>, so the capacity
+        /// clamp, the <see cref="CanAccrue"/> gate and the manual Collect tap all still apply -
+        /// no new route to the wallet. Never touches GameState.LastHarvestClaimMs (WO-859 sec.2 R2:
+        /// that clock already has an ordering race between OfflineHarvestService and EchoService,
+        /// and this must not become a third consumer).
+        /// </summary>
+        private void CatchUpAway()
+        {
+            double nowMs = TimeSource.NowUnixMs();
+
+            // Fresh collector: seed the clock to now and back-fill NOTHING this launch
+            // (mirrors OfflineHarvestService's fresh-save arm, :141-148).
+            if (_lastAccrualMs <= 0.0)
+            {
+                _lastAccrualMs = nowMs;
+                SaveState();
+                FlowTrace.Step("Harvest",
+                    $"away catch-up '{_buildingId}': fresh stamp (<=0) - seeded to now, nothing back-filled.");
+                return;
+            }
+
+            // Anti-tamper monotonic guard: a clock set BACKWARDS yields 0, never a negative and
+            // never a re-claim (mirrors OfflineHarvestService.cs:152-154).
+            double awaySec = (nowMs - _lastAccrualMs) / 1000.0;
+            if (awaySec < 0.0)
+            {
+                FlowTrace.Warn("Harvest",
+                    $"away catch-up '{_buildingId}': clock ran BACKWARDS (now={nowMs:0} < stamp={_lastAccrualMs:0}) - " +
+                    "clamped to 0, no accrual, no re-claim.");
+                awaySec = 0.0;
+            }
+            if (awaySec > MaxAwaySeconds)
+            {
+                FlowTrace.Warn("Harvest",
+                    $"away catch-up '{_buildingId}': away {awaySec:0}s exceeds the {MaxAwaySeconds:0}s int-overflow " +
+                    "guard - clamped (this is NOT the design cap; capacity is).");
+                awaySec = MaxAwaySeconds;
+            }
+
+            int amount = AwayAmount(_buildingId, awaySec);
+            double before = _pending;
+
+            // ALWAYS stamp, even when the window earns nothing - Accrue's unconditional stamp
+            // write covers the paying case; this covers amount<=0 and the CanAccrue-false case
+            // (a broken collector must not bank a frozen backlog if it is ever revived).
+            _lastAccrualMs = nowMs;
+
+            if (amount > 0) Accrue(amount);
+            else SaveState();
+
+            FlowTrace.Step("Harvest",
+                $"away catch-up '{_buildingId}': away={awaySec:0}s owed={amount} " +
+                $"pending {before:F0} -> {_pending:F0} / cap {Capacity:F0}" +
+                (_pending >= Capacity - 0.001 ? " (AT CAP - the cap is what bounds the away window)" : ""));
+        }
+
+        /// <summary>
+        /// Units owed for <paramref name="awaySec"/> of unattended production. The rate comes from
+        /// the SHARED <see cref="ResourceBuildingHarvester.EffectiveYieldPerTick"/> - the very
+        /// function the online tick uses - so the offline path can never drift from the online one
+        /// by re-implementing the multiplier stack. Clamped to int range before the cast.
+        /// </summary>
+        private static int AwayAmount(string buildingId, double awaySec)
+        {
+            if (awaySec <= 0.0) return 0;
+            float interval = ResourceBuildingState.CurrentHarvestInterval(buildingId);
+            if (interval <= 0f) return 0;
+            int perTick = ResourceBuildingHarvester.EffectiveYieldPerTick(buildingId);
+            if (perTick <= 0) return 0;
+            double owed = perTick * (awaySec / interval);
+            if (owed <= 0.0) return 0;
+            return owed >= int.MaxValue ? int.MaxValue : (int)owed;
+        }
+
+        /// <summary>
+        /// Wire from the bootstrap / <see cref="StructureFactory"/> after AddComponent.
+        /// <para>
+        /// ! MEASURED DEFECT (2026-08-04 headless capture, WO-859 Phase 0): registration happens in
+        /// <see cref="OnEnable"/>, and <c>AddComponent</c> on an ACTIVE GameObject runs Awake+OnEnable
+        /// SYNCHRONOUSLY - i.e. BEFORE this method has been called. At that moment
+        /// <see cref="_buildingId"/> is still its serialized default (<c>FarmId</c>), so EVERY
+        /// collector registered itself under the key "farm". The capture is unambiguous - three
+        /// consecutive lines, one per fallback collector:
+        ///   <c>[Flow:Harvest] register id=farm pending=1088/2000</c> (x3)
+        /// followed by <c>existence gate CLOSED for 'lumbermill' (liveCollector=no)</c> and the same
+        /// for 'forge', while the FARM tick was paid into a collector whose id had since become
+        /// 'forge' (<c>accrue-pending building=forge</c> rising in steps of ~12 = the FARM's yield 13
+        /// x HpFraction, not the forge's 6). Consequences: lumbermill/forge income was silently
+        /// WITHHELD by the no-live-collector branch, and farm income landed in the wrong pool and
+        /// banked as the wrong RESOURCE.
+        /// </para>
+        /// The fix belongs HERE, at the one seam where the id changes, so both call sites
+        /// (ResourceCollectorBootstrap and StructureFactory) are corrected by construction: drop the
+        /// stale key BEFORE the id moves, then re-register under the new one.
+        /// </summary>
         public void Configure(string buildingId, float maxHp = DefaultMaxHp)
         {
+            string previousId = _buildingId;
+            bool live = isActiveAndEnabled;
+
+            // Unregister while BuildingId still returns the OLD key (the registry removes by
+            // current id), otherwise the stale "farm" entry is orphaned forever.
+            if (live) ResourceCollectorRegistry.Unregister(this);
+
             _buildingId = buildingId;
             _maxHp = Mathf.Max(1f, maxHp);
             LoadState();
             if (_hp <= 0f) _hp = _maxHp;
+
+            if (live)
+            {
+                ResourceCollectorRegistry.Register(this);
+                if (!string.Equals(previousId, buildingId, System.StringComparison.Ordinal))
+                    FlowTrace.Step("Harvest",
+                        $"collector re-keyed '{previousId}' -> '{buildingId}' on Configure " +
+                        "(AddComponent registers under the serialized default before Configure runs).");
+            }
+
+            // A collector configured AFTER Start (re-purposed host) still owes its away catch-up
+            // for the id it now carries; before Start, Start() will do it with the correct id.
+            if (_started) CatchUpAway();
         }
 
         // Last accrual scale that was FlowTraced — edge-logged (per state change), never per tick.
@@ -167,12 +329,34 @@ namespace DeNelle.Village.Buildings.Progression
             double before = _pending;
             int stepsBefore = FilledSteps;
             _pending = System.Math.Min(cap, _pending + amount * (double)health);
+
+            // ! WO-859 sec.4, THE HIGHEST-RISK LINE IN THE WHOLE CHANGE - and it is deliberately
+            // OUTSIDE the `_pending > before` block below. The stamp records "production up to
+            // HERE has been accounted for", which is true even when the pool was already FULL and
+            // this call added nothing. If the stamp only advanced when the pool grew, it would
+            // FREEZE the moment a collector caps; the player would then tap Collect and the very
+            // next catch-up would re-pay the entire frozen backlog instantly, so the capacity cap
+            // would bound nothing at all and the away window would be unlimited. Mirrors
+            // OfflineHarvestService.cs:176-181 ("ALWAYS advance the clock - even on a zero haul").
+            // Pinned by CollectorIncomeRegression case 8 [stamp-advances-at-cap]; moving this line
+            // inside the block below FAILS that oracle.
+            _lastAccrualMs = TimeSource.NowUnixMs();
+
             if (_pending > before)
             {
                 FlowTrace.Throttle("Harvest", $"accrue-{_buildingId}", 2f,
                     $"accrue-pending building={_buildingId} pending={_pending:F0}/{cap:F0}");
                 SaveState();
                 RaiseStepChangedIfMoved(stepsBefore);
+            }
+            else
+            {
+                // At cap: nothing banked, but the advanced stamp above MUST be persisted, or a
+                // relaunch would read the pre-cap stamp off disk and refill from the backlog.
+                SaveState();
+                FlowTrace.Throttle("Harvest", $"atcap-{_buildingId}", 30f,
+                    $"collector '{_buildingId}' is AT CAP ({_pending:F0}/{cap:F0}) - production is being " +
+                    "DISCARDED and the last-accrual stamp still advances (no frozen backlog).");
             }
         }
 
@@ -257,13 +441,26 @@ namespace DeNelle.Village.Buildings.Progression
         }
 
         /// <summary>
-        /// Collector reserve capacity. PRIMARY path (owner creative 2026-07-24, TIGHT
-        /// collect-loop): the DATA-authored base reserve from the structures-catalog
-        /// `capacity` field (designer-tunable), deepened +50% per LEVEL above 1 so
-        /// upgrading a collector holds more. FALLBACK (field absent/0): the legacy
-        /// ~2 hours of max production formula (which over-sized the buffer so collectors
-        /// never filled). The STEWARD `collectorCap` talent sum (WO-676 Deep Reserves;
-        /// x1 at sum 0) multiplies ON TOP of whichever base is used.
+        /// Collector reserve capacity, expressed in HOURS OF PRODUCTION (WO-859 sec.5).
+        /// <para>
+        /// PRIMARY path: the DATA-authored base reserve from the structures-catalog `capacity`
+        /// field is the collector's L1 pool, and it is scaled by <see cref="ThroughputScale"/> -
+        /// the ratio of what this collector produces NOW to what it produced at level 1 with one
+        /// echo. That makes HOURS-TO-FULL CONSTANT across level and echo count, so `capacity`
+        /// reads as "hours the town keeps working unattended" and stays correct through any future
+        /// rate re-scale.
+        /// </para>
+        /// <para>
+        /// WHAT THIS REPLACED, and why: the old scale was a flat <c>1 + 0.5x(level-1)</c>, i.e.
+        /// capacity grew x3 from L1->L5 while throughput grew x5.6 - so UPGRADING A COLLECTOR
+        /// SHORTENED how long it could run unattended (the curve ran BACKWARDS), and the echo
+        /// multiplier was not in the capacity basis at all, so a 6-echo L5 farm filled in under
+        /// six minutes. Capacity now grows MORE on upgrade than it used to (x5.6 at L5, not x3),
+        /// so "upgrade to hold more" is strengthened, not weakened.
+        /// </para>
+        /// The STEWARD `collectorCap` talent sum (WO-676 Deep Reserves; x1 at sum 0) still
+        /// multiplies ON TOP. FALLBACK (field absent/0): the legacy ~2-hours-of-production
+        /// formula, unchanged.
         /// </summary>
         private double ComputeCapacity()
         {
@@ -271,10 +468,9 @@ namespace DeNelle.Village.Buildings.Progression
             double catalogCap = CatalogCapacity();
             if (catalogCap > 0.0)
             {
-                // DATA base reserve; +50% per level above 1 (upgrading deepens the reserve).
-                int level = ResourceBuildingState.GetLevel(_buildingId);
-                double levelScale = 1.0 + 0.5 * System.Math.Max(0, level - 1);
-                baseCap = catalogCap * levelScale;
+                // DATA base reserve for level 1 / one echo, scaled by live throughput so the
+                // FILL TIME - not the unit count - is the authored quantity.
+                baseCap = catalogCap * ThroughputScale();
             }
             else
             {
@@ -302,6 +498,40 @@ namespace DeNelle.Village.Buildings.Progression
         }
 
         /// <summary>
+        /// WO-859 sec.5 - how much this collector produces per hour RIGHT NOW, divided by what it
+        /// produced per hour at level 1 with a single echo. Multiplying the authored `repo.capacity`
+        /// by this keeps hours-to-full constant, which is the whole point.
+        /// <para>
+        /// INCLUDED: the level's yield + interval (both upgrade axes) and the echo
+        /// <c>GlobalHarvestMultiplier</c>. EXCLUDED, deliberately: the STEWARD `harvestRate` talent.
+        /// That is not an oversight - it mirrors the identical, already-shipped ruling on the Echo
+        /// silo (<c>EchoService.SiloCapacity</c>, "capacity is `collectorCap`'s seam, not
+        /// `harvestRate`'s"), so the game's two capacity systems obey ONE rule instead of two.
+        /// </para>
+        /// The denominator is the AUTHORED level-1 table row, never a live read: it is the fixed
+        /// reference `repo.capacity` was authored against, so perks/echoes move the numerator only.
+        /// Floored at 1.0 so capacity can never shrink below its authored base.
+        /// </summary>
+        private double ThroughputScale()
+        {
+            var def = ResourceBuildingProgression.Find(_buildingId);
+            var l1 = def?.LevelDef(1);
+            if (l1 == null) return 1.0;
+
+            double baseInterval = Mathf.Max(0.5f, l1.HarvestInterval);
+            double basePerHour = l1.YieldPerTick * Mathf.Max(0f, l1.YieldSizeMultiplier) * (3600.0 / baseInterval);
+            if (basePerHour <= 0.0) return 1.0;
+
+            int yieldNow = ResourceBuildingState.CurrentEffectiveYield(_buildingId);
+            float intervalNow = ResourceBuildingState.CurrentHarvestInterval(_buildingId);
+            if (yieldNow <= 0 || intervalNow <= 0f) return 1.0;
+
+            double nowPerHour = yieldNow * (3600.0 / intervalNow)
+                              * ResourceBuildingHarvester.EchoHarvestMultiplier();
+            return System.Math.Max(1.0, nowPerHour / basePerHour);
+        }
+
+        /// <summary>
         /// The DATA-authored base collector reserve (structures-catalog `repo.capacity`) for
         /// this collector's building, or 0 when none is authored. A collector is registered
         /// under its catalog id (e.g. "collector_farm") but keyed on the bare
@@ -325,12 +555,24 @@ namespace DeNelle.Village.Buildings.Progression
             _pending = PlayerPrefs.GetFloat(PendingPrefsPrefix + _buildingId, 0f);
             _hp = PlayerPrefs.GetFloat(HpPrefsPrefix + _buildingId, _maxHp);
             _broken = _hp <= 0f;
+
+            // WO-859: the away stamp. Stored as a string (see LastAccrualPrefsPrefix) - an
+            // unparsable/absent value reads as 0 = "never stamped", which seeds to now and
+            // back-fills nothing rather than paying a bogus window.
+            string stamp = PlayerPrefs.GetString(LastAccrualPrefsPrefix + _buildingId, string.Empty);
+            if (string.IsNullOrEmpty(stamp) ||
+                !double.TryParse(stamp, System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out _lastAccrualMs))
+                _lastAccrualMs = 0.0;
+            if (_lastAccrualMs < 0.0) _lastAccrualMs = 0.0;
         }
 
         private void SaveState()
         {
             PlayerPrefs.SetFloat(PendingPrefsPrefix + _buildingId, (float)_pending);
             PlayerPrefs.SetFloat(HpPrefsPrefix + _buildingId, _hp);
+            PlayerPrefs.SetString(LastAccrualPrefsPrefix + _buildingId,
+                _lastAccrualMs.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
             PlayerPrefs.Save();
         }
 
@@ -348,6 +590,11 @@ namespace DeNelle.Village.Buildings.Progression
         {
             _hp = _maxHp;
             _broken = false;
+            // WO-859: a fresh placement is a NEW building, so it also gets a FRESH away clock.
+            // Without this it would inherit the destroyed building's stale stamp and instantly
+            // back-fill a backlog it never earned (the PlayerPrefs keys are keyed by buildingId,
+            // which is exactly the stale-state trap this method already exists to close for HP).
+            _lastAccrualMs = TimeSource.NowUnixMs();
             SaveState();
             StepChanged?.Invoke(this);   // health/broken state moved — let the fill/damage views re-read
             FlowTrace.Step("Harvest", $"collector '{_buildingId}' HP reset to full on fresh placement (stale persisted damage cleared)");

@@ -57,9 +57,47 @@ namespace DeNelle.Village.Buildings.Progression
         // with ff.strategicplacement — placed collector_* structures own their collectors
         // via StructureFactory; only the registry-gated logical fallback below remains.)
 
+        /// <summary>
+        /// Stand up the DDOL logical fallback collector for <paramref name="buildingId"/> - but ONLY
+        /// for a building the player has actually built.
+        /// <para>
+        /// ! P0, WO-859 sec.2 R4 - THE BACK DOOR COMMIT 35485f31 DID NOT CLOSE. That commit gated the
+        /// harvest RULE (<see cref="ResourceBuildingHarvester.MayHarvest"/>) on the persisted WO-834
+        /// ever-built ledger, but <see cref="MayHarvest"/> returns true the instant a LIVE collector
+        /// is registered (`:236`) - and this method used to create one for farm, lumbermill and
+        /// forge UNCONDITIONALLY, consulting only the registry. So the rule was gated and the
+        /// gate was bypassed.
+        /// </para>
+        /// <para>
+        /// PROVEN HEADLESS BEFORE THE FIX (sec.12 - captured, not inferred), blank-town run,
+        /// everBuiltStructureIds = []:
+        /// <code>
+        /// [Flow:Harvest] collector fallback host for building=farm
+        /// [Flow:Harvest] existence gate OPEN for 'farm' (liveCollector=yes, everBuilt=[&lt;empty&gt;]) - this id may tick
+        /// [Flow:Harvest] accrue-pending building=... pending=87/600
+        /// </code>
+        /// A town with nothing in it was earning again. The second consequence was worse: hub
+        /// collectors unregister on unload, <see cref="WireScene"/> fires for the DUNGEON, the
+        /// fallbacks are re-created there, and the harvester DOES bootstrap in dungeons (they are
+        /// not enemy-owned) - so full town income accrued while the player was off in a dungeon,
+        /// which is the exact defect the removed direct-grant was blamed for, surviving by another
+        /// route.
+        /// </para>
+        /// The gate resolves catalog ids through
+        /// <see cref="ResourceBuildingHarvester.CatalogIdsForBuilding"/> - the SAME resolution the
+        /// harvest gate uses - so the two can never disagree about what "built" means.
+        /// </summary>
         private static void EnsureFallbackCollector(string buildingId)
         {
             if (ResourceCollectorRegistry.Get(buildingId) != null) return;
+
+            if (!HasEverBuilt(buildingId))
+            {
+                FlowTrace.Once("Harvest", $"fallback-skipped-{buildingId}",
+                    $"NO fallback collector for '{buildingId}' - it is not in the WO-834 ever-built ledger " +
+                    "(a live collector would open the existence gate, so an unbuilt building must never get one).");
+                return;
+            }
 
             var host = GameObject.Find(HostName);
             if (host == null) return;
@@ -85,7 +123,26 @@ namespace DeNelle.Village.Buildings.Progression
                 box.isTrigger = false;
             }
             FlowTrace.Once("Harvest", $"fallback-{buildingId}",
-                $"collector fallback host for building={buildingId}");
+                $"collector fallback host for building={buildingId} (ever-built ledger confirms it exists)");
+        }
+
+        /// <summary>
+        /// True when any COLLECTOR catalog id standing for <paramref name="buildingId"/> is in the
+        /// persisted WO-834 <c>GameState.EverBuiltStructureIds</c> ledger. Null-safe by design: no
+        /// GameStateService / no state (Title, a headless boot before the save loads) reads as
+        /// "nothing built", which is the SAFE answer - it withholds a fallback rather than opening
+        /// the income gate on an unproven town.
+        /// </summary>
+        private static bool HasEverBuilt(string buildingId)
+        {
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+            if (state == null) return false;
+
+            var catalogIds = ResourceBuildingHarvester.CatalogIdsForBuilding(buildingId);
+            if (catalogIds == null) return false;
+            for (int i = 0; i < catalogIds.Count; i++)
+                if (state.HasEverBuilt(catalogIds[i])) return true;
+            return false;
         }
     }
 }

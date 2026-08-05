@@ -367,13 +367,43 @@ namespace DeNelle.Village.Buildings.Progression
             VFXManager.Play(VFXType.LevelUp_Celebration, pos + Vector3.up * 0.6f);
         }
 
+        // -- Aggregated FULL toast (WO-900 sec.3, defect 2) -----------------------
+        // Each view fires its own toast, so three collectors capping in the same frame threw
+        // THREE stacked toasts at the player. The tell is per-collector but the ANNOUNCEMENT is
+        // a town-level fact, so it is coalesced here: names are collected into a static pending
+        // set and flushed ONCE at end of frame, naming every building that filled.
+        // Coalescing is driven off the EXISTING LateUpdate pump rather than a coroutine on
+        // purpose: a coroutine started on a view that is destroyed in the same frame (scene
+        // unload / siege) would never resume, wedging its "flush queued" flag true and killing
+        // every future toast for the whole app run. LateUpdate cannot wedge - any surviving
+        // view drains the buffer, and if no view survives there is nobody to toast anyway.
+        private static readonly System.Collections.Generic.List<string> s_pendingFullNames =
+            new System.Collections.Generic.List<string>(4);
+
         private void ShowFullToast()
         {
+            // Refresh() runs from StepChanged, which fires inside the harvester's Update loop -
+            // so every collector that capped this frame has been buffered before ANY LateUpdate
+            // runs, and the flush below sees the complete set.
             string label = ResolveBuildingLabel();
+            if (!s_pendingFullNames.Contains(label)) s_pendingFullNames.Add(label);
+        }
+
+        private static void FlushFullToast()
+        {
+            if (s_pendingFullNames.Count == 0) return;
+
             // Singleton-correct wording (owner 2026-07-24): a collector is one-of-a-kind, so
             // "place another" is wrong — the player collects it, or upgrades it to hold more.
-            // ASCII-only (hyphen, not em dash).
-            GearGrantToast.Show($"{label} is full - collect it, or upgrade it to hold more.");
+            // ASCII-only (hyphen, not em dash). "Storage" is deliberately never used here:
+            // that word belongs to the town BANK (WO-857), and the player must never be shown
+            // two different notions of "full" (WO-900 sec.4 copy law).
+            string subject = s_pendingFullNames.Count == 1
+                ? s_pendingFullNames[0] + " is full"
+                : string.Join(", ", s_pendingFullNames.ToArray()) + " are full";
+            s_pendingFullNames.Clear();
+
+            GearGrantToast.Show($"{subject} - collect it, or upgrade it to hold more.");
         }
 
         private string ResolveBuildingLabel()
@@ -402,6 +432,10 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void LateUpdate()
         {
+            // Drain the coalesced FULL announcement buffer (see ShowFullToast): exactly ONE
+            // toast per frame no matter how many collectors capped together.
+            FlushFullToast();
+
             // Gentle FULL bob (cheap; only while full). Shape/height tell, not colour.
             if (_stackRoot != null)
             {
