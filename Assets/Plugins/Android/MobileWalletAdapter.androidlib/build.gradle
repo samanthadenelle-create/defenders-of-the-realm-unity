@@ -12,4 +12,33 @@ apply plugin: 'com.android.library'
 android {
     namespace "com.denelle.defenders.mwa"
     compileSdk 34
+
+    // ── 2026-08-05 BLOCKING DEFECT FIX ───────────────────────────────────────
+    // The sibling manifest was NEVER reaching the APK: the packaged manifest
+    // contained ZERO occurrences of "queries" (verified against the shipped
+    // build). The moment this file exists, Unity stops treating the folder as a
+    // legacy `.androidlib` and hands it to AGP as a real Gradle module - and
+    // AGP's DEFAULT manifest location is `src/main/AndroidManifest.xml`, NOT
+    // the module root. So the folder-root AndroidManifest.xml next to this file
+    // was silently ignored, with no warning. (The sibling
+    // FirebaseApp.androidlib has NO build.gradle - it uses `project.properties`
+    // and the legacy path - which is exactly why ITS manifest merges fine.)
+    //
+    // Point AGP back at the folder-root manifest instead of relocating the file
+    // into src/main/. Deliberate: this keeps the two .androidlib modules
+    // visually identical (manifest at the folder root), avoids .meta churn in
+    // Assets/, and DEGRADES SAFELY - if this build.gradle is ever deleted to
+    // dodge an AGP issue, Unity's legacy handling picks the root manifest back
+    // up. The src/main/ layout would silently stop merging in that case.
+    //
+    // IMPACT: latent today (an IMPLICIT association intent still launches a
+    // wallet without package visibility) but FATAL the instant we target a
+    // specific wallet - `startActivity` with `setPackage(<invisible package>)`
+    // throws ActivityNotFoundException, and `queryIntentActivities` returns an
+    // empty list. TargetedLocalAssociationScenario does BOTH.
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+        }
+    }
 }
