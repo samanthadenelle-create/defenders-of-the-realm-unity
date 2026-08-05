@@ -155,16 +155,37 @@ namespace DeNelle.Onboarding
             // choice, no dismiss). withBackdrop:false — the scrim above already dims.
             // Cosmetic flag C (owner 2026-07-24): the panel was short (0.24-0.76) so the header
             // crowded the copy top and the copy band sat tight to the buttons. Raise it taller
-            // (0.18-0.82) to open the header<->copy and copy<->button gaps — the body content
-            // below is body-fraction relative, so it simply gains absolute pixels to breathe.
+            // (0.18-0.82) to open the header<->copy and copy<->button gaps.
+            // OWNER F8 2026-08-05 (Seeker 2670x1200, "the two options render as ONE two-line
+            // panel and slice the paragraph above"): 0.18-0.82 was still too short. Measured at
+            // source: panelFracH 0.64 * postScaleCanvasH 965 = 618 units; the kit's close-band
+            // reservation then raised the body floor to 0.359 (BuildObsidianPanel PROCEDURAL
+            // path, ElarionUiKit.cs:796-810), leaving a ~313-unit body. The old 0.18-tall button
+            // bands resolved to ~56px — UNDER MinTouchPx(112) — so ClampMinTouch grew each rect
+            // ~28px ABOUT ITS CENTRE, closing the authored gap (buttons overlapped) and pushing
+            // the top button up into the copy band. Taller panel (0.12-0.88) + the fixed-pixel
+            // bands below remove BOTH symptoms at their one shared cause.
             var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "FOUND YOUR TOWN",
-                new Vector2(0.12f, 0.18f), new Vector2(0.88f, 0.82f), onClose: null,
+                new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), onClose: null,
                 withBackdrop: false);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
             Transform body = chrome.layout != null && chrome.layout.body != null
                 ? chrome.layout.body.transform
                 : chrome.content.transform;
+
+            // RECLAIM THE DEAD CLOSE BAND. The kit raises every body zone's floor to reserve
+            // room for the ONE shared Close box (~36% of this panel's height here). THIS panel
+            // HIDES that Close two lines above (chrome.close.SetActive(false) — a forced choice
+            // has no dismiss), so the reservation is pure dead space. Restore the kit's DEFAULT
+            // body floor (ZonesFor(null).body.y == 0.10, ElarionUiKit.cs:326). Valid ONLY because
+            // the Close is hidden — do NOT re-enable the Close without reverting this.
+            var bodyRt = body as RectTransform;
+            if (bodyRt != null)
+            {
+                bodyRt.anchorMin = new Vector2(bodyRt.anchorMin.x, 0.10f);   // kit default; no Close to clear
+                bodyRt.offsetMin = Vector2.zero;
+            }
 
             // Body copy — teaches that BOTH options stay editable, so the choice is
             // low-stakes (owner: every building is movable). Inline ASCII literal (not a
@@ -177,22 +198,61 @@ namespace DeNelle.Onboarding
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             copy.textWrappingMode = TextWrappingModes.Normal;
             copy.raycastTarget = false;
-            // Cosmetic flag C: autosize + ellipsize the copy inside its 0.56-0.94 band so it can
-            // never overflow down onto the "Default Town" button (the reported bug).
-            ElarionUiKit.FitBlock(copy);
+            // PIN THE PARAGRAPH TO A FIXED-PIXEL BAND (owner F8 2026-08-05). The 0.56-0.94
+            // fraction band shrank with the body, and the grown button below reached UP into it
+            // and sliced the last line. A top-anchored FIXED band cannot be reached by any
+            // future grow, at any resolution (CANON_GROUND_TRUTH 2026-08-02 Section 4: a text
+            // band is fixed px >= the font's line box, never a fraction of a parent).
+            // CopyBandH 160 >= 4 lines at the FontFloorMobile(30) line box (~34.5px).
+            const float CopyBandH   = 160f;
+            const float CopyTopPad  = 16f;
+            var copyRt = copy.rectTransform;
+            copyRt.anchorMin = new Vector2(0.06f, 1f);
+            copyRt.anchorMax = new Vector2(0.94f, 1f);
+            copyRt.pivot     = new Vector2(0.5f, 1f);          // seat by the TOP edge -> grows down
+            copyRt.sizeDelta        = new Vector2(0f, CopyBandH);
+            copyRt.anchoredPosition = new Vector2(0f, -CopyTopPad);
+            // Autosize + truncate inside that fixed band, floored at the mobile readability
+            // floor — the copy re-flows to fit; it never overflows onto the buttons.
+            ElarionUiKit.FitBlock(copy, ElarionUi.FontFloorMobile);
 
             // Two stacked full-width buttons (large mobile touch targets). Meaning is in
-            // the LABEL, not the colour (owner colourblind): "Default Town" (Green CTA)
-            // and "Build Your Own" (Gray).
+            // the LABEL, not the colour (owner colourblind): "Default Town" and "Build Your Own".
             // Owner 2026-07-25: the two choices must read as SEPARATE buttons (wider gap, not
             // edge-connected) + a benefit subtitle on each (inline, single-line-safe).
-            ElarionUiKit.BuildObsidianButton(body, "Default Town  (Faster Onboarding)",
-                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.52f), OnDefaultTown);
+            //
+            // OWNER F8 2026-08-05 — THE FIX. The two hand-placed 0.18-of-body bands resolved to
+            // ~56px on the Seeker, under MinTouchPx(112); ClampMinTouch then grew each rect
+            // symmetrically about its centre, which CLOSED the authored gap (the two buttons
+            // read as one two-line panel) and pushed the upper one into the copy. Use the kit's
+            // shared fixed-pixel button COLUMN instead — the canonical fix the kit already ships
+            // for exactly this defect class (ElarionUiKitObsidian.cs:574-615): a
+            // VerticalLayoutGroup with a FIXED px gap, each row pinned to a FIXED px height by a
+            // LayoutElement. No band is a fraction of the body, every row is >= MinTouchPx, so
+            // ClampMinTouch can never fire here at ANY resolution.
+            //
+            // STYLE1 FOR BOTH (2026-08-05): ObsidianButtonSpriteName (ElarionUiKitObsidian.cs:525-532)
+            // resolves "button<style>_gray" — colour was standardized to grey game-wide but the
+            // STYLE still picks the sprite, and button1_gray is SQUARE while button2_gray is
+            // ROUNDED. That mismatch IS the owner's "one rounded, one square" report. Style carries
+            // no semantic on this panel (meaning is in the label), so both rows use Style1.
+            const float BtnH   = ElarionUiKit.CanonCtaHeight;   // 132 px, >= MinTouchPx 112
+            const float BtnGap = 28f;                           // FIXED px gap, never a fraction
+            const float BtnBottomPad = 28f;
 
-            ElarionUiKit.BuildObsidianButton(body, "Build Your Own  (Customize Locations)",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.22f), OnBuildYourOwn);
+            var column = ElarionUiKit.BuildButtonColumn(body, BtnGap, 0.08f, 0f, 0f);
+            column.anchorMin = new Vector2(0.08f, 0f);
+            column.anchorMax = new Vector2(0.92f, 0f);
+            column.pivot     = new Vector2(0.5f, 0f);           // seat by the BOTTOM edge -> grows up
+            column.sizeDelta        = new Vector2(0f, BtnH * 2f + BtnGap);
+            column.anchoredPosition = new Vector2(0f, BtnBottomPad);
+
+            ElarionUiKit.AddColumnButton(column, "Default Town  (Faster Onboarding)",
+                ElarionUiKit.ObsidianButtonColor.Green, OnDefaultTown,
+                ElarionUiKit.ObsidianButtonStyle.Style1, BtnH);
+            ElarionUiKit.AddColumnButton(column, "Build Your Own  (Customize Locations)",
+                ElarionUiKit.ObsidianButtonColor.Gray, OnBuildYourOwn,
+                ElarionUiKit.ObsidianButtonStyle.Style1, BtnH);
 
             // UIF: join the single-modal arbiter. isOpen reflects the live overlay; the close
             // delegate routes onward (Continue) — the arbiter's back/close proceeds to the hub.
