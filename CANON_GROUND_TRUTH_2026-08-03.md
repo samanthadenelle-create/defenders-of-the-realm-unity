@@ -1,3 +1,7 @@
+> # SUPERSEDED 2026-08-05
+> **This anchor is no longer current. The live anchor is `CANON_GROUND_TRUTH_2026-08-05.md`.**
+> Frozen as a point-in-time record (SS15) - do not rewrite the body below.
+
 # CANON GROUND TRUTH — 2026-08-03 (the solo-night wave + the first live server verification)
 
 > **LIVE ANCHOR (2026-08-03).** Records reality after the 2026-08-02 → 08-03 overnight solo run and
