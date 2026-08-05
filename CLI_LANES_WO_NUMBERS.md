@@ -1,6 +1,27 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **906**. **782–859 + 900–905 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **908**. **782–859 + 900–907 CONSUMED.**
+> - **907** = **Elemental affinity — towers, enemies, and a match bonus that is never a lock.** Owner:
+>   *"each tower could land a different affinity"*, *"they could both apply"* (visual AND damage), and —
+>   asked whether enemies carry an element — *"they don't yet but should."* ⚠ **Governing rule is the
+>   EXISTING Echo grammar (CLAUDE.md §7 / WO-830): a MATCH BONUS, NEVER A LOCK.** No tower may become
+>   useless against an enemy type. ⚠ Only `tower_arcane_spire` authors an element today (Aether); the
+>   other four author NONE, and enemies author none at all — **tower affinity without enemy affinity is
+>   half a system, both land together or neither ships.** `IDamageable.cs:61` already documents the
+>   element param as *"used for resist / bonus math"* — §4.1 is to find out whether that math exists,
+>   is unwired, or was never written. ⚠ **Gates part of WO-870: element FIRST, visual SECOND** — picking
+>   VFX before elements reproduces the exact Arcane Spire defect (Aether damage, Fire visuals).
+>   ⚠ Balance blast radius: this re-opens WO-855's tower cost/DPS band hours after it landed.
+>   File `WORK_ORDER_907_elemental_affinity_system.md`. **SPEC.**
+> - **906** = **Catapult becomes a DEPLOYED offensive siege unit** (owner: *"deploy offensively"*). Moves
+>   it between SYSTEMS — StructureFactory/DefenseTower → TroopController/TroopDeployer — so it is NOT a
+>   tag change. Currently authored as its opposite: `behaviorId: DefenseTower`, range 28, a placed
+>   structure, and unreachable anyway (the build menu lists only the cheapest FOUR of five tower rows).
+>   Named failure mode: half-of-each. WO-853's damageable walls/gates/towers is what makes a siege
+>   weapon meaningful at all. File `WORK_ORDER_906_catapult_deployable_siege_unit.md`. **SPEC.**
+>
+> *(banner bumped 906 → 908 in the SAME edit as the 907 mint — and correcting a 906 mint that went to
+> disk WITHOUT a bump earlier tonight, which is the exact rule this banner exists to enforce.)*
 > - **905** = **"Manage" — one screen for every upgrade, sorted by what you can afford.** Owner: a Manage
 >   section under Bag showing all three rails with drill-in, because *"not sure what they can afford"*.
 >   ⚠ **The content tabs and the queue channels CROSS**: Defensive structures AND Building upgrades both
@@ -114,7 +135,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **906** (782–859 + 900–905 consumed; 860–899 belongs to the UI seat) |
+> | **main line** | CLI | **908** (782–859 + 900–907 consumed; 860–899 belongs to the UI seat) |
 > | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
 >
 > ⚠ **This table drifted (2026-08-04).** It still read `853` while the header row above it read `856`
