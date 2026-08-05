@@ -91,17 +91,29 @@ namespace DeNelle.Village
         /// they ship their own Animator + controller.
         /// </summary>
         internal static void ArmIdle(GameObject bodyInstance, string resolvedRes, string system)
+            => ArmController(bodyInstance, resolvedRes, IdleControllerRes, system);
+
+        /// <summary>
+        /// WO-871 generalization of <see cref="ArmIdle"/>: arm a staged KayKit body with ANY
+        /// Resources-loadable controller. ArmIdle is this with the shared WO-833 idle; the build
+        /// worker (ConstructionWorkerPool) passes its work/rest controller. ONE authority for
+        /// "make a staged KayKit humanoid actually animate" - the avatar-recovery fallback and
+        /// the applyRootMotion rule must never fork per caller.
+        /// </summary>
+        internal static void ArmController(GameObject bodyInstance, string resolvedRes,
+                                           string controllerRes, string system)
         {
-            if (bodyInstance == null) return;
-            Guard.Try(system, $"arm KayKit npc idle '{bodyInstance.name}' (WO-833)", () =>
+            if (bodyInstance == null || string.IsNullOrEmpty(controllerRes)) return;
+            Guard.Try(system, $"arm KayKit npc controller '{controllerRes}' on '{bodyInstance.name}'", () =>
             {
-                var controller = Resources.Load<RuntimeAnimatorController>(IdleControllerRes);
+                var controller = Resources.Load<RuntimeAnimatorController>(controllerRes);
                 if (controller == null)
                 {
                     FlowTrace.Warn(system,
-                        $"KayKit idle controller MISSING at Resources/{IdleControllerRes} - body " +
+                        $"KayKit controller MISSING at Resources/{controllerRes} - body " +
                         $"'{bodyInstance.name}' stays visible in bind pose. Rebuild it: " +
-                        "Defenders/Art/Build KayKit NPC Idle Controller (KayKitNpcAnimatorSetup.Build).");
+                        "Defenders/Art/Build KayKit NPC Idle Controller (KayKitNpcAnimatorSetup.Build) " +
+                        "or Defenders/Art/Build Builder Worker Controller (BuilderWorkerAnimatorSetup.Build).");
                     return;
                 }
 
@@ -127,9 +139,9 @@ namespace DeNelle.Village
                 }
 
                 animator.runtimeAnimatorController = controller;
-                animator.applyRootMotion = false;   // NPCs are ground-seated in place - the idle must not drift them
-                FlowTrace.Once(system, "kaykit-idle-armed",
-                    "KayKit idle armed (controller=KayKitNpcIdle, retargeted humanoid clip).");
+                animator.applyRootMotion = false;   // NPCs are ground-seated in place - the clip must not drift them
+                FlowTrace.Once(system, "kaykit-controller-armed-" + controllerRes,
+                    $"KayKit body armed (controller={controllerRes}, retargeted humanoid clip).");
             });
         }
     }

@@ -44,6 +44,12 @@
 //                      the gate actually collects. This is the guard that stops the
 //                      NEXT tower family from silently slipping through, which is
 //                      precisely how this bug happened.
+//   7. BUILD WORKER  -- WO-871. The same scaffold now also leases a builder NPC that
+//                      works for the life of the job. Pinned: assets present, exactly
+//                      one worker per scaffolded structure, released on Reveal AND on
+//                      the structure being destroyed mid-build (the WO-753 orphan
+//                      shape), never parented to the structure, bounded by the pool
+//                      cap, and no accumulation across build/complete cycles.
 //
 // Edit-mode, no PlayMode, NO reflection. Awake does not fire on an edit-mode
 // AddComponent (see DefenseTargetableRegression's header), so the components carry
@@ -102,17 +108,27 @@ namespace DeNelle.Editor.Regression
                 CheckBakedAndEnemyOwnedUntouched(failures, created);
                 CheckPersistenceKeyRoundTrip(failures, created);
                 CheckCatalogPlacementPath(failures, notes, created);
+                CheckBuildWorkerLifecycle(failures, notes, created);
                 CheckSourcePins(failures);
             }
             catch (System.Exception ex)
             {
-                reason = $"UnderConstructionGateRegression threw: {ex.GetType().Name}: {ex.Message}";
+                // The stack is the WHOLE point of a throwing suite (CLAUDE.md sec.12): without it the
+                // failure line names only this catch site, and the next reader has to guess which case
+                // threw. 2026-08-04: that is exactly what happened -- "IndexOutOfRangeException: Index
+                // must be between 0 and 1" arrived with no line, so the throw had to be hunted by
+                // re-running with the stack attached. It is attached permanently now.
+                reason = $"UnderConstructionGateRegression threw: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}";
                 Debug.LogError("UNDER_CONSTRUCTION_GATE_FAIL: " + reason);
                 return false;
             }
             finally
             {
                 foreach (var go in created) if (go != null) Object.DestroyImmediate(go);
+                // WO-871: Attach() leases a build worker, so a verification run must leave no
+                // builder body standing in the open scene. (Pool bodies are HideFlags.DontSave,
+                // so nothing could be serialized either way -- this keeps the editor view clean.)
+                ConstructionWorkerPool.DisposeAll();
             }
 
             if (failures.Count > 0)
@@ -130,7 +146,9 @@ namespace DeNelle.Editor.Regression
             ok.Append("UNDER-CONSTRUCTION GATE OK -- a scaffolded structure silences every combat family " +
                       "(DefenseTower + ArcaneTower + TowerCombat), Reveal restores exactly what it silenced, " +
                       "baked/EnemyOwned towers with no scaffold are untouched, and the job key survives the " +
-                      "PlacedStructure save round trip so a pending tower reloads inert.");
+                      "PlacedStructure save round trip so a pending tower reloads inert. WO-871: the build-site " +
+                      "worker is leased on scaffold, returned on Reveal AND on the structure being destroyed " +
+                      "mid-build, is never parented to the structure, and stays bounded + pooled across cycles.");
             if (notes.Count > 0) ok.Append("  [notes: " + string.Join(" ; ", notes) + "]");
             reason = ok.ToString();
             Debug.Log("UNDER_CONSTRUCTION_GATE_OK");
@@ -389,6 +407,148 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  7 -- WO-871: the build-site WORKER lives and dies with the scaffold
+        // =====================================================================
+
+        /// <summary>
+        /// WO-871 acceptance, proven over the real types in edit mode (Attach -> Bind runs
+        /// synchronously on AddComponent, so the worker really is leased here):
+        ///   a. ASSETS      -- the generated work controller + the staged builder body exist.
+        ///                     Without them no worker can ever spawn, and a controller-less
+        ///                     humanoid would render its T-pose bind pose (WO-833's defect).
+        ///   b. SPAWN       -- a scaffolded structure leases exactly ONE worker.
+        ///   c. DESPAWN     -- Reveal() (job complete) returns it; the live count goes back down.
+        ///   d. NO ORPHAN   -- destroying the structure mid-build releases its worker too. This is
+        ///                     the WO-753 shape: a "worker with no building" left chopping at an
+        ///                     empty tile is exactly what the one-owner teardown rule exists to stop.
+        ///   e. NOT A CHILD -- the worker is NOT parented to the structure (re-parenting during a
+        ///                     host's OnDestroy is a Unity error; that is how the orphan would be born).
+        ///   f. BOUNDED     -- more concurrent builds than the cap never produce more than the cap's
+        ///                     worth of workers, and repeated build/complete cycles do not accumulate.
+        /// </summary>
+        private static void CheckBuildWorkerLifecycle(List<string> failures, List<string> notes,
+                                                      List<GameObject> created)
+        {
+            // --- a. the assets the worker needs ---
+            string ctrl = Path.Combine(Application.dataPath, "Resources/NPCs/KayKit/BuilderWorkerWork.controller");
+            string body = Path.Combine(Application.dataPath, "Resources/NPCs/KayKit/" +
+                                       ConstructionWorkerPool.BodySlug + ".fbx");
+            bool haveCtrl = File.Exists(ctrl);
+            bool haveBody = File.Exists(body);
+
+            if (!haveCtrl)
+                failures.Add("[worker-assets] the build-worker controller is MISSING at " +
+                             "Assets/Resources/NPCs/KayKit/BuilderWorkerWork.controller -- no builder can spawn " +
+                             "for any build timer. Generate + commit it: menu Defenders/Art/Build Builder Worker " +
+                             "Controller, or batchmode -executeMethod DeNelle.Editor.BuilderWorkerAnimatorSetup.Build " +
+                             "(expect BUILDER_WORKER_ANIM_OK).");
+            if (!haveBody)
+                failures.Add($"[worker-assets] the staged builder body is MISSING at " +
+                             $"Assets/Resources/NPCs/KayKit/{ConstructionWorkerPool.BodySlug}.fbx -- " +
+                             "ConstructionWorkerPool.BodySlug points at a body that is not staged (WO-818 stager: " +
+                             "DeNelle.Editor.KayKitNpcImporter).");
+
+            if (!haveCtrl || !haveBody)
+            {
+                notes.Add("worker lifecycle cases skipped -- the worker assets above are absent, so a spawn " +
+                          "assertion would only restate the same miss.");
+                return;
+            }
+
+            // --- b + c. spawn on scaffold, despawn on reveal ---
+            int baseline = ConstructionWorkerPool.LiveCount;
+
+            var host = new GameObject("UCWorker_Host");
+            created.Add(host);
+            UnderConstructionVisual.Attach(host, "ucworker_spawn@1_1");
+
+            var scaffold = host.GetComponent<UnderConstructionVisual>();
+            if (scaffold == null)
+            {
+                failures.Add("[worker-spawn] Attach added no scaffold -- the worker seam is unreachable.");
+                return;
+            }
+
+            int during = ConstructionWorkerPool.LiveCount;
+            if (during != baseline + 1)
+                failures.Add($"[worker-spawn] a structure with a live build job leased {during - baseline} worker(s), " +
+                             "expected exactly 1 -- the owner asked for a builder to be visibly working during a " +
+                             "build/upgrade timer and nothing (or more than one body) turned up.");
+
+            // e. the worker must NOT be a child of the structure (it lives on the pool root).
+            foreach (Transform child in host.transform)
+            {
+                if (child == null || child.name != "ConstructionWorker") continue;
+                failures.Add("[worker-parenting] the build worker is PARENTED to the structure. It must not be: a " +
+                             "pooled body cannot be re-parented during the host's OnDestroy (Unity errors on that), " +
+                             "so a parented worker is either destroyed with the building it belongs to or stranded " +
+                             "half-torn-down. That is precisely how the orphaned worker WO-753 forbids gets born.");
+                break;
+            }
+
+            scaffold.Reveal();
+
+            int after = ConstructionWorkerPool.LiveCount;
+            if (after != baseline)
+                failures.Add($"[worker-despawn] {after - baseline} worker(s) are still leased after Reveal() -- a " +
+                             "builder keeps working at a FINISHED building. Reveal must release the worker in the " +
+                             "same beat it stops the upgrade aura.");
+
+            // --- d. destroying the structure mid-build takes its worker with it (WO-753) ---
+            // NOTE ON WHICH NET THIS PROVES: edit mode does not deliver OnDestroy or Update to a
+            // plain MonoBehaviour (see this file's header on Awake), so the two callback-based
+            // release nets are unobservable here -- OnDestroy -> StopWorker is pinned instead by
+            // the source pin in CheckSourcePins. What this case proves is the net that needs NO
+            // callback at all: the pool reaps any lease whose owning scaffold is gone. That is the
+            // guarantee that has to hold when a callback is missed, which is exactly the condition
+            // an orphaned worker is born under.
+            var doomed = new GameObject("UCWorker_DestroyedMidBuild");
+            UnderConstructionVisual.Attach(doomed, "ucworker_destroy@2_2");
+            int withDoomed = ConstructionWorkerPool.LiveCount;
+            if (withDoomed != baseline + 1)
+            {
+                failures.Add("[worker-orphan] baseline broken: the second probe leased " +
+                             $"{withDoomed - baseline} worker(s) instead of 1.");
+            }
+            Object.DestroyImmediate(doomed);
+            int afterDestroy = ConstructionWorkerPool.LiveCount;
+            if (afterDestroy != baseline)
+                failures.Add($"[worker-orphan] {afterDestroy - baseline} worker(s) SURVIVED the structure being " +
+                             "destroyed mid-build -- a builder left chopping at an empty tile. This is the WO-753 " +
+                             "one-owner teardown rule: OnDestroy must release the worker exactly as it stops the " +
+                             "upgrade loop.");
+
+            // --- f. bounded, and no accumulation across cycles ---
+            var many = new List<GameObject>();
+            int over = ConstructionWorkerPool.MaxLive + 3;
+            for (int i = 0; i < over; i++)
+            {
+                var go = new GameObject("UCWorker_Cap_" + i);
+                many.Add(go);
+                created.Add(go);
+                UnderConstructionVisual.Attach(go, $"ucworker_cap@{i}_0");
+            }
+            int live = ConstructionWorkerPool.LiveCount;
+            if (live > ConstructionWorkerPool.MaxLive)
+                failures.Add($"[worker-bounded] {live} workers are live with a cap of {ConstructionWorkerPool.MaxLive} " +
+                             $"({over} concurrent builds) -- the worker count is unbounded. A town mid-boom would " +
+                             "carry a skinned humanoid per queued building.");
+
+            foreach (var go in many)
+            {
+                var s = go.GetComponent<UnderConstructionVisual>();
+                if (s != null) s.Reveal();
+            }
+            int settled = ConstructionWorkerPool.LiveCount;
+            if (settled != baseline)
+                failures.Add($"[worker-bounded] {settled - baseline} worker(s) remain leased after every build in the " +
+                             "batch completed -- workers accumulate build over build instead of returning to the pool.");
+            if (ConstructionWorkerPool.IdleCount > ConstructionWorkerPool.MaxLive)
+                failures.Add($"[worker-bounded] the pool parked {ConstructionWorkerPool.IdleCount} bodies with a cap of " +
+                             $"{ConstructionWorkerPool.MaxLive} -- bodies are being created per build instead of leased.");
+        }
+
+        // =====================================================================
         //  6 -- coverage + wiring pins (the guard against the NEXT silent slip)
         // =====================================================================
 
@@ -417,6 +577,27 @@ namespace DeNelle.Editor.Regression
                 if (!gate.Contains("RestoreCombat"))
                     failures.Add("[coverage] UnderConstructionVisual has no RestoreCombat -- a completed tower would " +
                                  "never be handed its combat behaviours back.");
+
+                // WO-871: the worker seam must stay a HANDLE with three release points, exactly like
+                // the upgrade aura. The runtime cases above prove today's behaviour; these pins stop
+                // a future edit from quietly dropping one of the release calls.
+                if (!gate.Contains("ConstructionWorkerPool.Spawn"))
+                    failures.Add("[worker-seam] UnderConstructionVisual no longer leases a build worker " +
+                                 "(ConstructionWorkerPool.Spawn) -- no builder animates during any build/upgrade timer.");
+                if (CountOccurrences(gate, "StopWorker()") < 3)
+                    failures.Add("[worker-seam] UnderConstructionVisual calls StopWorker() fewer than 3 times " +
+                                 "(expected: Reveal + OnDestroy + the method itself) -- one of the release points was " +
+                                 "dropped, so a worker can outlive its build job. Mirror StopUpgradeLoop exactly.");
+
+                // 2026-08-04, proven the hard way (Builds/wo871-stack.log): an Animator quirk inside the
+                // worker spawn threw IndexOutOfRangeException straight out of Attach -- which
+                // BuildModeController placement and BaseLayoutLoader both call. The worker is DECORATION;
+                // it must never be able to abort a real structure being placed or reloaded.
+                if (!gate.Contains("stand a build worker at the site"))
+                    failures.Add("[worker-seam] the ConstructionWorkerPool.Spawn call in UnderConstructionVisual.Bind " +
+                                 "is no longer wrapped in its Guard.Try(\"stand a build worker at the site\") -- a throw " +
+                                 "inside the cosmetic worker spawn would propagate out of Attach and abort the actual " +
+                                 "placement/reload of the structure. That exact throw already happened once.");
             }
 
             string loader = ReadSource(Path.Combine(assets, LoaderSrc), "BaseLayoutLoader", failures);
@@ -445,6 +626,19 @@ namespace DeNelle.Editor.Regression
                     failures.Add($"[enemy-owned] {Path.GetFileName(path)} now references UnderConstructionVisual -- a " +
                                  "baked/garrison turret has no build job, so a scaffold there would silence it forever.");
             }
+        }
+
+        /// <summary>Non-overlapping occurrences of <paramref name="needle"/> in <paramref name="haystack"/>.</summary>
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(needle)) return 0;
+            int n = 0, i = 0;
+            while ((i = haystack.IndexOf(needle, i, System.StringComparison.Ordinal)) >= 0)
+            {
+                n++;
+                i += needle.Length;
+            }
+            return n;
         }
 
         private static string ReadSource(string path, string label, List<string> failures)

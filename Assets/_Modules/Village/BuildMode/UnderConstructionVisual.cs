@@ -63,6 +63,13 @@ namespace DeNelle.Village
         // it never lingers under the completion fireworks and never leaks a loop slot.
         private VFXHandle _upgradeLoop;
 
+        // WO-871: the builder NPC that stands at this structure and WORKS for exactly as long as
+        // this scaffold lives. Held as a handle beside _upgradeLoop and released by the SAME three
+        // seams (Reveal on completion, OnDestroy on cancel/move/teardown, plus the worker's own
+        // self-heal when this component vanishes) so it can never be orphaned -- WO-753.
+        // The worker asks NOTHING about build state: this component is its only authority.
+        private ConstructionWorker _worker;
+
         /// <summary>Job key for a placed structure — unique per placement (id + cell).</summary>
         public static string KeyFor(PlacedStructureData data)
             => $"{data.itemId}@{data.cellX}_{data.cellZ}";
@@ -167,6 +174,24 @@ namespace DeNelle.Village
             // is still physically there; only the ACTIVE behaviours pause).
             SilenceCombat();
 
+            // WO-871: stand a builder at the site for the duration of the job. Null-safe no-op when
+            // the body/controller assets are missing or the concurrent-worker cap is reached -- the
+            // build then shows exactly what it showed before (dim + countdown + aura).
+            // Deliberately BEFORE the countdown label + the aura are parented: the worker anchors
+            // itself off the structure's renderer bounds, and a TextMeshPro label / particle system
+            // hanging off the same transform would inflate those bounds and push it out of position.
+            //
+            // GUARDED like every other risky step in this method, and for a reason that was PROVEN
+            // rather than imagined: on 2026-08-04 an Animator quirk inside the spawn threw
+            // IndexOutOfRangeException straight out of Attach (Builds/wo871-stack.log). Attach is
+            // called from BuildModeController placement and from BaseLayoutLoader on load, so an
+            // unguarded cosmetic spawn can abort a real structure being placed or reloaded. A worker
+            // is DECORATION -- it must never be able to break a build.
+            Guard.Try("Build", "stand a build worker at the site", () =>
+            {
+                _worker = ConstructionWorkerPool.Spawn(this, transform, _key);
+            });
+
             Guard.Try("Build", "scaffold label", () =>
             {
                 var go = new GameObject("BuildCountdown");
@@ -193,7 +218,8 @@ namespace DeNelle.Village
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.JobCompleted += OnJobCompleted;
             FlowTrace.Step("Build", $"under-construction armed for '{_key}'"
-                + (_upgradeLoop != null ? " (circling upgrade loop held)." : " (upgrade loop no-op — key/catalog not ready)."));
+                + (_upgradeLoop != null ? " (circling upgrade loop held)." : " (upgrade loop no-op — key/catalog not ready).")
+                + (_worker != null ? " Builder worker on site." : " No builder worker (assets absent or worker cap reached)."));
         }
 
         // =====================================================================
@@ -381,6 +407,8 @@ namespace DeNelle.Village
             // Stop the circling loop IMMEDIATELY on completion so it can't linger under the
             // UpgradeStructureComplete_Aura fireworks the upgrade-apply path fires this same beat.
             StopUpgradeLoop();
+            // WO-871: the builder leaves the instant the job completes -- same beat, same discipline.
+            StopWorker();
             FlowTrace.Step("Build", $"construction complete — revealed '{_key}'");
             DestroyHost(this);
         }
@@ -400,10 +428,22 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
-            // Catch-all for cancel / host-destroy / scene teardown: never leak the circling loop.
+            // Catch-all for cancel / host-destroy / scene teardown: never leak the circling loop,
+            // and never leave a builder standing at a structure that is gone (WO-753).
             StopUpgradeLoop();
+            StopWorker();
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.JobCompleted -= OnJobCompleted;
+        }
+
+        /// <summary>Return the build-site worker to its pool (idempotent -- safe from both Reveal
+        /// and OnDestroy; the handle is nulled so the second call is a no-op). The worker is never
+        /// a child of this structure, so this is safe to call while the host is being destroyed.</summary>
+        private void StopWorker()
+        {
+            if (_worker == null) return;
+            _worker.Release();
+            _worker = null;
         }
 
         /// <summary>Return the circling upgrade loop to its pool (idempotent — safe to call from
