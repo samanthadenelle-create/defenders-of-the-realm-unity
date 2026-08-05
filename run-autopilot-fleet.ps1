@@ -108,12 +108,15 @@ for ($i = 0; $i -lt $Count; $i++) {
     # -Graphics => WINDOWED real-rendering run (no -batchmode/-nographics) so ScreenCapture
     # writes real frames (batchmode has no backbuffer => black). Default => headless batch.
     $args = if ($Graphics) { @() } else { @('-batchmode', '-nographics') }
-    # Capture runs default to 2340x1080 - the Seeker's EXACT screen. The old 1280x720
-    # is a different aspect (1.78 vs 2.17), and this project's recurring UI defect is
-    # fraction-anchored bands that only cull/overlap at the device aspect, so a shot
-    # taken at the wrong ratio can pass a review the device would fail.
-    $w = if ($Graphics) { if ($Width  -gt 0) { "$Width" }  else { '2340' } } else { '800' }
-    $h = if ($Graphics) { if ($Height -gt 0) { "$Height" } else { '1080' } } else { '600' }
+    # Capture runs default to 2670x1200 - the Seeker's REAL surface, corrected 2026-08-05.
+    # This comment used to call 2340x1080 "the Seeker's EXACT screen"; it is NOT - it is the
+    # old harness size, and the two differ in BOTH scale and aspect (2.225 vs 2.167). This
+    # project's recurring UI defect is fraction-anchored bands that only cull/overlap at the
+    # device geometry, so a shot at the wrong size can pass a review the device would fail -
+    # which is exactly how two panels shipped broken behind a green marker tonight.
+    # Override with -Width/-Height to reproduce a legacy size.
+    $w = if ($Graphics) { if ($Width  -gt 0) { "$Width" }  else { '2670' } } else { '800' }
+    $h = if ($Graphics) { if ($Height -gt 0) { "$Height" } else { '1200' } } else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
     if ($Phases -ne '') { $args += "--phases=$Phases" }
     $p = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru

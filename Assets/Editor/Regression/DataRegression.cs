@@ -343,6 +343,16 @@ namespace DeNelle.Editor
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---
             if (!UiObsidianConformanceRegression.Run(out var uiObsidianReason)) failures.Add(uiObsidianReason); else log.AppendLine("[ui-obsidian] " + uiObsidianReason);
             if (!UiMvvmConformanceRegression.Run(out var uiMvvmReason)) failures.Add(uiMvvmReason); else log.AppendLine("[ui-mvvm] " + uiMvvmReason);
+            // --- UI-capture FIDELITY guard (2026-08-05): the headless capture harness was
+            // geometry-BLIND — RenderCanvasToPng only rewrote canvas.scaleFactor and never
+            // Screen.*, while the kit computes zone geometry AT BUILD TIME from Screen.*, so
+            // every PNG shared ONE layout and the resolution in the filename was a LABEL, not
+            // a layout. Two panels shipped broken behind a green UI_CAPTURE_OK. This is the
+            // source-text ratchet that stops the fix being silently reverted; the live
+            // geometry assertions run inside the harness itself. ---
+            // Fully qualified: this suite lives in DeNelle.Editor.Regression, not DeNelle.Editor
+            // (same as RuntimeSpawnVisualRegression below).
+            if (!DeNelle.Editor.Regression.UiCaptureFidelityRegression.Run(out var uiCapFidelityReason)) failures.Add(uiCapFidelityReason); else log.AppendLine("[ui-capture-fidelity] " + uiCapFidelityReason);
             if (!HudPostureRegression.Run(out var hudPostureReason)) failures.Add(hudPostureReason); else log.AppendLine("[hud-posture] " + hudPostureReason);
             // --- WO-673 strategic placement — the §5 permission gates (flag-off parity,
             // migration round-trip, one-per-id, save v30, repair chain, 45° yaw + claim) ---

@@ -28,8 +28,43 @@
 //   powershell -File .\run-unity-method.ps1 `
 //     -Method DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless -LogName ui-capture.log
 //
-// OUTPUT: Builds/ui-capture/<PanelName>.png  +  a final `UI_CAPTURE_OK <count>`
-// marker line the caller greps to confirm.
+// OUTPUT: Builds/ui-capture/<PanelName>_<w>x<h>.png  +  three DISTINCT marker lines
+// the caller greps:
+//     UI_CAPTURE_OK <count>                 -- non-blank frames written
+//     UI_CAPTURE_FIDELITY_OK <n> builds     -- every panel was BUILT at the size it
+//                                              was shot at (or _DEGRADED, an error)
+//     UI_GEOMETRY_OK <n> canvases           -- numeric layout assertions passed
+//                                              (or UI_GEOMETRY_FAIL x<n>, an error)
+//
+// =============================================================================
+//  THE FIDELITY HOLE THIS FILE USED TO HAVE (fixed 2026-08-05) -- READ THIS
+// -----------------------------------------------------------------------------
+//  Until today every panel was BUILT ONCE and then RE-SCALED per shot: the
+//  capture flipped the canvas to ScreenSpaceCamera and called ApplyScreenSpaceScale,
+//  which rewrites ONLY `canvas.scaleFactor`. It never resized the root canvas rect
+//  and never moved `Screen.width`/`Screen.height`.
+//
+//  But panels compute their ZONE GEOMETRY AT BUILD TIME from
+//  `ElarionUiKit.PostScaleCanvasHeight`, which reads `Screen.*` (and falls back to a
+//  hard-coded 1920 when Screen is unusable). So EVERY png a run wrote shared ONE
+//  geometry -- the editor process's -- and the "1920x1080" / "2340x1080" in the
+//  filenames were LABELS, NOT LAYOUTS. Font point size reproduced; zone geometry did
+//  not. That is precisely how the founding Echo card passed green at two "sizes" all
+//  night while, on the device, its caption rendered entirely off the black plate.
+//
+//  THE FIX, two halves:
+//    (1) BUILD PER TARGET SIZE. Every capture is now wrapped in ForEachTarget, which
+//        runs the WHOLE build->shoot->teardown cycle once per target. Nothing is
+//        built once and re-labelled.
+//    (2) MOVE Screen.* BEFORE THE BUILD. GameViewSizeScope drives the editor's main
+//        game view to the target resolution (the GameViewSizes/GameView reflection
+//        recipe) so PostScaleCanvasHeight returns the TARGET value while the panel is
+//        being constructed. The scope VERIFIES the move by reading Screen.* back; if
+//        the editor refuses (batchmode with no game view), it does NOT pretend --
+//        it logs loudly and the run reports UI_CAPTURE_FIDELITY_DEGRADED.
+//
+//  And because eyes-only review is not a defence, AuditGeometry now asserts the
+//  layout NUMERICALLY on every captured canvas (see its banner).
 // =============================================================================
 
 using System;
@@ -77,6 +112,285 @@ namespace DeNelle.Editor
         private const float BlankMinInkFraction = 0.002f;
 
         // ---------------------------------------------------------------------
+        //  CAPTURE TARGETS (2026-08-05).
+        //
+        //  2670x1200 is the Solana SEEKER'S REAL SURFACE. It had NEVER been shot by
+        //  anything in this repo. The 2340x1080 entry below was only ever a harness
+        //  size -- tools' run-autopilot-fleet.ps1 still (wrongly) describes it as the
+        //  Seeker's exact screen; fix it there too. 1920x1080 is kept as the
+        //  desktop/reference landscape.
+        //
+        //  Each target drives a FULL build->shoot->teardown cycle (ForEachTarget), so
+        //  the geometry in the png is the geometry that resolution really produces.
+        // ---------------------------------------------------------------------
+        private struct CaptureTarget
+        {
+            public readonly int W;
+            public readonly int H;
+            public readonly string Tag;
+            public CaptureTarget(int w, int h) { W = w; H = h; Tag = w + "x" + h; }
+        }
+
+        private static readonly CaptureTarget[] LandscapeTargets =
+        {
+            new CaptureTarget(1920, 1080),   // desktop / reference landscape
+            new CaptureTarget(2340, 1080),   // common tall-phone landscape (NOT the Seeker)
+            new CaptureTarget(2670, 1200),   // THE SEEKER'S REAL SURFACE
+        };
+
+        // Fidelity bookkeeping (reported as UI_CAPTURE_FIDELITY_OK / _DEGRADED).
+        private static int _fidelityOk;
+        private static int _fidelityDegraded;
+        private static readonly HashSet<string> _fidelityReasons = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Run one capture body ONCE PER TARGET SIZE, with the editor's game view driven to
+        /// that size FIRST so the panel is BUILT against it (not built once and re-labelled).
+        /// The body owns its own build + teardown, exactly as it did before.
+        /// </summary>
+        private static int ForEachTarget(string panelName, Func<CaptureTarget, int> buildAndShoot)
+        {
+            return ForEachTarget(panelName, LandscapeTargets, buildAndShoot);
+        }
+
+        private static int ForEachTarget(string panelName, CaptureTarget[] targets,
+                                         Func<CaptureTarget, int> buildAndShoot)
+        {
+            int total = 0;
+            if (targets == null || buildAndShoot == null) return 0;
+            foreach (var target in targets)
+            {
+                using (new GameViewSizeScope(target, panelName))
+                {
+                    try
+                    {
+                        total += buildAndShoot(target);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("[UICap-HL] " + panelName + " @" + target.Tag + " threw: " + e);
+                    }
+                }
+            }
+            return total;
+        }
+
+        // ---------------------------------------------------------------------
+        //  GameViewSizeScope -- move Screen.* to the target BEFORE the panel builds.
+        //
+        //  Panels read ElarionUiKit.PostScaleCanvasHeight (-> Screen.width/height) on
+        //  the frame they build their zones. Nothing this harness does to the canvas
+        //  AFTER the build can change those zones, so the only honest fix is to move
+        //  the value the build reads.
+        //
+        //  The only editor lever that moves Screen.* is the MAIN GAME VIEW size, and
+        //  the only way to set it is the long-standing GameViewSizes / GameView
+        //  reflection recipe (UnityEditor internals -- no public API exists). Every
+        //  step is guarded, and the result is VERIFIED by reading Screen.* back:
+        //  a scope that could not move Screen does NOT pretend it did. It records a
+        //  reason, and the run ends on UI_CAPTURE_FIDELITY_DEGRADED with that reason
+        //  printed -- i.e. the harness declares itself scale-only rather than
+        //  shipping a green run over one geometry wearing three filenames.
+        // ---------------------------------------------------------------------
+        private sealed class GameViewSizeScope : IDisposable
+        {
+            private static bool _probed;
+            private static Type _sizesType, _groupType, _sizeType, _sizeTypeEnum, _gameViewType;
+            private static object _sizes;              // GameViewSizes.instance
+            private static object _group;              // its current GameViewSizeGroup
+            private static EditorWindow _gameView;
+            private static string _probeFailure;
+
+            private int _prevIndex;
+            private bool _restore;
+
+            public GameViewSizeScope(CaptureTarget target, string panelName)
+            {
+                _prevIndex = -1;
+                _restore = false;
+                try
+                {
+                    Probe();
+                    if (_probeFailure == null)
+                    {
+                        _prevIndex = GetSelectedIndex();
+                        if (Select(target.W, target.H)) _restore = _prevIndex >= 0;
+                    }
+                }
+                catch (Exception e)
+                {
+                    _probeFailure = _probeFailure ?? (e.GetType().Name + ": " + e.Message);
+                }
+
+                // VERIFY -- never trust the set, read Screen back.
+                int sw = Screen.width, sh = Screen.height;
+                if (sw == target.W && sh == target.H)
+                {
+                    _fidelityOk++;
+                    return;
+                }
+
+                _fidelityDegraded++;
+                string why = _probeFailure ?? ("game view accepted the size but Screen still reads "
+                                               + sw + "x" + sh);
+                if (_fidelityReasons.Add(why))
+                {
+                    Debug.LogError("[UICap-HL] GEOMETRY FIDELITY LOST for " + target.Tag +
+                                   " (panel " + panelName + "): " + why +
+                                   ". Screen.width/height stayed " + sw + "x" + sh + ", so " +
+                                   "ElarionUiKit.PostScaleCanvasHeight will resolve this panel's zones " +
+                                   "against THAT geometry, not " + target.Tag + ". The png is then " +
+                                   "SCALE-ACCURATE ONLY -- font size reproduces, zone geometry does NOT. " +
+                                   "Treat its filename as a label, not a layout.");
+                }
+            }
+
+            public void Dispose()
+            {
+                try
+                {
+                    if (_restore && _prevIndex >= 0) SelectIndex(_prevIndex);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[UICap-HL] game view size restore failed (harmless): " + e.Message);
+                }
+            }
+
+            private static void Probe()
+            {
+                if (_probed) return;
+                _probed = true;
+                try
+                {
+                    var edAsm = typeof(EditorWindow).Assembly;
+                    _sizesType = edAsm.GetType("UnityEditor.GameViewSizes");
+                    _sizeType = edAsm.GetType("UnityEditor.GameViewSize");
+                    _sizeTypeEnum = edAsm.GetType("UnityEditor.GameViewSizeType");
+                    _gameViewType = edAsm.GetType("UnityEditor.GameView");
+                    if (_sizesType == null || _sizeType == null || _sizeTypeEnum == null || _gameViewType == null)
+                    {
+                        _probeFailure = "UnityEditor internals not found (GameViewSizes/GameViewSize/" +
+                                        "GameViewSizeType/GameView) -- this Unity version moved them";
+                        return;
+                    }
+
+                    var singleton = typeof(ScriptableSingleton<>).MakeGenericType(_sizesType);
+                    var instProp = singleton.GetProperty("instance",
+                        BindingFlags.Public | BindingFlags.Static);
+                    _sizes = instProp != null ? instProp.GetValue(null, null) : null;
+                    if (_sizes == null) { _probeFailure = "GameViewSizes.instance was null"; return; }
+
+                    var groupProp = _sizesType.GetProperty("currentGroup",
+                        BindingFlags.Public | BindingFlags.Instance);
+                    _group = groupProp != null ? groupProp.GetValue(_sizes, null) : null;
+                    if (_group == null) { _probeFailure = "GameViewSizes.currentGroup was null"; return; }
+                    _groupType = _group.GetType();
+
+                    // An EXISTING game view is preferred; GetWindow can be hostile in batchmode.
+                    var open = Resources.FindObjectsOfTypeAll(_gameViewType);
+                    if (open != null && open.Length > 0) _gameView = open[0] as EditorWindow;
+                    if (_gameView == null)
+                    {
+                        try { _gameView = EditorWindow.GetWindow(_gameViewType, false, "Game", false); }
+                        catch (Exception e) { _probeFailure = "no GameView and GetWindow threw (" + e.GetType().Name + ": " + e.Message + ")"; return; }
+                    }
+                    if (_gameView == null) { _probeFailure = "no GameView window exists and one could not be created"; return; }
+                }
+                catch (Exception e)
+                {
+                    _probeFailure = e.GetType().Name + ": " + e.Message;
+                }
+            }
+
+            /// <summary>Index of the group's FixedResolution entry for w x h, adding it if absent.</summary>
+            private static int IndexOf(int w, int h)
+            {
+                var totalM = _groupType.GetMethod("GetTotalCount", BindingFlags.Public | BindingFlags.Instance);
+                var getM = _groupType.GetMethod("GetGameViewSize",
+                    BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(int) }, null);
+                if (totalM == null || getM == null) return -1;
+
+                var wProp = _sizeType.GetProperty("width", BindingFlags.Public | BindingFlags.Instance);
+                var hProp = _sizeType.GetProperty("height", BindingFlags.Public | BindingFlags.Instance);
+                if (wProp == null || hProp == null) return -1;
+
+                int total = (int)totalM.Invoke(_group, null);
+                for (int i = 0; i < total; i++)
+                {
+                    object s = getM.Invoke(_group, new object[] { i });
+                    if (s == null) continue;
+                    if ((int)wProp.GetValue(s, null) == w && (int)hProp.GetValue(s, null) == h) return i;
+                }
+
+                // Not present -> author it (FixedResolution, so the view is exactly w x h).
+                var ctor = _sizeType.GetConstructor(new[] { _sizeTypeEnum, typeof(int), typeof(int), typeof(string) });
+                var addM = _groupType.GetMethod("AddCustomSize", BindingFlags.Public | BindingFlags.Instance);
+                if (ctor == null || addM == null) return -1;
+                object created = ctor.Invoke(new object[]
+                {
+                    Enum.Parse(_sizeTypeEnum, "FixedResolution"), w, h, "UICap " + w + "x" + h,
+                });
+                addM.Invoke(_group, new[] { created });
+
+                total = (int)totalM.Invoke(_group, null);
+                for (int i = 0; i < total; i++)
+                {
+                    object s = getM.Invoke(_group, new object[] { i });
+                    if (s == null) continue;
+                    if ((int)wProp.GetValue(s, null) == w && (int)hProp.GetValue(s, null) == h) return i;
+                }
+                return -1;
+            }
+
+            private static int GetSelectedIndex()
+            {
+                var p = _gameViewType.GetProperty("selectedSizeIndex",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (p == null || _gameView == null) return -1;
+                try { return (int)p.GetValue(_gameView, null); }
+                catch { return -1; }
+            }
+
+            private static bool Select(int w, int h)
+            {
+                int idx = IndexOf(w, h);
+                if (idx < 0)
+                {
+                    _probeFailure = _probeFailure ?? ("could not find or author a " + w + "x" + h +
+                                                      " FixedResolution game view size");
+                    return false;
+                }
+                return SelectIndex(idx);
+            }
+
+            private static bool SelectIndex(int idx)
+            {
+                if (_gameView == null) return false;
+                var m = _gameViewType.GetMethod("SizeSelectionCallback",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (m == null)
+                {
+                    _probeFailure = _probeFailure ?? "GameView.SizeSelectionCallback not found";
+                    return false;
+                }
+                m.Invoke(_gameView, new object[] { idx, null });
+                _gameView.Repaint();
+                // The size is applied on the view's next layout; force it now so the
+                // Screen.* read in the ctor is the POST-change value, not the stale one.
+                try { InternalEditorUtility_RepaintAllViews(); } catch { }
+                return true;
+            }
+
+            private static void InternalEditorUtility_RepaintAllViews()
+            {
+                var t = typeof(EditorWindow).Assembly.GetType("UnityEditorInternal.InternalEditorUtility");
+                var m = t != null ? t.GetMethod("RepaintAllViews", BindingFlags.Public | BindingFlags.Static) : null;
+                if (m != null) m.Invoke(null, null);
+            }
+        }
+
+        // ---------------------------------------------------------------------
         //  LEGACY -- Play-mode drive (menu item only; not headless-reliable).
         // ---------------------------------------------------------------------
         [MenuItem("Defenders/UI/Capture UI Panels")]
@@ -103,11 +417,17 @@ namespace DeNelle.Editor
         public static void RunCaptureHeadless()
         {
             int count = 0;
+            _fidelityOk = 0;
+            _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _geoCanvasesChecked = 0;
             try
             {
                 Directory.CreateDirectory(OutDir);
                 Debug.Log("[UICap-HL] headless UI capture start (batchmode=" + Application.isBatchMode +
                           ", graphicsDevice=" + SystemInfo.graphicsDeviceType +
+                          ", screen=" + Screen.width + "x" + Screen.height +
                           ", out=" + Path.GetFullPath(OutDir) + ")");
 
                 if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
@@ -136,8 +456,36 @@ namespace DeNelle.Editor
                 Debug.LogError("[UICap-HL] capture run threw: " + e);
             }
 
+            // Three DISTINCT markers (CLAUDE.md §8: one marker per entry point, never a
+            // shared string -- that is how a 22-case pass once read as a full-suite pass).
+            ReportFidelity();
+            ReportGeometry();
+
             // The marker a headless caller greps to confirm the run produced pixels.
             Debug.Log("UI_CAPTURE_OK " + count);
+        }
+
+        /// <summary>Did every panel get BUILT at the size it was SHOT at?</summary>
+        private static void ReportFidelity()
+        {
+            int total = _fidelityOk + _fidelityDegraded;
+            if (total == 0)
+            {
+                Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED 0/0 builds -- no capture ran at all");
+                return;
+            }
+            if (_fidelityDegraded == 0)
+            {
+                Debug.Log("UI_CAPTURE_FIDELITY_OK " + _fidelityOk + " builds -- every panel was " +
+                          "constructed with Screen.* at its target resolution, so the zone geometry " +
+                          "in each png is that resolution's real geometry");
+                return;
+            }
+            Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED " + _fidelityDegraded + "/" + total +
+                           " builds -- the editor would not move Screen.* to the target, so those " +
+                           "pngs are SCALE-ACCURATE ONLY (font size reproduces, zone geometry does " +
+                           "NOT; the resolution in the filename is a LABEL, not a layout). Reasons: " +
+                           string.Join(" | ", new List<string>(_fidelityReasons).ToArray()));
         }
 
         // ---------------------------------------------------------------------
@@ -145,10 +493,20 @@ namespace DeNelle.Editor
         //  LONGEST copy -- the founding echo Aldwin. This is the panel with the
         //  just-fixed text/button overlap the owner cares about. We render both
         //  the flavor state and the "Tell me more" LORE state (the worst-case
-        //  copy), at two mobile-landscape resolutions, so any overlap shows as it
-        //  does on device.
+        //  copy), at EVERY capture target (including the Seeker's real 2670x1200),
+        //  so any overlap shows as it does on device.
+        //
+        //  BUILT ONCE PER TARGET (2026-08-05). This card is the exact panel the old
+        //  build-once/re-scale harness lied about: it was "captured at two sizes" and
+        //  green all night while its caption rendered off the black plate on device,
+        //  because both pngs carried the SAME zone geometry.
         // ---------------------------------------------------------------------
         private static int CaptureFoundingEchoCard()
+        {
+            return ForEachTarget("EchoUnlockDialogue", CaptureFoundingEchoCardOnce);
+        }
+
+        private static int CaptureFoundingEchoCardOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -189,8 +547,9 @@ namespace DeNelle.Editor
                 GameObject emergenceGo = GetPrivateGameObject(dlg, "_emergenceCanvas");
                 if (emergenceGo != null)
                 {
-                    if (RenderCanvasToPng(emergenceGo, OutDir + "EchoUnlockDialogue_Aldwin_emergence_1920x1080.png", 1920, 1080)) saved++;
-                    if (RenderCanvasToPng(emergenceGo, OutDir + "EchoUnlockDialogue_Aldwin_emergence_2340x1080.png", 2340, 1080)) saved++;
+                    if (RenderCanvasToPng(emergenceGo,
+                        OutDir + "EchoUnlockDialogue_Aldwin_emergence_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
 
                     // Advance exactly as the player does (the Continue tap). Edit-mode safe:
                     // the dialogue retires its emergence canvas via DestroyImmediate here.
@@ -209,15 +568,17 @@ namespace DeNelle.Editor
                 }
 
                 // -- FLAVOR state (the default awaken copy) --
-                if (RenderCanvasToPng(canvasGo, OutDir + "EchoUnlockDialogue_Aldwin_flavor_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "EchoUnlockDialogue_Aldwin_flavor_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "EchoUnlockDialogue_Aldwin_flavor_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
 
                 // -- LORE state (the LONGEST copy, swapped in by "Tell me more") --
                 // OnTellMore is private; invoking it mirrors the real button so we capture
                 // exactly what the owner sees after tapping "Tell me more".
                 InvokePrivate(dlg, "OnTellMore");
-                if (RenderCanvasToPng(canvasGo, OutDir + "EchoUnlockDialogue_Aldwin_lore_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "EchoUnlockDialogue_Aldwin_lore_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "EchoUnlockDialogue_Aldwin_lore_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -248,6 +609,11 @@ namespace DeNelle.Editor
         //  field/method access) -- no compile-time dependency, no asmdef change.
         // ---------------------------------------------------------------------
         private static int CapturePauseMenu()
+        {
+            return ForEachTarget("PauseMenu", CapturePauseMenuOnce);
+        }
+
+        private static int CapturePauseMenuOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -311,8 +677,8 @@ namespace DeNelle.Editor
 
                 canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
 
-                if (RenderCanvasToPng(canvasGo, OutDir + "PauseMenu_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "PauseMenu_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "PauseMenu_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -353,6 +719,11 @@ namespace DeNelle.Editor
         // ---------------------------------------------------------------------
         private static int CaptureEchoRoster()
         {
+            return ForEachTarget("EchoPetButton", CaptureEchoRosterOnce);
+        }
+
+        private static int CaptureEchoRosterOnce(CaptureTarget target)
+        {
             int saved = 0;
             GameObject tempEventSystem = null;
             GameObject hostGo = null;
@@ -385,8 +756,8 @@ namespace DeNelle.Editor
 
                 pipCanvas.SetActive(true);   // scene-gate never ran (no Start); ensure it is visible
 
-                if (RenderCanvasToPng(pipCanvas, OutDir + "EchoPetButton_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(pipCanvas, OutDir + "EchoPetButton_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(pipCanvas, OutDir + "EchoPetButton_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -416,6 +787,11 @@ namespace DeNelle.Editor
         //  PanelManager registration leaks from this capture.
         // ---------------------------------------------------------------------
         private static int CaptureHelpMenu()
+        {
+            return ForEachTarget("HelpMenu", CaptureHelpMenuOnce);
+        }
+
+        private static int CaptureHelpMenuOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -462,8 +838,8 @@ namespace DeNelle.Editor
 
                 canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
 
-                if (RenderCanvasToPng(canvasGo, OutDir + "HelpMenu_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "HelpMenu_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "HelpMenu_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -498,6 +874,11 @@ namespace DeNelle.Editor
         //  regardless of data, so its geometry IS in the shot.
         // ---------------------------------------------------------------------
         private static int CaptureDailyQuestHud()
+        {
+            return ForEachTarget("DailyQuestHud", CaptureDailyQuestHudOnce);
+        }
+
+        private static int CaptureDailyQuestHudOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -542,8 +923,8 @@ namespace DeNelle.Editor
                 var chromeRoot = GetFieldValue(chrome, "root") as GameObject;
                 if (chromeRoot != null) chromeRoot.SetActive(true);
 
-                if (RenderCanvasToPng(canvasGo, OutDir + "DailyQuestHud_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "DailyQuestHud_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "DailyQuestHud_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -574,6 +955,11 @@ namespace DeNelle.Editor
         //  panel's own Close() uses runtime Destroy (illegal in edit mode).
         // ---------------------------------------------------------------------
         private static int CaptureLoreReadingModal()
+        {
+            return ForEachTarget("LoreReadingModal", CaptureLoreReadingModalOnce);
+        }
+
+        private static int CaptureLoreReadingModalOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -642,8 +1028,8 @@ namespace DeNelle.Editor
                 }
 
                 Debug.Log("[UICap-HL] lore worst-case fragment = '" + worst.Id + "' (" + worstLen + " chars).");
-                if (RenderCanvasToPng(canvasGo, OutDir + "LoreReadingModal_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "LoreReadingModal_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "LoreReadingModal_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -690,6 +1076,11 @@ namespace DeNelle.Editor
         //  Destroy on its collider, which edit mode forbids.
         // ---------------------------------------------------------------------
         private static int CaptureTowerManagerPanel()
+        {
+            return ForEachTarget("TowerManagerPanel", CaptureTowerManagerPanelOnce);
+        }
+
+        private static int CaptureTowerManagerPanelOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -756,8 +1147,8 @@ namespace DeNelle.Editor
 
                 canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
 
-                if (RenderCanvasToPng(canvasGo, OutDir + "TowerManagerPanel_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "TowerManagerPanel_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "TowerManagerPanel_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -793,6 +1184,11 @@ namespace DeNelle.Editor
         //  service/scene context is needed -- BuildModeController is NOT touched.
         // ---------------------------------------------------------------------
         private static int CaptureBuildMenuUpgradeTower()
+        {
+            return ForEachTarget("BuildMenuUpgradeTower", CaptureBuildMenuUpgradeTowerOnce);
+        }
+
+        private static int CaptureBuildMenuUpgradeTowerOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -861,8 +1257,8 @@ namespace DeNelle.Editor
 
                 canvasGo.SetActive(true);   // EnsureBuilt builds it hidden; show it for the shot
 
-                if (RenderCanvasToPng(canvasGo, OutDir + "BuildMenuUpgradeTower_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "BuildMenuUpgradeTower_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "BuildMenuUpgradeTower_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -902,13 +1298,28 @@ namespace DeNelle.Editor
         //  Destroy-free (tower-manager parking recipe, applied as a pre-clear).
         //
         //  PORTRAIT: Open() picks the stacked-vs-split geometry from
-        //  Screen.height > Screen.width at BUILD time, which a synchronous
-        //  edit-mode call cannot change. The portrait branch differs ONLY in the
-        //  list-viewport + detail-pane anchor rects (same hosts, same chrome), so
-        //  after the two landscape shots we apply the authored portrait anchors
-        //  by hand and shoot 1080x2340 -- the true stacked layout.
+        //  Screen.height > Screen.width at BUILD time. The portrait targets below
+        //  are now BUILT under a portrait GameViewSizeScope, so Open() takes that
+        //  branch ITSELF. The authored portrait anchors are still re-applied after
+        //  the paint: they are the same values Open writes (so a no-op when the
+        //  scope worked), and they keep the shot honest if the editor refused to
+        //  move Screen (UI_CAPTURE_FIDELITY_DEGRADED).
         // ---------------------------------------------------------------------
+        private static readonly CaptureTarget[] RumorBoardTargets =
+        {
+            new CaptureTarget(1920, 1080),
+            new CaptureTarget(2340, 1080),
+            new CaptureTarget(2670, 1200),   // Seeker landscape
+            new CaptureTarget(1080, 2340),
+            new CaptureTarget(1200, 2670),   // Seeker portrait
+        };
+
         private static int CaptureRumorBoard()
+        {
+            return ForEachTarget("RumorBoard", RumorBoardTargets, CaptureRumorBoardOnce);
+        }
+
+        private static int CaptureRumorBoardOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -965,9 +1376,43 @@ namespace DeNelle.Editor
 
                 InvokePrivate(panel, "Repaint");   // worst-case list + longest detail body + Accept CTA
 
-                // Landscape (the geometry Open() authored under the editor's landscape Screen).
-                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_2340x1080.png", 2340, 1080)) saved++;
+                if (target.H > target.W)
+                {
+                    // PORTRAIT: re-assert the authored portrait anchors (the ONLY delta of the
+                    // portrait branch in Open). A no-op when the portrait scope worked and Open
+                    // already took that branch; the honest correction when it did not.
+                    RectTransform listViewport = null;
+                    foreach (var srScroll in canvasGo.GetComponentsInChildren<ScrollRect>(true))
+                    {
+                        if (srScroll != null && srScroll.vertical && !srScroll.horizontal
+                            && srScroll.gameObject.name == "Viewport")
+                        {
+                            listViewport = (RectTransform)srScroll.transform;
+                            break;
+                        }
+                    }
+                    var detailPane = GetPrivateFieldValue(panel, "_detailPane") as RectTransform;
+                    if (listViewport != null && detailPane != null)
+                    {
+                        listViewport.anchorMin = new Vector2(0.03f, 0.48f);
+                        listViewport.anchorMax = new Vector2(0.97f, 0.855f);
+                        detailPane.anchorMin = new Vector2(0.05f, 0.05f);
+                        detailPane.anchorMax = new Vector2(0.95f, 0.46f);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[UICap-HL] rumor board portrait anchors not re-applied -- list "
+                                         + "viewport or detail pane not found (listViewport="
+                                         + (listViewport != null) + ", detailPane="
+                                         + (detailPane != null) + ").");
+                    }
+                    if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+                    return saved;
+                }
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
 
                 // WO-810 follow-up: the DAILY tab — its rows carry raw "{target}" authored
                 // labels resolved via DailyQuestCatalog.ResolveLabel, so this shot pixel-
@@ -976,40 +1421,8 @@ namespace DeNelle.Editor
                 // extra pre-clear pass is needed for these repaints.
                 worstVm.SetTab("daily");
                 InvokePrivate(panel, "Repaint");
-                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_daily_1920x1080.png", 1920, 1080)) saved++;
-
-                // Restore the worst-case All-tab selection for the portrait shot below.
-                worstVm.SetTab("all");
-                SetPrivateField(panel, "_selectedId", WorstCaseRumorBackend.LongestBodyId);
-                InvokePrivate(panel, "Repaint");
-
-                // Portrait: apply the authored portrait anchors (the ONLY delta of the
-                // portrait branch in Open) to the same hosts, then shoot 1080x2340.
-                RectTransform listViewport = null;
-                foreach (var srScroll in canvasGo.GetComponentsInChildren<ScrollRect>(true))
-                {
-                    if (srScroll != null && srScroll.vertical && !srScroll.horizontal
-                        && srScroll.gameObject.name == "Viewport")
-                    {
-                        listViewport = (RectTransform)srScroll.transform;
-                        break;
-                    }
-                }
-                var detailPane = GetPrivateFieldValue(panel, "_detailPane") as RectTransform;
-                if (listViewport != null && detailPane != null)
-                {
-                    listViewport.anchorMin = new Vector2(0.03f, 0.48f);
-                    listViewport.anchorMax = new Vector2(0.97f, 0.855f);
-                    detailPane.anchorMin = new Vector2(0.05f, 0.05f);
-                    detailPane.anchorMax = new Vector2(0.95f, 0.46f);
-                    if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_1080x2340.png", 1080, 2340)) saved++;
-                }
-                else
-                {
-                    Debug.LogWarning("[UICap-HL] rumor board portrait shot skipped -- list viewport or "
-                                     + "detail pane not found (listViewport=" + (listViewport != null)
-                                     + ", detailPane=" + (detailPane != null) + ").");
-                }
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_daily_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -1052,6 +1465,11 @@ namespace DeNelle.Editor
         // ---------------------------------------------------------------------
         private static int CaptureRealmMap()
         {
+            return ForEachTarget("RealmMap", CaptureRealmMapOnce);
+        }
+
+        private static int CaptureRealmMapOnce(CaptureTarget target)
+        {
             int saved = 0;
             GameObject tempEventSystem = null;
             GameObject hostGo = null;
@@ -1079,11 +1497,10 @@ namespace DeNelle.Editor
                     return 0;
                 }
 
-                // Landscape at both mobile aspect ratios (the panel authored under the
-                // editor's landscape Screen; the portrait branch needs a live portrait
-                // Screen so it is not re-shot here).
-                if (RenderCanvasToPng(canvasGo, OutDir + "RealmMap_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "RealmMap_2340x1080.png", 2340, 1080)) saved++;
+                // Landscape at every capture target -- and now genuinely BUILT at each one
+                // (the panel used to be authored once under the editor's own Screen).
+                if (RenderCanvasToPng(canvasGo, OutDir + "RealmMap_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -1312,6 +1729,11 @@ namespace DeNelle.Editor
         // ---------------------------------------------------------------------
         private static int CaptureEchoCard()
         {
+            return ForEachTarget("EchoCard", CaptureEchoCardOnce);
+        }
+
+        private static int CaptureEchoCardOnce(CaptureTarget target)
+        {
             int saved = 0;
             GameObject tempEventSystem = null;
             GameObject hostGo = null;
@@ -1343,8 +1765,8 @@ namespace DeNelle.Editor
                 modal.SetActive(true);
                 InvokePrivate(view, "Refresh");
 
-                if (RenderCanvasToPng(modal, OutDir + "EchoCard_1920x1080.png", 1920, 1080)) saved++;
-                if (RenderCanvasToPng(modal, OutDir + "EchoCard_2340x1080.png", 2340, 1080)) saved++;
+                if (RenderCanvasToPng(modal, OutDir + "EchoCard_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -1379,9 +1801,19 @@ namespace DeNelle.Editor
         //  tower_arcane_spire with 193s left (so the idle slot MUST draw a visible
         //  "FREE" card), 3 identical footman trains queued (so they MUST collapse
         //  to one card with an x3 badge), and an idle Research channel.
-        //  Shot at 2340x1080 -- the device resolution, landscape-only.
+        //
+        //  Landscape-only, at every capture target. CORRECTION (2026-08-05): the old
+        //  banner here described the second harness size as the device resolution. It
+        //  is not -- the Seeker's real surface is 2670x1200, which nothing in this
+        //  repo had ever shot. (The same wrong claim is still in tools'
+        //  run-autopilot-fleet.ps1 -- fix it there too.)
         // ---------------------------------------------------------------------
         private static int CaptureQueueRail()
+        {
+            return ForEachTarget("QueueCardRail", CaptureQueueRailOnce);
+        }
+
+        private static int CaptureQueueRailOnce(CaptureTarget target)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -1467,8 +1899,8 @@ namespace DeNelle.Editor
                 }
 
                 Canvas.ForceUpdateCanvases();
-                if (RenderCanvasToPng(canvasGo, OutDir + "QueueCardRail_2340x1080.png", 2340, 1080)) saved++;
-                if (RenderCanvasToPng(canvasGo, OutDir + "QueueCardRail_1920x1080.png", 1920, 1080)) saved++;
+                if (RenderCanvasToPng(canvasGo, OutDir + "QueueCardRail_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
             }
             catch (Exception e)
             {
@@ -1649,6 +2081,10 @@ namespace DeNelle.Editor
                     Canvas.ForceUpdateCanvases();
                 }
 
+                // THE NUMERIC GEOMETRY GATE. Runs on the SETTLED layout, before the pixels
+                // exist -- eyes-on review is not a defence and never was (CLAUDE.md §12).
+                AuditGeometry(canvasGo, Path.GetFileNameWithoutExtension(path), w, h);
+
                 // Render (SRP-correct path first; fall back to legacy Camera.Render).
                 var req = new RenderPipeline.StandardRequest { destination = rt };
                 if (RenderPipeline.SupportsRenderRequest(cam, req)) cam.SubmitRenderRequest(req);
@@ -1702,6 +2138,336 @@ namespace DeNelle.Editor
                 if (camGo != null) UnityEngine.Object.DestroyImmediate(camGo);
                 if (rt != null) { rt.Release(); UnityEngine.Object.DestroyImmediate(rt); }
             }
+        }
+
+        // =====================================================================
+        //  AuditGeometry -- the numeric layout gate (2026-08-05).
+        // ---------------------------------------------------------------------
+        //  A screenshot only catches a layout defect if a HUMAN opens it and sees the
+        //  defect. That is not a gate; it is a hope. Two RCAs on 2026-08-05 landed on
+        //  the same finding -- the harness was structurally blind, and green runs
+        //  shipped broken panels to the owner.
+        //
+        //  So every captured canvas is now MEASURED on its settled layout. All rects
+        //  are converted into ROOT-CANVAS LOCAL SPACE, which is the kit's reference-px
+        //  space -- the same units MinTouchPx and the zone fractions are authored in --
+        //  so every number in a failure message is directly comparable to the source.
+        //
+        //  RULE 1 [text-off-plate]  A TMP_Text under a kit Zone_Body must be fully
+        //     inside that body's ZoneBacking rect. The ZoneBacking IS the black plate
+        //     (ElarionUiKit ~line 690: ZoneBacking(layout.body, ObsidianFill)), and
+        //     "the caption fell off the black" is the exact founding-Echo-card defect.
+        //     Text under a RectMask2D/Mask is SKIPPED: masked content is clipped by
+        //     construction and cannot visibly spill.
+        //
+        //  RULE 2 [button-overlap]  Two SIBLING Buttons must not overlap. Sibling
+        //     buttons are bands laid in one host, and an overlap there is the
+        //     "options stacked" / "only the bottom chip is tappable" defect.
+        //
+        //  RULE 3 [button-over-text]  A VISIBLE Button must not overlap a TMP_Text it
+        //     does not own. Its own label is a descendant, so it is excluded; INVISIBLE
+        //     buttons (no targetGraphic, or alpha < 0.05) are excluded too -- those are
+        //     hit-area/scrim overlays and cannot collide visually with anything.
+        //
+        //  RULE 4 [sub-touch-floor]  A kit button (one carrying the ClampMinTouch guard)
+        //     whose AUTHORED band resolves under ElarionUiKit.MinTouchPx. The guard grows
+        //     it in LateUpdate, which never runs in an edit-mode capture -- so what this
+        //     harness measures IS the pre-grow authored size. That is the point: the
+        //     sub-floor band is the DEFECT SIGNATURE; the symmetric growth is only its
+        //     consequence, and by the time you can see the growth the neighbour is
+        //     already overlapped.
+        //
+        //  Elements that are clipped and NOT fully inside their clipper are skipped by
+        //  rules 2 and 3: a scrolled-out row's pixel adjacency is unknowable.
+        // =====================================================================
+        private static readonly List<string> _geoFailures = new List<string>();
+        private static int _geoCanvasesChecked;
+
+        /// <summary>Containment slack, reference px. Sub-pixel seams are not defects.</summary>
+        private const float GeoContainSlackPx = 1.5f;
+        /// <summary>Overlap must exceed this on BOTH axes to count, reference px.</summary>
+        private const float GeoOverlapPadPx = 2f;
+        /// <summary>A Button covering this fraction of the canvas is a scrim, not a control.</summary>
+        private const float GeoScrimAreaFraction = 0.80f;
+        /// <summary>Cap on printed failure lines (all are still counted in the marker).</summary>
+        private const int GeoMaxPrintedLines = 60;
+
+        private static void AuditGeometry(GameObject canvasGo, string label, int w, int h)
+        {
+            RectTransform root = canvasGo != null ? canvasGo.GetComponent<RectTransform>() : null;
+            if (root == null) return;
+
+            _geoCanvasesChecked++;
+            var fails = new List<string>();
+            string at = " [" + label + " @" + w + "x" + h + "]";
+
+            try
+            {
+                TMP_Text[] texts = canvasGo.GetComponentsInChildren<TMP_Text>(false);
+                Button[] buttons = canvasGo.GetComponentsInChildren<Button>(false);
+
+                if (!TryRectInRoot(root, root, out Rect canvasRect)) canvasRect = new Rect(0f, 0f, w, h);
+                float canvasArea = Mathf.Max(1f, canvasRect.width * canvasRect.height);
+
+                // ---- RULE 1: text must stay on its panel's black plate -------------
+                foreach (var t in texts)
+                {
+                    if (t == null || !t.enabled || !t.gameObject.activeInHierarchy) continue;
+                    if (string.IsNullOrEmpty(t.text) || t.color.a < 0.05f) continue;
+                    var trt = t.transform as RectTransform;
+                    if (!TryRectInRoot(trt, root, out Rect tr)) continue;
+
+                    RectTransform body = ZoneBodyAbove(t.transform);
+                    if (body == null) continue;                                  // header/footer/close copy
+                    if (NearestClipper(t.transform, body.transform) != null) continue;   // masked well
+
+                    RectTransform plate = PlateOf(body);
+                    if (!TryRectInRoot(plate, root, out Rect pr)) continue;
+
+                    float over = OutsideBy(tr, pr);
+                    if (over > GeoContainSlackPx)
+                        fails.Add("TEXT OFF PLATE" + at + " '" + PathOf(t.transform, canvasGo.transform) +
+                                  "' (\"" + Snippet(t.text) + "\") overflows its layout.body ZoneBacking by " +
+                                  over.ToString("0.#") + " ref px -- text " + RectStr(tr) +
+                                  " vs plate " + RectStr(pr) +
+                                  ". This is the founding-Echo-card defect: copy rendered off the black.");
+                }
+
+                // ---- RULE 2: sibling buttons must not overlap ----------------------
+                for (int i = 0; i < buttons.Length; i++)
+                {
+                    var a = buttons[i];
+                    if (!ButtonUsable(a, root, canvasGo.transform, canvasArea, out Rect ar)) continue;
+                    for (int j = i + 1; j < buttons.Length; j++)
+                    {
+                        var b = buttons[j];
+                        if (b == null || a.transform.parent != b.transform.parent) continue;
+                        if (!ButtonUsable(b, root, canvasGo.transform, canvasArea, out Rect br)) continue;
+                        if (!Overlaps(ar, br, GeoOverlapPadPx, out float ow, out float oh)) continue;
+                        fails.Add("BUTTONS OVERLAP" + at + " siblings '" +
+                                  PathOf(a.transform, canvasGo.transform) + "' " + RectStr(ar) + " and '" +
+                                  PathOf(b.transform, canvasGo.transform) + "' " + RectStr(br) +
+                                  " share " + ow.ToString("0.#") + "x" + oh.ToString("0.#") +
+                                  " ref px -- two tap targets in one place; only one can win the raycast.");
+                    }
+                }
+
+                // ---- RULE 3: a visible button must not sit on foreign text ---------
+                foreach (var b in buttons)
+                {
+                    if (!ButtonUsable(b, root, canvasGo.transform, canvasArea, out Rect br)) continue;
+                    if (!HasVisibleGraphic(b)) continue;     // hit areas / scrims cannot collide visually
+                    foreach (var t in texts)
+                    {
+                        if (t == null || !t.enabled || !t.gameObject.activeInHierarchy) continue;
+                        if (string.IsNullOrEmpty(t.text) || t.color.a < 0.05f) continue;
+                        if (IsDescendantOf(t.transform, b.transform)) continue;   // its own label
+                        if (IsDescendantOf(b.transform, t.transform)) continue;
+                        if (ClippedOut(t.transform, canvasGo.transform, root)) continue;
+                        var trt = t.transform as RectTransform;
+                        if (!TryRectInRoot(trt, root, out Rect tr)) continue;
+                        if (!Overlaps(br, tr, GeoOverlapPadPx, out float ow, out float oh)) continue;
+                        fails.Add("BUTTON OVER TEXT" + at + " '" + PathOf(b.transform, canvasGo.transform) +
+                                  "' " + RectStr(br) + " covers '" + PathOf(t.transform, canvasGo.transform) +
+                                  "' (\"" + Snippet(t.text) + "\") " + RectStr(tr) + " by " +
+                                  ow.ToString("0.#") + "x" + oh.ToString("0.#") + " ref px.");
+                    }
+                }
+
+                // ---- RULE 4: authored band under the kit touch floor ---------------
+                foreach (var b in buttons)
+                {
+                    if (b == null || !b.gameObject.activeInHierarchy) continue;
+                    if (!HasMinTouchGuard(b)) continue;      // not a kit button; not this rule's contract
+                    var brt = b.transform as RectTransform;
+                    if (!TryRectInRoot(brt, root, out Rect br)) continue;
+                    float shortest = Mathf.Min(br.width, br.height);
+                    if (shortest >= ElarionUiKit.MinTouchPx - 0.5f) continue;
+                    fails.Add("SUB-TOUCH-FLOOR BAND" + at + " '" + PathOf(b.transform, canvasGo.transform) +
+                              "' resolves " + br.width.ToString("0.#") + "x" + br.height.ToString("0.#") +
+                              " ref px -- shortest side " + shortest.ToString("0.#") + " is " +
+                              (ElarionUiKit.MinTouchPx - shortest).ToString("0.#") + " px UNDER " +
+                              "ElarionUiKit.MinTouchPx (" + ElarionUiKit.MinTouchPx.ToString("0.#") +
+                              "). ClampMinTouch will grow it SYMMETRICALLY about its centre at runtime and " +
+                              "spill it into both neighbours. Author the band AT the floor.");
+                }
+            }
+            catch (Exception e)
+            {
+                fails.Add("GEOMETRY AUDIT THREW" + at + " " + e.GetType().Name + ": " + e.Message);
+            }
+
+            _geoFailures.AddRange(fails);
+        }
+
+        private static void ReportGeometry()
+        {
+            if (_geoCanvasesChecked == 0)
+            {
+                Debug.LogError("UI_GEOMETRY_FAIL x0 -- ZERO canvases were measured, so the geometry gate " +
+                               "proved nothing this run (a green UI_CAPTURE_OK without it is the old blindness).");
+                return;
+            }
+            if (_geoFailures.Count == 0)
+            {
+                Debug.Log("UI_GEOMETRY_OK " + _geoCanvasesChecked + " canvases -- no text off its plate, " +
+                          "no overlapping sibling buttons, no button on foreign text, no authored band " +
+                          "under the " + ElarionUiKit.MinTouchPx.ToString("0.#") + " px touch floor");
+                return;
+            }
+
+            int shown = Mathf.Min(_geoFailures.Count, GeoMaxPrintedLines);
+            for (int i = 0; i < shown; i++) Debug.LogError("[UICap-GEO] " + _geoFailures[i]);
+            if (_geoFailures.Count > shown)
+                Debug.LogError("[UICap-GEO] ... and " + (_geoFailures.Count - shown) + " more");
+
+            Debug.LogError("UI_GEOMETRY_FAIL x" + _geoFailures.Count + " over " + _geoCanvasesChecked +
+                           " canvases -- see the [UICap-GEO] lines above; each names the panel, the " +
+                           "element and the numbers.");
+        }
+
+        // ---------------------------------------------------------------------
+        //  Geometry helpers (all measurements in ROOT-CANVAS local = reference px).
+        // ---------------------------------------------------------------------
+        private static bool TryRectInRoot(RectTransform rt, RectTransform root, out Rect r)
+        {
+            r = default(Rect);
+            if (rt == null || root == null) return false;
+            var c = new Vector3[4];
+            rt.GetWorldCorners(c);
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 p = root.InverseTransformPoint(c[i]);
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            }
+            if (float.IsNaN(minX) || float.IsNaN(minY) || float.IsInfinity(maxX) || float.IsInfinity(maxY))
+                return false;
+            r = new Rect(minX, minY, maxX - minX, maxY - minY);
+            return r.width > 0.5f && r.height > 0.5f;
+        }
+
+        /// <summary>How far <paramref name="inner"/> pokes outside <paramref name="outer"/> (px; &lt;=0 = contained).</summary>
+        private static float OutsideBy(Rect inner, Rect outer)
+        {
+            float left = outer.xMin - inner.xMin;
+            float right = inner.xMax - outer.xMax;
+            float bottom = outer.yMin - inner.yMin;
+            float top = inner.yMax - outer.yMax;
+            return Mathf.Max(Mathf.Max(left, right), Mathf.Max(bottom, top));
+        }
+
+        private static bool Overlaps(Rect a, Rect b, float pad, out float ow, out float oh)
+        {
+            ow = Mathf.Min(a.xMax, b.xMax) - Mathf.Max(a.xMin, b.xMin);
+            oh = Mathf.Min(a.yMax, b.yMax) - Mathf.Max(a.yMin, b.yMin);
+            return ow > pad && oh > pad;
+        }
+
+        /// <summary>The kit body zone above <paramref name="t"/>, if any (ElarionUiKit names it Zone_Body).</summary>
+        private static RectTransform ZoneBodyAbove(Transform t)
+        {
+            for (Transform p = t != null ? t.parent : null; p != null; p = p.parent)
+                if (string.Equals(p.name, "Zone_Body", StringComparison.Ordinal)) return p as RectTransform;
+            return null;
+        }
+
+        /// <summary>The black plate of a body zone: its ZoneBacking child, else the zone itself.</summary>
+        private static RectTransform PlateOf(RectTransform body)
+        {
+            if (body == null) return null;
+            for (int i = 0; i < body.childCount; i++)
+            {
+                Transform ch = body.GetChild(i);
+                if (ch != null && string.Equals(ch.name, "ZoneBacking", StringComparison.Ordinal))
+                    return ch as RectTransform;
+            }
+            return body;
+        }
+
+        /// <summary>Nearest masking ancestor between <paramref name="t"/> and <paramref name="stopAt"/> (exclusive).</summary>
+        private static RectTransform NearestClipper(Transform t, Transform stopAt)
+        {
+            for (Transform p = t != null ? t.parent : null; p != null; p = p.parent)
+            {
+                if (p == stopAt) break;
+                if (p.GetComponent<RectMask2D>() != null || p.GetComponent<Mask>() != null)
+                    return p as RectTransform;
+            }
+            return null;
+        }
+
+        /// <summary>True when the element is clipped and not FULLY inside its clipper (scrolled out).</summary>
+        private static bool ClippedOut(Transform t, Transform canvasRoot, RectTransform root)
+        {
+            RectTransform clip = NearestClipper(t, canvasRoot);
+            if (clip == null) return false;
+            var rt = t as RectTransform;
+            if (!TryRectInRoot(rt, root, out Rect er)) return true;
+            if (!TryRectInRoot(clip, root, out Rect cr)) return true;
+            return OutsideBy(er, cr) > GeoContainSlackPx;
+        }
+
+        private static bool ButtonUsable(Button b, RectTransform root, Transform canvasRoot,
+                                         float canvasArea, out Rect r)
+        {
+            r = default(Rect);
+            if (b == null || !b.gameObject.activeInHierarchy) return false;
+            var brt = b.transform as RectTransform;
+            if (!TryRectInRoot(brt, root, out r)) return false;
+            if (r.width * r.height >= canvasArea * GeoScrimAreaFraction) return false;   // scrim
+            if (ClippedOut(b.transform, canvasRoot, root)) return false;
+            return true;
+        }
+
+        private static bool HasVisibleGraphic(Button b)
+        {
+            var g = b != null ? b.targetGraphic : null;
+            return g != null && g.enabled && g.color.a >= 0.05f;
+        }
+
+        /// <summary>The ClampMinTouch guard is a PRIVATE nested type in the kit -- match by name.</summary>
+        private static bool HasMinTouchGuard(Button b)
+        {
+            if (b == null) return false;
+            foreach (var mb in b.GetComponents<MonoBehaviour>())
+                if (mb != null && string.Equals(mb.GetType().Name, "UiKitMinTouchGuard", StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
+        private static bool IsDescendantOf(Transform child, Transform ancestor)
+        {
+            if (child == null || ancestor == null) return false;
+            for (Transform p = child; p != null; p = p.parent)
+                if (p == ancestor) return true;
+            return false;
+        }
+
+        private static string PathOf(Transform t, Transform stopAt)
+        {
+            if (t == null) return "<null>";
+            string s = t.name;
+            for (Transform p = t.parent; p != null && p != stopAt; p = p.parent)
+                s = p.name + "/" + s;
+            return s;
+        }
+
+        private static string RectStr(Rect r)
+        {
+            return "(x " + r.xMin.ToString("0.#") + ".." + r.xMax.ToString("0.#") +
+                   ", y " + r.yMin.ToString("0.#") + ".." + r.yMax.ToString("0.#") + ")";
+        }
+
+        private static string Snippet(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            s = s.Replace("\n", " ").Replace("\r", " ");
+            return s.Length <= 48 ? s : s.Substring(0, 45) + "...";
         }
 
         /// <summary>Set <c>canvas.scaleFactor</c> to what a ScaleWithScreenSize +
