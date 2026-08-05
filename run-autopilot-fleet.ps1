@@ -27,7 +27,9 @@ param(
     [string]$ExePath = 'Builds\Windows\DefendersOfTheRealm.exe',
     [int]$TimeoutMin = 8,
     [switch]$Graphics,  # render WITH a graphics device so the per-panel UI shots are not blank
-    [string]$Phases = ''  # optional comma list; driver runs ONLY matching phases (substring, case-insensitive) — fast single-purpose capture runs
+    [string]$Phases = '',  # optional comma list; driver runs ONLY matching phases (substring, case-insensitive) - fast single-purpose capture runs
+    [int]$Width = 0,    # -Graphics only; 0 => the capture default below
+    [int]$Height = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,6 +73,34 @@ if (Test-Path $runsDir) { Remove-Item $runsDir -Recurse -Force -ErrorAction Sile
 if (Test-Path $rootBreak) { Remove-Item $rootBreak -Force -ErrorAction SilentlyContinue }
 Write-Host "[fleet] cleaned stale run logs under '$pdp' (fresh aggregation slate)."
 
+# --- capture runs only: clear the stale UI_REVIEW shots ------------------------
+# Same reasoning as the run-log wipe above, applied to the review artefacts. If a
+# panel fails to open on THIS run, the reviewer must see MISSING (which gets
+# chased) rather than last week's shot or a leftover blank (which gets reviewed
+# and believed). Only a -Graphics run does this: a logic/flow fleet writes no
+# shots at all now, so it must never destroy the good ones either.
+if ($Graphics) {
+    $shotsDir = Join-Path $pdp 'ui-shots'
+    if (Test-Path $shotsDir) {
+        $stale = @(Get-ChildItem -Path $shotsDir -Filter 'panel_*.png' -File -ErrorAction SilentlyContinue)
+        if ($stale.Count -gt 0) {
+            $blank = @($stale | Where-Object { $_.Length -lt 40000 })
+            $archive = Join-Path $shotsDir '_stale'
+            New-Item -ItemType Directory -Force -Path $archive | Out-Null
+            foreach ($f in $stale) {
+                # A flat frame is evidence of nothing - delete it. Anything with real
+                # pixels is somebody's evidence, so park it rather than destroy it.
+                if ($f.Length -lt 40000) {
+                    Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
+                } else {
+                    Move-Item $f.FullName (Join-Path $archive $f.Name) -Force -ErrorAction SilentlyContinue
+                }
+            }
+            Write-Host ("[fleet] cleared {0} stale panel_*.png ({1} blank deleted, {2} real parked under _stale\)." -f $stale.Count, $blank.Count, ($stale.Count - $blank.Count))
+        }
+    }
+}
+
 # --- launch N headless instances ---------------------------------------------
 $procs = @()
 for ($i = 0; $i -lt $Count; $i++) {
@@ -78,8 +108,12 @@ for ($i = 0; $i -lt $Count; $i++) {
     # -Graphics => WINDOWED real-rendering run (no -batchmode/-nographics) so ScreenCapture
     # writes real frames (batchmode has no backbuffer => black). Default => headless batch.
     $args = if ($Graphics) { @() } else { @('-batchmode', '-nographics') }
-    $w = if ($Graphics) { '1280' } else { '800' }
-    $h = if ($Graphics) { '720' }  else { '600' }
+    # Capture runs default to 2340x1080 - the Seeker's EXACT screen. The old 1280x720
+    # is a different aspect (1.78 vs 2.17), and this project's recurring UI defect is
+    # fraction-anchored bands that only cull/overlap at the device aspect, so a shot
+    # taken at the wrong ratio can pass a review the device would fail.
+    $w = if ($Graphics) { if ($Width  -gt 0) { "$Width" }  else { '2340' } } else { '800' }
+    $h = if ($Graphics) { if ($Height -gt 0) { "$Height" } else { '1080' } } else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
     if ($Phases -ne '') { $args += "--phases=$Phases" }
     $p = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru

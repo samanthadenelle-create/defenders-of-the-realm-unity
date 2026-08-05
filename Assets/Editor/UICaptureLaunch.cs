@@ -58,6 +58,25 @@ namespace DeNelle.Editor
         private const string OutDir = "Builds/ui-capture/";
 
         // ---------------------------------------------------------------------
+        //  BLANK GUARD (2026-08-04). UI_CAPTURE_OK <n> is a PRE-SHIP GATE, so the
+        //  number has to mean real pixels. It did not: every render was written and
+        //  counted regardless of what was in it, so a run with no graphics device
+        //  produced a full green count over flat black frames.
+        //
+        //  That is not hypothetical -- it is exactly how the owner's UI_REVIEW went
+        //  empty. The AutoPilot fleet's own capture writer carries the same
+        //  soft-fail ("a -nographics fleet writes a blank frame, never an error"),
+        //  and a default-mode fleet run at 21:21 on 2026-08-04 overwrote 35 real
+        //  review shots with 33150-byte black PNGs. A blank that looks like a
+        //  capture is worse than an absent one: MISSING gets chased, blank gets
+        //  reviewed. So every frame is measured BEFORE it is written; a flat one is
+        //  refused, logged as an error, and counted as a FAILURE.
+        // ---------------------------------------------------------------------
+        private const int BlankSampleStride = 13;       // ~190k samples at 2340x1080
+        private const int BlankMinDistinctBuckets = 3;  // 4-bit-per-channel quantisation
+        private const float BlankMinInkFraction = 0.002f;
+
+        // ---------------------------------------------------------------------
         //  LEGACY -- Play-mode drive (menu item only; not headless-reliable).
         // ---------------------------------------------------------------------
         [MenuItem("Defenders/UI/Capture UI Panels")]
@@ -1531,6 +1550,44 @@ namespace DeNelle.Editor
             return rt;
         }
 
+        /// <summary>
+        /// True when the frame carries no picture: fewer than a handful of distinct
+        /// (4-bit quantised) colours, or almost every pixel identical to the dominant one.
+        /// A real Obsidian panel -- plate, gold trim, antialiased text -- clears this by an
+        /// order of magnitude; an all-black no-graphics frame scores exactly 1 bucket and
+        /// 0 ink. Sampled on a stride, so the check costs microseconds.
+        /// </summary>
+        private static bool IsBlank(Texture2D tex, out string measure)
+        {
+            measure = "unmeasured";
+            if (tex == null) return true;
+
+            Color32[] px;
+            try { px = tex.GetPixels32(); }
+            catch (Exception e) { measure = "GetPixels32 threw: " + e.Message; return true; }
+            if (px == null || px.Length == 0) { measure = "no pixels"; return true; }
+
+            var buckets = new Dictionary<int, int>();
+            int sampled = 0;
+            for (int i = 0; i < px.Length; i += BlankSampleStride)
+            {
+                var p = px[i];
+                int key = ((p.r >> 4) << 8) | ((p.g >> 4) << 4) | (p.b >> 4);
+                buckets.TryGetValue(key, out int n);
+                buckets[key] = n + 1;
+                sampled++;
+            }
+            if (sampled == 0) { measure = "no samples"; return true; }
+
+            int dominant = 0;
+            foreach (var kv in buckets) if (kv.Value > dominant) dominant = kv.Value;
+            float ink = 1f - (dominant / (float)sampled);
+
+            measure = "distinct=" + buckets.Count + " ink=" + ink.ToString("F4") +
+                      " (floors " + BlankMinDistinctBuckets + " / " + BlankMinInkFraction.ToString("F4") + ")";
+            return buckets.Count < BlankMinDistinctBuckets || ink < BlankMinInkFraction;
+        }
+
         private static bool RenderCanvasToPng(GameObject canvasGo, string path, int w, int h)
         {
             if (canvasGo == null) return false;
@@ -1603,6 +1660,17 @@ namespace DeNelle.Editor
                 tex.ReadPixels(new Rect(0f, 0f, w, h), 0, 0);
                 tex.Apply(false);
 
+                // THE BLANK GUARD: measure the pixels before shipping them. A flat frame is
+                // the no-graphics failure mode, not a screenshot -- refuse to write it, so a
+                // reviewer sees an honest MISSING instead of a convincing empty rectangle,
+                // and UI_CAPTURE_OK cannot be inflated by frames with nothing in them.
+                if (IsBlank(tex, out string measure))
+                {
+                    Debug.LogError("[UICap-HL] BLANK RENDER (not written): " + path +
+                                   " -- " + measure + ". Counted as a FAILURE, not a shot.");
+                    return false;
+                }
+
                 byte[] png = tex.EncodeToPNG();
                 if (png == null || png.Length == 0)
                 {
@@ -1612,7 +1680,7 @@ namespace DeNelle.Editor
 
                 File.WriteAllBytes(path, png);
                 Debug.Log("[UICap-HL] saved " + w + "x" + h + " -> " + Path.GetFullPath(path) +
-                          " (" + png.Length + " bytes)");
+                          " (" + png.Length + " bytes, " + measure + ")");
                 return true;
             }
             catch (Exception e)

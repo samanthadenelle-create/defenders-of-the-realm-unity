@@ -4329,10 +4329,44 @@ namespace DeNelle.DevTools
         // frame, never an error). Lands in persistentDataPath/ui-shots/ next to the
         // panel_/bridge_ shots. Any arbitrary file name (panel_<Screen>.png, moat_ring.png,
         // <scene>.png) routes through here so there is exactly one capture path to maintain.
+        // BLANK-WRITE GUARD (2026-08-04). This writer used to fire unconditionally, and
+        // the comment above recorded the consequence as acceptable: "a -nographics fleet
+        // writes a blank frame, never an error". It is NOT acceptable, and it is what
+        // emptied the owner's UI review.
+        //
+        // PROVING DATA, not inference: Builds\Windows\DefendersOfTheRealm.exe was built at
+        // 21:18:09 on 2026-08-04; three minutes later, at 21:21:06, THIRTY-FIVE
+        // panel_*.png files in ui-shots were rewritten at exactly 33150 bytes each -- the
+        // signature of a flat black frame. A fleet had run in the DEFAULT mode
+        // (run-autopilot-fleet.ps1 passes -batchmode -nographics unless -Graphics is
+        // given), and every panel it walked overwrote a previously REAL review shot with
+        // black. build-ui-review.ps1 then paired those blanks against the Blink templates
+        // and reported "PAIR COMPLETE", which is why the owner opened INDEX.html and saw
+        // "mostly just the blank templates and nothing else".
+        //
+        // A logic/flow fleet has no business writing review artefacts at all. With no
+        // graphics device we now write NOTHING: the previous real shot survives, and a
+        // screen that was never captured reads as MISSING in the review -- which gets
+        // chased -- instead of as a blank, which gets reviewed.
+        private static bool s_warnedNoGraphicsShot;
+
         private static void CaptureRawShot(string fileName)
         {
             try
             {
+                if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+                {
+                    if (!s_warnedNoGraphicsShot)
+                    {
+                        s_warnedNoGraphicsShot = true;
+                        FlowTrace.Warn("Auto", "UI shots SKIPPED for this run: no graphics device " +
+                            "(-nographics). ScreenCapture would write flat black frames and silently " +
+                            "overwrite the real UI_REVIEW shots. Re-run with " +
+                            "run-autopilot-fleet.ps1 -Graphics for capture.");
+                    }
+                    return;
+                }
+
                 string dir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
                 System.IO.Directory.CreateDirectory(dir);
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, fileName));
@@ -5730,9 +5764,17 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            yield return null;                              // let the modal build + render this frame
-            CaptureUiPanel(shotName);                       // -> panel_<shotName>.png
-            yield return null;                              // flush ScreenCapture with the panel up
+            // MID-FADE GUARD (2026-08-04). This used to be a bare `yield return null` +
+            // CaptureUiPanel: ONE frame after the open call. Every Obsidian panel opens
+            // through PanelOpenCloseFx, which animates alpha 0->1 and scale 0.92->1 over
+            // ~0.2s, so a next-frame grab caught the panel at partial alpha with the world
+            // and the gameplay HUD showing straight through it. panel_TroopTraining.png in
+            // the 2026-08-04 capture is the proof: a ghost-transparent Barracks modal over
+            // a live town. That is not reviewable -- you cannot judge contrast, plate fill
+            // or text legibility through a half-faded panel. Let the FX finish, THEN use the
+            // settled writer (end-of-frame, post-render) the router sweep already uses.
+            yield return Wait(0.4f);
+            yield return CaptureUiPanelSettled(shotName, extraSettleFrames: 2);
             _extraShotCount++;
             FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_" + shotName + ".png.");
 
@@ -5760,9 +5802,9 @@ namespace DeNelle.DevTools
             bool opened = Guard.Try("Auto", "CaptureExtraPanels open " + shotName, () => openFn(inst));
             if (opened)
             {
-                yield return null;
-                CaptureUiPanel(shotName);                   // -> panel_<shotName>.png
-                yield return null;
+                // Same mid-fade guard as CaptureComponentPanel above (see its banner).
+                yield return Wait(0.4f);
+                yield return CaptureUiPanelSettled(shotName, extraSettleFrames: 2);
                 _extraShotCount++;
                 FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_" + shotName + ".png.");
             }

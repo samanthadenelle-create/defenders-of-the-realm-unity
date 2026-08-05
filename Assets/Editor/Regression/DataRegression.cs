@@ -399,6 +399,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-aura-diff suite", () => { if (!VfxAuraDifferentiationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-aura-diff] " + r); });
             // --- owner VfxManualPicks per-tier tower projectiles: archer tier ladder + arcane base/upgraded wired + every key catalogued ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-proj-map suite", () => { if (!TowerProjectileMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-proj-map] " + r); });
+            // --- WO-869 dungeon portal rebuild: robust shader resolve + MagentaGuard widening (protected primitive art + deferred re-sweep) + real additive state + arch structure ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "portal-rebuild suite", () => { if (!PortalRebuildRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[portal-rebuild] " + r); });
             // --- WO-826 Realm Map: realm-map.json dual-copy field parity + RealmMapCatalog loader oracle ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-map suite", () => { if (!RealmMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-map] " + r); });
             // --- WO-839 raid deploy screen: FrameCore footer/subHeader zones + F8 harness dev-guard + ScoutReport honesty ---
@@ -415,6 +417,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
             // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
+            // --- WO-866 rumor board layout: every filter tab fits the list well at the touch floor (the clipped "Gear"), the tab band is X-bounded by the list column so the detail pane cannot cross it, and the detail stack + a two-line body fits the pane (the -11px culled body) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "rumor-board-layout suite", () => { if (!DeNelle.Editor.Regression.RumorBoardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[rumor-board-layout] " + r); });
             // --- WO-860 starter loadout + shelf: new game clears dotr-equip-*, Knight starts sword+shield (not the stale axe / not auto-best Flameblade), shelf capped + equippable-only + no blink_* ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-loadout suite", () => { if (!DeNelle.Editor.Regression.StarterLoadoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-loadout] " + r); });
             // --- shields: every shield carries a real defense value, the ladder climbs with req.level, and GearLoadout actually SUMS the off-hand (all three were missing - shields were pure decoration) ---
@@ -482,6 +486,31 @@ namespace DeNelle.Editor
             // between the player and vaporised resources), capacity scales with container level,
             // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
+
+            // --- THE EMPTY UI REVIEW (owner, 2026-08-04): INDEX.html showed "mostly just the
+            // blank templates and nothing else". Not an un-fed review -- a POISONED one. The exe
+            // was built 21:18:09 and at 21:21:06 an AutoPilot fleet running in its DEFAULT
+            // -nographics mode rewrote 35 panel_*.png review shots at exactly 33150 bytes each
+            // (flat black), because CaptureRawShot fired ScreenCapture with no graphics device
+            // and its own comment called that acceptable. build-ui-review.ps1 then badged the
+            // blanks "PAIR COMPLETE". Pins: neither capture path can write an unmeasured frame,
+            // every _mapping.json panelId has a real AutoPilot route or an argued exemption, and
+            // each route writes the EXACT deliveredShot filename the review reads ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ui-capture-coverage suite", () => { if (!DeNelle.Editor.Regression.UiCaptureCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ui-capture-coverage] " + r); });
+
+            // --- WO-865 Skills panel layout: the body is three DISJOINT fixed-pixel bands
+            // (columns / ability / action), never fractions of a ~493px body well. The 2026-08-04
+            // Seeker capture showed a 32px fraction action row that ClampMinTouch grew to the
+            // 112px touch floor SYMMETRICALLY -- straight over the graph well and quick-slot 4 --
+            // plus a centre-pivoted graph content rect sliced at both mask edges, a section band
+            // 15.6px from a node row, and a 23px name band that ellipsized "Emberbrand Throw".
+            // Pins: every tappable band >= MinTouchPx and every text band >= a TMP line box; the
+            // stack replayed at the reference body leaves a positive graph well + a two-line
+            // description; the graph pad covers half a node plate and the fixed px-per-unit
+            // lattice clears the tightest gap authored in hero-talents.json; the longest catalog
+            // word/name fits at the FontFloor; and the source laws (RectMask2D, top-left pivot,
+            // band pins, reserved section row, no 1/n slicing, no green ButtonConfirm overlay) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "skills-panel-layout suite", () => { if (!DeNelle.Editor.Regression.SkillsPanelLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[skills-panel-layout] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
