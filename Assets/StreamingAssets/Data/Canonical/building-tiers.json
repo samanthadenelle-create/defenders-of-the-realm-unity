@@ -73,8 +73,8 @@
       ]
     },
     {
-      "id": "windmill",
-      "displayName": "Windmill",
+      "id": "farm",
+      "displayName": "Farm",
       "tiers": [
         { "tier": 1, "name": "Rebuild the Windmill", "effect": "Food production +10%. Structure HP +20%", "costWood": 500, "costFood": 700, "costCrystal": 100, "requiresVillageTier": 0, "structureHpBonusPct": 0.20, "modifiers": { "foodProductionMult": 1.10 } },
         { "tier": 2, "name": "Wind Harnessing", "effect": "Food production +18%. Structure HP +45%", "costWood": 1100, "costFood": 1400, "costCrystal": 300, "requiresVillageTier": 1, "structureHpBonusPct": 0.45, "modifiers": { "foodProductionMult": 1.18 } },

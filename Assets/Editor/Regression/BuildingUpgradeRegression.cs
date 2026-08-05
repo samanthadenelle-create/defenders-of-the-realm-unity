@@ -141,6 +141,7 @@ namespace DeNelle.Editor
             Case(failures, "gather-faucet", () => CheckGatherFaucet(farm, mill, forge, failures));
             Case(failures, "perk-stack", () => CheckProductionStacks(failures));
             Case(failures, "echo-scaling", () => CheckEchoScaling(failures));
+            Case(failures, "upgrader-reaches-receiver", () => CheckUpgraderReachesReceiver(failures));
 
             if (failures.Count == 0)
             {
@@ -241,6 +242,98 @@ namespace DeNelle.Editor
             if (lIron > lWood)
                 failures.Add($"[gather-faucet] LATE iron {F(lIron)}/hr exceeds LATE wood {F(lWood)}/hr - " +
                              "iron is the scarce harvestable by design");
+        }
+
+        // =====================================================================
+        //  Case 9 - [upgrader-reaches-receiver] every collector can be buffed.
+        //
+        //  The design (owner, 2026-08-04) is UPGRADER -> RECEIVER: you level a
+        //  building, and its perks raise a DIFFERENT building's output. That link
+        //  is a plain string lookup in ModifierService.ProductionMultFor, so it
+        //  breaks silently whenever the two ids are spelled differently.
+        //
+        //  It HAD broken. Wood worked only by coincidence - ladder and collector
+        //  are both "lumbermill", so the lookup collided and the perk landed. Food
+        //  was authored under "windmill" while the collector is "farm", so every
+        //  food perk (up to +45%, and paid for) resolved to the 1.0 default and did
+        //  nothing at all. Owner ruling 2026-08-04: the ladder MOVED to "farm" and
+        //  "windmill" is retired - the windmill is the Farm's secondary prop, not a
+        //  building of its own (VillageSceneBuilder.Content.cs, WO-101).
+        //
+        //  The law: EVERY id the harvester actually ticks must resolve to a real
+        //  multiplier. A collector whose lookup returns the default is orphaned
+        //  from its upgrader - the player can buy a perk that cannot reach it.
+        //  This fails for any FUTURE collector added without wiring, which is the
+        //  whole point of pinning it here rather than just fixing the one case.
+        // =====================================================================
+
+        private static void CheckUpgraderReachesReceiver(List<string> failures)
+        {
+            // Neutral baseline: with no tiers/perks owned every mult is 1.0, so a
+            // wired id and an orphaned id both read 1.0 and the test would pass
+            // vacuously. Seed a distinctive value per kind and assert it arrives.
+            // Active is READ-ONLY (=> _override ?? Compute()); SetOverride is the seam.
+            // Capture whether an override was already in force so the restore below
+            // cannot INSTALL one that did not exist before this case ran.
+            bool hadOverride = DeNelle.Core.State.ModifierService.HasOverride;
+            var saved = hadOverride ? DeNelle.Core.State.ModifierService.Active : null;
+            try
+            {
+                DeNelle.Core.State.ModifierService.SetOverride(new DeNelle.Core.State.GameModifiers
+                {
+                    WoodProductionMult     = 1.31f,
+                    FoodProductionMult     = 1.37f,
+                    ResourceEfficiencyMult = 1.43f,
+                });
+
+                foreach (string id in ResourceBuildingProgression.OrderedIds)
+                {
+                    float mult = DeNelle.Core.State.ModifierService.ProductionMultFor(id);
+                    if (Mathf.Approximately(mult, 1f))
+                    {
+                        failures.Add(
+                            $"[upgrader-reaches-receiver] collector '{id}' resolves to the 1.0 DEFAULT in " +
+                            "ModifierService.ProductionMultFor, so no upgrader's perk can ever reach it. " +
+                            "The harvester ticks this id every frame; a tier ladder authored for it (or for " +
+                            "its upgrader under a different spelling) is resources the player spends for " +
+                            "nothing. Add a case mapping this id to the mult its upgrader grants.");
+                    }
+                }
+
+                // The owner's 2026-08-04 ruling: the food ladder MOVED onto the farm, and the
+                // dead "windmill" id must stay dead. If someone re-adds it as an alias, a future
+                // ladder authored under the retired id would appear to work while the building
+                // it names does not exist - the exact silent failure this ruling removed.
+                if (!Mathf.Approximately(
+                        DeNelle.Core.State.ModifierService.ProductionMultFor("windmill"), 1f))
+                {
+                    failures.Add(
+                        "[upgrader-reaches-receiver] 'windmill' resolves to a real multiplier again. " +
+                        "That id was RETIRED (owner, 2026-08-04): the windmill is the Farm's secondary " +
+                        "prop, not a building, so the food ladder lives on 'farm'. Re-aliasing it lets a " +
+                        "ladder be authored under a building that does not exist and still look wired.");
+                }
+
+                // ...and the ladder must actually be filed under the id the harvester ticks.
+                foreach (string path in TierPaths)
+                {
+                    string full = Path.Combine(Application.dataPath, path);
+                    if (!File.Exists(full)) continue;
+                    string raw = File.ReadAllText(full);
+                    if (raw.Contains("\"id\": \"windmill\""))
+                    {
+                        failures.Add(
+                            $"[upgrader-reaches-receiver] {path} still authors a 'windmill' tier ladder. " +
+                            "It was moved to 'farm' - a ladder under the retired id is bought with real " +
+                            "resources and reaches nothing.");
+                    }
+                }
+            }
+            finally
+            {
+                if (hadOverride) DeNelle.Core.State.ModifierService.SetOverride(saved);
+                else             DeNelle.Core.State.ModifierService.ClearOverride();
+            }
         }
 
         // =====================================================================

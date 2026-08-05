@@ -49,8 +49,27 @@ namespace DeNelle.Core.State
 
         /// <summary>
         /// The production multiplier for a specific resource building (WO-430): maps the building
-        /// to the relevant active mult (lumbermill→wood, windmill→food, forge→efficiency). Returns
-        /// 1.0 (no-op) for any building not in the city-upgrade set, so non-WO-430 yield is untouched.
+        /// to the relevant active mult (lumbermill→wood, farm→food, forge→efficiency).
+        /// Returns 1.0 (no-op) for any building not in the city-upgrade set, so non-WO-430 yield
+        /// is untouched.
+        ///
+        /// THE FOOD LADDER LIVES ON THE FARM (owner ruling, 2026-08-04). It used to be authored
+        /// under "windmill" while the collector the harvester actually ticks is "farm"
+        /// (ResourceBuildingProgression.FarmId) — so this lookup fell through to the default and
+        /// every food perk, up to +45% and paid for, silently did nothing. Wood was never broken
+        /// only because its ladder and its collector are BOTH spelled "lumbermill", so the lookup
+        /// collided by luck rather than by design.
+        ///
+        /// The fix is the ID, not the value: Apply already aggregates BY KIND, so the grant was
+        /// always landing in GameModifiers.FoodProductionMult with nothing asking for it. The
+        /// ladder MOVED to "farm" in building-tiers.json rather than this switch gaining a second
+        /// food case, because the windmill is not a separate building — it is the Farm's secondary
+        /// prop (VillageSceneBuilder.Content.cs, WO-101: SM_Farm_House primary + Windmill_Medieval
+        /// secondary). One building in the world, one id everywhere.
+        ///
+        /// NOTE: "windmill" is deliberately NOT kept as an alias. An alias would let a future
+        /// ladder be authored under the dead id and appear to work, which is the exact silent
+        /// failure this ruling removed. Guarded by [upgrader-reaches-receiver].
         /// </summary>
         public static float ProductionMultFor(string buildingId)
         {
@@ -58,7 +77,7 @@ namespace DeNelle.Core.State
             switch (buildingId)
             {
                 case "lumbermill": return m.WoodProductionMult;
-                case "windmill":   return m.FoodProductionMult;
+                case "farm":       return m.FoodProductionMult;
                 case "forge":      return m.ResourceEfficiencyMult;
                 default:           return 1f;
             }
