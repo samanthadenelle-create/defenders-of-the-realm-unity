@@ -55,7 +55,16 @@ namespace DeNelle.Core
         /// then fold in the other classes. When ON (default), <see cref="DeNelle.Core.State.GameStateService"/>
         /// ChooseHero forces the class to Knight. Flip OFF to restore free class choice:
         /// PlayerPrefs "ff.knightonly" = 0.</summary>
-        public static bool KnightOnly => Get("knightonly", defaultOn: true);
+        // OWNER RULING 2026-08-05: Mage + Ranger are UNLOCKED. WO-861 Phase 0 (e1ae9403) built
+        // the single-source-of-truth registry (DeNelle.Core.State.PlayableHeroes) precisely so
+        // this one flag widens EVERY consumer at once - the select screen's lock state,
+        // GameStateService.ChooseHero's coercion, and VendorStockResolver's shelf roster - with
+        // no three-site edit and no drift. Phase 0 deliberately shipped with the flag still ON
+        // (its own header says "TODAY'S BEHAVIOUR IS UNCHANGED"), so the plumbing landed and the
+        // unlock did not. This is that unlock. The flag-OFF roster is Knight/Ranger/Mage;
+        // CLERIC STAYS OUT deliberately (PlayableHeroes.cs:20-26) - it has no authored kit.
+        // Set PlayerPrefs "ff.knightonly" = 1 to restore the solo-Knight V1 pivot.
+        public static bool KnightOnly => Get("knightonly", defaultOn: false);
 
         /// <summary>PIVOT (owner 2026-06-22): base-building / CoC base-defense is GATED OFF — NOT on the
         /// V1 critical path. Polish the solo-hero OFFENSE loop first; revisit base-building only if the
