@@ -290,7 +290,39 @@ namespace DeNelle.Village
             _canvas = built.canvas;
             var content = built.chrome.content.transform;
 
+            // -- THE BLACK PLATE IS layout.body (owner F8 2026-08-05) -----------------
+            // The visible black area of this card is the kit's Zone_Body ZoneBacking
+            // (ElarionUiKit.cs:690 ZoneBacking(layout.body, ObsidianFill)) -- so the plate
+            // rect IS chrome.layout.body, NOT chrome.content. This card historically laid
+            // its copy on chrome.content with PANEL fractions, which do NOT track the body
+            // zone's floor. That floor MOVES at runtime: the factory close-band reservation
+            // (ElarionUiKit.cs:604-647) raises z.body.y to footer.w + 0.015 and resolves to
+            // 0.4305 @2670x1200 / 0.4276 @2340x1080 / 0.4071 @1920x1080 -- so the element
+            // caption authored at panel y[0.30-0.39] was 100% BELOW the plate at EVERY
+            // resolution (it painted on the metal frame), and the flavor's tail with it.
+            //
+            // Reclaim + re-parent. This card uses NEITHER the FrameCore footer band NOR the
+            // shared Close's exclusion band for copy (its own button row owns y[0.05-0.245]),
+            // so ~0.14 of panel height was reserved for nothing. Drop the plate floor to just
+            // above whichever is higher -- our button row or the shared Close box -- and make
+            // the plate itself the parent of all copy. Replicating the kit's OWN close math
+            // (rather than a magic number) means this self-corrects if the reservation changes.
+            const float BtnRowTop = 0.245f;                       // matches the button row below
+            var plate = built.chrome.layout != null ? built.chrome.layout.body : null;
+            if (plate != null)
+            {
+                float panelH   = ElarionUiKit.PostScaleCanvasHeight(content) * (0.82f - 0.20f);
+                float closeTop = 0.050f + ElarionUiKit.CanonCtaHeight / Mathf.Max(1f, panelH);
+                float floorY   = Mathf.Max(BtnRowTop, closeTop) + 0.020f;
+                plate.anchorMin = new Vector2(plate.anchorMin.x, floorY);
+                plate.offsetMin = Vector2.zero;
+            }
+            // Every piece of copy parents HERE (plate-local fractions), never to content.
+            Transform well = plate != null ? plate.transform : content;
+
             // -- "Echo Leveled Up to N!" banner (top strip: gold fill + ink text) ----
+            //    DELIBERATELY on `content`, not the plate: the gold strip is chrome that sits
+            //    in the frame's own header band ABOVE the plate (same as the buttons below).
             var bannerGo = new GameObject("LevelBanner", typeof(Image));
             bannerGo.transform.SetParent(content, false);
             var brt = bannerGo.GetComponent<RectTransform>();
@@ -309,10 +341,10 @@ namespace DeNelle.Village
             if (sprite != null)
             {
                 var pg = new GameObject("EchoPortrait", typeof(Image));
-                pg.transform.SetParent(content, false);
+                pg.transform.SetParent(well, false);
                 var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.05f, 0.40f);
-                prt.anchorMax = new Vector2(0.40f, 0.85f);
+                prt.anchorMin = new Vector2(0.02f, 0.36f);
+                prt.anchorMax = new Vector2(0.42f, 1.00f);
                 prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
                 var pimg = pg.GetComponent<Image>();
                 pimg.sprite = sprite;
@@ -322,33 +354,46 @@ namespace DeNelle.Village
             else
             {
                 // Never blank: a text placeholder stands in for a missing portrait.
-                ElarionUiKit.Label(content, "[ " + entry.Element + " ]", 0.50f, 0.62f,
+                ElarionUiKit.Label(well, "[ " + entry.Element + " ]", 0.40f, 0.70f,
                     ElarionUi.ParchmentDim, ElarionUi.FontHead, TextAlignmentOptions.Center,
-                    0.05f, 0.40f, bold: true);
+                    0.02f, 0.42f, bold: true);
             }
-            ElarionUiKit.Label(content, entry.Element, 0.30f, 0.39f,
+            // ELEMENT CAPTION -- the owner's "keeper fell off the black" line. Plate-local,
+            // and FitBlock rather than FitSingleLine: "Essence of a fallen keeper" measures
+            // ~1082 units at FontLabel 40 but the widest plate-local column is only 541 units
+            // (@1920x1080), so a single-line fit would bottom out on the 20pt HARD FLOOR and
+            // still ellipsize ("...kee..."). FitBlock keeps it legible, lets the last word WRAP
+            // to a second line INSIDE the plate, and its Truncate mode guarantees the glyphs can
+            // never paint past the rect -- which is the actual defect reported.
+            var elemLabel = ElarionUiKit.Label(well, entry.Element, 0.02f, 0.34f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                0.05f, 0.40f, bold: true);
+                0.00f, 0.44f, bold: true);
+            ElarionUiKit.FitBlock(elemLabel, 26f, ElarionUi.FontLabel);
 
             // -- RIGHT: name + flavor ------------------------------------------------
-            // NON-OVERLAP BUDGET (content fractions of the ~1685x670 landscape card,
-            // top->bottom, every band DISJOINT so nothing can stack):
-            //   banner/header ..... 0.885-0.98   (top strip, built above)
-            //   name .............. 0.75 -0.87   x[0.45-0.97]
-            //   flavor block ...... 0.32 -0.73   x[0.45-0.97]  (TALL -- the founding copy
-            //                                     is ~6 lines / ~320 chars; shrink-to-fit)
-            //   BOTTOM ROW (y 0.05-0.245), three affordances SIDE BY SIDE, no stacking:
-            //     Accept .......... x[0.045-0.36]   (primary, bottom-LEFT under portrait)
-            //     [shared Close] .. x~[0.382-0.618] (kit's fixed 360px box, bottom-CENTER)
-            //     Tell me more .... x[0.64 -0.955]  (toggle, bottom-RIGHT under the flavor)
-            // The Close box (SeatSharedCloseInside: fixed 360x132px growing UP from y=0.050)
-            // tops out near y~0.27 at this canvas; the flavor bottom (0.32) clears it with a
-            // margin and the two card buttons flank it in x, so the whole lower band reads as
-            // one clean row. LEFT column (portrait 0.40-0.85, element 0.30-0.39) sits entirely
-            // above the Accept button. No band overlaps another in x AND y.
-            var nameLabel = ElarionUiKit.Label(content, entry.DisplayName, 0.75f, 0.87f,
+            // NON-OVERLAP BUDGET. TWO coordinate spaces now, and that distinction is the
+            // whole fix -- all COPY is PLATE-local (fractions of `well` = layout.body, whose
+            // floor we lowered above), all CHROME is PANEL-local (fractions of `content`):
+            //   PLATE-local (of `well`), top->bottom, every band DISJOINT:
+            //     name ............ 0.84-1.00  x[0.46-1.00]  (single line, fit)
+            //     flavor block .... 0.02-0.82  x[0.46-1.00]  (TALL -- the founding copy is
+            //                                   ~6 lines / ~320 chars; shrink-to-fit)
+            //     portrait ........ 0.36-1.00  x[0.02-0.42]
+            //     element caption . 0.02-0.34  x[0.00-0.44]  (wraps, FitBlock)
+            //   The left and right columns are disjoint in x (0.44 vs 0.46), so the caption
+            //   and the flavor can never collide even at their tallest.
+            //   PANEL-local (of `content`), OUTSIDE the plate by design:
+            //     banner/header ... 0.885-0.98 (top strip, built above)
+            //     BOTTOM ROW (y 0.05-0.245), three affordances SIDE BY SIDE, no stacking:
+            //       Accept ........ x[0.045-0.36]   (primary, bottom-LEFT under portrait)
+            //       [shared Close]  x~[0.382-0.618] (kit's fixed 360px box, bottom-CENTER)
+            //       Tell me more .. x[0.64 -0.955]  (toggle, bottom-RIGHT under the flavor)
+            // The plate floor is seated at max(0.245 button row, Close box top) + 0.020, so
+            // the plate ENDS above the whole bottom row at every resolution -- copy can no
+            // longer reach a button, and (the reported defect) can no longer reach the metal.
+            var nameLabel = ElarionUiKit.Label(well, entry.DisplayName, 0.84f, 1.00f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Left,
-                0.45f, 0.97f, bold: true);
+                0.46f, 1.00f, bold: true);
             ElarionUiKit.FitSingleLine(nameLabel);
 
             // FLAVOR: SHRINK-TO-FIT, NEVER TRUNCATE (owner F8 2026-07-19: the founding teach
@@ -357,12 +402,15 @@ namespace DeNelle.Village
             // TextOverflowModes.Truncate -- wrong for the founding card, whose full instruction
             // MUST read. We do NOT call FitBlock; instead the label WRAPS + AUTO-SIZES DOWN to
             // fit its rect (bounded [FlavorFontMin..FontBody]) with Overflow mode so a tail can
-            // never be clipped. The rect is now TALL (0.32-0.73 = ~0.41h x ~0.52w ~= 876x249px):
-            // the ~320-char founding flavor auto-sizes to ~33px (inside the 28-34 legible band)
-            // and fits whole; the "Tell me more" lore (shorter, ~290 chars) fits with headroom.
-            _flavorLabel = ElarionUiKit.Label(content, entry.Flavor, 0.32f, 0.73f,
+            // never be clipped. The rect is TALL and now PLATE-local (0.02-0.82 of the plate,
+            // x[0.46-1.00] ~= 743x261 units at 2670x1200): the ~320-char founding flavor
+            // auto-sizes into the 28-34 legible band and fits whole; the "Tell me more" lore
+            // (shorter, ~290 chars) fits with headroom. Because the rect is now measured off
+            // the plate, an Overflow tail spills into the plate's own margin -- never onto the
+            // metal frame, which is where the last line was landing before.
+            _flavorLabel = ElarionUiKit.Label(well, entry.Flavor, 0.02f, 0.82f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.TopLeft,
-                0.45f, 0.97f, bold: false);
+                0.46f, 1.00f, bold: false);
             _flavorLabel.textWrappingMode = TextWrappingModes.Normal;   // wrap, don't spill wide
             _flavorLabel.overflowMode = TextOverflowModes.Overflow;     // NEVER cut the tail
             _flavorLabel.enableAutoSizing = true;                       // shrink-to-fit the rect
@@ -372,11 +420,22 @@ namespace DeNelle.Village
             // -- RIGHT/BOTTOM: the two CARD buttons, side-by-side flanking the shared Close
             //    (the kit's one bottom-center Close is the single dismiss; no card "Dismiss").
             //    Each is 0.315w (~531px) x 0.195h (~118px, above MinTouchPx=112) with a clear
-            //    x-gap to the 360px Close box on either side. Bottom row y[0.05-0.245] sits a
-            //    full ~0.075 below the flavor (0.32) -- text can never land on a button.
-            ElarionUiKit.Button(content, "I accept your power", ElarionUiKit.ButtonKind.Confirm,
+            //    x-gap to the 360px Close box on either side. Bottom row y[0.05-0.245] sits
+            //    entirely below the plate floor -- text can never land on a button.
+            //
+            //    UNIFORM SHAPE (owner F8 2026-08-05: "one rounded, one square, Close square").
+            //    ButtonKind is a back-compat shim (ElarionUiKit.cs:1343-1353) that maps
+            //    Confirm->(Style2,Green) and Quiet->(Style1,Gray) -- and ObsidianButtonSpriteName
+            //    resolves button2_* ROUNDED vs button1_* SQUARE. So Accept came out rounded while
+            //    Tell me more AND the shared Close (which hardcodes Style1) came out square:
+            //    three buttons, two shapes. Style carries no meaning on this card (the label
+            //    does), so call the obsidian builder DIRECTLY with a uniform Style1 and let
+            //    COLOUR alone carry emphasis. Same precedent as FoundingChoiceController.
+            ElarionUiKit.BuildObsidianButton(content, "I accept your power",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0.045f, 0.05f), new Vector2(0.36f, 0.245f), OnAccept);
-            _tellMoreBtn = ElarionUiKit.Button(content, "Tell me more", ElarionUiKit.ButtonKind.Quiet,
+            _tellMoreBtn = ElarionUiKit.BuildObsidianButton(content, "Tell me more",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.64f, 0.05f), new Vector2(0.955f, 0.245f), OnTellMore);
         }
 
