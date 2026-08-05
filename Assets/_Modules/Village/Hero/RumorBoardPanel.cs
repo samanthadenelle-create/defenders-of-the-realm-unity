@@ -1,30 +1,69 @@
 // =============================================================================
-// RumorBoardPanel (WO-304 · WO-810 layout rework) — Brom's rumor board: the
-// BROWSE / ACCEPT surface for the realm's story + vendor questlines.
+// RumorBoardPanel (WO-304 . WO-810 layout rework . WO-866 tab-band + chrome pass)
+// Brom's rumor board: the BROWSE / ACCEPT surface for the realm's questlines.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
-//
-// WO-810 (owner-signed wireframe, 2026-07-30): a clear MASTER-DETAIL board.
-//   • Filter chips: ONE horizontally-scrollable row of full-label pill chips —
-//     never five squeezed plates ("Endgame" used to clip). Selected chip =
-//     gilt fill + underline bar + a leading "*" marker (shape, never colour
-//     alone — colourblind law; the spec's diamond glyph is non-ASCII and the
-//     bundled font tofus non-Latin symbols, so the marker is ASCII "*").
-//   • Left ~42%: the LIST. In Progress collapses to one quiet dim line when
-//     empty (no section slab). Rows are two-line CARDS (title + state pip /
-//     one-line hook) with NO buttons in the row — the whole card selects.
-//     Selected card = gilt left border + warmer fill. Scrolls (WO-795).
-//   • Right ~58%: the DETAIL, always bound to the selection (first available
-//     auto-selected on open/tab change, so it is never blank). Tag row · gilt
-//     title · full tale · rewards · the PRIMARY CTA pinned at the bottom with
-//     a full word: Accept (available) / Track (active) / Pinned (tracked).
-//     The Accept CTA living HERE (not in each row) is the load-bearing move —
-//     it un-crushes the list and kills the "ACC…" truncation for good.
-//   • Portrait (H > W): the same rules, panes stacked (list top, detail below).
 //
 // READ-ONLY consumer of RumorBoardVM (strict MVVM): the View renders VM
 // projections and routes taps to Accept/Track/SetTab; it never touches
 // QuestService / QuestCatalog / DailyQuestService.
+//
+// -----------------------------------------------------------------------------
+// WO-866 (Seeker capture 2026-08-04, docs/ui-review/2026-08-04-seeker/04-rumor-board.png)
+// -----------------------------------------------------------------------------
+// TWO defects, both the SAME class (a band sized against something that is not a
+// fixed pixel budget), both PROVEN by arithmetic that reproduces the capture:
+//
+//  1. THE CLIPPED TAB STRIP. The strip parents into chrome.layout.body, which on
+//     FrameQuest is the DARK LEFT WELL ONLY (x 0.035-0.495 of the frame). At
+//     2340x1080 the modal canvas resolves to 2120x978 reference px (CanvasScaler
+//     1080x1920, match 0.5 -> scale 1.104), the panel to 1780x783, so the left
+//     well is 819 ref px wide and the old 0.03-0.97 strip was 770. Five chips at a
+//     HARDCODED preferredWidth of 220 + 4x10 spacing ask for 1140 px, so the
+//     strip's RectMask2D cut chip 4 at 770 px -- 80 px into a 220 px chip, i.e.
+//     ~36% of "Gear", which is EXACTLY the lone "G" in the capture. It only LOOKED
+//     like the detail pane crossed the tabs: the mask edge lands at frame x 0.481
+//     and the detail pane starts at 0.505 -- 24 px apart on screen.
+//     FIX: the tab band is now its OWN fixed-pixel band (TabBandPx) hung from the
+//     LEFT well's top line and X-BOUNDED BY THAT WELL, parented to chrome.content
+//     as a LATER sibling than every zone. The detail pane lives in the RIGHT well.
+//     They are horizontally DISJOINT rects in different columns, so the detail pane
+//     cannot cross the tab band by construction -- not by tuning. And the chips no
+//     longer carry a hardcoded width: they FLEX-FILL the band (flexibleWidth 1,
+//     minWidth = MinTouchPx), so all five are always fully visible.
+//
+//  2. THE CULLED DETAIL BODY (found while measuring #1 -- the same class the F8
+//     ObsidianQueueHud header bug was). The old detail stack reserved 148 px of
+//     top bands + 212 px of bottom bands = 360 px inside a right well that is only
+//     349 px tall at 2340x1080, so the body label's rect resolved to -11 px and TMP
+//     culled the tale WHOLE. That is why the capture shows tag chips, a title,
+//     reward chips and the CTAs but NO quest text at all. At 1920x1080 (the headless
+//     capture aspect) the same band computes to +39 px and squeaks out one line,
+//     which is precisely why RunCaptureHeadless never caught it.
+//     FIX: the whole detail stack is a declared FIXED-PIXEL budget
+//     (DetailFixedStackPx = 310) proven against the measured pane height, and the
+//     pane is TOP-ALIGNED to the left well's top line (anchorMax.y > 1 by the ratio
+//     of the two wells' spans) so both columns start on one line and the detail
+//     gains the 77 px the frame's lower parchment zone was giving away. Body band
+//     is then 116 px at 2340x1080 / 174 px at 1920x1080 -- two whole FontLabel line
+//     boxes with slack. RumorBoardLayoutRegression pins all of it.
+//
+// STYLING (WO-866 sec.2), all presentation-only:
+//   . ONE chip language. Tag chips, reward chips AND the list row's state pip are
+//     now the SAME MakeChip widget with ONE ink and ONE border -- meaning is
+//     carried by the WORD, never by colour (the owner is red/green colourblind).
+//   . Content chrome now answers the ornate frame: 2 px gilt-dim borders on the
+//     detail plate and on every card, gilt hairline rules under the tab band and
+//     under each section label, and a footer band that gives the shared Close a
+//     home instead of leaving it floating over the frame's bottom border.
+//   . An EARLY STATE card replaces the dead black region when the board is sparse.
+//
+// KEEP (owner ruling, do NOT restyle away): the selected tab is marked with BOTH a
+// leading "*" AND an underline bar. Text-encoded state, never colour alone. It is
+// the pattern the rest of this file now follows.
+//
+// ASCII-ONLY (including comments): the shipped LiberationSans SDF has no non-Latin
+// glyphs and RumorBoardLayoutRegression asserts the whole file is ASCII.
 // =============================================================================
 
 using UnityEngine;
@@ -36,14 +75,82 @@ namespace DeNelle.Village.Hero
 {
     public sealed class RumorBoardPanel : MonoBehaviour
     {
+        // =====================================================================
+        //  WO-866 LAYOUT BUDGET -- fixed reference pixels, never a fraction of
+        //  parent. Public so RumorBoardLayoutRegression can pin them without a
+        //  reflection bridge into private state.
+        // =====================================================================
+
+        /// <summary>Height of the filter-tab band (>= ElarionUiKit.MinTouchPx).</summary>
+        public const float TabBandPx = 124f;
+        /// <summary>Breathing gap between the tab band and the list below it.</summary>
+        public const float TabBandGapPx = 10f;
+        /// <summary>Horizontal inset of the tab band inside the list well.</summary>
+        public const float TabBandInsetPx = 8f;
+        /// <summary>Gap between two tab chips.</summary>
+        public const float TabChipSpacingPx = 8f;
+        /// <summary>Floor width of one tab chip. A chip never shrinks below the kit touch floor.</summary>
+        public const float TabChipMinPx = 112f;
+        /// <summary>Slack a tab chip adds around its MEASURED label.</summary>
+        public const float TabChipPadPx = 24f;
+        /// <summary>The fraction of a kit button's width its label rect actually gets
+        /// (BuildObsidianButton insets the label 0.04..0.96). A measured label width is grossed
+        /// up by this before it becomes the chip's ask, or the label lands on the rect edge.</summary>
+        public const float TabLabelInsetFrac = 0.92f;
+        /// <summary>Tab count the band must seat. Mirrors RumorBoardVM.TabKeys.Length --
+        /// BuildTabStrip warns if they diverge and RumorBoardLayoutRegression fails on it.</summary>
+        public const int TabCount = 5;
+        /// <summary>Narrowest list well the tab band can seat every tab in at the touch floor.</summary>
+        public const float TabRowMinWidthPx =
+            TabCount * TabChipMinPx + (TabCount - 1) * TabChipSpacingPx + 2f * TabBandInsetPx + 12f;
+        /// <summary>Pixels the list viewport is inset below the well's top for the tab band.</summary>
+        public const float ListTopInsetPx = TabBandPx + TabBandGapPx;
+        /// <summary>Pixels reserved at the list column's bottom for the status line.</summary>
+        public const float ListBottomInsetPx = 52f;
+        /// <summary>Status line band (one FontMicro line box + margin).</summary>
+        public const float StatusBandPx = 44f;
+        /// <summary>Card height. Above the touch floor (112) because the card seats TWO line
+        /// boxes: a FontBody(50) title (62.5) over a FontMicro(32) hook (40) plus padding --
+        /// at 112 the two bands would have to touch, which is how a descender gets clipped.</summary>
+        public const float CardHeightPx = 124f;
+        /// <summary>Height of the early-state note card in the list.</summary>
+        public const float EarlyNotePx = 132f;
+        /// <summary>Section label band (one FontLabel line box + the hairline rule).</summary>
+        public const float SectionBandPx = 56f;
+        /// <summary>Flavor line band (one FontMicro line box + margin).</summary>
+        public const float FlavorBandPx = 48f;
+
+        /// <summary>Detail pane edge padding.</summary>
+        public const float DetailPadPx = 6f;
+        /// <summary>Detail pane gap between two bands.</summary>
+        public const float DetailGapPx = 6f;
+        /// <summary>Chip row band -- 48 seats the 48px chip whose 44px label rect holds a FontMicro line box.</summary>
+        public const float DetailChipRowPx = 48f;
+        /// <summary>Detail title band -- 64 >= one FontBody(50) line box (62.5).</summary>
+        public const float DetailTitlePx = 64f;
+        /// <summary>Gilt hairline under the title.</summary>
+        public const float DetailRulePx = 2f;
+        /// <summary>Detail CTA band (the kit touch floor).</summary>
+        public const float DetailCtaPx = 112f;
+        /// <summary>Everything in the detail stack EXCEPT the body, in fixed px.
+        /// top: pad + chips + gap + title + rule + gap   bottom: pad + cta + gap + chips + gap.</summary>
+        public const float DetailFixedStackPx =
+            (DetailPadPx + DetailChipRowPx + DetailGapPx + DetailTitlePx + DetailRulePx + DetailGapPx) +
+            (DetailPadPx + DetailCtaPx + DetailGapPx + DetailChipRowPx + DetailGapPx);
+        /// <summary>Two whole FontLabel(40) line boxes -- the body's honest minimum.</summary>
+        public const float DetailBodyMinPx = 100f;
+        /// <summary>Footer band that seats the shared Close, hung from the wells' floor.</summary>
+        public const float FooterBandPx = 200f;
+
         private GameObject _ui;
         private Transform _panelRoot;
+        private Transform _chromeContent;
+        private RectTransform _zoneLeft;
+        private RectTransform _zoneRight;
         private GameObject _contentRoot;
         private TMPro.TextMeshProUGUI _statusText;
 
-        // Detail pane widgets (rebuilt content, persistent hosts). WO-810 follow-up
-        // (2026-08-02): the tag + reward TEXT lines became CHIP ROWS (bordered tag
-        // chips / reward chips — the signed spec's missing sections).
+        // Detail pane widgets (rebuilt content, persistent hosts).
         private RectTransform _detailTagRow;
         private TMPro.TextMeshProUGUI _detailTitle;
         private TMPro.TextMeshProUGUI _detailBody;
@@ -61,27 +168,30 @@ namespace DeNelle.Village.Hero
         private string _selectedId;
         private RowKind _selectedKind = RowKind.None;
 
-        // ── Chip metrics (iteration 3 — the store-listing capture RCA) ───────────
-        // MEASURED capture 2026-08-03 (RumorBoard_1920x1080.png): the detail pane is
-        // x 968..1711 (744 ref px) and the reward row ran 0.05-0.95 of it = 669 px. The four
-        // worst-case chips asked for text.Length*18+28 = 1090 px — a per-character budget that
-        // over-estimates a FontMicro glyph by ~37% (measured: ~13.1 px/char) — so the
-        // HorizontalLayoutGroup shrank every chip to 60.6% of its ask (measured chip edges at
-        // x 1152 / 1254 / 1366 / 1674 match that ratio exactly) while the labels, authored
-        // NoWrap + Overflow, kept painting at FULL width straight through their neighbours:
-        // "Crystals 220Food 90Magic 45em: relic_drowned_ledger". Two changes kill it:
+        // -- Chip metrics (iteration 3 -- the store-listing capture RCA) -----------
+        // MEASURED capture 2026-08-03 (RumorBoard_1920x1080.png): a chip sized from a
+        // per-character guess (text.Length*18+28) over-asked by ~37% against the measured
+        // ~13.1 px/char of a FontMicro glyph, the HorizontalLayoutGroup shrank every chip to
+        // 60.6% of its ask, and the labels -- authored NoWrap + Overflow -- kept painting at
+        // FULL width straight through their neighbours. Two rules kill it for good:
         //   1. a chip is sized from its label's MEASURED preferred width, never a guess;
-        //   2. a chip label is FITTED (bounded auto-size -> ellipsis), so even if a row does
-        //      run short the text can never paint outside its own chip again.
-        private const float ChipPadPx     = 16f;   // 8 per side around the measured label
-        private const float ChipSpacingPx = 6f;    // reward row gap (tag row keeps 8)
-        private const float ChipHeightPx  = 48f;   // inside the 56px band (44px label rect)
-        // Fitted floor for the REWARD row only: four chips at FontMicro(32) sit ~98% full in a
-        // 714px row, so a modest relaxation absorbs any font-metric drift without ever
-        // ellipsizing a reward's NAME. Well above the kit's FontHardFloor (20).
+        //   2. a chip label is FITTED (bounded auto-size -> ellipsis), so even a short row
+        //      shrinks text INSIDE the borders instead of across the next chip.
+        private const float ChipPadPx = 16f;      // 8 per side around the measured label
+        private const float ChipSpacingPx = 6f;   // gap between chips
+        private const float ChipHeightPx = 48f;   // 44px label rect -- one FontMicro line box
+        // Fitted floor for a chip label: well above the kit's FontHardFloor (20).
         private const float ChipMinFontPx = 26f;
 
-        // ── Public API ──────────────────────────────────────────────────────────
+        // WO-866: ONE chip language. Border + fill + ink are the same for a type tag, a
+        // state tag and a reward -- the WORD carries the meaning, never the colour.
+        private static readonly Color ChipBorder = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.55f);
+        private static readonly Color ChipFill = new Color(0.05f, 0.045f, 0.04f, 1f);
+        private static readonly Color PlateInk = new Color(0.05f, 0.045f, 0.04f, 1f);
+        // The hairline/border tone that answers the frame's gilt metal without shouting.
+        private static readonly Color HairLine = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.42f);
+
+        // -- Public API ----------------------------------------------------------
 
         public void Open()
         {
@@ -98,27 +208,22 @@ namespace DeNelle.Village.Hero
                 frameName: RpgUiCatalog.FrameQuest, medallionIcon: "quest");
             _ui = modal.canvas;
             var panel = modal.chrome.content;
+            _chromeContent = panel != null ? panel.transform : null;
             var bodyHost = (modal.chrome.layout != null && modal.chrome.layout.body != null)
                 ? modal.chrome.layout.body : (RectTransform)panel.transform;
             _panelRoot = bodyHost;
 
-            // WO-810 follow-up (2026-08-02, pixel-verified RCA): the panes now PARENT to the
-            // kit's MEASURED FrameQuest drop-zones — chrome.layout.bodyLeft (the dark list
-            // well) and chrome.layout.bodyRight (the parchment detail well) — at full 0..1
-            // anchors, instead of hand-tuned panel fractions. That seats the list, the
-            // detail plate AND the Accept CTA inside the frame's designed wells, and the
-            // bodyRight floor already reserves the shared Close band (Accept lifts clear of
-            // Close). Fallbacks keep panel fractions for a frameless procedural panel
-            // (detail floor RAISED to 0.30 so the CTA still clears Close) and for portrait
-            // (stacked panes — the zones are a landscape split).
+            // The panes parent to the kit's MEASURED FrameQuest drop-zones -- bodyLeft (the
+            // dark list well) and bodyRight (the detail well). Fallbacks keep panel fractions
+            // for a frameless procedural panel and for portrait (stacked panes).
             bool portrait = Screen.height > Screen.width;
-            var zoneLeft  = modal.chrome.layout != null ? modal.chrome.layout.bodyLeft  : null;
+            var zoneLeft = modal.chrome.layout != null ? modal.chrome.layout.bodyLeft : null;
             var zoneRight = modal.chrome.layout != null ? modal.chrome.layout.bodyRight : null;
+            _zoneLeft = zoneLeft;
+            _zoneRight = zoneRight;
+
             Vector2 listMin, listMax, detailMin, detailMax;
             Transform listHost, detailHost;
-            // Pixel inset the list top must leave for the FIXED-height tab strip (E3) when
-            // the list fills a zone: strip height (MinTouchPx + 24) + an 8px breathing gap.
-            // Bottom inset reserves the status line's 40px band + gap (iteration 2 defect 4).
             float listTopInsetPx = 0f;
             float listBottomInsetPx = 0f;
             if (portrait)
@@ -127,32 +232,49 @@ namespace DeNelle.Village.Hero
                 detailMin = new Vector2(0.05f, 0.05f); detailMax = new Vector2(0.95f, 0.46f);
                 listHost = bodyHost;
                 detailHost = panel.transform;
+                // Portrait stacks the panes and the band hangs from the BODY top, well above
+                // the list's own 0.855 ceiling -- no inset to take (landscape is the shipped
+                // orientation; this path only has to stay sane).
+                listTopInsetPx = 0f;
             }
             else
             {
                 if (zoneLeft != null)
                 {
-                    // List fills the dark left well; its top hangs from the SAME y 0.95 line
-                    // the strip hangs from, inset by the strip's fixed height (px, not
-                    // fraction — the strip no longer scales with the body).
+                    // The list fills the dark left well, inset below the tab band by a FIXED
+                    // pixel budget (the band hangs from the SAME 1.0 line, so the inset is
+                    // exact on every aspect -- no fraction can drift into the band).
                     listHost = zoneLeft;
                     listMin = Vector2.zero;
-                    listMax = new Vector2(1f, 0.95f);
-                    listTopInsetPx = ElarionUiKit.MinTouchPx + 32f;
-                    listBottomInsetPx = 52f;   // the status line's 44px band + gap at the column bottom
+                    listMax = Vector2.one;
+                    listTopInsetPx = ListTopInsetPx;
+                    listBottomInsetPx = ListBottomInsetPx;
                 }
                 else
-                { listHost = bodyHost; listMin = new Vector2(0.03f, 0.07f); listMax = new Vector2(0.97f, 0.70f); }
+                {
+                    listHost = bodyHost;
+                    listMin = new Vector2(0.03f, 0.07f); listMax = new Vector2(0.97f, 1f);
+                    listTopInsetPx = ListTopInsetPx;
+                }
 
                 if (zoneRight != null)
-                { detailHost = zoneRight; detailMin = Vector2.zero; detailMax = Vector2.one; }
+                {
+                    // WO-866: TOP-ALIGN the detail pane with the LIST well's top line. The
+                    // frame's parchment zone starts 0.098 of the frame lower than the dark
+                    // well (349 px vs 426 px tall at 2340x1080), which both misaligned the two
+                    // columns AND starved the detail stack until its body band went NEGATIVE.
+                    // anchorMax.y > 1 is legal and exact: it is the left well's top expressed
+                    // as a fraction of the right well's own span, read off the zones' anchors
+                    // (available at build time -- no layout pass, no hardcoded kit fractions).
+                    detailHost = zoneRight;
+                    detailMin = Vector2.zero;
+                    detailMax = new Vector2(1f, TopAlignFraction(zoneLeft, zoneRight));
+                }
                 else
                 { detailHost = panel.transform; detailMin = new Vector2(0.51f, 0.30f); detailMax = new Vector2(0.955f, 0.78f); }
             }
 
-            BuildTabStrip(bodyHost);
-
-            // ── LEFT: the scrollable card list (WO-795 — rows never stack/overlap) ──
+            // -- LEFT: the scrollable card list (WO-795 -- rows never stack/overlap) --
             var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewportGo.transform.SetParent(listHost, false);
             var vpr = viewportGo.GetComponent<RectTransform>();
@@ -167,28 +289,28 @@ namespace DeNelle.Village.Hero
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0f, 1f);
             cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot     = new Vector2(0.5f, 1f);
+            cr.pivot = new Vector2(0.5f, 1f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
             var vlg = _contentRoot.GetComponent<VerticalLayoutGroup>();
-            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlWidth = true; vlg.childForceExpandWidth = true;
             vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
             vlg.spacing = 8f;
             // Bottom pad = one card so the last row scrolls fully clear of the mask.
             vlg.padding = new RectOffset(6, 6, 6, 104);
             var csf = _contentRoot.GetComponent<ContentSizeFitter>();
-            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
             var scroll = viewportGo.GetComponent<ScrollRect>();
             scroll.viewport = vpr;
-            scroll.content  = cr;
+            scroll.content = cr;
             scroll.horizontal = false;
-            scroll.vertical   = true;
+            scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 25f;
 
-            // ── RIGHT: the detail pane (obsidian-dark; always bound to the selection) ──
+            // -- RIGHT: the detail pane (obsidian plate, gilt border, bound to the selection) --
             var detailGo = new GameObject("DetailPane", typeof(Image));
             detailGo.transform.SetParent(detailHost, false);
             _detailPane = detailGo.GetComponent<RectTransform>();
@@ -196,18 +318,26 @@ namespace DeNelle.Village.Hero
             _detailPane.anchorMax = detailMax;
             _detailPane.offsetMin = Vector2.zero; _detailPane.offsetMax = Vector2.zero;
             var dImg = detailGo.GetComponent<Image>();
-            // Solid obsidian: the plate must COVER the frame's tan parchment page beneath it
-            // (signed spec: dark pane, not the tan slab). WO-810 follow-up: alpha 0.92 -> 1f —
-            // the LINEAR-SPACE blend of 0.92-alpha dark over tan read KHAKI (pixel-proven).
-            dImg.color = new Color(0.05f, 0.045f, 0.04f, 1f);
+            // WO-866: the outer Image is now the 2px BORDER (chip language, scaled up) and an
+            // inset Fill child carries the obsidian. Solid alpha 1: the plate must COVER the
+            // frame's tan parchment page beneath it (a 0.92 alpha over tan reads KHAKI in
+            // linear space -- pixel-proven).
+            dImg.color = HairLine;
             dImg.raycastTarget = false;
+            var detailFill = new GameObject("Fill", typeof(Image));
+            detailFill.transform.SetParent(detailGo.transform, false);
+            var dfr = detailFill.GetComponent<RectTransform>();
+            dfr.anchorMin = Vector2.zero; dfr.anchorMax = Vector2.one;
+            dfr.offsetMin = new Vector2(2f, 2f); dfr.offsetMax = new Vector2(-2f, -2f);
+            var dfImg = detailFill.GetComponent<Image>();
+            dfImg.color = PlateInk;
+            dfImg.raycastTarget = false;
 
-            // Iteration 2 (capture RumorBoard_daily defect 3): the kit RAISES the bodyRight
-            // zone floor above the shared Close band (close-band reservation), leaving the
-            // frame art's baked tan parchment page visible BETWEEN the zone bottom and the
-            // page bottom. Cover that remainder with an alpha-1 obsidian strip hung from the
-            // zone's bottom edge. Children of Zone_BodyRight render UNDER the later-sibling
-            // Close (kit builds close after the zones), so this can never occlude Close.
+            // The kit RAISES the bodyRight zone floor above the shared Close band, leaving the
+            // frame art's baked tan parchment page visible BETWEEN the zone bottom and the page
+            // bottom. Cover that remainder with an alpha-1 obsidian strip hung from the zone's
+            // bottom edge. Children of Zone_BodyRight render UNDER the later-sibling Close, so
+            // this can never occlude Close.
             if (!portrait && zoneRight != null)
             {
                 var under = new GameObject("DetailUnderPlate", typeof(Image));
@@ -221,49 +351,69 @@ namespace DeNelle.Village.Hero
                 urt.sizeDelta = new Vector2(0f, 165f);   // the reserved-band remainder (~155-160 ref px)
                 urt.anchoredPosition = Vector2.zero;      // top edge = the zone's bottom edge
                 var underImg = under.GetComponent<Image>();
-                underImg.color = new Color(0.05f, 0.045f, 0.04f, 1f);
+                underImg.color = PlateInk;
                 underImg.raycastTarget = false;
             }
 
-            // Iteration 2 (capture RumorBoard_daily defect 2): the detail stack uses
-            // FIXED-PIXEL bands hung from the pane's top/bottom — fraction bands scaled with
-            // the zone height, under-heighted their text, and TMP CULLED it whole (the empty
-            // gold chip outlines). Bands: top-down 8 + 56 (tag chips) + 8 + 68 (title) + 8;
-            // bottom-up 8 + 132 (CTA) + 8 + 56 (reward chips) + 8; body fills between.
+            // -- The detail stack: a DECLARED fixed-pixel budget (DetailFixedStackPx) ------
+            // top-down:  pad 6 | chips 48 | gap 6 | title 64 | rule 2 | gap 6      = 132
+            // bottom-up: pad 6 | cta 112  | gap 6 | chips 48 | gap 6               = 178
+            // body fills the remainder: 116 px @ 2340x1080, 174 px @ 1920x1080.
+            const float TopChips = DetailPadPx;                                     // 6
+            const float TopTitle = TopChips + DetailChipRowPx + DetailGapPx;        // 60
+            const float TopRule = TopTitle + DetailTitlePx;                         // 124
+            const float BodyTop = TopRule + DetailRulePx + DetailGapPx;             // 132
+            const float BotCta = DetailPadPx;                                       // 6
+            const float BotRewards = BotCta + DetailCtaPx + DetailGapPx;            // 124
+            const float BodyBottom = BotRewards + DetailChipRowPx + DetailGapPx;    // 178
+
             _detailTagRow = MakeChipRow(detailGo.transform, "DetailTagRow",
-                topPx: 8f, heightPx: 56f);
+                topPx: TopChips, heightPx: DetailChipRowPx);
 
             _detailTitle = MakeDetailLabel(detailGo.transform, "DetailTitle",
-                new Vector2(0.05f, 1f), new Vector2(0.95f, 1f),
-                ElarionUi.Gilt, ElarionUi.FontHead, bold: true);
+                new Vector2(0.04f, 1f), new Vector2(0.96f, 1f),
+                ElarionUi.Gilt, ElarionUi.FontBody, bold: true);
             var titleRt = _detailTitle.rectTransform;
-            titleRt.offsetMin = new Vector2(0f, -140f);
-            titleRt.offsetMax = new Vector2(0f, -72f);
+            titleRt.offsetMin = new Vector2(0f, -(TopTitle + DetailTitlePx));
+            titleRt.offsetMax = new Vector2(0f, -TopTitle);
+
+            // Gilt hairline under the title -- the cheapest way to make the content chrome
+            // answer the frame's metal instead of reading as a bare black rectangle.
+            var rule = new GameObject("TitleRule", typeof(Image));
+            rule.transform.SetParent(detailGo.transform, false);
+            var rrt = rule.GetComponent<RectTransform>();
+            rrt.anchorMin = new Vector2(0.04f, 1f);
+            rrt.anchorMax = new Vector2(0.96f, 1f);
+            rrt.pivot = new Vector2(0.5f, 1f);
+            rrt.sizeDelta = new Vector2(0f, DetailRulePx);
+            rrt.anchoredPosition = new Vector2(0f, -TopRule);
+            var ruleImg = rule.GetComponent<Image>();
+            ruleImg.color = HairLine;
+            ruleImg.raycastTarget = false;
 
             _detailBody = MakeDetailLabel(detailGo.transform, "DetailBody",
-                new Vector2(0.05f, 0f), new Vector2(0.95f, 1f),
+                new Vector2(0.04f, 0f), new Vector2(0.96f, 1f),
                 ElarionUi.Parchment, ElarionUi.FontLabel, bold: false);
             _detailBody.alignment = TMPro.TextAlignmentOptions.TopLeft;
             _detailBody.textWrappingMode = TMPro.TextWrappingModes.Normal;
             var bodyRt = _detailBody.rectTransform;
-            bodyRt.offsetMin = new Vector2(0f, 212f);
-            bodyRt.offsetMax = new Vector2(0f, -148f);
+            bodyRt.offsetMin = new Vector2(0f, BodyBottom);
+            bodyRt.offsetMax = new Vector2(0f, -BodyTop);
 
-            // Reward chip row (crystals / food / magic / items as chips — signed spec),
-            // bottom-hung just above the fixed-height CTA band. Iteration 3 (store-listing
-            // capture): this row runs 0.02-0.98 of the pane, not 0.05-0.95 — at 1920x1080 the
-            // detail pane is only ~744 ref px wide and the worst-case rumor pays FOUR chips,
-            // so the row needs every pixel it can honestly take (669 -> 714 ref px).
+            // Reward chips, bottom-hung just above the fixed-height CTA band. Same widget,
+            // same ink and same border as the tag chips: ONE language for one class of info.
             _detailRewardRow = MakeChipRow(detailGo.transform, "DetailRewardRow",
-                topPx: 0f, heightPx: 56f, fromBottomPx: 148f,
+                topPx: 0f, heightPx: DetailChipRowPx, fromBottomPx: BotRewards,
                 sideFrac: 0.02f, spacingPx: ChipSpacingPx);
 
-            // Status line — iteration 2 (capture RumorBoard_daily defect 4): the footer-zone
-            // seat rendered the line full-width across the Close band (the kit re-seats the
-            // footer right above Close). It now sits at the BOTTOM OF THE LIST COLUMN
-            // (bodyLeft zone, fixed 44px band, FontMicro; the viewport is inset above it),
-            // so it can never touch Close or the parchment band. Fraction fallback for the
-            // zoneless/portrait paths keeps the old in-body seat.
+            // -- The tab band: its OWN band, in the list column, above every zone ---------
+            BuildTabStrip();
+
+            // -- Footer band: the shared Close gets panel chrome instead of floating -------
+            BuildFooterBand(portrait);
+
+            // Status line at the BOTTOM OF THE LIST COLUMN (fixed 44px band, FontMicro; the
+            // viewport is inset above it), so it can never touch Close or the parchment band.
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             var sRect = statusGo.GetComponent<RectTransform>();
             if (!portrait && zoneLeft != null)
@@ -273,15 +423,17 @@ namespace DeNelle.Village.Hero
                 sRect.anchorMax = new Vector2(1f, 0f);
                 sRect.pivot = new Vector2(0.5f, 0f);
                 sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
-                sRect.sizeDelta = new Vector2(0f, 44f);   // one FontMicro line + margin (never culled)
+                sRect.sizeDelta = new Vector2(0f, StatusBandPx);   // one FontMicro line (never culled)
                 sRect.anchoredPosition = new Vector2(0f, 4f);
             }
             else
             {
                 statusGo.transform.SetParent(bodyHost, false);
-                sRect.anchorMin = new Vector2(0.03f, 0.005f);
-                sRect.anchorMax = new Vector2(0.97f, 0.06f);
-                sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
+                sRect.anchorMin = new Vector2(0.03f, 0f);
+                sRect.anchorMax = new Vector2(0.97f, 0f);
+                sRect.pivot = new Vector2(0.5f, 0f);
+                sRect.sizeDelta = new Vector2(0f, StatusBandPx);
+                sRect.anchoredPosition = new Vector2(0f, 4f);
             }
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_statusText);
@@ -296,7 +448,7 @@ namespace DeNelle.Village.Hero
 
             if (!PanelManager.NotifyOpened(_handle)) return;
 
-            Debug.Log("[RumorBoardPanel] Opened (WO-810 master-detail).");
+            Debug.Log("[RumorBoardPanel] Opened (WO-866 tab band + fixed detail stack).");
         }
 
         public void Close()
@@ -314,6 +466,10 @@ namespace DeNelle.Village.Hero
             _detailCtaGo = null;
             _detailPane = null;
             _tabStrip = null;
+            _chromeContent = null;
+            _zoneLeft = null;
+            _zoneRight = null;
+            _panelRoot = null;
             _selectedId = null;
             _selectedKind = RowKind.None;
             PanelManager.NotifyClosed(_handle);
@@ -325,21 +481,38 @@ namespace DeNelle.Village.Hero
             if (_ui != null) Destroy(_ui);
         }
 
-        // ── Paint ───────────────────────────────────────────────────────────────
+        /// <summary>The LIST well's top line expressed as a fraction of the DETAIL well's own
+        /// vertical span, so a rect anchored there tops out on the same screen line as the list.
+        /// Reads the zones' ANCHORS (set by the kit's Zone() at build time -- valid before any
+        /// layout pass) and never shrinks the detail below its own zone top.</summary>
+        private static float TopAlignFraction(RectTransform zoneLeft, RectTransform zoneRight)
+        {
+            if (zoneLeft == null || zoneRight == null) return 1f;
+            float rb = zoneRight.anchorMin.y, rt = zoneRight.anchorMax.y;
+            float span = rt - rb;
+            if (span <= 0.0001f) return 1f;
+            float f = (zoneLeft.anchorMax.y - rb) / span;
+            if (f < 1f) f = 1f;      // pure floor -- a taller detail well is left alone
+            if (f > 1.6f) f = 1.6f;  // sanity clamp: never swallow the frame's header band
+            return f;
+        }
+
+        // -- Paint ---------------------------------------------------------------
 
         private void Repaint()
         {
             if (_contentRoot == null || _vm == null) return;
             ClearContent();
 
+            int rows = 0;
             if (_vm.IsDailyTab)
             {
-                RepaintDaily();
+                rows = RepaintDaily();
             }
             else
             {
-                // WO-810: empty In Progress = ONE quiet dim line, no section slab; populated =
-                // a compact section of cards above the Rumors list.
+                // Empty In Progress = ONE quiet dim line, no section slab; populated = a
+                // compact section of cards above the Rumors list.
                 if (_vm.ActiveQuests.Count == 0)
                 {
                     CreateFlavorRow(_contentRoot.transform, "In Progress - nothing underway.");
@@ -348,21 +521,31 @@ namespace DeNelle.Village.Hero
                 {
                     CreateSectionLabel(_contentRoot.transform, "- In Progress -");
                     foreach (var item in _vm.ActiveQuests)
+                    {
                         CreateCard(_contentRoot.transform, item.Id, item.Name,
                             _vm.ObjectiveFor(item.Id),
-                            item.Equipped ? "[Tracked]" : "", RowKind.Active,
-                            item.Equipped);
+                            item.Equipped ? "Tracked" : "Underway", RowKind.Active);
+                        rows++;
+                    }
                 }
 
                 CreateSectionLabel(_contentRoot.transform, "- Rumors & Requests -");
                 if (_vm.AvailableQuests.Count == 0)
                     CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.");
                 foreach (var item in _vm.AvailableQuests)
+                {
                     CreateCard(_contentRoot.transform, item.Id, item.Name,
-                        _vm.HookFor(item.Id), "[New]", RowKind.Available, false);
+                        _vm.HookFor(item.Id), "New", RowKind.Available);
+                    rows++;
+                }
             }
 
-            // WO-810 auto-select: the detail is never blank while anything is listable.
+            // WO-866: an EARLY STATE instead of a large dead-black region. A board with one
+            // rumor on it is not a broken board -- say so, in words, where the black was.
+            if (!_vm.IsDailyTab && rows <= 1)
+                CreateEarlyNote(_contentRoot.transform, rows == 0);
+
+            // Auto-select: the detail is never blank while anything is listable.
             EnsureSelection();
             RenderDetail();
         }
@@ -401,54 +584,82 @@ namespace DeNelle.Village.Hero
             return null;
         }
 
-        // ── Filter chips (WO-810 — scrollable pills, full labels, never clipped) ──
+        // -- Filter tabs (WO-866 -- one fixed band in the list column, chips flex-fill) --
 
-        private void BuildTabStrip(Transform parent)
+        /// <summary>The tab band. Parented to chrome.content (a LATER sibling than every kit
+        /// zone, so nothing can paint over it) but X-BOUNDED BY THE LIST WELL and hung from
+        /// that well's top line with a FIXED pixel height. The detail pane lives in the RIGHT
+        /// well, so the two rects are horizontally disjoint -- the overlap the capture showed
+        /// is structurally impossible now, not merely tuned away.</summary>
+        private void BuildTabStrip()
         {
             if (_tabStrip != null) { SafeDestroy(_tabStrip); _tabStrip = null; }
 
-            _tabStrip = new GameObject("TabStrip", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            _tabStrip.transform.SetParent(parent, false);
-            var sr = _tabStrip.GetComponent<RectTransform>();
-            // WO-810 follow-up E3: FIXED-height strip hung from the body top (pivot-top at
-            // y 0.95) replacing the 0.87-0.95 fraction band — chips are >= the touch floor
-            // tall on every screen instead of scaling with the body height.
-            sr.anchorMin = new Vector2(0.03f, 0.95f);
-            sr.anchorMax = new Vector2(0.97f, 0.95f);
-            sr.pivot = new Vector2(0.5f, 1f);
-            sr.offsetMin = Vector2.zero;
-            sr.offsetMax = Vector2.zero;
-            sr.sizeDelta = new Vector2(0f, ElarionUiKit.MinTouchPx + 24f);
-            _tabStrip.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);
+            Transform host;
+            float xMin, xMax, topY;
+            if (_chromeContent != null && _zoneLeft != null && Screen.width >= Screen.height)
+            {
+                host = _chromeContent;
+                xMin = _zoneLeft.anchorMin.x;
+                xMax = _zoneLeft.anchorMax.x;
+                topY = _zoneLeft.anchorMax.y;
+            }
+            else
+            {
+                host = _panelRoot != null ? _panelRoot : (_ui != null ? _ui.transform : null);
+                xMin = 0.02f; xMax = 0.98f; topY = 1f;
+            }
+            if (host == null) return;
 
-            // Horizontal chip content: each chip a fixed-width host (>= the touch floor);
-            // when the row is wider than the strip (portrait) it scrolls sideways.
-            var content = new GameObject("Chips", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            _tabStrip = new GameObject("TabBand", typeof(Image), typeof(RectMask2D));
+            _tabStrip.transform.SetParent(host, false);
+            var sr = _tabStrip.GetComponent<RectTransform>();
+            sr.anchorMin = new Vector2(xMin, topY);
+            sr.anchorMax = new Vector2(xMax, topY);
+            sr.pivot = new Vector2(0.5f, 1f);
+            sr.sizeDelta = new Vector2(-2f * TabBandInsetPx, TabBandPx);
+            sr.anchoredPosition = Vector2.zero;
+            var bandImg = _tabStrip.GetComponent<Image>();
+            bandImg.color = PlateInk;
+            bandImg.raycastTarget = false;
+
+            // The band declares itself with a gilt hairline along its base -- the same rule
+            // language as the detail title and the footer, so the chrome reads as one set.
+            var bandRule = new GameObject("BandRule", typeof(Image));
+            bandRule.transform.SetParent(_tabStrip.transform, false);
+            var brr = bandRule.GetComponent<RectTransform>();
+            brr.anchorMin = new Vector2(0f, 0f);
+            brr.anchorMax = new Vector2(1f, 0f);
+            brr.pivot = new Vector2(0.5f, 0f);
+            brr.sizeDelta = new Vector2(0f, 2f);
+            brr.anchoredPosition = Vector2.zero;
+            var brImg = bandRule.GetComponent<Image>();
+            brImg.color = HairLine;
+            brImg.raycastTarget = false;
+
+            // Chips FILL the band. No hardcoded preferredWidth (that 220 is what overflowed
+            // the mask and clipped "Gear"): flexibleWidth shares the band evenly and minWidth
+            // holds the kit touch floor, so five tabs always fit and none is ever untappable.
+            var content = new GameObject("Chips", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             content.transform.SetParent(_tabStrip.transform, false);
             var ccr = content.GetComponent<RectTransform>();
-            ccr.anchorMin = new Vector2(0f, 0f);
-            ccr.anchorMax = new Vector2(0f, 1f);
-            ccr.pivot = new Vector2(0f, 0.5f);
+            ccr.anchorMin = Vector2.zero;
+            ccr.anchorMax = Vector2.one;
             ccr.offsetMin = Vector2.zero;
             ccr.offsetMax = Vector2.zero;
             var hlg = content.GetComponent<HorizontalLayoutGroup>();
-            // SCREENSHOT-CORRECTED (2026-07-30): childControlWidth must be TRUE for the chip
-            // hosts' LayoutElement.preferredWidth to apply — with it false the HLG read the
-            // hosts' zero sizeDelta and the chips piled onto each other ("Endg..." clip).
-            hlg.childControlWidth = true; hlg.childForceExpandWidth = false;
+            hlg.childControlWidth = true; hlg.childForceExpandWidth = true;
             hlg.childControlHeight = true; hlg.childForceExpandHeight = true;
-            hlg.spacing = 10f;
-            var csf = content.GetComponent<ContentSizeFitter>();
-            csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            csf.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.spacing = TabChipSpacingPx;
+            hlg.padding = new RectOffset(6, 6, 4, 6);
 
-            var strip = _tabStrip.GetComponent<ScrollRect>();
-            strip.viewport = sr;
-            strip.content = ccr;
-            strip.horizontal = true;
-            strip.vertical = false;
-            strip.movementType = ScrollRect.MovementType.Clamped;
-            strip.scrollSensitivity = 25f;
+            // The band's width budget (TabRowMinWidthPx) is declared for TabCount tabs. If the
+            // VM grows a sixth, the budget -- and the regression that proves it fits the well --
+            // has to grow with it; never let it silently squeeze under the touch floor again.
+            if (RumorBoardVM.TabKeys.Length != TabCount)
+                Debug.LogWarning("[RumorBoardPanel] TabKeys.Length=" + RumorBoardVM.TabKeys.Length +
+                    " but TabCount=" + TabCount + " -- re-derive TabRowMinWidthPx and the layout regression.");
 
             string activeTab = _vm != null ? _vm.ActiveTab : "all";
             for (int i = 0; i < RumorBoardVM.TabKeys.Length; i++)
@@ -457,28 +668,56 @@ namespace DeNelle.Village.Hero
                 bool isActive = key == activeTab;
                 string tabKey = key;
 
-                var host = new GameObject("Chip_" + key, typeof(RectTransform), typeof(LayoutElement));
-                host.transform.SetParent(content.transform, false);
-                host.GetComponent<LayoutElement>().preferredWidth = 220f;   // >= MinTouchPx with margin
+                var chipHost = new GameObject("Chip_" + key, typeof(RectTransform), typeof(LayoutElement));
+                chipHost.transform.SetParent(content.transform, false);
+                var le = chipHost.GetComponent<LayoutElement>();
+                le.minWidth = TabChipMinPx;      // never below the kit touch floor
+                le.flexibleWidth = 1f;           // the band's slack is shared evenly
 
-                // Selected = gilt (Yellow) + a leading "*" marker + an underline bar —
-                // shape + luminance carry the state, never colour alone.
+                // KEEP (owner ruling): selected = a leading "*" AND an underline bar.
+                // Shape + word carry the state. NEVER a colour highlight.
                 string label = (isActive ? "* " : "") + RumorBoardVM.TabLabels[i];
-                ElarionUiKit.BuildObsidianButton(host.transform, label,
+                var btn = ElarionUiKit.BuildObsidianButton(chipHost.transform, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     isActive ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     Vector2.zero, Vector2.one,
                     () => SetTab(tabKey));
 
+                // One type size across the whole row: the kit fits a button label against its
+                // own rect, so a long tab would otherwise render at a different size than its
+                // neighbours (one of the "three visual languages" the review called out).
+                var lbl = btn != null ? btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true) : null;
+                if (lbl != null)
+                {
+                    lbl.fontSize = ElarionUi.FontLabel;
+                    // Ask for the label's MEASURED width (TMP's own metrics, rect-independent
+                    // and valid before any layout pass) grossed up for the button art's own
+                    // label inset. First capture after the flex-fill fix: an equal 1/5 share
+                    // gave every tab ~159 ref px, whose ~132 px label rect lost "Endgame" by a
+                    // hair -> "Endga...". With a measured ask the HLG seats each tab's natural
+                    // width FIRST and only then shares the slack, so the longest tab gets the
+                    // room it needs while every tab still clears TabChipMinPx.
+                    float ask = lbl.GetPreferredValues(label).x;
+                    if (ask <= 1f) ask = label.Length * 18f;   // atlas not ready -- honest estimate
+                    le.preferredWidth = ask / TabLabelInsetFrac + TabChipPadPx;
+                    ElarionUiKit.FitSingleLine(lbl, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+                }
+                else
+                {
+                    le.preferredWidth = TabChipMinPx;
+                }
+
                 if (isActive)
                 {
                     var bar = new GameObject("Underline", typeof(Image));
-                    bar.transform.SetParent(host.transform, false);
+                    bar.transform.SetParent(chipHost.transform, false);
                     var brt = bar.GetComponent<RectTransform>();
-                    brt.anchorMin = new Vector2(0.08f, 0f);
-                    brt.anchorMax = new Vector2(0.92f, 0.06f);
-                    brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
+                    brt.anchorMin = new Vector2(0.10f, 0f);
+                    brt.anchorMax = new Vector2(0.90f, 0f);
+                    brt.pivot = new Vector2(0.5f, 0f);
+                    brt.sizeDelta = new Vector2(0f, 6f);          // fixed px, never a fraction
+                    brt.anchoredPosition = new Vector2(0f, 6f);
                     var bi = bar.GetComponent<Image>();
                     bi.color = ElarionUi.Gilt;
                     bi.raycastTarget = false;
@@ -486,41 +725,80 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        /// <summary>An obsidian footer band hung from the wells' floor, with a gilt hairline on
+        /// top. The shared kit Close is seated in that band by the factory and was reading as a
+        /// button floating over the frame's bottom border (WO-866); the band is built as the
+        /// FIRST child of chrome.content so it renders BEHIND the Close (and behind everything
+        /// else) and simply gives it chrome to sit in.</summary>
+        private void BuildFooterBand(bool portrait)
+        {
+            if (portrait || _chromeContent == null || _zoneLeft == null || _zoneRight == null) return;
+
+            var go = new GameObject("FooterBand", typeof(Image));
+            go.transform.SetParent(_chromeContent, false);
+            go.transform.SetAsFirstSibling();
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(_zoneLeft.anchorMin.x, _zoneLeft.anchorMin.y);
+            rt.anchorMax = new Vector2(_zoneRight.anchorMax.x, _zoneLeft.anchorMin.y);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, FooterBandPx);
+            rt.anchoredPosition = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.color = PlateInk;
+            img.raycastTarget = false;
+
+            var rule = new GameObject("FooterRule", typeof(Image));
+            rule.transform.SetParent(go.transform, false);
+            var rrt = rule.GetComponent<RectTransform>();
+            rrt.anchorMin = new Vector2(0f, 1f);
+            rrt.anchorMax = new Vector2(1f, 1f);
+            rrt.pivot = new Vector2(0.5f, 1f);
+            rrt.sizeDelta = new Vector2(0f, 2f);
+            rrt.anchoredPosition = Vector2.zero;
+            var ri = rule.GetComponent<Image>();
+            ri.color = HairLine;
+            ri.raycastTarget = false;
+        }
+
         private void SetTab(string tab)
         {
             if (_vm == null || _vm.ActiveTab == tab) return;
-            _selectedId = null;                    // WO-810: the new tab auto-selects its first row
+            _selectedId = null;                    // the new tab auto-selects its first row
             _selectedKind = RowKind.None;
             _vm.SetTab(tab);                       // raises Changed -> Repaint -> EnsureSelection
-            if (_ui != null) BuildTabStrip(_panelRoot ?? _ui.transform);
+            if (_ui != null) BuildTabStrip();
         }
 
-        // ── Daily tab ───────────────────────────────────────────────────────────
+        // -- Daily tab -----------------------------------------------------------
 
-        private void RepaintDaily()
+        private int RepaintDaily()
         {
             CreateSectionLabel(_contentRoot.transform, "- Daily Quests -");
             var daily = _vm.DailyQuests;
             if (daily == null || daily.Count == 0)
             {
                 CreateFlavorRow(_contentRoot.transform, "No daily quests rolled yet. Check back later.");
-                return;
+                return 0;
             }
+            int n = 0;
             foreach (var q in daily)
             {
-                string hook = q.Completed ? $"Complete  ({q.Target}/{q.Target})" : $"{q.Progress}/{q.Target}";
+                string hook = q.Completed ? "Complete (" + q.Target + "/" + q.Target + ")"
+                                          : q.Progress + "/" + q.Target;
                 CreateCard(_contentRoot.transform, q.Id, q.Title, hook,
-                    q.Completed ? "[Done]" : "", RowKind.Daily, q.Completed);
+                    q.Completed ? "Done" : "Today", RowKind.Daily);
+                n++;
             }
+            return n;
         }
 
-        // ── Cards (WO-810 — two lines, no buttons, whole card selects) ───────────
+        // -- Cards (two lines, no buttons, the whole card selects) ----------------
 
         private void CreateSectionLabel(Transform parent, string txt)
         {
             var go = new GameObject("Section", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            go.GetComponent<LayoutElement>().preferredHeight = 56f;   // WO-810 follow-up E5
+            go.GetComponent<LayoutElement>().preferredHeight = SectionBandPx;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.text = txt;
@@ -528,13 +806,26 @@ namespace DeNelle.Village.Hero
             t.fontStyle = TMPro.FontStyles.Bold;
             t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.BottomLeft;
+
+            // The same gilt hairline the detail title and the footer band use.
+            var rule = new GameObject("SectionRule", typeof(Image));
+            rule.transform.SetParent(go.transform, false);
+            var rrt = rule.GetComponent<RectTransform>();
+            rrt.anchorMin = new Vector2(0f, 0f);
+            rrt.anchorMax = new Vector2(1f, 0f);
+            rrt.pivot = new Vector2(0.5f, 0f);
+            rrt.sizeDelta = new Vector2(0f, 2f);
+            rrt.anchoredPosition = Vector2.zero;
+            var ri = rule.GetComponent<Image>();
+            ri.color = HairLine;
+            ri.raycastTarget = false;
         }
 
         private void CreateFlavorRow(Transform parent, string txt)
         {
             var go = new GameObject("Flavor", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            go.GetComponent<LayoutElement>().preferredHeight = 48f;   // WO-810 follow-up E5
+            go.GetComponent<LayoutElement>().preferredHeight = FlavorBandPx;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.text = txt;
@@ -544,24 +835,95 @@ namespace DeNelle.Village.Hero
             t.alignment = TMPro.TextAlignmentOptions.Left;
         }
 
+        /// <summary>WO-866 EARLY STATE. The review's "roughly half the panel is dead space":
+        /// an early-game board has one rumor on it and the rest of the column was flat black,
+        /// which reads as a broken panel rather than as an early one. This says it in words,
+        /// in the same bordered-plate language as the cards.</summary>
+        private void CreateEarlyNote(Transform parent, bool empty)
+        {
+            var plate = new GameObject("EarlyNote", typeof(Image), typeof(LayoutElement));
+            plate.transform.SetParent(parent, false);
+            plate.GetComponent<LayoutElement>().preferredHeight = EarlyNotePx;
+            var border = plate.GetComponent<Image>();
+            border.color = HairLine;
+            border.raycastTarget = false;
+
+            var fill = new GameObject("Fill", typeof(Image));
+            fill.transform.SetParent(plate.transform, false);
+            var frt = fill.GetComponent<RectTransform>();
+            frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+            frt.offsetMin = new Vector2(2f, 2f); frt.offsetMax = new Vector2(-2f, -2f);
+            var fimg = fill.GetComponent<Image>();
+            fimg.color = PlateInk;
+            fimg.raycastTarget = false;
+
+            var head = new GameObject("Head", typeof(TMPro.TextMeshProUGUI));
+            head.transform.SetParent(plate.transform, false);
+            var hrt = head.GetComponent<RectTransform>();
+            hrt.anchorMin = new Vector2(0.04f, 1f);
+            hrt.anchorMax = new Vector2(0.96f, 1f);
+            hrt.offsetMin = new Vector2(0f, -58f);
+            hrt.offsetMax = new Vector2(0f, -8f);
+            var ht = head.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(ht);
+            ht.text = empty ? "The board is quiet." : "You are early.";
+            ht.fontSize = ElarionUi.FontLabel;
+            ht.fontStyle = TMPro.FontStyles.Bold;
+            ht.color = ElarionUi.Gilt;
+            ht.alignment = TMPro.TextAlignmentOptions.Left;
+            ht.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(ht, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+
+            var body = new GameObject("Body", typeof(TMPro.TextMeshProUGUI));
+            body.transform.SetParent(plate.transform, false);
+            var brt = body.GetComponent<RectTransform>();
+            brt.anchorMin = new Vector2(0.04f, 0f);
+            brt.anchorMax = new Vector2(0.96f, 0f);
+            brt.pivot = new Vector2(0.5f, 0f);
+            brt.sizeDelta = new Vector2(0f, 54f);
+            brt.anchoredPosition = new Vector2(0f, 8f);
+            var bt = body.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(bt);
+            // One FontMicro line at the list column's width -- long enough to say it, short
+            // enough that the 54px band never has to wrap into a second (culled) line.
+            bt.text = "Brom posts more as Elarion wakes.";
+            bt.fontSize = ElarionUi.FontMicro;
+            bt.color = ElarionUi.ParchmentDim;
+            bt.alignment = TMPro.TextAlignmentOptions.TopLeft;
+            bt.raycastTarget = false;
+            ElarionUiKit.FitBlock(bt, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
+        }
+
         private void CreateCard(Transform parent, string id, string title, string hook,
-                                string pip, RowKind kind, bool pipGilt)
+                                string pip, RowKind kind)
         {
             bool selected = id == _selectedId;
 
             var row = new GameObject("Card_" + id, typeof(Image), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
-            // WO-810 follow-up E5: cards are select-targets — floor them at the kit touch floor.
-            row.GetComponent<LayoutElement>().preferredHeight = ElarionUiKit.MinTouchPx;
+            // Cards are select-targets -- floor them at the kit touch floor.
+            row.GetComponent<LayoutElement>().preferredHeight = CardHeightPx;
+            // WO-866: the outer Image is the 2px border (chip language) so a row is a CRAFTED
+            // plate, not the flat black bar the review called a debug list.
             var img = row.GetComponent<Image>();
+            img.color = selected ? ElarionUi.Gilt : HairLine;
+
+            var fill = new GameObject("Fill", typeof(Image));
+            fill.transform.SetParent(row.transform, false);
+            var frt = fill.GetComponent<RectTransform>();
+            frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+            frt.offsetMin = new Vector2(2f, 2f); frt.offsetMax = new Vector2(-2f, -2f);
+            var fimg = fill.GetComponent<Image>();
             // Selected = warmer fill; unselected = the dark stone plate.
-            img.color = selected
+            fimg.color = selected
                 ? new Color(ElarionUi.PanelStone.r * 1.35f, ElarionUi.PanelStone.g * 1.30f,
                             ElarionUi.PanelStone.b * 1.10f, 0.95f)
                 : new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g,
                             ElarionUi.PanelStoneDark.b, 0.85f);
+            fimg.raycastTarget = false;
 
-            // Selected card carries a gilt left border (shape marker, not colour alone).
+            // Selected card carries a gilt left border (shape marker, not colour alone) --
+            // the same text/shape-encoded discipline as the "*" on the selected tab.
             if (selected)
             {
                 var edge = new GameObject("SelEdge", typeof(Image));
@@ -571,25 +933,22 @@ namespace DeNelle.Village.Hero
                 ert.anchorMax = new Vector2(0f, 1f);
                 ert.pivot = new Vector2(0f, 0.5f);
                 ert.offsetMin = Vector2.zero;
-                ert.offsetMax = new Vector2(6f, 0f);
+                ert.offsetMax = new Vector2(8f, 0f);
                 var ei = edge.GetComponent<Image>();
                 ei.color = ElarionUi.Gilt;
                 ei.raycastTarget = false;
             }
 
-            // Line 1: title (bold parchment) + right-aligned state pip.
-            // Iteration 2 (capture RumorBoard_daily defect 1): FIXED-PIXEL bands — the old
-            // fraction band (0.52-0.94 of the 112px card = 47px) under-heighted the FontBody
-            // (50) line and TMP CULLED it whole, leaving titleless rows in the edit-mode
-            // capture AND play mode alike. 62px holds one FontBody line; the hook band below
-            // holds one FontMicro line. Same fixed-RowPx pattern DailyQuestHud proved out.
+            // Line 1: title (bold parchment) + the state as a CHIP -- the same widget the
+            // detail pane uses, so the list and the detail speak ONE language (WO-866).
             bool hasPip = !string.IsNullOrEmpty(pip);
             var titleGo = new GameObject("Title", typeof(TMPro.TextMeshProUGUI));
             titleGo.transform.SetParent(row.transform, false);
             var trt = titleGo.GetComponent<RectTransform>();
             trt.anchorMin = new Vector2(0.04f, 1f);
-            trt.anchorMax = new Vector2(hasPip ? 0.74f : 0.96f, 1f);
-            trt.offsetMin = new Vector2(0f, -66f);
+            trt.anchorMax = new Vector2(hasPip ? 0.70f : 0.96f, 1f);
+            // 66px band: one FontBody(50) line box is 62.5 -- anything shorter culls the line.
+            trt.offsetMin = new Vector2(0f, -70f);
             trt.offsetMax = new Vector2(0f, -4f);
             var tt = titleGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(tt);
@@ -598,26 +957,22 @@ namespace DeNelle.Village.Hero
             tt.fontStyle = TMPro.FontStyles.Bold;
             tt.color = ElarionUi.Parchment;
             tt.alignment = TMPro.TextAlignmentOptions.Left;
-            tt.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
-            tt.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             tt.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(tt, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
 
             if (hasPip)
             {
-                var pipGo = new GameObject("Pip", typeof(TMPro.TextMeshProUGUI));
-                pipGo.transform.SetParent(row.transform, false);
-                var prt = pipGo.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.74f, 1f);
+                // A right-aligned one-chip row: fixed 48px band, so it can never be culled.
+                var pipRow = MakeChipRow(row.transform, "PipRow",
+                    topPx: 8f, heightPx: ChipHeightPx, fromBottomPx: -1f,
+                    sideFrac: 0f, spacingPx: ChipSpacingPx, align: TextAnchor.MiddleRight);
+                var prt = pipRow;
+                prt.anchorMin = new Vector2(0.70f, 1f);
                 prt.anchorMax = new Vector2(0.96f, 1f);
-                prt.offsetMin = new Vector2(0f, -56f);
-                prt.offsetMax = new Vector2(0f, -8f);
-                var pt = pipGo.GetComponent<TMPro.TextMeshProUGUI>();
-                ElarionUiKit.EnsureFont(pt);
-                pt.text = pip;
-                pt.fontSize = ElarionUi.FontMicro;
-                pt.color = pipGilt ? ElarionUi.Gilt : ElarionUi.ParchmentDim;
-                pt.alignment = TMPro.TextAlignmentOptions.Right;
-                pt.raycastTarget = false;
+                prt.pivot = new Vector2(0.5f, 1f);
+                prt.sizeDelta = new Vector2(0f, ChipHeightPx);
+                prt.anchoredPosition = new Vector2(0f, -8f);
+                MakeChip(pipRow, pip);
             }
 
             // Line 2: one-line hook, dim, ellipsized (never wraps into a third line).
@@ -626,19 +981,20 @@ namespace DeNelle.Village.Hero
             var hrt = hookGo.GetComponent<RectTransform>();
             hrt.anchorMin = new Vector2(0.04f, 0f);
             hrt.anchorMax = new Vector2(0.96f, 0f);
-            hrt.offsetMin = new Vector2(0f, 4f);
-            hrt.offsetMax = new Vector2(0f, 44f);
-            var ht = hookGo.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(ht);
-            ht.text = hook;
-            ht.fontSize = ElarionUi.FontMicro;
-            ht.color = ElarionUi.ParchmentDim;
-            ht.alignment = TMPro.TextAlignmentOptions.Left;
-            ht.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
-            ht.overflowMode = TMPro.TextOverflowModes.Ellipsis;
-            ht.raycastTarget = false;
+            // 44px band under the 66px title inside a 124px card: 4px of clearance between
+            // them, and one whole FontMicro(32) line box (40) so the hook is never culled.
+            hrt.offsetMin = new Vector2(0f, 6f);
+            hrt.offsetMax = new Vector2(0f, 50f);
+            var ht2 = hookGo.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(ht2);
+            ht2.text = hook;
+            ht2.fontSize = ElarionUi.FontMicro;
+            ht2.color = ElarionUi.ParchmentDim;
+            ht2.alignment = TMPro.TextAlignmentOptions.Left;
+            ht2.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(ht2, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
 
-            // The whole card is the select target — no buttons live in rows (WO-810).
+            // The whole card is the select target -- no buttons live in rows.
             var btn = row.AddComponent<Button>();
             btn.targetGraphic = img;
             ElarionUiKit.StyleButtonColors(btn);
@@ -655,7 +1011,7 @@ namespace DeNelle.Village.Hero
             Repaint();   // repaints the card highlight + rebinds the detail
         }
 
-        // ── Detail pane (WO-810 — always bound to the selection) ─────────────────
+        // -- Detail pane (always bound to the selection) --------------------------
 
         private void RenderDetail()
         {
@@ -669,10 +1025,8 @@ namespace DeNelle.Village.Hero
             if (_selectedId == null || _selectedKind == RowKind.None)
             {
                 _detailTitle.text = "The Board Awaits";
-                ElarionUiKit.FitSingleLine(_detailTitle);
-                _detailBody.text = "Select a rumor to read the full tale.\n\n" +
-                    "Whispers gather here from every corner of Elarion - pick one up, and Brom will " +
-                    "point you where the trouble started.";
+                ElarionUiKit.FitSingleLine(_detailTitle, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+                _detailBody.text = "Pick a rumor on the left and Brom will tell you where the trouble started.";
                 _detailBody.fontSize = ElarionUi.FontLabel;
                 ElarionUiKit.FitBlock(_detailBody, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
                 return;
@@ -681,70 +1035,64 @@ namespace DeNelle.Village.Hero
             if (_selectedKind == RowKind.Daily)
             {
                 var d = FindDaily(_selectedId);
-                MakeChip(_detailTagRow, "Daily Quest", ElarionUi.ParchmentDim);
+                MakeChip(_detailTagRow, "Daily Quest");
                 if (d.HasValue)
-                    MakeChip(_detailTagRow, d.Value.Completed ? "Complete" : "In Progress",
-                        d.Value.Completed ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
+                    MakeChip(_detailTagRow, d.Value.Completed ? "Complete" : "In Progress");
                 _detailTitle.text = d.HasValue ? d.Value.Title : _selectedId;
-                ElarionUiKit.FitSingleLine(_detailTitle);
+                ElarionUiKit.FitSingleLine(_detailTitle, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
                 string prog = d.HasValue
-                    ? "Objectives:\n- " + (d.Value.Completed
+                    ? (d.Value.Completed
                         ? "Complete (" + d.Value.Target + "/" + d.Value.Target + ")"
-                        : d.Value.Progress + "/" + d.Value.Target)
+                        : d.Value.Progress + " of " + d.Value.Target)
                     : "";
-                _detailBody.text = prog +
-                    "\n\nDaily quests reset with the day. Finish them for a steady trickle of rewards.";
+                _detailBody.text = "Objective: " + prog + "\nDailies reset with the day.";
                 _detailBody.fontSize = ElarionUi.FontLabel;
                 ElarionUiKit.FitBlock(_detailBody, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
-                return;   // dailies have no CTA — they advance through play
+                return;   // dailies have no CTA -- they advance through play
             }
 
             bool active = _selectedKind == RowKind.Active;
             string title = TitleOf(_selectedId);
             bool tracked = IsTracked(_selectedId);
 
-            // Tag chips (signed spec): quest type + state — bordered shape + the word, never
-            // colour alone (colourblind law).
-            MakeChip(_detailTagRow, _vm.TypeFor(_selectedId) + " Quest", ElarionUi.ParchmentDim);
-            MakeChip(_detailTagRow,
-                active ? (tracked ? "Tracked" : "In Progress") : "New",
-                active && tracked ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
+            // Tag chips: quest type + state. Bordered shape + the WORD, one ink, never colour.
+            MakeChip(_detailTagRow, _vm.TypeFor(_selectedId) + " Quest");
+            MakeChip(_detailTagRow, active ? (tracked ? "Tracked" : "In Progress") : "New");
 
             _detailTitle.text = title;
-            ElarionUiKit.FitSingleLine(_detailTitle);
+            ElarionUiKit.FitSingleLine(_detailTitle, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
 
-            // Body: the tale + an ASCII-bullet objectives section (signed spec).
+            // Body: the objective, in the band's honest budget. The old copy repeated the hook
+            // and then appended the SAME generic paragraph to every quest -- filler that made
+            // the pane read as a template, and it did not render at all (the band was -11 px).
             _detailBody.text = active
-                ? "Objectives:\n- " + _vm.ObjectiveFor(_selectedId) +
-                  "\n\nThis rumor is underway. Track pins it to your HUD so you always know the next step."
-                : _vm.HookFor(_selectedId) +
-                  "\n\nObjectives:\n- " + _vm.HookFor(_selectedId) +
-                  "\n\nAccept this rumor to add it to your ledger. Brom will point you where the trouble started.";
+                ? "Objective: " + _vm.ObjectiveFor(_selectedId) +
+                  "\nTrack pins it to your HUD."
+                : "Objective: " + _vm.HookFor(_selectedId) +
+                  "\nAccept to add it to your ledger.";
             _detailBody.fontSize = ElarionUi.FontLabel;
             ElarionUiKit.FitBlock(_detailBody, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
 
-            // Reward chips (signed spec): one gilt-bordered chip per authored reward part.
-            // The VM hands over READY-TO-DRAW parts — resolved item display names included —
-            // so the View no longer re-parses a joined string to find the chip boundaries.
+            // Reward chips: one chip per authored reward part. The VM hands over READY-TO-DRAW
+            // parts (resolved item display names included) -- the View never re-parses a joined
+            // string to find the chip boundaries.
             var rewardParts = _vm.RewardPartsFor(_selectedId);
             if (rewardParts != null)
                 foreach (var part in rewardParts)
                     if (!string.IsNullOrEmpty(part))
-                        MakeChip(_detailRewardRow, part, ElarionUi.Gilt, ChipMinFontPx);
+                        MakeChip(_detailRewardRow, part, ChipMinFontPx);
 
-            // CTA row — pinned at the pane's bottom, full words, >= the touch floor. The
-            // pane now lives inside the bodyRight zone, whose floor already clears Close.
+            // CTA row -- bottom-hung FIXED-PIXEL band at the kit touch floor, inside the pane's
+            // declared budget (DetailFixedStackPx). The kit's close-band reservation already
+            // keeps the well clear of the shared Close.
             _detailCtaGo = new GameObject("DetailCta", typeof(RectTransform));
             _detailCtaGo.transform.SetParent(_detailPane, false);
             var crt = _detailCtaGo.GetComponent<RectTransform>();
-            // Fixed-pixel CTA band (iteration 2): CanonCtaHeight bottom-hung — matches the
-            // reward/tag bands and never scales below the touch floor with the zone height.
-            crt.anchorMin = new Vector2(0.05f, 0f);
-            crt.anchorMax = new Vector2(0.95f, 0f);
+            crt.anchorMin = new Vector2(0.04f, 0f);
+            crt.anchorMax = new Vector2(0.96f, 0f);
             crt.pivot = new Vector2(0.5f, 0f);
-            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
-            crt.sizeDelta = new Vector2(0f, ElarionUiKit.CanonCtaHeight);
-            crt.anchoredPosition = new Vector2(0f, 8f);
+            crt.sizeDelta = new Vector2(0f, DetailCtaPx);
+            crt.anchoredPosition = new Vector2(0f, DetailPadPx);
 
             string id = _selectedId;
             if (!active)
@@ -752,15 +1100,15 @@ namespace DeNelle.Village.Hero
                 ElarionUiKit.BuildObsidianButton(_detailCtaGo.transform, "Accept",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                     new Vector2(0f, 0f), new Vector2(0.52f, 1f), () => OnAccept(id));
-                // Signed spec: Track rides SECONDARY beside Accept — accept-and-pin in one
-                // visit (Track on an available rumor accepts it first, then pins + closes).
+                // Track rides SECONDARY beside Accept -- accept-and-pin in one visit (Track on
+                // an available rumor accepts it first, then pins + closes).
                 ElarionUiKit.BuildObsidianButton(_detailCtaGo.transform, "Track",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.56f, 0f), new Vector2(1f, 1f), () => { OnAccept(id); OnTrack(id); });
             }
             else
             {
-                // Tracked = affirmative Green + the word carries the state (never colour-only).
+                // The WORD carries the state ("Pinned" vs "Track") -- never colour alone.
                 ElarionUiKit.BuildObsidianButton(_detailCtaGo.transform,
                     tracked ? "Pinned" : "Track",
                     ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -802,16 +1150,16 @@ namespace DeNelle.Village.Hero
             return t;
         }
 
-        // ── Chip rows (WO-810 follow-up — the signed spec's tag/reward chips) ────
+        // -- Chip rows (the ONE chip language) -----------------------------------
 
-        /// <summary>A left-aligned horizontal chip host as a FIXED-PIXEL band (iteration 2:
-        /// fraction bands scaled with the zone and under-heighted the chips — TMP culled
-        /// their labels whole). Top-hung at <paramref name="topPx"/> below the pane top, or
-        /// bottom-hung at <paramref name="fromBottomPx"/> above the pane bottom when &gt;= 0.
-        /// Chips are rebuilt into it per selection (RenderDetail).</summary>
+        /// <summary>A horizontal chip host as a FIXED-PIXEL band (a fraction band scales with
+        /// the zone, under-heights the chips and TMP culls their labels whole). Top-hung at
+        /// <paramref name="topPx"/> below the parent top, or bottom-hung at
+        /// <paramref name="fromBottomPx"/> above the parent bottom when &gt;= 0.</summary>
         private static RectTransform MakeChipRow(Transform parent, string name,
             float topPx, float heightPx, float fromBottomPx = -1f,
-            float sideFrac = 0.05f, float spacingPx = 8f)
+            float sideFrac = 0.04f, float spacingPx = 8f,
+            TextAnchor align = TextAnchor.MiddleLeft)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
             go.transform.SetParent(parent, false);
@@ -826,31 +1174,33 @@ namespace DeNelle.Village.Hero
             var hlg = go.GetComponent<HorizontalLayoutGroup>();
             hlg.childControlWidth = true; hlg.childForceExpandWidth = false;
             hlg.childControlHeight = true; hlg.childForceExpandHeight = false;
-            hlg.childAlignment = TextAnchor.MiddleLeft;
+            hlg.childAlignment = align;
             hlg.spacing = spacingPx;
             return rt;
         }
 
-        /// <summary>One bordered chip: dim-gilt border frame, obsidian fill, micro label.
-        /// Shape (the border) + the word carry the meaning — never colour alone.
-        /// The chip is sized from its label's MEASURED width and the label is FITTED to the
-        /// chip, so a crowded row shrinks text INSIDE the borders instead of painting it
-        /// across the next chip (see the ChipPadPx block for the captured proof).</summary>
-        private static void MakeChip(RectTransform row, string text, Color ink, float minFontPx = 0f)
+        /// <summary>ONE chip: gilt-dim border frame, obsidian fill, parchment micro label.
+        /// WO-866: the SAME widget, ink and border for a type tag, a state tag, a list row's
+        /// state pip and a reward -- the review found three visual languages for one class of
+        /// information. Shape (the border) + the WORD carry the meaning; nothing is encoded in
+        /// colour (colourblind law). The chip is sized from its label's MEASURED width and the
+        /// label is FITTED to the chip, so a crowded row shrinks text INSIDE the borders
+        /// instead of painting it across the next chip.</summary>
+        private static void MakeChip(RectTransform row, string text, float minFontPx = 0f)
         {
             if (row == null || string.IsNullOrEmpty(text)) return;
 
             var chip = new GameObject("Chip", typeof(Image), typeof(LayoutElement));
             chip.transform.SetParent(row, false);
             var borderImg = chip.GetComponent<Image>();
-            borderImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.55f);
+            borderImg.color = ChipBorder;
             borderImg.raycastTarget = false;
             var le = chip.GetComponent<LayoutElement>();
-            // Height 48 inside the 56px row: the fill inset leaves a 44px label rect, which
-            // seats the FontMicro (~40px) line box AND the fitted floor's (~33px) — never
+            // Height 48 inside the 48px row: the fill inset leaves a 44px label rect, which
+            // seats the FontMicro (~40px) line box AND the fitted floor's (~33px) -- never
             // culled vertically, which is why Ellipsis is safe on this label (below).
             le.preferredHeight = ChipHeightPx;
-            le.flexibleWidth = 0f;   // a chip never absorbs slack — it stays word-sized
+            le.flexibleWidth = 0f;   // a chip never absorbs slack -- it stays word-sized
 
             var fill = new GameObject("Fill", typeof(Image));
             fill.transform.SetParent(chip.transform, false);
@@ -858,7 +1208,7 @@ namespace DeNelle.Village.Hero
             frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
             frt.offsetMin = new Vector2(2f, 2f); frt.offsetMax = new Vector2(-2f, -2f);
             var fillImg = fill.GetComponent<Image>();
-            fillImg.color = new Color(0.05f, 0.045f, 0.04f, 1f);
+            fillImg.color = ChipFill;
             fillImg.raycastTarget = false;
 
             var lblGo = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
@@ -870,28 +1220,26 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.EnsureFont(t);
             t.text = text;
             t.fontSize = ElarionUi.FontMicro;
-            t.color = ink;
+            t.color = ElarionUi.Parchment;   // ONE ink for every chip
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
             t.raycastTarget = false;
 
-            // MEASURE the label (TMP's own metrics, rect-independent — valid at build time,
-            // before any layout pass) and size the chip to it. The old text.Length*18+28 guess
-            // is what over-asked the row into the shrink that garbled the capture.
+            // MEASURE the label (TMP's own metrics, rect-independent -- valid at build time,
+            // before any layout pass) and size the chip to it.
             float textW = t.GetPreferredValues(text).x;
-            if (textW <= 1f) textW = text.Length * 14f;   // font atlas not ready — honest estimate
+            if (textW <= 1f) textW = text.Length * 14f;   // font atlas not ready -- honest estimate
             le.preferredWidth = textW + ChipPadPx;
             le.minWidth = 0f;   // a too-full row still shrinks rather than spilling off the pane
 
             // FIT the label to whatever width the chip ends up with: bounded auto-size, then
-            // Ellipsis. The old Overflow was the run-together's second half — a shrunken chip
-            // let its text paint over the neighbours. Ellipsis's vertical-cull trap does not
-            // apply here: the 44px label rect seats the floor's line box with room to spare.
+            // Ellipsis. The 44px label rect seats the floor's line box with room to spare, so
+            // Ellipsis's vertical-cull trap does not apply here.
             ElarionUiKit.FitSingleLine(t, minFontPx > 0f ? minFontPx : ElarionUiKit.FontFloor,
                                        ElarionUi.FontMicro);
         }
 
-        // ── Commands ────────────────────────────────────────────────────────────
+        // -- Commands ------------------------------------------------------------
 
         private void OnAccept(string id)
         {
@@ -903,10 +1251,10 @@ namespace DeNelle.Village.Hero
         private void OnTrack(string id)
         {
             // The VM pins it (SetTracked) then invokes onClose -> this View's Close.
-            _vm?.Track(id);
+            if (_vm != null) _vm.Track(id);
         }
 
-        // ── Helpers ─────────────────────────────────────────────────────────────
+        // -- Helpers -------------------------------------------------------------
 
         private void SetStatus(string s)
         {
@@ -924,7 +1272,7 @@ namespace DeNelle.Village.Hero
         }
 
         /// <summary>Destroys immediately in edit mode (the UICaptureLaunch headless-screenshot
-        /// path repaints without Play — runtime Destroy is edit-illegal), normally in play.</summary>
+        /// path repaints without Play -- runtime Destroy is edit-illegal), normally in play.</summary>
         private static void SafeDestroy(GameObject go)
         {
             if (go == null) return;
