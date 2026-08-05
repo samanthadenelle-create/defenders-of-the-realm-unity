@@ -36,6 +36,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;   // heartStatus scene gate (see ApplyHeartSceneGate)
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core;
@@ -129,6 +130,15 @@ namespace DeNelle.HUD.Kit
 
         private bool _startWaveAvailable;
         private float _chipsExpandUntil;   // collapsed chips: tap-expand window
+
+        // heartStatus scene gate (ApplyHeartSceneGate): the hub test is cached per ACTIVE
+        // SCENE (Scene.name allocates a string, and the gate runs on every occupancy apply
+        // AND every frame's availability poll), and the decision is logged only when it
+        // FLIPS, so a per-frame poll cannot spam the trace.
+        private int _heartGateSceneHandle = int.MinValue;
+        private bool _heartGateIsHub;
+        private string _heartGateSceneName = string.Empty;
+        private int _heartGateLogged = -1;   // -1 unknown, 0 hidden, 1 shown
 
         /// <summary>Build the whole kit under a fresh HudAreasHost.</summary>
         public static HudKitController Create(VillageHudController owner)
@@ -922,6 +932,10 @@ namespace DeNelle.HUD.Kit
                 new Vector2(0.70f, 0.10f), new Vector2(0.83f, 0.95f), HudCommands.Potion);
             var healIcon = UiStyle.Icon("potion", "consumable", "heal");
             if (healIcon != null) _hpPotionSlot.SetIcon(healIcon);
+            // Owner ruling 2026-08-05: the potion badges are STACK counts, not ability charges —
+            // an empty larder must render a literal ASCII "0" rather than the blank face a
+            // single-potion stack shows. Opt in per-slot; every other action slot is unchanged.
+            _hpPotionSlot.showZero = true;
             Register("hpPotionSlot", WrapAsWidget("hpPotionSlot", _hpPotionSlot.root));
 
             _manaPotionSlot = ElarionUiKit.BuildActionSlot(pool,
@@ -929,6 +943,7 @@ namespace DeNelle.HUD.Kit
             var manaIcon = UiStyle.Icon("mana", "consumable", "crystal");
             if (manaIcon == null) manaIcon = UiStyle.Icon("potion", "consumable", "mana");
             if (manaIcon != null) _manaPotionSlot.SetIcon(manaIcon);
+            _manaPotionSlot.showZero = true;   // stack semantics, same ruling as the HP slot
             Register("manaPotionSlot", WrapAsWidget("manaPotionSlot", _manaPotionSlot.root));
 
             if (FeatureFlags.CombatHud611)
@@ -1422,16 +1437,22 @@ namespace DeNelle.HUD.Kit
                 // so a used-up or unbound potion still greys out even when not cooling.
                 _hpPotionSlot.SetCooldown(c.HpCooldownRemaining, c.HpCooldownTotal);
                 if (_hpPotionSlot.button != null)
+                    // Owner ruling 2026-08-05: the count term is GONE from this predicate. A tap at
+                    // ZERO must be RECEIVED so ConsumableUseService's empty-larder branch can tell the
+                    // player what is wrong and where to get more — a dead button absorbs the tap with
+                    // no trace, which is the silence the owner reported. The COOLDOWN term stays, so a
+                    // cooling potion keeps its existing greyed-out behaviour (the sweep already says why).
                     _hpPotionSlot.button.interactable =
-                        c.HpPotionCount > 0 && HudCommands.HasPotion && c.HpCooldownRemaining <= 0f;
+                        HudCommands.HasPotion && c.HpCooldownRemaining <= 0f;
             }
             if (_manaPotionSlot != null)
             {
                 _manaPotionSlot.SetCount(c.ManaPotionCount);
                 _manaPotionSlot.SetCooldown(c.ManaCooldownRemaining, c.ManaCooldownTotal);
                 if (_manaPotionSlot.button != null)
+                    // Same ruling as the HP slot: tap-at-zero is received (toast), cooldown still greys.
                     _manaPotionSlot.button.interactable =
-                        c.ManaPotionCount > 0 && HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f;
+                        HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f;
             }
         }
 
@@ -1679,6 +1700,7 @@ namespace DeNelle.HUD.Kit
             // Dynamic gates on top of the rows (availability, never layout):
             if (_widgets.TryGetValue("fleeButton", out var flee) && flee.activeSelf)
                 flee.SetActive(HudCommands.HasFlee);
+            ApplyHeartSceneGate(posture);
             // WO-835: relay the posture key to the applicability model (a relay of the
             // notification this View already receives — the key->set mapping lives in
             // the model). A set change comes back as ActiveButtonsChanged -> render.
@@ -1690,6 +1712,55 @@ namespace DeNelle.HUD.Kit
 
             FlowTrace.Step("HudKit", "occupancy applied: posture " + HudPostureKeys.Key(posture) +
                            " -> " + shown + " widgets live");
+        }
+
+        // ---------------------------------------------------------------------
+        // heartStatus SCENE GATE (owner felt-test, Seeker: the "Heart of Elarion"
+        // bar rendered INSIDE Dungeon_HealersCottage).
+        //
+        // The Heart is the VILLAGE world-tree; its status bar has no meaning outside a
+        // hub/town scene. hud-areas.json RIGHTLY lists heartStatus in calm(town) AND in
+        // hostile(prebattle|activebattle) — a wave defence is exactly the situation the
+        // bar exists for — but posture alone cannot tell a village wave from a dungeon
+        // fight: in the dungeon the evaluator resolved hostile(activebattle) (correctly)
+        // and the row fired, so the bar appeared. The row is NOT the bug and must NOT be
+        // edited; the missing SCENE test is. So this is a dynamic availability gate ON TOP
+        // of the rows — the exact fleeButton/HudCommands.HasFlee precedent above.
+        //
+        // In the hub every posture that lists heartStatus still shows it: IsHub() is true
+        // there, so `want` collapses to pure row membership (today's behaviour, unchanged).
+        private void ApplyHeartSceneGate(HudPosture posture)
+        {
+            GameObject heart;
+            if (_config == null || !_widgets.TryGetValue("heartStatus", out heart) || heart == null)
+                return;
+
+            var scene = SceneManager.GetActiveScene();
+            if (scene.handle != _heartGateSceneHandle)
+            {
+                _heartGateSceneHandle = scene.handle;
+                _heartGateSceneName = scene.name;
+                _heartGateIsHub = HubScenes.IsHub(_heartGateSceneName);
+                _heartGateLogged = -1;   // re-announce the decision once per scene
+            }
+
+            bool inRow = _config.Occupancy(posture).ContainsKey("heartStatus");
+            bool want = inRow && _heartGateIsHub;
+            if (heart.activeSelf != want) heart.SetActive(want);
+
+            // Project law: a decision leaves a logged line. This runs per occupancy apply
+            // AND per frame, so log ONLY on a flip (and once per scene) — never per frame.
+            int decision = want ? 1 : 0;
+            if (decision == _heartGateLogged) return;
+            _heartGateLogged = decision;
+            if (inRow && !_heartGateIsHub)
+                FlowTrace.Warn("HudKit", "heartStatus: posture " + HudPostureKeys.Key(posture) +
+                               " lists it, but scene '" + _heartGateSceneName +
+                               "' is not a hub -> scene gate HIDES it (the Heart is village-only)");
+            else
+                FlowTrace.Step("HudKit", "heartStatus scene gate: " + (want ? "show" : "hide") +
+                               " (scene " + _heartGateSceneName + ", hub " + _heartGateIsHub +
+                               ", inRow " + inRow + ")");
         }
 
         private void Update()
@@ -1717,6 +1788,10 @@ namespace DeNelle.HUD.Kit
                             _config.Occupancy(_evaluator.Posture).ContainsKey("fleeButton");
                 if (flee.activeSelf != want) flee.SetActive(want);
             }
+            // Same cheap poll for the Heart's scene gate: a scene change (hub -> dungeon)
+            // need not move the posture, so the ApplyPosture call alone can be missed.
+            // Self-throttled (cached hub test, log only on a flip) — see ApplyHeartSceneGate.
+            if (_evaluator != null) ApplyHeartSceneGate(_evaluator.Posture);
             // Collapsed chips: the tap-expand window temporarily shows the full row.
             if (_widgets.TryGetValue("resourceChipsCollapsed", out var col) && col.activeSelf &&
                 _widgets.TryGetValue("resourceChips", out var row))

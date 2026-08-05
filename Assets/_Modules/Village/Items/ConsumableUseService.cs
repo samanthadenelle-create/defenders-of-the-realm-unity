@@ -26,6 +26,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Village.Crafting;
 using DeNelle.Core.Diagnostics; // WO3: FlowTrace self-reporting for the percent/over-time potions
+using DeNelle.Core.UI;          // 2026-08-05: ElarionUiKit.ShowToast — the ONE transient toast
+                                // (BankOverflowToastPresenter precedent) for the empty-larder tell
 
 namespace DeNelle.Village.Items
 {
@@ -83,6 +85,12 @@ namespace DeNelle.Village.Items
             if (inv.Get(consumableId) <= 0)
             {
                 Debug.Log("[ConsumableUse] none in larder: " + consumableId);
+                // Owner ruling 2026-08-05: an empty larder must SAY SO. Until now this branch only
+                // wrote a Debug.Log, so tapping the potion belt at zero was completely silent to the
+                // player. Route it through the ONE canonical transient toast (ElarionUiKit.ShowToast,
+                // the BankOverflowToastPresenter precedent) — no new toast layer. The words carry the
+                // meaning; never a colour-only cue (owner is red/green colourblind). ASCII only.
+                ElarionUiKit.ShowToast(EmptyLarderLine(def), ElarionUiKit.ToastTone.Danger, 3.4f);
                 return false;
             }
 
@@ -106,6 +114,31 @@ namespace DeNelle.Village.Items
                 _nextReadyAt[consumableId] = Time.time + def.UseCooldown;
 
             return true;
+        }
+
+        // ── Empty-larder copy (owner ruling 2026-08-05) ──────────────────────────
+        // The line must name the potion TYPE and give BOTH remedies. Locations verified
+        // from the catalogs, NOT assumed:
+        //   CRAFT -> the "Apothecary" station (CraftingStationInjector.StationLabel) is the
+        //            only thing in the world that opens PanelId.ConsumableCrafting, which is
+        //            where consumable-recipes.json is brewed (craft-minor-heal-potion,
+        //            craft-survival-mana-potion). There is no potion bench at the Workshop.
+        //   BUY   -> vendors.json "market" / displayName "Market Stalls" is the sole vendor
+        //            whose categories include "consumable"; both potions carry a `price`.
+        private const string CraftPlace = "Apothecary";
+        private const string BuyPlace = "Market Stalls";
+
+        /// <summary>ASCII, colour-free "you have none" line naming the item and both remedies.</summary>
+        private static string EmptyLarderLine(ConsumableDef def)
+        {
+            string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
+                ? def.DisplayName
+                : (def != null && !string.IsNullOrEmpty(def.Id) ? def.Id : "that item");
+            // Cheap ASCII plural: "Minor Healing Draught" -> "Draughts"; anything already
+            // ending in 's' ("Traveler's Rations") is left alone.
+            if (!name.EndsWith("s") && !name.EndsWith("S")) name += "s";
+            return "Out of " + name + ". Craft one at the " + CraftPlace
+                 + ", or buy one at the " + BuyPlace + ".";
         }
 
         private static void ApplyEffect(ConsumableDef def)

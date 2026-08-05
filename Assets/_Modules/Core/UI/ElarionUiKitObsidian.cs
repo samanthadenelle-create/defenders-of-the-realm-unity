@@ -897,6 +897,14 @@ namespace DeNelle.Core.UI
             public TMP_Text cdText;
             /// <summary>Stack/charge count (bottom-right).</summary>
             public TMP_Text count;
+            /// <summary>OPT-IN stack semantics for <see cref="SetCount"/> (default FALSE — every
+            /// existing caller keeps the charge-badge behaviour: blank at 0 and 1, digits from 2).
+            /// Set TRUE on slots whose count is a CONSUMABLE STACK (the potion belt), where an
+            /// EMPTY larder must READ as empty instead of looking identical to a full-but-single
+            /// stack. When true the badge renders the literal digit for every n &gt;= 0, so zero
+            /// shows an ASCII "0". Owner ruling 2026-08-05: the DIGIT carries the meaning — never
+            /// signal empty by colour (owner is red/green colourblind).</summary>
+            public bool showZero;
             /// <summary>The tap target.</summary>
             public Button button;
             /// <summary>Optional centered TEXT face (lazy — built on first <see cref="SetLabel"/>);
@@ -976,7 +984,12 @@ namespace DeNelle.Core.UI
             {
                 if (count == null || n == _shownCount) return;
                 _shownCount = n;
-                count.text = n > 1 ? n.ToString() : "";
+                // Charge badge (default): 0 and 1 are both blank — a lone charge needs no "1".
+                // Stack badge (showZero): every n >= 0 prints, so an empty stack reads "0" instead
+                // of rendering the same blank face a full single stack does. ASCII digits only.
+                count.text = showZero
+                    ? (n >= 0 ? n.ToString() : "")
+                    : (n > 1 ? n.ToString() : "");
             }
         }
 

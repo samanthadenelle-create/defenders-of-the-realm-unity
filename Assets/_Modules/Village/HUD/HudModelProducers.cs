@@ -497,7 +497,22 @@ namespace DeNelle.Village.Hud
         protected override void Poll()
         {
             if (_heart == null || !_heart) _heart = Object.FindAnyObjectByType<HeartController>();
-            if (_heart == null) return; // no Heart in this scene -> leave at default
+            if (_heart == null)
+            {
+                // NO HEART IN THIS SCENE -> publish an explicit EMPTY, do NOT early-return.
+                // The old bare `return` left WorldMetricsModel holding the HUB's last pushed
+                // Hp across a scene change, so anything that rendered the Heart bar outside
+                // the village drew a plausible FILLED bar (owner felt-test, Seeker: full
+                // "Heart of Elarion" bar inside Dungeon_HealersCottage) and the
+                // "[Flow:HUD] heart <hp>/<max>" line never re-fired to show it. Belt-and-
+                // braces behind the HUD's scene gate: any future leak now reads EMPTY and
+                // is visible in the trace. Published ONCE (the _heartHp latch keeps the
+                // 0.5s poll quiet afterwards); SetMetrics does the throttled trace itself.
+                if (_heartHp == 0 && _towers == 0) return;
+                _heartHp = 0; _towers = 0;
+                Model.World.SetMetrics(0, 0, 0f, 0, 0, 0, 0f, 0, 0, 0, 0, null);
+                return;
+            }
 
             int heartHp = Mathf.CeilToInt(Mathf.Max(0f, _heart.Hp));
             int maxHp = Mathf.CeilToInt(HeartMaxHp);
