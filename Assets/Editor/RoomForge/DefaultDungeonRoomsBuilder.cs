@@ -32,6 +32,11 @@ namespace DeNelle.Editor.RoomForge
         private const float Cell = 6f;
         private const string Sys = "RoomForgeDefaults";
 
+        /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
+        /// write canonical JSON: that overload emits a leading EF BB BF which fails the
+        /// static check-in gate's JSON parse.</summary>
+        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
+
         private struct RoomSpec
         {
             public string id;
@@ -487,10 +492,14 @@ namespace DeNelle.Editor.RoomForge
         private static void WriteCatalog(RoomCatalogFile catalog)
         {
             string json = JsonConvert.SerializeObject(catalog, Formatting.Indented);
+            // Encoding.UTF8 EMITS A BOM - a leading EF BB BF fails the static
+            // check-in gate's canonical-JSON parse and is invisible to the EditMode
+            // integrity test (File.ReadAllText silently eats it). Always UTF8-no-BOM
+            // on a canonical path.
             bool wrote = Guard.Try("RoomForge", "write rooms-catalog dual-copy", () =>
             {
-                File.WriteAllText(CatalogPath, json, Encoding.UTF8);
-                File.WriteAllText(CatalogPathRes, json, Encoding.UTF8);
+                File.WriteAllText(CatalogPath, json, Utf8NoBom);
+                File.WriteAllText(CatalogPathRes, json, Utf8NoBom);
             });
             FlowTrace.Step("RoomForge", $"catalog write entries={catalog.rooms.Count} dualCopy={(wrote ? "ok" : "FAILED")} " +
                                         $"(StreamingAssets + Resources)");

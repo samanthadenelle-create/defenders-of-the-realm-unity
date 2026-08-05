@@ -24,6 +24,11 @@ namespace DeNelle.Editor.RoomForge
         private const string CatalogPath = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts/rooms-catalog.json";
         private const float CellSize = 6f;
 
+        /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
+        /// write canonical JSON: that overload emits a leading EF BB BF which fails the
+        /// static check-in gate's JSON parse.</summary>
+        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
+
         private string _roomId = "EntryHall";
         private string _archetype = "hub";
         private string _theme = "default";
@@ -453,10 +458,14 @@ namespace DeNelle.Editor.RoomForge
             string resDir = "Assets/Resources/Data/Canonical/dungeon-layouts";
             EnsureFolder(resDir);
             string resPath = resDir + "/rooms-catalog.json";
+            // Encoding.UTF8 EMITS A BOM - a leading EF BB BF fails the static
+            // check-in gate's canonical-JSON parse and is invisible to the EditMode
+            // integrity test (File.ReadAllText silently eats it). Always UTF8-no-BOM
+            // on a canonical path.
             bool wrote = Guard.Try("RoomForge", "write rooms-catalog dual-copy", () =>
             {
-                File.WriteAllText(CatalogPath, json, Encoding.UTF8);
-                File.WriteAllText(resPath, json, Encoding.UTF8);
+                File.WriteAllText(CatalogPath, json, Utf8NoBom);
+                File.WriteAllText(resPath, json, Utf8NoBom);
             });
             FlowTrace.Step("RoomForge", $"catalog write id='{meta.roomId}' entries={file.rooms.Count} " +
                                         $"dualCopy={(wrote ? "ok" : "FAILED")} (StreamingAssets + Resources)");

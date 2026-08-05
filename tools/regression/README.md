@@ -72,6 +72,44 @@ Exit code `0` = clean, non-zero = at least one hard failure (printed with the
 offending path). **A non-zero static gate blocks the hand-off** — fix it or flag
 CLI before proceeding.
 
+### Bridge reflection — the allowlist is a design record, not a mute button (2026-08-04)
+
+`REFLECTION_BRIDGE_ALLOWLIST` in `static_gate.py` maps each reflection-using
+`*Bridge*.cs` to **why it cannot be a direct call**. The standing reason is
+CLAUDE.md §5: `DeNelle.Village` must never reference `DeNelle.HUD` (check 4 of this
+same gate enforces it), and the only sanctioned seam — `CoreServices.Hud`, typed as
+`IVillageHud` — does not declare the members these bridges push. Reflection is the
+deliberate architecture-preserving choice there.
+
+- The gate **prints every allowlisted entry with its reason on each run**, so the
+  list stays reviewed rather than silently accumulating.
+- It also reports **stale** entries (registered but no longer using reflection, or
+  gone) as a NOTE, so the list gets pruned when code improves.
+- **Adding an entry is a design decision.** First prove the member is genuinely
+  absent from `Assets/_Modules/Core/HUD/IVillageHud.cs`. If it is on the interface,
+  call it through `CoreServices.Hud` and do *not* register the file.
+- The proper long-term fix is to promote the shared members onto `IVillageHud` and
+  delete the reflection wholesale — a Core+HUD refactor with its own work order.
+
+### Canonical JSON coverage (2026-08-04)
+
+Check 5 scans **both** `Assets/Resources/Data/Canonical` and
+`Assets/StreamingAssets/Data/Canonical`. Resources is the WebGL runtime authority
+(Resources wins at load) and was **not** scanned until 2026-08-04 — a corrupt file
+on the runtime path could never fail the gate. The former third entry,
+`Assets/Data/Canonical`, was a dead orphan copy nothing read; it was deleted and
+de-listed the same day.
+
+Two traps this check exists to catch, both of which the EditMode
+`CanonicalJsonIntegrityTest` **cannot** see:
+
+- **UTF-8 BOM.** `File.ReadAllText` silently eats a BOM, so the EditMode test passes
+  on a BOM'd file; this gate reads strict UTF-8 and rejects it. When writing
+  canonical JSON from C#, never use `Encoding.UTF8` (it *emits* a BOM) — use
+  `new UTF8Encoding(false)`.
+- **Truncation.** A half-written file is invalid JSON here even when nothing loads
+  it at runtime.
+
 > Note: on the Linux mount, very large files can occasionally read *truncated*
 > due to the known mount/Windows sync lag (CLAUDE.md §0). If the gate flags a
 > brace mismatch on a file you did not touch, re-run on Windows (CLI) — the file

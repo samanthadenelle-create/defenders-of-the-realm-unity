@@ -42,19 +42,68 @@ DEFAULT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir, os.pardir))
 # Directories we never scan for .cs (generated / third-party build output).
 SKIP_DIRS = {"Library", "Temp", "obj", "Build", "Builds", "Logs", ".git", ".vs"}
 
-# Bridge files that ALREADY use System.Reflection as of WO-329. These are
-# grandfathered: the gate only fails on NEW *Bridge*.cs that introduce it.
-# (Path is repo-relative, forward slashes.) Keep this list frozen; if a real
-# refactor removes reflection from one of these, deleting its entry is fine.
-REFLECTION_BRIDGE_BASELINE = {
-    "Assets/_Modules/Pets/MineNodeBridge.cs",
-    "Assets/_Modules/Pets/PetAttackVfxBridge.cs",
-    "Assets/_Modules/Village/Buildings/BuildMenuHudBridge.cs",
-    "Assets/_Modules/Village/BuildMode/BuildButtonBridge.cs",
-    "Assets/_Modules/Village/Heart/HeartHudBridge.cs",
-    "Assets/_Modules/Village/Hero/HeroAbilitiesHudBridge.cs",
-    "Assets/_Modules/Village/NPCs/PartyHudBridge.cs",
-    "Assets/_Modules/Village/Walls/WallRepairHudBridge.cs",
+# Bridge files ALLOWED to use System.Reflection, each with the reason it cannot
+# be expressed as a direct call. The gate only fails on a NEW *Bridge*.cs that
+# introduces reflection without being registered here.
+#
+# WHY THESE EXIST (the standing architectural reason, CLAUDE.md section 5):
+#   DeNelle.Village must NEVER reference DeNelle.HUD (check 4 below enforces that
+#   in the same run). The only sanctioned cross-module seam is CoreServices.Hud,
+#   typed as DeNelle.Core.HUD.IVillageHud. Every entry below reaches a member that
+#   lives on the CONCRETE VillageHudController but is NOT declared on IVillageHud,
+#   so a direct call is impossible without either (a) a forbidden assembly
+#   reference or (b) widening the Core interface. Reflection is the deliberate,
+#   architecture-preserving choice - NOT an oversight.
+#
+# ADDING AN ENTRY IS A DESIGN DECISION, NOT A WAY TO SILENCE THE GATE. Before you
+# add one, prove the member is genuinely absent from IVillageHud
+# (Assets/_Modules/Core/HUD/IVillageHud.cs). If it IS on the interface, call it
+# through CoreServices.Hud instead and do not register the file here.
+#
+# The proper long-term fix for the HUD bridges is to promote the shared members
+# onto IVillageHud so the reflection can be deleted wholesale; that is a Core+HUD
+# refactor with its own work order, not something to smuggle into a gate cleanup.
+#
+# (Path is repo-relative, forward slashes.)
+REFLECTION_BRIDGE_ALLOWLIST = {
+    # --- pre-WO-329 baseline -------------------------------------------------
+    "Assets/_Modules/Pets/MineNodeBridge.cs":
+        "reads MineNode state / SetWorkerClaim + TryAutoExtract across a module boundary",
+    "Assets/_Modules/Pets/PetAttackVfxBridge.cs":
+        "invokes the VFX kit's static SpawnAbilityVfx without linking the VFX assembly",
+    "Assets/_Modules/Village/Buildings/BuildMenuHudBridge.cs":
+        "binds VillageHudController.BuildRequested (UnityEvent field, not on IVillageHud)",
+    "Assets/_Modules/Village/BuildMode/BuildButtonBridge.cs":
+        "binds VillageHudController.BuildRequested (UnityEvent field, not on IVillageHud)",
+    "Assets/_Modules/Village/Heart/HeartHudBridge.cs":
+        "pushes SetGold + resource setters; resolves the HUD by type name pre-registration",
+    "Assets/_Modules/Village/Hero/HeroAbilitiesHudBridge.cs":
+        "pushes SetMana/SetHeroHp/SetAbilityCooldown/SetAbilitySlot, none on IVillageHud",
+    "Assets/_Modules/Village/NPCs/PartyHudBridge.cs":
+        "pushes SetPartyMember/SetPartyMemberVisible, neither on IVillageHud",
+    "Assets/_Modules/Village/Walls/WallRepairHudBridge.cs":
+        "pushes HideRepairPrompt/ShowRepairFeedback, neither on IVillageHud",
+
+    # --- pre-existing at HEAD, registered 2026-08-04 -------------------------
+    # These 7 were written after the WO-329 baseline froze and had never been
+    # surfaced, because checkin_gate.ps1 did not parse under PowerShell 5.1 and
+    # so no stage of it had ever run. Each was verified against IVillageHud
+    # (2026-08-04): every member reached below is absent from that interface, so
+    # none of them has a reflection-free seam available today.
+    "Assets/_Modules/Village/Arena/ArenaHudBridge.cs":
+        "calls VillageHudController.SetHudVisible(bool) - not on IVillageHud",
+    "Assets/_Modules/Village/BuildMode/BuildModeHudBridge.cs":
+        "calls VillageHudController.SetHudVisible(bool) - not on IVillageHud",
+    "Assets/_Modules/Village/Hero/RaidEntryBridge.cs":
+        "binds VillageHudController.RaidRequested (UnityEvent field) - not on IVillageHud",
+    "Assets/_Modules/Village/HUD/TownHudBridge.cs":
+        "pushes SetWaveProgress/SetTownMetrics/SetLookoutStatus/SetPassiveXp - none on IVillageHud",
+    "Assets/_Modules/Village/Vfx/ComboHudBridge.cs":
+        "pushes SetComboCount/SetKillStreak - neither on IVillageHud",
+    "Assets/_Modules/Village/Waves/StartWaveHudBridge.cs":
+        "binds StartWaveRequested (UnityEvent field) + calls SetStartWaveAvailable(bool) - neither on IVillageHud",
+    "Assets/_Modules/Village/Waves/WaveHudBridge.cs":
+        "calls VillageHudController.SetEnemyCount(int,int) - not on IVillageHud",
 }
 
 # Mutually-exclusive assembly pairs (neither may reference the other).
@@ -62,9 +111,15 @@ ASMDEF_FORBIDDEN_PAIRS = [
     ("DeNelle.Village", "DeNelle.HUD"),
 ]
 
-# Canonical JSON dirs (repo-relative). Both are scanned if present.
+# Canonical JSON dirs (repo-relative). All are scanned if present.
+#
+# Assets/Resources/Data/Canonical is the WebGL runtime authority (Resources WINS
+# at load) and was NOT scanned here until 2026-08-04 - a real coverage hole: a
+# corrupt file on the *runtime* path could never fail this gate. Assets/Data/
+# Canonical was a dead orphan third copy that nothing read; it was deleted the
+# same day and its entry removed, so the gate no longer implies it is live.
 CANONICAL_DIRS = [
-    "Assets/Data/Canonical",
+    "Assets/Resources/Data/Canonical",
     "Assets/StreamingAssets/Data/Canonical",
 ]
 
@@ -220,16 +275,31 @@ def check_braces(files, root):
 
 # --- 2) bridge reflection ----------------------------------------------------
 def check_bridge_reflection(cs_files, root):
+    """Returns (failures, allowed_hits, stale_allowlist_entries).
+
+    `allowed_hits` are registered files that really do still use reflection.
+    `stale_allowlist_entries` are allowlist paths that no longer exist or no
+    longer use reflection - so the allowlist cannot quietly rot into a list of
+    permanent excuses nobody re-reads.
+    """
     failures = []
+    allowed_hits = []
+    seen = set()
     for path in cs_files:
         if "Bridge" not in os.path.basename(path):
             continue
         relpath = rel(root, path)
-        if relpath in REFLECTION_BRIDGE_BASELINE:
+        uses = "System.Reflection" in read(path)
+        if relpath in REFLECTION_BRIDGE_ALLOWLIST:
+            seen.add(relpath)
+            if uses:
+                allowed_hits.append(relpath)
             continue
-        if "System.Reflection" in read(path):
-            failures.append((relpath, "new System.Reflection in a bridge script"))
-    return failures
+        if uses:
+            failures.append((relpath, "new System.Reflection in a bridge script "
+                                      "(not in REFLECTION_BRIDGE_ALLOWLIST)"))
+    stale = sorted(set(REFLECTION_BRIDGE_ALLOWLIST) - set(allowed_hits))
+    return failures, allowed_hits, stale
 
 
 # --- 3) IDamageableStructure using -------------------------------------------
@@ -348,7 +418,23 @@ def main(argv):
     total_fail += report(check_braces(brace_targets, root))
 
     print(f"\n--- 2. Bridge reflection ({n_bridge} bridge files) ---")
-    total_fail += report(check_bridge_reflection(all_cs, root))
+    refl_failures, refl_allowed, refl_stale = check_bridge_reflection(all_cs, root)
+    total_fail += report(refl_failures)
+    # Show the allowlist every run: a silently-suppressed list is a list nobody
+    # re-reads. These are ARCHITECTURAL decisions (Village must not link HUD),
+    # each with a recorded reason - not unreviewed debt.
+    if refl_allowed:
+        print(f"  ({len(refl_allowed)} allowlisted, reason on file - see "
+              f"REFLECTION_BRIDGE_ALLOWLIST):")
+        for relpath in sorted(refl_allowed):
+            print(f"    - {relpath}: {REFLECTION_BRIDGE_ALLOWLIST[relpath]}")
+    if refl_stale:
+        # Not a hard failure: a stale entry means the code got BETTER (reflection
+        # removed) or a file moved. Surface it so the allowlist gets pruned.
+        print(f"  NOTE: {len(refl_stale)} allowlist entr(y/ies) no longer use "
+              f"reflection or no longer exist - prune them:")
+        for relpath in refl_stale:
+            print(f"    ? {relpath}")
 
     print("\n--- 3. IDamageableStructure using-directive ---")
     total_fail += report(check_idamageable_using(all_cs, root))

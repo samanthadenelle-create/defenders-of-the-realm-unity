@@ -84,6 +84,11 @@ namespace DeNelle.Editor.RoomForge
         private const string LayoutsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts";
         private const string StarterGraph = "dg_starter_loop.json";
         private const string Sys = "DungeonGraph";
+
+        /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
+        /// write canonical JSON: that overload emits a leading EF BB BF which fails the
+        /// static check-in gate's JSON parse.</summary>
+        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
         // Emitted layout uses cellSize=1 so cell=[x,y,z] carries the exact solved world
         // coords (default kit is grid-aligned to integer units) with no quantization loss.
         private const float EmitCellSize = 1f;
@@ -167,8 +172,11 @@ namespace DeNelle.Editor.RoomForge
             EnsureFolder(LayoutsFolder);
             string layoutAssetPath = $"{LayoutsFolder}/{layout.dungeonId}.json";
             string outJson = JsonConvert.SerializeObject(layout, Formatting.Indented);
+            // UTF8-no-BOM: Encoding.UTF8 emits a leading EF BB BF that fails the
+            // static check-in gate's canonical-JSON parse (this writes into
+            // StreamingAssets/Data/Canonical/dungeon-layouts).
             bool wrote = Guard.Try(Sys, "write composed layout json", () =>
-                File.WriteAllText(ToFilesystemPath(layoutAssetPath), outJson, Encoding.UTF8));
+                File.WriteAllText(ToFilesystemPath(layoutAssetPath), outJson, Utf8NoBom));
             if (!wrote)
             {
                 FlowTrace.Fail(Sys, $"failed to write composed layout {layoutAssetPath} - abort");
