@@ -1,6 +1,43 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-04 (CLI): next free WO = **857**. **782–856 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-04 (CLI): main line next free = **902**. **782–859 + 900/901 CONSUMED.**
+>
+> ### ⛔ THE MAIN LINE HAS COLLIDED WITH THE UI-SEAT BLOCK — READ BEFORE MINTING
+> The main line consumed 859 and the next number, 860, is **inside the UI seat's reserved 860–899**
+> (860/861/862/863 already consumed there). **The two blocks have MET.** The main line therefore
+> **jumps to 900+**; the UI seat keeps 860–899 (next free 864). Any main-line mint below 900 from here
+> is a guaranteed collision. Owner ratification of a permanent main-line range is now overdue.
+>
+> - **901** = **THE COLLECTOR LOOP (umbrella)** — owner directive "consolidate those into one idea and
+>   implement". One idea: *your town keeps producing while you are away, into containers that visibly
+>   fill to a cap and then stop, and storage raises what the town can hold.* Folds 857/858/859/900 into
+>   one sequence (phases 0/A–G) and rules on their overlap. **⚠ Ruling: Grok's 858 icon half and CLI's
+>   900 tell are the SAME FEATURE — `CollectorStackView` (437 lines) already implements it and `Attach`
+>   has ZERO CALLERS. WIRE IT, do not build it.** Phase F (wallet clamp) deliberately WITHHELD from the
+>   autonomous pass — it clamps `EconomyService.Grant`, which every income path flows through.
+>   File `WORK_ORDER_901_the_collector_loop.md`. **IN PROGRESS.**
+> - **900** = **Collector "I am full" tell** — appendix of 901, phases D/E. `CollectorStackView.Attach`
+>   has zero callers (recorded WO-783:186 + `UiObsidianConformanceRegression.cs:168`, never fixed): a
+>   WIRING fix, not a UI build. HUD chip via a Core status gate mirroring `ObsidianQueueGate` — NOT
+>   `IVillageHud` (that is imperative push; this is a polled snapshot). No new reflection.
+>   File `WORK_ORDER_900_collector_full_tell.md`. **READY.**
+> - **859** = **Per-collector capacity in HOURS + offline accrual** — appendix of 901, phases 0/A/B/C.
+>   Collectors have NO offline accrual (zero consumers of `LastHarvestClaimMs`), and the capacity curve
+>   **runs backwards**: capacity grows x3 L1→L5 while throughput grows x5.6, so upgrading a collector
+>   SHORTENS unattended runtime (6-echo L5 farm fills in **5.7 min**). ⚠ **Carries a P0 `35485f31` did
+>   NOT close: `ResourceCollectorBootstrap.EnsureFallbackCollector` creates live collectors
+>   UNCONDITIONALLY without consulting `everBuiltStructureIds`** — a blank town earns again, and full
+>   town income accrues while the player is in a DUNGEON. Prove headless before editing (§12).
+>   File `WORK_ORDER_859_collector_capacity_hours_and_offline_accrual.md`. **READY.**
+>   ⚠ **Renumbered from a collided 858 mint** — Grok's 858 was first-on-disk-and-referenced and wins.
+>
+> *(banner bumped 859 → 902 in the SAME edit as the 859 + 900 + 901 mint)*
+> - **858** = **Collector resource icons + high-value invasion targets** — billboard wood/iron/food/crystal
+>   icons when pending (tap=Collect); catalog siegeValue/highValueTarget for premium collectors.
+>   File `WORK_ORDER_858_collector_resource_icons_and_siege_value.md`, READY.
+> - **857** = **CoC resource storage caps + HUD have/max** — bank max from lumberyard/foundry/silo
+>   (`storageCapacity`) + baseCap; clamp grants; chips `current/max`. Collectors stay pending-only.
+>   File `WORK_ORDER_857_coc_resource_storage_caps_hud.md`, READY.
 > - **856** = **Crystal Mine actually pays out** — `mine_crystal` has never yielded a single crystal and
 >   cannot: payout is gated at L3 (`CrystalMine.cs:188`), `_currentLevel` is a private field that persists
 >   NOWHERE, and the catalog authors no `maxLevel`, so the upgrade verb answers `1 >= 1` and toasts
@@ -50,7 +87,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **857** (782–856 consumed) |
+> | **main line** | CLI | **902** (782–859 + 900/901 consumed; 860–899 belongs to the UI seat) |
 > | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
 >
 > ⚠ **This table drifted (2026-08-04).** It still read `853` while the header row above it read `856`
