@@ -136,12 +136,20 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **908** (782–859 + 900–907 consumed; 860–899 belongs to the UI seat) |
-> | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
+> | **860–899 reserved** | UI seat | **884** (860–883 consumed) |
 >
-> ⚠ **This table drifted (2026-08-04).** It still read `853` while the header row above it read `856`
-> — two numbers in ONE file, which is the same two-authority failure the header warns about. The
-> header is the authority; this table is a convenience mirror. **Bump BOTH rows in the same edit as
-> a mint, or delete this table.**
+> ⚠ **This table drifted AGAIN (corrected 2026-08-05).** The UI-seat row read `864` while
+> `WorkOrders/` holds an unbroken 860→883 — twenty numbers stale, and 864 itself is not only
+> consumed but is cited as a live dependency by the WO-905 spec ("depends on WO-864's rail
+> component"). Three of the range (878/879/880/881/882/883) shipped in commits `31888576`,
+> `d185f43c`, `572f1289`. Minting from this row would have collided on the first try — the exact
+> failure that struck five times on 2026-08-02. `CANON_GROUND_TRUTH_2026-08-05.md` §8 already had
+> 884 right; the SOLE AUTHORITY was the file that was wrong.
+>
+> ⚠ **Prior drift (2026-08-04).** It read `853` while the header row above it read `856` — two
+> numbers in ONE file, the same two-authority failure the header warns about. The header is the
+> authority; this table is a convenience mirror. **Bump BOTH rows in the same edit as a mint, or
+> delete this table.**
 >
 > - **863** = Vercel one-pager + hosted privacy policy (the two dApp Store listing URLs). File
 >   `WORK_ORDER_863_vercel_landing_and_privacy_page.md`, READY.
