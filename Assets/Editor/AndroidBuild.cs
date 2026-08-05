@@ -127,7 +127,49 @@ namespace DeNelle.Editor
             // ProjectSettings.asset (that would leak the secret into git).
             ApplyReleaseSigning();
 
+            // Every build must carry a DISTINCT, increasing version or tester builds are
+            // indistinguishable (see ApplyVersionStamp).
+            ApplyVersionStamp();
+
             Debug.Log($"[AndroidBuild] PlayerSettings: id={PackageId}, IL2CPP, ARM64, minSdk=26.");
+        }
+
+        /// <summary>
+        /// Stamps a UNIQUE, MONOTONIC version on every APK.
+        /// </summary>
+        /// <remarks>
+        /// Captured 2026-08-05, distributing the 08-05 build: Firebase App Distribution replied
+        /// <c>"re-uploaded already existing release 1.0 (1)"</c> — versionName/versionCode had never
+        /// been set, so every tester build overwrote the SAME release and a tester could not tell
+        /// one build from the next. Android also refuses an install whose versionCode goes
+        /// backwards, so a fixed code is a latent update failure too.
+        ///
+        /// Scheme: versionCode = minutes elapsed since 2026-01-01 UTC. Monotonic by construction,
+        /// STATELESS (no counter file to keep in sync across the owner's two machines — the drift
+        /// class that caused the magenta-terrain and 4-of-41-models incidents), and int-safe for
+        /// ~4000 years. versionName pairs the human-readable date with that same code.
+        ///
+        /// Bonus, deliberate: <c>bundleVersion</c> is what <c>Application.version</c> returns, which
+        /// feeds <c>WebTrace._buildId</c> and the bug-report <c>app_version</c> column. Those have
+        /// been reporting a constant "1.0" for every build, which is exactly why a magenta preview
+        /// and a healthy prod were indistinguishable in the trace DB (2026-07-15). This closes that
+        /// too.
+        /// </remarks>
+        private static void ApplyVersionStamp()
+        {
+            var epoch = new System.DateTime(2026, 1, 1, 0, 0, 0, System.DateTimeKind.Utc);
+            System.DateTime now = System.DateTime.UtcNow;
+
+            int code = (int)(now - epoch).TotalMinutes;
+            if (code <= 0) code = 1; // clock skew / pre-epoch guard — never emit 0 or negative.
+
+            string name = $"{now:yyyy.MM.dd}.{code}";
+
+            PlayerSettings.Android.bundleVersionCode = code;
+            PlayerSettings.bundleVersion = name;
+
+            Debug.Log($"[AndroidBuild] VERSION: name={name} code={code} " +
+                      "(monotonic — distinct App Distribution release per build).");
         }
 
         private static void ApplyReleaseSigning()

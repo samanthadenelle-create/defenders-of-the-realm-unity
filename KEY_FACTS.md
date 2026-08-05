@@ -282,6 +282,27 @@
   `structures-catalog.json` `visualPrefabPath` keys do not resolve on disk. Proposed 07-15, owner's call. *(2026-07-15)*
 
 ## Builds
+- **APK VERSION STAMPING (2026-08-05):** every Android build now stamps a **monotonic
+  `AndroidBundleVersionCode`** (minutes since 2026-01-01 UTC — stateless, no counter file to drift
+  across the two machines) plus a readable `bundleVersion` (`2026.08.05.312200`) via
+  `AndroidBuild.ApplyVersionStamp`. **Before this both were frozen at `1.0` / `1` forever**, so
+  (a) Firebase App Distribution folded EVERY tester build into one release — the upload literally
+  replies *"re-uploaded already existing release 1.0 (1)"* and testers cannot tell builds apart —
+  and (b) `Application.version`, which feeds `WebTrace._buildId` and the bug-report `app_version`
+  column, was the constant `"1.0"` that made a magenta preview and a healthy prod indistinguishable
+  in the trace DB (the 2026-07-15 incident). Android also refuses an install whose versionCode goes
+  backwards, so the frozen code was a latent update failure.
+- **Firebase = APK DISTRIBUTION ONLY (owner ruling 2026-08-05):** *"only for storing the APK not
+  changing from Neon."* Neon `/api/game/save` remains the save backend; **no Firestore migration**,
+  and **no re-adding email/Google/phone auth** (Android ships wallet-first per WO-837/847). The
+  Firebase console's "Add Firebase to your Android app" wizard shows the **Android Studio** path —
+  its `com.google.gms.google-services` Gradle plugin + `firebase-bom` snippets must **NEVER** be
+  applied here: this is Unity (`mainTemplate.gradle` is `com.android.library`, Groovy, template
+  tokens), the Firebase **Unity** SDK pre-generates
+  `Assets/Plugins/Android/FirebaseApp.androidlib/res/values/google-services.xml` instead, and the
+  dependency block between `// Android Resolver Dependencies Start/End` is EDM4U-generated and
+  overwritten on every resolve. Installed SDK = **13.14.0** (`firebase-app-unity`/`firebase-auth-unity`);
+  any added Firebase package MUST match that version.
 - **PROD (current) = the 07-16 six-fix build** — `q2v5vj86g`, promoted 2026-07-16, public, on
   `defenders-of-the-realm-v2.vercel.app`. Rollback target recorded in `Builds/PROD_ROLLBACK.txt`
   (prior prod `44dellx2j`). Commit `77e927be` (pushed to origin). *(2026-07-16)*
