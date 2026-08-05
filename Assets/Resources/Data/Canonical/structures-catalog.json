@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
   "entries": [
     {
@@ -38,7 +38,7 @@
           "Structures/Tower_Medieval_Big"
         ],
         "navSurface": "Blocker",
-        "heightMul": 1.25,
+        "heightMul": 1.2,
         "range": 14.0,
         "damage": 6.0,
         "fireRate": 2.5,

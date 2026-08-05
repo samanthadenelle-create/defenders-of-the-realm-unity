@@ -152,14 +152,17 @@ namespace DeNelle.Village
                     behaviorId = "DefenseTower",
                     buildCost  = 100,
                     navSurface = NavSurfaceKind.Blocker,
-                    heightMul = 1.25f,   // WO-764: tower = 1.25 × base (was absolute visualHeight 5)
+                    // MIRROR THE CATALOG: every value in this fallback must match the
+                    // tower_ground_archer row in structures-catalog.json — a drifted fallback
+                    // silently ships a different-sized tower whenever the JSON fails to load.
+                    heightMul = 1.2f,    // owner 2026-08-05: archer tower = 1.2 × base (4 m) = 4.8 m (was 1.25)
                     range = 14f, damage = 6f, fireRate = 2.5f,
                     canHitAir = false, element = DamageElement.None,
                     projectileStyle = "bolt",   // owner 2026-07-08: arrows, not pellets
                     placement = new PlacementRules
                     {
                         mustSitOn = PlacementSurface.Ground,
-                        footprint = 2.5f, noOverlap = true, checkAffordable = true,
+                        footprint = 1.75f, noOverlap = true, checkAffordable = true,   // matches catalog (was a drifted 2.5)
                     },
                 },
             });
