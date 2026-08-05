@@ -2,7 +2,7 @@
 
 **For:** the UI seat. **Numbers to be assigned by the owner** (UI-seat block 860–899).
 **Status:** SPEC — findings + intent. Not implemented.
-**Captured on:** Seeker `SM02G4061955851`, 2340×1080 landscape, build installed 22:20 (commit `829e5585`).
+**Captured on:** Seeker `SM02G4061955851`, **2670x1200** landscape (measured; an earlier draft said 2340x1080 - wrong, that is the harness size not the device surface), build installed 22:20 (commit `829e5585`).
 **Owner:** *"the one on screen now I think needs a little rework on styling."*
 
 **These are real device captures, not headless renders.** `RunCaptureHeadless` renders code-built panels
@@ -30,7 +30,7 @@ this project has hit repeatedly (WO-841 / WO-852 fraction-band culling), and its
 > **Text and content bands must be FIXED PIXELS >= the font line height — never a fraction of parent.**
 
 A layout expressed in percentages looks correct in the editor at one aspect and culls, clips or overlaps
-at 2340×1080. **Every fix below must use fixed-pixel bands.** If a rework replaces one fraction layout
+at the device surface (2670x1200). **Every fix below must use fixed-pixel bands.** If a rework replaces one fraction layout
 with another, it will regress the moment the aspect changes again.
 
 Binding on all of it: `MinTouchPx = 112`; **text-encoded state, never colour alone** (the owner is
@@ -113,8 +113,8 @@ right edge grouped into a deliberate column with consistent sizing.
 - **BUG: `Connect Wallet` is clipped** off the top-right corner. Not a capture crop — the button runs off
   the screen edge. On a device with rounded corners and a camera cutout this is worse. **It needs a safe-
   area inset.**
-- Thin black bars remain at left and right. The source art is a **1.49 ratio against the Seeker's 2.17**;
-  filling edge-to-edge needs new artwork at ~2340×1080, not a code change. **Do not "fix" this by
+- Thin black bars remain at left and right. The source art is a **1.49 ratio against the Seeker's 2.225** (2670/1200);
+  filling edge-to-edge needs new artwork at ~2670x1200, not a code change. **Do not "fix" this by
   switching to cover/crop** — the owner ruled fit-to-screen on 2026-07-16 and the title text is baked into
   the art, so cropping cuts the title off.
 
@@ -168,7 +168,7 @@ respect the WO-753 one-owner teardown rule so a destroyed portal does not orphan
 
 **Reference frames for the rebuild:** `08-portal-magenta.png` is the current state. The portal sits in
 open ground with nothing else competing for attention, so it carries the whole "there is somewhere to go"
-read on its own. It should be visible and legible from across the field at 2340x1080, not just up close.
+read on its own. It should be visible and legible from across the field at the device surface (2670x1200), not just up close.
 
 ---
 
@@ -183,4 +183,4 @@ rather than unpolished**, and should go first regardless of how the rest are gro
 4. Title — safe-area inset for `Connect Wallet` (small; could ride with any of the above)
 
 **`UI_CAPTURE_OK` is necessary but NOT sufficient here.** Every item above was invisible to headless
-capture. Verify on the Seeker at 2340×1080 — `adb shell screencap` then look at the PNG.
+capture. Verify on the Seeker at its real surface (2670x1200) — `adb shell screencap` then look at the PNG.
