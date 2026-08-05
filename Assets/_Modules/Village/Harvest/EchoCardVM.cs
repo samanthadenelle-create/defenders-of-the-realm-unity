@@ -12,8 +12,11 @@
 //
 // WO-830 (owner ruling 2026-08-02): the card's PRIMARY interaction is a per-Echo
 // RESOURCE PICKER -- Wood/Iron/Food/Gold/Crystals. The Echo's AFFINITY is a match
-// BONUS (flagged "(best -- this Echo's calling)" on the matching chip), never a
-// lock. The DISCLOSED pair-synergy status renders as its own line (SynergyText);
+// BONUS (flagged " - best" IN the matching chip's LABEL since WO-883; it used to be a
+// second text band under the chip, which duplicated the footer and was the row the
+// picker's scroll fold cut in half), never a lock. The full "(best -- this Echo's
+// calling)" phrasing survives in StateText, which is the footer's own line.
+// The DISCLOSED pair-synergy status renders as its own line (SynergyText);
 // the hidden tri-synergy is NEVER represented in any string here (Sec.3d).
 // The dead Crafting chip is REMOVED (Sec.3e default); Defense/Exploration stay
 // hidden (owner ruling 2026-07-24).
@@ -46,8 +49,8 @@ namespace DeNelle.Village
         public readonly struct ResourceChip
         {
             public readonly string Id;        // resource token ("wood"/"iron"/"food"/"gold"/"crystals")
-            public readonly string Label;     // resource name (+ " (now)" when selected -- TEXT cue, never hue)
-            public readonly string Note;      // affinity subtext (ASCII; may be "")
+            public readonly string Label;     // resource name (+ " - best" affinity cue, + " (now)" when selected -- TEXT, never hue)
+            public readonly string Note;      // WO-883: RETIRED, always "" (the View still supports a note band; nothing feeds it)
             public readonly bool Selected;    // this echo currently gathers this resource
             public readonly bool Preferred;   // this resource is the echo's AFFINITY (its match bonus lands here)
             public ResourceChip(string id, string label, string note, bool selected, bool preferred)
@@ -190,7 +193,8 @@ namespace DeNelle.Village
         /// <summary>The five live resource chips (WO-830 -- EchoAssignments.PickableResources).
         /// Selected state and the affinity "best" tag are carried AS TEXT (never hue) so the
         /// picker never misleads a colorblind player. Affinity is a bonus, never a lock: every
-        /// chip is always tappable.</summary>
+        /// chip is always tappable. WO-883: both cues live in <see cref="ResourceChip.Label"/>
+        /// -- <see cref="ResourceChip.Note"/> is now always "" (see the body for why).</summary>
         public ResourceChip[] ResourceChips()
         {
             string current = EchoAssignments.ResourceTokenOf(EchoIndex);
@@ -203,8 +207,20 @@ namespace DeNelle.Village
                 string res = resources[i];
                 bool sel = res == current;
                 bool preferred = res == affinityToken;
-                string label = EchoAssignments.ResourceLabelFor(res) + (sel ? " (now)" : "");
-                string note = preferred ? "best -- this Echo's calling" : "";
+                // WO-883: the affinity cue rides IN THE LABEL now; the separate per-chip note
+                // is retired. It was the VERBATIM tail of StateText, so the footer repeated it
+                // two lines down ("Gathering Food - Lv 1 - +5% (best -- this Echo's calling)"),
+                // and its extra 39.5px band made ONE row taller than the other four -- which is
+                // the row the picker's scroll fold sliced through mid-sentence on the owner's
+                // 2026-08-04 capture (docs/ui-review/screens-2026-08-04/EchoCard_2340x1080.png).
+                // With every row the same height the fold cuts a BUTTON, which reads as "scroll
+                // me" rather than as broken text. Order matters: " (now)" stays the LAST token
+                // so the selected cue is never split by the affinity cue. Both are TEXT, never
+                // hue (colorblind owner), and both are ASCII.
+                string label = EchoAssignments.ResourceLabelFor(res)
+                             + (preferred ? " - best" : "")
+                             + (sel ? " (now)" : "");
+                string note = "";
                 chips[i] = new ResourceChip(res, label, note, sel, preferred);
             }
             return chips;

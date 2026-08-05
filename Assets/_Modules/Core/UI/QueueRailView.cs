@@ -61,6 +61,18 @@
 // touches nothing else. Sprites are cached by QueueIconResolver. No per-frame work
 // beyond an int compare; zero cost while the host is inactive.
 //
+// ── WO-883 POLISH (owner capture 2026-08-04) ────────────────────────────────
+// The name band printed "Arcane S..." at FULL size in a card wide enough to seat the
+// whole name a point or two smaller: TMP's auto-size does NOT shrink when overflowMode
+// is Ellipsis, it truncates. FitToWidth (below) now measures the string with TMP's own
+// metrics at REBUILD time and sets the size; the ellipsis is the last resort only.
+// The clock SPRITE beside the timer stays UNBUILT and deliberately so — there is no
+// clock in any RpgUiCatalog role (verified on disk 2026-08-04: icons/ holds 11 sprites,
+// none a clock; concept-icons.json has no time key; the only clock art in the project is
+// Resources/HudIcons/hud_wave_clock.png, a gold cog MEDALLION that reads as a blob at the
+// ~30px the timer band allows). The WO said "if cheap"; it is not, so the timer stays
+// gold TEXT until a readable clock sprite is authored.
+//
 // ASCII ONLY in every TMP string (LiberationSans SDF has no clock glyph -> tofu),
 // and state is carried by TEXT ("FREE" / "QUEUED" / the verb), never by colour —
 // the owner is red/green colourblind.
@@ -98,6 +110,10 @@ namespace DeNelle.Core.UI
 
         private const int VerbFont  = 26;
         private const int NameFont  = 26;
+        // The smallest the NAME may shrink to before it is allowed to ellipsize. Same floor
+        // StretchLabel's auto-size already used (Mathf.Max(16, font * 0.6)) — kept as a named
+        // constant so the width fit below and the auto-size floor can never drift apart.
+        private const int NameFontMin = 16;
         private const int TimerFont = 30;
         private const int BadgeFont = 24;
         private const int InitialFont = 44;
@@ -471,6 +487,9 @@ namespace DeNelle.Core.UI
                 NameFont, dim ? ElarionUi.ParchmentDim : ElarionUi.Parchment, bold: false);
             name.text = Ascii(e.Label);
             name.overflowMode = TextOverflowModes.Ellipsis;
+            // Band() insets the band 4px each side of the card, so this is the real span the
+            // name has to live in. Fit BEFORE the ellipsis gets a chance to fire (WO-883).
+            FitToWidth(name, w - 8f, NameFont, NameFontMin);
 
             // 5. TIMER — the ONLY place a countdown is printed. The host header carries
             //    none, which is what kills the double-timer (WO-864 bug 1).
@@ -575,15 +594,53 @@ namespace DeNelle.Core.UI
             // Ellipsis, never Overflow: an over-long string must be clipped INSIDE its card,
             // not painted across the neighbouring card and past the rail's edge.
             t.overflowMode = TextOverflowModes.Ellipsis;
-            // ...but SHRINK before truncating. A narrow card (a channel with many slots) was
-            // rendering the state word as "QUE..." in the 2026-08-03 capture, which destroys
+            // ...and try to SHRINK before truncating. A narrow card (a channel with many slots)
+            // was rendering the state word as "QUE..." in the 2026-08-03 capture, which destroys
             // the whole point of encoding state as TEXT rather than colour. Auto-size floors
             // at 60% so the band stays fixed-pixel and the word stays whole.
+            // !! WO-883 CORRECTION: this alone does NOT shrink. TMP truncates instead of
+            // reducing the size whenever overflowMode is Ellipsis, which is why the 2026-08-04
+            // capture still read "Arcane S..." at full size. Any label that must actually fit
+            // has to be measured — see FitToWidth, which the NAME band now goes through.
             t.enableAutoSizing = true;
             t.fontSizeMax = font;
             t.fontSizeMin = Mathf.Max(16f, font * 0.6f);
             if (bold) t.fontStyle = FontStyles.Bold;
             return t;
+        }
+
+        // Shrink ONE label until its single line actually fits the card's REAL width.
+        //
+        // WHY THIS EXISTS (owner capture docs/ui-review/screens-2026-08-04/QueueCardRail_
+        // 2340x1080.png): the build card printed "Arcane S..." at FULL SIZE inside a band wide
+        // enough to seat the whole of "Arcane Spire" a point or two smaller. StretchLabel above
+        // sets enableAutoSizing AND overflowMode = Ellipsis, and in that combination TMP
+        // TRUNCATES instead of reducing the size — so the auto-size floor never got a chance to
+        // do the job the WO-864 comment says it does. Auto-size is therefore turned OFF here and
+        // the size is derived from TMP's OWN measurement of the string, which is decidable
+        // without a layout pass. Ellipsis stays armed as the last resort for a card too narrow
+        // for even NameFontMin (the always-on HUD chip) — where it now clips a whole word
+        // instead of the two letters the owner saw.
+        //
+        // CHEAP: called from BuildCard only, i.e. on a SHAPE change. The 1s tick still touches
+        // timer text and nothing else (WO-864 §4b — do not move this into RefreshTimers).
+        private static void FitToWidth(TextMeshProUGUI t, float availPx, int baseFont, int minFont)
+        {
+            if (t == null || availPx <= 1f) return;
+            t.enableAutoSizing = false;
+            t.fontSize = baseFont;
+            if (string.IsNullOrEmpty(t.text)) return;
+
+            // Parameterless overload deliberately: it measures the ASSIGNED text with
+            // unconstrained margins. The (text, width, height) overload would take width 0 as a
+            // real 0px margin and hand back a useless number.
+            float need = Guard.Try("QueueUi", "measure card name width",
+                () => t.GetPreferredValues().x, fallback: 0f);
+            if (need <= 0.01f) return;                 // unmeasurable -> leave the base size
+
+            float room = availPx - 2f;                 // 1px of slack each side, never a hairline
+            if (need <= room) return;
+            t.fontSize = Mathf.Max(minFont, Mathf.Floor(baseFont * (room / need)));
         }
 
         // =====================================================================

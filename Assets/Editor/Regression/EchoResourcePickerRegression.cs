@@ -11,7 +11,9 @@
 // FIVE ASSERTION GROUPS:
 //   1. Chip projection    — EchoCardVM.ResourceChips(): exactly the 5 resources in
 //      PickableResources order; Selected on the assigned one (with the "(now)" TEXT
-//      cue); Preferred + the "calling" note ONLY on the affinity chip; ASCII-only.
+//      cue); Preferred + the "best" cue IN THE LABEL only on the affinity chip, and
+//      NO chip carries a Note any more (WO-883 — the note band duplicated the footer
+//      and was the one row the picker's scroll fold cut in half); ASCII-only.
 //   2. Picker verb        — vm.AssignResource("iron") writes through the seam
 //      (lane=harvest, resource=iron persisted); a bogus token is a logged no-op.
 //   3. Card strings       — StateText names the ASSIGNED resource + the (best) flag
@@ -156,10 +158,21 @@ namespace DeNelle.Editor
                     Fail($"chip '{c.Id}' Preferred={c.Preferred} (expected {expectPref} — affinity is Wood)");
                 if (expectSel && !c.Label.Contains("(now)"))
                     Fail($"selected chip '{c.Id}' label '{c.Label}' lacks the '(now)' TEXT cue (colorblind law)");
-                if (expectPref && string.IsNullOrEmpty(c.Note))
-                    Fail("affinity chip 'wood' has no calling note (the match bonus must be disclosed in TEXT)");
-                if (!expectPref && !string.IsNullOrEmpty(c.Note))
-                    Fail($"non-affinity chip '{c.Id}' carries a note '{c.Note}' (only the calling chip is annotated)");
+                // WO-883: the affinity cue moved OUT of a separate note band and INTO the chip
+                // label. The disclosure itself is NOT optional (colorblind law — the match
+                // bonus can never be carried by hue), only its home changed.
+                if (expectPref && c.Label.IndexOf("best", StringComparison.OrdinalIgnoreCase) < 0)
+                    Fail($"affinity chip '{c.Id}' label '{c.Label}' does not disclose the match bonus in TEXT " +
+                         "(the calling must be readable without colour)");
+                if (!expectPref && c.Label.IndexOf("best", StringComparison.OrdinalIgnoreCase) >= 0)
+                    Fail($"non-affinity chip '{c.Id}' label '{c.Label}' claims the match bonus (only the calling chip is flagged)");
+                // The note band is RETIRED. It was the verbatim tail of StateText, so the
+                // footer said it again two lines down, and it made ONE picker row 39.5px taller
+                // than the other four — the row the scroll fold sliced mid-sentence on the
+                // owner's 2026-08-04 capture (docs/ui-review/screens-2026-08-04/EchoCard_2340x1080.png).
+                if (!string.IsNullOrEmpty(c.Note))
+                    Fail($"chip '{c.Id}' carries a per-chip note '{c.Note}' again (WO-883 retired it: it duplicated " +
+                         "the footer's StateText and gave the fold a half-line of text to cut — keep the cue in the label)");
             }
         }
 

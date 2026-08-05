@@ -59,11 +59,18 @@ namespace DeNelle.Village
     {
         private const float LineHeightPx = 30f;
         private const float ActionRowHeightPx = 56f;
-        // 66, not the old 34: the header label renders at ElarionUi.FontBody (50), whose line
-        // box is ~60px — in a 34px row TMP culled the descenders, which the 2026-08-03 headless
-        // capture showed as "BUILDERS 1/2 busy" with its bottoms sliced off. Fixed-pixel band
-        // sized off the FONT, per the WO-841 lesson.
-        private const float HeaderHeightPx = 66f;
+        // 80, not the old 34 and not the WO-864 66: the header label renders at
+        // ElarionUi.FontBody (50), whose line box is ~60px, and AddStretchLabel seats it in
+        // 0.05..0.95 of the row — i.e. 90% of this constant. 34px culled the descenders
+        // outright (2026-08-03 capture). 66px gave the line 59.4px, a hair UNDER its own box,
+        // so the descenders of "...busy" spilled below the row and the next row's opaque card
+        // plate painted over them — the "descenders kiss the first card" defect in the
+        // 2026-08-04 capture (docs/ui-review/screens-2026-08-04/QueueCardRail_2340x1080.png).
+        // 80px seats the 60px box in 72px with ~6px of slack top and bottom, and the scroll
+        // column's own 4px spacing then reads as a real gap above the cards.
+        // (Side benefit: the +slot button sits at 0.10..0.90 of this row, so a taller row also
+        // shrinks how far ClampMinTouch has to grow it toward MinTouchPx=112.)
+        private const float HeaderHeightPx = 80f;
 
         private GameObject _modal;
         private RectTransform _listContent;   // MakeScrollZone content (layout.body host)

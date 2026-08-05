@@ -479,8 +479,79 @@ namespace DeNelle.Editor
             if (DeNelle.Core.UI.QueueIconResolver.Resolve(spire) == null)
                 failures.Add("QueueIconResolver did not reach Portraits/arcane-spire for 'tower_arcane_spire@15_7' — the leading category-token strip regressed");
 
+            // ── WO-883 polish pins (owner capture 2026-08-04, QueueCardRail_2340x1080.png) ──
+
+            // (g) THE NAME IS MEASURED, NOT LEFT TO AUTO-SIZE. The capture read "Arcane S..."
+            //     at FULL SIZE in a card wide enough to seat the whole of "Arcane Spire" a
+            //     point or two smaller. StretchLabel sets enableAutoSizing AND overflowMode =
+            //     Ellipsis, and in THAT combination TMP truncates instead of shrinking — so
+            //     the auto-size floor never fired horizontally and the WO-864 comment claiming
+            //     it would was wrong. The card must measure the string with TMP's own metrics
+            //     and set the size, keeping the ellipsis as the last resort only.
+            string railPath = Path.Combine(Application.dataPath, "_Modules/Core/UI/QueueRailView.cs");
+            if (!File.Exists(railPath))
+            {
+                failures.Add("QueueRailView.cs missing at " + railPath);
+            }
+            else
+            {
+                string railSrc = File.ReadAllText(railPath);
+                if (railSrc.IndexOf("FitToWidth") < 0)
+                    failures.Add("QueueRailView lost the card-name width fit (FitToWidth) — building names " +
+                                 "truncate mid-word at full size again ('Arcane S...', WO-883)");
+                if (railSrc.IndexOf("GetPreferredValues") < 0)
+                    failures.Add("QueueRailView no longer MEASURES the card name (TMP GetPreferredValues) before " +
+                                 "sizing it — auto-size + Ellipsis TRUNCATES rather than shrinks, which is exactly " +
+                                 "the defect WO-883 fixed; a fit that does not measure is a guess");
+                // NOTE: no blanket ASCII sweep on this file. Its comment banners are drawn with
+                // box-drawing characters, so a source-wide check would fail forever; the ASCII
+                // law that matters is on the RENDERED strings, and (c) above already asserts
+                // that on the real countdown output.
+                if (railSrc.IndexOf('\0') >= 0)
+                    failures.Add("QueueRailView.cs contains an embedded NUL byte (mount-garble, CLAUDE.md Sec.0)");
+            }
+
+            // (h) THE CHANNEL HEADER CLEARS THE CARDS. AddStretchLabel seats the header text in
+            //     0.05..0.95 of HeaderHeightPx and renders it at ElarionUi.FontBody, whose line
+            //     box is ~1.2em. At 66px the line got 59.4px — a hair under its own box — so the
+            //     descenders of "...busy" spilled below the row and the NEXT row's opaque card
+            //     plate painted over them. Demand the box PLUS a visible gap, not just non-clip.
+            float headerPx = PrivateConstFloat(typeof(ObsidianQueueHud), "HeaderHeightPx", failures);
+            if (headerPx > 0f)
+            {
+                const float lineBoxMul = 1.2f;    // TMP line box for the shipped SDF face
+                const float bandFrac = 0.90f;     // the label's 0.05..0.95 seat inside the row
+                const float gapPx = 8f;           // the "few px of gap" WO-883 asks for
+                float needed = (DeNelle.Core.UI.ElarionUi.FontBody * lineBoxMul + gapPx) / bandFrac;
+                if (headerPx < needed)
+                    failures.Add($"ObsidianQueueHud.HeaderHeightPx={headerPx} cannot seat a FontBody(" +
+                                 DeNelle.Core.UI.ElarionUi.FontBody + $") line box plus a gap inside its " +
+                                 $"0.05-0.95 label band (needs >= {needed:F0}) — the '...busy' descenders spill " +
+                                 "under the row and the first card's plate paints over them (WO-883)");
+            }
+
             log.AppendLine("  WO-864 card rail (reusable Build/HeightOf + no duplicate timer + free-slot card + " +
-                           "queued text + xN collapse + verb fallback) OK-checked");
+                           "queued text + xN collapse + verb fallback) + WO-883 polish (measured name fit + " +
+                           "header clears the cards) OK-checked");
+        }
+
+        /// <summary>Read a private const float (a compile-time literal field) by reflection —
+        /// the layout constants these oracles pin are deliberately not public API.</summary>
+        private static float PrivateConstFloat(System.Type t, string name, List<string> failures)
+        {
+            var f = t.GetField(name, BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (f == null)
+            {
+                failures.Add($"{t.Name}.{name} does not exist — the layout constant this oracle pins was renamed " +
+                             "or removed; re-point it rather than dropping the guard");
+                return 0f;
+            }
+            object v = f.GetValue(null);
+            if (v is float fv) return fv;
+            if (v is int iv) return iv;
+            if (v is double dv) return (float)dv;
+            failures.Add($"{t.Name}.{name} is not a numeric constant");
+            return 0f;
         }
 
         // Reach QueueRailView's private card model (snapshot entries + the FREE slots it
