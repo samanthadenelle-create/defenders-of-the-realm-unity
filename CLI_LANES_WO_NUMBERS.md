@@ -114,7 +114,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **902** (782–859 + 900/901 consumed; 860–899 belongs to the UI seat) |
+> | **main line** | CLI | **906** (782–859 + 900–905 consumed; 860–899 belongs to the UI seat) |
 > | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
 >
 > ⚠ **This table drifted (2026-08-04).** It still read `853` while the header row above it read `856`
