@@ -1,6 +1,20 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-03 (CLI / Grok economy): next free WO = **856**. **782–855 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-04 (CLI): next free WO = **857**. **782–856 CONSUMED.**
+> - **856** = **Crystal Mine actually pays out** — `mine_crystal` has never yielded a single crystal and
+>   cannot: payout is gated at L3 (`CrystalMine.cs:188`), `_currentLevel` is a private field that persists
+>   NOWHERE, and the catalog authors no `maxLevel`, so the upgrade verb answers `1 >= 1` and toasts
+>   "Max tier reached." on a freshly-built mine. Root cause is the ORACLE:
+>   `CrystalProductionRegression.cs:63-66` reflectively writes `_currentLevel` to max — a state no player
+>   can reach — while claiming to prove yield "at a reachable level". Fix pulls the level from the
+>   existing persisted `PlacedStructureData.level` (do NOT add a 4th level authority) and authors a
+>   `[2,4,7]` per-wave curve. File `WORK_ORDER_856_crystal_mine_pays_out.md`. **READY.**
+>   Spawns three separate WOs, NOT folded in: jeweler-as-crystal-upgrader (new feature, 5 ordered
+>   steps — author the ladder LAST); `HealingFountain` (identical bug, and worse: it authors
+>   `maxLevel:3` AND keeps the Coins F-key path, so two systems can each level one building); and a
+>   generic `ApplyTierStats` level-receiver seam.
+>
+> *(banner bumped 856 -> 857 in the SAME edit as the WO-856 mint — the rule that broke 5x on 08-02)*
 > - **855** = **Economy balance (mobile grind)** — data-first: tower/troop/gear costs, build+upgrade
 >   times, gather yields, difficulty light pass, **generic tower spam softcap** (cost mult only).
 >   NO system rewrites. File `WORK_ORDER_855_economy_balance_mobile_grind.md`, READY.
@@ -36,8 +50,13 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **853** (782–852 consumed) |
+> | **main line** | CLI | **857** (782–856 consumed) |
 > | **860–899 reserved** | UI seat | **864** (860/861/862/863 consumed) |
+>
+> ⚠ **This table drifted (2026-08-04).** It still read `853` while the header row above it read `856`
+> — two numbers in ONE file, which is the same two-authority failure the header warns about. The
+> header is the authority; this table is a convenience mirror. **Bump BOTH rows in the same edit as
+> a mint, or delete this table.**
 >
 > - **863** = Vercel one-pager + hosted privacy policy (the two dApp Store listing URLs). File
 >   `WORK_ORDER_863_vercel_landing_and_privacy_page.md`, READY.
