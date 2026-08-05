@@ -356,11 +356,39 @@ namespace DeNelle.Village.Arena
             // "BeginEncounter HERO-POS: pos=<no Player>" + "WarpHero: no 'Player' hero
             // found"). REFUSE to stage instead; callers handle false
             // (EncounterTrigger.RollbackHandoff clears the dungeon combat lock + re-arms).
-            if (GameObject.FindWithTag("Player") == null)
+            var stageHero = GameObject.FindWithTag("Player");
+            if (stageHero == null)
             {
                 FlowTrace.Fail("BattleArena",
                     "BeginEncounter REFUSED: no 'Player'-tagged hero in scene — a hero-less stage is a " +
                     "phantom fight that can never resolve. Caller rolls back its combat lock.");
+                return false;
+            }
+
+            // F8 2026-08-05 (dungeon unplayable from the first encounter) — the SAME refusal, widened.
+            // A hero-less stage was never the only unwinnable stage: the dungeon Keeper staged
+            // 'Player'-TAGGED but PARTIAL — no PlayerAttackController (she could not damage anything:
+            // captured 5x "[Flow:HudKit] attack fired but no PlayerAttackController in scene") and no
+            // HeroHealth (EnemyBrain deals damage ONLY through HeroHealth, so the enemy stood aware and
+            // in range doing nothing: 77x Idle_A against 69x inRange=True). Neither side could land a
+            // hit, so the fight could never resolve, so BattleLock never released — the run was
+            // softlocked from the first encounter. An UNWINNABLE fight must NEVER stage: refuse, NAME
+            // the missing component, and let the caller unwind (EncounterTrigger.RollbackHandoff
+            // clears the pending handoff + combat lock and re-arms the trigger).
+            bool canDealDamage = stageHero.GetComponent<DeNelle.Village.PlayerAttackController>() != null;
+            bool canTakeDamage = stageHero.GetComponent<DeNelle.Village.HeroHealth>() != null;
+            if (!canDealDamage || !canTakeDamage)
+            {
+                string missing = (!canDealDamage ? "PlayerAttackController" : string.Empty) +
+                                 (!canDealDamage && !canTakeDamage ? " + " : string.Empty) +
+                                 (!canTakeDamage ? "HeroHealth" : string.Empty);
+                FlowTrace.Fail("BattleArena",
+                    $"BeginEncounter REFUSED: hero '{stageHero.name}' is PARTIAL — missing {missing}. " +
+                    (!canDealDamage ? "Without PlayerAttackController the hero cannot damage the family. " : string.Empty) +
+                    (!canTakeDamage ? "Without HeroHealth nothing can damage the hero (EnemyBrain routes all hero damage through it). " : string.Empty) +
+                    "Either way the fight can NEVER resolve and BattleLock would latch forever. " +
+                    "Caller rolls back its combat lock. FIX THE RIG (HeroControlEnsurer." +
+                    "EnsureHeroCombatComponents), do not relax this gate.");
                 return false;
             }
 

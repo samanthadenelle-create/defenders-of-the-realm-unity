@@ -238,51 +238,11 @@ namespace DeNelle.Village
             if (!hero.CompareTag("Player")) hero.tag = "Player";
             if (!hero.TryGetComponent(out HeroLocomotion l)) l = hero.AddComponent<HeroLocomotion>();
             l.enabled = true;
-            if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
-            // Open-world combat readability: reticle over the nearest hostile target.
-            if (hero.GetComponent<HeroTargetIndicator>() == null) hero.AddComponent<HeroTargetIndicator>();
-            // DEF (combat feel): wire the melee swing that was BUILT but never attached.
-            // PlayerAttackController.Awake self-configures (_enemyLayer -> "Enemy", animator/audio),
-            // so a bare AddComponent is safe. Melee fires on Space / gamepad-South. NOTE: added for
-            // EVERY class right now (the Knight's sword was the ask); Mage/Ranger get a melee with no
-            // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
-            // Knight later if desired.
-            if (hero.GetComponent<PlayerAttackController>() == null) hero.AddComponent<PlayerAttackController>();
-            // WO-VFX-WEAPON-TRAILS: the shared blade-trail flash on every swing/cast (self-drives off
-            // ActorAnimator.AttackStarted). PlayerAttackController.Awake also ensures it; this explicit
-            // add guarantees it on the hero rig even for a class/path that skips the attack controller.
-            // DisallowMultipleComponent makes a double-add a no-op.
-            if (hero.GetComponent<WeaponTrailController>() == null) hero.AddComponent<WeaponTrailController>();
-            // Default gear stats (even for emergency capsule or non-swapped heroes): GearLoadout
-            // pulls level-1 starters from GearCatalog (now populated) and drives WeaponMult/ArmorDefense.
-            if (hero.GetComponent<GearLoadout>() == null) hero.AddComponent<GearLoadout>();
-            // ARMOR RENDER (HeroArmorVisual): universal registration so EVERY hero variant shows
-            // equipped Blink armor on the body — including the Mage/default body (which HeroBodySwapper
-            // skips) and a non-swapped hero. It self-guards: with no humanoid "HeroBody" (e.g. the
-            // emergency capsule) it simply keeps the existing body (never naked). Subscribes to
-            // GearLoadout.OnGearChanged; [DisallowMultipleComponent] makes a double-add a no-op.
-            if (hero.GetComponent<HeroArmorVisual>() == null) hero.AddComponent<HeroArmorVisual>();
-            // LOADOUT (HeroLoadout): the per-hero W/E/R equipped-ability map (Knight skill-tree
-            // spine). It was BUILT (HeroLoadout + HeroLoadoutAccess + the chooser VM/View) but NEVER
-            // attached to the hero — so HeroLoadoutAccess.Current resolved null and every Equip(W/E/R)
-            // silently no-op'd (owner: "can't assign unlocked weapon skills"). Adding it here makes
-            // its Awake() run -> Load() from PlayerPrefs -> HeroLoadoutAccess.Current resolves, and
-            // all three W/E/R slots equip + persist. Re-added each Ensure() so a recreated/scene-
-            // reloaded hero restores its saved loadout from PlayerPrefs (DisallowMultipleComponent
-            // makes a double-add a no-op).
-            if (hero.GetComponent<HeroLoadout>() == null) hero.AddComponent<HeroLoadout>();
-            // Persistence belt-and-suspenders: a freshly-added HeroLoadout restores via its own
-            // Awake->Load, but a hero that PERSISTS across the scene load (carried/DDOL) won't re-run
-            // Awake — so replay the PlayerPrefs load here to guarantee the saved W/E/R loadout is
-            // restored after every (re)ensure. PlayerPrefs is the source of truth (Equip saves it
-            // immediately), so this is idempotent.
-            var heroLoadout = hero.GetComponent<HeroLoadout>();
-            heroLoadout?.ReloadFromPrefs();
-            // DEF-205: the always-on blue ground "reach ring" read as a mystery indicator
-            // while walking (players couldn't tell what it meant). Removed — do NOT attach
-            // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in
-            // reach hint is wanted later, but it must NOT render during normal play.
-            // (Intentionally not adding HeroReachRing here.)
+
+            // The fight-capable component set (attack / health / gear / loadout). Extracted so a
+            // NON-village scene owner that builds its own hero rig can provision it explicitly —
+            // see EnsureHeroCombatComponents' header for the dungeon softlock that forced the split.
+            EnsureHeroCombatComponents(hero, $"HeroControlEnsurer.Ensure scene='{scene}'");
 
             // DUNGEON GUARD (audit 2026-08-01, latent race): a scene carrying a DungeonCameraRig
             // owns its own camera (the Cinemachine iso/FPV rig driven by DungeonController).
@@ -380,6 +340,137 @@ namespace DeNelle.Village
             }
 
             Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled}.");
+        }
+
+        // ── Fight-capable provisioning (the component-attach half of Ensure) ──────
+        /// <summary>
+        /// Attaches the components that make a hero rig FIGHT-CAPABLE — the melee swing
+        /// (<see cref="PlayerAttackController"/>), the damage sink (<see cref="HeroHealth"/>),
+        /// gear, loadout and the combat-readability bits. NO camera takeover, NO locomotion
+        /// injection, NO emergency spawn, NO scene-name gate: it provisions exactly the rig it
+        /// is handed.
+        ///
+        /// WHY THIS IS PUBLIC + SPLIT OUT (F8 2026-08-05, dungeon unplayable from the first
+        /// encounter — PROVEN from device capture, not inferred):
+        ///   15:25:37.019 [Flow:Hero] Ensure: no hero in non-village scene
+        ///                            'Dungeon_HealersCottage' - nothing to ensure (skipping).
+        ///   15:25:56.x  [Flow:HudKit] attack fired but no PlayerAttackController in scene (x5)
+        ///   enemy: 77x Idle_A while 69x inRange=True — aware, in range, idle, nothing to hit.
+        /// The Keeper staged into <c>BattleArena</c> as a PARTIAL hero: 'Player'-tagged but with
+        /// no attack controller (she could not damage the enemy) and no HeroHealth (EnemyBrain
+        /// deals damage ONLY through HeroHealth, so the enemy could not damage her). A mutual
+        /// null-target deadlock: the fight could never resolve, so BattleLock never released.
+        ///
+        /// TWO compounding causes, which is why a scene-name clause alone does NOT fix it:
+        ///   (a) <see cref="IsVillageScene"/> does not match 'Dungeon_*', so <see cref="Ensure"/>
+        ///       early-returns; AND
+        ///   (b) at sceneLoaded the dungeon Keeper has no <see cref="HeroLocomotion"/> yet —
+        ///       HeroBodySwapper injects it ~160ms later — so even a widened scene gate would
+        ///       find no hero (FindLoco) and skip anyway, and Ensure only re-runs on the next
+        ///       sceneLoaded, which never comes (the arena stages ADDITIVELY).
+        /// So the dungeon owns the call: DungeonController invokes this ONCE, after the body
+        /// swap has landed. Widening IsVillageScene is deliberately NOT done — it also gates the
+        /// Watch() emergency-respawn loop, which would fabricate a lavender emergency pill in
+        /// every dungeon during the ~160ms window where FindLoco() is legitimately null.
+        ///
+        /// IDEMPOTENT: every attach is behind a GetComponent null-check and the types that matter
+        /// are [DisallowMultipleComponent], so re-calling this is a no-op, never a duplicate-attach.
+        /// </summary>
+        /// <param name="hero">The hero ROOT to provision (the transform the camera follows).</param>
+        /// <param name="reason">Caller context — appears verbatim in the FlowTrace line.</param>
+        public static void EnsureHeroCombatComponents(GameObject hero, string reason)
+        {
+            // No silent failures (CLAUDE.md §12): a null rig means NOTHING was provisioned, and a
+            // fight staged on it can never resolve. Say so loudly instead of returning quietly.
+            if (hero == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroEnsure",
+                    $"EnsureHeroCombatComponents({reason}): hero rig is NULL — nothing provisioned. " +
+                    "Any fight staged against this rig would be unwinnable.");
+                return;
+            }
+
+            // WO-450: canonical hero tag. Re-asserted here (not only in Ensure) because this entry
+            // point is reached by rigs Ensure never sees — e.g. the dungeon Keeper.
+            if (!hero.CompareTag("Player")) hero.tag = "Player";
+
+            if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
+            // Open-world combat readability: reticle over the nearest hostile target.
+            if (hero.GetComponent<HeroTargetIndicator>() == null) hero.AddComponent<HeroTargetIndicator>();
+            // DEF (combat feel): wire the melee swing that was BUILT but never attached.
+            // PlayerAttackController.Awake self-configures (_enemyLayer -> "Enemy", animator/audio),
+            // so a bare AddComponent is safe. Melee fires on Space / gamepad-South. NOTE: added for
+            // EVERY class right now (the Knight's sword was the ask); Mage/Ranger get a melee with no
+            // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
+            // Knight later if desired.
+            // ORDERING NOTE: its Awake caches HeroLocomotion + ActorAnimator off this rig, so a
+            // caller that builds its body asynchronously MUST call this AFTER the body swap.
+            bool addedAttack = hero.GetComponent<PlayerAttackController>() == null;
+            if (addedAttack) hero.AddComponent<PlayerAttackController>();
+            // WO-VFX-WEAPON-TRAILS: the shared blade-trail flash on every swing/cast (self-drives off
+            // ActorAnimator.AttackStarted). PlayerAttackController.Awake also ensures it; this explicit
+            // add guarantees it on the hero rig even for a class/path that skips the attack controller.
+            // DisallowMultipleComponent makes a double-add a no-op.
+            if (hero.GetComponent<WeaponTrailController>() == null) hero.AddComponent<WeaponTrailController>();
+            // Default gear stats (even for emergency capsule or non-swapped heroes): GearLoadout
+            // pulls level-1 starters from GearCatalog (now populated) and drives WeaponMult/ArmorDefense.
+            if (hero.GetComponent<GearLoadout>() == null) hero.AddComponent<GearLoadout>();
+            // ARMOR RENDER (HeroArmorVisual): universal registration so EVERY hero variant shows
+            // equipped Blink armor on the body — including the Mage/default body (which HeroBodySwapper
+            // skips) and a non-swapped hero. It self-guards: with no humanoid "HeroBody" (e.g. the
+            // emergency capsule) it simply keeps the existing body (never naked). Subscribes to
+            // GearLoadout.OnGearChanged; [DisallowMultipleComponent] makes a double-add a no-op.
+            if (hero.GetComponent<HeroArmorVisual>() == null) hero.AddComponent<HeroArmorVisual>();
+            // LOADOUT (HeroLoadout): the per-hero W/E/R equipped-ability map (Knight skill-tree
+            // spine). It was BUILT (HeroLoadout + HeroLoadoutAccess + the chooser VM/View) but NEVER
+            // attached to the hero — so HeroLoadoutAccess.Current resolved null and every Equip(W/E/R)
+            // silently no-op'd (owner: "can't assign unlocked weapon skills"). Adding it here makes
+            // its Awake() run -> Load() from PlayerPrefs -> HeroLoadoutAccess.Current resolves, and
+            // all three W/E/R slots equip + persist. Re-added each Ensure() so a recreated/scene-
+            // reloaded hero restores its saved loadout from PlayerPrefs (DisallowMultipleComponent
+            // makes a double-add a no-op).
+            if (hero.GetComponent<HeroLoadout>() == null) hero.AddComponent<HeroLoadout>();
+            // Persistence belt-and-suspenders: a freshly-added HeroLoadout restores via its own
+            // Awake->Load, but a hero that PERSISTS across the scene load (carried/DDOL) won't re-run
+            // Awake — so replay the PlayerPrefs load here to guarantee the saved W/E/R loadout is
+            // restored after every (re)ensure. PlayerPrefs is the source of truth (Equip saves it
+            // immediately), so this is idempotent.
+            var heroLoadout = hero.GetComponent<HeroLoadout>();
+            heroLoadout?.ReloadFromPrefs();
+
+            // DAMAGE SINK (F8 2026-08-05): HeroHealth is the ONLY way anything hurts the hero —
+            // EnemyBrain/Enemy resolve the player as IDamageableStructure through this component.
+            // Until now it was attached exclusively by HeroHealthBootstrap, which keys off a
+            // HeroAbilities component; a composed dungeon Keeper deliberately carries NO
+            // HeroAbilities (see GearLoadout.CurrentJob's header), so it NEVER got HeroHealth and
+            // was literally invulnerable — captured as
+            //   "SeedHeroVitalsFromLiveHero: no live HeroHealth on 'Keeper' nor HeroHealth.Instance
+            //    - falling back to the 120 HP placeholder."
+            // Attaching it here makes every provisioned rig damageable. In the village this is the
+            // SAME GameObject the bootstrap would have used (VillageSceneBuilder.BuildHero puts
+            // HeroAbilities on the hero root), so the bootstrap simply finds it already present and
+            // skips — no duplicate ([DisallowMultipleComponent] would reject one anyway).
+            bool addedHealth = hero.GetComponent<HeroHealth>() == null;
+            if (addedHealth) hero.AddComponent<HeroHealth>();
+            // HeroHitReaction rode along with the bootstrap's HeroHealth attach (damage screen
+            // flash + death slow-mo). The bootstrap early-returns as soon as HeroHealth.Instance is
+            // set, so it must be attached HERE too or provisioning HeroHealth above would silently
+            // cost the village its hit feedback.
+            if (hero.GetComponent<HeroHitReaction>() == null) hero.AddComponent<HeroHitReaction>();
+
+            // DEF-205: the always-on blue ground "reach ring" read as a mystery indicator
+            // while walking (players couldn't tell what it meant). Removed — do NOT attach
+            // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in
+            // reach hint is wanted later, but it must NOT render during normal play.
+            // (Intentionally not adding HeroReachRing here.)
+
+            // PROOF LINE (§12): the next capture must be able to answer "did the hero get
+            // provisioned, and could this fight ever have been won?" without re-reading code.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroEnsure",
+                $"combat components ensured on '{hero.name}' ({reason}) — " +
+                $"attack={(addedAttack ? "ADDED" : "present")} health={(addedHealth ? "ADDED" : "present")} " +
+                $"loco={(hero.GetComponent<HeroLocomotion>() != null)} " +
+                $"scene='{SceneManager.GetActiveScene().name}'.");
         }
 
         // Re-check while in the village; if the hero is gone, spawn an emergency one.

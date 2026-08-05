@@ -208,6 +208,15 @@ namespace DeNelle.Dungeons
         private UnityEngine.AI.NavMeshAgent _injectedHeroAgent;
         private bool _moverNeutralized;   // true while the injected HeroLocomotion's movement is gated off
 
+        // F8 2026-08-05 (dungeon unplayable from the first encounter): true once the Keeper has been
+        // provisioned as a FIGHT-CAPABLE hero (PlayerAttackController + HeroHealth + gear/loadout).
+        // Latched so the provisioning runs EXACTLY once per run — see EnsureKeeperFightCapable.
+        private bool _keeperFightProvisioned;
+        // Time.time at which the run went live (Ready). Bounds the wait for the async body swap so a
+        // failed swap degrades to a LOGGED late-provision instead of a permanently unarmed Keeper.
+        private float _readySinceTime;
+        private const float BodySwapWaitSeconds = 3f;
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         private void Start()
@@ -372,6 +381,7 @@ namespace DeNelle.Dungeons
             FlowTrace.Step("Dungeon",
                 $"EnterDungeon: run live (Ready=true) — spawn={spawnPos}, entryRoom='{_lastRoomId}', " +
                 $"resuming={resuming}.");
+            _readySinceTime = Time.time;   // F8 2026-08-05: bounds the body-swap wait in EnsureKeeperFightCapable
             Ready = true;
 
             // The run is live and the Keeper is framed — hand movement back.
@@ -482,6 +492,10 @@ namespace DeNelle.Dungeons
         {
             if (!Ready || _runtimeState == null || _hero == null) return;
 
+            // F8 2026-08-05: provision the Keeper as a FIGHT-CAPABLE hero once the body swap has
+            // landed. Once-only + self-gated; see EnsureKeeperFightCapable for the captured proof.
+            EnsureKeeperFightCapable();
+
             // Felt-fix: keep DungeonHero the sole mover (kill the injected village NavMeshAgent locomotion
             // that slides the hero on the un-navmeshed cottage floor). Polled — the body swap is async.
             if (!_arenaOwnsHero) EnsureSingleDungeonMover();   // F8 2026-07-30: arena owns the hero mid-fight
@@ -541,10 +555,41 @@ namespace DeNelle.Dungeons
             DungeonRoom entry = Layout.FindRoom(Layout.spawn?.roomId ?? Layout.entryRoomId);
             if (entry?.bounds != null)
             {
-                Vector3 pos = SeatExitOnFloor(entry.bounds.Center);
+                // F8 2026-08-05 (owner felt-test, Seeker) — "two big flat green bars fill the view".
+                // The arch USED to seat at entry.bounds.Center, which is the very point the hero is
+                // dropped on (ResolveSpawnPosition falls back to that same centre, and this layout's
+                // explicit spawn sits on it). Captured, same run:
+                //     EnterDungeon: run live ... spawn=(-28.00, 0.00, 0.00), entryRoom='garden-approach'
+                //     HydrateExits: NORMAL exit at entry room 'garden-approach' centre (-28.00, 1.76, 0.00)
+                // Identical XZ — so the hero materialised INSIDE the archway with a 0.35 x 2.6 x 0.35
+                // emerald pillar 1.1m to either side (DungeonExitInteractable.BuildVisual's Pillar_L /
+                // Pillar_R, flat URP/Unlit sRGB(51,140,77)); at point-blank range each pillar reads as a
+                // hard-edged green bar, not as geometry. It also parked the hero inside the arch's 2.0m
+                // walk-in TriggerRadius, leaving only the _armed latch between run-start and an instant
+                // self-exit. Seating the arch OFF the spawn removes that dependency (the latch stays as
+                // defence in depth). Same spirit as the compose path's basePos + (0,0,-2.6) nudge off
+                // the hero seat (DungeonExitInteractable.ResolveExitPosition), generalised to the room's
+                // long axis so it works for any layout.
+                Vector3 spawnPos = ResolveSpawnPosition();
+                Vector3 pos = SeatExitOnFloor(OffsetExitFromSpawn(entry.bounds, spawnPos));
                 var normalExit = DungeonExitInteractable.Spawn(pos, () => ExitToVillage().Forget(), "Leave Dungeon");
                 normalExit.SetHero(_hero);   // push the rig so the prompt is independent of HeroLocomotion's enabled state
-                FlowTrace.Step("Dungeon", $"HydrateExits: NORMAL exit at entry room '{entry.id}' centre {pos}.");
+
+                // Planar separation only — SeatExitOnFloor moves y onto the floor, which is not a
+                // clearance we care about. This line is what the next capture reads to PROVE the fix.
+                float clearance = Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(spawnPos.x, spawnPos.z));
+                FlowTrace.Step("Dungeon", $"HydrateExits: NORMAL exit in entry room '{entry.id}' at {pos} " +
+                                          $"(spawn {spawnPos}, clearance {clearance:0.00}m).");
+                if (clearance < ExitSpawnClearance)
+                {
+                    // Never silent: a room too small to clear the arch must be a logged line, so a future
+                    // layout edit cannot quietly re-create the spawn-inside-the-archway collision.
+                    FlowTrace.Warn("Dungeon", $"HydrateExits: NORMAL exit is only {clearance:0.00}m from the spawn " +
+                                              $"(want >= {ExitSpawnClearance:0.#}m) — room '{entry.id}' is too small to " +
+                                              $"clear the arch. exit={pos} spawn={spawnPos}; the hero may spawn inside " +
+                                              "the archway (green pillars in frame) and relies on the _armed latch to " +
+                                              "avoid an instant self-exit.");
+                }
             }
             else
             {
@@ -571,6 +616,75 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
+        /// Minimum planar separation we want between the hero's spawn and the exit arch — enough
+        /// that the hero starts clear of both pillars AND outside the arch's 2.0m walk-in
+        /// TriggerRadius (DungeonExitInteractable.TriggerRadius).
+        /// </summary>
+        private const float ExitSpawnClearance = 3f;
+
+        /// <summary>
+        /// How far we actually step the arch off the spawn. Deliberately ABOVE
+        /// <see cref="ExitSpawnClearance"/>: the healers-cottage entry room ('garden-approach',
+        /// bounds min(-36,-8) max(-20,8), spawn (-28,0,0)) would otherwise land at exactly 3.000m
+        /// and sit on the warn threshold, so any layout tweak or float wobble would flip the log
+        /// line. 4m keeps a real margin and still clamps comfortably inside that 16x16 room.
+        /// </summary>
+        private const float ExitSpawnStep = 4f;
+
+        /// <summary>
+        /// How far the arch must stay off a room wall. Its pillars sit at ±1.1m with a 0.35m
+        /// footprint and the lintel spans 2.7m (DungeonExitInteractable.BuildVisual), so the true
+        /// half-width is 1.35m — 1.45m here for margin. Used as the inset when clamping into bounds.
+        /// </summary>
+        private const float ExitBoundsInset = 1.45f;
+
+        /// <summary>
+        /// F8 2026-08-05: place the NORMAL exit arch <see cref="ExitSpawnStep"/> off the hero's
+        /// spawn instead of on top of it, along the room's LONG axis (whichever of the footprint's X
+        /// or Z extent is larger — the long axis is the one with room to step into), pushing toward
+        /// whichever end of that axis has more space left from the spawn. The result is CLAMPED into
+        /// <paramref name="bounds"/> with <see cref="ExitBoundsInset"/> so the arch can never land in
+        /// or past a wall; a room too narrow to hold the inset collapses to its centre line rather
+        /// than inverting the clamp. The cross axis stays on the room's centre line (clamped the same
+        /// way) so the arch never hugs a side wall. Returns a floor-plane point — the caller still
+        /// passes it through <see cref="SeatExitOnFloor"/>, which is unchanged.
+        /// </summary>
+        private static Vector3 OffsetExitFromSpawn(DungeonBounds bounds, Vector3 spawn)
+        {
+            Vector3 centre = bounds.Center;   // min/max are structs (DungeonPointXZ) — never null
+
+            // Bounds are authored min/max but treat them as unordered — a swapped pair would
+            // otherwise invert every clamp below and silently push the arch outside the room.
+            float minX = Mathf.Min(bounds.min.x, bounds.max.x), maxX = Mathf.Max(bounds.min.x, bounds.max.x);
+            float minZ = Mathf.Min(bounds.min.z, bounds.max.z), maxZ = Mathf.Max(bounds.min.z, bounds.max.z);
+
+            bool alongX = (maxX - minX) >= (maxZ - minZ);   // long axis = the larger extent
+            float axisPos = alongX ? spawn.x : spawn.z;
+            float axisMin = alongX ? minX : minZ;
+            float axisMax = alongX ? maxX : maxZ;
+
+            // Step toward the end of the long axis with more room between it and the spawn.
+            float dir = (axisMax - axisPos) >= (axisPos - axisMin) ? 1f : -1f;
+            float target = ClampInside(axisPos + dir * ExitSpawnStep, axisMin, axisMax);
+
+            float cross = ClampInside(alongX ? centre.z : centre.x, alongX ? minZ : minX, alongX ? maxZ : maxX);
+
+            return alongX ? new Vector3(target, centre.y, cross)
+                          : new Vector3(cross, centre.y, target);
+        }
+
+        /// <summary>
+        /// Clamp <paramref name="v"/> into [min, max] inset by <see cref="ExitBoundsInset"/> on both
+        /// ends. When the span is too narrow to hold the inset, returns the span's midpoint.
+        /// </summary>
+        private static float ClampInside(float v, float min, float max)
+        {
+            float lo = min + ExitBoundsInset;
+            float hi = max - ExitBoundsInset;
+            return lo <= hi ? Mathf.Clamp(v, lo, hi) : (min + max) * 0.5f;
+        }
+
+        /// <summary>
         /// Seat an exit's origin on the room floor so its arch stands rather than floating at the
         /// room's mid-height bounds centre (a short ray down, the townsfolk y-band idiom). Falls
         /// back to the raw point when nothing is hit.
@@ -591,6 +705,78 @@ namespace DeNelle.Dungeons
             DungeonRoom entry = Layout?.FindRoom(Layout.entryRoomId);
             if (entry?.bounds != null) return entry.bounds.Center;
             return Vector3.zero;
+        }
+
+        /// <summary>
+        /// F8 2026-08-05 — THE DUNGEON SOFTLOCK FIX. Provision the Keeper as a FIGHT-CAPABLE hero
+        /// exactly once per run, AFTER the async body swap has landed.
+        ///
+        /// PROVEN FROM DEVICE CAPTURE (2026-08-05), not inferred:
+        ///   15:25:37.007 [Flow:Hero] Ensure begin scene='Dungeon_HealersCottage' isVillage=False
+        ///   15:25:37.019 [Flow:Hero] Ensure: no hero in non-village scene 'Dungeon_HealersCottage'
+        ///                            - nothing to ensure (skipping).
+        ///   15:25:37.220 [Flow:Dungeon] SeedHeroVitalsFromLiveHero: no live HeroHealth on 'Keeper'
+        ///                            nor HeroHealth.Instance - falling back to the 120 HP placeholder.
+        ///   15:25:56.x   [Flow:HudKit] attack fired but no PlayerAttackController in scene   (x5)
+        ///   enemy: 77x Idle_A while 69x inRange=True — aware, in range, idle, nothing to hit.
+        /// The Keeper staged into BattleArena as a PARTIAL hero: 'Player'-tagged (EnterDungeon does
+        /// that) but with NO PlayerAttackController — she could not damage the enemy — and NO
+        /// HeroHealth — EnemyBrain deals damage ONLY through HeroHealth, so the enemy could not
+        /// damage her. Mutual null-target deadlock: the fight could never resolve, so BattleLock
+        /// never released and the run was dead from the first encounter.
+        ///
+        /// WHY THE FIX LIVES HERE AND NOT IN HeroControlEnsurer'S SCENE GATE. Two compounding causes:
+        ///   (a) HeroControlEnsurer.IsVillageScene matches Village*/*Castle*/raid only, so Ensure()
+        ///       early-returns for every Dungeon_* scene; AND
+        ///   (b) a RACE that makes a dungeon clause ALONE insufficient — at sceneLoaded the Keeper
+        ///       has no HeroLocomotion yet (HeroBodySwapper injects it ~160ms later,
+        ///       HeroBodySwapper.cs:722), so Ensure()'s FindLoco() would find nothing and skip even
+        ///       with a widened gate, and Ensure only re-runs on the next sceneLoaded — which never
+        ///       comes, because the arena stages ADDITIVELY.
+        /// So the DUNGEON owns the call, and the ORDERING is the fix: PlayerAttackController.Awake
+        /// caches HeroLocomotion + ActorAnimator off the rig (PlayerAttackController.cs:206-209), so
+        /// provisioning before the swap would arm a controller wired to a body that no longer exists.
+        /// The injected HeroLocomotion is therefore used as the post-swap signal.
+        ///
+        /// IDEMPOTENT + ONCE: latched on <see cref="_keeperFightProvisioned"/>, and the ensurer it
+        /// calls is itself null-checked per component, so nothing can double-attach.
+        ///
+        /// NEVER SILENT: if the body swap never lands, we still provision after
+        /// <see cref="BodySwapWaitSeconds"/> behind a FlowTrace.Warn rather than leave the Keeper
+        /// unarmed — an unwinnable encounter must be impossible, and a degraded path must be logged.
+        /// </summary>
+        private void EnsureKeeperFightCapable()
+        {
+            if (_keeperFightProvisioned) return;
+            if (_hero == null) return;
+
+            // Post-swap signal: HeroBodySwapper adds HeroLocomotion at the END of the swap, once the
+            // real class body + its Animator exist. Wait for it — but only for a BOUNDED window, so a
+            // failed/absent swap degrades to a logged late-provision instead of an unarmed Keeper.
+            bool bodySwapped = _hero.GetComponent<DeNelle.Village.HeroLocomotion>() != null;
+            if (!bodySwapped)
+            {
+                if (Time.time - _readySinceTime < BodySwapWaitSeconds) return;   // still swapping
+                FlowTrace.Warn("Dungeon",
+                    $"EnsureKeeperFightCapable: HeroBodySwapper never injected a HeroLocomotion on " +
+                    $"'{_hero.name}' within {BodySwapWaitSeconds:0.#}s of the run going live — provisioning " +
+                    "the combat components ANYWAY so the first encounter is winnable. The rig's animator " +
+                    "wiring is degraded (attack may not animate); the fight itself will still resolve.");
+            }
+
+            _keeperFightProvisioned = true;
+            Guard.Try("Dungeon", "provision Keeper as a fight-capable hero", () =>
+                DeNelle.Village.HeroControlEnsurer.EnsureHeroCombatComponents(
+                    _hero.gameObject,
+                    $"DungeonController.EnsureKeeperFightCapable id='{_dungeonId}' bodySwapped={bodySwapped}"));
+
+            // PROOF LINE (§12): the next capture must show, without a code read, that the Keeper can
+            // both deal and take damage BEFORE any encounter stages.
+            FlowTrace.Step("Dungeon",
+                $"EnsureKeeperFightCapable: Keeper '{_hero.name}' provisioned (bodySwapped={bodySwapped}) — " +
+                $"attack={(_hero.GetComponent<DeNelle.Village.PlayerAttackController>() != null)} " +
+                $"health={(_hero.GetComponent<DeNelle.Village.HeroHealth>() != null)}. " +
+                "An encounter staged from here can resolve.");
         }
 
         /// <summary>
