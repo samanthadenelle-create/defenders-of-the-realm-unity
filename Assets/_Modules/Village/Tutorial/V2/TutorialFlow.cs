@@ -185,6 +185,44 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// The TOWN WAVE CLOCK window: TRUE while the FTUE chain is LIVE on a not-yet-Onboarded
+        /// save, REGARDLESS of hero zone. Distinct from <see cref="HostilesSuppressedForTutorial"/>,
+        /// which is the ZONE-scoped AMBIENT window (leaving town resumes ambient spawns -- owner
+        /// ruling 2026-07-24, deliberately NOT regressed here).
+        /// <para>
+        /// WHY A SECOND PREDICATE (F8 2026-08-05 "wave 1 attacked me while I was still on the
+        /// tutorial screen"): the zone-scoped window is the right answer for AMBIENT hostiles but
+        /// the WRONG one for the town wave CLOCK -- WaveManager consulted it at the DOOR
+        /// (BeginLoop / GuardedKickoff) and, once EnterCountdown had armed the phase, the clock ran
+        /// to zero and spawned no matter what the window said afterwards (captured: cd29.9 -> cd6.8
+        /// with the tutorial live). WaveManager now re-checks THIS predicate every tick and stands
+        /// the countdown down. Splitting the two stops the owner's two rulings from fighting over
+        /// one boolean.
+        /// </para>
+        /// <para>
+        /// <c>_phase != Finished</c> is deliberate and load-bearing: it closes the Awake-vs-Start
+        /// race where <c>s_instance</c> is published in Awake but <c>_phase</c> is not set until
+        /// Start. <c>Idle</c> can therefore only ever mean "Start has not run yet" -- Start parks
+        /// returning players at <c>Finished</c>, and every exit (FinishFlow, SkipAll -> FinishFlow)
+        /// sets Finished AND FinishOnboarding before kicking the loop. Do NOT weaken this to
+        /// <c>!= Idle &amp;&amp; != Finished</c>.
+        /// </para>
+        /// Fails OPEN on a missing instance/state, the same rule as the ambient gate.
+        /// </summary>
+        public static bool WaveLoopSuppressedForTutorial
+        {
+            get
+            {
+                if (!FeatureFlags.TutorialV2) return false;
+                var svc = GameStateService.Instance;
+                if (svc == null || svc.State == null || svc.State.Onboarded) return false;
+                var flow = s_instance;
+                if (flow == null) return false;          // fail-open, same rule as the ambient gate
+                return flow._phase != Phase.Finished;
+            }
+        }
+
         // -- FTUE peace window (decoupled from !Onboarded) ---------------------
         // The single live instance (set in Awake, cleared in OnDestroy) lets the static
         // HostilesSuppressedForTutorial getter the spawners already call consult the running

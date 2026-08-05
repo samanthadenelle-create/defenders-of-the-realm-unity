@@ -660,6 +660,41 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // FTUE PER-TICK STAND-DOWN (F8 2026-08-05: "wave 1's enemies attacked me while I was
+            // still paused on the tutorial screen" — captured cd29.9 -> cd6.8 with the tutorial
+            // LIVE). The FTUE guard used to be checked at the DOOR only (BeginLoop /
+            // GuardedKickoff); once EnterCountdown had set phase=Countdown the clock ran to zero
+            // and spawned regardless of what the peace window said afterwards. WaveManager was the
+            // ONLY consumer that asked once — every other one (RegionMobSpawner,
+            // OverworldEncounterSpawner, HeroHealth) re-checks every tick. So we re-check here.
+            //
+            // Countdown ONLY, never Active: at Countdown no enemy exists yet, so nothing is
+            // despawned and no live wave is yanked out from under the player. A countdown is tens
+            // of seconds and cannot cross into Active within one frame, so with this gate in place
+            // Active is unreachable during the FTUE anyway.
+            //
+            // The loop is NOT left stranded: TutorialFlow.FinishFlow sets Phase.Finished +
+            // FinishOnboarding() and THEN calls BeginLoop() — both of which close this predicate
+            // first — so the legitimate post-tutorial handoff re-arms the clock normally.
+            if (_phase == WavePhase.Countdown && TutorialFlow.WaveLoopSuppressedForTutorial)
+            {
+                FlowTrace.Warn("Wave", $"FTUE stand-down: wave {_currentWaveId} countdown was armed while the " +
+                    $"tutorial is live (cd {_countdownRemaining:F1}s) — returning the loop to Idle.");
+                _countdownRemaining = 0f;
+                _awaitingPlayerStart = false;
+                _phase = WavePhase.Idle;
+
+                // Clear both countdown surfaces so neither keeps drawing its own clock after the
+                // stand-down: the HUD band (WaveHudBridge listens to OnCountdownTick — 0f is the
+                // same "clear it" value OnWaveStart pushes, and WaveFeedbackDirector ignores 0f so
+                // no imminent-alert fires), and the world-space label (WaveCountdownUI has no
+                // Hide() seam, but StartCountdown(0f) takes its seconds <= 0 branch: stop the
+                // routine + HideLabel — no new API invented in a third file).
+                OnCountdownTick.Invoke(0f);
+                WaveCountdownUI.Instance?.StartCountdown(0f);
+                return;
+            }
+
             switch (_phase)
             {
                 case WavePhase.Countdown:
@@ -696,7 +731,14 @@ namespace DeNelle.Village
             // SpawnEnemyForExternalMode (not this loop), so it is unaffected. The intended
             // post-tutorial kick from TutorialFlow.FinishFlow runs AFTER FinishOnboarding sets
             // Onboarded=true, so this never blocks the legitimate handoff.
-            if (TutorialFlow.HostilesSuppressedForTutorial)
+            //
+            // PREDICATE (F8 2026-08-05): this door now consults the WAVE-CLOCK window
+            // (WaveLoopSuppressedForTutorial — FTUE live, zone-independent), NOT the zone-scoped
+            // AMBIENT window. Strict superset of the old check, so no path loses a guard, and the
+            // town clock no longer arms just because the hero stepped outside the village bounds.
+            // The ambient spawners (RegionMobSpawner / OverworldEncounterSpawner / HeroHealth)
+            // deliberately STAY on HostilesSuppressedForTutorial (owner ruling 2026-07-24).
+            if (TutorialFlow.WaveLoopSuppressedForTutorial)
             {
                 FlowTrace.Step("Wave", "BeginLoop suppressed — tutorial (FTUE) active; ambient wave loop stays closed until onboarding completes.");
                 return;
@@ -893,7 +935,9 @@ namespace DeNelle.Village
             // teaching wave uses TutorialWaveSpawner -> SpawnEnemyForExternalMode, NOT this loop, so it
             // is unaffected. This keys off !Onboarded exactly like the BeginLoop guard, so it LIFTS the
             // instant onboarding completes and post-tutorial DEFEND / force-start works normally.
-            if (TutorialFlow.HostilesSuppressedForTutorial)
+            // (F8 2026-08-05: same predicate swap as BeginLoop — the wave-CLOCK window, not the
+            // zone-scoped ambient one. Strict superset; no path loses a guard.)
+            if (TutorialFlow.WaveLoopSuppressedForTutorial)
             {
                 FlowTrace.Step("Wave", $"GuardedKickoff ({source}) — force-start suppressed: tutorial (FTUE) active; ambient wave loop stays closed until onboarding completes. No retry, no fail.");
                 return;
