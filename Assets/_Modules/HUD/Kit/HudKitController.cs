@@ -1681,10 +1681,12 @@ namespace DeNelle.HUD.Kit
         }
 
         // WO-439: the LEFT slide-out dock — a gear tab pinned to the left screen edge (collapsed by
-        // default) that slides open a panel with FOUR tabs: Chat / Leaderboard / Music / Settings.
+        // default) that slides open a panel with FIVE rows: Chat / Leaderboard / Music / Settings /
+        // Pause (Pause folded in 2026-07-24, cosmetic flag A).
         // Built from the shared ElarionUiKit.BuildSlideTab helper; registered under the same "chatDock"
-        // widget id so the hud-areas.json occupancy rows are unchanged. Icons resolve through the HUD's
-        // concept-icon path (UiStyle.Icon) with a text fallback so nothing blanks.
+        // widget id so the hud-areas.json occupancy rows are unchanged. The GEAR on the handle is the
+        // dock's ONE icon (kit-resolved, gilt plate, ASCII "=" fallback so it never blanks); the rows
+        // themselves are label-only — see AddDockTab for why (WO-908).
         private void BuildSlideDock(Transform pool)
         {
             _slideDock = ElarionUiKit.BuildSlideTab(pool, ElarionUiKit.SlideEdge.Left,
@@ -1698,51 +1700,72 @@ namespace DeNelle.HUD.Kit
             // canonical-CTA discipline) so the tiny mount can't scale them: thumb-size tab on the
             // left edge, real-size panel overlaying when open. Cells/fonts inside are fractions of
             // the PANEL, so they inherit the fix.
+            //
+            // WO-908 (owner felt-test, Seeker 2670x1200 — capture
+            // docs/qa/screens/2026-08-05/gear-menu-double-icon.png): the gear HANDLE and the
+            // slide-out PANEL were BOTH pinned to the mount's left edge at anchoredPosition zero,
+            // so opening the drawer parked the handle plate ON TOP of the panel — dead centre of
+            // its height, which is exactly the MUSIC row (row 2 of 5 is centred on 0.5) — and over
+            // the panel's left rim, reading as a second, mis-seated gear. Fix: the handle owns its
+            // own FIXED-PIXEL column at the edge and the panel STARTS where that column ends. The
+            // handle therefore never moves on toggle (the owner taps the same spot to close), never
+            // covers a row, and nothing overhangs the frame. Fixed px, never a parent fraction.
+            const float dockTabPx = ElarionUiKit.MinTouchPx;   // 112 - the kit touch floor, verbatim
             var dockPanelRt = _slideDock.panel;
             dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
             dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
             dockPanelRt.pivot = new Vector2(0f, 0.5f);
-            dockPanelRt.anchoredPosition = Vector2.zero;
+            dockPanelRt.anchoredPosition = new Vector2(dockTabPx, 0f);   // clear of the handle column
             // Height carries FIVE tabs now (Pause folded in — cosmetic flag A) at ~112px
-            // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx.
+            // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx. Do NOT shrink 700:
+            // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
+            // them under the floor and ClampMinTouch would grow them about their centres into each
+            // other — the documented WO-852/865/868 overlap trap.
             dockPanelRt.sizeDelta = new Vector2(400f, 700f);
             var dockTabRt = (RectTransform)_slideDock.tab.transform;
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
             dockTabRt.pivot = new Vector2(0f, 0.5f);
             dockTabRt.anchoredPosition = Vector2.zero;
-            dockTabRt.sizeDelta = new Vector2(84f, 84f);
+            dockTabRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);   // was 84 - under the 112 floor
 
-            AddDockTab(_slideDock.panel, 0, "Chat",        "chat",        OpenClanChat);
-            AddDockTab(_slideDock.panel, 1, "Leaderboard", "leaderboard", OpenLeaderboard);
-            AddDockTab(_slideDock.panel, 2, "Music",       "music",       OpenJukebox);
-            AddDockTab(_slideDock.panel, 3, "Settings",    "settings",    OpenSettings);
+            AddDockTab(_slideDock.panel, 0, "Chat",        OpenClanChat);
+            AddDockTab(_slideDock.panel, 1, "Leaderboard", OpenLeaderboard);
+            AddDockTab(_slideDock.panel, 2, "Music",       OpenJukebox);
+            AddDockTab(_slideDock.panel, 3, "Settings",    OpenSettings);
             // Pause folded into the LEFT gear (cosmetic flag A, 2026-07-24): the standalone
             // top-right pause chip (PauseHudBootstrap.PauseHudButton) was culled to leave ONE
             // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
             // tab is the caller that opens Pause/Quit-to-Title via PauseGate.RequestBack().
-            AddDockTab(_slideDock.panel, 4, "Pause",       "pause",       () => PauseGate.RequestBack());
+            AddDockTab(_slideDock.panel, 4, "Pause",       () => PauseGate.RequestBack());
 
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
 
-        // One labelled + icon-badged tab inside the slide-out (stacked vertically, top-to-bottom).
-        private void AddDockTab(RectTransform panel, int i, string label, string iconConcept, Action onTap)
+        // One labelled tab inside the slide-out (stacked vertically, top-to-bottom).
+        //
+        // WO-908: this row used to stamp a leading concept icon over the button. It was removed,
+        // for THREE reasons proven from source, not taste:
+        //  1. Of the five row concepts only "settings" is mapped in concept-icons.json (line 165) —
+        //     chat / leaderboard / music / pause are absent from the table AND there is no art for
+        //     them in Assets/Resources/RpgUi/icons/ at all. So the path could only ever badge ONE
+        //     row of five: a per-row icon treatment is not achievable, it is a lone odd row out.
+        //  2. BuildObsidianButton's label is a FULL-STRETCH centred TMP (ElarionUiKitObsidian.cs:679),
+        //     and the icon was added AFTER it, so the icon drew ON TOP of the row's own label — the
+        //     gear sat on the "S" of "Settings" in the felt-test capture.
+        //  3. Assets/Resources/RpgUi/icons/icon_settings.png is DARK art; bare (no plate) on the
+        //     Gray obsidian face it is a near-contrastless smudge, which is the "formatting is wrong
+        //     on colour" half of the report.
+        // The menu's one gear is now the drawer HANDLE (BuildSlideTab), which carries the same
+        // sprite on the kit's gilt plate. Rows are uniformly label-only — ONE treatment.
+        private void AddDockTab(RectTransform panel, int i, string label, Action onTap)
         {
             const int n = 5;   // Chat/Leaderboard/Music/Settings/Pause (Pause folded in, flag A)
             float y1 = 1f - (i / (float)n) - 0.02f;
             float y0 = 1f - ((i + 1) / (float)n) + 0.02f;
-            var btn = ElarionUiKit.BuildObsidianButton(panel, label,
+            ElarionUiKit.BuildObsidianButton(panel, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.06f, y0), new Vector2(0.94f, y1), onTap);
-            var icon = UiStyle.Icon(iconConcept);
-            if (icon != null)
-            {
-                var ico = ElarionUiKit.AddImage(btn.transform, "TabIcon",
-                    new Vector2(0.05f, 0.18f), new Vector2(0.28f, 0.82f), Color.white, rounded: false);
-                var img = ico.GetComponent<Image>();
-                img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
-            }
         }
 
         // Settings tab -> the Help/Settings card (same target as the gear/Menu button).
