@@ -532,8 +532,11 @@ namespace DeNelle.Editor
                 }
 
                 // Build the REAL beat via its own public entry (data-driven, guarded).
-                // WO-831: Show now opens on the EMERGENCE state (2D sprite + intro line);
-                // the awakening card builds on the Continue advance.
+                // OWNER RULING 2026-08-05 ("it should just simply be one screen"): the WO-831
+                // EMERGENCE state is GONE -- its headline, arrival line, artwork and fade are
+                // folded into the single awakening card. So there is no _emergenceCanvas to
+                // capture and no OnEmergenceContinue advance to drive; Show() lands directly on
+                // the one screen. Two states remain to capture: flavor and lore.
                 bool shown = EchoUnlockDialogue.Show(entry, 1);
                 dlg = UnityEngine.Object.FindAnyObjectByType<EchoUnlockDialogue>();
                 if (dlg == null)
@@ -541,23 +544,6 @@ namespace DeNelle.Editor
                     Debug.LogWarning("[UICap-HL] EchoUnlockDialogue instance not found after Show(shown=" +
                                      shown + ") -- founding card skipped.");
                     return 0;
-                }
-
-                // -- EMERGENCE state (WO-831 acceptance: the new beat renders headless) --
-                GameObject emergenceGo = GetPrivateGameObject(dlg, "_emergenceCanvas");
-                if (emergenceGo != null)
-                {
-                    if (RenderCanvasToPng(emergenceGo,
-                        OutDir + "EchoUnlockDialogue_Aldwin_emergence_" + target.Tag + ".png",
-                        target.W, target.H)) saved++;
-
-                    // Advance exactly as the player does (the Continue tap). Edit-mode safe:
-                    // the dialogue retires its emergence canvas via DestroyImmediate here.
-                    InvokePrivate(dlg, "OnEmergenceContinue");
-                }
-                else
-                {
-                    Debug.LogWarning("[UICap-HL] EchoUnlockDialogue._emergenceCanvas was null -- emergence state skipped (card may have built directly).");
                 }
 
                 canvasGo = GetPrivateGameObject(dlg, "_canvas");

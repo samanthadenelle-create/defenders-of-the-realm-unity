@@ -248,9 +248,14 @@ Two generations coexist deliberately:
   EchoRosterVM/EchoCardView/EchoCardVM (**WO-830: the card is a 5-chip RESOURCE PICKER** —
   affinity disclosed as "Favors: X" + the "(best -- this Echo's calling)" text flag; the
   disclosed pair-synergy line via `SynergyText`; hidden tri never worded), EchoUnlockFeedback,
-  **EchoUnlockDialogue (WO-831: two-state — 2D EMERGENCE beat first (`Resources/Echoes/
-  Emergence/<PortraitName>_emerge.png`, LFS; CanvasGroup fade-in; missing art degrades to
-  portrait→text, never blocks) then Continue → the awakening card)**, EchoWispInjector,
+  **EchoUnlockDialogue (owner ruling 2026-08-05 "it should just simply be one screen": the
+  WO-831 two-state beat is COLLAPSED — the emergence screen's headline, EmergeLine arrival copy,
+  artwork (`Resources/Echoes/Emergence/<PortraitName>_emerge.png`, LFS; degrades to
+  portrait→text, never blocks) and CanvasGroup fade all fold into the top of the ONE awakening
+  card; no Continue advance. Buttons 3→2: "I accept your power" + "Tell me more" survive, the
+  shared kit Close is retired locally as a duplicate dismiss. Both CTAs seat at one fixed
+  480x132 ref-px box on one baseline; all copy parents to the plate (`layout.body`) which
+  carries a RectMask2D)**, EchoWispInjector,
   EchoSpiritPresentation, EchoWaveUnlockBridge, EchoBalanceCatalog (owner-tunable knobs,
   echoes-balance.json: WO-830 `preferredLaneMatchBonus 0.40`, 3 `crossBonuses` pairs
   Provisions/Forge/Fortune @ +0.10, `hiddenTriSynergyBonus 0.25`, Bran+Maren rates 0.45 each
