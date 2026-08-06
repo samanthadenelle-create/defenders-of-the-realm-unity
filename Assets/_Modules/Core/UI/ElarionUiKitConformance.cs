@@ -384,8 +384,15 @@ namespace DeNelle.Core.UI
         /// Use this for ALL transient status ("Saved", "Not enough Gold", "Equipped") —
         /// a screen must never park status text in a label that can go stale.
         /// </summary>
+        /// <param name="cardWidth">Card width in reference px. The 480x76 default holds ~2 lines of
+        /// the 24px legacy Text at ~442px usable width (~80 chars). A longer sentence needs a bigger
+        /// card: ToastCard's label is VerticalWrapMode.Overflow, so a third line draws OUTSIDE the
+        /// plate instead of being clipped. Appended as trailing optionals — every existing caller
+        /// keeps the exact card it has today.</param>
+        /// <param name="cardHeight">Card height in reference px (see <paramref name="cardWidth"/>).</param>
         public static void ShowToast(string message, ToastTone tone = ToastTone.Info,
-            float lifeSeconds = 2.2f, int sortingOrder = 720)
+            float lifeSeconds = 2.2f, int sortingOrder = 720,
+            float cardWidth = 480f, float cardHeight = 76f)
         {
             if (string.IsNullOrEmpty(message) || !Application.isPlaying) return;
 
@@ -415,7 +422,7 @@ namespace DeNelle.Core.UI
             crt.anchorMax = new Vector2(0.5f, 0f);
             crt.pivot = new Vector2(0.5f, 0f);
             crt.anchoredPosition = new Vector2(0f, 220f);          // clear of thumb bands / palette trays
-            crt.sizeDelta = new Vector2(480f, 76f);
+            crt.sizeDelta = new Vector2(Mathf.Max(240f, cardWidth), Mathf.Max(60f, cardHeight));
             if (parts.label != null) parts.label.text = message;
 
             var life = go.AddComponent<UiKitTransientToast>();

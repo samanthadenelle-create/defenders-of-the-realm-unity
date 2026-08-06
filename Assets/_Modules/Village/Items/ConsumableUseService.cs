@@ -90,7 +90,10 @@ namespace DeNelle.Village.Items
                 // player. Route it through the ONE canonical transient toast (ElarionUiKit.ShowToast,
                 // the BankOverflowToastPresenter precedent) — no new toast layer. The words carry the
                 // meaning; never a colour-only cue (owner is red/green colourblind). ASCII only.
-                ElarionUiKit.ShowToast(EmptyLarderLine(def), ElarionUiKit.ToastTone.Danger, 3.4f);
+                // Card grown past the 480x76 default: the default holds ~2 lines / ~80 chars and
+                // ToastCard's label overflows VERTICALLY (a third line draws outside the plate).
+                ElarionUiKit.ShowToast(EmptyLarderLine(def), ElarionUiKit.ToastTone.Danger, 3.8f,
+                                       sortingOrder: 720, cardWidth: 640f, cardHeight: 112f);
                 return false;
             }
 
@@ -117,18 +120,56 @@ namespace DeNelle.Village.Items
         }
 
         // ── Empty-larder copy (owner ruling 2026-08-05) ──────────────────────────
-        // The line must name the potion TYPE and give BOTH remedies. Locations verified
-        // from the catalogs, NOT assumed:
-        //   CRAFT -> the "Apothecary" station (CraftingStationInjector.StationLabel) is the
-        //            only thing in the world that opens PanelId.ConsumableCrafting, which is
-        //            where consumable-recipes.json is brewed (craft-minor-heal-potion,
-        //            craft-survival-mana-potion). There is no potion bench at the Workshop.
-        //   BUY   -> vendors.json "market" / displayName "Market Stalls" is the sole vendor
-        //            whose categories include "consumable"; both potions carry a `price`.
+        // The line must name the potion TYPE and send the player somewhere that ACTUALLY
+        // EXISTS. A message that routes to a place the player cannot reach is worse than
+        // no message, so both destinations below were re-verified at source:
+        //
+        //   BUY -> REAL. vendors.json id "market" / displayName "Market Stalls" is the only
+        //          vendor whose `categories` include "consumable", and both potions carry a
+        //          `price` in consumables.json (minor-heal-potion 8, cons_mana_draught 12).
+        //          Its storefront is BAKED into the hub (Marketplace_Monetization +
+        //          NPC_Marketplace_Interactable in Main_Castle_Overworld.unity) and the
+        //          Lever-1 ruling keeps baked stores PRE-STANDING on a fresh save, so the
+        //          player can always walk to it. This is the route we can promise.
+        //
+        //   CRAFT -> CONDITIONAL, and it is NOT a standing destination today. Recipes exist
+        //          (consumable-recipes.json: craft-minor-heal-potion, craft-survival-mana-potion)
+        //          but PanelId.ConsumableCrafting has exactly TWO openers: a Building of
+        //          BuildingType.ApothecaryWorkbench, and the "apothecary" NPC dialogue, whose
+        //          vendor anchor waits on a live Building with that same id. On a strategic-
+        //          placement save CraftingStationInjector.Inject stands down unconditionally
+        //          (StrategicPlacementMigration.StanddownActiveForStation returns StanddownActive),
+        //          structures-catalog.json has NO "apothecary" row so the palette can never
+        //          build one, and no apothecary is baked in the hub scene. Net: usually there
+        //          is no brewer to send anyone to.
+        //          So the craft clause is emitted ONLY when an alchemy bench is genuinely
+        //          standing in the scene — checked, never assumed. The alternative (hardcoding
+        //          "Craft one at the Apothecary") is the exact defect this rewrite corrects.
         private const string CraftPlace = "Apothecary";
         private const string BuyPlace = "Market Stalls";
 
-        /// <summary>ASCII, colour-free "you have none" line naming the item and both remedies.</summary>
+        /// <summary>
+        /// True when a consumable-crafting bench is ACTUALLY standing in the loaded scene —
+        /// i.e. a live Building whose Type is ApothecaryWorkbench, the one thing that opens
+        /// PanelId.ConsumableCrafting. Scans the Building collection rather than trusting a
+        /// catalog/marker, because the station is injected at runtime and stands down on most
+        /// saves. Cheap enough here: this runs once per EMPTY-slot tap, never in a loop.
+        /// </summary>
+        private static bool AlchemyBenchIsStanding()
+        {
+            var buildings = Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
+            if (buildings == null) return false;
+            for (int i = 0; i < buildings.Length; i++)
+            {
+                var b = buildings[i];
+                if (b != null && b.IsAlive && b.Type == BuildingType.ApothecaryWorkbench) return true;
+            }
+            return false;
+        }
+
+        /// <summary>ASCII, colour-free "you have none" line naming the item and every remedy that
+        /// is REACHABLE right now. The words carry the whole meaning — no colour-only cue (the
+        /// owner is red/green colourblind), and no destination is named unless it exists.</summary>
         private static string EmptyLarderLine(ConsumableDef def)
         {
             string name = def != null && !string.IsNullOrEmpty(def.DisplayName)
@@ -137,8 +178,15 @@ namespace DeNelle.Village.Items
             // Cheap ASCII plural: "Minor Healing Draught" -> "Draughts"; anything already
             // ending in 's' ("Traveler's Rations") is left alone.
             if (!name.EndsWith("s") && !name.EndsWith("S")) name += "s";
-            return "Out of " + name + ". Craft one at the " + CraftPlace
-                 + ", or buy one at the " + BuyPlace + ".";
+
+            if (AlchemyBenchIsStanding())
+                return "Out of " + name + ". Brew more at the " + CraftPlace
+                     + ", or buy them at the " + BuyPlace + ".";
+
+            // No brewer standing: name the ONE real route, and say plainly why crafting is not
+            // on the table instead of pointing at a building that is not in the world.
+            return "Out of " + name + ". Buy more at the " + BuyPlace
+                 + " in town - there is no " + CraftPlace + " standing to brew them yet.";
         }
 
         private static void ApplyEffect(ConsumableDef def)

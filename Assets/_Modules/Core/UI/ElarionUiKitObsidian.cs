@@ -1081,6 +1081,76 @@ namespace DeNelle.Core.UI
             return h;
         }
 
+        /// <summary>
+        /// STACK-QUANTITY BADGE (owner ruling 2026-08-05: "we need to somehow let the player know
+        /// if they have zero health potions... have a quantity on that for the quick action").
+        /// Re-homes an action slot's <see cref="ActionSlotHandle.count"/> onto a dedicated
+        /// FIXED-PIXEL plate at the slot's bottom-right, and turns on
+        /// <see cref="ActionSlotHandle.showZero"/> so an empty stack reads a literal ASCII "0".
+        /// Presentation-only: the tap, icon and cooldown contracts are untouched. Idempotent.
+        ///
+        /// WHY A PLATE AND NOT THE BARE LABEL IT REPLACES:
+        ///  • LEGIBILITY. The default badge is anchored by FRACTION of the slot (x 0.50-0.94,
+        ///    y 0.02-0.34). On the round potion medallions the arc sizes at ~93.7 ref px
+        ///    (see <see cref="EnsureTouchFloorArea"/>), so that band resolves to roughly
+        ///    41 x 30 ref px — SHORTER than the ElarionUi.FontMicro(32) glyph it must hold, so
+        ///    the digit clipped. A fixed 52x40 px plate is independent of the slot's measured
+        ///    size, which is the project's standing rule: FIXED PIXEL BANDS, NEVER FRACTIONS.
+        ///  • ISOLATION. The numeral 1 renders as a bare vertical stroke in this HUD font
+        ///    (confirmed from a 2670x1200 capture). The plate's own rounded silhouette + padding
+        ///    keeps the digit clear of any neighbouring vertical mark, so "1" cannot be mistaken
+        ///    for chrome. Deliberately NO separator/pipe/border-rule is drawn for that reason.
+        ///  • COLOURBLIND LAW. The DIGIT carries the whole meaning. The plate is the same
+        ///    obsidian in every state — empty is never signalled by a red tint (the owner is
+        ///    red/green colourblind). Only shape (the plate) and the number itself speak.
+        ///
+        /// The plate is a plain Image + TMP_Text and NEVER a Button, so <see cref="ClampMinTouch"/>
+        /// can never grow it symmetrically about its centre and overlap the neighbouring slot —
+        /// that growth is this project's most-repeated badge defect.
+        /// </summary>
+        public static void StyleAsStackBadge(ActionSlotHandle slot)
+        {
+            if (slot == null || slot.root == null || slot.count == null) return;
+            if (slot.root.transform.Find("StackBadge") != null) { slot.showZero = true; return; } // idempotent
+
+            const float BadgeW = 52f;    // fixed reference px — holds up to 3 digits at FontMicro
+            const float BadgeH = 40f;
+            const float Inset = 3f;      // keeps the plate inside the slot rect (never over a neighbour)
+
+            var plate = new GameObject("StackBadge", typeof(Image));
+            plate.transform.SetParent(slot.root.transform, false);
+            var prt = (RectTransform)plate.transform;
+            prt.anchorMin = new Vector2(1f, 0f);          // bottom-right CORNER of the slot
+            prt.anchorMax = new Vector2(1f, 0f);
+            prt.pivot = new Vector2(1f, 0f);
+            prt.sizeDelta = new Vector2(BadgeW, BadgeH);  // FIXED px, not a fraction of the slot
+            prt.anchoredPosition = new Vector2(-Inset, Inset);
+
+            var pimg = plate.GetComponent<Image>();
+            var disc = RoundedSprite;                     // rounded plate; falls back to the solid quad
+            if (disc == null) disc = SolidSprite;
+            if (disc != null) { pimg.sprite = disc; pimg.type = Image.Type.Sliced; pimg.fillCenter = true; }
+            else ApplyRounded(pimg);
+            // Near-opaque obsidian so a gilt digit reads over ANY icon art underneath. Opacity,
+            // not hue, is what makes it legible — the plate never changes colour to mean anything.
+            pimg.color = new Color(C611Obsidian.r, C611Obsidian.g, C611Obsidian.b, 0.92f);
+            pimg.raycastTarget = false;                   // never steals the slot's tap
+
+            // Move the EXISTING count label onto the plate (one badge, never two) and centre it.
+            slot.count.transform.SetParent(plate.transform, false);
+            var crt2 = (RectTransform)slot.count.transform;
+            crt2.anchorMin = Vector2.zero; crt2.anchorMax = Vector2.one;
+            crt2.offsetMin = Vector2.zero; crt2.offsetMax = Vector2.zero;
+            slot.count.alignment = TextAlignmentOptions.Center;
+            slot.count.fontSize = ElarionUi.FontMicro;    // 32 ref px — above the FontFloor(30) legibility line
+            slot.count.color = ElarionUi.Gilt;
+            slot.count.raycastTarget = false;
+
+            // Stack semantics: every n >= 0 prints, so an empty larder reads "0" instead of the
+            // same blank face a full single stack shows (the charge-badge default).
+            slot.showZero = true;
+        }
+
         // =====================================================================
         // §1.7 BuildCastBar — the telegraph UI.
         // =====================================================================

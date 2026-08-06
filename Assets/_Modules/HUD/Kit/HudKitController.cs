@@ -1079,8 +1079,14 @@ namespace DeNelle.HUD.Kit
 
             _manaPotionSlot = ElarionUiKit.BuildActionSlot(pool,
                 new Vector2(0.85f, 0.10f), new Vector2(0.99f, 0.95f), HudCommands.ManaPotion);
-            var manaIcon = UiStyle.Icon("mana", "consumable", "crystal");
-            if (manaIcon == null) manaIcon = UiStyle.Icon("potion", "consumable", "mana");
+            // Owner ruling 2026-08-05 ("the other one looks like a crystal, I think that should be
+            // a mana potion"): resolve the MANA POTION concept. concept-icons.json maps
+            // mana -> role 'potion' / potion_mana (the blue flask art already on disk at
+            // Resources/RpgUi/potion/potion_mana.png). The fallback chain deliberately NO LONGER
+            // ends in "crystal" — that currency-crystal sprite IS the wrong icon the owner
+            // reported, so if the mana art ever fails to load we degrade to another POTION shape
+            // rather than silently reintroducing the defect.
+            var manaIcon = UiStyle.Icon("mana", "potion", "consumable");
             if (manaIcon != null) _manaPotionSlot.SetIcon(manaIcon);
             _manaPotionSlot.showZero = true;   // stack semantics, same ruling as the HP slot
             Register("manaPotionSlot", WrapAsWidget("manaPotionSlot", _manaPotionSlot.root));
@@ -1093,6 +1099,13 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.StyleAsRoundMedallion(_hpPotionSlot);
                 ElarionUiKit.StyleAsRoundMedallion(_manaPotionSlot);
             }
+
+            // Owner ruling 2026-08-05 (quantity on the quick action): give both potion slots the
+            // kit's fixed-pixel STACK badge. MUST run AFTER StyleAsRoundMedallion — that call can
+            // add a GoldRim child, and whatever is parented last draws on top; badge-then-rim
+            // would bury the number under the medallion ring.
+            ElarionUiKit.StyleAsStackBadge(_hpPotionSlot);
+            ElarionUiKit.StyleAsStackBadge(_manaPotionSlot);
         }
 
         private void BuildTargetCycle(Transform pool)
