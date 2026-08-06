@@ -99,7 +99,7 @@ marked *(ed)*. Oracle column = the check(s) beyond the blanket §3 gates.
 | `gear-recipes.json` | 1 | `Village/Crafting/GearCraftingRecipeCatalog.cs` | |
 | `guide-content.json` | 1 | `Village/UI/Guide/GuideContentCatalog.cs` | in-game guide pages (27KB). |
 | `heart.json` | 1 | **NONE via CanonicalJson** | Heart phase thresholds; mirrored + pinned; currently data-inert; §7.4. |
-| `hero-talents.json` | 2 | `Village/Talents/HeroTalentCatalog.cs`; *(ed)* `TalentStrategyRegression` | 3 trees + tier costs (33KB). |
+| `hero-talents.json` | 2 | `Village/Talents/HeroTalentCatalog.cs`; *(ed)* `TalentStrategyRegression` | 3 trees + tier costs (33KB). **2026-08-06 note (`04d375c3`): the FILE IS UNTOUCHED (md5 unchanged) — but its ranger + mage trees had NEVER been audited.** `TalentStrategyRegression` hardcoded `HiddenTrees = {ranger, mage}` from the `ff.knightonly` era and was not updated at the 2026-08-05 unlock, so guard G3 (no dead talent nodes) silently skipped both entire trees while players could reach them. Emptying that set surfaced **31 pre-existing dead nodes across 40 player-reachable talents** (17 ranger + 14 mage); knight's 32 and the 9 shared are green. They are held as a dated **WO-910 ratcheted baseline** (`KnownDeadNodeBaseline`) — new dead debt FAILS, and a baseline id that STOPS reporting dead also FAILS. **`hidden: true` per node is now a real lever** (`HeroTalentNodeDef.Hidden` had ZERO runtime readers before this and is now wired into both `HeroSkillTreeVM.Rebuild` loops) — **no node sets it today**, and setting one is the OWNER's call. **WO-910 READY FOR OWNER RULING.** |
 | `hud-areas.json` | **1** | `HUD/Kit/HudAreasConfig.cs`; *(ed)* `ObsidianQueueRegression` | HUD kit occupancy table: `postures[] → areas[] → widgets[]` (calm(town) / battle; WO-609 battle layout). |
 | `jeweler-recipes.json` | 1 | `Village/Crafting/JewelerRecipeCatalog.cs` | |
 | `loot-tables.json` | 2 | `Village/Items/LootTableCatalog.cs` | |
@@ -115,7 +115,7 @@ marked *(ed)*. Oracle column = the check(s) beyond the blanket §3 gates.
 | `skin.json` | 1 | `Core/Platform/CurrencySkinResolver.cs` | currency skin per platform. |
 | `spawn-areas.json` | 1 | `Core/World/SpawnAreaTable.cs` | |
 | `stake-rewards.json` | 1 | `Core/Platform/StakeRewardsResolver.cs` | |
-| `structures-catalog.json` | **6** | `Village/Catalog/CatalogBootstrap.cs` (→ CatalogRegistry at startup); *(ed)* `CatalogOrientationBaker`, `StructureHeightAudit`, `RegressionSuite`, `DataRegression`, `BuildEconomyRegression`, `StrategicPlacementRegression`, `SessionRegression`, `DefenseTargetableRegression`, `VfxAuraDifferentiationRegression` | THE build-mode structure table (31KB, 5+ oracles — the most oracle-covered file in the area). Schema law in its `notes` (line 3): `type/mustSitOn/navSurface/element` are enum NAMES; `visualPrefabPath` Resources-relative; `behaviorId` → `StructureFactory.AttachBehavior` (only DefenseTower/WallSegment/CrystalMine/Gate wired; null = inert); S4 `repo.cost` multi-resource via ResourceLedger; S5 `repo.maxLevel`/`upgradeCost` CoC upgrade sink; v5 **`repo.bakedTwins`** = legacy baked scene-root names a singleton row represents (StructureSingleton standdown/resurface, e.g. lines 493, 552); v6 adds **`npcModel`** (structure-bound NPC mesh: Cleric line 404, Druid line 491, Engineer line 536). |
+| `structures-catalog.json` | **8** *(corrected 2026-08-06; was 6 — `0ac59581` bumped 6→7, `d42e2817` bumped 7→8)* | `Village/Catalog/CatalogBootstrap.cs` (→ CatalogRegistry at startup); *(ed)* `CatalogOrientationBaker`, `StructureHeightAudit`, `RegressionSuite`, `DataRegression`, `BuildEconomyRegression`, `StrategicPlacementRegression`, `SessionRegression`, `DefenseTargetableRegression`, `VfxAuraDifferentiationRegression` | THE build-mode structure table (31KB, 5+ oracles — the most oracle-covered file in the area). **NEW top-level `_heightCadence` key (line 3, `d42e2817`) — the owner's 2026-08-05 height ruling now lives IN THE DATA so the authority travels with the file** (1.25 landmark / 1.2 tower ANCHOR / 1.0 building base / 0.75 siege / 0.35 decoration; `collector_farm` 1.4 is a bounds COMPENSATION, not a cadence value; wall rows deliberately unauthored for save-compat). Per-row `_heightNote` keys carry the exceptions; `StructureFactory`/`RepoProps.heightMul` carry only the summary. Full rationale: `docs/MASTER_CATALOG/village-systems.md` §4 DELTA. **The JSON-failure fallback `CatalogBootstrap.RegisterFallback` is now parity-guarded** against this file by a reflection deep-compare inside `BuildEconomyRegression` (tag `[fallback-parity]`, rides `BUILDECON_OK` — no new suite, no change to the `REGRESSION_OK n/n` count; `21c11327`). Schema law in its `notes` (now line 4): `type/mustSitOn/navSurface/element` are enum NAMES; `visualPrefabPath` Resources-relative; `behaviorId` → `StructureFactory.AttachBehavior` (only DefenseTower/WallSegment/CrystalMine/Gate wired; null = inert); S4 `repo.cost` multi-resource via ResourceLedger; S5 `repo.maxLevel`/`upgradeCost` CoC upgrade sink; v5 **`repo.bakedTwins`** = legacy baked scene-root names a singleton row represents (StructureSingleton standdown/resurface, e.g. lines 493, 552); v6 adds **`npcModel`** (structure-bound NPC mesh: Cleric line 404, Druid line 491, Engineer line 536). |
 | `themes.json` | — | `Core/Theme/Theme.cs` | Versionless-by-design. |
 | `tower-perks.json` | 1 | `Village/Buildings/Tower.cs` | WC3-style tower perk rows. |
 | `towers.json` | 1 | **NONE via CanonicalJson** — `BuildModeController.cs:2119,2148` reference its tier data in comments only | Mirrored + pinned; currently data-inert; §7.4. |
@@ -249,6 +249,41 @@ UNVALIDATED with a warning); tower rows (per-tier projectile keys).
 catalogued or it "fires a bare pellet", `:88`; wired at `DataRegression.cs:361`) and
 `VfxAuraDifferentiationRegression` (aura keys must resolve in Map or ManualPicks;
 `UpgradeStructureComplete_Aura` must be `isLoop:false`, `:96`).
+
+### DELTA 2026-08-06 - `isLoop` is DERIVED DATA now, and `VFXType` serialises by ORDINAL
+
+*Two contract changes landed in the 2026-08-05 VFX wave. Both change how this data may be
+edited, so they belong here and not only in the VFX docs.*
+
+1. **`isLoop` is no longer a hand-set field (`bd532d5b`).** It had been a **sticky manual UI
+   checkbox** that `VfxCasterWindow` FORCE-SET true for any row tagged Projectile or Aura;
+   nothing ever read the prefab's actual emission. **95 of 135 Hovl rows carried `isLoop:1`**,
+   including every `PP_*Impacts` and `PP_MuzzleFlash` — all single bursts at t=0. Both catalog
+   generators now **DERIVE** it from the art, and the rule is stated **once, in one place**
+   (`Assets/Editor/Regression/VfxLoopFlagRegression.cs`, the shared resolver every other
+   builder calls): `main.loop` AND a positive rate over time or distance, with emission
+   enabled; **the authority is the ROOT system UNLESS the root cannot emit**, in which case it
+   falls through to the first system that can. **53 of 122 picks were wrong.** The
+   `VfxCasterWindow` checkbox is now **read-only and derived**, and the role-based force-set is
+   deleted. New marker `VFX_LOOPFLAG_OK`. **Do not hand-author `isLoop` in
+   `VfxManualPicks.json` — fix the ART, or pin the row (next point).**
+2. **STANDING OWNER RULINGS OUTRANK THE DERIVATION.** Deriving promoted some genuinely
+   continuous prefabs TO loops — one of them, the upgrade fireworks, is played
+   fire-and-forget. The owner had already reported "perma-fireworks" and ruled it one-shot. So
+   **the prefab is the authority on what the art DOES, not on what the game SHOULD DO**:
+   standing owner rulings are **PINNED in a table with their reason**, and **every consumer
+   resolves through ONE method**, so a pin cannot be honoured in one place and forgotten in
+   another. (This is why `VfxAuraDifferentiationRegression`'s
+   `UpgradeStructureComplete_Aura`/`isLoop:false` assertion still holds.)
+3. **`VFXCatalog.asset` serialises `VFXType` by ORDINAL, not by name (`0011b8ba`).** 16 new
+   values were **APPENDED after `Boss_FireBreath`**, and append-only is precisely what makes
+   that safe: **an insert anywhere above would silently re-point every row below it at the
+   wrong art.** Verified after the append: `Boss_FireBreath` still reads `Type: 79`.
+   **NEVER insert, reorder or delete a `VFXType` value — append only.**
+4. **A catalog ROW written by a builder alone is silently DROPPED (`a12c6d22`).**
+   `VFXCatalogGenerator.Build()` does `entries.arraySize = rows.Count`, so map entries MUST
+   land in `VFXCatalogGenerator` alongside the rows — otherwise the next regenerate erases them
+   and the effect falls back to something that still looks like it works.
 
 ---
 

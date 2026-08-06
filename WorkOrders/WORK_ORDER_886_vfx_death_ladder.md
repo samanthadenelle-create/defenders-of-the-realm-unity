@@ -1,6 +1,16 @@
 # WORK ORDER 886 — VFX: enemy death ladder
 
-**Status:** READY TO IMPLEMENT · **Silo:** Combat/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status: LANDED 2026-08-05 (`29f9ac2b`)** — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120` +
+`PARTICLE_PACK_VFX_BUILD_OK` + `VFX_ART_MIRROR_OK`. ⚠ **Read before re-opening:** the **0.7 boss death
+shake in this WO's own acceptance criteria has NEVER FIRED** — `EliteVFXController` is attached to nothing
+(zero prefabs, zero scenes), so every kill including bosses got the flat 0.18; the tier rule was lifted
+into statics instead of auto-attaching the component. **`Death_Skeleton` and `Death_Wolf` are REFUSED with
+measurements** (their ratified `SparksEffect` measures CONTINUOUS — 80/sec on loop at the root — so
+cataloguing it re-opens the loop-cap P0); they keep their tracked Lana rows and need a human re-pick or a
+ruling that the sparks may be re-authored as a one-shot. The **lingering-loop column is deferred** (no
+`VFXType` exists for a death linger). Full ledger:
+`docs/reference/SESSION_INDEX_2026-08-06.md` §5, §7.
+*(original header: READY TO IMPLEMENT · **Silo:** Combat/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05)*
 **Context (read once):** WO-884 §0.2 (locked contract) · `docs/vfx/VFX_PREFAB_HANDBOOK.md` (Step 1–8 pipeline) · `docs/vfx/VFX_CREATIVE_PICKS_REGISTRY.md` §5 (recipes). Enum LANDED — reference names only.
 **Depends on:** WO-884 Phase 0 platform (`Vfx`/`VfxElementTables`/builders).
 

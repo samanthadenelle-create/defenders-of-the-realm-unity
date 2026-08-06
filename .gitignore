@@ -118,8 +118,51 @@ Thumbs.db
 # (the Portal falls back to a box doorway, buildings would need the re-copy).
 /Assets/Art/TripoStructures/
 /Assets/Art/TripoStructures.meta
-/Assets/Resources/Structures/
+# NOTE the trailing /* rather than a bare /: git NEVER DESCENDS into an excluded
+# DIRECTORY, so a `!` negation on a file inside `/Assets/Resources/Structures/` was
+# silently dead - `git check-ignore -v` blamed line 121 for every owner-sourced FBX the
+# negations below were written to rescue. Excluding the CONTENTS (/*) instead keeps the
+# same mirror ignored while letting the per-asset negations actually re-include.
+/Assets/Resources/Structures/*
 /Assets/Resources/Structures.meta
+
+# ...EXCEPT art the owner sourced herself, which lives nowhere else.
+# The blanket ignore above exists because Resources/Structures is a MIRROR of the
+# gitignored Polyperfect/Tripo packs (see CatalogPrefabImporter) - re-derivable on any
+# machine that has the packs. An asset the owner downloaded and dropped in is NOT
+# re-derivable: ignoring it means it exists on exactly one disk, and a fresh clone
+# renders the structure that references it as a missing prefab. That is the same class
+# of defect as the 183 gitignored VFX dependencies fixed on 2026-08-05.
+# Un-ignore per asset, deliberately, so the mirror stays ignored and owner art does not.
+# Folders need BOTH the folder and its .meta, and the negation must re-open the folder
+# before a file inside it can be matched.
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_Tex/
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_Tex.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_Tex/**
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.prefab
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.prefab.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.mat
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower.mat.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2.fbx
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2.fbx.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2_Tex/
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2_Tex.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2_Tex/**
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2.prefab
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2.prefab.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2*.mat
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L2*.mat.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3.fbx
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3.fbx.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3_Tex/
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3_Tex.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3_Tex/**
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3.prefab
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3.prefab.meta
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3*.mat
+!/Assets/Resources/Structures/Tower_Wooden_Watchtower_L3*.mat.meta
 
 # Low Poly Ultimate Pack (polyperfect) — 246MB asset pack kept LOCAL (owner
 # instruction 2026-05-29: "use what you like and we can not git the others").

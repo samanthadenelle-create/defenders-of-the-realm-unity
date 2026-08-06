@@ -1,6 +1,64 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-03) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-06) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-06.md`** (supersedes 08-05, which is bannered; note the
+> 08-05 anchor itself was never threaded here, so this line jumps two days). Branch
+> `wip/village2-and-f8-tickets`, **HEAD `1534dffb`, local is 43 commits AHEAD of origin — NOT PUSHED.**
+> ⚠ Working tree NOT clean, **and it is a SHARED tree (CLAUDE.md §11)**: `ProjectSettings.asset` carries a
+> newer APK stamp (`312459` vs the committed `312348`); `WorkOrders/WORK_ORDER_885`–`894` are untracked;
+> and **a concurrent implementation lane of ~32 modified `.cs` files + the dual-copy
+> `structures-catalog.json` / `damage-states.json`** is in the tree (consistent with WO-889–893 in flight).
+> **One committer, staged by explicit path, never `git add -A`.**
+> Gates last emitted: `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** + `VFX_LOOPFLAG_OK` +
+> `VFX_ART_MIRROR_OK` + `PARTICLE_PACK_VFX_BUILD_OK` + `BOSS_FIREBREATH_BUILD_OK`. Save **v36** unchanged.
+> **Never restate a suite count from a doc — read it off the marker.** It moved 117 → 118 → 119 → 120 in
+> eight hours, and the three entry points now emit DISTINCT markers (`REGRESSION_OK` /
+> `CHECKIN_SUITE_OK` / `SESSION_GUARDS_OK`).
+>
+> **THE PATTERN OF THE NIGHT — carry this forward:** *a flag authored BY HAND instead of DERIVED from the
+> thing it describes.* `IsLoop` (53 of 122 picks wrong) · the "self-contained" tracked VFX prefab
+> (`CopyAsset` copies the prefab only — **183 pack references**) · `HeroTalentNodeDef.Hidden` (zero runtime
+> readers, its own comment lied) · `TalentStrategyRegression.HiddenTrees` (40 nodes never audited) · the UI
+> capture harness resolution (a **label, not a layout**) · `CatalogBootstrap.RegisterFallback` (all three
+> rows drifted). **Derive it, and PIN the owner's standing rulings above the derivation with their reason.**
+>
+> **⚠ VFX LOOP-CAP P0 — FIXED, six captured proving sessions.** `IsLoop` was a sticky checkbox force-set
+> true for role Projectile/Aura; a loop played fire-and-forget **permanently consumes one of the 20 global
+> slots**. The archer and ballista fire `PP_MuzzleFlash` and discard the handle, so after ~20 shots a tower
+> renders no projectile AND starves the Tree of Life aura and every POI marker. `break-log` shows
+> `SKIPPED - active loops 20/20` naming five victims that were themselves the mis-flagged culprits.
+> ⚠ **Not yet proven: the ABSENCE of the cap message across a full wave — that needs a fleet run.**
+> ⚠ **A SECOND signature, NOT closed by this fix: the ONESHOT pool saturates 40/40** in three captures.
+>
+> **⚠ RANGER + MAGE ARE UNLOCKED** (`ff.knightonly` defaults OFF; roster Knight/Ranger/Mage via
+> `PlayableHeroes`; **Cleric deliberately out** — no authored kit). **WO-910: their talent trees are
+> effectively EMPTY — Ranger has ONE usable node of 20, Mage five, both tier-4 capstone rows dead
+> (31 dead nodes total). READY FOR OWNER RULING.** ⚠ **Hero select SELF-SKIPS when the save already
+> records a class** (`HeroSelectController.OnEnable` → `SceneRouter.GoCastle()`), so **testing a class
+> change requires New Game / Play Intro**, not Continue.
+>
+> **⚠ ACCESSIBILITY:** the low-health tell is **no longer a red vignette**. It reads by **pulse rate
+> (0.85 → 3.2 Hz)**, **guttering depth** (trough to a tenth of density) and a **recipe swap to a candle
+> gutter below a quarter health** — shape and timing, never hue. The vignette stays only as a redundant cue.
+> Still colour-only and OPEN: the build placement ghost (valid/invalid on the red/green axis) and the hero
+> health bar.
+>
+> **⚠ HEIGHT CADENCE (owner ruling):** 1.25 landmark / **1.2 towers** / 1.0 building base / 0.75 siege /
+> 0.35 decoration, recorded in the data as `_heightCadence`, **catalog v8** (6→7 archer, 7→8 cadence). **WALLS DELIBERATELY EXCLUDED** —
+> the fit is uniform, so narrowing a wall **opens PATHABLE GAPS in saved wall runs**. `collector_farm` at
+> 1.4 is a **compensation, not an outlier** (windmill blades inflate the Y bounds) — do not "fix" it.
+>
+> **⚠ THE UI CAPTURE HARNESS WAS GEOMETRY-BLIND until `7e05e6d3`** — the resolution in a PNG filename was a
+> LABEL, not a layout. **2670x1200, the Seeker's real surface, had never been rendered in this repo.**
+> Several of tonight's UI commits are explicitly **not** geometry-verified and need a device check.
+> ✖ **`ClampMinTouch` was CHECKED AND RULED OUT** at three sites tonight (bands resolved 117 / 116.7-130.6 /
+> exactly 112.0 px). It is a real class, but check the band arithmetic before naming it.
+>
+> **Full detail + the refuted-beliefs ledger:** `docs/reference/SESSION_INDEX_2026-08-06.md`
+> (and `docs/reference/DEFECT_INDEX_2026-08-05.md` for the earlier half of the same day, frozen).
+> **The 08-03 thread below is SUPERSEDED.**
+>
+> ## ▶ LIVE THREAD (2026-08-03) — SUPERSEDED (see 08-06 above)
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-03.md`** (supersedes 08-02, bannered). Branch
 > `wip/village2-and-f8-tickets`, **HEAD `56be3ae2`, local==origin, PUSHED**. **Working tree CLEAN.**
 > Gates `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** + **`TESTS_OK 912/912`, zero reds** +
@@ -182,7 +240,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-02.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-06.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
 
 > **Fast reconciliation (07-22/07-26 corrections — trust these over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
@@ -212,7 +270,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   tower glow (`ff.hubambientvfx`).
 - **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v36**); gold on kills; research costs. **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830: the player picks each Echo's resource; matching its affinity doubles the yield; token grammar `<resource>:<level>`; Maren = Crystals).
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-08-02.md` (the single live anchor of current reality — read FIRST; a delta over 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `CANON_GROUND_TRUTH_2026-08-06.md` (the single live anchor of current reality — read FIRST; a delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `docs/reference/SESSION_INDEX_2026-08-06.md` (tonight as a known dictionary: every defect with its proving line, every REFUTED belief with the evidence that killed it, the owner rulings, the open items) · `docs/reference/DEFECT_INDEX_2026-08-05.md` (the same for the earlier half of 08-05; frozen)
 - `docs/qa/UI_REVIEW_2026-08-01.md` (frozen 20-panel real-pixel readability review) · `docs/GROK_MEMORY.md` (Grok fast path)
 - `docs/qa/SUNDAY_STATUS_2026-07-26.md` (current WO/ticket status table) + `docs/qa/dungeon-raid-validation-2026-07-26.md` (dungeon/raid sign-off)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)

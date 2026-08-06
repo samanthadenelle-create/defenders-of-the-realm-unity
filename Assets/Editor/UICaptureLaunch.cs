@@ -56,12 +56,28 @@
 //    (1) BUILD PER TARGET SIZE. Every capture is now wrapped in ForEachTarget, which
 //        runs the WHOLE build->shoot->teardown cycle once per target. Nothing is
 //        built once and re-labelled.
-//    (2) MOVE Screen.* BEFORE THE BUILD. GameViewSizeScope drives the editor's main
-//        game view to the target resolution (the GameViewSizes/GameView reflection
-//        recipe) so PostScaleCanvasHeight returns the TARGET value while the panel is
-//        being constructed. The scope VERIFIES the move by reading Screen.* back; if
-//        the editor refuses (batchmode with no game view), it does NOT pretend --
-//        it logs loudly and the run reports UI_CAPTURE_FIDELITY_DEGRADED.
+//    (2) MOVE THE SURFACE BEFORE THE BUILD. CaptureSurfaceScope sets the resolution
+//        the kit resolves geometry against, so PostScaleCanvasHeight returns the TARGET
+//        value while the panel is being constructed. The scope VERIFIES the move by
+//        reading the surface back; if it did not take, it does NOT pretend -- it logs
+//        loudly and the run reports UI_CAPTURE_FIDELITY_DEGRADED.
+//
+//  WHY IT IS NOT THE GAME VIEW ANY MORE (2026-08-05 evening, from CAPTURED DATA).
+//  The first cut of (2) drove the editor's main game view (the GameViewSizes /
+//  SizeSelectionCallback reflection recipe) and hoped Screen.* would follow. It does
+//  not, and the run proved it: Builds/ui-capture-rail.log:475 records
+//  "batchmode=True, graphicsDevice=Direct3D11 ... screen=640x480" -- a REAL D3D11
+//  device, so this is not the -nographics case -- and :489 records the reflection
+//  SUCCEEDING ("game view accepted the size but Screen still reads 640x480").
+//  UI_CAPTURE_FIDELITY_DEGRADED 38/38 was the whole run. Root cause: `-batchmode`
+//  builds no editor window layout, so there is no GameView GUIView for Screen.* to
+//  mirror and it stays on the 640x480 offscreen default no matter what the size list
+//  says. Dropping -nographics cannot help -- that run already had a graphics device.
+//  So the harness stopped depending on editor internals for the load-bearing move and
+//  drives ElarionUiKit's injectable surface instead (default = Screen.*, override =
+//  editor-only). The game-view move is still ATTEMPTED, because in an interactive
+//  editor it really does move Screen.* and that also covers any panel still reading
+//  Screen directly -- but nothing depends on it.
 //
 //  And because eyes-only review is not a defence, AuditGeometry now asserts the
 //  layout NUMERICALLY on every captured canvas (see its banner).
@@ -143,6 +159,17 @@ namespace DeNelle.Editor
         private static int _fidelityDegraded;
         private static readonly HashSet<string> _fidelityReasons = new HashSet<string>(StringComparer.Ordinal);
 
+        // Screen.* itself NEVER moves in batchmode (proven -- see the file banner). Tracked
+        // separately from fidelity so the report can name that residual honestly instead of
+        // letting a reader assume every Screen.* reader in the tree followed the target.
+        private static int _screenStuckBuilds;
+        private static string _screenStuckAt;
+
+        // The divergence proof: two different ASPECTS must resolve DIFFERENT zone rects, or the
+        // run is back to one geometry wearing several filenames. Non-null == proven.
+        private static string _geoMoveProof;
+        private static string _geoMoveFailure;
+
         /// <summary>
         /// Run one capture body ONCE PER TARGET SIZE, with the editor's game view driven to
         /// that size FIRST so the panel is BUILT against it (not built once and re-labelled).
@@ -160,7 +187,7 @@ namespace DeNelle.Editor
             if (targets == null || buildAndShoot == null) return 0;
             foreach (var target in targets)
             {
-                using (new GameViewSizeScope(target, panelName))
+                using (new CaptureSurfaceScope(target, panelName))
                 {
                     try
                     {
@@ -176,23 +203,33 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
-        //  GameViewSizeScope -- move Screen.* to the target BEFORE the panel builds.
+        //  CaptureSurfaceScope -- move the geometry the panel BUILDS against.
         //
-        //  Panels read ElarionUiKit.PostScaleCanvasHeight (-> Screen.width/height) on
-        //  the frame they build their zones. Nothing this harness does to the canvas
-        //  AFTER the build can change those zones, so the only honest fix is to move
-        //  the value the build reads.
+        //  Panels resolve their zones through ElarionUiKit.PostScaleCanvasHeight on the
+        //  frame they are constructed. Nothing this harness does to the canvas AFTER the
+        //  build can change those zones, so the only honest fix is to move the value the
+        //  build READS.
         //
-        //  The only editor lever that moves Screen.* is the MAIN GAME VIEW size, and
-        //  the only way to set it is the long-standing GameViewSizes / GameView
-        //  reflection recipe (UnityEditor internals -- no public API exists). Every
-        //  step is guarded, and the result is VERIFIED by reading Screen.* back:
-        //  a scope that could not move Screen does NOT pretend it did. It records a
-        //  reason, and the run ends on UI_CAPTURE_FIDELITY_DEGRADED with that reason
-        //  printed -- i.e. the harness declares itself scale-only rather than
-        //  shipping a green run over one geometry wearing three filenames.
+        //  (1) THE LOAD-BEARING MOVE: ElarionUiKit.SetSurfaceOverride. The kit's surface
+        //      defaults to Screen.* (shipped behaviour, unchanged) and is overridable
+        //      ONLY in the editor. No UnityEditor internals, so a Unity upgrade cannot
+        //      silently take this away -- which is the whole reason it is not the game
+        //      view any more (see the file banner for the captured proof that the game
+        //      view CANNOT move Screen.* in batchmode).
+        //
+        //  (2) BEST EFFORT: still drive the editor's main game view too. In an
+        //      INTERACTIVE editor that genuinely moves Screen.*, which additionally
+        //      covers any panel that still reads Screen directly. In batchmode it is a
+        //      no-op and nothing here depends on it.
+        //
+        //  VERIFIED, not assumed: the ctor reads the effective surface back. A scope
+        //  that could not move it does NOT pretend -- it records a reason and the run
+        //  ends on UI_CAPTURE_FIDELITY_DEGRADED, i.e. the harness declares itself
+        //  scale-only rather than shipping a green run over one geometry wearing three
+        //  filenames. Screen.* is read back too and reported separately, so nobody
+        //  mistakes "the kit surface moved" for "the process's screen moved".
         // ---------------------------------------------------------------------
-        private sealed class GameViewSizeScope : IDisposable
+        private sealed class CaptureSurfaceScope : IDisposable
         {
             private static bool _probed;
             private static Type _sizesType, _groupType, _sizeType, _sizeTypeEnum, _gameViewType;
@@ -204,10 +241,15 @@ namespace DeNelle.Editor
             private int _prevIndex;
             private bool _restore;
 
-            public GameViewSizeScope(CaptureTarget target, string panelName)
+            public CaptureSurfaceScope(CaptureTarget target, string panelName)
             {
                 _prevIndex = -1;
                 _restore = false;
+
+                // (1) The load-bearing move: what PostScaleCanvasHeight reads at BUILD time.
+                ElarionUiKit.SetSurfaceOverride(target.W, target.H);
+
+                // (2) Best effort: the editor's own game view (moves Screen.* interactively only).
                 try
                 {
                     Probe();
@@ -222,23 +264,34 @@ namespace DeNelle.Editor
                     _probeFailure = _probeFailure ?? (e.GetType().Name + ": " + e.Message);
                 }
 
-                // VERIFY -- never trust the set, read Screen back.
+                // VERIFY -- never trust a set, read it back. Screen first, for the record:
+                // in batchmode it never moves, and the run must say so rather than let a
+                // reader assume every Screen.* reader in the tree followed the target.
                 int sw = Screen.width, sh = Screen.height;
-                if (sw == target.W && sh == target.H)
+                bool screenMoved = sw == target.W && sh == target.H;
+                if (!screenMoved)
+                {
+                    _screenStuckAt = sw + "x" + sh;
+                    _screenStuckBuilds++;
+                }
+
+                // The EFFECTIVE surface -- the value the kit will actually resolve zones from.
+                int ew = ElarionUiKit.SurfaceWidth, eh = ElarionUiKit.SurfaceHeight;
+                if (ew == target.W && eh == target.H)
                 {
                     _fidelityOk++;
                     return;
                 }
 
                 _fidelityDegraded++;
-                string why = _probeFailure ?? ("game view accepted the size but Screen still reads "
-                                               + sw + "x" + sh);
+                string why = "ElarionUiKit surface would not move: asked for " + target.Tag +
+                             ", it reports " + ew + "x" + eh +
+                             (_probeFailure != null ? " (game view path also failed: " + _probeFailure + ")" : "");
                 if (_fidelityReasons.Add(why))
                 {
                     Debug.LogError("[UICap-HL] GEOMETRY FIDELITY LOST for " + target.Tag +
                                    " (panel " + panelName + "): " + why +
-                                   ". Screen.width/height stayed " + sw + "x" + sh + ", so " +
-                                   "ElarionUiKit.PostScaleCanvasHeight will resolve this panel's zones " +
+                                   ". ElarionUiKit.PostScaleCanvasHeight will resolve this panel's zones " +
                                    "against THAT geometry, not " + target.Tag + ". The png is then " +
                                    "SCALE-ACCURATE ONLY -- font size reproduces, zone geometry does NOT. " +
                                    "Treat its filename as a label, not a layout.");
@@ -247,6 +300,9 @@ namespace DeNelle.Editor
 
             public void Dispose()
             {
+                // FIRST and unconditional: a leaked override would mis-size every panel built
+                // later in this editor session (including the owner's own play-mode UI).
+                ElarionUiKit.ClearSurfaceOverride();
                 try
                 {
                     if (_restore && _prevIndex >= 0) SelectIndex(_prevIndex);
@@ -420,6 +476,10 @@ namespace DeNelle.Editor
             _fidelityOk = 0;
             _fidelityDegraded = 0;
             _fidelityReasons.Clear();
+            _screenStuckBuilds = 0;
+            _screenStuckAt = null;
+            _geoMoveProof = null;
+            _geoMoveFailure = null;
             _geoFailures.Clear();
             _geoCanvasesChecked = 0;
             try
@@ -435,6 +495,11 @@ namespace DeNelle.Editor
                     Debug.LogWarning("[UICap-HL] NO graphics device (looks like -nographics) -- pngs will be " +
                                      "BLANK. Re-run WITHOUT -nographics for real pixels.");
                 }
+
+                // BEFORE any panel is shot: prove the surface move actually changes resolved
+                // geometry. If it does not, every png below shares one layout and the run is
+                // worthless -- so this decides the fidelity marker (see ReportFidelity).
+                ProveGeometryMoves();
 
                 count += CaptureFoundingEchoCard();
                 count += CapturePauseMenu();
@@ -469,23 +534,214 @@ namespace DeNelle.Editor
         private static void ReportFidelity()
         {
             int total = _fidelityOk + _fidelityDegraded;
+
+            // The residual, stated plainly. The kit surface moved; the PROCESS's screen did not
+            // (batchmode has no game view). Everything resolving through ElarionUiKit is
+            // therefore target-accurate; a panel that reads Screen.* DIRECTLY at build time is
+            // not. Naming it is the difference between a known limit and a fresh silent lie.
+            string residual = _screenStuckBuilds > 0
+                ? " RESIDUAL: Screen.width/height itself never moved (stuck at " + _screenStuckAt +
+                  " across " + _screenStuckBuilds + " builds) -- `-batchmode` builds no game view for " +
+                  "it to mirror, with or without a graphics device. Zones resolved through " +
+                  "ElarionUiKit (PostScaleCanvasHeight / SurfaceWidth / SurfaceHeight) ARE the " +
+                  "target's; any panel still reading Screen.* directly at build time is not, and " +
+                  "must be routed through the kit surface before its shot can be trusted."
+                : "";
+
             if (total == 0)
             {
-                Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED 0/0 builds -- no capture ran at all");
+                Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED 0/0 builds -- no capture ran at all" + residual);
                 return;
             }
+
+            // The divergence proof gates the whole run: if two different aspects resolve the SAME
+            // zone rects then every png shares one geometry, whatever the per-build checks said.
+            if (_geoMoveProof == null)
+            {
+                Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED " + total + "/" + total +
+                               " builds -- the harness could NOT prove that changing the target " +
+                               "changes the resolved layout, so every png in this run must be treated " +
+                               "as SCALE-ACCURATE ONLY (font size reproduces, zone geometry does NOT; " +
+                               "the resolution in the filename is a LABEL, not a layout). Reason: " +
+                               (_geoMoveFailure ?? "the aspect-divergence proof did not run") + residual);
+                return;
+            }
+
             if (_fidelityDegraded == 0)
             {
                 Debug.Log("UI_CAPTURE_FIDELITY_OK " + _fidelityOk + " builds -- every panel was " +
-                          "constructed with Screen.* at its target resolution, so the zone geometry " +
-                          "in each png is that resolution's real geometry");
+                          "constructed with the kit surface at its target resolution, so the zone " +
+                          "geometry in each png is that resolution's real geometry. PROOF: " +
+                          _geoMoveProof + residual);
                 return;
             }
+
             Debug.LogError("UI_CAPTURE_FIDELITY_DEGRADED " + _fidelityDegraded + "/" + total +
-                           " builds -- the editor would not move Screen.* to the target, so those " +
+                           " builds -- the surface would not move to the target, so those " +
                            "pngs are SCALE-ACCURATE ONLY (font size reproduces, zone geometry does " +
                            "NOT; the resolution in the filename is a LABEL, not a layout). Reasons: " +
-                           string.Join(" | ", new List<string>(_fidelityReasons).ToArray()));
+                           string.Join(" | ", new List<string>(_fidelityReasons).ToArray()) + residual);
+        }
+
+        // =====================================================================
+        //  ProveGeometryMoves -- the run's own proof that the fix is working.
+        // ---------------------------------------------------------------------
+        //  A capture harness can claim any resolution it likes in a filename. The only
+        //  thing that makes the claim MEAN something is that two targets with different
+        //  ASPECTS resolve to DIFFERENT zone rects. Before today they did not -- one
+        //  geometry wore three filenames all night and a caption rendering off its plate
+        //  was invisible.
+        //
+        //  So the run measures it, on the real kit path: build the real Obsidian modal
+        //  under each of the two most-different aspects in the matrix (today 1920x1080,
+        //  aspect 1.778, and the Seeker's 2670x1200, aspect 2.225) and compare the
+        //  resolved layout.body zone. Identical => the whole run is scale-only and
+        //  ReportFidelity says so at ERROR severity. This is a FAILURE, never a warning:
+        //  a warning is indistinguishable from the silence that shipped the defect.
+        //
+        //  Computed from the zone's RESOLVED anchors and PostScaleCanvasHeight rather than
+        //  a live rect -- the overlay canvas's own rect is still the editor's 640x480
+        //  (nothing can move that in batchmode), and it is not what the panel's fraction
+        //  anchors resolve against anyway. Both axes are expressed in canvas-HEIGHT units
+        //  so that every number in the proof is one the KIT produced (see MeasureZones).
+        // =====================================================================
+        private static readonly Vector2 ProbePanelMin = new Vector2(0.22f, 0.10f);
+        private static readonly Vector2 ProbePanelMax = new Vector2(0.78f, 0.90f);
+
+        private struct ZoneProbe
+        {
+            public string Tag;
+            public float CanvasH;
+            public Rect Body;
+        }
+
+        private static void ProveGeometryMoves()
+        {
+            _geoMoveProof = null;
+            _geoMoveFailure = null;
+
+            // The two most-different aspects in the matrix (never a hard-coded pair -- if the
+            // matrix changes, the proof follows it).
+            CaptureTarget lo = default(CaptureTarget), hi = default(CaptureTarget);
+            float loAr = float.MaxValue, hiAr = float.MinValue;
+            foreach (var t in LandscapeTargets)
+            {
+                float ar = (float)t.W / Mathf.Max(1, t.H);
+                if (ar < loAr) { loAr = ar; lo = t; }
+                if (ar > hiAr) { hiAr = ar; hi = t; }
+            }
+            if (Mathf.Abs(hiAr - loAr) < 0.01f)
+            {
+                _geoMoveFailure = "the capture matrix carries only ONE aspect ratio, so nothing in " +
+                                  "this run can demonstrate that geometry follows the target. Keep at " +
+                                  "least one 16:9-class target and the Seeker's 2670x1200 (2.225).";
+                Debug.LogError("[UICap-HL] " + _geoMoveFailure);
+                return;
+            }
+
+            ZoneProbe a, b;
+            if (!MeasureZones(lo, out a) || !MeasureZones(hi, out b))
+            {
+                _geoMoveFailure = "the zone probe could not be measured at both aspects (see the " +
+                                  "[UICap-HL] error above), so the run cannot claim geometry moved";
+                return;
+            }
+
+            bool moved = Mathf.Abs(a.CanvasH - b.CanvasH) > 0.5f || RectDiffers(a.Body, b.Body, 0.5f);
+            if (!moved)
+            {
+                _geoMoveFailure = "aspect " + loAr.ToString("0.###") + " (" + a.Tag + ") and aspect " +
+                                  hiAr.ToString("0.###") + " (" + b.Tag + ") resolved the IDENTICAL " +
+                                  "layout.body zone " + RectStr(a.Body) + " at canvas height " +
+                                  a.CanvasH.ToString("0.#") + " -- i.e. the surface move is not " +
+                                  "reaching ElarionUiKit.PostScaleCanvasHeight and every png in this " +
+                                  "run shares one geometry, exactly as before the 2026-08-05 fix";
+                Debug.LogError("[UICap-HL] GEOMETRY DID NOT MOVE: " + _geoMoveFailure);
+                return;
+            }
+
+            _geoMoveProof = a.Tag + " (aspect " + loAr.ToString("0.###") + ") resolves layout.body " +
+                            RectStr(a.Body) + " at canvas height " + a.CanvasH.ToString("0.#") +
+                            " ref px, while " + b.Tag + " (aspect " + hiAr.ToString("0.###") +
+                            ") resolves " + RectStr(b.Body) + " at " + b.CanvasH.ToString("0.#") +
+                            " (rects in canvas-height units, all kit-derived) -- different targets, " +
+                            "genuinely different layouts";
+            Debug.Log("[UICap-HL] geometry-moves proof: " + _geoMoveProof);
+        }
+
+        /// <summary>Build the real kit modal under <paramref name="target"/> and measure its
+        /// resolved body zone in kit reference px. Returns false (loudly) if it cannot.</summary>
+        private static bool MeasureZones(CaptureTarget target, out ZoneProbe probe)
+        {
+            probe = default(ZoneProbe);
+            ElarionUiKit.ObsidianModal modal = null;
+            try
+            {
+                ElarionUiKit.SetSurfaceOverride(target.W, target.H);
+                if (ElarionUiKit.SurfaceWidth != target.W || ElarionUiKit.SurfaceHeight != target.H)
+                {
+                    Debug.LogError("[UICap-HL] zone probe: ElarionUiKit surface refused " + target.Tag +
+                                   " (reports " + ElarionUiKit.SurfaceWidth + "x" +
+                                   ElarionUiKit.SurfaceHeight + "). The injectable surface is the ONE " +
+                                   "lever this harness has left -- without it every shot is scale-only.");
+                    return false;
+                }
+
+                modal = ElarionUiKit.BuildObsidianModal("~UICapZoneProbe", "Zone Probe",
+                    ProbePanelMin, ProbePanelMax, null, 100);
+                if (modal == null || modal.chrome == null || modal.chrome.content == null
+                    || modal.chrome.layout == null || modal.chrome.layout.body == null)
+                {
+                    Debug.LogError("[UICap-HL] zone probe: BuildObsidianModal produced no layout.body " +
+                                   "at " + target.Tag + " -- the probe measures the kit's real chrome, " +
+                                   "so a null here means the kit path itself did not build.");
+                    return false;
+                }
+
+                float canvasH = ElarionUiKit.PostScaleCanvasHeight(modal.chrome.content.transform);
+
+                // EVERY number below comes from the KIT (this height + the zone's resolved
+                // anchors). The x axis is deliberately expressed in canvas-HEIGHT units rather
+                // than a width derived from the target's own aspect: a self-derived width would
+                // make the two rects differ even if the kit had ignored the surface completely,
+                // i.e. a proof that proves itself. This way the rects can only diverge because
+                // the kit's own build-time geometry diverged.
+                float canvasW = canvasH;
+
+                // The body zone's resolved rect: its anchors within the panel, the panel's
+                // anchors within the canvas, the canvas in reference units.
+                var body = modal.chrome.layout.body;
+                float px0 = ProbePanelMin.x * canvasW, px1 = ProbePanelMax.x * canvasW;
+                float py0 = ProbePanelMin.y * canvasH, py1 = ProbePanelMax.y * canvasH;
+                float pw = px1 - px0, ph = py1 - py0;
+                probe = new ZoneProbe
+                {
+                    Tag = target.Tag,
+                    CanvasH = canvasH,
+                    Body = new Rect(px0 + body.anchorMin.x * pw,
+                                    py0 + body.anchorMin.y * ph,
+                                    (body.anchorMax.x - body.anchorMin.x) * pw,
+                                    (body.anchorMax.y - body.anchorMin.y) * ph),
+                };
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] zone probe threw at " + target.Tag + ": " + e);
+                return false;
+            }
+            finally
+            {
+                if (modal != null && modal.canvas != null)
+                    UnityEngine.Object.DestroyImmediate(modal.canvas);
+                ElarionUiKit.ClearSurfaceOverride();
+            }
+        }
+
+        private static bool RectDiffers(Rect a, Rect b, float eps)
+        {
+            return Mathf.Abs(a.xMin - b.xMin) > eps || Mathf.Abs(a.yMin - b.yMin) > eps
+                || Mathf.Abs(a.width - b.width) > eps || Mathf.Abs(a.height - b.height) > eps;
         }
 
         // ---------------------------------------------------------------------
@@ -1283,13 +1539,14 @@ namespace DeNelle.Editor
         //  CTA field) before invoking Repaint -- the repaint then runs
         //  Destroy-free (tower-manager parking recipe, applied as a pre-clear).
         //
-        //  PORTRAIT: Open() picks the stacked-vs-split geometry from
-        //  Screen.height > Screen.width at BUILD time. The portrait targets below
-        //  are now BUILT under a portrait GameViewSizeScope, so Open() takes that
-        //  branch ITSELF. The authored portrait anchors are still re-applied after
-        //  the paint: they are the same values Open writes (so a no-op when the
-        //  scope worked), and they keep the shot honest if the editor refused to
-        //  move Screen (UI_CAPTURE_FIDELITY_DEGRADED).
+        //  PORTRAIT: Open() picks the stacked-vs-split geometry at BUILD time from
+        //  the KIT SURFACE (ElarionUiKit.SurfaceHeight > SurfaceWidth -- it used to
+        //  read Screen.* directly, which batchmode can never move). The portrait
+        //  targets below are BUILT under a portrait CaptureSurfaceScope, so Open()
+        //  takes that branch ITSELF. The authored portrait anchors are still
+        //  re-applied after the paint: they are the same values Open writes (so a
+        //  no-op when the scope worked), and they keep the shot honest if the
+        //  surface ever refused to move (UI_CAPTURE_FIDELITY_DEGRADED).
         // ---------------------------------------------------------------------
         private static readonly CaptureTarget[] RumorBoardTargets =
         {

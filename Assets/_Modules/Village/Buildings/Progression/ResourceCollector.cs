@@ -389,8 +389,52 @@ namespace DeNelle.Village.Buildings.Progression
             if (_pending < 0) _pending = 0;
             SaveState();
             FlowTrace.Step("Harvest", $"collect building={_buildingId} +{amount} {res} wallet");
+
+            // WO-890 - THE COLLECT TAP HAD NO FEEDBACK AT ALL, and it is the most repeated
+            // action in the town loop. Verified at source before this line existed: Collect
+            // moved a wallet number and printed a trace, and that was the entire response -
+            // no popup, no sound, no effect. Every OTHER banking path in the game already
+            // emits this exact popup (MineNode.SpawnGainPopup on tap / worker extract,
+            // HarvestSite via EconomyService.AddResource), so a collector was the one income
+            // source that paid you silently.
+            //
+            // This is the SHARED income language, not a new one, and deliberately not a new
+            // VFX pick: ResourceGainPopup is the code-built world text those paths already
+            // use, so "+N Wood" means the same thing wherever the wood came from. It is also
+            // free of the loop budget - it is a self-destroying GameObject, not a pooled
+            // loop, so the most-repeated action in the game cannot starve the 20 aura slots.
+            // The COLLECTOR's own state tells (the Collector_Ready beacon going out, the
+            // pile emptying, the "N/20" readout) are driven by the StepChanged raised below.
+            //
+            // The model spawning this mirrors MineNode.Extract, the established precedent in
+            // this same domain: the popup needs the AMOUNT, which only lives here for the
+            // duration of this call, and ResourceGainPopup is a shared static spawner rather
+            // than UI this class builds or owns.
+            DeNelle.Village.World.ResourceGainPopup.Spawn(
+                transform.position + Vector3.up * 1.6f,
+                $"+{amount} {ResourceBuildingProgression.LabelFor(res)}",
+                PopupTint(res));
+
             RaiseStepChangedIfMoved(stepsBefore);
             return amount;
+        }
+
+        /// <summary>
+        /// Popup tint per resource. Deliberately the SAME palette MineNode.ResourceTint
+        /// uses so wood reads as wood whether it came from a node or a lumbermill. The
+        /// colour is a redundant channel only - the popup always names the resource in
+        /// words, which is what carries the meaning for a red/green-colourblind reader.
+        /// </summary>
+        private static Color PopupTint(HarvestResource res)
+        {
+            switch (res)
+            {
+                case HarvestResource.Wood:     return new Color(0.55f, 0.38f, 0.22f);
+                case HarvestResource.Iron:     return new Color(0.62f, 0.64f, 0.70f);
+                case HarvestResource.Food:     return new Color(0.72f, 0.62f, 0.28f);
+                case HarvestResource.Crystals: return new Color(0.35f, 0.72f, 0.95f);
+                default:                       return Color.white;
+            }
         }
 
         public void ApplyContactDamage(float amount)

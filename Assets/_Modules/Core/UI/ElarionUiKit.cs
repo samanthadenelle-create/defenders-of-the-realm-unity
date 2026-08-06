@@ -994,6 +994,63 @@ namespace DeNelle.Core.UI
             }
         }
 
+        // =====================================================================
+        //  SURFACE SIZE — the ONE place the kit asks "how big is the screen?"
+        // ---------------------------------------------------------------------
+        //  WHY THIS EXISTS (2026-08-05). Zone geometry is resolved AT BUILD TIME by
+        //  PostScaleCanvasHeight below, which read Screen.width/height directly. In
+        //  `-batchmode` there is NO game view for Screen.* to mirror: it reports the
+        //  640x480 offscreen default and nothing in the editor moves it. That is
+        //  measured, not theorised — Builds/ui-capture-rail.log:475 records
+        //  "graphicsDevice=Direct3D11 ... screen=640x480" (a real GPU, so it is not
+        //  the -nographics case) and :489 records the GameViewSizes /
+        //  SizeSelectionCallback reflection SUCCEEDING while Screen stayed 640x480.
+        //  Consequence: every UI capture was BUILT at one geometry and written under
+        //  three different filenames, so a caption that rendered off its black plate
+        //  on the device was structurally invisible to the harness.
+        //
+        //  The surface is therefore INJECTABLE. With no override the properties return
+        //  Screen.* — byte-identical to the behaviour before this change, on device and
+        //  in play mode. A capture may override it so a panel is BUILT against the
+        //  resolution it is about to be SHOT at.
+        //
+        //  DELIBERATELY EDITOR-ONLY: the setter no-ops outside the editor, so no shipped
+        //  build can run on an overridden surface however a future caller misuses it.
+        //  Presentation-layer only — it reports a size, it never touches game state.
+        // =====================================================================
+        private static int _surfaceOverrideW;   // 0 == no override (the shipped state)
+        private static int _surfaceOverrideH;
+
+        /// <summary>Screen width the kit resolves geometry against (Screen.width unless a
+        /// capture has overridden it via <see cref="SetSurfaceOverride"/>).</summary>
+        public static int SurfaceWidth => _surfaceOverrideW > 0 ? _surfaceOverrideW : Screen.width;
+
+        /// <summary>Screen height the kit resolves geometry against (Screen.height unless a
+        /// capture has overridden it via <see cref="SetSurfaceOverride"/>).</summary>
+        public static int SurfaceHeight => _surfaceOverrideH > 0 ? _surfaceOverrideH : Screen.height;
+
+        /// <summary>True while a capture is driving the surface (never true in a player).</summary>
+        public static bool HasSurfaceOverride => _surfaceOverrideW > 0 && _surfaceOverrideH > 0;
+
+        /// <summary>EDITOR-ONLY. Make the kit resolve geometry as if the screen were
+        /// <paramref name="width"/> x <paramref name="height"/>. Always pair with
+        /// <see cref="ClearSurfaceOverride"/> in a finally/Dispose — a leaked override would
+        /// mis-size every panel built afterwards in that editor session.</summary>
+        public static void SetSurfaceOverride(int width, int height)
+        {
+            if (!Application.isEditor) return;   // structurally unreachable in a shipped build
+            if (width <= 0 || height <= 0) { ClearSurfaceOverride(); return; }
+            _surfaceOverrideW = width;
+            _surfaceOverrideH = height;
+        }
+
+        /// <summary>Back to Screen.* — the default, shipped behaviour.</summary>
+        public static void ClearSurfaceOverride()
+        {
+            _surfaceOverrideW = 0;
+            _surfaceOverrideH = 0;
+        }
+
         /// <summary>
         /// Height of the canvas above <paramref name="under"/> in CANVAS-LOCAL units, as it
         /// will be AFTER the CanvasScaler has applied — NOT the live rect. F8-5 root cause
@@ -1025,7 +1082,10 @@ namespace DeNelle.Core.UI
             var rootRt = root.transform as RectTransform;
             float liveH = rootRt != null ? rootRt.rect.height : 0f;
 
-            float screenH = Screen.height;
+            // SurfaceHeight/Width, not Screen.* directly: identical on device and in play mode
+            // (no override), but a capture can drive them so this build-time read resolves the
+            // TARGET resolution's geometry instead of the editor's 640x480 batchmode default.
+            float screenH = SurfaceHeight;
             var scaler = root.GetComponent<CanvasScaler>();
             if (root.renderMode == RenderMode.ScreenSpaceOverlay && scaler != null && screenH > 1f)
             {
@@ -1035,7 +1095,7 @@ namespace DeNelle.Core.UI
                     case CanvasScaler.ScaleMode.ScaleWithScreenSize:
                         float refW = Mathf.Max(1f, scaler.referenceResolution.x);
                         float refH = Mathf.Max(1f, scaler.referenceResolution.y);
-                        float screenW = Mathf.Max(1f, (float)Screen.width);
+                        float screenW = Mathf.Max(1f, (float)SurfaceWidth);
                         switch (scaler.screenMatchMode)
                         {
                             case CanvasScaler.ScreenMatchMode.Expand:
@@ -1680,15 +1740,26 @@ namespace DeNelle.Core.UI
         public static void EnsureFont(TextMeshProUGUI t)
         {
             if (t == null || t.font != null) return;
+            var f = ResolveDefaultFont();
+            if (f != null) t.font = f;
+            else DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                "ElarionUiKit.Label: no TMP font (TMP_Settings.defaultFontAsset null AND LiberationSans SDF " +
+                "absent from Resources) — assigning none to avoid an NRE; text may not render until a font ships.");
+        }
+
+        /// <summary>THE default-chain font (TMP_Settings.defaultFontAsset ?? Resources
+        /// "Fonts &amp; Materials/LiberationSans SDF"), resolved once and cached. Exposed because the
+        /// numeral-legibility gate (ElarionUiKitObsidian) must be able to judge the font a rejected
+        /// ROLE will actually fall back to — one resolution path, so the gate can never report on a
+        /// font different from the one that draws. Null only when neither is present.</summary>
+        public static TMPro.TMP_FontAsset ResolveDefaultFont()
+        {
             if (_fontCache == null)
             {
                 _fontCache = TMPro.TMP_Settings.defaultFontAsset
                           ?? UnityEngine.Resources.Load<TMPro.TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
             }
-            if (_fontCache != null) t.font = _fontCache;
-            else DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
-                "ElarionUiKit.Label: no TMP font (TMP_Settings.defaultFontAsset null AND LiberationSans SDF " +
-                "absent from Resources) — assigning none to avoid an NRE; text may not render until a font ships.");
+            return _fontCache;
         }
 
         // =====================================================================

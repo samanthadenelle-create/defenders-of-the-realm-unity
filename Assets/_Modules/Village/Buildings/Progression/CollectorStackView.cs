@@ -123,6 +123,38 @@ namespace DeNelle.Village.Buildings.Progression
             // Subscribe to the model's single "re-render" signal + paint the initial state.
             if (_collector != null) _collector.StepChanged += OnStepChanged;
             Refresh();
+
+            AttachHarvestAura();
+        }
+
+        // ── WO-890: the held VFX loop that DECORATES this tell (never replaces it) ──
+        //
+        // The "!" bang, the bob, the numeric readout, the one-shot LevelUp_Celebration
+        // glint and the coalesced FULL toast above are UNCHANGED - WO-890 says build ON
+        // the existing full-tell, and this does. What was missing is a PERSISTENT read:
+        // the glint fires once at the transition and is gone, so a player who looks away
+        // for two seconds never learns the collector capped. Collector_Ready is the
+        // standing beacon (rising bob = "come pick me up"), and the per-resource harvest
+        // aura is the standing "this thing is working" read below it.
+        //
+        // Ownership of the loop is entirely HarvestAura's: one handle, one beat at a
+        // time, a nearest-N budget across every harvest surface in the town, and a stop
+        // on every exit path (beat change, collected, broken, disable, destroy, scene
+        // unload). This view supplies STATE and nothing else - it never holds a handle,
+        // so it cannot leak one.
+        private void AttachHarvestAura()
+        {
+            if (_collector == null) return;
+
+            var col = _collector;   // capture the field, not `this`, so the delegate has no view dependency
+            HarvestAura.Attach(gameObject,
+                () =>
+                {
+                    if (col == null || col.IsBroken || !col.IsActive) return HarvestAura.Beat.None;
+                    return col.IsFull ? HarvestAura.Beat.Ready : HarvestAura.Beat.Harvesting;
+                },
+                () => HarvestAura.TypeForResource(col != null ? col.Resource : HarvestResource.Wood),
+                "collector:" + col.BuildingId);
         }
 
         private void OnDestroy()

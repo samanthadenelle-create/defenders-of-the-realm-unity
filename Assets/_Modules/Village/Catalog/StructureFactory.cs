@@ -803,6 +803,40 @@ namespace DeNelle.Village
                     break;
                 }
 
+                // HealerTower - WO-891. The FIRST instance of the general support/offensive
+                // FIELD pattern, and the proof of its thesis: a new structure is stats plus
+                // TWO TAGS. It copies range / fireRate / magnitude off entry.repo exactly the
+                // way DefenseTower's case above does, then hands SupportFieldStructure an
+                // element tag (presentation) and an effect tag (gameplay).
+                //
+                // NOT a clone of HealingFountain. That one is a bespoke singleton whose whole
+                // job is topping the HEART up out of battle (its own upgrade UI, its own coin
+                // ladder, its own out-of-battle gate). This heals UNITS in a radius on a tick,
+                // in or out of battle, and carries no UI of its own.
+                //
+                // THE PATTERN PROOF - a second variant costs exactly these three lines and NO
+                // new VFX code, because SupportFieldStructure's element table already resolves
+                // all four wheel elements and every one of those VFXTypes is already
+                // catalogued:
+                //     case "SlowFieldTower":
+                //     {
+                //         var s = root.AddComponent<SupportFieldStructure>();
+                //         s.Configure(entry, SupportFieldStructure.FieldElement.Ice,
+                //                            SupportFieldStructure.FieldEffect.Heal);
+                //         break;
+                //     }
+                // (An Ice SLOW would additionally need one arm in ResolveTick's effect switch
+                // - that is gameplay, not VFX, and WO-891's claim is about the VFX half. Said
+                // plainly rather than glossed.)
+                case "HealerTower":
+                {
+                    var h = root.AddComponent<SupportFieldStructure>();
+                    h.Configure(entry,
+                                SupportFieldStructure.FieldElement.Holy,
+                                SupportFieldStructure.FieldEffect.Heal);
+                    break;
+                }
+
                 // GameplayBuilding — Phase 2: the village's economy/upgrade buildings
                 // (pet-house / workshop / market / mill / lumbermill / forge / arcane-
                 // tower) as first-class droppable catalog entries. Mirrors the hard-coded

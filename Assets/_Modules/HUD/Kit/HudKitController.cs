@@ -891,8 +891,13 @@ namespace DeNelle.HUD.Kit
             // The chip is MinTouchPx tall and its label wraps, so the height for a second
             // line is already reserved and costs nothing. Two short lines also survive a
             // narrow chip better than one wrapped line.
-            // The underlying glyph problem is wider than this chip - see the numeral-1
-            // legibility ticket - but no caller should have to depend on that being fixed.
+            // The underlying glyph problem was wider than this chip and is now FIXED AT THE
+            // SOURCE (2026-08-05, same day): ElarionUiKit's numeral-legibility gate measured the
+            // Body role font (Alata) drawing '1' at 7.23 ink units against its own 'l' 6.84 and
+            // '|' 6.14, rejected it, and fell every FontRole.Body surface through to the default
+            // chain. The two lines STAY regardless: this chip is 220 ref px wide and 112 tall, so
+            // one wrapped line would still ellipsize the Train count off a legible face, and the
+            // height for a second line is already reserved. Layout reason, no longer a font one.
             if (s.TrainBusy > 0) line += "\nTrain " + s.TrainBusy;
             return line;
         }

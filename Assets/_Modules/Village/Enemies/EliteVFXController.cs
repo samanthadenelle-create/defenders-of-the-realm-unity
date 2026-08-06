@@ -78,7 +78,10 @@ namespace DeNelle.Village
         {
             yield return new WaitForSeconds(spawnDramaticDelay);
 
-            VFXType spawnVfx = isBoss ? VFXType.Boss_Spawn : VFXType.Elite_Spawn;
+            // WO-893: delegate to the shared rule rather than re-deciding it here, so a
+            // hand-placed prefab carrying this component and a pooled enemy driven by
+            // Enemy.FireSpawnTell cannot pick different art for the same tier.
+            VFXType spawnVfx = SpawnVfxFor(isBoss, isElite);
             VFXManager.Play(spawnVfx, transform.position);
 
             if (isBoss)
@@ -123,6 +126,30 @@ namespace DeNelle.Village
             if (isBoss)  return VFXType.Boss_Death;
             if (isElite) return VFXType.Elite_Death;
             return VFXType.None;
+        }
+
+        /// <summary>
+        /// WO-893 — THE SPAWN TIER RULE, in the same one place as the death rule above and
+        /// for the same reason: this component is attached to no prefab in the tree (WO-886
+        /// grepped every .prefab/.unity/.asset and found none), so
+        /// <see cref="DramaticSpawnRoutine"/> has never run in the shipped game and neither
+        /// Elite_Spawn nor Boss_Spawn had ever played. Lifting the rule to a static lets
+        /// <c>Enemy</c> drive it off its enemies.json stat block - the only species signal
+        /// the pool/factory spawn path actually sets - without auto-attaching this component
+        /// and silently shipping its aura light pulse as well.
+        /// <para>
+        /// Unlike <see cref="DeathVfxFor"/>, a plain enemy does NOT return
+        /// <see cref="VFXType.None"/>: the STANDARD spawn is exactly the moment WO-893
+        /// exists to add ("mobs no longer pop from nothing"), so every tier returns a real
+        /// type and the three form a ladder - standard materialise, elite rise, boss set
+        /// piece. All three are Family B one-shots; a spawn must never hold a loop slot.
+        /// </para>
+        /// </summary>
+        public static VFXType SpawnVfxFor(bool isBoss, bool isElite)
+        {
+            if (isBoss)  return VFXType.Boss_Spawn;
+            if (isElite) return VFXType.Elite_Spawn;
+            return VFXType.Enemy_Spawn;
         }
 
         /// <summary>

@@ -11,6 +11,27 @@
 // (×, en/em dash, ellipsis, curly quotes, degree, bullet). Titillium is
 // reserved — NOT generated in v1 (TMP atlas cost).
 //
+// ⚠ NUMERAL-1 DEFECT IN THE BODY ROLE (owner, captured 2026-08-05 —
+//   Builds/ui-capture/QueueCardRail_2670x1200.png + docs/qa/UI_REVIEW_2026-08-05_seeker.md):
+//   ALATA DRAWS THE NUMERAL 1 AS A BARE VERTICAL STEM. Measured off the source outlines
+//   (1000 upem): Alata '1' = 113 units of ink, its own 'l' = 107, its '|' = 96. On a HUD
+//   made of counts that made "Builders 1/2 | Train 1" render as three identical vertical
+//   marks with three different meanings. It is the TYPEFACE, not this importer and not the
+//   SDF atlas — re-running BlinkFontImporter over Alata reproduces it exactly.
+//
+//   ElarionUiKit's numeral-legibility gate now REJECTS font_body at load and falls the Body
+//   role through to the default chain (LiberationSans SDF, '1' = 883/2048 em vs '|' 166 —
+//   unambiguous), so the game is legible today with no asset work.
+//
+//   THE ASSET-LEVEL FIX, when the owner rules on look: point the font_body row of Table
+//   below at "Titillium/TitilliumWeb-Regular.ttf" and re-run this importer. Verified from
+//   the pack's own TTF: Titillium '1' = 282 units vs 'l' 75 / '|' 74 (3.8x — clearly
+//   flagged), full ASCII 32..126 coverage AND every typographic extra BuildCharacterSet
+//   requests, and it is 8.6% NARROWER than Alata over a sample sentence, so nothing that
+//   fits today can overflow. The gate then accepts it automatically — no code change.
+//   (Acme also passes at 2.0x but it is the STAMP role; reusing it for body collapses the
+//   type hierarchy. Merriweather passes at 4.0x vs its pipe but it is the serif TITLE face.)
+//
 // The generated .asset files live under committed Resources/ so the game is
 // fresh-clone safe; the gitignored Blink pack is only needed to REGENERATE.
 // Pack absent ⇒ Debug.LogWarning + no-op (game runs on the existing fallback

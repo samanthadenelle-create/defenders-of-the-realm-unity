@@ -10,13 +10,55 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-08-02 (supersedes ALL blocks below; anchor = `CANON_GROUND_TRUTH_2026-08-02.md`)
+## CURRENT STATE — 2026-08-06 (supersedes ALL blocks below; anchor = `CANON_GROUND_TRUTH_2026-08-06.md`)
 
-> The 2026-08-01, 2026-07-26, 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they
-> conflict, **the newest block wins.** Live anchor of current reality =
-> `CANON_GROUND_TRUTH_2026-08-02.md` (delta over 08-01 → 07-26 → the deep `2026-07-22` module anchor).
+> All blocks below (2026-08-02, 08-01, 07-26, 06-09, 05-29) are kept for history. Where they conflict,
+> **the newest block wins.** Live anchor of current reality = `CANON_GROUND_TRUTH_2026-08-06.md`
+> (delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `2026-07-22` module anchor).
 
-- **2026-08-02 delta — marathon day 2 (HEAD `e60b19e5`, local==origin, pushed; 21 commits dated 08-02):**
+- **2026-08-06 delta — the VFX night (HEAD `1534dffb`; local 43 commits AHEAD of origin, NOT PUSHED):**
+  - **Gates:** `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** + `VFX_LOOPFLAG_OK` +
+    `VFX_ART_MIRROR_OK` + `PARTICLE_PACK_VFX_BUILD_OK` + `BOSS_FIREBREATH_BUILD_OK`.
+    ⚠ The count moved **117 → 118 → 119 → 120** in eight hours — **read it off the marker, never a doc.**
+    Save **v36**, unchanged. ⚠ Working tree NOT clean, **and SHARED** (`ProjectSettings.asset` APK stamp
+    `312459`; `WorkOrders/WORK_ORDER_885`–`894` untracked; **plus a concurrent lane of ~32 modified `.cs`
+    files and the dual-copy `structures-catalog.json` / `damage-states.json`** — WO-889–893 in flight).
+    **Reconcile by explicit path; one committer; never `git add -A`.**
+  - **⚠ P0 — VFX LOOP CAP.** `IsLoop` was a sticky UI checkbox force-set true for role Projectile/Aura;
+    **53 of 122 picks wrong.** A loop played fire-and-forget **permanently consumes one of 20 global slots**
+    (the only reclaim frees DESTROYED hosts; pooled objects are never destroyed). Archer + ballista fire
+    `PP_MuzzleFlash` and discard the handle → after ~20 shots **no tower projectile at all**, plus the Tree
+    of Life aura and every POI marker starved. **Six F8 sessions show `SKIPPED - active loops 20/20`.**
+    Both generators now DERIVE the flag; standing owner rulings are **pinned above the derivation**.
+    ⚠ **Absence-of-message across a full wave is NOT yet proven** (fleet run owed). ⚠ **Separate signature,
+    not closed: the ONESHOT pool saturates 40/40.**
+  - **⚠ P0 — the tracked VFX prefabs were NOT self-contained.** `CopyAsset` copies the prefab only:
+    **27 of 28 prefabs, 183 references, 73 assets** into gitignored art. **Now 0**, ~**23.85 MB** mirrored
+    to `Resources/VFX/_Shared/`, guarded. ⚠ Two pack scripts stripped — **`Casting_Fire` no longer spawns a
+    projectile.** ⚠ **Lana Studio is NOT gitignored** (only its URP upgrade subfolder).
+  - **SHIPPED:** WO-759 boss fire breath · 16 appended `VFXType` values (**ordinal-serialised — appends
+    only**) with 14 built into tracked prefabs + rows · four bought-and-never-played combat effects wired ·
+    **WO-886** death ladder · **WO-887** empowered-tower element routing (surface half REFUSED with
+    measurements) · **WO-888** colourblind low-health tell · **WO-894** victory screen (two-column landscape
+    spoils, a documented deviation from the WO's own wireframe) · **WO-908** side-menu gear icons · Echo
+    unlock merged to ONE screen with two buttons · right-rail collapsed chip style · potion hotbar ·
+    tutorial wave stand-down + its watchdog cancellation · one **structure height cadence** (catalog **v8**).
+  - **IN FLIGHT (specs on disk, untracked, NOT implemented):** **WO-889/890/891/892/893** (combat auras
+    nearest-N · harvest economy · structures/healer · building damage state · portals/spawn/dissolve).
+    **WO-884/885** READY. **WO-910 READY FOR OWNER RULING** (Ranger/Mage talent trees are effectively empty
+    — 31 dead nodes; Ranger 1 usable of 20, Mage 5 of 20, both tier-4 capstone rows dead).
+  - **Hero:** `ff.knightonly` defaults **OFF** — roster Knight/Ranger/Mage via `PlayableHeroes`
+    (**Cleric deliberately out**). A **latent invisible-hero P0** is closed (Ranger/Mage had no FBX and fell
+    to a gitignored Blink body that instantiated nothing on a fresh clone; now a tracked KayKit body).
+    ⚠ **Hero select self-skips when the save already records a class — testing needs New Game.**
+  - **⚠ The UI capture harness was GEOMETRY-BLIND** until `7e05e6d3`: the resolution in a PNG filename was a
+    **label, not a layout**, and 2670x1200 had never been rendered here. Several 08-05 UI commits are **not**
+    geometry-verified. ✖ `ClampMinTouch` was **checked and ruled out** at three sites.
+  - **NOT DEPLOYED:** the wallet identity fix — `assetlinks` must be live **before** an APK carrying the new
+    identity, or it reproduces the exact bug. Owner's call, alongside promoting `api/` to prod.
+  - Session ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` (+ `DEFECT_INDEX_2026-08-05.md`, frozen).
+
+- **2026-08-02 delta — marathon day 2 (HEAD `e60b19e5`, local==origin, pushed; 21 commits dated 08-02)** *(superseded by the 08-06 block above; kept for history — its WO next-free numbers are stale)***:**
   - **Gates:** `COMPILE_GATE_OK` + `REGRESSION_OK` + **EditMode 884/884, zero reds** + **`UI_CAPTURE_OK 28`**.
     **Ten new oracles** today: raid-deploy-ui, wallet-provider, hud-actionbar, echo-picker,
     dungeon-room-ownership, realm-map, dungeon-treasure, echo-card-layout, starter-loadout, shield-defense.

@@ -1,6 +1,17 @@
 # WORK ORDER 894 — Victory screen: real spinning stars + exact wireframe layout
 
-**Status:** READY TO IMPLEMENT · **Silo:** UI / EndState · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status: LANDED 2026-08-05 (`afa50e44`) WITH A DOCUMENTED DEVIATION FROM THIS WO'S OWN WIREFRAME** —
+gate `COMPILE_GATE_OK`. ⚠ **Read before treating §2/§3 as binding again:** **this WO's own spec made the
+crush WORSE** — raising the star band 48 -> 72 pushed arena-win from 0.893 to 0.859. **The crush is
+arithmetic, not layout, and it is not `ClampMinTouch`:** landscape has **965 reference px** of height and an
+arena win with five spoils asks for a **1027 px** panel, so the content was taller than the screen. The fix
+therefore takes the spoils list **TWO COLUMN in landscape**, overriding the §2 wireframe because that
+wireframe was drawn without knowing the content does not fit the surface. Result: arena win with five
+spoils **0.859 -> 1.000** unclamped; raid win 0.950 -> 1.000; portrait stays single column.
+**One case still compresses** — arena + FLAWLESS + five spoils at 0.992 — **currently UNREACHABLE** because
+nothing ever sets `perfect` true. ⚠ **The diamonds were NEVER a font problem** (see the ledger).
+Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §5.16-5.18, §6.1-6.2.
+*(original header: READY TO IMPLEMENT · **Silo:** UI / EndState · **For:** CLAUDE CLI · **Date:** 2026-08-05)*
 **PO:** Samantha (owner) · **Author:** UI seat
 **Binding acceptance:** the built screen must match the **§2 wireframe** and **§3 spacing table** EXACTLY, and the stars must be **real 5-point stars that visibly SPIN in** (§4). No approximations.
 

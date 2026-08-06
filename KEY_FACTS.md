@@ -29,6 +29,77 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-06) — the VFX night: two P0s, Ranger/Mage unlocked, one height cadence
+- **Anchor = `CANON_GROUND_TRUTH_2026-08-06.md`** (supersedes 08-05, bannered). **HEAD `1534dffb`, local is
+  43 commits AHEAD of origin — NOT PUSHED.** ⚠ Working tree NOT clean: `ProjectSettings.asset` carries a
+  newer APK stamp (`2026.08.05.312459` / code `312459` vs the committed `312348`) and
+  `WorkOrders/WORK_ORDER_885`–`894` are untracked. Save still **v36**.
+- **Gates last emitted:** `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** + `VFX_LOOPFLAG_OK` +
+  `VFX_ART_MIRROR_OK` + `PARTICLE_PACK_VFX_BUILD_OK` + `BOSS_FIREBREATH_BUILD_OK`.
+  ⚠ **The count moved 117 → 118 → 119 → 120 in eight hours. Read it off the marker, never off a doc.**
+- **THE PATTERN (transferable):** six defects, one shape — **a flag authored BY HAND instead of DERIVED
+  from the thing it describes.** `IsLoop` · the "self-contained" tracked VFX prefab · `HeroTalentNodeDef.Hidden`
+  · `TalentStrategyRegression.HiddenTrees` · the capture harness resolution · `RegisterFallback`.
+  **Derive it — and PIN the owner's standing rulings ABOVE the derivation with their reason**, because the
+  prefab is the authority on what the art *does*, not on what the game *should do*.
+- **⚠ P0 — THE VFX LOOP CAP LEAKED DRY.** `IsLoop` was a sticky checkbox `VfxCasterWindow` force-set true
+  for role Projectile/Aura; **53 of 122 picks were wrong.** A loop row never returns its slot (the only
+  reclaim frees DESTROYED hosts; pooled objects are never destroyed), **cap 20**. Archer + ballista fire
+  `PP_MuzzleFlash` and discard the handle, so after ~20 shots a tower renders **no projectile** and starves
+  the Tree of Life aura + every POI marker. **Six F8 sessions on two dates show `SKIPPED - active loops
+  20/20`**, naming five victims that were themselves the mis-flagged culprits. Both generators now DERIVE
+  the flag from the art (rule: `main.loop` AND a positive rate, emission enabled; authority = the root
+  system UNLESS it cannot emit). ⚠ **Not yet proven: the ABSENCE of the message across a full wave — owed a
+  fleet run.** ⚠ **A separate, unbundled signature: the ONESHOT pool saturates 40/40** in three captures.
+- **⚠ P0 — THE TRACKED VFX PREFABS WERE NOT SELF-CONTAINED.** `CopyAsset` duplicates the **prefab only** —
+  never its materials/textures/shaders/meshes/animations. **27 of 28 prefabs, 183 references, 73 distinct
+  assets** pointed into gitignored art (magenta/untextured/invisible on any machine without the packs).
+  **Now 0**, verified twice; **~23.85 MB mirrored, deduped** to `Assets/Resources/VFX/_Shared/`; enforced by
+  a regression that fails on ANY dependency in a gitignored root (`VFX_ART_MIRROR_OK`). ⚠ Two pack
+  MonoBehaviours could not be mirrored and were **stripped — `Casting_Fire` no longer spawns a projectile.**
+  ⚠ **Lana Studio is NOT gitignored** (only its URP upgrade subfolder is).
+- **⚠ RANGER + MAGE UNLOCKED, TREES EMPTY.** `ff.knightonly` defaults **OFF**; roster Knight/Ranger/Mage via
+  `DeNelle.Core.State.PlayableHeroes` (**Cleric deliberately out — no authored kit**;
+  `ff.knightonly`=1 restores the solo-Knight pivot). Emptying `TalentStrategyRegression.HiddenTrees` — which
+  had hardcoded `{ranger,mage}` so guard G3 had **NEVER** audited 40 player-reachable nodes — surfaced **31
+  real dead nodes: Ranger ONE usable talent of 20, Mage five, both tier-4 capstone rows dead.** Knight (32)
+  and shared (9) green. `hero-talents.json` **UNTOUCHED, md5 unchanged**; the 31 are a dated ratcheted
+  baseline (a baseline id that stops reporting dead ALSO fails). **WO-910 = READY FOR OWNER RULING.**
+- **⚠ LATENT INVISIBLE-HERO P0, FIXED.** Ranger/Mage have **no FBX**; both fell through to a Blink base body
+  and **`Assets/Blink` is gitignored** — on a fresh clone the terminal fallback **returned without
+  instantiating anything** after `Start` had destroyed the placeholder. Both bail-outs now build a tracked
+  **KayKit** body. ⚠ **Hero select SELF-SKIPS when the save already records a class**
+  (`HeroSelectController.OnEnable` → `SceneRouter.GoCastle()`), so testing a class change needs **New Game /
+  Play Intro**, never Continue.
+- **⚠ ONE HEIGHT CADENCE** (owner ruling, recorded in the data as `_heightCadence`, catalog **v6 → v7 → v8** — 7 = the archer `0ac59581`, 8 = the cadence `d42e2817`, verified at HEAD):
+  **1.25** landmark · **1.2** towers (4.8 m, 2.778 m across = 49.9% of a house) · **1.0** building base ·
+  **0.75** siege · **0.35** decoration. **WALLS DELIBERATELY EXCLUDED** — the fit is uniform, so narrowing a
+  wall **opens PATHABLE GAPS in saved wall runs** and shrinks the navmesh obstacle with them; needs a
+  measured audit + a migration decision. **`collector_farm` at 1.4 is a COMPENSATION, not an outlier**
+  (windmill blades inflate the Y bounds). **`repo.visualHeight` is DEAD for runtime placement** — deprecated by
+  WO-764, authored zero times, no longer read by `StructureFactory.EffectiveVisualHeight` (one legacy
+  EDITOR reader survives in `RaidBaseGenerator.cs`). *(This SUPERSEDES the "tower override 7m" line further down this file.)*
+- **ACCESSIBILITY — the low-health tell is no longer a colour.** Severity drives **pulse rate 0.85 → 3.2 Hz**,
+  **guttering depth** (trough to a tenth of authored density) and simulation speed; **below a quarter health
+  the RECIPE SWAPS** to a candle gutter — a shape change, not a hue change. The vignette stays as a
+  **redundant** cue; colour-ONLY was the bug. Mutual exclusion is **structural** (one handle field). Still
+  colour-only and OPEN: **the build placement ghost** and **the hero health bar**.
+- **⚠ THE UI CAPTURE HARNESS WAS GEOMETRY-BLIND** until `7e05e6d3` — only `canvas.scaleFactor` was rewritten,
+  never `Screen.*`, so **the resolution in a PNG filename was a LABEL, NOT A LAYOUT** and two panels shipped
+  broken behind a green marker. **2670x1200 had never been rendered in this repo.** Several 08-05 UI commits
+  are **not** geometry-verified. ✖ **`ClampMinTouch` was CHECKED AND RULED OUT** at three sites tonight
+  (bands resolved 117 / 116.7-130.6 / exactly 112.0 px) — check the arithmetic before naming it.
+- **⚠ VFX is a CONNECTION problem, not an art problem:** **26 of 79 enum values are wired to real art with
+  ZERO gameplay callers**; six whole tracked Lana categories sit at **0% usage**; a GUID sweep of **8,795
+  prefabs and 156 scenes found ZERO VFX scripts attached anywhere** (which is what makes `EliteVFXController`
+  dead three separate ways — **its 0.7 boss death shake has never fired in the shipped game**).
+  ⚠ **`VFXType` serialises by ORDINAL, not name — appends only.** ⚠ `Build()` does
+  `entries.arraySize = rows.Count`, so **a row written only by a builder is silently dropped by the next
+  regenerate** and the effect falls back to something that still looks like it works.
+- **Session ledger (known dictionary):** `docs/reference/SESSION_INDEX_2026-08-06.md` — every defect with
+  its proving line, every **refuted** belief with the evidence that killed it, the owner rulings, the open
+  items. Earlier half of the same day: `docs/reference/DEFECT_INDEX_2026-08-05.md` (frozen).
+
 ## Latest (2026-08-03) — the solo-night wave + the FIRST live server verification
 - **Anchor = `CANON_GROUND_TRUTH_2026-08-03.md`** (supersedes 08-02, bannered). **HEAD `56be3ae2`, pushed,
   local==origin, working tree CLEAN.** Gates: `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** +
@@ -346,7 +417,13 @@
 - ASCII-only TMP strings (non-ASCII glyphs = tofu □ on device); never meaning by color alone (owner red/green colorblind). HUDUI oracle locks the tofu class. *(2026-07-12)*
 - Build-mode touch: uGUI verb bar + PLACE + kit d-pad (publishes `HudMoveInput` → merged with arrow-key read). GhostPreview moves its CHILD visual — probe via `GhostPreview.CurrentPosition`, never the host transform. *(2026-07-12)*
 - **Right ActionBar = Attack + Q/W/E/R named skills:** Sword Wielding / Sword Heroic / Shield Charge / Warden's Grace / Radiant Strike. **Mobile HUD shows NO key-letters** (WO-750 SPEC). *(2026-07-19)*
-- **All placed items normalized by Y-height:** default **4m**, tower override **7m**, siege override **3m**, + a Y-height audit tool (WO-751 IMPLEMENTED). *(2026-07-19)*
+- ⚠ **CORRECTED 2026-08-06 — this line was two rulings stale.** It read "default **4m**, tower override
+  **7m**, siege override **3m**". WO-764 replaced the per-class metre overrides with a **`heightMul`
+  multiplier** on a 4 m base (tower 1.25 = 5.0 m), and the 2026-08-05 owner cadence ruling moved it again.
+  **Live values:** base **4 m** × `heightMul` — **1.25** landmark · **1.2** towers (4.8 m) · **1.0**
+  building base · **0.75** siege · **0.35** decoration; recorded in `structures-catalog.json` as
+  `_heightCadence`. Walls stay at 1.0 **deliberately**. `repo.visualHeight` is dead. The Y-height audit tool
+  (`StructureHeightAudit`) is still the way to print `measuredY` per prefab. *(WO-751 → WO-764 → 2026-08-05)*
 - **Destroyed items = NO rebuild + full-cost + VFX cleanup** via a new `Destructible` component (WO-753 in progress). *(2026-07-19)*
 - **Headless UI-screenshot pass must run before builds** (felt-test-wave standing rule). *(2026-07-19)*
 

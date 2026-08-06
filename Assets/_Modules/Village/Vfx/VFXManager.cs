@@ -91,6 +91,7 @@ namespace DeNelle.Village
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            ApplyLoopBudget();      // WO-889: scene-tier the loop ceiling BEFORE any pool warms
             EnsureCatalog();
             InitialisePools();
             // WO-VFX-002: the Hovl-prefab-by-key subsystem shares this singleton, the
@@ -121,7 +122,36 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            VfxLoopBudget.CapChanged -= OnLoopBudgetChanged;
             if (Instance == this) Instance = null;
+        }
+
+        // ── WO-889: the scene-tiered loop ceiling ─────────────────────────────
+        //
+        // _maxActiveLoops shipped as a flat serialized 20 that nobody had computed, and
+        // six F8 captures show it saturated and starving tower projectiles, the Tree of
+        // Life aura and every POI marker (the lines are cited at source in
+        // VfxLoopFlagRegression's header). THIS is the single place the tier is read: the
+        // budget object owns the arithmetic and the tier state, this method owns applying
+        // it to the pool's limit. Subscribed rather than polled so a dungeon load or a
+        // boss spawn re-tiers the live manager without anything having to remember to ask.
+        private void ApplyLoopBudget()
+        {
+            VfxLoopBudget.CapChanged -= OnLoopBudgetChanged;
+            VfxLoopBudget.CapChanged += OnLoopBudgetChanged;
+            OnLoopBudgetChanged(VfxLoopBudget.CurrentCap);
+        }
+
+        private void OnLoopBudgetChanged(int cap)
+        {
+            if (cap <= 0 || cap == _maxActiveLoops) return;
+            int prev = _maxActiveLoops;
+            _maxActiveLoops = cap;
+            FlowTrace.Step("VFXManager",
+                "loop ceiling " + prev + " -> " + _maxActiveLoops + " (tier=" + VfxLoopBudget.TierName +
+                "). Headroom is NOT a licence to leak - every loop still needs an owner that stops it " +
+                "on every exit path; the enemy/pet aura POPULATION is bounded separately by the " +
+                "nearest-N ring (VfxAuraProximityCuller).");
         }
 
         // ── Inspector fields ──────────────────────────────────────────────────
@@ -364,6 +394,15 @@ namespace DeNelle.Village
         public void ApplyDungeonMode(bool active)
         {
             _dungeonMode = active;
+
+            // WO-889: this is the existing dungeon entry/exit seam, so it is also where the
+            // loop tier is declared. A dressed dungeon's AMBIENT loops alone (candles, fog,
+            // steam vents - handbook section 10 names "30 candle IsLoop" as the motivating
+            // risk) can outnumber the village ceiling before a single enemy spawns. Declared
+            // even when dungeonSettings is null: the tier is about the SCENE's loop
+            // population, not about whether prefab overrides happen to be wired.
+            VfxLoopBudget.SetDungeon(active);
+
             if (dungeonSettings == null) return;
 
             foreach (var ov in dungeonSettings.overrides)

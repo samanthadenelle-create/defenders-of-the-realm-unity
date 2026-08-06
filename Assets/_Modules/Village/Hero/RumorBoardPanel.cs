@@ -216,7 +216,9 @@ namespace DeNelle.Village.Hero
             // The panes parent to the kit's MEASURED FrameQuest drop-zones -- bodyLeft (the
             // dark list well) and bodyRight (the detail well). Fallbacks keep panel fractions
             // for a frameless procedural panel and for portrait (stacked panes).
-            bool portrait = Screen.height > Screen.width;
+            // Kit surface, not Screen.* - same value at runtime; a capture drives it so the
+            // portrait BRANCH ITSELF is exercised by a portrait shot (Screen never moves in batchmode).
+            bool portrait = ElarionUiKit.SurfaceHeight > ElarionUiKit.SurfaceWidth;
             var zoneLeft = modal.chrome.layout != null ? modal.chrome.layout.bodyLeft : null;
             var zoneRight = modal.chrome.layout != null ? modal.chrome.layout.bodyRight : null;
             _zoneLeft = zoneLeft;
@@ -597,7 +599,8 @@ namespace DeNelle.Village.Hero
 
             Transform host;
             float xMin, xMax, topY;
-            if (_chromeContent != null && _zoneLeft != null && Screen.width >= Screen.height)
+            if (_chromeContent != null && _zoneLeft != null
+                && ElarionUiKit.SurfaceWidth >= ElarionUiKit.SurfaceHeight)   // kit surface: capture-drivable
             {
                 host = _chromeContent;
                 xMin = _zoneLeft.anchorMin.x;

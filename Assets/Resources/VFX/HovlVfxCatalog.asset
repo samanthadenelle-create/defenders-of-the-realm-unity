@@ -83,6 +83,41 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 0
     IsLoop: 0
+  - Key: Damage_Smolder
+    Prefab: {fileID: 1273915125232972, guid: 594b23790bb5ebe48acb60d18cd8b512, type: 3}
+    PoolSize: 4
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Damage_Fire
+    Prefab: {fileID: 1478314613700728, guid: 3764532321f8a5a4b9729bc18c6e7367, type: 3}
+    PoolSize: 4
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Damage_CriticalBeacon
+    Prefab: {fileID: 1000011945391522, guid: 458587f53f0cdcd4fb49bd18018767de, type: 3}
+    PoolSize: 3
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Damage_BreakBurst
+    Prefab: {fileID: 1025285306637258, guid: 6dc3efbfffccfa14fac362dec2a688cb, type: 3}
+    PoolSize: 3
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 0
+  - Key: Damage_Ruin
+    Prefab: {fileID: 1956197547661106, guid: 8e2b8b254593cc94e8d5d6501bac2227, type: 3}
+    PoolSize: 3
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
   - Key: Dash_Blink
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 6

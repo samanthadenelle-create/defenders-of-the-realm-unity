@@ -1,8 +1,8 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
 > **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
-> 2026-08-02) → this sheet → `../CANON_GROUND_TRUTH_2026-08-02.md` (the live reality anchor; it deltas
-> 08-01 → 07-26 → 07-22) →
+> **2026-08-06**) → this sheet → `../CANON_GROUND_TRUTH_2026-08-06.md` (the live reality anchor; it deltas
+> 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → 07-22) →
 > `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
 > `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
 > `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
@@ -16,9 +16,127 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-08-06 (the VFX night: two P0s, Ranger/Mage unlocked, one height cadence) ★★
+
+**Anchor:** `../CANON_GROUND_TRUTH_2026-08-06.md` (NEW — supersedes 08-05, bannered). Branch
+`wip/village2-and-f8-tickets`, **HEAD `1534dffb`, local is 43 commits AHEAD of origin — NOT PUSHED.**
+⚠ **Working tree NOT clean, and it is a SHARED tree (CLAUDE.md §11):** `ProjectSettings.asset` carries a
+newer APK stamp (`2026.08.05.312459` / code `312459`, above the committed `312348`);
+`WorkOrders/WORK_ORDER_885`–`894` are untracked; and **a concurrent implementation lane of ~32 modified
+`.cs` files plus the dual-copy `structures-catalog.json` / `damage-states.json`** is sitting in the tree
+(consistent with WO-889–893 in flight). **Reconcile by EXPLICIT PATH — one committer, never `git add -A`.**
+Save **v36**, unchanged. Gates last emitted: `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** plus
+`VFX_LOOPFLAG_OK`, `VFX_ART_MIRROR_OK`, `PARTICLE_PACK_VFX_BUILD_OK`, `BOSS_FIREBREATH_BUILD_OK`.
+
+**⚠ Read the marker, not a doc.** The suite count moved **117 → 118 → 119 → 120 inside eight hours**. The
+three entry points now emit **DISTINCT** markers (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
+`SESSION_GUARDS_OK`) precisely so a 22-case suite's pass can never again read as the full suite's.
+
+**THE PATTERN OF THE NIGHT — this is the transferable finding.** Six separate defects were the same shape:
+**a flag authored BY HAND instead of DERIVED from the thing it describes.** `IsLoop` in the VFX catalog
+(a sticky UI checkbox — **53 of 122 picks wrong**) · the "self-contained" tracked VFX prefab (**`CopyAsset`
+copies the prefab only — 183 pack references**) · `HeroTalentNodeDef.Hidden` (**zero runtime readers**, its
+own comment claiming otherwise) · `TalentStrategyRegression.HiddenTrees` (**40 player-reachable nodes never
+audited**) · the UI capture harness resolution (**a label, not a layout**) · `CatalogBootstrap.RegisterFallback`
+(**all three rows drifted**). **Derive the value from the artefact, and PIN the owner's standing rulings
+above the derivation with their reason** — because the prefab is the authority on what the art *does*, not
+on what the game *should do*.
+
+**⚠ P0 #1 — THE VFX LOOP CAP WAS LEAKING DRY.** A loop row never returns its slot (the oneshot branch
+registers a deadline and gets swept; the loop branch does a bare `++`, and the only reclaim frees
+**destroyed** hosts — pooled objects are never destroyed). **The cap is 20.** The archer and ballista fire
+`PP_MuzzleFlash` — a single burst mis-flagged as a loop — and **discard the handle**, so after ~20 shots a
+tower renders **no projectile at all** and in the same breath starves the Tree of Life aura and every POI
+marker. `break-log` across **six F8 sessions on two dates** shows `SKIPPED - active loops 20/20` naming
+five victims (`ArcherTower_Projectile`, `ARcaneTower_Projectile`, `ArcaneTower-Baselevel_Projectile`,
+`Poi_NodeAura`, `Poi_Landmark`) — **all five were themselves the mis-flagged culprits filling the cap that
+starved them.** Both catalog generators now DERIVE the flag; the caster window's checkbox is read-only.
+⚠ **NOT YET PROVEN: the ABSENCE of the cap message across a full wave. That needs a fleet run.**
+⚠ **A SEPARATE signature, deliberately NOT bundled: the ONESHOT pool saturates 40/40** in three other
+captures — different pool, different reclaim path. **Do not assume the loop fix closed it.**
+
+**⚠ P0 #2 — THE TRACKED VFX PREFABS WERE NEVER SELF-CONTAINED.** `CopyAsset` duplicates the prefab but not
+its materials, textures, shaders, meshes or animations, so **27 of 28 prefabs / 183 references / 73 distinct
+assets** pointed back into gitignored art — magenta, untextured or invisible on any machine without the
+packs. **Now 0**, verified twice (the mirror's own report *and* an independent GUID walk that does not reuse
+the builder's code); **~23.85 MB mirrored, deduped**, into `Assets/Resources/VFX/_Shared/`.
+⚠ **Two pack MonoBehaviours could not be mirrored and were STRIPPED — felt-visible: `Casting_Fire` no
+longer spawns a projectile.** ⚠ The mirror **only converged on a first run** until it was fixed to re-seed
+from everything already mirrored — six prefabs read as self-contained while their art was one hop away.
+**Lana Studio is NOT gitignored** (only its URP upgrade subfolder is), contrary to standing assumption.
+
+**⚠ RANGER AND MAGE ARE UNLOCKED — AND THEIR TREES ARE EMPTY.** `ff.knightonly` defaults OFF; roster is
+Knight/Ranger/Mage through the single `PlayableHeroes` registry (**Cleric deliberately out — no authored
+kit**). Emptying `TalentStrategyRegression`'s hardcoded `HiddenTrees` surfaced **31 real, pre-existing dead
+nodes across 40 player-reachable talents: Ranger has ONE usable talent of 20, Mage five, and BOTH lose their
+entire tier-4 capstone row.** Knight's 32 and the 9 shared are green. **`hero-talents.json` is UNTOUCHED**
+(md5 unchanged); the 31 are a dated, ratcheted, WO-910-numbered baseline where a baseline id that stops
+reporting dead **also** fails. **WO-910 is READY FOR OWNER RULING — a design call, not an implementation
+ticket.** ⚠ **Hero select SELF-SKIPS when the save already records a class** — testing a class change needs
+**New Game / Play Intro**, never Continue.
+
+**⚠ A LATENT INVISIBLE-HERO P0, FIXED.** Ranger and Mage have **no FBX at all** and fell through to a Blink
+base body — and **`Assets/Blink` is gitignored**. On a fresh clone the terminal fallback logged a failure and
+**returned without instantiating anything**, after `Start` had already destroyed the placeholder. Not a
+Knight-degrade: **nothing at all.** Both bail-outs now build a tracked KayKit body.
+
+**⚠ ONE HEIGHT CADENCE ACROSS EVERY STRUCTURE** (owner ruling): **1.25** landmark / **1.2** towers /
+**1.0** building base / **0.75** siege / **0.35** decoration, now recorded **in the data** as `_heightCadence`
+(catalog **v6 → v7 → v8** — 7 = the archer, 8 = the cadence; verified at HEAD). **WALLS ARE DELIBERATELY EXCLUDED** — the fit is uniform, so lowering a wall NARROWS it,
+and every wall in a saved town sits on the cell pitch of its old claim: shrinking **opens PATHABLE GAPS in
+existing wall runs** and shrinks the navmesh obstacle with them. Needs a measured audit plus a migration
+decision. **`collector_farm` at 1.4 is a COMPENSATION, not an outlier** (windmill blades inflate the Y
+bounds) — do not "fix" it.
+
+**ACCESSIBILITY — the low-health tell is no longer a colour.** It reads by **pulse rate 0.85 → 3.2 Hz**,
+**guttering depth** (trough to a tenth of authored density) and a **recipe swap to a candle gutter below a
+quarter health** — a shape change, not a hue change. The vignette stays as a *redundant* cue; colour-ONLY
+was the bug. Still colour-only and OPEN: **the build placement ghost** (valid/invalid on the red/green axis,
+in the one mode where the player commits resources) and **the hero health bar**.
+
+**UI this session:** the Echo unlock is **ONE screen with two buttons** (owner ruling) · victory screen
+gets real generated stars, the right reward icons (the broken one was **one letter** — label `Crystals`,
+data key `crystal`) and a two-column landscape spoils list, a **documented deviation from WO-894's own
+wireframe because the WO's star-band spec made the crush worse** · the right rail is one collapsed chip
+style with one shared gutter · the side-menu "duplicate gear" was the **drawer handle**, not a duplicate ·
+the potion tap was dead because **the button disabled itself at zero** (proven: **433,897 log lines, zero
+`command potion fired`**, while `attack` fired hundreds of times through the same mount).
+⚠ **THERE IS NO APOTHECARY** — the recipes, panel, VM and service all exist, but no catalog row does, so
+the empty state pointed at a place the player cannot reach by any path.
+⚠ **The numeral `1` renders as a bare vertical stroke** in the chip font; ticketed as an owner look call.
+✖ **`ClampMinTouch` was CHECKED AND RULED OUT** at three sites (bands resolved 117 / 116.7-130.6 / exactly
+112.0 px) — a real class, but check the arithmetic before naming it.
+
+**⚠ THE UI CAPTURE HARNESS WAS GEOMETRY-BLIND** until `7e05e6d3` — only `canvas.scaleFactor` was rewritten,
+never `Screen.*`, so **every PNG shared one layout and the filename resolution was a LABEL, NOT A LAYOUT**.
+**2670x1200 — the Seeker's real surface — had never been rendered in this repo.** A run that cannot move
+`Screen.*` now degrades **loudly**. **Several of tonight's UI commits are explicitly not geometry-verified
+and need a device check.**
+
+**OPEN for the owner:** (1) **WO-910** — rule on the Ranger/Mage trees. (2) The **surface taxonomy** WO-887
+refused — no surface signal exists anywhere in the game. (3) **`Death_Wolf`/`Death_Tiefling`/`Death_Skeleton`**
+— the roster has three families; routing them is a creative pick. (4) **Which accessory carries the heal
+aura** (inert until tagged; only the flameblade carries element data). (5) **`Cast_Heal` is a green glow** —
+a second colourblind pass. (6) **The market has three player-facing names** and no authority. (7) **Potion
+crafting has no reachable entry point.** (8) The wave stand-down **restarts the countdown from full** —
+product call. (9) **Promote `api/` + `assetlinks` to prod** before any APK carrying the new wallet identity.
+(10) **Push** — 43 commits are local-only. (11) The absence-of-cap-message **fleet run** is still owed.
+
+**Full ledger, incl. every REFUTED belief and its killing evidence:**
+`reference/SESSION_INDEX_2026-08-06.md` · earlier half of the same day: `reference/DEFECT_INDEX_2026-08-05.md`.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-08-03 (the solo-night wave + first live server verification) ★★
 
-**Anchor:** `../CANON_GROUND_TRUTH_2026-08-03.md` (NEW — supersedes 08-02, bannered). Branch
+> ⚠ **SUPERSEDED 2026-08-06 — frozen ledger, do not rewrite the body.** HEAD is now `1534dffb` (43 commits
+> ahead of origin, unpushed), gates are `REGRESSION_OK 120/120`, and the anchor is
+> `../CANON_GROUND_TRUTH_2026-08-06.md`. Its **WO block numbers (main 853 / UI-seat 863) are stale** —
+> read the `CLI_LANES_WO_NUMBERS.md` banner. Its **canon-health paragraph is partly paid**: the
+> `docs/MASTER_CATALOG.md` index and several area files were corrected 2026-08-06. Everything else in this
+> block (the server probe, the wall/gate damage seam, adaptive difficulty being inert) still stands.
+
+**Anchor:** `../CANON_GROUND_TRUTH_2026-08-03.md` (superseded — see above). Branch
 `wip/village2-and-f8-tickets`, **HEAD `56be3ae2`, local==origin, pushed. Working tree CLEAN.** Prod
 untouched. Save **v36**. Gates: `COMPILE_GATE_OK` + **`REGRESSION_OK 104/104 suites`** +
 **`TESTS_OK 912/912`, zero reds** + `UI_CAPTURE_OK 28`. WO blocks unchanged (main **853** / UI-seat **863**).

@@ -42,7 +42,7 @@ Supersedes the 2026-06-12 body (+2026-07-03 note). Live anchor at write time:
 | Textures | 2 | misc |
 | Title | 2 | `Title_H/Title_L.jpg` |
 | Towers | 4 | `ArcherTower/DevTower/FrostTower/MageTower.asset` TowerData SOs |
-| VFX | 15 | **`HovlVfxCatalog.asset`** + `VFXCatalog.asset` + 13 `Projectiles/*` prefabs — §6 |
+| VFX | **119** *(was 15; recount 2026-08-06)* | `HovlVfxCatalog.asset` + `VFXCatalog.asset` + **36 prefabs across `Projectiles/` (13), `Death/` (6), `Harvest/` (6), `Aura/` (4), `Env/` (3), `Boss/` (1), `Weapon/` (1)** + **`_Shared/` (83 files: Materials/Textures/Models/Shaders/Animation)** — the WO-886/887/888 build-out plus the `948080f5` self-containment mirror. §6 |
 | VfxParade | 1 | `VfxParadeManifest.asset` — AdminOverlay "VFX Parade" (`AdminOverlay.cs:544`; bake via VfxParadeManifestBuilder.Build) |
 | Walls | 15 | `wood/iron/steel_wall.fbx` + PBR tex — `WallTierData.cs:78-85` (steel = "PENDING owner art") |
 
@@ -102,8 +102,26 @@ ranged-cast fields are **HovlVfxCatalog string keys** (`EnemyTypeVfxSet.cs:80-13
 
 - On disk/tracked FBX at root: **`Knight.fbx`, `knightV2.fbx`, `KnightV3.fbx` only** (all LFS;
   `KnightV3.fbx` verified `filter: lfs`). `Cleric/Mage/Ranger` keep only their `.controller` +
-  stale `.fbx.tripo-extracted` markers — **the 4-hero FBX set no longer exists**; REQUIRED_PACKS
+  `.fbx.tripo-extracted` markers — **the 4-hero FBX set no longer exists**; REQUIRED_PACKS
   §3 ("Knight, KnightV3, Mage, Cleric tracked") is stale on this point.
+- **REFUTATION 2026-08-06 (`d0c7b8fd`) — `*.fbx.tripo-extracted` is NOT a parked mesh.**
+  `Ranger.fbx.tripo-extracted` is a **125-byte PLAIN TEXT SENTINEL** written by
+  `TripoAssetPostprocessor`. **There is nothing to un-park.** Knight's sentinel sits beside a
+  live `Knight.fbx`, which proves the marker never blocked an import. **WO-909's premise was
+  wrong** and the comments repeating it are fixed. Do not spend another cycle on it.
+- **THE INVISIBLE-HERO P0, FIXED (`d0c7b8fd`) — this folder's absence was shipping NOTHING.**
+  Ranger and Mage have **no FBX at all**, so both fell to a **Blink base body**, and
+  `Assets/Blink` is **GITIGNORED**. On a fresh clone the terminal fallback logged a failure and
+  **RETURNED WITHOUT INSTANTIATING ANYTHING**, after `Start` had already destroyed the
+  placeholder — **an INVISIBLE HERO, not a Knight-degrade**. Both bail-outs now build a
+  **tracked KayKit body** (`HeroBodySwapper.BuildTrackedFallbackBody`; the KayKit stage in §2 is
+  the only humanoid body set actually in the repo, verified via `git ls-files`). A missing art
+  pack may now look WRONG; it can never look like NOTHING. Ranger/Mage body art stays OPEN.
+- **Hero portraits — a HALF-fixed import defect (`d0c7b8fd`).** **Thrain's** portrait was
+  imported as a plain TEXTURE, so `Load<Sprite>` returned null and it fell to the blurrier
+  RawImage path while Sylas hit the crisp one; its `.meta` now differs from Sylas's only by
+  guid. **Grom and Elara carry the IDENTICAL defect and are NOT fixed — and Grom is the DEFAULT
+  hero**, so the default hero renders on the blurry path. OPEN.
 - **`ff.knightv3` default ON** (`FeatureFlags.cs:475-484`): `HeroBodySwapper.cs:78-86,322-345`
   routes EVERY class to `BuildKnightV3Body` — KnightV3 is a CC/AccuRIG export, raw FBX bound to
   `Knight.controller` at runtime, own embedded `Material_Pbr` (extracted to `KnightV3.fbm/`).
@@ -167,7 +185,104 @@ the owner's machines — EXCEPT a small force-tracked exception set.
 - ⚠ **Unity Particle Pack has NO fallback**: 54 owner-tagged keys in
   `Assets/Editor/VfxManualPicks.json` point into gitignored `Assets/UnityTechnologies/ParticlePack/`
   (191MB); a machine without the pack silently loses those effects (REQUIRED_PACKS table row —
-  its own flagged follow-up: promote used prefabs into tracked Resources).
+  its own flagged follow-up: promote used prefabs into tracked Resources). **PARTIALLY ADDRESSED
+  2026-08-06** — the promote-to-tracked follow-up is what §6-DELTA below actually did.
+
+### DELTA 2026-08-06 - the VFX build-out, the self-containment P0, and what is still open
+
+*Sourced from commits `3db877d2`, `bd532d5b`, `7f3971a3`, `0011b8ba`, `a186c282`, `a12c6d22`,
+`948080f5`, `29f9ac2b`, `4ef2d532`, `1534dffb`, `449b16bb` (2026-08-05).*
+
+**A. THE SELF-CONTAINMENT P0 (`948080f5`) — the whole reason FLAG-4 existed.**
+`CopyAsset` duplicates the **PREFAB ONLY** — never its materials, textures, shaders, meshes or
+animations. So every prefab duplicated into `Resources/VFX` was a **tracked file pointing
+straight back into GITIGNORED art**. Measured: **27 of 28 prefabs, 183 references, 73 distinct
+assets** — all rendering missing (magenta / untextured / invisible by platform) on any machine
+without the packs. **Now 0**, verified TWICE (the mirror's own report plus an independent
+recursive GUID walk that does not reuse the builder's code). Exposure reached a mesh
+(`FireFly.fbx`), a nested pack prefab pulled in through the ParticleSystem **LIGHTS** module,
+two `.anim`, a `.controller` and two C# MonoBehaviours. **~23.85 MB mirrored, deduped**, into
+`Assets/Resources/VFX/_Shared/` (`Glow.mat` was referenced twelve times, `Trail` nine — ONE
+copy each). The mirrored FireFly shader is renamed under a **`VFXMirror` namespace** so it
+cannot collide with the pack copy still present on this machine; materials bind by GUID, so the
+rename is free.
+- **THE TWO SCRIPTS COULD NOT BE MIRRORED AND WERE STRIPPED** — the one judgement call, and it
+  is **felt-visible: `Casting_Fire` no longer spawns a projectile.** Copying a `.cs` would put
+  two identical types in `Assembly-CSharp` and take the compile gate down for every lane.
+  Removal is right on its own merits: nothing references the pack namespace, and inside a
+  POOLED manager-driven prefab those demo scripts read a Rigidbody that is not there,
+  `Destroy()` a pooled instance on collision, and `InvokeRepeating` a fireball once a second
+  forever.
+- **New regression** (`Assets/Editor/Regression/VfxResourceSelfContainmentRegression.cs`,
+  marker `VFX_ART_MIRROR_OK`) walks every `Resources/VFX` prefab and **fails on ANY dependency
+  in a gitignored root**. It deliberately does **NOT** require zero deps outside the VFX tree
+  (that would force mirroring tracked art like Lana Studio and the URP package shaders) and
+  reports that total separately.
+- **THE MIRROR ONLY CONVERGED ON A FIRST RUN — fixed in `29f9ac2b`.** It seeded its dependency
+  walk from the PREFABS, so on any later run the prefab already pointed at the MIRRORED
+  material, the walk saw a target outside the pack, skipped it, and **never re-entered that
+  material** — leaving the pack texture the material itself referenced undiscovered. **Six
+  prefabs read as self-contained while their art was one hop away.** It now re-seeds from
+  everything already mirrored: **a fixed point has to be fixed ACROSS runs.** Two collisions
+  surfaced: `ParticlesLight`, and `ramp01`/`Ramp01` — the second pair differing **ONLY IN
+  CASE**, which is one file on Windows and two on CI.
+- **NOT gitignored, contrary to assumption: Lana Studio.** Only its **URP upgrade subfolder**
+  is (`.gitignore:312`, already correct in §8). `Flash_generic` sources all seven of its
+  dependencies there and measures **zero exposure**.
+- **KNOWN, NOT FIXED:** `SpellsPackVfxMirror.cs`'s header makes the same false fresh-clone
+  claim; and **`_Shared/Textures` is 16.9 MB of `.tif` sitting OUTSIDE the texture-optimizer
+  sweeps' root list**. Also: **the base tower's Hovl muzzle key points straight into the
+  gitignored pack** so it renders nothing on a fresh clone — left alone because it carries the
+  tier scale; the tracked type now plays alongside it.
+
+**B. IT WAS A CONNECTION PROBLEM, NOT AN ART PROBLEM (`3db877d2`).** **26 of 79 enum values are
+wired to real art with ZERO gameplay callers** — the PERFECT-hit flash, four per-species death
+bursts, the enemy caster's bolt. **Six whole TRACKED Lana categories sit at 0% usage.** A GUID
+sweep of **8,795 prefabs and 156 scenes found ZERO VFX scripts attached anywhere**, which is
+what makes `EliteVFXController` dead three separate ways.
+- `a186c282` connected four (PERFECT hit flash, per-species enemy deaths, the enemy's blow
+  landing, the hero's own death). `Die()` had routed override -> typeSet -> generic and **never
+  consulted the species**, so the pool/factory spawn path could never reach the four authored
+  death bursts; species now sits AFTER the authored per-prefab set and before the generic.
+- `0011b8ba` appended **16 new `VFXType` values after `Boss_FireBreath`** — append-only,
+  because the catalog serialises `VFXType` by **ORDINAL, not by name** (verified:
+  `Boss_FireBreath` still reads `Type: 79`).
+- `a12c6d22` built **14 of those 16** into tracked prefabs + catalog rows (marker
+  `PARTICLE_PACK_VFX_BUILD_OK`, `Assets/Editor/ParticlePackVfxBatchBuilder.cs`). Emission is
+  **MEASURED off each asset, never taken from the doc**, and `IsLoop` goes through the shared
+  `VfxLoopFlagRegression` resolver rather than a second local derivation. All 14 sources ship
+  `playOnAwake` enabled and the builder **clears it on every system**, or a prewarmed pool
+  instance emits at the world origin. **`Enemy_Spawn` and `Despawn_Dissolve` are DEFERRED, not
+  faked** — they are SCRIPTED recipes carrying a pack MonoBehaviour plus a demo mesh to
+  dissolve, and need a runtime component driving the TARGET's material cutoff: authoring work,
+  not a copy. `Env_Candle` uses `TinyFlames`, **not** the pack's `Candles`, because `Candles`
+  carries candle GEOMETRY (three mesh renderers).
+
+**C. `Resources/VFX/Boss/Boss_FireBreath.prefab` — the Particle Pack's first sanctioned import
+(`7f3971a3`, WO-759).** The dragon's finale breath had been a comment: `FireBreath()` was an
+anim trigger plus instant damage with NO stream, so **the player took 8.5 damage from a dragon
+that visibly did nothing.** The pack prefab is a **THREE-LAYER RECIPE** (FlameThrower +
+FireEmbers(3) + Smoke at rates 30/100/20), duplicated **whole** into `Assets/Resources/VFX/Boss/`.
+The builder **PROVES the emission family off the real asset** (confirmed CONTINUOUS,
+`rateOverTime=30`, bursts=0) and **hard-fails if the root reads as burst**. Socket authored by
+script onto `dragon_Snout_bone` (the rig has 198 named nodes; the resolver ranks
+snout > mouth > jaw > chin > head and demotes `_ctrl` / nub / IKGoal helpers). URP
+`m_RequireDepthTexture` **0 -> 1** (pack fire uses soft particles, which hard-clip into geometry
+without a depth buffer); **HDR deliberately left OFF as a mobile perf call.** Marker
+`BOSS_FIREBREATH_BUILD_OK`. **Known follow-up:** the Medium quality tier (root layer only) is
+NOT reachable from `DragonBoss` — `VFXHandle` exposes no accessor for the pooled GameObject by
+design; today Medium and High both get the full three-layer stack.
+
+**D. `449b16bb` — MagentaGuard FALSE POSITIVE (an art-absence report that was not one).**
+`MagentaProbe` FAILed on the Arcane Tower Hovl aura (`ElectricyCenter`, slot 0, material NULL).
+**No art was missing.** On a `ParticleSystemRenderer`, slot 0 is the particle material and slot
+1 the trail; that system is **trail-only by vendor design**, so the empty slot is legitimate.
+The guard assigned a shared opaque URP/Lit (`NullSlot_MagentaFix`) **OUTSIDE the dedupe guard**,
+so it was unconditional and **stuck in built players — the aura rendered as a white opaque
+blob. 28 of 261 Hovl prefabs carry this pattern**, all sharing one material instance. A
+renderer is now exempt **only** when it is a `ParticleSystemRenderer` **AND** at least one other
+slot holds a valid material; an **all-null particle renderer is still a real defect and is still
+reported**.
 
 ---
 
@@ -218,8 +333,34 @@ From `.gitignore` (line cites) — cross-ref the full how-to-obtain table in
 - **FLAG-3 (absent art, carried):** `HeroPortraits/` folder still absent (every hero-portrait
   load nulls); `Cosmetics/` empty; `Intro/`, `UI/`, `heart-wing` unbacked; Sfx beyond the 4
   shipped files = procedural fallback.
-- **FLAG-4 (no-fallback pack):** ParticlePack keys (54) silently vanish on a pack-less machine —
-  the ONE pack whose absence has no tracked runtime fallback (§6).
+- **FLAG-4 (no-fallback pack) — LARGELY CLOSED 2026-08-06 (`948080f5`, `29f9ac2b`), with named
+  residue.** The `Resources/VFX` tree is now **self-contained: 183 pack references across 27 of
+  28 prefabs -> 0**, verified twice, with **~23.85 MB deduped into `Resources/VFX/_Shared/`** and
+  a standing regression (`VFX_ART_MIRROR_OK`) that FAILS on any dependency in a gitignored root.
+  **Residue that is still real:** (a) the base tower's Hovl **muzzle key still points into the
+  gitignored pack** and renders nothing on a fresh clone (deliberate — it carries the tier
+  scale; the tracked type plays alongside it); (b) `SpellsPackVfxMirror.cs`'s header repeats the
+  old false fresh-clone claim; (c) **`_Shared/Textures` is 16.9 MB of `.tif` outside the
+  texture-optimizer sweeps' root list**; (d) any owner-tagged `VfxManualPicks.json` key added
+  from here on re-opens the same hole unless it is mirrored. §6-DELTA A.
+- **FLAG-9 (2026-08-06, VFX loop-cap leak — the P0 the towers were hiding, `bd532d5b`):**
+  `IsLoop` was a **sticky manual checkbox** that `VfxCasterWindow` force-set true for any
+  Projectile/Aura row; **95 of 135 Hovl rows carried `IsLoop:1`**, including every `PP_*Impacts`
+  and `PP_MuzzleFlash` — all single bursts at t=0. **A loop row never returns its slot** (the
+  oneshot branch registers a deadline and gets swept; the loop branch does a bare `++` and hands
+  back a handle, and the only loop reclaim frees DESTROYED hosts — pooled objects are never
+  destroyed). **Cap is 20.** Both catalog generators now DERIVE `IsLoop` from the art
+  (`VfxLoopFlagRegression` is the single resolver; **53 of 122 picks were wrong**); marker
+  `VFX_LOOPFLAG_OK`. **STILL OPEN and deliberately NOT bundled: the ONESHOT pool saturates at
+  40/40** in three separate captures — different pool, different reclaim path; the loop fix must
+  NOT be assumed to close it.
+- **FLAG-10 (2026-08-06, `449b16bb`): a MagentaGuard FAIL is not proof of missing art.** The
+  Arcane Tower aura `ElectricyCenter` FAILed on slot 0 = null while being **trail-only by vendor
+  design** (slot 0 = particle material, slot 1 = trail). The guard's opaque URP/Lit repair sat
+  **outside the dedupe guard**, so it was unconditional and **stuck in built players — a white
+  opaque blob**. **28 of 261 Hovl prefabs carry the pattern.** Exemption is now conditional
+  (ParticleSystemRenderer AND another slot valid); an all-null particle renderer is still a real
+  defect. §6-DELTA D.
 - **FLAG-5 (license hygiene, resolved but watch):** CC-BY-NC dragon cluster git-rm'd in
   `08b912bf`; licensed `Assets/Dragon/` + force-tracked `SyndrathDragon.controller` are the only
   sanctioned dragon assets. Never resurrect `Enemies/Dragon.*` keys.

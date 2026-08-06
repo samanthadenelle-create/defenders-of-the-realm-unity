@@ -1,6 +1,20 @@
 # WORK ORDER 887 — VFX: on-hit surface + element impacts
 
-**Status:** READY TO IMPLEMENT · **Silo:** Combat/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status: ELEMENT HALF LANDED 2026-08-05 (`4ef2d532`) · SURFACE HALF REFUSED WITH MEASUREMENTS** — gate
+`COMPILE_GATE_OK`. **What landed:** `TowerCombat.OnProjectileImpact` computed the projectile's element
+EIGHT LINES BELOW the impact pick and never used it, so **every empowered tower detonated as
+`Impact_ExplosionAether`**; element now decides flavour, tier decides size, and the paired `SfxId` follows.
+Also replaced `FireAt`'s use of `Projectile_TowerArcane` (a projectile-BODY row with `IsLoop` TRUE) as a
+muzzle flash. **What is REFUSED, and why nobody should re-attempt the copy:** the five surface rows carry
+**demo geometry on the prefab ROOT** (built-in primitive mesh + pack material + a **SPHERE COLLIDER**), all
+five **emit 5/sec on loop at the derivation authority**, and there is **no enum home**
+(`Impact_Flesh/Metal/Stone/Wood/Dirt` do not exist). ⚠ **THE SURFACE SIGNAL DOES NOT EXIST — verified, not
+assumed:** no `SurfaceType` field, no physic-material read, no per-material tag; wood palisades, stone
+walls and steel gates share one `Structure` layer, and both footstep implementations play a single clip
+with no surface query. **Defining a surface taxonomy is DESIGN work and belongs to the owner.**
+Also refused: `GoopSpray` can never be selected — `DamageElement` is `{None, Aether, Flame, Ice}` and this
+game has **no nature element**. Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §5.2, §6.11-6.12, §7.
+*(original header: READY TO IMPLEMENT · **Silo:** Combat/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05)*
 **Context (read once):** WO-884 §0.2 · `VFX_PREFAB_HANDBOOK.md` (Step 1–8) · `VFX_CREATIVE_PICKS_REGISTRY.md` §4. Enum LANDED — reference names only.
 **Depends on:** WO-884 Phase 0 platform.
 

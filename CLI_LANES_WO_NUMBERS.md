@@ -166,8 +166,13 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **910** (782–859 + 900–909 consumed; 860–899 belongs to the UI seat) |
+> | **main line** | CLI | **911** (782–859 + 900–**910** consumed; 860–899 belongs to the UI seat) |
 > | **860–899 reserved** | UI seat | **895** (860–894 consumed) |
+>
+> *(⚠ **Row corrected 2026-08-06:** the main-line cell read `910` while the RECONCILED banner at the top of
+> this file — written in the same edit as the WO-910 mint — already said next free = **911** and
+> `900–910 CONSUMED`. The file contradicted itself, which is precisely how a collision starts. The
+> top banner wins; this row now agrees with it.)*
 >
 > *(UI-seat bumped 894 → 895 in the SAME edit as the WO-894 mint — Victory screen: real spinning 5-point
 > stars + exact wireframe layout, replacing the diamond/no-spin BuildStarRow in EndStateView.)*

@@ -85,7 +85,20 @@ indexed separately in `../PROJECT_INDEX.md`.
   `village-review-suggestions.md`, `recovery-work-orders.md`, `claude-code-work-order.md`
 - `_archive/docs/UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md` — screen-by-screen UI audit against the Blink template canon (+ owner addenda; source of the extended UI canon rules). **Archived.**
 - `_archive/docs/PUBLISHER_CRITIQUE_2026-07-03.md` — publisher-lens critique (pass-with-revisit; ranks the seam un-stack #1). **Archived.**
-- Subfolders: `audit/`, `qa/`, `roadmap/`, `port-notes/`
+- `reference/` — **known dictionaries** (SUNDAY_HOUSEKEEPING §2): durable, source-cited registries rather
+  than one-off reports. **Frozen ledgers — banner, never rewrite.**
+  - `reference/SESSION_INDEX_2026-08-06.md` — the 2026-08-05 evening / 08-06 overnight VFX session: every
+    defect with its proving line, **every REFUTED belief with the evidence that killed it**, every refusal
+    with its disqualifying measurement, the owner rulings, and the open items
+  - `reference/DEFECT_INDEX_2026-08-05.md` — the same, for the earlier half of 2026-08-05 (dungeon P0,
+    wallet dossier, catalog fallback drift)
+  - `reference/REGRESSION_COVERAGE_MATRIX.md` — ⚠ **counts are stale; use its proposed assertions only**
+  - `reference/HERO_ANIMATION_DICTIONARY.md` · `reference/DOTWEEN_SME.md` ·
+    `reference/MASTER_BACKLOG_2026-07-19.md`
+- `vfx/` — VFX direction + inventory: `VFX_CREATIVE_PICKS_REGISTRY.md` (owner-ratified elemental wheel x
+  6-beat kit), `VFX_PREFAB_HANDBOOK.md`, `PARTICLE_PACK_UTILIZATION_MAP.md`, `HovlStudio_Inventory.md`,
+  `SkillTree_VFX_Mapping.md`, `Grok-01-VFX-guidance.md`, `weapon_vfx_design.md`
+- Subfolders: `audit/`, `qa/`, `roadmap/`, `port-notes/`, `reference/`, `vfx/`
 
 ## Media
 

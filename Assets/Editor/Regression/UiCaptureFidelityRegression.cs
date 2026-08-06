@@ -40,9 +40,32 @@
 //          literal resolution pair. A hard-coded pair is the signature of the old
 //          build-once/re-label shape -- the exact defect above.
 //
-//   RULE 3 [screen-first]  A GameViewSizeScope still drives Screen.* to the target
-//          BEFORE the build and VERIFIES the move by reading Screen back. Setting
+//   RULE 3 [screen-first]  A CaptureSurfaceScope still drives the surface to the
+//          target BEFORE the build and VERIFIES the move by reading it back. Setting
 //          without verifying is how a harness convinces itself it is accurate.
+//
+//          UPDATED 2026-08-05 (evening), from captured data. The first cut of this
+//          rule pinned the GAME VIEW as the lever. It is not one: in `-batchmode`
+//          there is no editor window layout, hence no GameView GUIView for Screen.*
+//          to mirror, so Screen stays on the 640x480 offscreen default. Proof, not
+//          theory -- Builds/ui-capture-rail.log:475 shows a REAL D3D11 device with
+//          screen=640x480 (so this is not the -nographics case) and :489 shows the
+//          GameViewSizes/SizeSelectionCallback reflection SUCCEEDING while Screen
+//          stayed 640x480; the run ended DEGRADED on every one of its 38 builds. The
+//          lever is now ElarionUiKit's injectable surface (RULE 6).
+//
+//   RULE 6 [kit-surface]  ElarionUiKit exposes SurfaceWidth/SurfaceHeight, they fall
+//          back to Screen.* when nothing overrides them (so device behaviour is
+//          untouched), the override is EDITOR-ONLY, and PostScaleCanvasHeight reads
+//          the surface rather than Screen directly. This is the only rule in the file
+//          that reads the kit; without it the harness's lever can be removed from the
+//          other end and every source-text check here would still pass.
+//
+//   RULE 7 [aspect-divergence]  The run PROVES its own fix: two targets with
+//          different aspect ratios must resolve DIFFERENT zone rects, and identical
+//          rects must fail the run. Without this, a future regression that quietly
+//          re-pins the surface would restore the original defect -- one geometry
+//          wearing several filenames -- with every other check in this file green.
 //
 //   RULE 4 [honest-degrade]  When the editor refuses to move Screen, the harness
 //          says so LOUDLY (UI_CAPTURE_FIDELITY_DEGRADED, at error severity). A
@@ -75,8 +98,14 @@ namespace DeNelle.Editor.Regression
     {
         private const string HarnessSrc = "Assets/Editor/UICaptureLaunch.cs";
 
+        /// <summary>The OTHER end of the lever: the kit the harness now drives (RULE 6).</summary>
+        private const string KitSrc = "Assets/_Modules/Core/UI/ElarionUiKit.cs";
+
         /// <summary>How much source after a method's signature counts as "inside" it.</summary>
         private const int MethodWindowChars = 400;
+
+        /// <summary>A wider window for methods whose banner comment precedes the body.</summary>
+        private const int WideWindowChars = 1600;
 
         /// <summary>Standalone batch entry - prints the distinct marker a gate can grep.</summary>
         public static void RunAll()
@@ -100,7 +129,12 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "screen-first", () => Case3_ScreenFirst(src, failures, notes));
                     Case(failures, "honest-degrade", () => Case4_HonestDegrade(src, failures, notes));
                     Case(failures, "geometry-gate", () => Case5_GeometryGate(src, failures, notes));
+                    Case(failures, "aspect-divergence", () => Case7_AspectDivergence(src, failures, notes));
                 }
+
+                string kit = ReadSource(KitSrc, "kit-surface", failures);
+                if (kit != null)
+                    Case(failures, "kit-surface", () => Case6_KitSurface(kit, failures, notes));
             }
             catch (Exception ex)
             {
@@ -111,9 +145,10 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "UI CAPTURE FIDELITY OK - the harness builds every panel at the resolution it " +
-                         "shoots it at (Seeker 2670x1200 included), verifies the Screen move instead of " +
-                         "assuming it, degrades LOUDLY when it cannot, and asserts the layout numerically " +
-                         "rather than trusting a reviewer's eyes" + noteStr;
+                         "shoots it at (Seeker 2670x1200 included) by driving the kit's injectable " +
+                         "surface, verifies that move instead of assuming it, proves two aspects resolve " +
+                         "different zone rects, degrades LOUDLY when it cannot, and asserts the layout " +
+                         "numerically rather than trusting a reviewer's eyes" + noteStr;
                 return true;
             }
             reason = "ui-capture-fidelity FAIL x" + failures.Count + ": " +
@@ -229,28 +264,142 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void Case3_ScreenFirst(string src, List<string> failures, List<string> notes)
         {
-            if (src.IndexOf("GameViewSizeScope", StringComparison.Ordinal) < 0)
+            if (src.IndexOf("CaptureSurfaceScope", StringComparison.Ordinal) < 0)
             {
-                failures.Add("[screen-first] GameViewSizeScope is gone. Panels read " +
-                             "ElarionUiKit.PostScaleCanvasHeight -> Screen.width/height on the frame they " +
-                             "build their zones, so moving Screen BEFORE the build is the only lever that " +
-                             "makes a capture geometry-accurate. Nothing done to the canvas afterwards can " +
-                             "substitute for it.");
+                failures.Add("[screen-first] CaptureSurfaceScope is gone. Panels resolve their zones " +
+                             "through ElarionUiKit.PostScaleCanvasHeight on the frame they are built, so " +
+                             "moving the surface BEFORE the build is the only lever that makes a capture " +
+                             "geometry-accurate. Nothing done to the canvas afterwards can substitute for it.");
                 return;
             }
 
+            // The lever itself: the kit's injectable surface, set AND released.
+            if (src.IndexOf("SetSurfaceOverride", StringComparison.Ordinal) < 0)
+                failures.Add("[screen-first] the scope no longer calls ElarionUiKit.SetSurfaceOverride. " +
+                             "That is the load-bearing move -- the game-view path it replaced CANNOT move " +
+                             "Screen.* in batchmode (captured proof: a D3D11 run whose reflection succeeded " +
+                             "while Screen stayed 640x480 for all 38 builds).");
+            else if (src.IndexOf("ClearSurfaceOverride", StringComparison.Ordinal) < 0)
+                failures.Add("[screen-first] the scope sets the surface override but never clears it. A " +
+                             "leaked override mis-sizes every panel built afterwards in that editor " +
+                             "session, including the owner's own play-mode UI.");
+            else
+                notes.Add("surface override set + released");
+
+            // VERIFY the effective surface (the value the build will actually read)...
+            if (!Regex.IsMatch(src, @"ew\s*==\s*target\.W")
+                && !Regex.IsMatch(src, @"ElarionUiKit\.SurfaceWidth\s*==\s*target\.W"))
+                failures.Add("[screen-first] the scope no longer VERIFIES the move by reading the " +
+                             "effective surface (ElarionUiKit.SurfaceWidth/SurfaceHeight) back. An " +
+                             "unverified set is an assumption, and this whole defect class is assumptions " +
+                             "the harness made about its own output.");
+            else
+                notes.Add("surface move is read back and verified");
+
+            // ...and STILL read Screen back, because it is the residual the report must name.
             if (!Regex.IsMatch(src, @"Screen\.width\s*==\s*target\.W")
                 && !Regex.IsMatch(src, @"sw\s*==\s*target\.W"))
-                failures.Add("[screen-first] the scope no longer VERIFIES the size change by reading " +
-                             "Screen.* back. An unverified set is an assumption, and this whole defect " +
-                             "class is assumptions the harness made about its own output.");
-            else
-                notes.Add("Screen move is read back and verified");
+                failures.Add("[screen-first] the scope no longer reads Screen.* back at all. It never " +
+                             "moves in batchmode, and the run must SAY so: a panel that still reads " +
+                             "Screen.* directly at build time is not covered by the kit surface, and " +
+                             "silently dropping that residual is how the next blind spot opens.");
 
             if (src.IndexOf("PostScaleCanvasHeight", StringComparison.Ordinal) < 0)
-                failures.Add("[screen-first] the file no longer records WHY the Screen move matters " +
+                failures.Add("[screen-first] the file no longer records WHY the surface move matters " +
                              "(ElarionUiKit.PostScaleCanvasHeight is the build-time reader). Keep the " +
                              "causal note: the next reader will otherwise delete the scope as ceremony.");
+        }
+
+        // =====================================================================
+        //  RULE 6 - the other end of the lever: the kit's injectable surface
+        // =====================================================================
+        private static void Case6_KitSurface(string kit, List<string> failures, List<string> notes)
+        {
+            if (kit.IndexOf("SetSurfaceOverride", StringComparison.Ordinal) < 0
+                || kit.IndexOf("SurfaceWidth", StringComparison.Ordinal) < 0
+                || kit.IndexOf("SurfaceHeight", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[kit-surface] ElarionUiKit no longer exposes an injectable surface " +
+                             "(SurfaceWidth / SurfaceHeight / SetSurfaceOverride). It is the ONLY lever " +
+                             "that moves build-time geometry in batchmode; without it every capture " +
+                             "returns to one geometry wearing several filenames.");
+                return;
+            }
+
+            // It must DEFAULT to Screen.* -- the injection may not change shipped behaviour.
+            if (!Regex.IsMatch(kit, @"SurfaceWidth\s*=>[^;]*Screen\.width")
+                || !Regex.IsMatch(kit, @"SurfaceHeight\s*=>[^;]*Screen\.height"))
+                failures.Add("[kit-surface] SurfaceWidth/SurfaceHeight no longer fall back to " +
+                             "Screen.width/Screen.height. The whole safety of this seam is that with no " +
+                             "override it is byte-identical to the behaviour it replaced; a different " +
+                             "default would be a silent layout change on the device.");
+            else
+                notes.Add("surface defaults to Screen.*");
+
+            if (kit.IndexOf("Application.isEditor", StringComparison.Ordinal) < 0)
+                failures.Add("[kit-surface] the surface override is no longer gated to the editor. A " +
+                             "capture-only lever that a shipped build can pull is a device layout bug " +
+                             "waiting for its first caller.");
+            else
+                notes.Add("override is editor-only");
+
+            // And PostScaleCanvasHeight must actually READ it, or the seam is decorative.
+            if (Regex.IsMatch(kit, @"float\s+screenH\s*=\s*Screen\.height"))
+                failures.Add("[kit-surface] PostScaleCanvasHeight reads Screen.height directly again, so " +
+                             "the injectable surface no longer reaches the one computation that resolves " +
+                             "zone geometry at build time. That is the exact wiring the 2026-08-05 fix put in.");
+            else if (!Regex.IsMatch(kit, @"float\s+screenH\s*=\s*SurfaceHeight"))
+                failures.Add("[kit-surface] PostScaleCanvasHeight no longer resolves its height from " +
+                             "SurfaceHeight -- the harness can set the surface all it likes and nothing " +
+                             "will read it.");
+            else
+                notes.Add("PostScaleCanvasHeight reads the surface");
+        }
+
+        // =====================================================================
+        //  RULE 7 - the run proves its own fix, or fails
+        // =====================================================================
+        private static void Case7_AspectDivergence(string src, List<string> failures, List<string> notes)
+        {
+            if (src.IndexOf("ProveGeometryMoves", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[aspect-divergence] ProveGeometryMoves is gone. It is the only check that " +
+                             "two different ASPECTS resolve DIFFERENT zone rects -- i.e. the only thing " +
+                             "standing between this harness and a silent return to one geometry wearing " +
+                             "several filenames, which every other rule here would pass.");
+                return;
+            }
+
+            var call = Regex.Match(src, @"public\s+static\s+void\s+RunCaptureHeadless\s*\(\s*\)");
+            if (!call.Success ||
+                src.Substring(call.Index, Math.Min(WideWindowChars, src.Length - call.Index))
+                   .IndexOf("ProveGeometryMoves", StringComparison.Ordinal) < 0)
+                failures.Add("[aspect-divergence] RunCaptureHeadless no longer runs ProveGeometryMoves, " +
+                             "so the proof exists but never executes - the most convincing kind of dead code.");
+            else
+                notes.Add("divergence proof runs every capture");
+
+            // The proof must derive its pair from the real matrix, not a hard-coded one, or it
+            // stops tracking the matrix the moment a target is added or retired.
+            var sig = Regex.Match(src, @"private\s+static\s+void\s+ProveGeometryMoves\s*\(\s*\)");
+            if (sig.Success &&
+                src.Substring(sig.Index, Math.Min(WideWindowChars, src.Length - sig.Index))
+                   .IndexOf("LandscapeTargets", StringComparison.Ordinal) < 0)
+                failures.Add("[aspect-divergence] ProveGeometryMoves no longer derives its two aspects " +
+                             "from LandscapeTargets, so the proof can drift away from the matrix the " +
+                             "captures actually use (and away from the Seeker's 2670x1200).");
+
+            if (src.IndexOf("RectDiffers", StringComparison.Ordinal) < 0)
+                failures.Add("[aspect-divergence] the resolved-rect comparison (RectDiffers) is gone - " +
+                             "the proof can no longer tell a moved layout from an identical one");
+
+            // Failing the proof must sink the RUN, not print a note nobody reads.
+            if (!Regex.IsMatch(src, @"_geoMoveProof\s*==\s*null"))
+                failures.Add("[aspect-divergence] the fidelity report no longer branches on the proof, so " +
+                             "a run whose geometry did NOT move can still report itself accurate. A " +
+                             "warning here is indistinguishable from the silence that shipped the defect.");
+            else
+                notes.Add("failed proof degrades the run");
         }
 
         // =====================================================================

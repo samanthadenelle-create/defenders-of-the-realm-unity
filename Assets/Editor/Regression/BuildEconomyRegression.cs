@@ -678,6 +678,33 @@ namespace DeNelle.Editor
             if (bar <= 0f)   failures.Add($"damage-states barOffset {bar} <= 0 — the health bar spawns inside the mesh");
             if (loops < 1)   failures.Add($"damage-states maxBurnLoops {loops} < 1");
 
+            // -- WO-892: the critical-save beacon dials --------------------------
+            // The beacon is the "repair me NOW before it is destroyed" alarm. Two things
+            // must hold or it stops meaning anything:
+            //   * it must arm no EARLIER than the fire tell, or the alarm becomes the
+            //     normal state of a lightly damaged base and the player learns to ignore it;
+            //   * its cap must be a REAL cap and must leave headroom under VFXManager's
+            //     global 20-loop budget once maxBurnLoops is also spent, or the beacon and
+            //     the burn loops starve each other and whichever asks second shows nothing.
+            float beacon  = DamageStatesCatalog.CriticalBeacon("wall");
+            int   beacons = DamageStatesCatalog.MaxCriticalBeacons;
+            log.AppendLine($"  damage-states beacon: criticalBeacon {beacon}, maxCriticalBeacons {beacons} " +
+                           $"(worst-case held loops = maxBurnLoops + maxCriticalBeacons = {loops + beacons})");
+
+            if (!(beacon > 0f && beacon < 1f))
+                failures.Add($"damage-states criticalBeacon threshold {beacon} outside (0,1)");
+            if (beacon > fire)
+                failures.Add($"damage-states criticalBeacon {beacon} > fire {fire} - the save-me alarm would " +
+                             "arm BEFORE the building is even on fire, so it would be the normal state of a " +
+                             "damaged base rather than a call to act");
+            if (beacons < 1)
+                failures.Add($"damage-states maxCriticalBeacons {beacons} < 1 - the critical tell could never show");
+            if (loops + beacons > 16)
+                failures.Add($"damage-states maxBurnLoops {loops} + maxCriticalBeacons {beacons} = {loops + beacons} " +
+                             "leaves under 4 of VFXManager's 20 global loop slots for the whole rest of the game " +
+                             "(hero HP aura, boss aura, pet auras, portals, harvest nodes) - structure damage " +
+                             "would silently starve every other held effect");
+
             // Every authored perType key must map through the loader (parse-level check
             // over the raw JSON — the loader swallows unknown keys silently), and each
             // override that authors both thresholds must keep them ordered.

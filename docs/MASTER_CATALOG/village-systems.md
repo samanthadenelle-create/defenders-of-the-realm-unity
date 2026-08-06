@@ -159,8 +159,8 @@ NOT a damage model — never reads HP (:27-29).
 
 | Class | File (lines) | Responsibility |
 |---|---|---|
-| **WallSegment** | WallSegment.cs (231) | One perimeter section; `IDamageableStructure`. Tier 1-3 with toughness `{1, 1.6, 2.56}` — incoming contact damage DIVIDED by it (:57-65). `Configure()` by VillageController; BuildMode-placed walls attach a bare WallSegment (no Configure) — the Structure layer comes from `BaseLayoutLoader.Spawn:325-334`. |
-| **WallTierData** | WallTierData.cs (215) | The CoC wall ladder DATA only: naming Wood→Iron→Reinforced Steel, per-tier mesh prefab path (**placeholders, owner meshes pending**), upgrade cost (Iron, then Iron+Crystals). Durability deliberately NOT duplicated — `ToughnessFor()` reads WallSegment's table (header :6-20). |
+| **WallSegment** | WallSegment.cs (231) | One perimeter section; `IDamageableStructure`. Tier 1-3 with toughness `{1, 1.6, 2.56}` — incoming contact damage DIVIDED by it (:57-65). `Configure()` by VillageController; BuildMode-placed walls attach a bare WallSegment (no Configure) — the Structure layer comes from `BaseLayoutLoader.Spawn:325-334`. **Height (2026-08-06):** `wall_wood`/`wall_stone` stay at `heightMul` **1.0** (4.0 m) — DELIBERATELY unchanged by the `d42e2817` cadence pass; see §4 DELTA (lowering narrows, which opens PATHABLE GAPS in already-saved wall runs). |
+| **WallTierData** | WallTierData.cs (215) | The CoC wall ladder DATA only: naming Wood→Iron→Reinforced Steel, per-tier mesh prefab path (**placeholders, owner meshes pending**), upgrade cost (Iron, then Iron+Crystals). Durability deliberately NOT duplicated — `ToughnessFor()` reads WallSegment's table (header :6-20). **Height is NOT here either** — the per-row `heightMul` in `structures-catalog.json` owns it, and the wall rows are the one group the 2026-08-05 cadence ruling left unauthored (§4 DELTA, `d42e2817`). |
 | **WallRepairController** | WallRepairController.cs (1057) | The player repair LOOP (scan→select→modal prompt→confirm). **Repair cost ruling 2026-07-11:** damage-fraction × the structure's own BUILD cost in its own materials; Crystals never spent on repair (header :13-22). Spends via EconomyService.TrySpend + the GameState Wood/Iron mirror (GrantSpendable both-sides pattern). HUD cross-wired by reflection (module isolation). NOTE: "destroyed = rebuild at full build cost" here predates WO-753 — a destroyed structure is now REMOVED by Destructible, so the repair loop only ever sees damaged-but-standing structures. |
 | Support | RepairTarget (290), RepairHighlight (285), HubRepairAffordance (341), WallRepairHudBridge (242), WallRepairStrings (75), WallLayout (402) | Selection wrapper, amber/violet highlights, hub affordance, HUD bridge, strings, square-ring layout math. |
 
@@ -170,10 +170,78 @@ NOT a damage model — never reads HP (:27-29).
 
 | Class | File (lines) | Responsibility |
 |---|---|---|
-| **StructureFactory** | StructureFactory.cs (864) | **The ONE creation path** (WO-148): editor bake, runtime placement, and save replay all call `Create(entry, pose, parent)` (:78). Runtime-safe (no UnityEditor). WO-764 Y-height normalization: `YHeightVariable = 4f` × `repo.heightMul` (towers 1.25, siege 0.75) — one number rescales the whole town (:42-68). **behaviorId → component is an explicit switch, add-cases-not-reflection** (`AttachBehaviorImpl`, :680; cases `DefenseTower/ArcaneTower/WallSegment/Gate/ResourceCollector/CrystalMine/HealingFountain/GameplayBuilding`, :684-787; building-type map :836-859). Also `MeasureUprightFootprintMetres`, `ReskinForLevel` (DEF-208), Composite→`CreateGroup` (:90-94). |
-| **CatalogBootstrap** | CatalogBootstrap.cs (228) | Fills CatalogRegistry from **`Data/Canonical/structures-catalog.json`** (StreamingAssets source, Resources copy WINS on WebGL) via CanonicalJson; tiny 2-tower hardcoded fallback only if JSON fails. **Live JSON `version: 6`** with 12 `repo.singleton:true` rows, 9 carrying `repo.bakedTwins` (verified 2026-08-02): fountain_healing, pet-house→EchoHollow, workshop→Blacksmith_Weapons, market→Marketplace, mill, forge→Forge_Armor, armorer, jeweler→Jeweler_Gems (twin tolerated-absent — removed from the bake), arcane-tower→ArcaneTower_MagicUpgrades, collector_farm→Windmill, collector_lumbermill→Lumbermill, barracks→CastleBarracks. Overlays `StructureOrientationLocalStore` (local wins). |
+| **StructureFactory** | StructureFactory.cs (864) | **The ONE creation path** (WO-148): editor bake, runtime placement, and save replay all call `Create(entry, pose, parent)` (:78). Runtime-safe (no UnityEditor). WO-764 Y-height normalization: `YHeightVariable = 4f` × `repo.heightMul` — one number rescales the whole town (:42-68). **THE CADENCE (owner ruling 2026-08-05, `0ac59581` + `d42e2817`) — see the DELTA block below.** *(Corrected 2026-08-06: this row previously read "towers 1.25, siege 0.75"; towers are **1.2**, the owner-ruled ANCHOR, and 1.25 is now the LANDMARK value held by exactly one row.)* **behaviorId → component is an explicit switch, add-cases-not-reflection** (`AttachBehaviorImpl`, :680; cases `DefenseTower/ArcaneTower/WallSegment/Gate/ResourceCollector/CrystalMine/HealingFountain/GameplayBuilding`, :684-787; building-type map :836-859). Also `MeasureUprightFootprintMetres`, `ReskinForLevel` (DEF-208), Composite→`CreateGroup` (:90-94). |
+| **CatalogBootstrap** | CatalogBootstrap.cs (228) | Fills CatalogRegistry from **`Data/Canonical/structures-catalog.json`** (StreamingAssets source, Resources copy WINS on WebGL) via CanonicalJson; tiny 2-tower hardcoded fallback only if JSON fails — **that fallback is now PARITY-GUARDED, see the DELTA block**. **Live JSON `version: 8`** *(corrected 2026-08-06: was `version: 6`; `0ac59581` bumped 6 -> 7, `d42e2817` bumped 7 -> 8)* with 12 `repo.singleton:true` rows, 9 carrying `repo.bakedTwins` (verified 2026-08-02): fountain_healing, pet-house→EchoHollow, workshop→Blacksmith_Weapons, market→Marketplace, mill, forge→Forge_Armor, armorer, jeweler→Jeweler_Gems (twin tolerated-absent — removed from the bake), arcane-tower→ArcaneTower_MagicUpgrades, collector_farm→Windmill, collector_lumbermill→Lumbermill, barracks→CastleBarracks. Overlays `StructureOrientationLocalStore` (local wins). |
 | **BuildCategoryRegistry** | BuildCategoryRegistry.cs (244) | BuildType→CatalogType palette mapping from `build-categories.json` (Town/Defenses/Walls/Collector), data not switch. |
 | **StructureOrientationLocalStore** | StructureOrientationLocalStore.cs (136) | Orient-tool dials upserted to `persistentDataPath/structure-orientations.json`; overlaid at startup so owner dials survive sessions/rebuilds; `[OrientRecipe]` console line = the bake-into-repo source. |
+
+### DELTA 2026-08-06 - ONE height cadence across every structure
+
+*Sourced from commits `0ac59581` (the archer-tower anchor), `a67f1e77` (the code-side guidance
+correction) and `d42e2817` (the cadence pass). The AUTHORITY now lives IN THE DATA as the
+top-level `_heightCadence` key of `structures-catalog.json`, so the ruling travels with the
+file; `StructureFactory.YHeightVariable` and `RepoProps.heightMul` carry the summary.*
+
+**The family** (owner ruling: "all of the other structures stay within that cadence...
+relatively the same size... all scaled to the same point" - ONE FAMILY, NOT ONE NUMBER),
+anchored on the archer tower at **1.2**:
+
+| heightMul | Metres | Group |
+|---|---|---|
+| **1.25** | 5.0 | **LANDMARK** - `arcane-tower` (the Cathedral of Magic) ONLY. The town's single apex, tallest by design. |
+| **1.2** | 4.8 | **TOWER - THE ANCHOR.** Measured: 2.778 m across = **49.9% of a House_Medieval_Medium's 5.562 m fitted diameter**, i.e. the ruling's "exactly half as wide"; a 1x1 claim at the 3 m cell. The wizard tower and arcane spire had been floating 4% above it on the old WO-764 1.25 and came off it on 2026-08-05. |
+| **1.0** | 4.0 | **BUILDING BASE** - houses, production, vendors, storage, collectors, civic. **The WIDTH REFERENCE** the ruling measures against. |
+| **0.75** | 3.0 | **SIEGE ENGINES** (`tower_catapult`, `tower_siege_tower`) - machines, not architecture, deliberately UNDER the house line; also stops a wall-mounted Sky Ballista out-topping a tower once stacked. |
+| **0.35** | 1.4 | **DECORATION** (`deco_torch`) - unauthored it had inherited the 1.0 building default, i.e. **a WALL TORCH fitted to 4 m, as tall as a house**. |
+
+**`heightMul` fits BOUNDS, so equal multipliers do NOT mean equal apparent size.**
+`collector_farm` reads as the worst outlier at **1.4** and **is not one** - its windmill blades
+inflate the model's Y bounds, so at 1.0 its BODY fitted far smaller than a boxy forge at the
+same 4 m (the owner felt-reported exactly that as the shrunk farm, `31b41d19`). **1.4 is a
+COMPENSATION, not a cadence value. Left alone with a row note - do NOT "fix" it to 1.0.**
+
+**WALLS ARE DELIBERATELY UNCHANGED** (`wall_wood`, `wall_stone`, `gate_stone` stay at 1.0 = 4 m;
+each carries a `_heightNote`). At 4 m a palisade sits at nearly tower height, so it looks like
+the obvious next correction. It is not, and the reason is not visual: **the fit is UNIFORM, so
+lowering a wall NARROWS it by the same factor**, and every wall in an already-saved town sits on
+the cell pitch of its OLD claim. A narrower segment does not re-pitch its neighbours - **it
+opens PATHABLE GAPS in existing wall runs and shrinks the NavMeshObstacle with them.** That is
+worse than an overlap and **invisible to shrink-is-safe reasoning**. Needs a measured
+`StructureHeightAudit` run (before/after cell claim) plus a **save-migration decision** first.
+
+**Why every applied change was SAFE:** each one is a **SHRINK**, and the grid claim is
+`ceil(measured / 3 m)`, so a shrink can only REDUCE a cell claim - saved placements cannot
+reload overlapping. (RAISING a multiplier is the dangerous direction; always state the
+before/after cell claim.) **Tiers 2/3 inherit with no extra keys** - `ReskinForLevel` re-fits
+every tier model through the same `OptsFor`/`EffectiveVisualHeight` call and `RepoProps` has no
+per-level height field.
+
+**Height and footprint are NOT independently authored.** `BuildModeController` measures the XZ
+bounds of the model **AFTER** it is fitted to `EffectiveVisualHeight`
+(`StructureFactory.MeasureUprightFootprintMetres`), so ONE uniform number moves both - 1.25 ->
+1.2 shrank the archer's diameter by the same 4%. There is no width dial and none is needed. The
+authored `PlacementRules.footprint` is **only** the fallback for a prefab that fails to skin;
+its archer value had drifted to **2.5** against the catalog's **1.75** and was corrected
+(`0ac59581`).
+
+**`repo.visualHeight` is DEAD** - deprecated by WO-764, authored ZERO times, and no longer read
+by `StructureFactory.EffectiveVisualHeight` (`RepoProps.cs:267-274`). It is retained only so
+older serialized JSON still deserializes. **Do not author against it.** (One legacy editor
+reader survives: `Assets/Editor/WallTools/RaidBaseGenerator.cs:350-351`.)
+
+**Catalog version + dual copies:** `structures-catalog.json` bumped **6 -> 7** (`0ac59581`, dual
+copies verified byte-identical by md5, 38211 bytes each - exactly one byte less than before, the
+character dropped by 1.25 -> 1.2, positive proof no other row moved) and **7 -> 8**
+(`d42e2817`). **Live = 8.**
+
+**`CatalogBootstrap.RegisterFallback` (the JSON-load-failure path) had ALL THREE rows drifted**
+from the catalog it mirrors - a fallback that has diverged silently ships different geometry
+whenever the JSON fails to load. It now has a **reflection-based parity guard** that
+deep-compares every public field of the constructed `CatalogEntry` / `RepoProps` /
+`PlacementRules` / `OrientationFix` against the parsed catalog row. It **extends
+`BuildEconomyRegression`** (failure tag `[fallback-parity]`,
+`BuildEconomyRegression.cs:1202-1250`) and rides the existing `BUILDECON_OK` marker - **no new
+suite, so the `REGRESSION_OK <n>/<n>` count does not change** (`21c11327`).
 
 ---
 
@@ -309,8 +377,10 @@ storefront (idempotent, `LightSkin_` marker child) — the post-sell resurface b
    degrades to portrait); the two new oracles must be registered in `DataRegression.RunAll`
    by the committer.
 2. **Comment drift — catalog version:** `StructureSingleton.cs:17` and `:418` say
-   "structures-catalog.json **v5**"; the live JSON is **`version: 6`**. Harmless today
-   (fields unchanged) but the §15 canon rule says fix the comment on next touch.
+   "structures-catalog.json **v5**"; the live JSON is **`version: 8`** *(corrected 2026-08-06;
+   this line said `version: 6` — `0ac59581` bumped 6 -> 7, `d42e2817` bumped 7 -> 8)*. Harmless
+   today (fields unchanged) but the §15 canon rule says fix the comment on next touch — and the
+   drift is now THREE versions wide, which is exactly how a "v5" comment gets trusted.
 3. **Two `ResourceCost` structs still coexist** (`DeNelle.Village.ResourceCost` 4-field wallet
    cost vs `Buildings.Progression.ResourceCost` resource+amount). Live mitigation:
    `BuildingUpgradeVM.cs:35` aliases `EcoCost`. Any new Progression-namespace file must

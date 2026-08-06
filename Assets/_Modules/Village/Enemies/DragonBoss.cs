@@ -531,6 +531,15 @@ namespace DeNelle.Village
             _orbitAngleDeg = UnityEngine.Random.Range(0f, 360f);
         }
 
+        // WO-889: the boss's own lifecycle IS the boss-tier signal for the VFX loop
+        // budget. Declaring it here rather than from a fight-start/fight-won event means
+        // the flag cannot outlive the encounter when the fight ends by the boss being
+        // DESTROYED rather than resolved - OnDisable runs on the way to OnDestroy either
+        // way. This dragon alone holds two loops (the phase aura below plus the
+        // _breathHandle stream), and the arena keeps its own dressing, which is why the
+        // boss tier raises the ceiling at all.
+        private void OnEnable() => VfxLoopBudget.SetBossActive(true);
+
         private void Update()
         {
             float dt = Time.deltaTime;
@@ -1709,6 +1718,17 @@ namespace DeNelle.Village
             StopBreath(true);   // WO-757/759: never leave a stream parented to a disabled rig
             StopPhaseAura();
             UnsubTower();
+            VfxLoopBudget.SetBossActive(false);   // WO-889: drop the boss loop tier with the boss
+        }
+
+        // WO-889: OnDisable already covers destruction (Unity runs it on the way to
+        // OnDestroy), but a boss torn down while ALREADY disabled would skip it, so the
+        // phase aura's release is repeated on the terminal callback. Stopping a handle
+        // twice is a no-op; failing to stop it once costs a loop slot for the session.
+        private void OnDestroy()
+        {
+            StopPhaseAura();
+            VfxLoopBudget.SetBossActive(false);
         }
 
         // -------------------------------------------------------------------------

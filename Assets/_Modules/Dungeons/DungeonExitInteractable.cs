@@ -357,6 +357,17 @@ namespace DeNelle.Dungeons
             if (_leaving) return;
             _leaving = true;
             MobileInteractButton.Release(this);
+
+            // WO-893: arm the MATERIALISE beat for the hub. PortalVFXController.OnHeroExit
+            // existed but was called by nothing, so a portal round trip burst on the way IN
+            // and was silent on the way BACK - an asymmetric transition reads as a bug. The
+            // mirror beat belongs on the ARRIVAL side, which is a different scene from this
+            // one, so it cannot be a direct call: this stamps a short window and the first
+            // portal the hero surfaces near in the hub claims it. Both exit routes below
+            // (the rich ExitToVillage and the direct Castle load) pass through here, so the
+            // stamp covers both. If the hero comes up nowhere near a portal the stamp simply
+            // lapses - a missed flourish, never a stuck flag.
+            DeNelle.Village.PortalVFXController.NotifyReturnedThroughPortal();
             // WO-770.1: a RICH dungeon supplies ExitToVillage (banks the run's crafting scatter to
             // the larder + ends the run), so prefer it. A composed scene has no DungeonRuntimeState /
             // crafting inventory to bank, so it falls through to the direct Castle route below.

@@ -119,6 +119,51 @@ namespace DeNelle.Village
         private const float ProximityInterval = 0.15f;
         private Coroutine _transition;
 
+        // ── WO-893: the SECONDARY flame mouth accent ─────────────────────────────
+        // Registry section 7 keeps the procedural vortex as the portal and adds a
+        // MediumFlames accent at the mouth. The accent is a Family A LOOP, and a loop
+        // played fire-and-forget permanently consumes one of VFXManager's 20 global slots -
+        // so it is held by ONE handle and stopped on every exit path.
+        //
+        // IT IS ALSO GATED ON PROXIMITY, and that is the design, not a budget dodge. There
+        // is one portal per discovered dungeon in the overworld and each already holds a
+        // Dungeon_Portal_Gate rune-ring loop; a second permanent loop per portal would
+        // double a per-map cost against a global cap of 20. Holding the accent only while
+        // the hero is inside activationRadius bounds the whole feature to ~1 concurrent
+        // loop, AND folds the flame into the "the portal wakes as you approach" language
+        // the arch already speaks - which is also what finally gives OnHeroLeave a job.
+        private VFXHandle _accent;
+
+        // ── WO-893: making OnHeroExit reachable ──────────────────────────────────
+        // OnHeroExit was written and CALLED BY NOTHING - portal ENTER fired a burst and
+        // portal EXIT was dead code, so a round trip was visibly asymmetric (an
+        // asymmetric transition reads as a bug, not as a style). The mirror beat is
+        // EMERGING, and emerging happens in the HUB after the dungeon scene unloads, so no
+        // in-dungeon call site could ever have reached it.
+        //
+        // The dungeon exit stamps this static on its way out; the first portal the hero is
+        // standing near in the next scene CLAIMS it and plays Portal_Exit. Time.time is
+        // wall-clock since process start and is NOT reset by a scene load, so the stamp
+        // survives the fade + load. If the hero surfaces nowhere near a portal the stamp
+        // simply lapses and nothing plays - a missed flourish, never a stuck flag.
+        private static float s_returnPendingUntil;
+        private const float ReturnWindowSeconds = 12f;   // covers fade-out + load + fade-in
+        private const float ReturnClaimRadius   = 14f;   // generous: the hub may seat the hero off-arch
+
+        /// <summary>
+        /// WO-893: called by the dungeon RETURN exit as it routes home. Arms the
+        /// materialise beat for whichever portal the hero turns up next to in the hub.
+        /// Static and stateless on purpose - the portal that will play it does not exist
+        /// yet when this is called, because its scene has not been loaded.
+        /// </summary>
+        public static void NotifyReturnedThroughPortal()
+        {
+            s_returnPendingUntil = Time.time + ReturnWindowSeconds;
+            FlowTrace.Step("Portal",
+                $"return-through-portal ARMED for {ReturnWindowSeconds:0}s - the first portal within " +
+                $"{ReturnClaimRadius:0} m of the hero after the load plays Portal_Exit (materialise).");
+        }
+
         private void Start()
         {
             EnsureVisuals();
@@ -515,8 +560,93 @@ namespace DeNelle.Village
             float distSqr = (_hero.position - transform.position).sqrMagnitude;
             bool inRange = distSqr <= activationRadius * activationRadius;
 
+            // WO-893: claim a pending "the hero just came back through a portal" stamp.
+            // Checked on the SAME throttled tick as proximity so it costs nothing extra,
+            // and cleared FIRST so two portals near each other cannot both play it.
+            if (s_returnPendingUntil > 0f && Time.time <= s_returnPendingUntil &&
+                distSqr <= ReturnClaimRadius * ReturnClaimRadius)
+            {
+                s_returnPendingUntil = 0f;
+                FlowTrace.Step("Portal",
+                    $"claimed the return stamp at {Mathf.Sqrt(distSqr):0.0} m - playing Portal_Exit " +
+                    "(the materialise beat that mirrors OnHeroEnter; it had no caller before WO-893).");
+                OnHeroExit();
+            }
+
             if (inRange && !_active) OnHeroApproach();
             else if (!inRange && _active) OnHeroLeave();
+        }
+
+        // ── WO-893: accent lifecycle. EVERY exit path stops the held loop. ───────
+
+        private void OnEnable()
+        {
+            // A scene unload can tear down the VFXManager and its pool while this portal
+            // object survives (additive loads, DDOL hosts), stranding the held instance.
+            UnityEngine.SceneManagement.SceneManager.sceneUnloaded -= OnSceneUnloadedStopAccent;
+            UnityEngine.SceneManagement.SceneManager.sceneUnloaded += OnSceneUnloadedStopAccent;
+        }
+
+        private void OnDisable()
+        {
+            UnityEngine.SceneManagement.SceneManager.sceneUnloaded -= OnSceneUnloadedStopAccent;
+            StopAccent("OnDisable");
+        }
+
+        private void OnDestroy() => StopAccent("OnDestroy");
+
+        private void OnSceneUnloadedStopAccent(UnityEngine.SceneManagement.Scene _)
+            => StopAccent("sceneUnloaded");
+
+        /// <summary>
+        /// Hold the SECONDARY flame accent at the portal mouth while the hero is close.
+        /// Idempotent: a live handle is reused, never stacked. A refused start (global loop
+        /// cap / no manager / no catalogued prefab) is a silent no-op with a throttled
+        /// trace - the portal still reads through its vortex, glow, halo and light, so a
+        /// missing accent degrades the flourish and never the affordance.
+        /// </summary>
+        private void StartAccent()
+        {
+            if (_accent != null && _accent.IsAlive) return;
+            _accent = null;
+
+            var mgr = VFXManager.Instance;
+            if (mgr == null) return;
+
+            // Parented to the arch and seated at the threshold centre so the flame licks
+            // the MOUTH of the opening. Kept low and inside the frame deliberately: the
+            // phone is landscape at 2670x1200, so a tall flame is exactly the part that
+            // leaves the screen.
+            _accent = mgr.PlayEnvironment(VFXType.Env_DungeonPortal, transform);
+            if (_accent == null)
+            {
+                FlowTrace.Throttle("Portal", "accent-refused", 5f,
+                    "Env_DungeonPortal accent REFUSED (global loop cap or quality gate) - the portal " +
+                    "keeps its procedural vortex, which is the primary read anyway.");
+                return;
+            }
+
+            var mod = _accent.Modulator;
+            if (mod != null)
+            {
+                // Seat the room-scale pack recipe onto an arch mouth and clear any
+                // modulation left by this pooled instance's previous owner.
+                mod.SetScaleMul(1f);
+                mod.SetSimulationSpeed(1f);
+                mod.SetEmissionScale(1f);
+            }
+
+            FlowTrace.Step("Portal",
+                "flame mouth accent HELD (secondary to the procedural vortex; released when the hero leaves).");
+        }
+
+        /// <summary>Release the accent loop. Idempotent; safe with nothing held.</summary>
+        private void StopAccent(string reason)
+        {
+            if (_accent == null) return;
+            _accent.Stop();
+            _accent = null;
+            FlowTrace.Step("Portal", $"flame mouth accent released ({reason}) - loop slot returned.");
         }
 
         // ── WO-272: animated arcane-violet glow layered over the 264 base ────────
@@ -623,6 +753,7 @@ namespace DeNelle.Village
             _active = true;
             if (_transition != null) StopCoroutine(_transition);
             _transition = StartCoroutine(TransitionRoutine(true));
+            StartAccent();   // WO-893: the mouth flame is part of "the portal wakes up"
         }
 
         /// <summary>DEF-100: revert to the idle glow when the hero leaves the 3 m radius.</summary>
@@ -632,6 +763,7 @@ namespace DeNelle.Village
             _active = false;
             if (_transition != null) StopCoroutine(_transition);
             _transition = StartCoroutine(TransitionRoutine(false));
+            StopAccent("hero left the activation radius");   // WO-893
         }
 
         public void OnHeroEnter()
@@ -645,6 +777,15 @@ namespace DeNelle.Village
             StartCoroutine(ScreenFlashRoutine());
         }
 
+        /// <summary>
+        /// The MATERIALISE beat - the hero emerging from this portal, mirroring
+        /// <see cref="OnHeroEnter"/>. WO-893 gave it a caller for the first time (see
+        /// <see cref="NotifyReturnedThroughPortal"/>): it was written and reachable from
+        /// nothing, so a portal round trip flashed on the way in and was silent on the way
+        /// back. The two bursts share ONE recipe and differ only by MOTION SIGN - enter
+        /// throws outward, exit is drawn inward - which is a mirror the owner can read with
+        /// all colour removed. Still public so a future in-world emergence can call it.
+        /// </summary>
         public void OnHeroExit()
         {
             entryBurstParticles?.Play();

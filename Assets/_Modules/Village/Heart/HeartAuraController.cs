@@ -218,9 +218,52 @@ namespace DeNelle.Village
             // tree exists, else the legacy anchor+offset. Crown-tracked each tick in Update.
             StartGreenTreeAura(_hasTreeBody ? crown : transform.position + _auraOffset);
 
+            // (C) WO-891 (adjacent, reported): THE HEART DID NOT FLINCH WHEN STRUCK.
+            //
+            // Precisely: it has a good STATE read and had no EVENT read. Everything above
+            // is lerped continuously off Hp - size, luminance and pulse rate all track
+            // health, and all of it is colour-free, which is right. But it is lerped across
+            // the WHOLE 0-100 range, so one contact hit moves the aura by a percent or two:
+            // invisible. And StructureDamageVisuals deliberately never scans HeartController
+            // (bespoke tell, StructureDamageVisuals.cs), so nothing else reacted either.
+            // HeartController.SetHp raised OnHealthChanged into a room with no VFX listener.
+            //
+            // StructureHitReaction supplies the per-hit dust burst; NotifyHit below adds the
+            // Heart's OWN recoil in the channels this controller already owns (a deeper,
+            // faster flicker and a momentary shrink that recovers). Both are shape + rhythm,
+            // no hue, and the burst is a Family B one-shot so it cannot cost a loop slot.
+            StructureHitReaction.Attach(gameObject,
+                () => _heart != null ? Mathf.Clamp01(_heart.Hp / FullHp) : 1f,
+                "HeartOfElarion",
+                NotifyHit);
+
             // Seed the readout so tier one is traced from the first frame.
             ApplyHealthTell(force: true);
         }
+
+        // -- The recoil (WO-891 adjacent) -----------------------------------------
+
+        /// <summary>How fast the flinch decays back to rest. ~0.4 s of visible recoil.</summary>
+        private const float FlinchDecayPerSecond = 2.5f;
+
+        /// <summary>Extra pulse depth at full flinch - the tree flickers harder for a beat.</summary>
+        private const float FlinchDepthBoost = 0.45f;
+
+        /// <summary>How far the aura SHRINKS at full flinch. A recoil, then a recovery.</summary>
+        private const float FlinchShrink = 0.22f;
+
+        /// <summary>Extra pulse rate (Hz) at full flinch - the beat quickens on the blow.</summary>
+        private const float FlinchHzBoost = 3.0f;
+
+        private float _flinch;   // 1 on the frame of a hit, decaying to 0
+
+        /// <summary>
+        /// The Heart was struck. Kicks the recoil that <see cref="ApplyHealthTell"/> reads.
+        /// Driven by <see cref="StructureHitReaction"/>, which watches the HP fraction, so
+        /// EVERY damage source reaches it - contact attacks, the dragon, and anything future
+        /// that routes through <c>SetHp</c> - without a new event or a gameplay edit.
+        /// </summary>
+        private void NotifyHit() => _flinch = 1f;
 
         // -- VFX loop lifecycle ---------------------------------------------------
 
@@ -345,10 +388,17 @@ namespace DeNelle.Village
             float hp = _heart != null ? _heart.Hp : 0f;
             float hpFrac = Mathf.Clamp01(hp / FullHp);
 
+            // The recoil decays every frame regardless of state, so a flinch is always a
+            // short spike and never a latched mode (a latched flinch would fight the health
+            // tell and misreport the Heart's condition).
+            if (_flinch > 0f) _flinch = Mathf.Max(0f, _flinch - Time.deltaTime * FlinchDecayPerSecond);
+
             // Motion: pulse rate + depth accelerate/deepen as HP falls. Advance the phase
-            // by the CURRENT frequency so a rate change is smooth, not a snap.
-            float hz    = Mathf.Lerp(_pulseHzHurt,    _pulseHzHealthy,    hpFrac);
-            float depth = Mathf.Lerp(_pulseDepthHurt, _pulseDepthHealthy, hpFrac);
+            // by the CURRENT frequency so a rate change is smooth, not a snap. The flinch
+            // rides ON TOP of both, so a hit reads as a quickened, harder beat for ~0.4 s -
+            // rhythm, which survives greyscale, rather than a colour flash, which does not.
+            float hz    = Mathf.Lerp(_pulseHzHurt,    _pulseHzHealthy,    hpFrac) + _flinch * FlinchHzBoost;
+            float depth = Mathf.Lerp(_pulseDepthHurt, _pulseDepthHealthy, hpFrac) + _flinch * FlinchDepthBoost;
             _pulsePhase += Time.deltaTime * hz;
             float pulse = 1f + Mathf.Sin(_pulsePhase * 2f * Mathf.PI) * depth;
 
@@ -364,7 +414,10 @@ namespace DeNelle.Village
             {
                 float baseScale = Mathf.Lerp(_scaleHurt, _scaleHealthy, hpFrac);
                 float breath = 1f + (pulse - 1f) * 0.15f;
-                _pivot.localScale = Vector3.one * (baseScale * breath);
+                // The recoil: the aura SHRINKS on the blow and swells back as _flinch
+                // decays. A visible "took that one" in shape, with no hue involved.
+                float recoil = 1f - _flinch * FlinchShrink;
+                _pivot.localScale = Vector3.one * (baseScale * breath * recoil);
             }
 
             // Step-trace only on a tier transition (color-free readout), not per frame.

@@ -1,6 +1,37 @@
 # WORK ORDER 909 — Activate Mage + Ranger in character selection (re-enable + verify)
 
-**Status:** READY TO IMPLEMENT
+> ## ⚠ LANDED 2026-08-05 (`9a0ff548` + `d0c7b8fd`) — AND THIS WO'S STATED PREMISE WAS **REFUTED**
+> - **`Ranger.fbx.tripo-extracted` is NOT a parked mesh.** It is a **125-byte PLAIN TEXT SENTINEL** written
+>   by `TripoAssetPostprocessor`. **There is nothing to un-park.** Knight's sentinel sits beside a live
+>   `Knight.fbx`, which proves the marker never blocked an import. **Nobody should spend another cycle on
+>   it.** The source comments repeating the premise were fixed in `d0c7b8fd`.
+> - **What the body work actually was: a latent P0.** Ranger and Mage have **no FBX at all**; both fell
+>   through to a **Blink base body**, and **`Assets/Blink` is GITIGNORED**. On a fresh clone the terminal
+>   fallback logged a failure and **returned without instantiating anything**, after `Start` had already
+>   destroyed the placeholder — **an INVISIBLE HERO, not a Knight-degrade.** Both bail-outs now build a
+>   tracked **KayKit** body.
+> - **Identity shipped too:** the nameplate had printed the CLASS word and the inventory medallion
+>   hardcoded Grom's face, so **all four heroes wore the Knight's portrait**.
+>   ⚠ **STILL OPEN — Grom and Elara** carry Thrain's exact portrait-import defect (imported as a plain
+>   texture, so `Load<Sprite>` returns null and they fall to the blurrier RawImage path). **Grom is the
+>   default hero.** Flagged, not fixed.
+> - ⚠ **§4's "stale PlayerPref" gotcha is NOT what was observed.** The mechanism is real
+>   (`FeatureFlags.cs:689-695` — a stored `ff.knightonly=1` wins over the new default), but the proven
+>   reason a returning save never shows Ranger or Mage is that **the hero-select screen SELF-SKIPS**:
+>   `HeroSelectController.OnEnable` (`:123-131`) calls `SceneRouter.GoCastle()` when
+>   `IsIntroComplete()` (`:156-161`, `svc.State.HeroClass != HeroClassOpt.None`), and
+>   `_skipWhenIntroComplete` defaults **true** (`:85-89`). `TitleController.cs:411-431` routes **Continue**
+>   straight to the castle with no hero-select at all, and `:385-395` clears the persisted class on
+>   **Play Intro** precisely because of this.
+>   **>> TESTING RANGER OR MAGE REQUIRES NEW GAME / PLAY INTRO. Continue will never show the carousel. <<**
+>   The pref migration §4 asks for was **never implemented**, so verify on a cleared-prefs profile before
+>   ruling that gotcha closed.
+> - ⚠ **The follow-on finding is WO-910 (READY FOR OWNER RULING): both unlocked classes have effectively
+>   no talent tree** — Ranger 1 usable node of 20, Mage 5 of 20, both tier-4 capstone rows dead, 31 dead
+>   nodes total.
+> - Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §6.3, §6.4, §8.
+
+**Status:** LANDED (see the banner above) — original header read: READY TO IMPLEMENT
 **Silo:** Hero / character-select / onboarding
 **PO:** Samantha (owner)
 **For:** CLAUDE CLI (sole committer, headless-verifier)

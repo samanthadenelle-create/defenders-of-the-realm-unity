@@ -150,6 +150,56 @@ namespace DeNelle.Village
                 calloutRadius: 28f, handoffRadius: InteractRadius + 1f,
                 tint: new Color(1f, 0.94f, 0.72f, 1f),
                 isSpent: () => IsDepleted || IsReserveEmpty);
+
+            // WO-890 — the PER-RESOURCE HARVEST AURA, seated on the node itself.
+            //
+            // WHY HERE AND NOT ON NodeFillIndicator, which is what WO-890 names:
+            // VERIFIED AT SOURCE, NodeFillIndicator is NOT ATTACHED IN THE LIVE GAME.
+            // Its only attach site is WorkerManager.Start, behind
+            // WorkerManager.AttachFillIndicators, which is DEFAULT FALSE and carries an
+            // explicit DEF-258 comment turning it off ("reads in-game as a green disc
+            // floating on the node ... re-enable only with the proper node UX"). Hosting
+            // the aura there would have shipped code that never runs. This method,
+            // by contrast, runs unconditionally for every node (it is already where
+            // MineNodeVisual and the PoiBeacon are composed on), so the aura is live on
+            // every node, worker-driven or hand-tapped, regardless of that flag.
+            //
+            // The state delegate is the whole contract: HarvestAura polls it and owns the
+            // loop slot, its budget and every stop path. This class stays the MODEL - it
+            // never plays, holds or stops a VFX.
+            HarvestAura.Attach(gameObject,
+                () => IsBeingHarvested ? HarvestAura.Beat.Harvesting : HarvestAura.Beat.None,
+                () => HarvestAura.TypeForResource(Resource),
+                "node:" + Resource);
+        }
+
+        // ── WO-890 harvest-activity seam (read-only; the aura polls it) ──────────
+
+        /// <summary>
+        /// How long after a successful extract a node still reads as "being worked".
+        /// A manual tap is instantaneous, so without a hold the aura would flicker for a
+        /// single frame and read as nothing at all. Sized under the shortest sensible
+        /// ExtractCooldown so a worker on station reads as CONTINUOUS harvesting rather
+        /// than a stutter between extracts.
+        /// </summary>
+        private const float HarvestGlowSeconds = 3.0f;
+
+        private float _lastExtractTime = -999f;
+
+        /// <summary>
+        /// True while this node is actively being worked - a worker is on station, or a
+        /// manual/auto extract landed within the last <see cref="HarvestGlowSeconds"/>.
+        /// A depleted or mined-out node is never harvesting. Read-only: this is the
+        /// surface the presentation layer polls, exactly like <see cref="ExtractFraction"/>.
+        /// </summary>
+        public bool IsBeingHarvested
+        {
+            get
+            {
+                if (_depleted || IsReserveEmpty) return false;
+                if (_claimedByWorker) return true;
+                return Time.time - _lastExtractTime <= HarvestGlowSeconds;
+            }
         }
 
         // =====================================================================
@@ -216,6 +266,7 @@ namespace DeNelle.Village
             _reserveRemaining -= banked;
             BankYield(banked);
             SpawnGainPopup(banked);   // WO-229 floating "+N <Resource>" at the node
+            _lastExtractTime = Time.time;   // WO-890 harvest-activity window (see IsBeingHarvested)
 
             if (_reserveRemaining <= 0)
             {
@@ -466,6 +517,9 @@ namespace DeNelle.Village
             {
                 GameSfx.PlayPetHarvest();   // harvest "ding" on a successful extract
                 SpawnGainPopup(amount);     // WO-229 floating "+N <Resource>" at the node
+                // WO-890: stamp the activity window the harvest aura reads. Model-side
+                // state only - this class never touches VFX (see IsBeingHarvested).
+                _lastExtractTime = Time.time;
             }
             _cooldown = ExtractCooldown;
 

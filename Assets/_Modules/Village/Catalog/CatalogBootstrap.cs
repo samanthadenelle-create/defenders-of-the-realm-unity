@@ -166,9 +166,12 @@ namespace DeNelle.Village
                 displayName = "Archer Tower",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                // Tribal/castle ladder (bug22 resolution 2026-07-06). NOT PatriciaLight â€”
-                // that module was REMOVED 2026-06-09; only the orphan tower2 asset remains.
-                visualPrefabPath = "Structures/Tower_Castle_Round",
+                // ALL-WOOD ladder (owner 2026-08-06: "New Wooden Tower Level 1", then L2 + L3).
+                // Owner-sourced Tripo art, git-TRACKED under Resources/Structures and authored by
+                // DeNelle.Editor.WoodenWatchtowerBuilder.Build. Supersedes the Castle_Round /
+                // Castle_Square / Medieval_Big polyperfect ladder (WO-902) and, before it, the
+                // Tribal _T ladder. NOT PatriciaLight - that module was REMOVED 2026-06-09.
+                visualPrefabPath = "Structures/Tower_Wooden_Watchtower",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
@@ -182,8 +185,8 @@ namespace DeNelle.Village
                     },
                     upgradeVisualPath = new[]
                     {
-                        "Structures/Tower_Castle_Square",   // L2
-                        "Structures/Tower_Medieval_Big",    // L3
+                        "Structures/Tower_Wooden_Watchtower_L2",   // L2
+                        "Structures/Tower_Wooden_Watchtower_L3",   // L3
                     },
                     navSurface = NavSurfaceKind.Blocker,
                     heightMul = 1.2f,    // owner 2026-08-05: archer tower = 1.2 Ã— base (4 m) = 4.8 m
@@ -198,11 +201,19 @@ namespace DeNelle.Village
                 },
                 orientation = new OrientationFix
                 {
-                    corrected = false, manual = false,
+                    // manual:true at ZERO is deliberate and must match the catalog row, or the
+                    // reflective [fallback-parity] gate fails on the bool. It follows the
+                    // tower_arcane_spire precedent: human-verified, so no tool re-bakes an
+                    // advisory euler that would DOUBLE-APPLY on top of the -90 the builder
+                    // bakes into each prefab. The correction does NOT belong here - ReskinForLevel
+                    // never applies this block to a tier model, and Create applies it AFTER
+                    // VisualFactory.Skin has already fit to height, so a -90 here would fit the
+                    // model's SHORT axis and ship a 9.25 m tower. See the catalog row's note.
+                    corrected = false, manual = true,
                     euler  = new[] { 0f, 0f, 0f },
                     offset = new[] { 0f, 0f, 0f },
                     scale  = 1f,
-                    note   = "mirrors the catalog row (zeroed â€” polyperfect _M prefabs are upright)",
+                    note   = "mirrors the catalog row (zero + manual-locked; the -90 upright correction is baked into the three prefabs, not applied from the row)",
                 },
             });
 

@@ -2601,8 +2601,119 @@ namespace DeNelle.Core.UI
         private static readonly TMP_FontAsset[] _roleFonts = new TMP_FontAsset[3];
         private static readonly bool[] _roleFontTried = new bool[3];
 
+        // =====================================================================
+        // NUMERAL-LEGIBILITY GATE (owner defect 2026-08-05 — BINDING on every role font)
+        // ---------------------------------------------------------------------
+        // THE DEFECT, from captured data (not inference):
+        //   Builds/ui-capture/QueueCardRail_2670x1200.png rendered the Builders chip's
+        //   "Builders 1/2 | Training 1" as THREE IDENTICAL VERTICAL MARKS carrying three
+        //   different meanings, and docs/qa/UI_REVIEW_2026-08-05_seeker.md reports the same
+        //   stroke on "Echoes 1/6", the gold "1|3" chip and the "SKILL |75" wisdom chip.
+        //   The SAME capture shows the Work Queue panel's "BUILDERS 1/2 busy" with a
+        //   properly flagged 1 — two surfaces, two fonts, one digit. So it is the FONT.
+        //
+        // THE PROOF, measured off the assets themselves (glyph ink widths, TMP 64pt space,
+        // and confirmed against the source TTF outlines at 1000 upem):
+        //   Alata-Regular  (font_body): '1' ink 7.23  vs 'l' 6.84  vs '|' 6.14  -> 1.18x 'l'
+        //   Liberation Sans (default) : '1' ink 38.00 vs 'l' 9.00  vs '|' 8.00  -> 4.22x 'l'
+        //   Merriweather-Bold (title) : '1' ink 25.72 vs 'l' 18.36 vs '|' 6.41  -> 1.40x 'l'*
+        //   Acme-Regular    (stamp)   : '1' ink 17.84 vs 'l' 8.77  vs '|' 5.81  -> 2.03x 'l'
+        //   (*Merriweather is a SERIF: its 'l' carries slab serifs, so the pipe is the
+        //    honest yardstick there — 25.72 vs 6.41 = 4.01x, unambiguous.)
+        //   Alata's numeral 1 is a BARE STEM: 113/1000 em of ink against a lowercase l's
+        //   107 and a pipe's 96. It is not an atlas or import artifact — the typeface draws
+        //   it that way, so REGENERATING font_body from Alata cannot fix it.
+        //
+        // THE GATE: a role font is only accepted if its '1' is measurably wider than the
+        // narrowest of its own bare strokes ('|' and 'l'). This is deliberately a PROPERTY
+        // CHECK on the asset, not a hardcoded font swap, so:
+        //   - the day font_body is regenerated from a typeface with a flagged 1 (TitilliumWeb
+        //     is already in the Blink pack and measures 282 vs 74 = 3.81x — see
+        //     BlinkFontImporter's header), the gate passes and the role picks it up with ZERO
+        //     code change;
+        //   - a future pack font with the same defect can never silently ship;
+        //   - nothing fails silently — a rejection logs WHY, with the numbers (§12).
+        // A rejected role falls through the existing chain (TMP default -> LiberationSans),
+        // which is ALREADY what every plain ElarionUiKit.Label in the game renders in, so the
+        // rejection makes typography MORE consistent, not less.
+        //
+        // OWNER VETO (look is the owner's call): set NumeralStrokeRatio to 0f to disable the
+        // gate entirely and accept the ambiguous numeral. One line, no other edits.
+        // =====================================================================
+
+        /// <summary>Minimum ratio of the numeral 1's ink width to the narrowest bare stroke
+        /// ('|' or 'l') for a role font to be accepted. 1.6 clears every legible face measured
+        /// (Acme 2.03, Liberation 4.22, Titillium 3.81, Merriweather 4.01 vs its pipe) and
+        /// rejects Alata's bare stem (1.18). Set to 0f to DISABLE the gate (owner veto).</summary>
+        public const float NumeralStrokeRatio = 1.6f;
+
+        /// <summary>Last gate verdict per role, for regressions/diagnostics: null = not
+        /// evaluated, "" = accepted, otherwise the rejection reason (with the measurements).</summary>
+        private static readonly string[] _roleFontVerdict = new string[3];
+
+        /// <summary>The gate verdict for a role — null when the role has not been resolved yet,
+        /// empty when the font was accepted (or there was nothing to judge), else the rejection
+        /// reason including the measured ink widths. Regression hook; never drives rendering.</summary>
+        public static string FontRoleVerdict(FontRole role)
+        {
+            FontFor(role);                       // force resolution so the verdict is real
+            return _roleFontVerdict[(int)role];
+        }
+
+        /// <summary>Judge the font a role EFFECTIVELY renders with — the role asset when it passed
+        /// the gate, otherwise the default chain it fell back to. <paramref name="ok"/> is false only
+        /// when that final font really does draw an ambiguous 1, which is the state no build may ship
+        /// in. Returns a human-readable line with the measurements either way. String-only signature
+        /// on purpose: the regression assembly can call this without referencing TMP.</summary>
+        public static string NumeralLegibilityReport(FontRole role, out bool ok)
+        {
+            var fa = FontFor(role) ?? ResolveDefaultFont();
+            if (fa == null) { ok = true; return role + ": no font resolvable at all - not a numeral verdict"; }
+            string why;
+            ok = NumeralsAreLegible(fa, out why);
+            return role + " -> '" + fa.name + "': " +
+                   (ok ? "numeral 1 is legible" : "AMBIGUOUS numeral 1") +
+                   (string.IsNullOrEmpty(why) ? " (undecidable - glyph metrics unavailable)" : " (" + why + ")");
+        }
+
+        /// <summary>Ink width of one character's glyph in the asset's own point space, or -1 when
+        /// the character is absent / has no glyph. Reads the SAME metrics TMP lays text out with
+        /// (the EndStateView subtitle measure uses this table too) — a measurement, not a guess.</summary>
+        private static float GlyphInkWidth(TMP_FontAsset fa, char c)
+        {
+            if (fa == null) return -1f;
+            var table = fa.characterLookupTable;
+            if (table == null) return -1f;
+            if (!table.TryGetValue(c, out var ch) || ch == null || ch.glyph == null) return -1f;
+            return ch.glyph.metrics.width;
+        }
+
+        /// <summary>True when <paramref name="fa"/> draws the numeral 1 distinguishably from a
+        /// bare stroke. <paramref name="why"/> carries the measurements either way. Undecidable
+        /// (a glyph missing, an unpopulated table) NEVER rejects — we do not fail a font on
+        /// absence of evidence; the TOFU oracle in HudUiRegression owns coverage.</summary>
+        private static bool NumeralsAreLegible(TMP_FontAsset fa, out string why)
+        {
+            why = "";
+            // Owner veto: the gate is off, so nothing is judged. Say so rather than
+            // letting the caller print "legible" for a font nobody measured (no silent pass).
+            if (NumeralStrokeRatio <= 0f) { why = "gate disabled (NumeralStrokeRatio = 0)"; return true; }
+            float one = GlyphInkWidth(fa, '1');
+            float pipe = GlyphInkWidth(fa, '|');
+            float ell = GlyphInkWidth(fa, 'l');
+            float stroke = Mathf.Min(pipe < 0f ? float.MaxValue : pipe, ell < 0f ? float.MaxValue : ell);
+            if (one <= 0f || stroke <= 0f || stroke == float.MaxValue) return true;   // undecidable -> accept
+            float ratio = one / stroke;
+            why = "'1' ink " + one.ToString("0.00") + " vs narrowest bare stroke " +
+                  stroke.ToString("0.00") + " ('|' " + pipe.ToString("0.00") + ", 'l' " +
+                  ell.ToString("0.00") + ") = " + ratio.ToString("0.00") + "x, floor " +
+                  NumeralStrokeRatio.ToString("0.00") + "x";
+            return ratio >= NumeralStrokeRatio;
+        }
+
         /// <summary>The TMP asset for a role (BlinkFontImporter-generated, committed under
-        /// Resources/RpgUi/font). Null when not generated — callers fall through the default chain.</summary>
+        /// Resources/RpgUi/font). Null when not generated OR when the asset fails the numeral
+        /// -legibility gate above — either way callers fall through the default chain.</summary>
         public static TMP_FontAsset FontFor(FontRole role)
         {
             int i = (int)role;
@@ -2615,7 +2726,30 @@ namespace DeNelle.Core.UI
                 _roleFonts[i] = Guard.Try("UI", "load role font " + name,
                     () => Resources.Load<TMP_FontAsset>(RpgUiCatalog.FontRoot + name), null);
                 if (_roleFonts[i] == null)
+                {
+                    _roleFontVerdict[i] = "not generated";
                     FlowTrace.Warn("UI", "role font '" + name + "' not generated yet (BlinkFontImporter, P0) — using the default chain");
+                }
+                else
+                {
+                    // The gate runs ONCE per role, at resolve time — no per-label cost.
+                    string why;
+                    if (NumeralsAreLegible(_roleFonts[i], out why))
+                    {
+                        _roleFontVerdict[i] = "";
+                        FlowTrace.Step("UI", "role font '" + name + "' accepted (" +
+                                       (string.IsNullOrEmpty(why) ? "numeral gate undecidable" : why) + ")");
+                    }
+                    else
+                    {
+                        _roleFontVerdict[i] = why;
+                        _roleFonts[i] = null;   // fall through to the default chain
+                        FlowTrace.Warn("UI", "role font '" + name + "' REJECTED - its numeral 1 is a bare " +
+                                       "stroke, indistinguishable from '|' and 'l' on a HUD made of counts (" + why +
+                                       "). Falling back to the default chain. Fix = regenerate this role from a " +
+                                       "typeface with a flagged 1 (BlinkFontImporter); see the numeral-legibility gate.");
+                    }
+                }
             }
             return _roleFonts[i];
         }

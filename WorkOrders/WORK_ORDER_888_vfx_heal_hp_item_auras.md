@@ -1,6 +1,18 @@
 # WORK ORDER 888 — VFX: heal + HP-state auras + item auras (colourblind accessibility fix)
 
-**Status:** READY TO IMPLEMENT · **Silo:** Hero/VFX/accessibility · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status: LANDED 2026-08-05 (`1534dffb`)** — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120`.
+The low-health tell now reads by **pulse rate (0.85 -> 3.2 Hz)**, **guttering depth** (trough to a tenth of
+authored density) and **simulation speed**, with a **recipe swap to a candle gutter below a quarter health**
+— a shape change, not a hue change. **The vignette STAYS as a redundant cue; colour-ONLY was the bug.**
+Mutual exclusion is **structural** (exactly one handle field). Worst case adds 3 of the 20 loop slots.
+⚠ **TWO ITEMS STILL NEED THE OWNER:** `Cast_Heal`'s committed row is a **green glow**, so the heal CAST
+beat still reads partly by hue (a second accessibility pass); and **the item heal aura is INERT until she
+tags an accessory** — only the flameblade carries element data today.
+**REFUSED with measurements:** `Cast_Heal`/`Impact_Heal` as held auras (their ratified recipes measure
+CONTINUOUS, 3/sec and 5/sec on loop, so repointing leaks a loop slot per cast) and the arcane gear aura
+(rate-0 with a single burst — held as a loop it pops once then occupies a slot showing nothing).
+Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §5.24, §7, §10 O4-O5.
+*(original header: READY TO IMPLEMENT · **Silo:** Hero/VFX/accessibility · **For:** CLAUDE CLI · **Date:** 2026-08-05)*
 **Context (read once):** WO-884 §0.2 · `VFX_PREFAB_HANDBOOK.md` (Step 1–8) · `VFX_CREATIVE_PICKS_REGISTRY.md` §6a/6b/6c. Enum LANDED — reference names only.
 **Depends on:** WO-884 Phase 0 platform. **May promote before WO-886 (Death) — this fixes a real accessibility bug.**
 

@@ -5,10 +5,13 @@ Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
 > **Branch = `wip/village2-and-f8-tickets`.** The single live anchor of current reality is
-> `CANON_GROUND_TRUTH_2026-08-02.md` (a delta over 08-01 → 07-26 → the deep
+> `CANON_GROUND_TRUTH_2026-08-06.md` (a delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep
 > `CANON_GROUND_TRUTH_2026-07-22.md` module anchor) — **read it first; if any file below contradicts
-> it, the anchor wins.** Every earlier dated anchor (08-01/07-26/07-22/07-19/07-18/07-13/07-12/07-08
-> and older) is superseded/frozen.
+> it, the anchor wins.** Every earlier dated anchor (08-05/08-03/08-02/08-01/07-26/07-22/07-19/07-18/
+> 07-13/07-12/07-08 and older) is superseded/frozen.
+> **HEAD `1534dffb`; local is 43 commits AHEAD of origin — NOT PUSHED.** Gates last emitted
+> `COMPILE_GATE_OK` + `REGRESSION_OK 120/120 suites` (⚠ read the count off the marker, never off a doc —
+> it moved 117 → 120 in eight hours on 2026-08-05).
 > **WO next-free: read the `CLI_LANES_WO_NUMBERS.md` banner — never a number copied here.** TWO
 > disjoint blocks are in use as of 2026-08-02: **main line (CLI)** and **860–899 reserved (UI seat)**;
 > each seat bumps its own banner row in the same edit as the mint.
@@ -22,13 +25,15 @@ Docs index: `docs/README.md`.
 
 | File | Purpose |
 |---|---|
-| `CANON_GROUND_TRUTH_2026-08-02.md` | **The single live anchor of current reality — read FIRST** (delta over 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
+| `CANON_GROUND_TRUTH_2026-08-06.md` | **The single live anchor of current reality — read FIRST** (delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
+| `docs/reference/SESSION_INDEX_2026-08-06.md` | The 2026-08-05/06 session as a **known dictionary** — every defect with its proving line, every **REFUTED** belief with the evidence that killed it, the owner rulings, the open items |
+| `docs/reference/DEFECT_INDEX_2026-08-05.md` | Same, for the earlier half of 2026-08-05 (dungeon P0, wallet, catalog fallback drift). **Frozen ledger** |
 | `KEY_FACTS.md` | The living fact sheet + ⭐ NORTH STAR state — always current, updated in place |
 | `START_HERE.md` | The single entry point / boot sequence a fresh CLI session follows |
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
 | `SESSION_CANON_LOADER.md` | At-a-glance SME primer (live thread + current state + key files) |
-| `docs/HANDOVER.md` | Operator's manual + newest ★★ session block (**2026-08-02**) |
-| `PIPELINE_STATE.md` | Pipeline/build state (current block re-dated **2026-08-02**; deep history below it) |
+| `docs/HANDOVER.md` | Operator's manual + newest ★★ session block (**2026-08-06**) |
+| `PIPELINE_STATE.md` | Pipeline/build state (current block re-dated **2026-08-06**; deep history below it) |
 | `docs/COMBAT_PIVOT_NORTHSTAR.md` | Single-Knight pivot — supersedes Blink/party-of-4 canon |
 | `docs/MASTER_CATALOG.md` | Verified-from-code SME catalog (code mechanics current) |
 | `docs/GROK_MEMORY.md` | Grok (AI PM) fast path |
@@ -52,11 +57,15 @@ Docs index: `docs/README.md`.
 > the **860–899 reserved block (UI seat)**. Each seat bumps ITS OWN banner row in the SAME edit as the
 > mint — skipping that bump caused FIVE collisions on 08-02 alone; collisions resolve
 > first-on-disk-and-referenced-wins.
-> Recent arc: WO-818 (KayKit NPC bodies, SHIPPED), 819/820/823 (singleton /
-> army-gate / hardening, SHIPPED, PO felt-verify open), 825-829 immersive Realm Map program (826 SHIPPED;
-> 827-829 READY), **830/831 Echo program SHIPPED**, 836 catalog SME refresh SHIPPED, 842-844/849/850/852
-> SHIPPED, **848 OPEN** (restore Android stripping Medium), **851 spec-only**, **860 shipped / 861 in
-> flight / 862 minted** (UI-seat block). Some historical numbers were reused/collided
+> Recent arc *(refreshed 2026-08-06)*: **865-870/878-883** UI rework set SHIPPED · **871** build-site
+> workers SHIPPED · **759** boss fire breath SHIPPED · **886/887/888** VFX (death ladder / empowered-tower
+> element routing / colourblind low-health tell) **SHIPPED** · **894** victory screen SHIPPED (with a
+> documented deviation from its own wireframe) · **908** side-menu gear icons SHIPPED · **909** Mage/Ranger
+> activation SHIPPED (**its premise — a parked `.tripo-extracted` FBX — was REFUTED**) · **884/885** READY ·
+> **889/890/891/892/893** IN FLIGHT (specs on disk, untracked, not implemented) · **910 READY FOR OWNER
+> RULING** (Ranger/Mage talent trees effectively empty) · **848 OPEN** (restore Android stripping Medium) ·
+> 904/905/906/907 SPEC. Earlier: WO-818 KayKit NPC bodies, 826 Realm Map, 830/831 Echo program, 836 catalog
+> SME refresh — all SHIPPED. Some historical numbers were reused/collided
 > (e.g. 677/678); a `.RESULT.md` beside a spec means it is done.
 
 The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutter

@@ -36,6 +36,32 @@
 //     request Task (result on success, SetException on a JSON-RPC error), so
 //     re-deserializing the envelope here bought nothing but a Newtonsoft
 //     dependency. This class exposes the two operations we actually use.
+//
+//     >> AND IT SIDESTEPS A REAL SDK BUG: "dequeue after close". <<
+//     LocalAssociationScenario.cs:132-138 (pinned v1.2.9):
+//
+//         private void ExecuteNextAction(Response<object> response = null)
+//         {
+//             if (_actions.Count == 0 || response is { Failed: true })
+//                 CloseAssociation(response);     // no `return`, no `else`
+//             var action = _actions.Dequeue();    // executes REGARDLESS
+//             action.Invoke(_client);
+//         }
+//
+//     On the final response the queue is empty, CloseAssociation() is entered,
+//     and control falls through into Dequeue() on an empty Queue<T> ->
+//     InvalidOperationException. It is thrown from inside the websocket message
+//     callback (HandleEncryptedSessionPayload, :98-110) which has NO try/catch,
+//     so it tears down the message pump. Same fall-through on the `Failed` branch:
+//     a wallet-side error both closes the association AND dequeues.
+//     The damage lands hardest on the MULTI-action flows - SignMessage and
+//     SignAllTransactions (SolanaMobileWalletAdapter.cs:145-187 / :95-135) - which
+//     is why "connect looks fine, signing breaks later" is the reported shape.
+//     We do NOT patch the vendored package (a Library/PackageCache edit is lost on
+//     the next resolve). Having no queue means this control flow does not exist
+//     here, and SolanaWalletProvider.SignMessageBase58 now routes through THIS
+//     class unconditionally instead of Web3.Wallet, so the buggy pump is never
+//     entered on any path we own.
 //  5. A _closed latch on OnClose. The SDK reconnects the socket from its own
 //     OnClose handler with no "we meant to close" guard — a latent respawn
 //     after a completed association.
@@ -176,6 +202,8 @@ namespace DeNelle.Wallet
         public async Task<AuthorizationResult> Authorize(
             string identityUri, string iconUri, string identityName, string cluster)
         {
+            LogIdentity("authorize", identityUri, iconUri, identityName);
+
             var client = await StartAssociation();
             try
             {
@@ -204,6 +232,9 @@ namespace DeNelle.Wallet
             string identityUri, string iconUri, string identityName, string cluster,
             string authToken, byte[] message, byte[] addressBytes)
         {
+            LogIdentity(string.IsNullOrEmpty(authToken) ? "authorize+sign_messages" : "reauthorize+sign_messages",
+                identityUri, iconUri, identityName);
+
             var client = await StartAssociation();
             try
             {
@@ -232,6 +263,58 @@ namespace DeNelle.Wallet
             {
                 await CloseAssociation();
             }
+        }
+
+        /// <summary>
+        /// Prints the EXACT dapp identity triplet that is about to go on the wire,
+        /// plus the absolute URL the wallet will resolve the icon to.
+        /// <para>
+        /// WHY (2026-08-06): the owner's Seeker showed the SDK's branding on the
+        /// approval sheet and there was no way to tell, from a device log, WHICH of
+        /// the three identity fields the wallet had actually received. MWA wallets
+        /// render name + icon straight from the authorize request's `identity`
+        /// object (MobileWalletAdapterClient.cs:70-86 -> JsonRequest.cs:18-37,
+        /// serialized as "name"/"uri"/"icon"), and every one of those properties is
+        /// NullValueHandling.Ignore - a blank field is silently OMITTED from the
+        /// JSON, and the wallet then draws its own default. So a missing field is
+        /// invisible on the wire and invisible in the logs. This line makes it
+        /// visible, and FAILS loudly rather than shipping a nameless request.
+        /// </para>
+        /// ASCII only - this goes to logcat / Player.log / the F8 break-log.
+        /// </summary>
+        private static void LogIdentity(string method, string identityUri, string iconUri, string identityName)
+        {
+            // A blank name or uri is the exact condition that makes a wallet fall
+            // back to its own branding. Never let it pass unremarked.
+            if (string.IsNullOrEmpty(identityName))
+                FlowTrace.Fail("Wallet", "MWA identity NAME is empty - the wallet will show its own default branding.");
+            if (string.IsNullOrEmpty(identityUri))
+                FlowTrace.Fail("Wallet", "MWA identity URI is empty - the wallet cannot verify us and will decline.");
+
+            // The MWA spec resolves `icon` RELATIVE to `uri`. A leading slash is a
+            // root-relative reference, which append-style wallet resolvers turn into
+            // a doubled slash and a 404. Warn, never block - a bad icon costs only
+            // the branding, and hard-failing a connect over artwork would be worse.
+            if (!string.IsNullOrEmpty(iconUri) && iconUri[0] == '/')
+            {
+                FlowTrace.Warn("Wallet",
+                    "MWA icon path starts with '/' - it must be RELATIVE to the identity uri or wallets may resolve it to a doubled slash.");
+            }
+
+            var resolved = "<unresolved>";
+            try
+            {
+                if (!string.IsNullOrEmpty(identityUri) && !string.IsNullOrEmpty(iconUri))
+                    resolved = new Uri(new Uri(identityUri), iconUri).AbsoluteUri;
+            }
+            catch (Exception ex)
+            {
+                // Never let a display-only string break a connect. Report and move on.
+                FlowTrace.Warn("Wallet", $"MWA icon URL resolve failed ({ex.GetType().Name}: {ex.Message}).");
+            }
+
+            FlowTrace.Step("Wallet",
+                $"MWA {method} identity -> name='{identityName}' uri='{identityUri}' icon='{iconUri}' resolvedIcon='{resolved}'");
         }
 
         // =====================================================================

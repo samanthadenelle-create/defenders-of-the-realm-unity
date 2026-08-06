@@ -162,8 +162,20 @@
             "mirror": "Assets/Resources/VFX/_Shared/Materials/ExplosionDistortion.mat"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/LargeFlame02.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/LargeFlame02.mat"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Lightning.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/Lightning.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/MediumFlame01.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MediumFlame01.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/MediumFlame03.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MediumFlame03.mat"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/SandParticle.mat",
@@ -210,8 +222,28 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Fireball.tif"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/LargeFlame02.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/LargeFlame02.tif"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Lightning.tif",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Lightning.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/MediumFlame01.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MediumFlame01.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/MediumFlame01Emission.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MediumFlame01Emission.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/MediumFlame03.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MediumFlame03.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Ramp02.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Ramp02.png"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Ramp03.png",
@@ -248,6 +280,10 @@
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/DustMote.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/DustMote.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/ElectricalSparks.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/ElectricalSparks.mat"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/FireFly.mat",
@@ -298,6 +334,10 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/SparkParticle.tif"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/GroundFog.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/GroundFog.mat"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/SmokeLight.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/SmokeLight.mat"
         },
@@ -308,6 +348,10 @@
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/wispySmoke.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/wispySmoke.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/SmokeLoop02.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokeLoop02.tif"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/SmokePuff.png",

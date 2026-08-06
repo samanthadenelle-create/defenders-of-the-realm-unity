@@ -53,17 +53,19 @@ namespace DeNelle.Editor
         private static readonly KitPrefab[] KitPrefabs =
         {
             // --- already copied / verified (keep) ---
-            // WO-902 (owner, Option A, 2026-08-04): tower_ground_archer's ladder is now
-            // Castle_Round (L1) -> Castle_Square (L2) -> Medieval_Big (L3). The Tribal ladder
-            // it replaced is retired, and Tower_Medieval_Wood stays REJECTED by owner ruling.
-            // These three MUST be registered here: /Assets/Resources/Structures/ is gitignored
-            // (.gitignore:121), so the mirror is regenerated from the pack rather than committed.
-            // A prefab hand-copied into that folder works locally and is MISSING on a fresh
-            // clone -- which is how the archer ladder would silently fall back to a placeholder.
+            // NO LONGER THE ARCHER LADDER (owner 2026-08-06): tower_ground_archer moved to the
+            // ALL-WOOD Tower_Wooden_Watchtower / _L2 / _L3 Tripo set, which is owner-sourced,
+            // git-TRACKED via per-asset .gitignore negations, and built by
+            // DeNelle.Editor.WoodenWatchtowerBuilder.Build -- NOT mirrored from a pack, so it is
+            // deliberately absent from this table. The four rows below stay because /Assets/
+            // Resources/Structures/* is gitignored and OTHER consumers still load them from there:
+            // CastleHubBuilder, VillageSceneBuilder.Walls, TowerDataSeeder, GarrisonSceneBuilder,
+            // EnemyStrongholdBuilder, and the tower_wall_wizard catalog row. Dropping them would
+            // leave those callers with a missing prefab on a fresh clone.
             new KitPrefab("Tower_Medieval_Wood",       "Medieval_M"),  // retired from the archer ladder; kept for other consumers
-            new KitPrefab("Tower_Castle_Round",        "Medieval_M"),  // tower_ground_archer L1 (WO-902)
-            new KitPrefab("Tower_Castle_Square",       "Medieval_M"),  // tower_ground_archer L2 (WO-902)
-            new KitPrefab("Tower_Medieval_Big",        "Medieval_M"),  // tower_ground_archer L3 (WO-902) + tower_wall_wizard
+            new KitPrefab("Tower_Castle_Round",        "Medieval_M"),  // ex-archer L1 (WO-902); now CastleHubBuilder / walls / seeders
+            new KitPrefab("Tower_Castle_Square",       "Medieval_M"),  // ex-archer L2 (WO-902); now CastleHubBuilder / walls / seeders
+            new KitPrefab("Tower_Medieval_Big",        "Medieval_M"),  // ex-archer L3 (WO-902); still tower_wall_wizard + CastleHubBuilder
             new KitPrefab("Windmill_Medieval",         "Medieval_M"),  // mill
             new KitPrefab("Wall_Medieval_Wood",        "Medieval_M"),  // wall_wood
             new KitPrefab("Wall_Medieval_Stone",       "Medieval_M"),  // wall_stone
@@ -84,8 +86,10 @@ namespace DeNelle.Editor
             new KitPrefab("Altar",                     "Fantasy_M"),   // composite Heart of Elarion
             new KitPrefab("Pillar_Ionic",              "Roman_M"),     // composite Heart of Elarion
 
-            // --- archer Tribal ladder (catalog _bug22, owner-correct art; owner F8 2026-07-06
-            //     "archer towers are still these") — _T tier per the ruling, Tier4 unused (maxLevel 3).
+            // --- archer Tribal ladder: RETIRED TWICE OVER (superseded by WO-902's polyperfect
+            //     ladder 2026-08-04, then by the owner's all-wood Tripo ladder 2026-08-06).
+            //     Kept mirrored so nothing that still references the _T prefabs breaks; they are
+            //     NOT the archer tower's art any more. _T tier, Tier4 unused (maxLevel 3).
             new KitPrefab("Tower_Tribal_Tier1",        "Tribal_T", SrcRootT),  // tower_ground_archer L1
             new KitPrefab("Tower_Tribal_Tier2",        "Tribal_T", SrcRootT),  // tower_ground_archer L2
             new KitPrefab("Tower_Tribal_Tier3",        "Tribal_T", SrcRootT),  // tower_ground_archer L3

@@ -95,6 +95,7 @@ namespace DeNelle.Editor
         private const string AuraVfx    = "Assets/Resources/VFX/Aura/";
         private const string HarvestVfx = "Assets/Resources/VFX/Harvest/";
         private const string DeathVfx   = "Assets/Resources/VFX/Death/";   // WO-886 death ladder
+        private const string PortalVfx  = "Assets/Resources/VFX/Portal/";  // WO-893 portals + spawn tiers
 
         // The curated table. Keep it minimal - high-traffic battle types first.
         private static readonly Dictionary<string, Pick> Map = new Dictionary<string, Pick>
@@ -208,7 +209,17 @@ namespace DeNelle.Editor
             { "Aura_Flame",             new Pick(Lana + "Fire/Fire_medium.prefab",  isLoop: true, minQuality: 1) },
             { "Aura_Ice",               new Pick(Lana + "Fog/Fog_frost.prefab",     isLoop: true, minQuality: 1) },
             { "Aura_Healer",            new Pick(Lana + "Regeneration/Regeneration_health_loop.prefab", isLoop: true, minQuality: 1) },
-            { "Aura_EnemyCaster",       new Pick(Lana + "Orbs/Orbs_electric.prefab", isLoop: true, minQuality: 1) },
+            // WO-889 REPOINT - the one registry 6d row that was a genuine DEFECT rather
+            // than a re-skin. Its old pick (Lana Orbs/Orbs_electric) MEASURES AS A BURST:
+            // the derivation authority (layer 'orbs') is main.loop FALSE with rateOverTime
+            // 0, which is why the note at the derivation site below already named this row
+            // as one of three that "contradict their own art". Held by PlayAura it popped
+            // once and then occupied a loop slot rendering NOTHING until the caster died.
+            // Aura_EnemyCaster.prefab is an ElectricalSparks mirror - root ParticleSystem,
+            // main.loop TRUE, rateOverTime 50/sec - thinned to 40% and seated on a body,
+            // with the pack's demo 'Plane' (MeshFilter + MeshRenderer + MeshCollider)
+            // STRIPPED so an enemy does not carry a lit primitive and a physics collider.
+            { "Aura_EnemyCaster",       new Pick(AuraVfx + "Aura_EnemyCaster.prefab", isLoop: true, minQuality: 1, poolSize: 4) },
             { "Aura_Necromancer",       new Pick(Lana + "Fog/Fog_poison.prefab",     isLoop: true, minQuality: 1) },
             { "Aura_SmokeReaper",       new Pick(Lana + "Fog/Fog_speedSlow.prefab",  isLoop: true, minQuality: 1) },
 
@@ -230,6 +241,28 @@ namespace DeNelle.Editor
 
             // -- Environment ---------------------------------------------------
             { "Env_TorchFlame",         new Pick(Lana + "Fire/Fire_small.prefab",   isLoop: true, minQuality: 1) },
+
+            // WO-891 (adjacent): the STRUCTURE PER-HIT flinch (StructureHitReaction).
+            // The moment is not a new one - Env_DestructionDust is a LANDED value whose own
+            // enum doc reads "Destroyable object impact dust (barrel, crate, wall section)",
+            // i.e. exactly this - but it had NO ROW, so it fell through to VFXManager's
+            // procedural default, which for an unmapped type is a generic Aoe NOVA. A magic
+            // nova is the wrong idea entirely for a wall being struck.
+            //
+            // MEASURED off the real asset (Lana Burst/Poof_generic): 5 layers, main.loop
+            // FALSE on every one, rateOverTime 0 on every one -> BURST, so isLoop:false is
+            // the art's own answer, not a guess. It is already committed and already tracked
+            // (it is the same prefab Impact_SmokeWisps and the Death_Skeleton row use, which
+            // a previous WO measured and called "genuinely burst-shaped"), so nothing new is
+            // authored and nothing points into a gitignored pack.
+            //
+            // STAND-IN, and flagged as one: a dust POOF is the closest committed match in the
+            // tree, not an owner-tagged pick. This table exists to be re-pointed - see the
+            // header, "Owner re-points any line here and re-runs" - so one line changes it.
+            // minQuality 0 and a large pool on purpose: during a raid this is the read that
+            // says WHICH structure is being attacked right now, and it fires from many
+            // structures at once. It costs no loop slot (Family B) at any rate.
+            { "Env_DestructionDust",    new Pick(Lana + "Burst/Poof_generic.prefab", isLoop: false, minQuality: 0, poolSize: 10) },
 
             // == WO-884 registry batch (Particle Pack mirrors) ==================
             // Authored by ParticlePackVfxBatchBuilder out of the GITIGNORED
@@ -281,12 +314,72 @@ namespace DeNelle.Editor
             { "Harvest_Gold",           new Pick(HarvestVfx + "Harvest_Gold.prefab",    isLoop: true, minQuality: 1, poolSize: 3) },
             { "Collector_Ready",        new Pick(HarvestVfx + "Collector_Ready.prefab", isLoop: true, minQuality: 1, poolSize: 4) },
 
+            // == WO-889 persistent combat auras (registry 6d) ====================
+            // All Family A, all played through PlayAura and ended through a held handle.
+            // Only the moments with NO committed art are here; Aura_Ice / Aura_Flame /
+            // Aura_Necromancer / Aura_SmokeReaper keep their RICHER, GIT-TRACKED Lana rows
+            // above (5/5/6/6 layers vs 1/1/3/1 for the proposed pack swaps, all four already
+            // derive continuous, and the Lana pack is tracked while Particle Pack materials
+            // are gitignored). The measurements are in ParticlePackVfxBatchBuilder's
+            // DeferredTypes so the refusal is auditable rather than a silent omission.
+
+            // Foot dust: GroundFog at half density and half lifetime with a POSITIVE
+            // gravity so it settles rather than hanging. In greyscale it is the one aura
+            // with no vertical extent - a flat sheet at the feet.
+            { "Aura_Dust",              new Pick(AuraVfx + "Aura_Dust.prefab",  isLoop: true, minQuality: 1, poolSize: 4) },
+
+            // Pet level ladder. Escalates by RECIPE then LAYER COUNT then density, so a
+            // level-up is legible with the colour removed: dull flat motes -> discrete
+            // bobbing twinkle -> twinkle PLUS falling glints (a merged Sparks layer).
+            { "Aura_PetLevel1",         new Pick(AuraVfx + "Aura_PetLevel1.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Aura_PetLevel2",         new Pick(AuraVfx + "Aura_PetLevel2.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Aura_PetLevel3",         new Pick(AuraVfx + "Aura_PetLevel3.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+
+            // Boss phase ladder, driven by DragonBoss through ONE swapped handle.
+            // calm -> enraged -> seething reads as thin-and-vertical (RisingSteam, 1 layer)
+            // -> dense-and-clinging (MediumFlames, 1 layer) -> multi-layer and spitting
+            // (WildFire, 3 layers + faster simulation). Shape and layer count, not hue.
+            { "Boss_Aura_Phase1",       new Pick(AuraVfx + "Boss_Aura_Phase1.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+            { "Boss_Aura_Phase2",       new Pick(AuraVfx + "Boss_Aura_Phase2.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+            { "Boss_Aura_Phase3",       new Pick(AuraVfx + "Boss_Aura_Phase3.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+
+            // == WO-893 portals + spawn tiers (registry 7) =======================
+            // All five VFXType values already existed (they predate the WO-884 batch), so
+            // nothing was appended to the enum. Prefabs are tracked Particle Pack mirrors
+            // under Resources/VFX/Portal/, authored by ParticlePackVfxBatchBuilder.
+            //
+            // MOTION VECTOR is what separates three of these, deliberately: it is the
+            // acceptance criterion and it is the only mirror that survives greyscale.
+            // EnergyExplosion serves enter / exit / elite-spawn from ONE recipe with three
+            // motion signs - enter throws OUTWARD (speed x1.25), exit is drawn INWARD
+            // (speed x-1.0, a literal implosion), elite-spawn RISES (gravity -0.30). A spawn
+            // rising and a death falling is what keeps Elite_Spawn from reading as
+            // Elite_Death, which shares its recipe.
+            //
+            // The portal mouth accent is SECONDARY by construction, not by intention: it is
+            // small (0.55) and thinned (0.6), and PortalVFXController holds it ONLY while the
+            // hero is inside the activation radius. The procedural vortex stays the portal.
+            { "Env_DungeonPortal",      new Pick(PortalVfx + "Env_DungeonPortal.prefab", isLoop: true,  minQuality: 1, poolSize: 3) },
+            { "Portal_Enter",           new Pick(PortalVfx + "Portal_Enter.prefab",      isLoop: false, minQuality: 0, poolSize: 3) },
+            { "Portal_Exit",            new Pick(PortalVfx + "Portal_Exit.prefab",       isLoop: false, minQuality: 0, poolSize: 3) },
+            // minQuality 0 on both spawn tiers: an elite or a boss ARRIVING is the warning
+            // the player acts on. A telegraph that vanishes on a low-end device is the same
+            // class of bug as the colour-only low-HP tell WO-888 fixed.
+            { "Elite_Spawn",            new Pick(PortalVfx + "Elite_Spawn.prefab",       isLoop: false, minQuality: 0, poolSize: 3) },
+            { "Boss_Spawn",             new Pick(PortalVfx + "Boss_Spawn.prefab",        isLoop: false, minQuality: 0, poolSize: 2) },
+
             // NOT WIRED, on purpose: Enemy_Spawn and Despawn_Dissolve. Their recipes
             // (Misc/Respawn, Misc/Dissolve) are SCRIPTED effects carrying the pack's own
             // SpawnEffect MonoBehaviour plus a demo mesh for it to dissolve. A CopyAsset
             // would ship a demo mesh and a missing-script reference; those two moments need
             // a runtime component driving the TARGET's material cutoff. Left procedural
-            // until that is authored - see ParticlePackVfxBatchBuilder's DeferredTypes.
+            // until that is authored - see ParticlePackVfxBatchBuilder's DeferredTypes,
+            // which carries the WO-893 re-measurement (Respawn: 3 layers under a root with a
+            // MeshFilter + MeshRenderer + the pack's SpawnEffect script; Dissolve: 3 layers
+            // plus TWO demo meshes and the same script). WO-893 still closed its acceptance
+            // criterion the honest way: the standard enemy spawn NOW FIRES Enemy_Spawn,
+            // which it never did, and with no catalogued prefab that resolves through
+            // VFXManager's procedural SpawnHeuristicFallback until the component is authored.
 
             // -- Juice / Feedback ----------------------------------------------
             { "Juice_CriticalHit",      new Pick(Lana + "Burst/Flash_star.prefab") },

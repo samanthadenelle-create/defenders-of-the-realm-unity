@@ -100,6 +100,46 @@
 // turned out to be CALL SITES (the ranged-release Cast_MuzzleFlash, which this builder
 // already ships, and element-correct tower impacts), not new art.
 //
+// WO-892 + WO-893 (2026-08-05/06) ADDED TWO MORE CAPABILITIES, both general:
+//   * Row.HovlKey - an ASSET-ONLY row. Not every VFX moment in this game is reached
+//     through a VFXType: StructureDamageVisuals (WO-672) drives its tells through
+//     VFXManager.PlayKey(STRING), the Hovl string-key path. Appending to VFXType is
+//     Grok's single-owner edit (WO-884 section 0.2), so a row whose consumer is a
+//     string key declares that key instead of a TypeName. It is copied, tuned,
+//     playOnAwake-cleared, layer-verified and MEASURED exactly like every other row -
+//     the only difference is that its consumer row lives in
+//     HovlVfxCatalogGenerator.Map rather than VFXCatalogGenerator.Map. The measured
+//     IsLoop is reported so that row can be authored to agree; VfxLoopFlagRegression
+//     already audits the Hovl catalog's stored IsLoop against the prefab, so the two
+//     surfaces still cannot drift.
+//   * THE ROOT DEMO-GEOMETRY GUARD - the WO-887 lesson turned into a MACHINE CHECK
+//     instead of a paragraph nobody re-reads. Five surface-impact recipes were refused
+//     that night because their prefab ROOT is a demo TARGET (MeshFilter + MeshRenderer
+//     + a Collider with the particle tree hanging underneath), so a CopyAsset would
+//     render a lit primitive AND drop a physics collider at every play position. Every
+//     row now PROVES its SOURCE ROOT carries none of those, and none of the pack's own
+//     scripts, before anything is copied - hard-failing with the component list when it
+//     does. It reuses WO-889's HasDemoGeometry / DescribeComponents predicate rather
+//     than restating it; WO-889 strips demo geometry from CHILD subtrees, this refuses
+//     it on the ROOT, and the two together are the whole rule.
+//     MEASURED clean on all seven recipes added by WO-892/893 (MediumFlames 1 layer,
+//     SmokeEffect 1, WildFire 3, SparksEffect 4, EnergyExplosion 4, DustExplosion 5,
+//     BigExplosion 8 - zero MeshFilter, zero MeshRenderer, zero Collider, zero
+//     MonoBehaviour on any of their prefab files).
+//
+// WO-890 + WO-891 (2026-08-05) ADDED NO ROWS EITHER, and again that is the finding.
+//   * WO-890's six harvest recipes were built by THIS builder earlier the same night and
+//     were RE-VERIFIED at source rather than rebuilt: every root carries only
+//     GameObject/Transform/ParticleSystem (no MeshFilter, no MeshRenderer, no Collider -
+//     none of the WO-887 demo-geometry problem), playOnAwake is 0 on every layer of all
+//     six, and every one measures CONTINUOUS at its root, matching IsLoop=true. Their
+//     per-row motion tuning survived intact and is genuinely distinct, so they are six
+//     effects and not five aliases. WO-890's real deliverable was CALL SITES - all six
+//     had ZERO runtime consumers, i.e. the art shipped and nothing ever played it.
+//   * WO-891's healer needs no new art at all: Aura_Healer and Impact_Heal are both
+//     already committed, tracked and family-correct (measured below), so the deliverable
+//     was the behaviour + the element table, not a CopyAsset.
+//
 // DELIBERATELY NOT DONE (reported, never faked):
 //   * Enemy_Spawn / Despawn_Dissolve. Their recipes (Misc/Respawn, Misc/Dissolve)
 //     are SCRIPTED effects: each carries a MonoBehaviour from the pack's own
@@ -108,7 +148,8 @@
 //     wherever it plays and (b) carries a missing-script reference on any machine
 //     without the gitignored pack. Those two moments need a real runtime component
 //     driving the TARGET's own material cutoff - authoring work, not a CopyAsset.
-//     They are left out of the table and named in the run report.
+//     They are left out of the table and named in the run report. RE-MEASURED for
+//     WO-893 rather than taken on trust - the numbers are in DeferredTypes.
 //
 // RUN:
 //   Editor menu : Defenders/VFX/Build Particle Pack VFX Batch
@@ -159,6 +200,8 @@ namespace DeNelle.Editor
         private const string DestAura    = "Assets/Resources/VFX/Aura/";
         private const string DestHarvest = "Assets/Resources/VFX/Harvest/";
         private const string DestDeath   = "Assets/Resources/VFX/Death/";   // WO-886 death ladder
+        private const string DestDamage  = "Assets/Resources/VFX/Damage/";  // WO-892 structure damage states
+        private const string DestPortal  = "Assets/Resources/VFX/Portal/";  // WO-893 portals + spawn tiers
 
         private const string CatalogPath = "Assets/Resources/VFX/VFXCatalog.asset";
 
@@ -205,6 +248,39 @@ namespace DeNelle.Editor
             public float   Gravity;       // absolute gravityModifier override; NaN = untouched
             public string  Why;           // the registry line this row implements
 
+            // -- WO-892 addition --------------------------------------------------
+            /// <summary>
+            /// The Hovl STRING KEY this recipe is consumed through, for rows that have no
+            /// VFXType. <see cref="TypeName"/> is then left empty and NO VFXCatalog row is
+            /// written; the consumer row lives in HovlVfxCatalogGenerator.Map instead.
+            ///
+            /// WHY A SECOND CONSUMER SURFACE EXISTS AT ALL: StructureDamageVisuals (WO-672)
+            /// - the one structure-damage observer, which WO-892 re-skins rather than
+            /// rewrites - drives every tell through VFXManager.PlayKey(STRING). Appending
+            /// to VFXType is Grok's single-owner edit (WO-884 section 0.2), so minting five
+            /// enum values here is not available; the string path is the one this observer
+            /// already speaks. The row is still copied, tuned, playOnAwake-cleared,
+            /// layer-verified and MEASURED identically - only the destination of the
+            /// catalog write differs, and VfxLoopFlagRegression audits the Hovl catalog's
+            /// stored IsLoop against the prefab exactly as it audits the typed one.
+            /// </summary>
+            public string  HovlKey;
+
+            /// <summary>
+            /// What to call this row in logs and errors: the VFXType name when it has one,
+            /// otherwise the Hovl key. Never null for a well-formed row.
+            /// </summary>
+            public string Label
+            {
+                get { return !string.IsNullOrEmpty(TypeName) ? TypeName : HovlKey; }
+            }
+
+            /// <summary>True for an asset-only row whose consumer is a Hovl string key.</summary>
+            public bool KeyOnly
+            {
+                get { return string.IsNullOrEmpty(TypeName); }
+            }
+
             // -- WO-886 additions -------------------------------------------------
             /// <summary>
             /// When &gt; 0, the SOURCE recipe must carry EXACTLY this many ParticleSystems
@@ -235,6 +311,25 @@ namespace DeNelle.Editor
             /// row and reported rather than applied to every recipe the builder owns.
             /// </summary>
             public bool    BurstOnce;
+
+            // -- WO-889 addition -------------------------------------------------
+            /// <summary>
+            /// Delete DEMO GEOMETRY from the copy: any child subtree that contains NO
+            /// ParticleSystem at all and carries a MeshFilter / MeshRenderer / Collider.
+            /// Applied EVERY run, like playOnAwake, because a lit primitive and a physics
+            /// collider riding along with an aura are never correct - not a taste call.
+            ///
+            /// THIS IS NOT "FLATTENING". The never-flatten law (handbook 1.2) protects the
+            /// multi-layer PARTICLE recipe; a stripped node by definition contains no
+            /// particle layer. WO-887 REFUSED five recipes for demo geometry, but there the
+            /// geometry was on the ROOT and PickAuthority fell through it to a child that
+            /// derived the wrong family - the prefab was shaped as a demo TARGET rather than
+            /// an effect. The distinction that makes a strip safe here: the ROOT itself must
+            /// hold the authoritative ParticleSystem, so removing a scenery sibling cannot
+            /// move the derivation authority or change the measured family. The builder
+            /// asserts exactly that before stripping, and refuses the row otherwise.
+            /// </summary>
+            public bool    StripGeometry;
         }
 
         /// <summary>"leave this knob alone" sentinel for Row.Gravity (0 is a real value).</summary>
@@ -466,6 +561,306 @@ namespace DeNelle.Editor
                       Scale = 1.8f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
                       RequiredSystems = 8, BurstOnce = true, Aliases = new[] { "Death_Boss" },
                       Why = "registry 5: Boss_Death AND Death_Boss = BigExplosion (8-layer, whole)" },
+
+            // == WO-889 PERSISTENT COMBAT AURAS (registry section 6d) ==============
+            // Every row here MEASURED CONTINUOUS off the real asset before it was written
+            // (per-layer numbers are in the run log and in the WO-889 result). All are
+            // Family A, played through PlayAura and ended through a held VFXHandle.
+            //
+            // ONLY the moments with NO committed art today are built. Four of registry
+            // 6d's rows (Aura_Ice / Aura_Flame / Aura_Necromancer / Aura_SmokeReaper)
+            // already point at richer, GIT-TRACKED Lana recipes and are deliberately NOT
+            // repointed - the measurements that forced that call are in DeferredTypes.
+            //
+            // GREYSCALE IS THE ACCEPTANCE CHANNEL (owner is red/green colourblind): each
+            // aura differs from its neighbours by DENSITY, LAYER COUNT, LIFETIME and
+            // GRAVITY - never by the tint of the material.
+
+            // Aura_EnemyCaster: the one registry 6d row that is a genuine FIX rather than
+            // a re-skin. Its incumbent (Lana Orbs/Orbs_electric) MEASURES AS A BURST -
+            // authority layer 'orbs' is main.loop FALSE with rateOverTime 0 - so held as an
+            // aura it pops once and then occupies a loop slot rendering NOTHING until the
+            // caster dies. VFXCatalogGenerator's own comment already names this row as one
+            // of three that "contradict their own art". ElectricalSparks is a true loop:
+            // root ParticleSystem, main.loop TRUE, rateOverTime 50/sec constant.
+            //
+            // Thinned to 40% (50 -> 20/sec) and seated small: the pack ships this as a
+            // demo-scale spark fountain, and a caster wants a CRACKLING CONDUIT clinging to
+            // a body. Greyscale read = high-frequency, short-lived point flicker tight to
+            // the silhouette - the only aura in the set with that stochastic sparkle
+            // cadence (the fogs roil, the dust settles, the flames lick).
+            //
+            // StripGeometry: MEASURED, this recipe carries a 'Plane' child with a
+            // MeshFilter + MeshRenderer + MeshCollider - demo-scene scenery for the sparks
+            // to bounce off. Copied as-is it would render a lit primitive AND add a physics
+            // collider on every caster enemy. The root holds the authoritative
+            // ParticleSystem, so removing that scenery cannot move the derivation.
+            new Row { TypeName = "Aura_EnemyCaster", Source = Misc + "ElectricalSparks.prefab",
+                      Dest = DestAura + "Aura_EnemyCaster.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 4, Required = false, StripGeometry = true,
+                      Scale = 0.6f, RateMul = 0.4f, SpeedMul = 1f, LifeMul = 0.6f, Gravity = None,
+                      Why = "registry 6d: crackling conduit; REPLACES a burst-shaped incumbent" },
+
+            // Aura_Dust: no committed art at all today (no catalog row, no consumer until
+            // this WO). GroundFog at half density, half lifetime and a POSITIVE gravity so
+            // it SETTLES at the feet instead of hanging as room fog - the registry flags
+            // "fog != kicked-dust" and gravity is what closes that gap. Greyscale read = a
+            // flat, low sheet hugging the ground, the only aura in the set with no vertical
+            // extent at all.
+            new Row { TypeName = "Aura_Dust", Source = Smoke + "GroundFog.prefab",
+                      Dest = DestAura + "Aura_Dust.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 4, Required = false,
+                      Scale = 0.5f, RateMul = 0.5f, SpeedMul = 1f, LifeMul = 0.5f, Gravity = 0.12f,
+                      Why = "registry 6d: foot dust, low; gravity SETTLES it (fog != kicked dust)" },
+
+            // -- Pet level ladder (registry 6d "density escalation") ---------------
+            // The three rungs escalate by RECIPE then LAYER COUNT then DENSITY, which is
+            // the same greyscale-first ladder WO-886 used for deaths. A pet owner must be
+            // able to see a level-up with the colour removed:
+            //   L1 DustMotes  1 layer  - dull motes, flat drift, no twinkle
+            //   L2 FireFlies  2 layers - discrete twinkling points that bob
+            //   L3 FireFlies + SparksEffect, 3+ layers - twinkle PLUS falling glints
+            // so the rungs differ in WHAT IS HAPPENING, not merely in how much of it.
+
+            // DustMotes ships at 100/sec (a room-fill ambience); a pet-sized aura wants a
+            // fraction of that. Gravity 0 = the flat sideways drift that keeps L1 visually
+            // "inert" next to L2's bobbing twinkle.
+            new Row { TypeName = "Aura_PetLevel1", Source = Misc + "DustMotesEffect.prefab",
+                      Dest = DestAura + "Aura_PetLevel1.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 3, Required = false,
+                      Scale = 0.6f, RateMul = 0.15f, SpeedMul = 1f, LifeMul = 1f, Gravity = 0f,
+                      Why = "registry 6d: pet L1 = DustMotes, dull flat drift (ladder floor)" },
+
+            new Row { TypeName = "Aura_PetLevel2", Source = Misc + "FireFlies.prefab",
+                      Dest = DestAura + "Aura_PetLevel2.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 3, Required = false,
+                      Scale = 0.6f, RateMul = 1.5f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      Why = "registry 6d: pet L2 = FireFlies, discrete bobbing twinkle" },
+
+            // The top rung MERGES a second recipe rather than merely turning L2 up - a
+            // denser copy of L2 would be indistinguishable from L2 at a glance, which is
+            // exactly the failure the registry's "density escalation" phrase invites.
+            new Row { TypeName = "Aura_PetLevel3", Source = Misc + "FireFlies.prefab",
+                      Secondary = Misc + "SparksEffect.prefab",
+                      Dest = DestAura + "Aura_PetLevel3.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 2, Required = false,
+                      Scale = 0.7f, RateMul = 1.6f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      Why = "registry 6d: pet L3 = FireFlies + Sparks (twinkle PLUS falling glints)" },
+
+            // -- Boss phase ladder (registry 6d "calm -> enraged -> seething") -----
+            // DragonBoss already drives these three VFXType values through ONE handle
+            // (_auraHandle, swapped on every phase transition), so the art is the only
+            // half that was missing. The escalation is deliberately a RECIPE CHANGE at
+            // each step, not a scale ramp:
+            //   P1 RisingSteam   1 layer  - a slow thin rising column. Calm, sparse, vertical.
+            //   P2 MediumFlames  1 layer  - a body-hugging flame envelope. Licking, mid-frequency.
+            //   P3 WildFire      3 layers - base + 100/sec embers + 20/sec fire. A seething boil
+            //                               that throws ember scatter well past the silhouette.
+            // In greyscale that is: thin-and-vertical -> dense-and-clinging -> multi-layer
+            // and spitting. Phase is legible from the SHAPE of the effect with all colour
+            // removed, and from the count of distinct things moving.
+            //
+            // These never fight the boss's fire-breath: DragonBoss holds the breath on
+            // _breathHandle parented to the mouth SOCKET, and the phase aura on a separate
+            // _auraHandle parented to the body transform. Two fields, two parents, and
+            // StopPhaseAura runs before every re-start.
+            //
+            // NOTE (measured, and it will show in the run log): the pack's RisingSteam ships
+            // at root scale 1.25, and ApplyTuning only writes Row.Scale onto a copy whose
+            // scale is still exactly 1 - so P1 will report "scale PRESERVED (already tuned)"
+            // and stay at 1.25 rather than taking the 2.0 below. On a dragon that is
+            // acceptable (the boss is large), which is why this is recorded rather than
+            // worked around; see the WO-888 note in DeferredTypes for the same measurement.
+            new Row { TypeName = "Boss_Aura_Phase1", Source = Smoke + "RisingSteam.prefab",
+                      Dest = DestAura + "Boss_Aura_Phase1.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 2, Required = false,
+                      Scale = 2f, RateMul = 1.2f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      Why = "registry 6d: boss P1 CALM = RisingSteam, thin vertical column" },
+
+            new Row { TypeName = "Boss_Aura_Phase2", Source = Fire + "MediumFlames.prefab",
+                      Dest = DestAura + "Boss_Aura_Phase2.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 2, Required = false,
+                      Scale = 2.2f, RateMul = 2f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      Why = "registry 6d: boss P2 ENRAGED = MediumFlames, clinging envelope" },
+
+            // Speed up rather than merely scale up: a faster-running fire snaps and recovers
+            // instead of drifting, which is what "seething" reads as when hue is removed
+            // (the same channel HeroHpStateAura uses for its near-death gutter).
+            new Row { TypeName = "Boss_Aura_Phase3", Source = Fire + "WildFire.prefab",
+                      Dest = DestAura + "Boss_Aura_Phase3.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 2, Required = false,
+                      Scale = 2.5f, RateMul = 1.4f, SpeedMul = 1.3f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 3,
+                      Why = "registry 6d: boss P3 SEETHING = WildFire, 3-layer boil + ember scatter" },
+
+            // == WO-892 STRUCTURE DAMAGE STATES (registry section 6g) ==============
+            // These five are HovlKey rows: their consumer is StructureDamageVisuals, which
+            // plays every tell through VFXManager.PlayKey(STRING). See Row.HovlKey.
+            //
+            // WHAT THIS REPLACES, AND WHY IT IS A FIX RATHER THAN A RE-SKIN. The observer
+            // asks for two keys today, "Ember_Burn" (smolder + fire) and "Raid_Explosion"
+            // (the break burst). VERIFIED AT SOURCE:
+            //   * Ember_Burn is declared in HovlVfxCatalogGenerator.Map as
+            //     "RPG VFX Bundle/Random effect prefabs/Debuff 1.prefab" - a path that DOES
+            //     NOT EXIST in the pack on this machine (the folder holds "Debuff chain"
+            //     and "Debuff scythe"; there is no "Debuff 1"). The generator skips a row
+            //     whose prefab will not load, so Ember_Burn is ABSENT from the shipped
+            //     HovlVfxCatalog.asset - grep the asset, the key is not there. PlayKey on a
+            //     key the catalog does not hold is a throttled no-op. THE SMOLDER AND FIRE
+            //     LOOPS HAVE THEREFORE NEVER RENDERED, on any machine, since WO-672.
+            //   * Raid_Explosion IS in the asset, but points at Hovl Studio art, and
+            //     /Assets/Hovl Studio/ is GITIGNORED (.gitignore:218) with ZERO files
+            //     tracked - so the one damage tell that does resolve resolves only on a
+            //     machine that happens to have the 236 MB pack on disk. Same WO-785
+            //     exposure the death ladder was moved off.
+            // Both are closed the same way the death ladder was: tracked Particle Pack
+            // mirrors under Assets/Resources/VFX/Damage/, self-contained after
+            // VfxResourceArtMirror.
+            //
+            // GREYSCALE IS THE ACCEPTANCE CHANNEL (the owner is red/green colourblind).
+            // The four states differ by SMOKE DENSITY, FLAME PRESENCE, PULSE RHYTHM and
+            // LAYER COUNT - every one of which survives with all colour removed:
+            //   smolder  1 layer, thin slow smoke, no flame, steady
+            //   fire     2 layers, flame present + a much denser smoke volume, steady
+            //   critical 4 layers, no smoke at all, hard fast STROBE (rhythm) + a "!" glyph
+            //   broken   one 5-layer grounded debris scatter, then 3 layers of low wide
+            //            guttering burn over a shell that is no longer standing
+            // LANDSCAPE PHONE (2670x1200): the vertical axis is the scarce one, so every
+            // one of these is deliberately kept low and close to the structure. None of
+            // them is a rising column.
+
+            // Smolder (hp <= 0.5). SmokeEffect is ONE layer at 20/sec on loop (measured).
+            // Thinned to 45% and shortened: "taking damage", a wisp, NOT a fire.
+            new Row { HovlKey = "Damage_Smolder", Source = Smoke + "SmokeEffect.prefab",
+                      Dest = DestDamage + "Damage_Smolder.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 4, Required = false,
+                      Scale = 0.9f, RateMul = 0.45f, SpeedMul = 1f, LifeMul = 0.8f, Gravity = None,
+                      RequiredSystems = 1,
+                      Why = "registry 6g: smolder = SmokeEffect low (light smoke wisp)" },
+
+            // Fire (hp <= 0.25). MediumFlames (1 layer) with SmokeEffect MERGED as a second
+            // layer - the registry's literal "MediumFlames + SmokeEffect". The step up from
+            // smolder is therefore a FLAME APPEARING plus roughly double the smoke, not a
+            // colour change: in greyscale you go from "a wisp" to "a lit thing making a lot
+            // of smoke".
+            new Row { HovlKey = "Damage_Fire", Source = Fire + "MediumFlames.prefab",
+                      Secondary = Smoke + "SmokeEffect.prefab",
+                      Dest = DestDamage + "Damage_Fire.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 4, Required = false,
+                      Scale = 1f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 1,
+                      Why = "registry 6g: fire = MediumFlames + SmokeEffect (active flame + smoke volume)" },
+
+            // THE CRITICAL-SAVE BEACON - the gap WO-892 exists to close. SparksEffect, 4
+            // layers, root emits by rate on loop (measured). Gravity 0 so the glints HANG
+            // instead of falling, which is what motion-splits it from Harvest_Gold (0.4,
+            // "coin-shimmer that falls"); short lifetime so each pop is a hard blink rather
+            // than a streak. The URGENCY itself is NOT in this prefab: it is the fast fixed
+            // strobe StructureDamageVisuals drives through VfxLoopModulator, plus the "!"
+            // glyph. Rhythm and a glyph both survive greyscale; a red tint does not.
+            new Row { HovlKey = "Damage_CriticalBeacon", Source = Misc + "SparksEffect.prefab",
+                      Dest = DestDamage + "Damage_CriticalBeacon.prefab", Expect = Family.Continuous,
+                      MinQuality = 0, PoolSize = 3, Required = false,
+                      Scale = 1f, RateMul = 0.5f, SpeedMul = 1f, LifeMul = 0.5f, Gravity = 0f,
+                      RequiredSystems = 4,
+                      Why = "registry 6g: CRITICAL-save beacon = SparksEffect fast-pulse (alarm cadence)" },
+
+            // Broken (hp = 0), beat 1: the one-shot. DustExplosion, 5 layers including a
+            // 30-count sand burst - GROUNDED debris, which is what a building coming down
+            // reads as (a fire explosion would read as a bomb). BurstOnce because every
+            // explosion recipe in this pack ships looping:1 with its payload in a t=0 burst
+            // and VFXManager reclaims a oneshot at duration + max startLifetime, so the
+            // burst would otherwise RE-FIRE mid-life and the building would collapse twice.
+            new Row { HovlKey = "Damage_BreakBurst", Source = Fire + "DustExplosion.prefab",
+                      Dest = DestDamage + "Damage_BreakBurst.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 3, Required = false,
+                      Scale = 1.25f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 5, BurstOnce = true,
+                      Why = "registry 6g: broken = DustExplosion one-shot (grounded structural collapse)" },
+
+            // Broken, beat 2: the lingering ruin. WildFire is 3 layers (100 + 5 + 20/sec,
+            // all looping - measured); at 35% density and a longer hold it is a LOW, WIDE,
+            // slow guttering burn rather than a burning field. It takes the SAME loop slot
+            // the fire tier held (a broken shell is tier 2, not tier 3), so a ruin costs
+            // nothing extra against the cap.
+            new Row { HovlKey = "Damage_Ruin", Source = Fire + "WildFire.prefab",
+                      Dest = DestDamage + "Damage_Ruin.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 3, Required = false,
+                      Scale = 0.8f, RateMul = 0.35f, SpeedMul = 0.8f, LifeMul = 1.2f, Gravity = None,
+                      RequiredSystems = 3,
+                      Why = "registry 6g: broken linger = WildFire/Smoke column over the ruin" },
+
+            // == WO-893 PORTALS + SPAWN TIERS (registry section 7) =================
+            // These five DO have landed VFXType values (Env_DungeonPortal, Portal_Enter,
+            // Portal_Exit, Elite_Spawn, Boss_Spawn all predate the WO-884 batch), so they
+            // are ordinary typed rows. Nothing is appended to the enum here.
+            //
+            // MOTION VECTOR IS THE ONLY THING SEPARATING THREE OF THEM, and that is
+            // deliberate - it is the acceptance criterion ("Portal_Enter vs Portal_Exit
+            // distinguishable by MOTION vector, not colour"). EnergyExplosion serves enter,
+            // exit and elite-spawn from one recipe with three different motion signs:
+            //   enter        speed x1.25            particles thrown OUTWARD  (consumed)
+            //   exit         speed x-1.0            particles drawn INWARD    (materialised)
+            //   elite spawn  gravity -0.30          particles RISE            (arriving)
+            // All three read in greyscale because direction has no hue.
+
+            // The portal mouth accent. MediumFlames, 1 layer, continuous. SECONDARY by
+            // construction: it is small (0.55) and thinned (0.6), and PortalVFXController
+            // holds it only while the hero is close, so it can never become the portal's
+            // identity - the procedural vortex stays the portal. Kept low and tight because
+            // the phone is landscape and a tall flame is the part that crops.
+            new Row { TypeName = "Env_DungeonPortal", Source = Fire + "MediumFlames.prefab",
+                      Dest = DestPortal + "Env_DungeonPortal.prefab", Expect = Family.Continuous,
+                      MinQuality = 1, PoolSize = 3, Required = false,
+                      Scale = 0.55f, RateMul = 0.6f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 1,
+                      Why = "registry 7: portal keeps its procedural vortex + a SECONDARY MediumFlames mouth accent" },
+
+            // Portal_Enter - stepping in. Outward, pushed harder than the recipe ships so
+            // the burst reads as the portal throwing the world outward around the hero.
+            new Row { TypeName = "Portal_Enter", Source = Fire + "EnergyExplosion.prefab",
+                      Dest = DestPortal + "Portal_Enter.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 3, Required = false,
+                      Scale = 1.15f, RateMul = 1f, SpeedMul = 1.25f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 7: Portal_Enter = EnergyExplosion (outward)" },
+
+            // Portal_Exit - emerging. THE MIRROR: a NEGATIVE startSpeed multiplier makes
+            // every layer's particles travel toward the emitter instead of away from it, so
+            // the same recipe implodes. Held slightly shorter so the convergence lands as a
+            // snap rather than a drift. This is the one row in the table whose tuning is a
+            // SIGN rather than a magnitude, and it is why Scaled() had to learn to keep a
+            // two-constants range in order when the multiplier is negative (see Scaled).
+            new Row { TypeName = "Portal_Exit", Source = Fire + "EnergyExplosion.prefab",
+                      Dest = DestPortal + "Portal_Exit.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 3, Required = false,
+                      Scale = 1.15f, RateMul = 1f, SpeedMul = -1f, LifeMul = 0.85f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 7: Portal_Exit = EnergyExplosion (inward, mirror of enter)" },
+
+            // Elite_Spawn - a rung below the boss. Same 4-layer EnergyExplosion as the elite
+            // DEATH (Elite_Death, scale 1.45), which is the point: an elite arriving and an
+            // elite dying are the same magnitude of event. What separates them is the
+            // NEGATIVE gravity - a spawn RISES into being, a death falls apart. The registry
+            // also says "dark"; that is a hue and is deliberately not implemented, because a
+            // read the owner cannot see is not a read.
+            new Row { TypeName = "Elite_Spawn", Source = Fire + "EnergyExplosion.prefab",
+                      Dest = DestPortal + "Elite_Spawn.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 3, Required = false,
+                      Scale = 1.3f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1.1f, Gravity = -0.3f,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 7: Elite_Spawn = EnergyExplosion, rising (arrival) not falling (death)" },
+
+            // Boss_Spawn - the scale jump. 8 layers pooled WHOLE, the same set piece as
+            // Boss_Death, at 1.6 against the death's 1.8 so the arrival is unmistakably big
+            // but the death still tops the ladder. Rises, for the same reason as the elite.
+            // The registry's LightningStormCloud accent is REFUSED - see DeferredTypes.
+            new Row { TypeName = "Boss_Spawn", Source = Fire + "BigExplosion.prefab",
+                      Dest = DestPortal + "Boss_Spawn.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 2, Required = false,
+                      Scale = 1.6f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = -0.25f,
+                      RequiredSystems = 8, BurstOnce = true,
+                      Why = "registry 7: Boss_Spawn = BigExplosion (8-layer scale jump), rising" },
         };
 
         // The moments this builder deliberately leaves alone, each with the reason the run
@@ -601,6 +996,75 @@ namespace DeNelle.Editor
             "GearAura scale multipliers, each carrying this measurement). If the owner would rather " +
             "fix the asset, delete the two .prefab files and re-run - the rows already say 0.8 / 0.5.",
 
+            // -- WO-889 (persistent combat auras) refusals. Each is a MEASUREMENT off the
+            // real assets, and the first one is the most consequential: the WO's recipe
+            // table would have REPLACED working art with thinner art. -------------------
+            "WO-889 Aura_Ice / Aura_Flame / Aura_Necromancer / Aura_SmokeReaper REPOINTS: REFUSED. " +
+            "Registry 6d nominates DustMotesEffect / TinyFlames / PoisonGas / SmokeEffect for these " +
+            "four. MEASURED off both sides, every one of those swaps is a DOWNGRADE on three counts. " +
+            "(1) LAYER COUNT. The incumbent Lana recipes are richer: Fog_frost 5 layers (root 25/sec " +
+            "+ fog 15 + sparks 15 + snowflakes 3 + snow 7), Fire_medium 5, Fog_poison 6, Fog_speedSlow " +
+            "6 - against DustMotesEffect 1, TinyFlames 1, PoisonGas 3, SmokeEffect 1. " +
+            "(2) THE INCUMBENTS ARE ALREADY CORRECT LOOPS. All four derive CONTINUOUS through the " +
+            "shared oracle, so there is no loop-flag defect to fix - unlike Aura_EnemyCaster, which " +
+            "is why that one row IS built above. " +
+            "(3) SELF-CONTAINMENT WOULD REGRESS. The Lana pack is GIT-TRACKED (verified: " +
+            "'Assets/Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_frost.prefab' is in git ls-files and " +
+            "is not gitignored), whereas every Particle Pack copy still resolves its materials and " +
+            "textures into the GITIGNORED pack (this builder's own AuditPackDependencies reports the " +
+            "count per row). Trading tracked art for untracked art is the WO-785 exposure moving " +
+            "backwards. " +
+            "SPECIFICALLY ON ICE, which WO-889 singles out for a COLD-MOTION criterion ('slow drift " +
+            "and settle, NOT upward'): the incumbent Fog_frost literally ships dedicated 'snowflakes' " +
+            "and 'snow' layers, while registry 6d itself marks the DustMotes pick with a standing " +
+            "'snow-gap' warning because it is an APPROXIMATION of snow. The criterion is met better " +
+            "by the art already in the catalog than by the art the WO proposed to replace it with. " +
+            "Note also that these two VFXTypes are LIVE CONSUMER-FACING: GearAuraMap resolves the " +
+            "hero's fire and frost weapon auras to Aura_Flame / Aura_Ice (shipped tonight under " +
+            "WO-888), so a repoint would silently re-skin hero gear under a combat-aura work order. " +
+            "A human must rule explicitly if the thinner pack look is wanted anyway.",
+
+            "WO-889 Aura_EmpowerTower: REFUSED - it has NO CONSUMER, and wiring one would override " +
+            "owner-tagged art. VERIFIED AT SOURCE: the tower aura is ArcaneAura.cs, and it does not " +
+            "use VFXType at all - it holds a HOVL STRING KEY loop via VFXManager.PlayKey, with the " +
+            "key assigned per surface by the owner ('Arcane_Aura' default, 'Aura_HeartPulse' for the " +
+            "combat Arcane Spire, 'Fountain_Heal_Aura' for the Cathedral of Magic) and its own doc " +
+            "calling these 'SWAPPABLE DEFAULTS - the owner may retag any surface in the VFX Caster'. " +
+            "Routing the tower through a CLI-picked Aura_EmpowerTower would substitute a creative " +
+            "pick for an owner tag, which the standing VFX rule forbids (map owner tags verbatim, " +
+            "never pick or substitute). ArcaneAura ALSO already implements the WO's escalation " +
+            "(ApplyLevel L1/L2/L3 grows the ring and adds an L3 idle pulse) and deliberately uses " +
+            "ONE-SHOTS for that pulse so a wall of L3 towers cannot blow the loop cap - re-plumbing " +
+            "it would trade a cap-safe design for a loop-per-tower one. The owner should tag a key " +
+            "if a different tower aura is wanted.",
+
+            "WO-889 Aura_HeartPulse repoint to FireFlies: REFUSED as out-of-scope-by-blast-radius. " +
+            "Registry 6d scopes this to 'combat/raid Hearts ONLY (hub tree withholds)', and the " +
+            "withholding is ALREADY IMPLEMENTED - HeartAuraController sets _suppressWhiteSwirl when " +
+            "the Heart has a visible tree centrepiece, so the hub tree does not play it. But this " +
+            "VFXType has THREE consumers, not one: HeartAuraController, EchoSpiritPresentation (the " +
+            "founding-Echo aura, _auraType = Aura_HeartPulse) and ArcaneAura's combat-spire key " +
+            "assignment. It also currently has NO VFXType catalog row, so PlayLoop resolves it " +
+            "through the HOVL BRIDGE in VFXManager.PlayLoop (TryGetHovlKeyForType -> the curated " +
+            "'Aura_HeartPulse' glow). Adding a VFXType row would BYPASS that bridge for every " +
+            "consumer at once, silently re-skinning the founding-Echo aura - a felt change to the " +
+            "onboarding moment under a combat-aura ticket. Needs an owner ruling, not a builder row.",
+
+            "WO-889 Pet_Aura_Fire / Pet_Aura_Ice: REFUSED - no selector exists. VERIFIED AT SOURCE: " +
+            "VFXManager.PlayPetAura(pet, level) switches on LEVEL only and can return nothing but " +
+            "Aura_PetLevel1/2/3, and PetAuraVFX (the only caller) passes a serialized 1-3 level with " +
+            "no element field anywhere. The enum doc says these are 'use instead of Aura_PetLevel* " +
+            "when pet type is Fire' - but no pet TYPE signal reaches this path, so the rows would be " +
+            "Resources bytes nothing can select. The level ladder IS built above. Wiring an element " +
+            "selector is a design question (which pets are fire/ice, and does element outrank level?) " +
+            "that belongs to the owner.",
+
+            "WO-889 Aura_Healer: not built - it already has a committed row (Lana " +
+            "Regeneration/Regeneration_health_loop) that derives CONTINUOUS, and no code plays it " +
+            "yet. Registry 6f introduces the healer STRUCTURE that would consume it; until that " +
+            "structure exists, repointing a working row at a thinner RisingSteam copy would be " +
+            "churn with no consumer to benefit.",
+
             "Death lingering loops (WO-886 'Lingering' column): SmokeEffect settle/column and " +
             "the WildFire lick MEASURE as genuine Family A loops (SmokeEffect 20/sec looping; " +
             "WildFire 100 + 5 + 20/sec looping across 3 layers), which is exactly what the WO " +
@@ -609,6 +1073,121 @@ namespace DeNelle.Editor
             "(WO-884 section 0.2 / handbook Step 3). Building the prefabs now would ship " +
             "Resources bytes with no consumer and no catalog row. Deferred pending the enum " +
             "values; the recipes are picked, measured and ready.",
+
+            // -- WO-893 deferrals. The Enemy_Spawn / Despawn_Dissolve entries at the top of
+            // this array were RE-MEASURED for WO-893 rather than inherited on trust, because
+            // the two moments are that WO's headline. The numbers below are what the .prefab
+            // files actually contain. -------------------------------------------------------
+            "Enemy_Spawn / Despawn_Dissolve (WO-893, RE-MEASURED 2026-08-06 - the deferral " +
+            "STANDS and here is the count). Misc/Respawn.prefab: 3 ParticleSystem layers " +
+            "(Rings, Embers, Smoke) hanging under a ROOT that itself carries a MeshFilter, a " +
+            "MeshRenderer and a MonoBehaviour whose script guid is " +
+            "585901dad4c09564db67dc1e08787f0e - resolved, that is the PACK'S OWN " +
+            "Misc Effects/Scripts/SpawnEffect.cs. Misc/Dissolve.prefab: 3 layers (Embers, " +
+            "Flakes, Smoke) plus TWO demo meshes ('Dissolve' and 'Ball Dissolve', each a " +
+            "MeshFilter + MeshRenderer) and the SAME script guid. A CopyAsset therefore ships " +
+            "a prefab that (a) renders a lit demo primitive at every spawn point and (b) " +
+            "carries a MISSING SCRIPT reference on any clone without the gitignored pack; and " +
+            "the .cs cannot be mirrored because a second copy would compile into " +
+            "Assembly-CSharp alongside the pack's own and take the compile gate down for every " +
+            "parallel lane (VfxResourceArtMirror PASS 1 exists for exactly this class of " +
+            "problem and STRIPS pack code rather than duplicating it). Both roots also fail the " +
+            "root demo-geometry guard added by this WO, so the builder would now refuse them " +
+            "even if a row were written. " +
+            "WHAT THESE MOMENTS ACTUALLY NEED, stated so it is a task and not a mystery: a " +
+            "runtime component that drives the TARGET'S OWN material cutoff - swap the enemy's " +
+            "renderers to a dissolve-capable shader for the duration, ramp _cutoff 1->0 to " +
+            "materialise and 0->1 to dissolve, then RESTORE the original shared materials " +
+            "(pooled enemies make that restore mandatory - the material-level twin of the " +
+            "pooled-instance contamination VfxLoopModulator closes for emission). That needs a " +
+            "committed ShaderLab dissolve shader authored and felt-checked, which is AUTHORING " +
+            "WORK, not a table row, and it is not attempted blind here. " +
+            "WHAT WAS DONE INSTEAD, and it is the WO's actual acceptance criterion: the " +
+            "standard enemy spawn NOW FIRES VFXType.Enemy_Spawn, which it never did - the " +
+            "moment had no VFX call at all. With no catalogued prefab the type resolves through " +
+            "VFXManager's SpawnHeuristicFallback (a procedural burst chosen off the enum name), " +
+            "so the moment reads today and upgrades for free the day the dissolve component is " +
+            "authored, with no call-site change. Nothing was faked and no recipe was " +
+            "substituted for the ratified one.",
+
+            "Boss_Spawn LIGHTNING ACCENT (WO-893 / registry 7): the ratified recipe is " +
+            "'BigExplosion + LightningStormCloud accent'. The BigExplosion half IS shipped " +
+            "(8 layers, whole). The accent is NOT, on the registry's own instruction: section 8 " +
+            "item 8 rules lightning stays PROCEDURAL specifically to avoid taking a dependency " +
+            "on the Legacy Particles folder, and the handbook (5.8) says the same. The file is " +
+            "also named 'LightnigStormCloud.prefab' in the pack - a typo in the pack itself, " +
+            "which is one more reason not to build a shipped row on it. A human must either " +
+            "lift the Legacy ruling or accept the boss arriving without a lightning accent; the " +
+            "scale jump (8 layers at 1.6 vs the elite's 4 at 1.3) carries the tier read on its " +
+            "own, and it carries it in greyscale.",
+
+            "Summon (necromancer / pet) (WO-893 / registry 7): 'Respawn cutoff + Area_generic " +
+            "ground swell'. The Respawn half is the scripted recipe refused above, and there is " +
+            "no VFXType for a summon, so a row here would be half a recipe with no consumer. " +
+            "The Area_generic ground swell is already committed and catalogued as " +
+            "Cast_NecromancerSummon (Lana Area_generic_green_outbreak), so the swell half of the " +
+            "moment is not missing - only the materialise half, which waits on the same dissolve " +
+            "component as Enemy_Spawn.",
+
+            "Ember_Burn (WO-892, a DEAD ROW found while re-skinning the damage states - NOT " +
+            "fixed here, because fixing it means PICKING art and the owner picks art). " +
+            "HovlVfxCatalogGenerator.Map declares Ember_Burn as 'RPG VFX Bundle/Random effect " +
+            "prefabs/Debuff 1.prefab'. That file DOES NOT EXIST - the folder ships 'Debuff " +
+            "chain.prefab' and 'Debuff scythe.prefab' and no 'Debuff 1'. The generator skips a " +
+            "row whose prefab will not load, so the key is ABSENT from the shipped " +
+            "HovlVfxCatalog.asset (grep it). Two things consume that key and BOTH have been " +
+            "silently dead: StructureDamageVisuals' smolder + fire loops (fixed by this WO, " +
+            "which moves them onto the tracked Damage_* mirrors) and abilities.json " +
+            "knight.emberbrand-throw's 'vfxResidual', which is still dead - the burning-brand " +
+            "DoT shows no residual burn on the struck enemy. Re-pointing it is a one-line map " +
+            "edit once someone with authority names the replacement prefab; substituting one " +
+            "unilaterally is the exact move the owner-tag rule forbids.",
+
+            // -- WO-890 / WO-891 findings. No rows were added by either; these record WHY,
+            // with the numbers, so nobody re-attempts a CopyAsset that is not needed. -------
+            "Harvest_Gold (WO-890): the prefab is BUILT, MEASURED and CATALOGUED (4 layers, " +
+            "5 / 5 / 40 per sec, gravity 0.4, lifetime x0.6 - short glint pops that FALL, " +
+            "correctly motion-split from Harvest_Crystal's suspended twinkle) and it has NO " +
+            "POSSIBLE CONSUMER. VERIFIED AT SOURCE: there is no gold harvestable in this game. " +
+            "MineResource is { Iron, Wood, Food, AetherCrystal } (MineNode.cs) and " +
+            "HarvestResource is { Crystals, Food, Wood, Iron } (ResourceBuildingProgression.cs); " +
+            "the only 'Gold' in the tree is a HUD display field (Core/HudModel/HudModels.cs) " +
+            "and a buildingTier goldCost, neither of which is harvested from anything. So the " +
+            "row stays (it costs nothing and is ready the day a gold node exists) and NO call " +
+            "site selects it. Inventing a gold resource is economy DESIGN and belongs to the " +
+            "owner - the same refusal shape as WO-887's absent surface taxonomy.",
+
+            "Aura_Healer NOT repointed to RisingSteam (WO-891): registry 6f/6d ratifies " +
+            "'RisingSteam (low/wide)' for the healer field, and this builder could ship it - " +
+            "MEASURED, RisingSteam is 1 layer at 3/sec looping, i.e. CONTINUOUS, which MATCHES " +
+            "the Family A beat, so unlike the WO-888 Cast_Heal / Impact_Heal cases there is no " +
+            "family contradiction and no grounds to refuse. It was not done because there is " +
+            "nothing missing to fix: Aura_Healer ALREADY resolves to a committed, tracked, " +
+            "family-correct loop - Lana Regeneration/Regeneration_health_loop, MEASURED as 6 " +
+            "layers with main.loop TRUE on every one and rateOverTime 15/25/7/1/5/5 - so " +
+            "isLoop:true is the art's own answer and WO-891's beat is served today. Repointing " +
+            "would be a TASTE change to a working row, and this builder's own WO-887 note names " +
+            "that move ('a downgrade dressed as progress'). ONE THING FOR THE OWNER TO RULE ON: " +
+            "the Lana regeneration loop is a green-family effect, so the healer field currently " +
+            "reads partly by HUE, which the owner cannot see. WO-891 covers that on the channels " +
+            "it owns - the per-tick CAST beat is pure TIMING and the contact flash is pure SHAPE, " +
+            "both colour-free - but if the FIELD itself must be colour-free, RisingSteam is the " +
+            "ratified swap and it is one row plus one Map line, already measured and ready.",
+
+            "Env_DestructionDust is a STAND-IN, not an owner pick (WO-891 adjacent, the " +
+            "structure per-hit flinch). The moment is real and the enum value is landed - its " +
+            "own doc reads 'Destroyable object impact dust (barrel, crate, wall section)' - but " +
+            "it had NO catalog row, so it fell through to VFXManager's unmapped-type default, a " +
+            "generic Aoe NOVA, which is the wrong idea entirely for a wall being struck. It is " +
+            "now mapped to the committed Lana Burst/Poof_generic (MEASURED: 5 layers, main.loop " +
+            "FALSE and rateOverTime 0 on every one -> BURST, so isLoop:false is the art's " +
+            "answer), which authors nothing new and points at no gitignored path. It is the " +
+            "closest committed dust poof in the tree and NOT a tagged creative pick; the owner " +
+            "re-points that one line the moment she tags a real structure-impact recipe. The " +
+            "obvious pack candidate, DustExplosion, was deliberately NOT copied: it is 5 layers " +
+            "with a 30-count and 500-grain burst, already shipped as the Death_Brute rung, and " +
+            "firing that on the hottest path in a raid (every enemy contact on every wall) is a " +
+            "perf decision, not a look decision, and not one to make blind.",
         };
 
         // =====================================================================
@@ -626,6 +1205,7 @@ namespace DeNelle.Editor
             var errors  = new List<string>();
             var built   = new List<string>();
             var aliased = new List<string>();   // WO-886: extra catalog rows sharing a row's prefab
+            var keyed   = new List<string>();   // WO-892: asset-only rows consumed by a Hovl string key
             var skipped = new List<string>();
             var summary = new StringBuilder();
 
@@ -659,7 +1239,19 @@ namespace DeNelle.Editor
                     string rowError = null;
                     try
                     {
-                        if (!Enum.IsDefined(enumType, row.TypeName))
+                        // WO-892: a KeyOnly row has no VFXType at all - its consumer is a
+                        // VFXManager.PlayKey(STRING) call and its catalog row lives in
+                        // HovlVfxCatalogGenerator.Map. Skip the enum lookup for those, but
+                        // insist the row actually declares SOMETHING to be called by; a row
+                        // with neither a TypeName nor a HovlKey is a table typo that would
+                        // otherwise silently write a prefab nothing can ever play.
+                        if (string.IsNullOrEmpty(row.Label))
+                        {
+                            rowError = "table row for '" + row.Dest + "' declares neither a TypeName " +
+                                       "nor a HovlKey - nothing could ever play it. Fix the table.";
+                            continue;
+                        }
+                        if (!row.KeyOnly && !Enum.IsDefined(enumType, row.TypeName))
                         {
                             string msg = "VFXType." + row.TypeName + " is not defined - the enum append " +
                                          "is Grok's single-owner edit (WO-884 section 0.2). Row skipped.";
@@ -670,7 +1262,7 @@ namespace DeNelle.Editor
                         var source = AssetDatabase.LoadAssetAtPath<GameObject>(row.Source);
                         if (source == null)
                         {
-                            string msg = row.TypeName + ": source recipe MISSING at '" + row.Source +
+                            string msg = row.Label + ": source recipe MISSING at '" + row.Source +
                                          "' - the Particle Pack must be imported on this machine " +
                                          "(never reimport it as part of a build). Nothing was faked; " +
                                          "the type keeps its procedural fallback.";
@@ -683,7 +1275,7 @@ namespace DeNelle.Editor
                         {
                             secondary = AssetDatabase.LoadAssetAtPath<GameObject>(row.Secondary);
                             if (secondary == null)
-                                Debug.LogWarning(Tag + row.TypeName + ": optional second layer '" +
+                                Debug.LogWarning(Tag + row.Label + ": optional second layer '" +
                                                  row.Secondary + "' is missing - shipping the primary " +
                                                  "recipe alone rather than failing the row.");
                         }
@@ -695,13 +1287,32 @@ namespace DeNelle.Editor
                         if (!MeasureAndResolve(row, dest, report, out isLoop, out rowError))
                             continue;
 
-                        WriteCatalogRow(enumType, entries, row, row.TypeName, dest, isLoop, report);
+                        // WO-892: a KeyOnly row writes NO VFXCatalog row - it has no VFXType
+                        // to key one by. Its consumer row is authored in
+                        // HovlVfxCatalogGenerator.Map against this same tracked prefab, and
+                        // the measured IsLoop is logged here so that row can be written to
+                        // agree. VfxLoopFlagRegression audits the Hovl catalog's stored
+                        // IsLoop against the prefab, so the two still cannot drift apart -
+                        // the check simply happens in the gate rather than in this loop.
+                        if (row.KeyOnly)
+                        {
+                            keyed.Add(row.HovlKey + "(IsLoop=" + isLoop + ")");
+                            report.Append("NO VFXCatalog row (KeyOnly): consumer is ")
+                                  .Append("VFXManager.PlayKey(\"").Append(row.HovlKey)
+                                  .Append("\") - author that key in HovlVfxCatalogGenerator.Map ")
+                                  .Append("pointing at '").Append(row.Dest)
+                                  .Append("' with IsLoop=").Append(isLoop).Append("; ");
+                        }
+                        else
+                        {
+                            WriteCatalogRow(enumType, entries, row, row.TypeName, dest, isLoop, report);
+                        }
 
                         // WO-886 aliases: extra VFXType names that must resolve to the SAME
                         // prefab. Written from the one Row so a legacy alias cannot drift
                         // away from the value it aliases. An alias that is not in the enum
                         // is a warning, never a silent skip.
-                        if (row.Aliases != null)
+                        if (row.Aliases != null && !row.KeyOnly)
                         {
                             foreach (var alias in row.Aliases)
                             {
@@ -719,12 +1330,12 @@ namespace DeNelle.Editor
 
                         packDeps += AuditPackDependencies(row, dest, report);
 
-                        built.Add(row.TypeName + "(IsLoop=" + isLoop + ",MinQ=" + row.MinQuality + ")");
-                        Debug.Log(Tag + row.TypeName + " -> " + row.Dest + " :: " + report);
+                        built.Add(row.Label + "(IsLoop=" + isLoop + ",MinQ=" + row.MinQuality + ")");
+                        Debug.Log(Tag + row.Label + " -> " + row.Dest + " :: " + report);
                     }
                     catch (Exception rowEx)
                     {
-                        rowError = row.TypeName + ": " + rowEx.Message;
+                        rowError = row.Label + ": " + rowEx.Message;
                     }
                     finally
                     {
@@ -743,6 +1354,9 @@ namespace DeNelle.Editor
                        .Append(" row(s) [").Append(string.Join(", ", built.ToArray())).Append("]; ")
                        .Append("alias catalog row(s) sharing a prefab: ").Append(aliased.Count)
                        .Append(" [").Append(string.Join(", ", aliased.ToArray())).Append("]; ")
+                       .Append("asset-only row(s) consumed by a Hovl STRING KEY (author these in ")
+                       .Append("HovlVfxCatalogGenerator.Map, no VFXType exists): ").Append(keyed.Count)
+                       .Append(" [").Append(string.Join(", ", keyed.ToArray())).Append("]; ")
                        .Append("deferred ").Append(DeferredTypes.Length)
                        .Append(" (Enemy_Spawn + Despawn_Dissolve scripted recipes; WO-886 Death_Skeleton, ")
                        .Append("Death_Wolf and the death lingering loops; WO-887 the five surface impacts, ")
@@ -782,6 +1396,45 @@ namespace DeNelle.Editor
             int srcDescendants = CountDescendants(source.transform);
             int srcSystems     = source.GetComponentsInChildren<ParticleSystem>(true).Length;
 
+            // WO-892/893 ROOT DEMO-GEOMETRY GUARD - the WO-887 refusal, made mechanical.
+            //
+            // Five surface-impact recipes were refused on 2026-08-05 because their prefab
+            // ROOT is a demo TARGET rather than an effect: a MeshFilter + MeshRenderer +
+            // Collider with the particle tree parented underneath. Copying one ships an
+            // effect that renders a lit primitive AND drops a physics collider at every
+            // position it plays. Misc/Respawn and Misc/Dissolve are the same shape with a
+            // pack MonoBehaviour on top, which additionally becomes a MISSING SCRIPT on any
+            // clone without the gitignored pack.
+            //
+            // That was written down; a written rule is re-litigated, a check is not. This
+            // asserts it on the SOURCE, before a byte is copied. It is ROOT-ONLY on purpose:
+            // WO-889's StripGeometry legitimately removes demo scenery from CHILD subtrees,
+            // and the two must not fight - a child can be repaired, a root cannot, because
+            // the root IS the thing the pool instantiates. HasDemoGeometry is WO-889's
+            // predicate, called rather than restated (two copies of one rule is how a tool
+            // and its gate come to disagree while both report success).
+            var rootExtras = source.GetComponents<MonoBehaviour>();
+            if (HasDemoGeometry(source) || (rootExtras != null && rootExtras.Length > 0))
+            {
+                string mono = "none";
+                if (rootExtras != null && rootExtras.Length > 0)
+                {
+                    var names = new List<string>();
+                    foreach (var mb in rootExtras)
+                        names.Add(mb == null ? "MISSING SCRIPT" : mb.GetType().Name);
+                    mono = string.Join(" + ", names.ToArray());
+                }
+                throw new Exception("DEMO GEOMETRY ON THE ROOT: '" + row.Source + "' carries [" +
+                                    DescribeComponents(source) + "] and script(s) [" + mono +
+                                    "] on the prefab ROOT. That is a demo TARGET, not an effect - " +
+                                    "a copy would render a lit primitive, add a physics collider at " +
+                                    "every play position, and (for a pack MonoBehaviour) carry a " +
+                                    "missing-script reference on any clone without the gitignored " +
+                                    "pack. This is the WO-887 shape and the Misc/Respawn + " +
+                                    "Misc/Dissolve shape: the recipe must be RE-PICKED or the effect " +
+                                    "AUTHORED, never repaired by a CopyAsset.");
+            }
+
             // WO-886: a row may DECLARE how many layers its recipe must have. Checked
             // against the SOURCE, before anything is copied, so a pack that arrived
             // trimmed fails here rather than shipping a boss death that is missing its
@@ -793,7 +1446,44 @@ namespace DeNelle.Editor
                                     "a short recipe still renders something plausible, which is why this " +
                                     "is asserted rather than eyeballed. Verify the Particle Pack import.");
 
-            int expectDescendants = srcDescendants;
+            // WO-889 STRIP: work out UP FRONT how many transforms the demo-geometry strip
+            // will remove, so the LAYER LOSS guard below still compares like with like. It
+            // is measured on the SOURCE (which is never modified) rather than counted after
+            // the fact, so the guard cannot be satisfied by a strip that removed the wrong
+            // thing.
+            int strippedNodes = 0;
+            if (row.StripGeometry)
+            {
+                // The strip is only safe when the ROOT itself is the derivation authority.
+                // If the root held no emitting ParticleSystem, VfxLoopFlagRegression.
+                // PickAuthority would fall through into the children and removing a child
+                // subtree could silently move which layer decides the family - the exact
+                // trap that made WO-887's five surface impacts unshippable.
+                var rootPs = source.GetComponent<ParticleSystem>();
+                if (rootPs == null || !rootPs.emission.enabled)
+                    throw new Exception("STRIP REFUSED: '" + row.Source + "' asks for a demo-geometry " +
+                                        "strip, but its ROOT holds no emitting ParticleSystem, so the " +
+                                        "loop-flag authority would fall through to a child and removing " +
+                                        "scenery could move which layer decides the family. This is the " +
+                                        "WO-887 demo-TARGET shape - refuse the recipe, do not strip it.");
+
+                var doomed = new List<Transform>();
+                CollectDemoGeometryRoots(source.transform, doomed);
+                foreach (var t in doomed)
+                    strippedNodes += t.GetComponentsInChildren<Transform>(true).Length;
+
+                report.Append("stripGeometry: ").Append(doomed.Count)
+                      .Append(" demo node(s) / ").Append(strippedNodes)
+                      .Append(" transform(s) marked [");
+                for (int i = 0; i < doomed.Count; i++)
+                {
+                    if (i > 0) report.Append(" + ");
+                    report.Append(doomed[i].name);
+                }
+                report.Append("]; ");
+            }
+
+            int expectDescendants = srcDescendants - strippedNodes;
             int expectSystems     = srcSystems;
             if (secondary != null)
             {
@@ -870,6 +1560,28 @@ namespace DeNelle.Editor
                     report.Append("tuning PRESERVED (scale=").Append(Fmt(contents.transform.localScale))
                           .Append(", emission untouched - existing prefab treated as owner-tuned; ")
                           .Append("delete the .prefab to re-derive); ");
+                }
+
+                // -- WO-889 DEMO-GEOMETRY STRIP. Applied EVERY run, like playOnAwake,
+                // because a lit primitive and a physics collider riding along with an aura
+                // are a correctness problem, not a taste call: this effect plays parented to
+                // an ENEMY, so a stray MeshCollider would push the body it is attached to.
+                // Only subtrees containing NO ParticleSystem are eligible, so the
+                // never-flatten law (handbook 1.2) cannot be violated by construction.
+                if (row.StripGeometry)
+                {
+                    var doomed = new List<Transform>();
+                    CollectDemoGeometryRoots(contents.transform, doomed);
+                    int removed = 0;
+                    foreach (var t in doomed)
+                    {
+                        if (t == null) continue;
+                        removed += t.GetComponentsInChildren<Transform>(true).Length;
+                        report.Append("stripped demo node '").Append(t.name).Append("' (")
+                              .Append(DescribeComponents(t.gameObject)).Append("); ");
+                        UnityEngine.Object.DestroyImmediate(t.gameObject);
+                    }
+                    if (removed > 0) dirty = true;
                 }
 
                 // -- playOnAwake off on every layer, EVERY run. Every one of these pack
@@ -1027,7 +1739,7 @@ namespace DeNelle.Editor
             var systems = dest.GetComponentsInChildren<ParticleSystem>(true);
             if (systems.Length == 0)
             {
-                error = row.TypeName + ": '" + row.Dest + "' has NO ParticleSystem at all - " +
+                error = row.Label + ": '" + row.Dest + "' has NO ParticleSystem at all - " +
                         "nothing would ever emit.";
                 return false;
             }
@@ -1055,7 +1767,7 @@ namespace DeNelle.Editor
                       .Append(",loop=").Append(mn.loop ? "Y" : "N")
                       .Append(em.enabled ? string.Empty : ",EMISSION-OFF");
 
-                Debug.Log(Tag + row.TypeName + " layer '" + ps.gameObject.name +
+                Debug.Log(Tag + row.Label + " layer '" + ps.gameObject.name +
                           "': rateOverTime=" + rateTime.ToString("0.##") +
                           " rateOverDistance=" + rateDist.ToString("0.##") +
                           " bursts=" + bursts +
@@ -1069,9 +1781,9 @@ namespace DeNelle.Editor
             // that writes the flag and the gate that judges it can never disagree.
             string detail;
             if (!DeNelle.Editor.Regression.VfxLoopFlagRegression.TryResolveExpected(
-                    row.TypeName, dest, out isLoop, out detail))
+                    row.Label, dest, out isLoop, out detail))
             {
-                error = row.TypeName + ": the shared loop-flag derivation could not read this " +
+                error = row.Label + ": the shared loop-flag derivation could not read this " +
                         "prefab (" + detail + "). Refusing to guess a flag - no catalog row written.";
                 return false;
             }
@@ -1086,7 +1798,7 @@ namespace DeNelle.Editor
             // ends up holding one of the 20 global loop slots for the rest of the session.
             if (row.Expect == Family.Continuous && !isLoop)
             {
-                error = row.TypeName + ": FAMILY MISMATCH. The enum doc claims a CONTINUOUS loop, " +
+                error = row.Label + ": FAMILY MISMATCH. The enum doc claims a CONTINUOUS loop, " +
                         "but the art reads as a BURST (" + detail + "; any layer emitting by rate: " +
                         anyRate + "). Refusing to author an IsLoop=false row under a loop-shaped " +
                         "contract, and refusing to force IsLoop=true on a self-terminating prefab - " +
@@ -1096,7 +1808,7 @@ namespace DeNelle.Editor
             }
             if (row.Expect == Family.Burst && isLoop)
             {
-                error = row.TypeName + ": FAMILY MISMATCH. The enum doc claims a one-shot BURST, but " +
+                error = row.Label + ": FAMILY MISMATCH. The enum doc claims a one-shot BURST, but " +
                         "the art reads as CONTINUOUS (" + detail + "). Cataloguing it as a loop would " +
                         "hand out a VFXHandle nothing stops and burn one of the 20 loop slots; " +
                         "cataloguing it as a one-shot would reclaim a still-emitting system. A human " +
@@ -1106,7 +1818,7 @@ namespace DeNelle.Editor
             if (row.Expect == Family.Either)
             {
                 report.Append("(enum doc permits EITHER family - measured value recorded, not judged); ");
-                Debug.Log(Tag + row.TypeName + ": the enum doc permits either family; the art measures " +
+                Debug.Log(Tag + row.Label + ": the enum doc permits either family; the art measures " +
                           measured + ", so the catalog row carries IsLoop=" + isLoop + ".");
             }
 
@@ -1212,7 +1924,7 @@ namespace DeNelle.Editor
             report.Append("packDeps=").Append(offenders.Count).Append("; ");
             if (offenders.Count > 0)
             {
-                Debug.LogWarning(Tag + row.TypeName + ": the prefab is committed, but " +
+                Debug.LogWarning(Tag + row.Label + ": the prefab is committed, but " +
                                  offenders.Count + " of its dependencies still live in the " +
                                  "GITIGNORED pack and will be missing on a fresh clone -> " +
                                  offenders[0] + (offenders.Count > 1 ? " (+" + (offenders.Count - 1) +
@@ -1227,7 +1939,19 @@ namespace DeNelle.Editor
         //  Helpers
         // =====================================================================
 
-        /// <summary>Scales a MinMaxCurve in whatever mode it was authored in.</summary>
+        /// <summary>
+        /// Scales a MinMaxCurve in whatever mode it was authored in.
+        /// <para>
+        /// WO-893 made the multiplier able to be NEGATIVE. Portal_Exit is the mirror of
+        /// Portal_Enter, and the ONLY colour-free way to mirror a burst is to reverse its
+        /// motion vector - a negative startSpeed multiplier turns an explosion into an
+        /// implosion. That works directly for the two single-value modes, but negating a
+        /// TWO-CONSTANTS range also SWAPS which end is the minimum: (2, 6) negated is
+        /// (-2, -6), whose min is -6. Unity samples that range with Random.Range and a
+        /// reversed pair is not a contract worth relying on, so the ends are put back in
+        /// order here. The multiplier stays a single knob and the caller never has to know.
+        /// </para>
+        /// </summary>
         private static ParticleSystem.MinMaxCurve Scaled(ParticleSystem.MinMaxCurve c, float k)
         {
             switch (c.mode)
@@ -1235,6 +1959,8 @@ namespace DeNelle.Editor
                 case ParticleSystemCurveMode.Constant:
                     return new ParticleSystem.MinMaxCurve(c.constant * k);
                 case ParticleSystemCurveMode.TwoConstants:
+                    if (k < 0f)
+                        return new ParticleSystem.MinMaxCurve(c.constantMax * k, c.constantMin * k);
                     return new ParticleSystem.MinMaxCurve(c.constantMin * k, c.constantMax * k);
                 case ParticleSystemCurveMode.Curve:
                     return new ParticleSystem.MinMaxCurve(c.curveMultiplier * k, c.curve);
@@ -1258,6 +1984,64 @@ namespace DeNelle.Editor
             float applied = k;
             if (max * k < MinScaledRate) applied = MinScaledRate / max;
             return Scaled(c, applied);
+        }
+
+        // =====================================================================
+        //  WO-889: demo-geometry detection
+        // =====================================================================
+
+        /// <summary>
+        /// Collect the SHALLOWEST child subtrees that are pure demo scenery: they contain
+        /// no ParticleSystem anywhere beneath them AND carry renderable geometry or a
+        /// collider. Recursion stops at each hit, so a returned list never contains a node
+        /// nested inside another returned node (which would double-count the strip and
+        /// break the LAYER LOSS arithmetic).
+        ///
+        /// A subtree holding ANY ParticleSystem is never eligible - that is what keeps
+        /// this from becoming a flatten. The root is never eligible; a recipe whose ROOT is
+        /// demo geometry is the WO-887 shape and must be refused outright, not repaired.
+        /// </summary>
+        private static void CollectDemoGeometryRoots(Transform node, List<Transform> into)
+        {
+            if (node == null || into == null) return;
+            for (int i = 0; i < node.childCount; i++)
+            {
+                var c = node.GetChild(i);
+                if (c == null) continue;
+
+                if (c.GetComponentsInChildren<ParticleSystem>(true).Length > 0)
+                {
+                    CollectDemoGeometryRoots(c, into);   // real layers live below - keep looking
+                    continue;
+                }
+
+                if (HasDemoGeometry(c.gameObject)) { into.Add(c); continue; }
+
+                CollectDemoGeometryRoots(c, into);
+            }
+        }
+
+        /// <summary>True when <paramref name="go"/> carries mesh geometry or a collider -
+        /// the three components that made WO-887's five surface recipes unshippable.</summary>
+        private static bool HasDemoGeometry(GameObject go)
+        {
+            if (go == null) return false;
+            if (go.GetComponent<MeshFilter>()   != null) return true;
+            if (go.GetComponent<MeshRenderer>() != null) return true;
+            if (go.GetComponent<Collider>()     != null) return true;
+            return false;
+        }
+
+        /// <summary>Names the geometry components on a node, so the run report says WHAT was
+        /// removed rather than only that something was.</summary>
+        private static string DescribeComponents(GameObject go)
+        {
+            var parts = new List<string>();
+            if (go.GetComponent<MeshFilter>()   != null) parts.Add("MeshFilter");
+            if (go.GetComponent<MeshRenderer>() != null) parts.Add("MeshRenderer");
+            var col = go.GetComponent<Collider>();
+            if (col != null) parts.Add(col.GetType().Name);
+            return parts.Count > 0 ? string.Join(" + ", parts.ToArray()) : "no geometry";
         }
 
         private static Transform FindChildByName(Transform root, string name)

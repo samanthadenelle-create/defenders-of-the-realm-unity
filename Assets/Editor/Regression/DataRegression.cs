@@ -528,6 +528,13 @@ namespace DeNelle.Editor
             // band pins, reserved section row, no 1/n slicing, no green ButtonConfirm overlay) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "skills-panel-layout suite", () => { if (!DeNelle.Editor.Regression.SkillsPanelLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[skills-panel-layout] " + r); });
 
+            // --- NUMERAL LEGIBILITY (owner defect 2026-08-05, QueueCardRail_2670x1200.png):
+            // no typographic role may render its numeral 1 as a bare vertical stroke. The chip
+            // font (Alata) drew '1' at 7.23 ink units against its own 'l' 6.84 and '|' 6.14, so
+            // "Builders 1/2 | Train 1" read as three identical marks with three meanings. This
+            // measures the LIVE glyph metrics of the font each role actually renders with ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "numeral-legibility suite", () => { if (!DeNelle.Editor.Regression.NumeralLegibilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[numeral-legibility] " + r); });
+
             // --- WO-879 daily-quest empty state: ONE empty-state fact owned by DailyQuestVM (assigned at a single site, IsEmpty projects it), proven on a live null-source VM, and DailyQuestHud reads it once + renders it once in one chrome (no BuildParchmentDetailEmpty second column, no View-authored copy, no View-side emptiness test), on fixed-pixel bands ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "daily-quest-empty suite", () => { if (!DeNelle.Editor.Regression.DailyQuestEmptyStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[daily-quest-empty] " + r); });
 

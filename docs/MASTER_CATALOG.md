@@ -1,12 +1,41 @@
 # MASTER CATALOG — Project Index
 
+> # ▶ DELTA 2026-08-06 — read this before the banners below
+> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-06.md`** (every "live anchor" reference further down this
+> file naming 08-02 or 08-03 is stale). **HEAD `1534dffb`, 43 commits ahead of origin, NOT pushed.**
+> Gates last emitted `COMPILE_GATE_OK` + `REGRESSION_OK 120/120 suites` — ⚠ **read the count off the
+> marker; it moved 117 → 120 in eight hours on 2026-08-05.** Save **v36**, unchanged.
+>
+> **Areas that moved on 2026-08-05/06 — read the anchor + the area file's own dated delta, not this index:**
+> - **VFX (the night's headline, two P0s):** `IsLoop` was a hand-authored sticky checkbox, **53 of 122 picks
+>   wrong**, and a fire-and-forget loop **permanently consumed one of the 20 global slots** — the archer and
+>   ballista were starving the whole VFX budget. Both catalog generators now DERIVE it, with **standing
+>   owner rulings PINNED above the derivation**. Separately, `CopyAsset` copies the **prefab only**, so
+>   **27 of 28 tracked VFX prefabs / 183 references** pointed into gitignored art; now 0, with ~23.85 MB
+>   mirrored to `Assets/Resources/VFX/_Shared/`. ⚠ **`VFXType` serialises by ORDINAL — appends only.**
+>   ⚠ **`Build()` does `entries.arraySize = rows.Count`** — a row written only by a builder is silently
+>   dropped by the next regenerate. See `resources-art.md`.
+> - **Hero:** `ff.knightonly` defaults **OFF** — roster Knight/Ranger/Mage. Any area file still saying
+>   "dormant under knight-only" is stale. A **latent invisible-hero P0** is closed (Ranger/Mage had no FBX,
+>   fell to a **gitignored** Blink body, and instantiated **nothing** on a fresh clone). **WO-910: their
+>   talent trees are effectively empty — 31 dead nodes; READY FOR OWNER RULING.** See `village-hero.md`.
+> - **Structures:** one owner-ruled **height cadence** — 1.25 landmark / **1.2 towers** / 1.0 base / 0.75
+>   siege / 0.35 decoration, recorded in the data as `_heightCadence`, **catalog v8** (6→7 archer, 7→8 cadence). **Walls deliberately
+>   excluded** (narrowing opens pathable gaps in saved wall runs). Any "towers 1.25" line is stale.
+>   See `village-systems.md` + `data-catalogs.md`.
+> - **Accessibility:** the low-health tell is **no longer a red vignette** — pulse rate, guttering depth and
+>   a recipe swap below a quarter health. Shape and timing, never hue.
+> - **Session ledgers:** `reference/SESSION_INDEX_2026-08-06.md` (incl. every REFUTED belief) and
+>   `reference/DEFECT_INDEX_2026-08-05.md` (frozen).
+
 > # ⚠ THIS INDEX FILE WAS **NOT** REFRESHED BY WO-836 — use it as a FILENAME LIST ONLY (flagged 2026-08-03)
 > WO-836 rewrote the **19 section files** under `docs/MASTER_CATALOG/`. **It did not rewrite this file's own
 > body.** §1–§3 below are ~2026-07 fiction and contradict both the section files and the live anchor:
 > Village-Hero "Blaise + class bodies" · NPCs "party-of-4" · Enemies/World "OuterWorld streaming"
 > (that scene is DELETED) · Dialogue "64 `.yarn` nodes + vendored Yarn" (Yarn is FULLY REMOVED, WO-557)
-> · `SaveSchema CurrentVersion=30` (it is **36**) · "next free WO = 412" (it is **853** main / **863**
-> UI-seat) · EconomyService "4-resource wallet" (5 with Coins) · `ZoneManager` village ±42/±33 (actual
+> · `SaveSchema CurrentVersion=30` (it is **36**) · "next free WO = 412" (**never trust a copied number — read the
+> `CLI_LANES_WO_NUMBERS.md` banner; corrected 2026-08-06, the 853/863 figures previously printed here
+> were themselves stale**) · EconomyService "4-resource wallet" (5 with Coins) · `ZoneManager` village ±42/±33 (actual
 > **52/52** — the 42/33 figure mis-classifies the courtyard and IS the 07-26 "enemies inside the castle" bug).
 > Several §3 ledger rows are also closed (Aegis set reachable, the six WebGL-broken catalogs pinned,
 > Settings/Pause UXML converted, `HUDManager`/`VirtualDPadLean` deleted, backend live, OuterWorld gone).
@@ -17,7 +46,7 @@
 > bodies have no Animator wiring (WO-833 shipped it) · `village-npcs.md` documents the
 > `"Forge"`→`"Blacksmith"` anchor mapping as correct (that mapping **was** the WO-840 bug).
 >
-> **Read order that actually works:** `CANON_GROUND_TRUTH_2026-08-03.md` → `KEY_FACTS.md` →
+> **Read order that actually works** *(anchor corrected 2026-08-06)*: `CANON_GROUND_TRUTH_2026-08-06.md` → `KEY_FACTS.md` →
 > the `CLI_LANES_WO_NUMBERS.md` banner → the specific `docs/MASTER_CATALOG/<area>.md` → `CLAUDE.md` →
 > `docs/ARCHITECTURE_PRINCIPLES.md` → the newest `docs/HANDOVER.md` block.
 
@@ -29,8 +58,9 @@ under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comme
 > **ALL 19 section catalogs under `docs/MASTER_CATALOG/` were REWRITTEN 2026-08-02, verified from code
 > at HEAD `b77a178e`+** (file:line cites; comments-lie law applied; per-file inventory + seams + risk
 > ledger each). The 07-22 §6 catalog-drift ledger is PAID for every area. Read the section files
-> directly — they are current. **Live anchor = `CANON_GROUND_TRUTH_2026-08-02.md`** (a delta over 08-01).
-> Fleet risk roll-up: see the **★★ SESSION HANDOVER — 2026-08-02** block, the newest in `docs/HANDOVER.md`.
+> directly — they are current. **Live anchor = `CANON_GROUND_TRUTH_2026-08-06.md`** (corrected 2026-08-06).
+> Fleet risk roll-up: see the **★★ SESSION HANDOVER — 2026-08-02** block in `docs/HANDOVER.md` (no longer
+> the newest — the newest is **2026-08-06**).
 > **Any banner below that calls the `<area>` files "2026-06-12-stale" is SUPERSEDED by this line.**
 
 Section catalogs compiled **2026-08-02** (previously 2026-06-12; the stale-framing banner below is
@@ -52,9 +82,10 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 >
 > ~~STALE: 2026-07-12 — the live anchor is now `CANON_GROUND_TRUTH_2026-07-12.md` (the 06-26 anchor below is superseded), and HEAD is `f123859d`, not `8aa24c32` (see CANON_GROUND_TRUTH_2026-07-12.md)~~
 
-> READ ORDER for a cold start: **`CANON_GROUND_TRUTH_2026-08-02.md`** (live anchor) → this file → the
+> READ ORDER for a cold start *(anchor + handover dates corrected 2026-08-06)*:
+> **`CANON_GROUND_TRUTH_2026-08-06.md`** (live anchor) → this file → the
 > relevant section file → `CLAUDE.md` (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture
-> law) → `docs/HANDOVER.md` (**newest = the 2026-08-02 block**). Trust the ground-truth anchor + newest
+> law) → `docs/HANDOVER.md` (**newest = the 2026-08-06 block**). Trust the ground-truth anchor + newest
 > handover for live state; trust the section files for "how it actually works."
 
 ---

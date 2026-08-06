@@ -1,5 +1,15 @@
 # DEFECT INDEX — 2026-08-05 felt-test session
 
+> ## ▶ CONTINUED IN `SESSION_INDEX_2026-08-06.md` (added 2026-08-06 — body unchanged, §15)
+> This ledger covers `fe44ddc7` → `8fdb29a5` (the felt-test day: dungeon P0, wallet, catalog fallback
+> drift). **Fourteen more commits landed the same evening/overnight** — the VFX loop-cap P0, the 183 pack
+> dependencies in the tracked VFX prefabs, the Ranger/Mage unlock and their 31 dead talent nodes, the
+> invisible-hero fallback, the structure height cadence, and the colourblind low-health tell. They are
+> indexed in `SESSION_INDEX_2026-08-06.md`, which also carries **five further REFUTED beliefs** — including
+> a direct correction to §6's assumption chain: **`ClampMinTouch` was checked and RULED OUT at three
+> separate sites**, so measure the band before naming that guard.
+> Live anchor: `../../CANON_GROUND_TRUTH_2026-08-06.md`.
+
 > **Known dictionary** (SUNDAY_HOUSEKEEPING §2). Every row carries its **proving line** or
 > **source citation** so any single fact is re-verifiable at a glance rather than re-derived.
 > Built from session history, not from memory. Where a claim was later **refuted**, the

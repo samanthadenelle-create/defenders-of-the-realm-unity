@@ -566,6 +566,13 @@ namespace DeNelle.Village
             _heart = heart;
             _def = def;
 
+            // WO-889: attach the persistent species-aura driver here, because Configure is
+            // the ONE place every spawn path (wave / roamer / tribe / arena) sets the stat
+            // block - the same reasoning SpeciesDeathVfx gives for reading _def at all.
+            // The component is inert (no loop, no registration) for an archetype whose
+            // SpeciesAuraVfx is None, so attaching it to every enemy costs nothing.
+            EnemyAuraVFX.Ensure(gameObject);
+
             if (def != null)
             {
                 _enemyDefId = def.Id;
@@ -669,6 +676,60 @@ namespace DeNelle.Village
                 $"{_enemyId}: init hasEnemyBrain={(aggroBrain != null)} " +
                 $"role={(def != null ? def.Role : "<no-def>")} ai={_ai} " +
                 $"(no brain => structure awareness = forward ProbeForStructure only)");
+
+            // WO-893: arm the ARRIVAL tell. Configure is the ONE place every spawn path
+            // sets the stat block (the same reasoning SpeciesDeathVfx and SpeciesAuraVfx
+            // give for reading _def here), and it is also the pooled-reuse entry point, so
+            // a recycled enemy re-announces itself exactly as a fresh one does.
+            _spawnTellPending = true;
+        }
+
+        // ---------------------------------------------------------------------
+        // WO-893 - THE ARRIVAL TELL ("mobs no longer pop from nothing")
+        // ---------------------------------------------------------------------
+        //
+        // THE GAP, verified at source: a standard enemy had NO spawn VFX whatsoever. The
+        // only spawn tell in the codebase was EliteVFXController.DramaticSpawnRoutine - and
+        // WO-886 already established, by grepping every .prefab/.unity/.asset in the tree,
+        // that EliteVFXController is attached to NOTHING, so Elite_Spawn and Boss_Spawn had
+        // never played either. All three tiers arrived in silence.
+        //
+        // The fix mirrors WO-886's exactly rather than inventing a second pattern: the tier
+        // rule lives in ONE place (EliteVFXController.SpawnVfxFor, beside the death rule it
+        // matches), Enemy drives it off its enemies.json stat block, and a hand-placed
+        // prefab that DOES carry EliteVFXController still behaves identically.
+        //
+        // Enemy_Spawn has no catalogued prefab on purpose (the ratified Respawn recipe is a
+        // SCRIPTED pack effect carrying a demo mesh and a pack MonoBehaviour - see
+        // ParticlePackVfxBatchBuilder.DeferredTypes for the re-measurement), so it resolves
+        // through VFXManager's name-driven procedural fallback today and upgrades for free
+        // the day the material-cutoff component is authored. No call site changes then.
+
+        /// <summary>Set by <see cref="Configure"/>; consumed by the first <c>Update</c>.</summary>
+        private bool _spawnTellPending;
+
+        /// <summary>
+        /// Play this enemy's arrival burst once, at its FINAL spawn position. Family B
+        /// one-shot for every tier, so an arrival can never consume one of the 20 global
+        /// loop slots - a wave arrives by the dozen.
+        /// </summary>
+        private void FireSpawnTell()
+        {
+            _spawnTellPending = false;
+
+            VFXType tell = EliteVFXController.SpawnVfxFor(IsBossTier(), IsEliteTier());
+            if (tell == VFXType.None) return;
+
+            VFXManager.Play(tell, transform.position);
+
+            // Shake ONLY for the two tiers that are a warning. A standard spawn happens
+            // constantly, and a camera that shakes on every trash mob is noise, not signal.
+            if (IsBossTier())       CameraShakeBridge.Shake(0.5f, 0.5f);
+            else if (IsEliteTier()) CameraShakeBridge.Shake(0.25f, 0.3f);
+
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemySpawn", "spawn-tell", 2f,
+                $"arrival tell '{tell}' for '{_enemyId}' (boss={IsBossTier()}, elite={IsEliteTier()}) " +
+                "at the final spawn position.");
         }
 
         // ---------------------------------------------------------------------
@@ -884,6 +945,14 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_dead) return;
+
+            // WO-893: the ARRIVAL tell. Deferred to the first Update after Configure rather
+            // than fired inside it, because a spawner is free to seat/nudge the enemy after
+            // configuring it (SmartEnemySpawner, EnemyGroupSpawner, WaveManager and the
+            // tutorial all call Configure separately from placement) - one frame later the
+            // transform is final for every path, so the burst cannot land at a stale
+            // position. One bool test per frame per enemy.
+            if (_spawnTellPending) FireSpawnTell();
 
             TickContactAttack();
             DriveNav();
@@ -2352,6 +2421,13 @@ namespace DeNelle.Village
         /// </summary>
         private void ClearPooledLatches()
         {
+            // WO-893 spawn tell. Set by Configure, consumed on the first Update after it,
+            // so a recycled body that was returned to the pool BEFORE its tell fired would
+            // otherwise carry the pending flag into its next life and play a spawn burst
+            // for an enemy that did not just spawn. This is the exact latch-survives-pooling
+            // shape the coverage guard exists to catch, and it caught this one.
+            _spawnTellPending      = false;
+
             // Combat / motion latches.
             _casting               = false;
             _telegraphing          = false;
@@ -2782,6 +2858,48 @@ namespace DeNelle.Village
 
             string family = (_def.Family ?? string.Empty).Trim().ToLowerInvariant();
             if (family == "hollow") return VFXType.Death_Skeleton;
+
+            return VFXType.None;
+        }
+
+        /// <summary>
+        /// WO-889: the PERSISTENT species aura this enemy holds while alive, or
+        /// <see cref="VFXType.None"/> for an archetype with no aura. Read by
+        /// <see cref="EnemyAuraVFX"/>, which owns the loop's lifecycle.
+        /// <para>
+        /// Every mapping is a DATA READ against the live enemies.json roster (verified at
+        /// source, 16 rows), never a creative pick - the same discipline
+        /// <see cref="SpeciesDeathVfx"/> follows:
+        /// </para>
+        /// <list type="bullet">
+        /// <item><c>role: "caster"</c> is a real, populated value (hollow-acolyte,
+        /// hollow-mage, orc-shaman) and <c>Aura_EnemyCaster</c>'s own name states the
+        /// relationship.</item>
+        /// <item>The necromancer and reaper rows match the enum's OWN NAME against real
+        /// roster ids (necromancer, orc-necromancer, hollow-reaper). Tested by id rather
+        /// than by role because both necromancers carry <c>role: "elite"</c>, which they
+        /// share with hollow-apprentice - an elite APPRENTICE is not a necromancer.</item>
+        /// </list>
+        /// <para>
+        /// NOT mapped, deliberately: <c>Aura_Dust</c>. Its recipe is built and catalogued,
+        /// but "which enemies kick up foot dust" is a creative call (the honest candidates
+        /// are the four brutes), and this method already sets the precedent of leaving
+        /// Death_Wolf / Death_Tiefling wired-but-unassigned rather than guessing. One line
+        /// here turns it on once the owner rules.
+        /// </para>
+        /// </summary>
+        public VFXType SpeciesAuraVfx()
+        {
+            if (_def == null) return VFXType.None;
+
+            // Id first: it is the most specific signal, and both necromancers would
+            // otherwise be swallowed by the elite role they share with hollow-apprentice.
+            string id = (_def.Id ?? string.Empty).Trim().ToLowerInvariant();
+            if (id.Contains("necromancer")) return VFXType.Aura_Necromancer;
+            if (id.Contains("reaper"))      return VFXType.Aura_SmokeReaper;
+
+            string role = (_def.Role ?? string.Empty).Trim().ToLowerInvariant();
+            if (role == "caster") return VFXType.Aura_EnemyCaster;
 
             return VFXType.None;
         }

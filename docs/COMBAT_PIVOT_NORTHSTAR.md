@@ -192,6 +192,20 @@ Knight only — there is no Ranger or Mage mesh in the tree, so those two render
 (gitignored) or, where that pack is absent, from `HeroBodySwapper.BuildTrackedFallbackBody`'s
 tracked KayKit stand-in. Ranger/Mage body art is open content work.
 
+> **Why that last clause exists — a LATENT P0, fixed in the same commit (`d0c7b8fd`, verified
+> 2026-08-06 against `HeroBodySwapper.cs:11-23`).** Before the fix the chain ENDED at the
+> gitignored assets: Blink base (Addressables, `Assets/Blink` is gitignored) -> legacy
+> `Resources/Heroes/<slug>.fbx` (**no `Ranger.fbx`, no `Mage.fbx`**) -> and the terminal fallback
+> logged a failure and **RETURNED WITHOUT INSTANTIATING ANYTHING**, after `Start` had already
+> destroyed the placeholder. That is not a Knight-degrade, it is an **INVISIBLE HERO** on every
+> fresh clone and CI machine. Both bail-outs now build a **tracked KayKit body** (verified via
+> `git ls-files` as the only humanoid bodies actually in the repo). **The standing rule: a
+> missing art pack must degrade to a visible WRONG-looking hero, never to nothing.**
+> Also landed with the unlock: the nameplate now reads the CANON NAME (it printed the class word,
+> and the inventory medallion hardcoded Grom's face, so all four heroes wore the Knight's
+> portrait); and **31 pre-existing dead talent nodes** surfaced across the Ranger and Mage trees
+> the moment the audit stopped skipping them — **WO-910, READY FOR OWNER RULING** (`04d375c3`).
+
 ## PHASING — V1 = offense only; base/CoC defense is gated to V2 (owner, 2026-06-22)
 Both modes fully exist EVENTUALLY and one feeds the other (offense earns resources -> build base ->
 base protects/generates -> funds more raiding). But the base layer is a **gated phase-2 feature, NOT
@@ -294,4 +308,10 @@ headless battle sim = the auto-resolve.
 ## Done so far (2026-06-22)
 - `ff.singlehero` (ON) — single-hero ATB party. Commit 07ada028.
 - `ff.blinkarmor` (OFF) — Blink armor junked (HeroArmorVisual inert; kills ShareBaseSkeleton spam).
-- `ff.knightonly` (ON) — hero locked to Knight (ChooseHero forces it).
+- `ff.knightonly` — **defaults OFF since 2026-08-05 (`9a0ff548`)**; `ChooseHero` no longer
+  forces the class and the playable roster is **Knight / Ranger / Mage**, resolved through the
+  single registry `DeNelle.Core.State.PlayableHeroes`. **Cleric stays out** (no authored kit).
+  Set PlayerPrefs `ff.knightonly`=1 to restore the solo-Knight V1 pivot.
+  *(Corrected 2026-08-06 — this line read "(ON) — hero locked to Knight (ChooseHero forces it)".
+  That was the state on 2026-06-22 when this section was written; see "Hero scope: KNIGHT first
+  — UNLOCKED 2026-08-05" above, which is the live statement.)*

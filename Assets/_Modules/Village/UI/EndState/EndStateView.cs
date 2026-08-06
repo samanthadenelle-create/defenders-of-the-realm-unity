@@ -232,7 +232,9 @@ namespace DeNelle.Village.UI
         /// RAW SCREEN pixels.</summary>
         private static float PostScaleCanvasWidth(float canvasH)
         {
-            float sw = Screen.width, sh = Screen.height;
+            // SurfaceWidth/Height, not Screen.* — identical at runtime (no override); a capture
+            // drives them so this build-time width resolves the TARGET aspect, not the editor's.
+            float sw = ElarionUiKit.SurfaceWidth, sh = ElarionUiKit.SurfaceHeight;
             if (sw < 1f || sh < 1f) return canvasH * (1080f / 1920f);   // headless: kit portrait reference
             return canvasH * (sw / sh);
         }

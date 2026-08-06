@@ -103,7 +103,9 @@ namespace DeNelle.Village.Hero
 
             // Responsive split (spec wireframe): landscape map-left / detail-right;
             // portrait map-top ~55% / detail below.
-            bool portrait = Screen.height > Screen.width;
+            // Kit surface, not Screen.* — same value at runtime; a capture drives it so a
+            // portrait shot exercises the portrait branch (Screen never moves in batchmode).
+            bool portrait = ElarionUiKit.SurfaceHeight > ElarionUiKit.SurfaceWidth;
             Vector2 mapMin, mapMax, detailMin, detailMax;
             if (portrait)
             {

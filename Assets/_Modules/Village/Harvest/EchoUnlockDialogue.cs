@@ -312,7 +312,12 @@ namespace DeNelle.Village
             // applies). The canvas is ScreenSpaceOverlay, so its local rect carries the SCREEN's
             // aspect -- that is what gives us the width without a second kit helper.
             float canvasH = ElarionUiKit.PostScaleCanvasHeight(content);
-            float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : 16f / 9f;
+            // SurfaceWidth/Height, not Screen.* — same value at runtime (no override), but this
+            // is a BUILD-TIME layout read, so a capture must be able to drive it or the shot
+            // reproduces the editor's 640x480 aspect (1.33) instead of the device's 2.23.
+            float aspect = ElarionUiKit.SurfaceHeight > 0
+                ? (float)ElarionUiKit.SurfaceWidth / ElarionUiKit.SurfaceHeight
+                : 16f / 9f;
             float panelPx = Mathf.Max(1f, (PanelYMax - PanelYMin) * canvasH);
             float panelWpx = Mathf.Max(1f, (PanelXMax - PanelXMin) * canvasH * aspect);
 

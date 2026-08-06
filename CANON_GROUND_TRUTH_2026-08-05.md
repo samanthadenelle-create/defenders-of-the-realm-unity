@@ -1,6 +1,25 @@
 # CANON GROUND TRUTH — 2026-08-05
 
-**This is the single live anchor (§15). It supersedes `CANON_GROUND_TRUTH_2026-08-03.md`.**
+> # ⚠ SUPERSEDED 2026-08-06 — FROZEN LEDGER, DO NOT REWRITE THE BODY (CLAUDE.md §15)
+> **The live anchor is now `CANON_GROUND_TRUTH_2026-08-06.md`.** This file was written at HEAD
+> `0ab0eece` (2026-08-05 00:02) and 25 commits landed after it. Where it disagrees with the 08-06
+> anchor, **08-06 wins.** Known corrections, listed so nobody acts on a stale line below:
+> - **§8 WO numbering is stale.** Main line next free is **911** and the UI seat is **895** — and even
+>   those must be read off the `CLI_LANES_WO_NUMBERS.md` banner, never off this file.
+> - **§8's gate line (`REGRESSION_OK 113/113`) is stale** — the marker moved 117 → 118 → 119 → 120 on
+>   2026-08-05. Read the count off the marker.
+> - **§3's "HELD awaiting owner tags" tower-VFX list is partly closed** — WO-887 landed element-routed
+>   tower impacts, and the empowered-tower arcane-violet defect it names was proven and fixed.
+> - **§4's `ClampMinTouch` framing was over-applied.** It is real, but on 2026-08-05 it was **checked and
+>   RULED OUT** at three sites (Echo card 116.7-130.6 units, merged Echo card 117 px, side-menu rows
+>   exactly 112.0 px). Check the band arithmetic before naming it.
+> - **§5's capture guidance is superseded** — the harness was **geometry-blind** until `7e05e6d3`; the
+>   resolution in a PNG filename was a label, not a layout.
+> - Nothing here anticipated the **VFX loop-cap P0**, the **183 pack dependencies** in the tracked VFX
+>   prefabs, the **Ranger/Mage unlock + 31 dead talent nodes**, the **invisible-hero fallback**, or the
+>   **structure height cadence**. All are in the 08-06 anchor.
+
+**This was the single live anchor (§15). It superseded `CANON_GROUND_TRUTH_2026-08-03.md`.**
 Every session and every agent checks docs against this file. Sourced from HEAD commits and the working
 tree, never from assumption.
 

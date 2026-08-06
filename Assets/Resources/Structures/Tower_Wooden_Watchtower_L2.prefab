@@ -1,0 +1,132 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8599116344973022297
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6518421476170479355}
+  m_Layer: 0
+  m_Name: Tower_Wooden_Watchtower_L2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6518421476170479355
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8599116344973022297}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 245556186632633217}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &352087200472390762
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 6518421476170479355}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8384146215956004604, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 22cf687ec1a21574ab3dd1c4a89cdb20, type: 2}
+    - target: {fileID: -7494341138360874234, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 91b8a8f6d091ded4a920b4ddc3a12cfc, type: 2}
+    - target: {fileID: -5531070391658095259, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: c77c6add453ae3141b52b37355e855e8, type: 2}
+    - target: {fileID: -4538625783236167409, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 45a745bbf8a0a184a94f0d79756346d6, type: 2}
+    - target: {fileID: -423912344370353643, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 6aea1b23d155ef6489abbb320850ea80, type: 2}
+    - target: {fileID: 919132149155446097, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: m_Name
+      value: Tower_Wooden_Watchtower_L2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4754211482944870617, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: cafe9f3df04d38549b8c527ccb1653a4, type: 2}
+    - target: {fileID: 4792637388764314844, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 1ff0ecfb03e632343911dad4bd872c4c, type: 2}
+    - target: {fileID: 6349481582772265824, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 4ad67268dc0463448a930cb11193aae4, type: 2}
+    - target: {fileID: 9088646232363944068, guid: 95f142e6a5688c644855087448b34620, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 5ebb0aab21b5d424c88ea2f17653a06d, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 95f142e6a5688c644855087448b34620, type: 3}
+--- !u!4 &245556186632633217 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 95f142e6a5688c644855087448b34620, type: 3}
+  m_PrefabInstance: {fileID: 352087200472390762}
+  m_PrefabAsset: {fileID: 0}

@@ -21,7 +21,11 @@ MVVM UI cluster (shops/inventory/raid/rumor/realm-map/barracks VMs + views) = `D
   (`HeroBodySwapper.cs:78-90, 331-390, 458-471`). Forward yaw +15°, height 1.75m
   (`HeroBodySwapper.cs:354-373`). Global animator speed restored to **1.0×** (the old 0.5×
   Mixamo band-aid removed, `HeroBodySwapper.cs:31-38`). Blaise/party/class-bodies/Blink armor
-  swap = historical; `ff.knightonly` default ON (`FeatureFlags.cs:58`).
+  swap = historical; **`ff.knightonly` default OFF** (`FeatureFlags.cs:68`
+  `Get("knightonly", defaultOn: false)`) — *(corrected 2026-08-06; was "default ON
+  (`FeatureFlags.cs:58`)", which is now only the XML-summary line, not the value)*. The
+  playable roster is **Knight / Ranger / Mage** via `DeNelle.Core.State.PlayableHeroes`;
+  Grom is still the only FINISHED body. See the DELTA block below (`9a0ff548`, `d0c7b8fd`).
 - **Owner rulings recorded 2026-08-01/02 (BINDING):**
   1. **Basic attack = swing + hit ONLY.** No impact bursts on the basic melee swing — the
      2026-08-02 F8 ("rocks on swing" / which-VFX-drew-that) ruled the extra impact bursts OUT;
@@ -48,6 +52,87 @@ MVVM UI cluster (shops/inventory/raid/rumor/realm-map/barracks VMs + views) = `D
 - **RumorBoard**: WO-810 master-detail rebuild (owner-signed wireframe) is the live layout; a
   2026-08-02 conformance fix wave is IN FLIGHT — re-verify this section after it lands.
 - **RealmMap (WO-826)** shipped `eb5d0710`; travel is a DISABLED stub until WO-827.
+
+---
+
+## DELTA 2026-08-06 - the hero roster unlocked (Knight / Ranger / Mage)
+
+*Sourced from commits `9a0ff548`, `d0c7b8fd`, `04d375c3` (2026-08-05). This block SUPERSEDES
+every "knight-only" statement in the body below; the individual lines are corrected in place
+and cross-reference here.*
+
+**1. The flag flipped (`9a0ff548`).** `ff.knightonly` now **defaults OFF**
+(`FeatureFlags.cs:68`). The flag-OFF playable roster resolves through the ONE registry
+`DeNelle.Core.State.PlayableHeroes` (`Assets/_Modules/Core/State/PlayableHeroes.cs`):
+`Roster = { Knight, Ranger, Mage }`, `SoloKnight = { Knight }` is now the opt-in ROLLBACK set.
+`GameStateService.ChooseHero` no longer forces the class; `HeroSelectController` and
+`VendorStockResolver` widened at once with no further code change (that is what the registry
+was built for). Set PlayerPrefs `ff.knightonly`=1 to restore the solo-Knight V1 pivot.
+
+**2. The CLERIC STAYS OUT, deliberately** (`PlayableHeroes.cs:20-26`, header ROSTER NOTE): no
+kit, no tree, no body work is authored for her, and `HeroAbilities` already aliases Cleric to
+the mage loadout. This narrows the pre-Phase-0 `VendorStockResolver.FullRoster` (which listed
+"cleric"), so cleric-ONLY weapons stop appearing on shelves - correct, the shelf follows the
+roster. Add `HeroClass.Cleric` to `Roster` the day her kit is authored; nothing else changes.
+
+**3. Canon debt the unlock left behind.** `9a0ff548` touched ONLY `FeatureFlags.cs`, so a dozen
+source comments and two docs still asserted KnightOnly was ON - including FeatureFlags' own XML
+summary, **the source lie every other copy came from**. Fixed in `d0c7b8fd`. If you find another
+"under knight-only" line anywhere, it is stale by default.
+
+**4. LATENT P0 FIXED - the invisible hero (`d0c7b8fd`).** Ranger and Mage have **no FBX at
+all**. Both fell through to a **Blink base body**, and `Assets/Blink` is **GITIGNORED**. On a
+fresh clone the terminal fallback logged a failure and **RETURNED WITHOUT INSTANTIATING
+ANYTHING**, after `Start` had already destroyed the placeholder - not a Knight-degrade, an
+**INVISIBLE HERO**. Both bail-outs now build a **tracked KayKit body**
+(`HeroBodySwapper.BuildTrackedFallbackBody`, verified via `git ls-files` as the only humanoid
+bodies actually in the repo). The live chain is now documented on the file itself
+(`HeroBodySwapper.cs:11-23`): (1) Knight-only KnightV3 -> KnightPackage; (2) all other classes
+= the Blink LowPoly base via Addressables; (3) legacy `Resources/Heroes/<slug>.fbx`; (4)
+**BuildTrackedFallbackBody - the tracked KayKit humanoid stage, the floor**. A missing art pack
+may now look WRONG; it can never look like NOTHING.
+
+**5. Identity: nameplate + portrait (`d0c7b8fd`).** Pick Ranger and, after load-in, nothing in
+the game ever said "Sylas": the nameplate printed the CLASS word and the inventory medallion
+hardcoded **Grom's face for every class**, so all four heroes wore the Knight's portrait. The
+nameplate now reads the canon name through a **Core-side reader** (the existing one lives in
+Onboarding and HUD may only reach Core); a missing file/key degrades to exactly the old
+capitalized class word, warned once. Inventory resolves its slug by **COMPOSING the two
+existing maps** rather than writing a third - a duplicated map is how these drift apart.
+
+**6. OPEN - the blurry-portrait defect.** **Thrain's** portrait was imported as a plain texture
+so `Load<Sprite>` returned null and it fell to the blurrier RawImage path while Sylas hit the
+crisp one; its `.meta` now differs from Sylas's only by guid. **Grom and Elara have the
+IDENTICAL defect and are NOT fixed** - and **Grom is the default hero**, so the default hero is
+on the blurry path. Flagged, not closed.
+
+**7. REFUTATION - do not re-chase `*.fbx.tripo-extracted`.** `Ranger.fbx.tripo-extracted` is a
+**125-byte PLAIN TEXT SENTINEL** written by `TripoAssetPostprocessor` - **NOT a parked mesh**.
+There is nothing to un-park. Knight's sentinel sits beside a live `Knight.fbx`, which proves
+the marker never blocked an import. **WO-909's premise was wrong**; the comments repeating it
+are fixed. Nobody should spend another cycle on it.
+
+**8. TALENT TREES - WO-910, READY FOR OWNER RULING (`04d375c3`).**
+`TalentStrategyRegression` hardcoded `HiddenTrees = { "ranger", "mage" }` from the knight-only
+era and was never updated at the unlock, so guard **G3 (no dead talent nodes) had NEVER
+audited them** while players could reach them. Emptying that set
+(`TalentStrategyRegression.cs:190-202`) surfaced **31 real pre-existing dead nodes across 40
+player-reachable talents** (17 ranger + 14 mage; split 16 unregistered-effect-key + 15
+registered-key-with-a-stub-note). **Knight's 32 nodes and the 9 shared are fully green.**
+- `hero-talents.json` is **UNTOUCHED** (md5 unchanged) - this is an AUDIT, not a data edit.
+- The 31 are a **dated, WO-910-numbered RATCHETED BASELINE** (`KnownDeadNodeBaseline`,
+  `TalentStrategyRegression.cs:204-235`): a dead node NOT in the set FAILS (no new debt), and
+  a baseline id that **stops reporting dead ALSO FAILS**, naming the line to delete - so the
+  baseline can never outlive its debt and rot into a lie.
+- **Why not `"hidden": true` on each node (the REJECTED fix - this reasoning must survive):**
+  on 2026-08-05 `HeroTalentNodeDef.Hidden` had **ZERO runtime readers** (`HeroSkillTreeVM.
+  Rebuild` never consulted it) while its own comment claimed the View skips hidden nodes - so
+  writing `hidden:true` would have turned the gate GREEN while leaving all 31 nodes fully
+  CLICKABLE. `Hidden` is now genuinely wired into both `Rebuild` loops; **no node sets it
+  today.** Second reason: hiding all 31 would strand **three whole tiers** (ranger t4, mage
+  t3 + t4) and orphan 3 survivors - **Ranger would collapse to ONE reachable talent out of
+  20, Mage to five, and BOTH would lose their entire tier-4 capstone row.**
+- Hiding is the **OWNER's call**, not the gate's. **WO-910 is READY FOR OWNER RULING.**
 
 ---
 
@@ -357,7 +442,8 @@ treat as a dormant compatibility layer, do not extend.
 - **GearVisualApplier** (307): legacy primitive-cube gear, `EnablePrimitiveGear=false` — gated
   off; still clears stale `GearVisual_*` children.
 - **HeroBowAttachment** (336): ranger bow on LeftHand; procedural fallback; retry until bones
-  bind. Dormant under knight-only but intact.
+  bind. **LIVE again since the 2026-08-05 roster unlock** — Ranger is playable, so this path is
+  no longer dormant *(corrected 2026-08-06; was "dormant under knight-only", `9a0ff548`)*.
 - **GearAppraisal** (276): pure lore/value surface (maker's mark, tier label, crystal value) —
   shop labels.
 - **ItemIconCatalog** (317) + **GearIconCatalog** (113): sprite resolution. GearIconCatalog is
@@ -379,7 +465,12 @@ treat as a dormant compatibility layer, do not extend.
 `WireHeroBody(..., "Knight", …, useKnightV3:true)` `:390` — controller slug stays "Knight" so
 cast/skill states resolve; **`ff.mocaploco` ON binds `KnightMocap.controller`** `:458-471`
 (MOCAP-DECISION FlowTrace proves the bind). Legacy Tripo Knight / Paladin package = fallback
-chain; other classes' FBX paths remain but are unreachable under knight-only. Post-swap it
+chain; **the other classes' body chain is LIVE again** since `ff.knightonly` went default-OFF
+*(corrected 2026-08-06; was "unreachable under knight-only")* — and its terminal step no longer
+bails out empty: Blink base (Addressables, GITIGNORED pack) -> legacy
+`Resources/Heroes/<slug>.fbx` (**no Ranger.fbx / Mage.fbx exists**) -> **`BuildTrackedFallbackBody`,
+the tracked KayKit humanoid floor** (`HeroBodySwapper.cs:11-23`, the `d0c7b8fd` invisible-hero P0
+— see the DELTA block). Post-swap it
 calls `HeroLocomotion.SetAnimator` + `HeroAbilities.SetAnimator` DIRECTLY (WO-581 — the old
 reflection write is gone) and `SetHeroClass`. `applyRootMotion=false`; animator speed 1.0
 `:33-38`; `cullingMode=AlwaysAnimate`. Holds a clean idle during dialogue (DialogueService
@@ -516,7 +607,10 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
 - **VendorStockContract** (166): store-TYPE → allowed GearKind flags; one contract, two
   consumers (shop filter + AutoPilot assertion).
 - **VendorStockResolver** (376): resolves a vendor's query against Gear/Consumable/Material/
-  Craftable catalogs, roster-filtered (knight-only ⇒ no wands) + level-locked rows;
+  Craftable catalogs, **roster-filtered through `PlayableHeroes` — the live set is
+  Knight/Ranger/Mage, so Mage wands are ON the shelf again** *(corrected 2026-08-06; was
+  "knight-only ⇒ no wands", `9a0ff548`; cleric-ONLY rows are the ones now excluded)* +
+  level-locked rows;
   `[Flow:Vendor]` traces; `DataRegression.CheckVendorStock`.
 - **StoreStockService** (219): WO-429 offline-first stock — LOCAL catalog is authoritative;
   an optional `IStoreStockProvider` remote snapshot MERGES on top; no network creds client-side.
@@ -571,9 +665,12 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
 ### Comment-vs-code lies (trust the lines cited above, not the headers)
 1. **HeroLocomotion** class XML summary still says "kinematic transform translation" — it is a
    NavMeshAgent (`Awake :462`). The file header is corrected; the summary isn't.
-2. **HeroBodySwapper** header still describes the Knight/Ranger/Mage class swap — the live path
-   is KnightV3+KnightMocap single-Knight (`:78-90`); other class paths are unreachable code
-   under `ff.knightonly`.
+2. **HeroBodySwapper** header describes the Knight/Ranger/Mage class swap — which as of
+   2026-08-05 is **true again**, not a lie: `ff.knightonly` defaults OFF and the other class
+   paths are REACHABLE *(corrected 2026-08-06, `9a0ff548`/`d0c7b8fd`; this entry previously
+   read "unreachable code under `ff.knightonly`")*. The Knight still routes
+   KnightV3+KnightMocap (`:78-90`); Ranger/Mage have no FBX and land on the tracked KayKit
+   floor (DELTA block, item 4).
 3. **HeroArmorVisual** header describes the Blink full-body armor swap — retired under
    no-mesh-swap; component is a dormant guard layer.
 4. **VillageCamera** header reads as if it were the live camera — SMC disables it at runtime.
@@ -590,8 +687,12 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
   footstep loop — two implementations exist, only the locomotion one can go live today).
 - **Do-not-extend: `HeroEquipment` (WO-109 stub).** All equip goes through GearLoadout →
   EquipmentController. EquipmentPanel no longer references it.
-- Dormant under knight-only: HeroBowAttachment, the mage/ranger branches of LaunchProjectile /
-  HeroBodySwapper, `ranger`/`mage` ability blocks (kept for the second-class future).
+- ~~Dormant under knight-only~~ — **NO LONGER DORMANT (corrected 2026-08-06, `9a0ff548`).**
+  HeroBowAttachment, the mage/ranger branches of LaunchProjectile / HeroBodySwapper and the
+  `ranger`/`mage` `abilities.json` blocks are all **LIVE**: `ff.knightonly` defaults OFF and
+  the roster is Knight/Ranger/Mage (`PlayableHeroes`). The "second-class future" arrived. What
+  IS still missing for those two: **body art** (no Ranger/Mage FBX — tracked KayKit floor) and
+  **31 dead talent nodes** pending the WO-910 owner ruling (`04d375c3`). Cleric remains out.
 
 ### Open gaps / pending seams (real, verified)
 - **Warden's Grace −20% damage reduction is NOT implemented** — needs a HeroHealth.TakeDamage
@@ -611,6 +712,14 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
   owner rule.
 - **2026-08-02 in-flight:** the basic-attack swing+hit-only conformance (impact-burst removal)
   and the RumorBoard conformance wave — re-verify §2/§9 and this ledger when they land.
+- **(added 2026-08-06) Ranger/Mage body art is OPEN content work** — no FBX in the tree; both
+  degrade to the tracked KayKit humanoid floor on any machine without the gitignored Blink pack
+  (`d0c7b8fd`; DELTA item 4).
+- **(added 2026-08-06) WO-910 — 31 dead talent nodes across Ranger + Mage**, ratcheted baseline
+  in `TalentStrategyRegression`, **READY FOR OWNER RULING** (`04d375c3`; DELTA item 8).
+- **(added 2026-08-06) Blurry hero portraits: Grom + Elara UNFIXED.** Imported as plain textures,
+  so `Load<Sprite>` nulls and they fall to the RawImage path. Thrain was fixed in `d0c7b8fd`;
+  Grom is the DEFAULT hero and is still on the blurry path (DELTA item 6).
 
 ### Duplicate / parallel systems (by design or debt)
 - Two footstep systems (HeroLocomotion.DriveFootsteps LIVE vs HeroFootstepController unwired).
