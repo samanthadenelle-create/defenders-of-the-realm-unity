@@ -1,0 +1,257 @@
+{
+    "note": "source->mirror map for VfxResourceArtMirror. REUSING a mirror is what preserves its GUID across runs; do not delete entries by hand.",
+    "entries": [
+        {
+            "source": "Assets/Spells Pack/Particles/Animations/Spell_Fire_6.anim",
+            "mirror": "Assets/Resources/VFX/_Shared/Animation/Spell_Fire_6.anim"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Animations/Spell_Fire_6.controller",
+            "mirror": "Assets/Resources/VFX/_Shared/Animation/Spell_Fire_6.controller"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Animations/Spell_Fire_6_Iddle.anim",
+            "mirror": "Assets/Resources/VFX/_Shared/Animation/Spell_Fire_6_Iddle.anim"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Expansive Wave 2.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Expansive Wave 2.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Expansive Wave 3.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Expansive Wave 3.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Expansive Wave 4.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Expansive Wave 4.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Glow.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Glow.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Lava.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Lava.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Orb 2.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Orb 2.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Orb.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Orb.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Smoke 2.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Smoke 2.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Snow 2.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Snow 2.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Spell 1.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 1.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Spell 2.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 2.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Spell 3.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 3.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Spell 4.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 4.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Thunder 3.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Thunder 3.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Trail.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Trail.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Expansive wave 2.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Expansive wave 2.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Expansive wave 3.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Expansive wave 3.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Expansive wave 4.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Expansive wave 4.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Glow.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Glow.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Lava.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Lava.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Lava_Normal.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Lava_Normal.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Orb.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Orb.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Smoke 2.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Smoke 2.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Snow 2.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Snow 2.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Spell 1.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 1.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Spell 2.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 2.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Spell 3.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 3.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Spell 4.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 4.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Thunder 3.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Thunder 3.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Trail.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Trail.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Embers.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Embers.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/SmokeDark.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/SmokeDark.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/TinyFlame.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/TinyFlame.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/fireball.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/fireball.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/FireBallEmission.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FireBallEmission.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Fireball.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Fireball.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SmokePuff01.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokePuff01.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/TinyFlame.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/TinyFlame.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/DustMote.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/DustMote.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/FireFly.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/FireFly.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/FireFlyTrail.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/FireFlyTrail.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/Sparks.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Sparks.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Models/FireFly.fbx",
+            "mirror": "Assets/Resources/VFX/_Shared/Models/FireFly.fbx"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/ParticlesLight.prefab",
+            "mirror": "Assets/Resources/VFX/_Shared/Prefabs/ParticlesLight.prefab"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Shaders/FireFly.shader",
+            "mirror": "Assets/Resources/VFX/_Shared/Shaders/FireFly.shader"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/DustMote.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/DustMote.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/FireFlyAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FireFlyAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/FireFlyEmission.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FireFlyEmission.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/FireFlyWings.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FireFlyWings.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/Ramp01.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Ramp01.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Textures/SparkParticle.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SparkParticle.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/SmokeLight.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/SmokeLight.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/SmokeySteam01.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/SmokeySteam01.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Materials/wispySmoke.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/wispySmoke.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/SmokePuff.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokePuff.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/SmokePuffNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokePuffNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/smokeysteam.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/smokeysteam.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/wispySmoke.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/wispySmoke.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/MuzzleFlash.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MuzzleFlash.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/MuzzleFlashFront.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MuzzleFlashFront.tif"
+        }
+    ]
+}

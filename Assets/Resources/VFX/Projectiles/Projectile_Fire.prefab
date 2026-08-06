@@ -4797,8 +4797,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 784fd635e5d16964ca0bc4d30c54283d, type: 2}
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
+  - {fileID: 2100000, guid: fc0ecd4f877d25c459ffbe86a3ac1bbc, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4865,7 +4865,6 @@ GameObject:
   - component: {fileID: 1485987801625442813}
   - component: {fileID: 7492767874365172936}
   - component: {fileID: 5728044031467041077}
-  - component: {fileID: 245376288123368487}
   m_Layer: 0
   m_Name: Projectile_Fire
   m_TagString: Untagged
@@ -9646,7 +9645,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
   - {fileID: 2100000, guid: 751cde1de5b29b247bba48305ded45f5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
@@ -9749,22 +9748,6 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.2
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &245376288123368487
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1485987801625442810}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c0856037d17322498c07284406b38e8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ExplosionPrefab: {fileID: 7156317333231045241, guid: fb8d8f6d8dd5fe247a08487a0dbf3943, type: 3}
-  DestroyExplosion: 5
-  DestroyChildren: 3
-  Velocity: {x: -15, y: 0}
 --- !u!1 &5099559516360549319
 GameObject:
   m_ObjectHideFlags: 0
@@ -14656,8 +14639,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: f99675afa6e9b0749882c0f8b3f567ab, type: 2}
-  - {fileID: 2100000, guid: f99675afa6e9b0749882c0f8b3f567ab, type: 2}
+  - {fileID: 2100000, guid: 0ab0ba3c36e41c240ac0bae94765b7d0, type: 2}
+  - {fileID: 2100000, guid: 0ab0ba3c36e41c240ac0bae94765b7d0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -19505,8 +19488,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
-  - {fileID: 2100000, guid: 0a0fca5b4c3e12a4e9c45fd03683201d, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
+  - {fileID: 2100000, guid: a92e711e67a06d4458a8e3ae9e8c0e85, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

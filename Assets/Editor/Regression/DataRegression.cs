@@ -542,6 +542,20 @@ namespace DeNelle.Editor
             // slots -- six F8 captures caught the cap saturated at 20/20 ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-loop-flag suite", () => { if (!DeNelle.Editor.Regression.VfxLoopFlagRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-loop-flag] " + r); });
 
+            // --- VFX SELF-CONTAINMENT (2026-08-05): the shipped Resources/VFX prefabs
+            // were committed with a message claiming the tracked copy is what ships.
+            // FALSE: AssetDatabase.CopyAsset duplicates the PREFAB ONLY, so all 28
+            // prefabs kept pointing their materials/textures/shaders/meshes at
+            // Assets/UnityTechnologies (.gitignore:399) and Assets/Spells Pack
+            // (.gitignore:214) -- 73 distinct gitignored assets, Boss_FireBreath alone
+            // reaching 6. On a fresh clone / the laptop / CI those resolve to nothing
+            // and the effects render MAGENTA or untextured, which is exactly the
+            // "no magenta leak through, no missing shaders" criterion that work was
+            // signed off against. Latent only because this machine has the packs.
+            // Fixed by DeNelle.Editor.VfxResourceArtMirror; this oracle is what stops
+            // it silently coming back ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-self-contained suite", () => { if (!DeNelle.Editor.Regression.VfxResourceSelfContainmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-self-contained] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

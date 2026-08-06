@@ -4803,8 +4803,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: e9b3f3b6befbf454285a4a5100a66581, type: 2}
-  - {fileID: 2100000, guid: 0a0fca5b4c3e12a4e9c45fd03683201d, type: 2}
+  - {fileID: 2100000, guid: 1ad8d23473b680843a04df2a5695093c, type: 2}
+  - {fileID: 2100000, guid: a92e711e67a06d4458a8e3ae9e8c0e85, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4871,7 +4871,6 @@ GameObject:
   - component: {fileID: 5900896550996689397}
   - component: {fileID: 3191546891526771159}
   - component: {fileID: 2432211616176421735}
-  - component: {fileID: 7008176942085948442}
   m_Layer: 0
   m_Name: Projectile_Storm
   m_TagString: Untagged
@@ -9660,7 +9659,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
   - {fileID: 2100000, guid: 751cde1de5b29b247bba48305ded45f5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
@@ -9763,22 +9762,6 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.2
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &7008176942085948442
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5900896550996689396}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c0856037d17322498c07284406b38e8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ExplosionPrefab: {fileID: 1715412861929044475, guid: b60ac164b9306fa4490a08f088cce962, type: 3}
-  DestroyExplosion: 5
-  DestroyChildren: 4
-  Velocity: {x: -15, y: 0}
 --- !u!1 &5900896552648668959
 GameObject:
   m_ObjectHideFlags: 0
@@ -14584,8 +14567,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 37488e31fc1810c4ab1d77c994d80445, type: 2}
-  - {fileID: 2100000, guid: 37488e31fc1810c4ab1d77c994d80445, type: 2}
+  - {fileID: 2100000, guid: 3f0a9b23dc7fbc841a08243d4bb09a84, type: 2}
+  - {fileID: 2100000, guid: 3f0a9b23dc7fbc841a08243d4bb09a84, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

@@ -3851,7 +3851,7 @@ ParticleSystem:
   LightsModule:
     enabled: 1
     ratio: 0.5
-    light: {fileID: 108000013609061350, guid: 61a6b3a108030e54ba372fe7097916d0, type: 3}
+    light: {fileID: 108000013609061350, guid: f5bb21e02ba3f6446a1687212c8990df, type: 3}
     randomDistribution: 0
     color: 1
     range: 0
@@ -4812,7 +4812,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 4294967295
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 5471faebdbcc34e47baecfecda463063, type: 2}
+  - {fileID: 2100000, guid: 4b13401c0d1221a4c81cf02e8c2c8401, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4858,7 +4858,7 @@ ParticleSystemRenderer:
   m_VertexStreams: 04000305
   m_UseCustomTrailVertexStreams: 0
   m_TrailVertexStreams: 00010304
-  m_Mesh: {fileID: 4300000, guid: dc6b02b1d8deafa448e0985c40c217ae, type: 3}
+  m_Mesh: {fileID: 4300000, guid: 8d005f340ec1fe14883df5ba0ed37805, type: 3}
   m_Mesh1: {fileID: 0}
   m_Mesh2: {fileID: 0}
   m_Mesh3: {fileID: 0}
@@ -8718,7 +8718,7 @@ ParticleSystem:
   LightsModule:
     enabled: 0
     ratio: 0.5
-    light: {fileID: 108000013609061350, guid: 61a6b3a108030e54ba372fe7097916d0, type: 3}
+    light: {fileID: 108000013609061350, guid: f5bb21e02ba3f6446a1687212c8990df, type: 3}
     randomDistribution: 0
     color: 1
     range: 0
@@ -9679,8 +9679,8 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 4294967295
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 5471faebdbcc34e47baecfecda463063, type: 2}
-  - {fileID: 2100000, guid: 1d11412570f90ba4caf1b0b6dea27152, type: 2}
+  - {fileID: 2100000, guid: 4b13401c0d1221a4c81cf02e8c2c8401, type: 2}
+  - {fileID: 2100000, guid: 2ead1ee5bedbc084a80d830fc4cf9567, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -9726,7 +9726,7 @@ ParticleSystemRenderer:
   m_VertexStreams: 04000305
   m_UseCustomTrailVertexStreams: 0
   m_TrailVertexStreams: 00010304
-  m_Mesh: {fileID: 4300000, guid: dc6b02b1d8deafa448e0985c40c217ae, type: 3}
+  m_Mesh: {fileID: 4300000, guid: 8d005f340ec1fe14883df5ba0ed37805, type: 3}
   m_Mesh1: {fileID: 0}
   m_Mesh2: {fileID: 0}
   m_Mesh3: {fileID: 0}

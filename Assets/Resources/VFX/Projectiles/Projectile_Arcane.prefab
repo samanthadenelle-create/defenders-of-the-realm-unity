@@ -4805,7 +4805,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 7162e08b1b32f244b99163b97e13b12f, type: 2}
+  - {fileID: 2100000, guid: 89f4194ab37da8a49889b5f784b7446a, type: 2}
   - {fileID: 2100000, guid: 751cde1de5b29b247bba48305ded45f5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
@@ -9654,7 +9654,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
   - {fileID: 2100000, guid: 751cde1de5b29b247bba48305ded45f5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
@@ -9819,7 +9819,6 @@ GameObject:
   - component: {fileID: 6140006693554785409}
   - component: {fileID: 2761072883975756212}
   - component: {fileID: 1068756314392069193}
-  - component: {fileID: 4813545260297584987}
   m_Layer: 0
   m_Name: Projectile_Arcane
   m_TagString: Untagged
@@ -14600,7 +14599,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: fca9ccea9760e3a45bf0dd60cac096c0, type: 2}
+  - {fileID: 2100000, guid: dd188b35be4dfdb4eb7eafadbc04e9e2, type: 2}
   - {fileID: 2100000, guid: 751cde1de5b29b247bba48305ded45f5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
@@ -14703,19 +14702,3 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.2
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &4813545260297584987
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6140006693554785414}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c0856037d17322498c07284406b38e8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ExplosionPrefab: {fileID: 5490221094549253126, guid: 85d321755e8a85847beb01a0a7246f92, type: 3}
-  DestroyExplosion: 5
-  DestroyChildren: 3
-  Velocity: {x: -20, y: 0}
