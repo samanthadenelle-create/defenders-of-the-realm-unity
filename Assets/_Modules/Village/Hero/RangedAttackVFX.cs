@@ -104,6 +104,7 @@ namespace DeNelle.Village
             Vector3 origin = LaunchOrigin();
             FlowTrace.Step("Ranged", $"FireArrow -> target={targetWorldPos} origin={origin} prefab={(_arrowPrefab == null ? "<pooled-vfx>" : _arrowPrefab.name)} hovl={hovlProjectileKey ?? "<none>"}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
+            PlayReleaseFlash(origin, targetWorldPos);                  // WO-887: bow release
 
             bool useHovl = !string.IsNullOrEmpty(hovlProjectileKey);
             bool suppressOldImpact = useHovl || !string.IsNullOrEmpty(hovlImpactKey);
@@ -156,6 +157,7 @@ namespace DeNelle.Village
             Vector3 origin = LaunchOrigin();
             FlowTrace.Step("Ranged", $"FireSpellOrb -> target={targetWorldPos} origin={origin} prefab={(_spellOrbPrefab == null ? "<pooled-vfx>" : _spellOrbPrefab.name)} hovl={hovlProjectileKey ?? "<none>"}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
+            PlayReleaseFlash(origin, targetWorldPos);                  // WO-887: staff release
 
             bool useHovl = !string.IsNullOrEmpty(hovlProjectileKey);
             bool suppressOldImpact = useHovl || !string.IsNullOrEmpty(hovlImpactKey);
@@ -252,6 +254,45 @@ namespace DeNelle.Village
             _launchPoint != null
                 ? _launchPoint.position
                 : transform.position + Vector3.up * 1.1f;
+
+        /// <summary>
+        /// WO-887 "ranged release (any)": the authored MuzzleFlash burst at the launch point,
+        /// aimed down the shot. THE one seam for it - FireArrow and FireSpellOrb are the shared
+        /// launcher behind the Ranger, the Mage, StoryCompanion and the enemy caster, so wiring
+        /// it here covers every ranged release in the game without a per-caller copy that would
+        /// drift (ARCHITECTURE_PRINCIPLES 2b: one owner per concern).
+        /// </summary>
+        /// <remarks>
+        /// <para>The green <see cref="PlayCastBurst"/> above is NOT replaced. It is a standing
+        /// owner ruling from 2026-06-02 ("green on fire, red on land to confirm where it's
+        /// going") and it is a code-built aim tell, not a release flash. This layers the real
+        /// flash on top - the same "layered, fallback stays" shape TowerCombat already uses.</para>
+        /// <para>Cast_MuzzleFlash is the TRACKED mirror of the pack's MuzzleFlash recipe
+        /// (Resources/VFX/Weapon/Cast_MuzzleFlash.prefab, built by ParticlePackVfxBatchBuilder).
+        /// MEASURED 2026-08-05 off the real asset: the root system is the derivation authority and
+        /// reads rateOverTime 0 / rateOverDistance 0 with a single count-1 burst at t=0 - a true
+        /// one-shot, catalogued IsLoop=false. That matters at this call site more than anywhere:
+        /// a ranged hero fires several times a second and a loop-flagged row played
+        /// fire-and-forget permanently books one of the 20 global loop slots per shot.</para>
+        /// <para>AIM LAW (handbook 1.3): direction comes from the socket ROTATION, never from
+        /// rewriting the Shape angle - so the flash is spawned with a LookRotation down the shot.
+        /// A zero-length aim vector degrades to identity rather than throwing.</para>
+        /// <para>playSound:false: the release cue belongs to the CALLER (the bow/staff/tower sound
+        /// each one already plays). VfxToSfx has no Cast_MuzzleFlash mapping today, so passing
+        /// false makes that structural instead of incidental - a later mapping cannot silently
+        /// double every shot in the game.</para>
+        /// </remarks>
+        private void PlayReleaseFlash(Vector3 origin, Vector3 targetWorldPos)
+        {
+            Guard.Try("Ranged", "release muzzle flash", () =>
+            {
+                Vector3 dir = targetWorldPos - origin;
+                Quaternion look = dir.sqrMagnitude > 0.0001f
+                    ? Quaternion.LookRotation(dir.normalized)
+                    : Quaternion.identity;
+                VFXManager.Play(VFXType.Cast_MuzzleFlash, origin, look, playSound: false);
+            });
+        }
 
         /// <summary>
         /// Brief particle burst at the cast origin — simulates bow-draw dust or

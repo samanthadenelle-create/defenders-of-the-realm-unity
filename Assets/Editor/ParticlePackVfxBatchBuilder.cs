@@ -89,6 +89,17 @@
 //     RE-FIRES mid-life. Measured on BigExplosion: duration 2 s, max startLifetime 2 s
 //     -> reclaim ~4.3 s -> the boss detonates TWICE. Felt-visible, hence opt-in per row.
 //
+// WO-887 (2026-08-05) ADDED NO ROWS, and that is the finding, not a gap. Its whole
+// surface ladder (Flesh/Metal/Stone/Wood/SandImpacts) was MEASURED and REFUSED: those
+// five pack recipes are demo TARGETS - the prefab root is a mesh + renderer + collider
+// with the particle tree hanging underneath - and the child that PickAuthority lands on
+// emits 5/sec on loop, so the art derives CONTINUOUS under a contract that requires
+// IsLoop=false. There is also no Impact_Flesh/_Metal/_Stone/_Wood/_Dirt enum value and,
+// verified at source, no surface signal anywhere in the game to choose between them.
+// The refusals are recorded in DeferredTypes with their numbers; WO-887's deliverable
+// turned out to be CALL SITES (the ranged-release Cast_MuzzleFlash, which this builder
+// already ships, and element-correct tower impacts), not new art.
+//
 // DELIBERATELY NOT DONE (reported, never faked):
 //   * Enemy_Spawn / Despawn_Dissolve. Their recipes (Misc/Respawn, Misc/Dissolve)
 //     are SCRIPTED effects: each carries a MonoBehaviour from the pack's own
@@ -491,6 +502,105 @@ namespace DeNelle.Editor
             "row. Note also that NO roster enemy is a wolf (enemies.json families are hollow / " +
             "orc / troll; Ice Wolf is a PET), so nothing plays this type today regardless.",
 
+            // -- WO-887 deferrals. Every one is a MEASUREMENT or a missing enum value, not an
+            // opinion, and each is spelled out so nobody re-attempts it as a CopyAsset.
+            "WO-887 SURFACE IMPACTS (FleshImpacts / MetalImpacts / StoneImpacts / WoodImpacts / " +
+            "SandImpacts): REFUSED on three independent grounds, any one of which is disqualifying. " +
+            "(1) DEMO GEOMETRY. All five recipes are shaped as a demo TARGET, not as an effect: the " +
+            "prefab ROOT carries a MeshFilter (built-in mesh fileID 10207), a MeshRenderer with a " +
+            "pack material and a SphereCollider, sits at the demo-scene position, and parents ONE " +
+            "child that holds the actual particle tree. A CopyAsset would render a lit primitive AND " +
+            "add a physics collider at every hit point. MuzzleFlash - the one Weapon-folder recipe " +
+            "this builder DOES ship - carries none of those three components, which is exactly why it " +
+            "was safe. Same shape as the Enemy_Spawn / Despawn_Dissolve demo-mesh refusal above. " +
+            "(2) THE ART MEASURES CONTINUOUS AT THE DERIVATION AUTHORITY. The root holds no " +
+            "ParticleSystem, so VfxLoopFlagRegression.PickAuthority falls through to the first " +
+            "can-emit system in hierarchy order, and in ALL FIVE that system is the child named " +
+            "'HitEffect': main.loop TRUE with rateOverTime 5/sec CONSTANT (emission enabled, " +
+            "GameObject active) -> derivedIsLoop TRUE. WO-887 requires every impact to be " +
+            "IsLoop=false. The burst layers are real but they are NOT the authority: Flesh = " +
+            "Streaks 5 + Mist 10 + Decal 1 at t=0; Metal = Dust 30 + Sparks 20 + Decal 1; Wood = " +
+            "Dust 30 + Decal 1 plus a 300/sec curve-spiked WoodSplinters; Stone = Decal 1 plus " +
+            "500/sec ImpactDebris and 1000/sec Dust; Sand = Decal 1 plus two 1000/sec dust layers. " +
+            "BurstOnce would technically clear main.loop and force the derivation to false, but on " +
+            "HitEffect that leaves a 5/sec emitter trickling for its full 5 s duration - a finite " +
+            "stream, not a hit - which is the same 'force a burst flag onto a live emitter' move " +
+            "refused for Death_Skeleton. (3) NO VFXType AND NO SURFACE SIGNAL. There is no " +
+            "Impact_Flesh / _Metal / _Stone / _Wood / _Dirt value in the enum and appending is " +
+            "Grok's single-owner edit (WO-884 section 0.2), so these would be Resources bytes with " +
+            "no consumer - and nothing could choose between them anyway (see the surface-signal note " +
+            "below). A human must re-pick recipes whose root IS the effect, or rule that the child " +
+            "sub-tree may be extracted from the demo target.",
+
+            "WO-887 SURFACE SIGNAL IS ABSENT (reported, never invented): the WO assumes flesh / " +
+            "metal / stone / wood / dirt detection exists at the hit sites. VERIFIED AT SOURCE - it " +
+            "does not. No SurfaceType/MaterialType/HitSurface enum or field anywhere; no " +
+            "Collider.sharedMaterial read (the repo's ONE .physicMaterial is a LeanTouch demo asset " +
+            "referenced by zero prefabs and zero scenes); TagManager holds only role tags (Tower, " +
+            "Building, HeartTarget, Player) and role layers (Tower, Building, Enemy, Structure - " +
+            "wood palisades, stone walls and steel gates all share 'Structure'); RepoProps / " +
+            "CatalogEntry have no material field (material words survive only inside ids like " +
+            "'wall_wood' and prefab paths); and both footstep implementations play ONE clip with no " +
+            "surface query. The nearest real signal is WallTier { Wood, Iron, ReinforcedSteel } on " +
+            "WallSegment, which covers player walls only and is a progression index. Defining a " +
+            "surface taxonomy is DESIGN and belongs to the owner, so nothing was invented; the " +
+            "ELEMENT half of WO-887 - which has a real source (DamageElement via " +
+            "TowerCombat.AbilityToElement) - was wired instead.",
+
+            "WO-887 element-proc recipes (TinyExplosion fire, IceLance shards, EnergyExplosion " +
+            "arcane, GoopSpray nature): NOT built, because every one would be bytes with no " +
+            "consumer. The four impact moments that DO have enum values are already pointed at " +
+            "deliberate, tracked, better picks - Impact_Flame at the Spells Pack Spell_Fire_6 " +
+            "detonation (the 'fireball headline' pick), Impact_ExplosionAether at Explosion_Arcane, " +
+            "Impact_Ice at Lana Hit_frost, Impact_Physical at the Lana slash ARC that an owner " +
+            "ruling on 2026-08-02 chose over an impact burst - so re-pointing them at smaller pack " +
+            "recipes would be a downgrade dressed as progress. The nature/poison row has no home at " +
+            "all: DamageElement is { None, Aether, Flame, Ice } - there is no Nature, Shadow or " +
+            "Lightning element in this game, so GoopSpray could never be selected.",
+
+            // -- WO-888 (heal + HP + item auras) deferrals. Same discipline: each is a
+            // MEASUREMENT off the real asset, not an opinion, and each is a REFUSAL to
+            // catalogue art whose family contradicts the beat it would serve. -----------
+            "Cast_Heal repoint (WO-888): the ratified recipe (registry 6a) is a RisingSteam warm " +
+            "column. MEASURED off the pack asset, RisingSteam is CONTINUOUS - rateOverTime 3/sec on " +
+            "loop, a single layer (the same source this builder already ships as Env_SteamVent and " +
+            "Aura_HealingInProgress). But every Cast_Heal CALL SITE is a one-shot " +
+            "(VFXManager.Play(VFXType.Cast_Heal, ...) from the hero's heal branch), so repointing it " +
+            "would either reclaim a still-emitting system mid-emit or hand a rate-emitting loop to a " +
+            "fire-and-forget call - one of the 20 global loop slots gone per cast. Refused, not faked. " +
+            "Cast_Heal KEEPS its committed Spells Buffs/Buff_Nature row. NOTE FOR THE OWNER: that row " +
+            "is a GREEN glow, i.e. the heal still reads partly by hue. WO-888 covers that on the " +
+            "channels it owns - the RISING motion of Aura_HealingInProgress and the heal number - but a " +
+            "colour-free CAST beat needs either a burst-shaped rising recipe or a ruling that the cast " +
+            "may be held as a short loop with an explicit Stop.",
+
+            "Impact_Heal repoint (WO-888): the ratified recipe (registry 6a) is a FireFlies upward " +
+            "burst. MEASURED, FireFlies is CONTINUOUS - 5/sec on the root plus 1/sec on its second " +
+            "layer, both looping (the same source already shipped as Harvest_Food / Harvest_Crystal / " +
+            "Collector_Ready, all catalogued Family A). Impact_Heal is Family B by definition - it is " +
+            "fired fire-and-forget from four HeroHealth paths - so the same refusal applies. It keeps " +
+            "its committed Lana Range_attack/Hit_heart row, which IS burst-shaped and IS tracked.",
+
+            "Arcane weapon aura (WO-888 registry 6c): the ratified recipe reuses Aura_EnemyCaster " +
+            "(Lana Orbs_electric) at 'faint'. VFXCatalogGenerator names that row, in its own comment, " +
+            "as one of three rows that are rate-0 + a single burst while declaring isLoop:true - the " +
+            "art is a BURST. Held as a gear loop it would pop once and then hold a loop slot showing " +
+            "nothing until the weapon is unequipped. GearAuraMap therefore REFUSES arcane (and " +
+            "lightning, which registry section 8 item 8 keeps procedural rather than take a gitignored " +
+            "Legacy dependency) and reports the reason. Fire -> Aura_Flame and frost -> Aura_Ice are " +
+            "SERVED: both derive continuous. Only knight_flameblade carries element:'fire' in " +
+            "weapons.json today, so fire is the one gear aura with live data.",
+
+            "Aura_HealingInProgress / Aura_ItemHeal SCALE (WO-888, not a deferral - a measured " +
+            "SURPRISE worth recording): both shipped at root scale 1.25, NOT the 0.8 / 0.5 their rows " +
+            "declare. ApplyTuning only applies Row.Scale to a copy whose scale is still 1, and the " +
+            "pack's RisingSteam ships at 1.25, so both were correctly reported 'scale PRESERVED " +
+            "(already tuned)' and stayed room-sized - and identical to each other, losing the 'LOW " +
+            "held' distinction the registry asks of the item seat. Rebuilding them would change their " +
+            "GUIDs, so WO-888 seats them on the body at the CALL SITE instead (HeroHpStateAura / " +
+            "GearAura scale multipliers, each carrying this measurement). If the owner would rather " +
+            "fix the asset, delete the two .prefab files and re-run - the rows already say 0.8 / 0.5.",
+
             "Death lingering loops (WO-886 'Lingering' column): SmokeEffect settle/column and " +
             "the WildFire lick MEASURE as genuine Family A loops (SmokeEffect 20/sec looping; " +
             "WildFire 100 + 5 + 20/sec looping across 3 layers), which is exactly what the WO " +
@@ -635,8 +745,9 @@ namespace DeNelle.Editor
                        .Append(" [").Append(string.Join(", ", aliased.ToArray())).Append("]; ")
                        .Append("deferred ").Append(DeferredTypes.Length)
                        .Append(" (Enemy_Spawn + Despawn_Dissolve scripted recipes; WO-886 Death_Skeleton, ")
-                       .Append("Death_Wolf and the death lingering loops - see the DEFERRED warnings, each ")
-                       .Append("carries its measurement); ")
+                       .Append("Death_Wolf and the death lingering loops; WO-887 the five surface impacts, ")
+                       .Append("the absent surface signal and the element-proc recipes - see the DEFERRED ")
+                       .Append("warnings, each carries its measurement); ")
                        .Append("skipped ").Append(skipped.Count).Append("; ")
                        .Append("prefab dependencies still resolving into the gitignored pack: ")
                        .Append(packDeps).Append(" (materials/textures/shaders - the PREFABS are " +

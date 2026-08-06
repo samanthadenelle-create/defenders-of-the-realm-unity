@@ -357,10 +357,27 @@ namespace DeNelle.Village
                 FireSingleProjectile(trueAimSecondary, damage, DamageElement.None, firePos);
 
             // ── VFX: muzzle flash ─────────────────────────────────────────────
-            var muzzleType = (level >= 3 || _isEmpowered)
-                ? VFXType.Cast_MageCharge
-                : VFXType.Projectile_TowerArcane;
-            VFXManager.Play(muzzleType, firePos);
+            // WO-887 "ranged release (any) -> MuzzleFlash": the low/mid tier branch used to play
+            // VFXType.Projectile_TowerArcane here - a PROJECTILE BODY row (catalog IsLoop=true,
+            // Resources/VFX/Projectiles/Projectile_Arcane) parked at the barrel and left to run out
+            // its detected duration. It is the wrong FAMILY for a release beat: a travel loop has no
+            // flash shape and its lifetime is meant to be the FLIGHT, not a frame or two of muzzle.
+            // Cast_MuzzleFlash is the tracked mirror of the pack's MuzzleFlash recipe, MEASURED
+            // (2026-08-05) as a genuine one-shot at the derivation authority: root system
+            // rateOverTime 0 / rateOverDistance 0 with a single count-1 burst at t=0, second layer
+            // FlashHeadon likewise, so the catalog row is IsLoop=false and it can never book one of
+            // the 20 global loop slots at the rate a field of towers fires. MinQuality 0 - the
+            // release flash is how the player reads that a shot LEFT the barrel, which is combat
+            // legibility, not dressing.
+            //
+            // playSound:false: GameSfx.PlayTowerFire() already fires the shot cue a few lines below,
+            // and VfxToSfx has no Cast_MuzzleFlash mapping today - passing false makes the intent
+            // STRUCTURAL, so a later mapping cannot silently double the tower's fire sound.
+            VFXManager.Play(VFXType.Cast_MuzzleFlash, firePos, Quaternion.identity, playSound: false);
+            // The empowered / L3 charge read is kept and LAYERED on top (extra layer = the
+            // colourblind-safe tier escalation the owner felt-tested on 2026-07-17), not replaced.
+            if (level >= 3 || _isEmpowered)
+                VFXManager.Play(VFXType.Cast_MageCharge, firePos);
 
             // WO-VFX-TOWERS: Hovl cast burst at the muzzle, LAYERED on top of the legacy
             // VFXType muzzle flash (fallback stays). Keyed off the shot's element (Aether when
@@ -574,21 +591,54 @@ namespace DeNelle.Village
         {
             int level = _tower != null ? _tower.CurrentLevel : 1;
 
+            // The shot's element mirrors FireAt exactly (Aether/Ice/Flame when empowered, else
+            // None). HOISTED above the impact pick - it used to be read only by the Hovl key
+            // below, which is why the typed impact could not see it. This is the ONE real
+            // element signal at a tower's hit resolution: EmpowermentAbility -> DamageElement.
+            DamageElement element = _isEmpowered ? AbilityToElement(_empowerment) : DamageElement.None;
+
+            // WO-887 "element procs override the physical hit". TIER decides SIZE, ELEMENT decides
+            // FLAVOUR - and only the ELEMENT half is new. Every non-empowered tower is
+            // DamageElement.None and keeps its exact existing ladder (L1 physical / L2 aether /
+            // L3 aether detonation), so nothing the owner has already felt-tuned moves.
+            //
+            // What was WRONG: an empowered tower ALWAYS detonated Impact_ExplosionAether. An
+            // EternalEmber (Flame) tower's bolt therefore burst in violet arcane light, and a
+            // GlacialCore (Ice) tower's did too - the shot's own element was computed eight lines
+            // further down and never reached the visual. AbilityToElement is the authority:
+            // EternalEmber->Flame, GlacialCore->Ice, ManaSurge->Aether, TrueAim->None (physical,
+            // intentional), so TrueAim and ManaSurge land on exactly the type they land on today.
+            //
+            // NOTE for the PO: there is no large/tier-3 ICE impact VFXType (the enum has one
+            // Impact_Ice and appending is Grok's single-owner edit, WO-884 section 0.2), so a
+            // GlacialCore tower reads element-correct but does NOT grow with tier on the typed
+            // layer. The Hovl "Freezing_Impact" layer below still carries its tier SCALE, so the
+            // escalation is not lost - it is just carried by the other layer.
             var impactType = (_isEmpowered || level >= 3)
-                ? VFXType.Impact_ExplosionAether
+                ? (element == DamageElement.Flame ? VFXType.Impact_ExplosionFire
+                  : element == DamageElement.Ice  ? VFXType.Impact_Ice
+                                                  : VFXType.Impact_ExplosionAether)
                 : level == 2
-                    ? VFXType.Impact_Aether
-                    : VFXType.Impact_Physical;
+                    ? (element == DamageElement.Flame ? VFXType.Impact_Flame
+                      : element == DamageElement.Ice  ? VFXType.Impact_Ice
+                                                      : VFXType.Impact_Aether)
+                    : (element == DamageElement.Flame ? VFXType.Impact_Flame
+                      : element == DamageElement.Ice  ? VFXType.Impact_Ice
+                                                      : VFXType.Impact_Physical);
+            // playSound left at its default (true) ON PURPOSE, unlike the muzzle above: routing by
+            // element also routes the PAIRED SfxId, which is the fix. VfxToSfx sends
+            // Impact_ExplosionFire/Impact_Flame -> FireExplosion and Impact_Ice -> None, so a fire
+            // tower stops playing the ARCANE bang it has been playing and an ice tower stops
+            // playing one at all. GameSfx.PlayTowerArrowHit() below is the separate CONNECT cue and
+            // is unchanged - the two have always layered.
             VFXManager.Play(impactType, hitPosition);
 
             // WO-VFX-TOWERS: Hovl impact burst LAYERED on top of the legacy VFXType impact.
-            // The shot's element mirrors FireAt (Aether when empowered, else Physical/None -> a
-            // Spear impact). Null-safe — no-ops on an unknown key. Reads by shape/motion.
+            // Null-safe — no-ops on an unknown key. Reads by shape/motion.
             //
             // TIER ESCALATION (owner felt-test 2026-07-17): the impact SCALES with tower level, and
             // at L3 a heavier Cleave detonation is stacked on top so an upgraded tower's hits land
             // harder. Reads by SIZE + an extra blast layer (colorblind-safe). Guarded per spawn.
-            DamageElement element = _isEmpowered ? AbilityToElement(_empowerment) : DamageElement.None;
             float impactScale = TierVfxScale(level);
             Guard.Try("TowerVfx", "impact", () =>
                 VFXManager.PlayKey(ImpactKeyFor(element), hitPosition, default, null, null, impactScale));
