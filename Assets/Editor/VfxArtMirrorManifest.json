@@ -134,8 +134,40 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Trail.png"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/DebrisParticle.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/DebrisParticle.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Dust.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Dust.mat"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Embers.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/Embers.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/EnergyExplosion.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/EnergyExplosion.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/EnergyShockwave.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/EnergyShockwave.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Explosion.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Explosion.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/ExplosionDistortion.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/ExplosionDistortion.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/Lightning.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Lightning.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/SandParticle.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/SandParticle.mat"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Materials/SmokeDark.mat",
@@ -150,6 +182,26 @@
             "mirror": "Assets/Resources/VFX/_Shared/Materials/fireball.mat"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/ParticlesLight.prefab",
+            "mirror": "Assets/Resources/VFX/_Shared/Prefabs/fireexplosioneffects__ParticlesLight.prefab"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Debris.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Debris.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/EnergyEffect.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/EnergyEffect.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Explosion.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Explosion.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/ExplosionEmission.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/ExplosionEmission.tif"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/FireBallEmission.tif",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/FireBallEmission.tif"
         },
@@ -158,12 +210,40 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Fireball.tif"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Lightning.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Lightning.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/Ramp03.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Ramp03.png"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SmokePuff01.tif",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokePuff01.tif"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SmokePuff02.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SmokePuff02.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SphereNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SphereNormal.tif"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/TinyFlame.tif",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/TinyFlame.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/TinyStones.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/TinyStones.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/ramp01.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/fireexplosioneffects__ramp01.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/shockwave.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/shockwave.tif"
         },
         {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Materials/DustMote.mat",

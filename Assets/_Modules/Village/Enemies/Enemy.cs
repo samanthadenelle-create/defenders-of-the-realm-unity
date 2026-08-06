@@ -2615,8 +2615,14 @@ namespace DeNelle.Village
                 PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomDeathClip() : null,
                               CombatSfxFallback.Death);
 
-                // Regular shake only when no EliteVFXController handled it.
-                if (eliteVfx == null) CameraShakeBridge.Shake(0.18f, 0.22f);
+                // WO-886: the kill shake is TIERED (boss 0.7 / elite 0.3 / regular 0.18),
+                // driven off this enemy's own enemies.json stat block and routed through the
+                // ONE home of that rule so the component path and this data path cannot
+                // drift. Until now every kill got the flat 0.18 punch - including a boss -
+                // because the component that owns the 0.7 boss shake is attached to no
+                // prefab, scene or asset anywhere in the tree, so its branch never ran.
+                if (eliteVfx == null)
+                    EliteVFXController.PlayDeathShake(IsBossTier(), IsEliteTier());
 
                 // Ticket #61: combo / kill-streak / RAMPAGE + crystal feedback fires for HERO
                 // kills ONLY. A tower / pet / DoT / environmental kill still bursts VFX, shakes,
@@ -2745,21 +2751,33 @@ namespace DeNelle.Village
         /// pre-existing generic burst — this is additive, never a substitution.
         /// </para>
         /// <para>
+        /// WO-886 added the ELITE rung. <c>role: "elite"</c> is a real, populated value in
+        /// enemies.json (hollow-reaper, hollow-apprentice, orc-necromancer, plus the
+        /// necromancer which is also <c>boss</c>) and <see cref="VFXType.Elite_Death"/>'s
+        /// own doc reads "on elite enemy death" — so this is a data read, not a creative
+        /// pick. It is tested BEFORE the family fallback or three of those four would have
+        /// died as plain Hollow trash.
+        /// </para>
+        /// <para>
         /// NOT mapped, deliberately: <c>Death_Wolf</c> and <c>Death_Tiefling</c> are wired
         /// to real prefabs but enemies.json contains no wolf and no tiefling (families are
         /// hollow / orc / troll; "Ice Wolf" is a PET, not an enemy). Assigning them to orc
         /// or troll would be a creative pick, which is the owner's call — leave them unused
-        /// rather than guess.
+        /// rather than guess. (WO-886 re-confirmed this against the live roster and left
+        /// the mapping untouched.)
         /// </para>
         /// </summary>
         private VFXType SpeciesDeathVfx()
         {
             if (_def == null) return VFXType.None;
 
-            // Boss flag first — it outranks family and role.
+            // Boss flag first — it outranks family and role. Death_Boss is the legacy alias
+            // of Boss_Death; WO-886 points both catalog rows at the SAME prefab, so which
+            // of the two names is returned here can no longer change what the player sees.
             if (_def.Boss) return VFXType.Death_Boss;
 
             string role = (_def.Role ?? string.Empty).Trim().ToLowerInvariant();
+            if (role == "elite") return VFXType.Elite_Death;
             if (role == "brute") return VFXType.Death_Brute;
 
             string family = (_def.Family ?? string.Empty).Trim().ToLowerInvariant();
@@ -2767,6 +2785,22 @@ namespace DeNelle.Village
 
             return VFXType.None;
         }
+
+        /// <summary>
+        /// True when this enemy's stat block flags it as a boss. WO-886: drives the tiered
+        /// death shake. Read off <c>_def</c> because that is the only species signal the
+        /// pool/factory spawn path sets (see <see cref="SpeciesDeathVfx"/>).
+        /// </summary>
+        private bool IsBossTier() => _def != null && _def.Boss;
+
+        /// <summary>
+        /// True when this enemy's stat block gives it the <c>elite</c> role (and it is not
+        /// already a boss, which outranks it). WO-886: drives the tiered death shake.
+        /// </summary>
+        private bool IsEliteTier() =>
+            _def != null && !_def.Boss &&
+            string.Equals((_def.Role ?? string.Empty).Trim(), "elite",
+                          System.StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// WO-219: maps a damage element to its existing impact VFXType. Returns

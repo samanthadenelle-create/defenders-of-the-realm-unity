@@ -115,9 +115,36 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Plays a larger death burst at <paramref name="position"/>.
+        /// <para>
+        /// WO-886: this is the LADDER FLOOR, not a separate effect. It used to be the
+        /// code-built violet sphere below, which is what a kill fell back to whenever the
+        /// dying thing carried no species data - so the most common death in the game was
+        /// also the only one that did not look like the pack. It now routes to the pooled,
+        /// committed <c>Death_Generic</c> recipe (SmallExplosion, 4 layers) through the one
+        /// bus, and the sphere survives ONLY as the no-VFXManager fallback so this can
+        /// never become a silent no-op.
+        /// </para>
+        /// <para>
+        /// <c>playSound:false</c> - the single caller (<c>Enemy.Die</c>) already fires its
+        /// own death SFX, and VFXManager's VfxToSfx map sends every <c>Death_*</c> to
+        /// <c>SfxId.EnemyDeath</c>, which would double it.
+        /// </para>
         /// </summary>
         public static void SpawnDeathBurst(Vector3 position)
         {
+            if (VFXManager.Instance != null)
+            {
+                VFXManager.Play(VFXType.Death_Generic, position,
+                                Quaternion.identity, playSound: false);
+                return;
+            }
+
+            // No VFXManager in this scene (unit-test scene, bare bootstrap): fall through to
+            // the code-built burst rather than showing nothing. Reported, not silent.
+            FlowTrace.Throttle("VfxPool", "death-no-manager", 1f,
+                "SpawnDeathBurst: no VFXManager.Instance - using the code-built burst instead " +
+                "of the pooled Death_Generic recipe.");
+
             if (Instance == null)
             {
                 FlowTrace.Throttle("VfxPool", "death-noinstance", 1f,

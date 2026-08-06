@@ -158,14 +158,14 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 28
-    Prefab: {fileID: 403557928190742514, guid: f1de3fbd6b76f96478ba35446cf15b36, type: 3}
-    PoolSize: 4
+    Prefab: {fileID: 1121192042590650, guid: b1667cb462053744da2d81199d315ed9, type: 3}
+    PoolSize: 2
     IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 29
-    Prefab: {fileID: 8307689965681055727, guid: 8050863a467fe9e46acb029a0fa570fc, type: 3}
-    PoolSize: 4
+    Prefab: {fileID: 1025285306637258, guid: 3abe0bcd1a35caf4982e8d2006f13727, type: 3}
+    PoolSize: 6
     IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
@@ -176,20 +176,20 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 31
-    Prefab: {fileID: 6981941031284743971, guid: 84cbf7d4f1c16bc478f079adeb0b6994, type: 3}
+    Prefab: {fileID: 1828176872806910, guid: c33c5790cafbbcf48a93b3690772f085, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 32
-    Prefab: {fileID: 9169863999176627214, guid: d80674d25b4036a43a9e0b72ed9f4fad, type: 3}
-    PoolSize: 4
+    Prefab: {fileID: 1828176872806910, guid: 875a0b319d6abf84bbde4267d7033e92, type: 3}
+    PoolSize: 8
     IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 68
-    Prefab: {fileID: 3255629840924039632, guid: 446383bc4333b1041bb1cc082b8b7102, type: 3}
-    PoolSize: 4
+    Prefab: {fileID: 1329845292236604, guid: 69e7047ad13f557498d78d84d146f59a, type: 3}
+    PoolSize: 6
     IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
@@ -372,4 +372,16 @@ MonoBehaviour:
     PoolSize: 4
     IsLoop: 1
     MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 70
+    Prefab: {fileID: 1329845292236604, guid: 901ec373f1d778f45824e386ccf6eb71, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 72
+    Prefab: {fileID: 1121192042590650, guid: b1667cb462053744da2d81199d315ed9, type: 3}
+    PoolSize: 2
+    IsLoop: 0
+    MinQuality: 0
     LifetimeOverride: 0

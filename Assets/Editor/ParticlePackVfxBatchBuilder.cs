@@ -76,6 +76,19 @@
 //   assembly and taking the compile gate down for every parallel lane. Both existing
 //   VFX builders do the same; the consistency is deliberate.
 //
+// WO-886 (2026-08-05) ADDED THE DEATH LADDER to this same table rather than minting a
+// third builder. Three capabilities came with it, all of them general:
+//   * Row.RequiredSystems - a row may DECLARE its recipe's layer count and hard-fail if
+//     the source disagrees. WO-886 requires BigExplosion pooled WHOLE (8 layers); a
+//     trimmed recipe still renders a plausible explosion, so it must be asserted.
+//   * Row.Aliases - extra VFXType names whose catalog row points at the SAME prefab, so
+//     the legacy Death_Boss alias physically cannot drift from Boss_Death.
+//   * Row.BurstOnce - clears main.loop + main.prewarm on a one-shot recipe. Every
+//     explosion in this pack ships looping:1 with its payload in a t=0 burst, and
+//     VFXManager reclaims a pooled oneshot at duration + max startLifetime, so the burst
+//     RE-FIRES mid-life. Measured on BigExplosion: duration 2 s, max startLifetime 2 s
+//     -> reclaim ~4.3 s -> the boss detonates TWICE. Felt-visible, hence opt-in per row.
+//
 // DELIBERATELY NOT DONE (reported, never faked):
 //   * Enemy_Spawn / Despawn_Dissolve. Their recipes (Misc/Respawn, Misc/Dissolve)
 //     are SCRIPTED effects: each carries a MonoBehaviour from the pack's own
@@ -134,6 +147,7 @@ namespace DeNelle.Editor
         private const string DestWeapon  = "Assets/Resources/VFX/Weapon/";
         private const string DestAura    = "Assets/Resources/VFX/Aura/";
         private const string DestHarvest = "Assets/Resources/VFX/Harvest/";
+        private const string DestDeath   = "Assets/Resources/VFX/Death/";   // WO-886 death ladder
 
         private const string CatalogPath = "Assets/Resources/VFX/VFXCatalog.asset";
 
@@ -179,6 +193,37 @@ namespace DeNelle.Editor
             public float   LifeMul;       // startLifetime multiplier   (1 = untouched)
             public float   Gravity;       // absolute gravityModifier override; NaN = untouched
             public string  Why;           // the registry line this row implements
+
+            // -- WO-886 additions -------------------------------------------------
+            /// <summary>
+            /// When &gt; 0, the SOURCE recipe must carry EXACTLY this many ParticleSystems
+            /// or the row hard-fails. WO-886 requires BigExplosion pooled WHOLE (8 layers);
+            /// a pack reimport that silently trimmed a layer would otherwise ship a boss
+            /// death missing its debris or its smoke column and nothing would say so.
+            /// 0 = no declared count (the dest-vs-source LAYER LOSS guard still applies).
+            /// </summary>
+            public int     RequiredSystems;
+
+            /// <summary>
+            /// Extra VFXType member names whose catalog row points at the SAME dest prefab.
+            /// WO-886 names this explicitly: Death_Boss (legacy alias) and Boss_Death must
+            /// both be BigExplosion. Sharing ONE prefab is what makes the alias unable to
+            /// drift - two copies would be two things to re-tune and forget.
+            /// </summary>
+            public string[] Aliases;
+
+            /// <summary>
+            /// Clear main.loop (and main.prewarm, which Unity only permits on a looping
+            /// system) on every layer of a FRESH copy. A death is fire-and-reclaim, but
+            /// every explosion recipe in this pack ships looping:1 with duration 2 s and its
+            /// whole payload in a t=0 burst - MEASURED on BigExplosion: 8 layers, duration
+            /// 2 s, max startLifetime 2 s, so VFXManager.DetectDuration reclaims the pooled
+            /// instance at ~4.3 s and the burst RE-FIRES at t=2. A boss death would detonate
+            /// twice. This is a correctness invariant for a one-shot, exactly like
+            /// playOnAwake, not a taste call - but it IS felt-visible, so it is opt-in per
+            /// row and reported rather than applied to every recipe the builder owns.
+            /// </summary>
+            public bool    BurstOnce;
         }
 
         /// <summary>"leave this knob alone" sentinel for Row.Gravity (0 is a real value).</summary>
@@ -318,10 +363,103 @@ namespace DeNelle.Editor
                       MinQuality = 1, PoolSize = 4, Required = false,
                       Scale = 1f, RateMul = 0.6f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
                       Why = "registry 6e: ready-to-collect beacon, rising bob" },
+
+            // == WO-886 DEATH LADDER (registry section 5) ==========================
+            // The ladder escalates by RECIPE + LAYER COUNT + SCALE, in that order of
+            // importance - all three survive greyscale, which hue does not (owner is
+            // red/green colourblind). Measured layer counts, off the real assets:
+            //   SmallExplosion 4 | DustExplosion 5 | EnergyExplosion 4 | BigExplosion 8
+            // so a trash pop and a boss set-piece differ in the number of things
+            // happening on screen, not only in how big they are.
+            //
+            // EVERY row here is Family.Burst and every one MEASURES as a burst at the
+            // root: rateOverTime 0, rateOverDistance 0, one burst at t=0 (counts 5 / 30 /
+            // 3 / 3). No death may be catalogued as a loop - a fire-and-forget loop
+            // permanently burns one of the 20 global loop slots, and a wave produces
+            // deaths by the dozen.
+            //
+            // MinQuality 0 across the board, deliberately: the death burst is how the
+            // player knows the thing they hit is GONE. A kill confirmation that vanishes
+            // on a Low-tier device is a combat-legibility bug, not saved dressing.
+            //
+            // NO gravity / speed overrides on this ladder. The recipes already carry the
+            // motion language the registry asks for (DustExplosion = grounded sand and
+            // debris, EnergyExplosion = symmetric radial energy, SmallExplosion = fire and
+            // rising embers, BigExplosion = debris + a smoke-trail column), and this
+            // builder's tuning pass applies a knob to EVERY layer including the flat
+            // shockwave ring - which a gravity override would visibly droop. Motion here
+            // is the recipe's; scale is ours.
+
+            // Trash floor. Also the target of VfxPool.SpawnDeathBurst, which is what a
+            // kill falls back to when the enemy carries no species data at all, so this
+            // is the single highest-traffic death in the game -> the largest pool.
+            new Row { TypeName = "Death_Generic", Source = Fire + "SmallExplosion.prefab",
+                      Dest = DestDeath + "Death_Generic.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 8, Required = true,
+                      Scale = 1f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 5: Death_Generic = SmallExplosion (trash pop, ladder floor)" },
+
+            // "SmallExplosion (ember)" - same recipe as the floor, held LONGER so the
+            // embers hang and rise instead of snapping out. That lifetime difference is
+            // the whole read ("tiefling = rising ember"); an untuned second copy of the
+            // floor recipe under a second name would be indistinguishable and pointless.
+            // NOT mapped to any roster enemy - see the run report.
+            new Row { TypeName = "Death_Tiefling", Source = Fire + "SmallExplosion.prefab",
+                      Dest = DestDeath + "Death_Tiefling.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 4, Required = true,
+                      Scale = 1.05f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1.25f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 5: Death_Tiefling = SmallExplosion (ember), lingering rise" },
+
+            // Golem / heavy. 5 layers incl. a 30-count sand burst - the "grounded dust"
+            // read, one rung above the floor by both layer count and scale.
+            new Row { TypeName = "Death_Brute", Source = Fire + "DustExplosion.prefab",
+                      Dest = DestDeath + "Death_Brute.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 6, Required = true,
+                      Scale = 1.15f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 5, BurstOnce = true,
+                      Why = "registry 5: Death_Brute (golem) = DustExplosion, grounded dust" },
+
+            // Dungeon runs read darker/bigger than the village floor without needing a
+            // different recipe family from the elite rung above it.
+            new Row { TypeName = "Death_EnemyExplosion_Dungeon", Source = Fire + "EnergyExplosion.prefab",
+                      Dest = DestDeath + "Death_EnemyExplosion_Dungeon.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 6, Required = true,
+                      Scale = 1.2f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 5: Death_EnemyExplosion_Dungeon = EnergyExplosion" },
+
+            // "EnergyExplosion (full)" - the same recipe as the dungeon rung, scaled up
+            // and held longer so an elite kill reads as a bigger version of the same idea
+            // rather than a different element. Elites are a TIER, not a species.
+            new Row { TypeName = "Elite_Death", Source = Fire + "EnergyExplosion.prefab",
+                      Dest = DestDeath + "Elite_Death.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 4, Required = true,
+                      Scale = 1.45f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1.15f, Gravity = None,
+                      RequiredSystems = 4, BurstOnce = true,
+                      Why = "registry 5: Elite_Death = EnergyExplosion (full)" },
+
+            // THE SET PIECE. 8 layers pooled WHOLE (BigExplosion, Embers, SmokeTrail,
+            // Embers (1), Light, Debris, AdditonalSmoke, Shockwave) - RequiredSystems
+            // hard-fails the row if the recipe ever arrives with fewer, because a boss
+            // death quietly missing its debris or its smoke column still LOOKS like an
+            // explosion and nobody would catch it.
+            //
+            // Death_Boss is the LEGACY ALIAS and shares this one prefab, so the two can
+            // never drift apart (WO-886 calls this out by name). One asset, two catalog
+            // rows, one thing to tune.
+            new Row { TypeName = "Boss_Death", Source = Fire + "BigExplosion.prefab",
+                      Dest = DestDeath + "Boss_Death.prefab", Expect = Family.Burst,
+                      MinQuality = 0, PoolSize = 2, Required = true,
+                      Scale = 1.8f, RateMul = 1f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
+                      RequiredSystems = 8, BurstOnce = true, Aliases = new[] { "Death_Boss" },
+                      Why = "registry 5: Boss_Death AND Death_Boss = BigExplosion (8-layer, whole)" },
         };
 
-        // The two values this builder deliberately leaves alone, with the reason the
-        // run report repeats verbatim so nobody re-attempts them as a CopyAsset.
+        // The moments this builder deliberately leaves alone, each with the reason the run
+        // report repeats verbatim so nobody re-attempts one as a CopyAsset. Every WO-886
+        // entry cites the MEASUREMENT that forced the deferral, not an opinion about it.
         private static readonly string[] DeferredTypes =
         {
             "Enemy_Spawn: Misc/Respawn is a SCRIPTED recipe (pack MonoBehaviour " +
@@ -331,6 +469,36 @@ namespace DeNelle.Editor
 
             "Despawn_Dissolve: Misc/Dissolve, same shape (pack script + 2 demo meshes). " +
             "Same reason, same remedy.",
+
+            // -- WO-886 deferrals. Every one is a MEASUREMENT, not an opinion. ------
+            "Death_Skeleton (WO-886): the ratified recipe is SparksEffect + a SmokeEffect " +
+            "wisp. MEASURED off the real assets, BOTH are CONTINUOUS, not bursts. " +
+            "SparksEffect's root emits rateOverTime 80/sec on loop (its other layers 10 and " +
+            "10; the ONLY burst in the recipe is a 0.2 s 'SparkDeathEffect' child that is not " +
+            "the derivation authority), and SmokeEffect is a single layer at 20/sec on loop. " +
+            "WO-886 requires every death to be BURST, and the shared oracle derives IsLoop " +
+            "from the ROOT - so cataloguing this would either hand a rate-emitting loop to a " +
+            "fire-and-forget death (one of the 20 global loop slots gone per kill) or force " +
+            "IsLoop=false onto a still-emitting system and reclaim it mid-emit. Refused, not " +
+            "faked. Death_Skeleton KEEPS its existing committed Lana Burst/Poof_generic row, " +
+            "which is genuinely burst-shaped and already tracked, so nothing regresses - the " +
+            "hollow trash pop stays the smallest rung of the ladder. A human must either " +
+            "re-pick a burst recipe for the bone scatter or rule that the sparks may be " +
+            "re-authored into a one-shot.",
+
+            "Death_Wolf (WO-886): same measurement, same refusal - SparksEffect (crystal) + a " +
+            "slow Steam drift are both continuous. Keeps its committed Lana Burst/Poof_water " +
+            "row. Note also that NO roster enemy is a wolf (enemies.json families are hollow / " +
+            "orc / troll; Ice Wolf is a PET), so nothing plays this type today regardless.",
+
+            "Death lingering loops (WO-886 'Lingering' column): SmokeEffect settle/column and " +
+            "the WildFire lick MEASURE as genuine Family A loops (SmokeEffect 20/sec looping; " +
+            "WildFire 100 + 5 + 20/sec looping across 3 layers), which is exactly what the WO " +
+            "asks for - 'a SEPARATE capped loop', never folded into the burst. But there is NO " +
+            "VFXType for a death linger, and appending to VFXType is Grok's single-owner edit " +
+            "(WO-884 section 0.2 / handbook Step 3). Building the prefabs now would ship " +
+            "Resources bytes with no consumer and no catalog row. Deferred pending the enum " +
+            "values; the recipes are picked, measured and ready.",
         };
 
         // =====================================================================
@@ -347,6 +515,7 @@ namespace DeNelle.Editor
         {
             var errors  = new List<string>();
             var built   = new List<string>();
+            var aliased = new List<string>();   // WO-886: extra catalog rows sharing a row's prefab
             var skipped = new List<string>();
             var summary = new StringBuilder();
 
@@ -416,7 +585,28 @@ namespace DeNelle.Editor
                         if (!MeasureAndResolve(row, dest, report, out isLoop, out rowError))
                             continue;
 
-                        WriteCatalogRow(enumType, entries, row, dest, isLoop, report);
+                        WriteCatalogRow(enumType, entries, row, row.TypeName, dest, isLoop, report);
+
+                        // WO-886 aliases: extra VFXType names that must resolve to the SAME
+                        // prefab. Written from the one Row so a legacy alias cannot drift
+                        // away from the value it aliases. An alias that is not in the enum
+                        // is a warning, never a silent skip.
+                        if (row.Aliases != null)
+                        {
+                            foreach (var alias in row.Aliases)
+                            {
+                                if (!Enum.IsDefined(enumType, alias))
+                                {
+                                    Debug.LogWarning(Tag + row.TypeName + ": alias VFXType." + alias +
+                                                     " is not defined - the alias row was NOT written, so that " +
+                                                     "name keeps its procedural fallback.");
+                                    continue;
+                                }
+                                WriteCatalogRow(enumType, entries, row, alias, dest, isLoop, report);
+                                aliased.Add(alias + "->" + row.TypeName);
+                            }
+                        }
+
                         packDeps += AuditPackDependencies(row, dest, report);
 
                         built.Add(row.TypeName + "(IsLoop=" + isLoop + ",MinQ=" + row.MinQuality + ")");
@@ -441,8 +631,12 @@ namespace DeNelle.Editor
 
                 summary.Append("built ").Append(built.Count).Append('/').Append(Rows.Length)
                        .Append(" row(s) [").Append(string.Join(", ", built.ToArray())).Append("]; ")
+                       .Append("alias catalog row(s) sharing a prefab: ").Append(aliased.Count)
+                       .Append(" [").Append(string.Join(", ", aliased.ToArray())).Append("]; ")
                        .Append("deferred ").Append(DeferredTypes.Length)
-                       .Append(" (Enemy_Spawn, Despawn_Dissolve - scripted recipes, see log); ")
+                       .Append(" (Enemy_Spawn + Despawn_Dissolve scripted recipes; WO-886 Death_Skeleton, ")
+                       .Append("Death_Wolf and the death lingering loops - see the DEFERRED warnings, each ")
+                       .Append("carries its measurement); ")
                        .Append("skipped ").Append(skipped.Count).Append("; ")
                        .Append("prefab dependencies still resolving into the gitignored pack: ")
                        .Append(packDeps).Append(" (materials/textures/shaders - the PREFABS are " +
@@ -476,6 +670,17 @@ namespace DeNelle.Editor
         {
             int srcDescendants = CountDescendants(source.transform);
             int srcSystems     = source.GetComponentsInChildren<ParticleSystem>(true).Length;
+
+            // WO-886: a row may DECLARE how many layers its recipe must have. Checked
+            // against the SOURCE, before anything is copied, so a pack that arrived
+            // trimmed fails here rather than shipping a boss death that is missing its
+            // debris and still looks like an explosion.
+            if (row.RequiredSystems > 0 && srcSystems != row.RequiredSystems)
+                throw new Exception("RECIPE LAYER COUNT: '" + row.Source + "' carries " + srcSystems +
+                                    " ParticleSystem(s) but this row REQUIRES exactly " + row.RequiredSystems +
+                                    ". The recipe must be pooled WHOLE (never flattened, never trimmed); " +
+                                    "a short recipe still renders something plausible, which is why this " +
+                                    "is asserted rather than eyeballed. Verify the Particle Pack import.");
 
             int expectDescendants = srcDescendants;
             int expectSystems     = srcSystems;
@@ -572,6 +777,33 @@ namespace DeNelle.Editor
                 {
                     report.Append("playOnAwake cleared on ").Append(cleared).Append(" system(s); ");
                     dirty = true;
+                }
+
+                // -- WO-886 BURST-ONCE. Re-applied EVERY run, like playOnAwake, because it
+                // is a correctness invariant of a one-shot rather than a taste call: every
+                // explosion recipe in this pack ships looping:1 + prewarm:1 with duration
+                // 2 s and its whole payload in a t=0 burst, while VFXManager reclaims a
+                // pooled oneshot at DetectDuration = duration + max startLifetime (~4.3 s
+                // MEASURED on BigExplosion). The burst therefore RE-FIRES at t=2 and a boss
+                // death detonates twice. prewarm is cleared first - Unity only permits it on
+                // a looping system, so clearing loop while prewarm is set is invalid.
+                if (row.BurstOnce)
+                {
+                    int unlooped = 0;
+                    foreach (var ps in contents.GetComponentsInChildren<ParticleSystem>(true))
+                    {
+                        var main = ps.main;
+                        if (!main.loop && !main.prewarm) continue;
+                        main.prewarm = false;
+                        main.loop    = false;
+                        unlooped++;
+                    }
+                    if (unlooped > 0)
+                    {
+                        report.Append("burst-once: loop+prewarm cleared on ").Append(unlooped)
+                              .Append(" system(s) (one-shot invariant, prevents the t=duration re-fire); ");
+                        dirty = true;
+                    }
                 }
 
                 if (dirty) PrefabUtility.SaveAsPrefabAsset(contents, row.Dest);
@@ -786,10 +1018,17 @@ namespace DeNelle.Editor
         //  4. VFXCatalog row (SerializedObject - Unity owns the serialization)
         // =====================================================================
 
+        /// <summary>
+        /// Writes (or updates in place) the catalog row for ONE VFXType name.
+        /// <paramref name="typeName"/> is passed separately from <paramref name="row"/> so a
+        /// WO-886 alias can be written from the same Row and therefore cannot drift from the
+        /// value it aliases - same prefab, same IsLoop, same pool, one place to tune.
+        /// </summary>
         private static void WriteCatalogRow(Type enumType, SerializedProperty entries, Row row,
-                                            GameObject prefab, bool isLoop, StringBuilder report)
+                                            string typeName, GameObject prefab, bool isLoop,
+                                            StringBuilder report)
         {
-            int enumValue   = (int)Enum.Parse(enumType, row.TypeName);
+            int enumValue   = (int)Enum.Parse(enumType, typeName);
             int enumOrdinal = EnumOrdinalFor(enumType, enumValue);
 
             // Find an existing row for this type (UPDATE, never append a duplicate).
@@ -828,7 +1067,8 @@ namespace DeNelle.Editor
             pMinQ.intValue               = row.MinQuality;
             pLife.floatValue             = 0f;   // auto-detect from the particle duration
 
-            report.Append("catalog row ").Append(appended ? "APPENDED" : "UPDATED")
+            report.Append("catalog row '").Append(typeName).Append("' ")
+                  .Append(appended ? "APPENDED" : "UPDATED")
                   .Append(" at index ").Append(rowIndex).Append('/').Append(entries.arraySize)
                   .Append(" (ordinal ").Append(enumOrdinal).Append(", value ").Append(enumValue)
                   .Append(", IsLoop=").Append(isLoop)

@@ -95,6 +95,47 @@ namespace DeNelle.Village
         }
 
         // ── Death ─────────────────────────────────────────────────────────────
+        //
+        // WO-886 — THE DEATH TIER RULE HAS ONE HOME, AND IT IS HERE.
+        //
+        // This component is authored to be dropped on a prefab, and a grep of every
+        // .prefab / .unity / .asset in the tree finds it on NONE of them — so
+        // Enemy.Die()'s GetComponent<EliteVFXController>() has always returned null and
+        // OnEliteDeath has never run in the shipped game. The 0.7 boss camera shake
+        // WO-886 asks for as a felt criterion therefore never fired either; every kill,
+        // boss included, got the flat 0.18 regular shake.
+        //
+        // The fix is NOT to auto-attach this component. Its Start() also drives an aura
+        // light pulse and a DramaticSpawnRoutine (Boss_Spawn VFX + a spawn shake) —
+        // attaching it to every elite would ship three unrequested felt changes under a
+        // death-VFX work order. Instead the tier rule is lifted into the two statics
+        // below, Enemy drives them straight off its enemies.json stat block (which is the
+        // only species signal the pool/factory spawn path actually sets), and this
+        // component delegates to them. One rule, two call sites, zero drift — and a
+        // hand-placed prefab that DOES carry this component still behaves identically.
+
+        /// <summary>
+        /// The death VFXType for a tier. Boss outranks elite; a plain enemy returns
+        /// <see cref="VFXType.None"/> so the caller keeps its own species-derived burst.
+        /// </summary>
+        public static VFXType DeathVfxFor(bool isBoss, bool isElite)
+        {
+            if (isBoss)  return VFXType.Boss_Death;
+            if (isElite) return VFXType.Elite_Death;
+            return VFXType.None;
+        }
+
+        /// <summary>
+        /// Fires the camera shake that matches a death's tier: boss 0.7, elite 0.3,
+        /// everything else the regular 0.18 kill punch. These are the exact values the
+        /// instance path has always declared — lifted, not re-invented.
+        /// </summary>
+        public static void PlayDeathShake(bool isBoss, bool isElite)
+        {
+            if (isBoss)       CameraShakeBridge.Shake(0.7f,  0.7f);
+            else if (isElite) CameraShakeBridge.Shake(0.3f,  0.3f);
+            else              CameraShakeBridge.Shake(0.18f, 0.22f);
+        }
 
         /// <summary>
         /// Call from <see cref="Enemy"/> Die() instead of the normal death VFX.
@@ -103,20 +144,20 @@ namespace DeNelle.Village
         /// </summary>
         public void OnEliteDeath()
         {
-            VFXType deathVfx = isBoss ? VFXType.Boss_Death : VFXType.Elite_Death;
-            VFXManager.Play(deathVfx, transform.position);
-
-            if (isBoss)
+            VFXType deathVfx = DeathVfxFor(isBoss, isElite);
+            if (deathVfx == VFXType.None)
             {
-                // Heavy shake on boss death: intensity 0.7, duration 0.7 s.
-                CameraShakeBridge.Shake(0.7f, 0.7f);
-                // AudioService.Instance?.PlaySfx(SfxId.BossDeath);
+                // Neither flag set: this component was added for its aura/spawn drama only.
+                // Fall to the shared ladder floor rather than playing nothing.
+                VfxPool.SpawnDeathBurst(transform.position);
             }
             else
             {
-                // Medium shake on elite death: intensity 0.3, duration 0.3 s.
-                CameraShakeBridge.Shake(0.3f, 0.3f);
+                VFXManager.Play(deathVfx, transform.position);
             }
+
+            PlayDeathShake(isBoss, isElite);
+            // AudioService.Instance?.PlaySfx(SfxId.BossDeath);  // wired when SfxId lands
         }
 
         // ── Attack ────────────────────────────────────────────────────────────

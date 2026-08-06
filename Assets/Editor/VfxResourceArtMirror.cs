@@ -235,6 +235,24 @@ namespace DeNelle.Editor
                 var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var p in prefabs) queue.Enqueue(p);
 
+                // SEED WITH EVERY ASSET ALREADY MIRRORED, not just the prefabs.
+                //
+                // WHY (2026-08-05): seeding from prefabs alone only converges on a FIRST run,
+                // when nothing is mirrored yet. On a later run the prefab's reference has
+                // already been repointed at the mirrored material, so the walk sees a target
+                // that is NOT in a gitignored root, skips it, and never re-enters that
+                // material - leaving any pack texture the material itself references
+                // undiscovered forever.
+                //
+                // That is not hypothetical: the death-ladder prefabs pulled in EnergyExplosion
+                // and Explosion, both mirrored on an earlier run, and both still pointing at
+                // the pack's ramp01.png. Six prefabs read as self-contained while their art
+                // was one hop away in the pack. Re-seeding from the mirror tree makes each run
+                // re-examine what it has already produced, which is what "to a fixed point"
+                // has to mean when the fixed point is computed across runs.
+                foreach (var mirrored in _mirrorBySource.Values)
+                    if (!string.IsNullOrEmpty(mirrored)) queue.Enqueue(mirrored);
+
                 int work = 0;
                 while (queue.Count > 0)
                 {
@@ -536,18 +554,11 @@ namespace DeNelle.Editor
                 return existing;
             }
 
-            string destPath = SharedRoot + BucketFor(srcPath) + "/" + Path.GetFileName(srcPath);
-
-            string otherSource;
-            if (_sourceByMirror.TryGetValue(destPath, out otherSource) &&
-                !string.Equals(otherSource, srcPath, StringComparison.OrdinalIgnoreCase))
-            {
-                _errors.Add("MIRROR NAME COLLISION: '" + srcPath + "' and '" + otherSource +
-                            "' both want the mirror path '" + destPath + "'. Refusing to let one silently " +
-                            "reuse the other's art. Give one of them a disambiguating destination name in " +
-                            "this builder before re-running.");
-                return null;
-            }
+            // Never mirrored before: derive the destination FROM THE SOURCE PATH, not
+            // from the leaf name (see ResolveDestination for why the leaf name alone is
+            // unsafe). Returns null and records the error on a genuine, unresolvable clash.
+            string destPath = ResolveDestination(srcPath);
+            if (destPath == null) return null;
 
             if (File.Exists(AbsoluteOf(destPath)))
             {
@@ -692,13 +703,37 @@ namespace DeNelle.Editor
                 var manifest = JsonUtility.FromJson<MirrorManifest>(File.ReadAllText(abs));
                 if (manifest == null || manifest.entries == null) return;
 
+                int dropped = 0;
                 foreach (var e in manifest.entries)
                 {
                     if (e == null || string.IsNullOrEmpty(e.source) || string.IsNullOrEmpty(e.mirror)) continue;
+
+                    // REJECT A SHARED MIRROR PATH (2026-08-05). A manifest written before
+                    // destinations were derived from the source path can contain TWO different
+                    // sources pointing at ONE mirror - which is the case-collision bug
+                    // persisted to disk. It is invisible without this check, because the early
+                    // "already mirrored" return trusts the manifest and File.Exists() answers
+                    // TRUE on Windows for a path that differs only in case. The result is one
+                    // texture silently standing in for another.
+                    // Keep the first claimant, drop the rest so they re-resolve through
+                    // ResolveDestination and pick up a qualified name.
+                    string incumbent;
+                    if (_sourceByMirror.TryGetValue(e.mirror, out incumbent) &&
+                        !string.Equals(incumbent, e.source, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.LogWarning(Tag + "manifest entry DROPPED - '" + e.source + "' claims mirror '" +
+                                         e.mirror + "' which is already held by '" + incumbent +
+                                         "'. Two sources cannot share one mirror; this one will re-resolve " +
+                                         "to a qualified destination.");
+                        dropped++;
+                        continue;
+                    }
+
                     _mirrorBySource[e.source] = e.mirror;
                     _sourceByMirror[e.mirror] = e.source;
                 }
-                Debug.Log(Tag + "manifest loaded: " + _mirrorBySource.Count + " known source->mirror pair(s).");
+                Debug.Log(Tag + "manifest loaded: " + _mirrorBySource.Count + " known source->mirror pair(s)" +
+                          (dropped > 0 ? ", " + dropped + " dropped as shared-mirror collisions" : "") + ".");
             }
             catch (Exception e)
             {
@@ -742,6 +777,94 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>Where a mirrored asset lands, by kind. Only buckets we actually use.</summary>
+        /// <summary>
+        /// The mirror destination for a source asset. Derived from the SOURCE PATH, not the
+        /// leaf name.
+        ///
+        /// WHY (2026-08-05): the leaf name alone is not unique across the pack. Two real
+        /// collisions surfaced the moment the death-ladder prefabs pulled in a second effect
+        /// category:
+        ///   Fire &amp; Explosion Effects/Prefabs/ParticlesLight.prefab
+        ///   Misc Effects/Prefabs/ParticlesLight.prefab        -- same name, different asset
+        ///   Fire &amp; Explosion Effects/Textures/ramp01.png
+        ///   Misc Effects/Textures/Ramp01.png                  -- differ ONLY IN CASE
+        /// The case-only pair is the dangerous one: on Windows those are the same filename,
+        /// so one silently overwrites the other; on a case-sensitive box (CI, a Linux agent)
+        /// they are two files. Either way the art silently diverges by machine.
+        ///
+        /// STABILITY IS THE CONSTRAINT. Mirrored assets are committed and referenced by
+        /// committed prefabs, so a destination that moves breaks those references. Hence:
+        /// the UNQUALIFIED path is tried first and always wins when it is free or already
+        /// ours, which leaves every existing mirror exactly where it is. Qualification is
+        /// applied ONLY to the later claimant of a contested name. That keeps this
+        /// deterministic (same source -> same destination, every run, every machine) without
+        /// migrating anything already on disk.
+        ///
+        /// Returns null and records an error only on a clash that qualification cannot
+        /// resolve - the guard is narrowed, never removed.
+        /// </summary>
+        private static string ResolveDestination(string srcPath)
+        {
+            string bucket = SharedRoot + BucketFor(srcPath) + "/";
+            string leaf   = Path.GetFileName(srcPath);
+
+            // 1. Unqualified: free, or already claimed by this very source.
+            string plain = bucket + leaf;
+            string owner;
+            if (!_sourceByMirror.TryGetValue(plain, out owner) ||
+                string.Equals(owner, srcPath, StringComparison.OrdinalIgnoreCase))
+                return plain;
+
+            // 2. Contested. Qualify with the source's effect-category folder. Deliberately
+            //    ASCII-sanitised and lower-cased: the category is only a disambiguator, and a
+            //    destination that varies by case would re-introduce the exact bug this fixes.
+            string qualified = bucket + CategoryTagFor(srcPath) + "__" + leaf;
+            if (!_sourceByMirror.TryGetValue(qualified, out owner) ||
+                string.Equals(owner, srcPath, StringComparison.OrdinalIgnoreCase))
+                return qualified;
+
+            // 3. Two DIFFERENT sources want the same qualified name - the category did not
+            //    separate them. Refuse rather than let one silently reuse the other's art.
+            _errors.Add("MIRROR NAME COLLISION: '" + srcPath + "' and '" + owner +
+                        "' both resolve to '" + qualified + "' even after category " +
+                        "qualification. Refusing to let one silently reuse the other's art. " +
+                        "Give one of them an explicit destination in this builder.");
+            return null;
+        }
+
+        /// <summary>
+        /// A stable, filesystem-safe tag for the source's effect category - the path segment
+        /// under EffectExamples (or the parent-of-parent folder for non-pack sources). Lower
+        /// -cased and stripped to [a-z0-9], so "Fire &amp; Explosion Effects" -> "fireexplosioneffects"
+        /// and two categories can never differ by case alone.
+        /// </summary>
+        private static string CategoryTagFor(string srcPath)
+        {
+            string norm = srcPath.Replace('\\', '/');
+            var parts = norm.Split('/');
+
+            // Prefer the segment directly under EffectExamples; else the grandparent folder.
+            string category = null;
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                if (string.Equals(parts[i], "EffectExamples", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = parts[i + 1];
+                    break;
+                }
+            }
+            if (category == null && parts.Length >= 3) category = parts[parts.Length - 3];
+            if (string.IsNullOrEmpty(category)) category = "src";
+
+            var sb = new StringBuilder(category.Length);
+            for (int i = 0; i < category.Length; i++)
+            {
+                char c = char.ToLowerInvariant(category[i]);
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) sb.Append(c);
+            }
+            return sb.Length > 0 ? sb.ToString() : "src";
+        }
+
         private static string BucketFor(string assetPath)
         {
             string ext = Path.GetExtension(assetPath).ToLowerInvariant();

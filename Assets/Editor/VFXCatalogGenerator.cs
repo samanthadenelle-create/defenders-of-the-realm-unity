@@ -94,6 +94,7 @@ namespace DeNelle.Editor
         private const string WeaponVfx  = "Assets/Resources/VFX/Weapon/";
         private const string AuraVfx    = "Assets/Resources/VFX/Aura/";
         private const string HarvestVfx = "Assets/Resources/VFX/Harvest/";
+        private const string DeathVfx   = "Assets/Resources/VFX/Death/";   // WO-886 death ladder
 
         // The curated table. Keep it minimal - high-traffic battle types first.
         private static readonly Dictionary<string, Pick> Map = new Dictionary<string, Pick>
@@ -158,17 +159,50 @@ namespace DeNelle.Editor
             { "Cast_NecromancerSummon", new Pick(Lana + "Area_generic/Area_generic_green_outbreak.prefab") }, // dark/poison summon swell
             { "Cast_EnemyCaster",       new Pick(Lana + "Orbs/Orbs_electric.prefab") },               // enemy caster violet swell
 
-            // -- Deaths (oneshot burst) ----------------------------------------
+            // == WO-886 DEATH LADDER (oneshot burst) ============================
+            // Repointed 2026-08-05 to the committed Particle Pack mirrors under
+            // Resources/VFX/Death/, authored by ParticlePackVfxBatchBuilder. The ladder
+            // escalates by RECIPE + LAYER COUNT + SCALE so a trash pop cannot be mistaken
+            // for a boss set-piece, and so the tiers survive greyscale (owner is red/green
+            // colourblind): 4-layer SmallExplosion -> 5-layer DustExplosion -> 4-layer
+            // EnergyExplosion (dungeon, then elite, scaled up) -> 8-layer BigExplosion.
+            //
+            // THESE ROWS MUST LIVE HERE, not only in the builder: Build() does
+            // 'entries.arraySize = rows.Count' and rebuilds Entries[] wholesale from this
+            // table, so a builder-only row is silently deleted on the next Generate and the
+            // death falls back to a procedural burst that still LOOKS like it works.
+            //
+            // isLoop:false on EVERY row and that is MEASURED, not asserted - each source
+            // root reads rateOverTime 0 / rateOverDistance 0 / one burst at t=0. The flag
+            // actually stored is derived from the prefab by the shared oracle below. A
+            // death catalogued as a loop would burn one of the 20 global loop slots per
+            // kill, and a wave produces deaths by the dozen.
+            //
+            // minQuality 0 throughout, deliberately: the death burst is how the player
+            // knows the thing they hit is GONE. A kill confirmation that disappears on a
+            // Low-tier device is a combat-legibility bug, not saved dressing.
+            { "Death_Generic",          new Pick(DeathVfx + "Death_Generic.prefab",  isLoop: false, minQuality: 0, poolSize: 8) },
+            { "Death_Tiefling",         new Pick(DeathVfx + "Death_Tiefling.prefab", isLoop: false, minQuality: 0, poolSize: 4) },
+            { "Death_Brute",            new Pick(DeathVfx + "Death_Brute.prefab",    isLoop: false, minQuality: 0, poolSize: 6) },
+            { "Death_EnemyExplosion_Dungeon", new Pick(DeathVfx + "Death_EnemyExplosion_Dungeon.prefab", isLoop: false, minQuality: 0, poolSize: 6) },
+            { "Elite_Death",            new Pick(DeathVfx + "Elite_Death.prefab",    isLoop: false, minQuality: 0, poolSize: 4) },
+
+            // BOTH names, ONE prefab. Death_Boss is the legacy alias of Boss_Death and
+            // WO-886 calls it out by name so it cannot drift: they share the asset, so
+            // there is nothing to keep in sync. Boss_Death previously pointed into the
+            // GITIGNORED Spells Pack (WO-785 exposure) and rendered nothing on a clone.
+            { "Boss_Death",             new Pick(DeathVfx + "Boss_Death.prefab",     isLoop: false, minQuality: 0, poolSize: 2) },
+            { "Death_Boss",             new Pick(DeathVfx + "Boss_Death.prefab",     isLoop: false, minQuality: 0, poolSize: 2) },
+
+            // NOT repointed, on purpose (WO-886, measured): Death_Skeleton and Death_Wolf.
+            // Their ratified recipe is SparksEffect (+ a SmokeEffect / Steam wisp), and
+            // BOTH measure CONTINUOUS - SparksEffect's root emits 80/sec on loop, SmokeEffect
+            // 20/sec on loop. A death must be a burst, so cataloguing either would leak a
+            // loop slot per kill or truncate a live emitter. They keep these Lana Poof rows,
+            // which ARE burst-shaped and ARE git-tracked, so the ladder's bottom rung still
+            // reads as a small grey scatter. See ParticlePackVfxBatchBuilder.DeferredTypes.
             { "Death_Skeleton",         new Pick(Lana + "Burst/Poof_generic.prefab") },
-            { "Death_Boss",             new Pick(Spells + "Projectiles/Explosion/Explosion_Dark.prefab") },
-            { "Death_Brute",            new Pick(Lana + "Burst/Poof_electric.prefab") },
             { "Death_Wolf",             new Pick(Lana + "Burst/Poof_water.prefab") },
-            { "Death_Tiefling",         new Pick(Spells + "Projectiles/Explosion/Explosion_Fire_2.prefab") },
-            { "Death_Generic",          new Pick(Lana + "Burst/Poof_generic.prefab") },
-            // Battle-polish: dungeon enemy death fires this live but had no wired prefab
-            // (procedural only). A darker owned Dark explosion reads bigger than the
-            // village Poof for the dungeon run. Owned, cheap oneshot.
-            { "Death_EnemyExplosion_Dungeon", new Pick(Spells + "Projectiles/Explosion/Explosion_Dark_2.prefab") },
 
             // -- Auras (persistent loops) --------------------------------------
             { "Aura_Flame",             new Pick(Lana + "Fire/Fire_medium.prefab",  isLoop: true, minQuality: 1) },

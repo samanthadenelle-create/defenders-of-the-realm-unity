@@ -1120,9 +1120,13 @@ namespace DeNelle.Village
                         position, "knight");
                     break;
 
+                // WO-886: Death_Boss NO LONGER shares this case. It is the legacy alias of
+                // Boss_Death and the two must be the same effect at every tier - including
+                // HERE, in the fallback nobody looks at. They sat at 3f and 4f respectively,
+                // which is exactly the drift the work order calls out; a boss that dies
+                // through the alias got a visibly smaller death than one that did not.
                 case VFXType.Death_Brute:
-                case VFXType.Death_Boss:
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 3f, position);
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 2.5f, position);
                     break;
 
                 // ── Projectile / ranger ───────────────────────────────────────
@@ -1199,9 +1203,12 @@ namespace DeNelle.Village
                     break;
 
                 // -- WO-59: dungeon enemy death -----------------------------------------------------
+                // WO-886: sized to sit BETWEEN brute (2.5) and elite (3.2). It used to be
+                // 3.5 - bigger than the elite death it is meant to rank below - so even the
+                // fallback ladder ran out of order.
                 case VFXType.Death_EnemyExplosion_Dungeon:
                     // Larger, darker explosion than the village default.
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 3.5f, position);
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 2.8f, position);
                     break;
 
                 // -- WO-66: elite / boss VFX -------------------------------------------------------
@@ -1210,14 +1217,18 @@ namespace DeNelle.Village
                     break;
 
                 case VFXType.Elite_Death:
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _aetherColor, position, 2.5f, position);
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _aetherColor, position, 3.2f, position);
                     break;
 
                 case VFXType.Boss_Spawn:
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 3f, position);
                     break;
 
+                // WO-886: the legacy alias rides the SAME case as the value it aliases, so
+                // the two cannot be re-tuned apart by a future edit. The catalog does the
+                // same thing by pointing both rows at one prefab.
                 case VFXType.Boss_Death:
+                case VFXType.Death_Boss:
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 4f, position);
                     break;
 
