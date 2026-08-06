@@ -289,3 +289,87 @@ MonoBehaviour:
     IsLoop: 1
     MinQuality: 1
     LifetimeOverride: 0
+  - Type: 80
+    Prefab: {fileID: 1972207730512856, guid: a66db87e26b195747b04b2e29c116c95, type: 3}
+    PoolSize: 6
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 81
+    Prefab: {fileID: 1475368415682648, guid: 3aaea40b211ce724080cc7173ac5a93c, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 82
+    Prefab: {fileID: 1533138625715334, guid: 9a0ada0a75b2eeb4da7d8136203da67b, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 83
+    Prefab: {fileID: 1743301284569550, guid: e52fa6044ea83ea479a0b8d2aee12d23, type: 3}
+    PoolSize: 8
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 86
+    Prefab: {fileID: 1273915125232972, guid: e31a0c8ffa737b244ab5a561e6f2d984, type: 3}
+    PoolSize: 2
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 87
+    Prefab: {fileID: 1972207730512856, guid: ca37d810d25bf214c9c60e95dd094757, type: 3}
+    PoolSize: 2
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 88
+    Prefab: {fileID: 1475368415682648, guid: 6daef6481db3a4c42963c13dca857eb5, type: 3}
+    PoolSize: 2
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 89
+    Prefab: {fileID: 1475368415682648, guid: 4f5fb85d4c6664a4b9c4723fe21e7726, type: 3}
+    PoolSize: 2
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 90
+    Prefab: {fileID: 1000012882023006, guid: 542acfe9aa731a0478e4a712e8b8b59f, type: 3}
+    PoolSize: 3
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 91
+    Prefab: {fileID: 1000012882023006, guid: 75df275d81b7c15488f26367c7705b91, type: 3}
+    PoolSize: 3
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 92
+    Prefab: {fileID: 1775406099119076, guid: b9cb76ce468ba944392418f6d63a63ed, type: 3}
+    PoolSize: 3
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 93
+    Prefab: {fileID: 1775406099119076, guid: a2c041fd9edbc7445bce89ca2a0fa473, type: 3}
+    PoolSize: 3
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 94
+    Prefab: {fileID: 1000011945391522, guid: a86336a154a2ed4469df1a298ad0f313, type: 3}
+    PoolSize: 3
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 95
+    Prefab: {fileID: 1775406099119076, guid: 496a95fea8dd187418e812afe7cb2c84, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0

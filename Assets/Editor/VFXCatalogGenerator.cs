@@ -86,6 +86,15 @@ namespace DeNelle.Editor
         private const string Res    = "Assets/Resources/VFX/Projectiles/";
         private const string BossVfx = "Assets/Resources/VFX/Boss/";
 
+        // Committed mirrors of Particle Pack recipes, authored by
+        // ParticlePackVfxBatchBuilder (Defenders/VFX/Build Particle Pack VFX Batch).
+        // Same rule as BossVfx: the PREFAB is tracked so the row does not point straight
+        // into the gitignored Assets/UnityTechnologies pack.
+        private const string EnvVfx     = "Assets/Resources/VFX/Env/";
+        private const string WeaponVfx  = "Assets/Resources/VFX/Weapon/";
+        private const string AuraVfx    = "Assets/Resources/VFX/Aura/";
+        private const string HarvestVfx = "Assets/Resources/VFX/Harvest/";
+
         // The curated table. Keep it minimal - high-traffic battle types first.
         private static readonly Dictionary<string, Pick> Map = new Dictionary<string, Pick>
         {
@@ -187,6 +196,63 @@ namespace DeNelle.Editor
 
             // -- Environment ---------------------------------------------------
             { "Env_TorchFlame",         new Pick(Lana + "Fire/Fire_small.prefab",   isLoop: true, minQuality: 1) },
+
+            // == WO-884 registry batch (Particle Pack mirrors) ==================
+            // Authored by ParticlePackVfxBatchBuilder out of the GITIGNORED
+            // UnityTechnologies pack into tracked Resources/VFX prefabs.
+            //
+            // THESE ROWS MUST LIVE HERE, not only in that builder - for the same reason
+            // the Boss_FireBreath note above gives: Build() does 'entries.arraySize =
+            // rows.Count' and rebuilds Entries[] wholesale from this table, so a row
+            // written ONLY by the builder is silently dropped the next time anyone runs
+            // Generate. The effect then falls back to the procedural AbilityVfxKit, which
+            // still LOOKS like something playing - the failure is invisible.
+            //
+            // The isLoop literals below are the values MEASURED off each recipe on
+            // 2026-08-05 (see the builder's per-layer emission log). They are here so a
+            // human can read the intent; the flag actually written is DERIVED from the
+            // prefab by the shared oracle a few dozen lines down, so if a recipe is ever
+            // re-pointed the derivation wins and warns rather than silently disagreeing.
+
+            // Environment dress (P1 dungeon). TinyFlames, not Misc/Candles, for the
+            // candle: Candles carries three candle MESHES, and Env_Candle is a flame loop
+            // for a prop that already has its own geometry.
+            { "Env_Candle",             new Pick(EnvVfx + "Env_Candle.prefab",       isLoop: true,  minQuality: 1, poolSize: 6) },
+            { "Env_SteamVent",          new Pick(EnvVfx + "Env_SteamVent.prefab",    isLoop: true,  minQuality: 1, poolSize: 4) },
+            // PressurisedSteam measures as a 2-layer rate-20/rate-15 LOOPING jet, so this
+            // lands continuous even though the enum doc allows "Family B Impact or short A".
+            { "Env_SteamBurst",         new Pick(EnvVfx + "Env_SteamBurst.prefab",   isLoop: true,  minQuality: 1, poolSize: 4) },
+
+            // Combat release. rate-0 + bursts on both layers -> one-shot, and MuzzleFlash
+            // is the canonical "must never be IsLoop=true" row (handbook section 10).
+            // MinQuality 0: a release flash is combat legibility, not dressing.
+            { "Cast_MuzzleFlash",       new Pick(WeaponVfx + "Cast_MuzzleFlash.prefab", isLoop: false, minQuality: 0, poolSize: 8) },
+
+            // HP-state auras. MinQuality 0 deliberately: registry section 8 item 7 makes these
+            // world-space tells the PRIMARY low-HP read, because the current red edge
+            // vignette is invisible to the owner. A survival read that vanishes on a Low
+            // device is the same bug in a new place.
+            { "Aura_LowHealth",         new Pick(AuraVfx + "Aura_LowHealth.prefab",         isLoop: true, minQuality: 0, poolSize: 2) },
+            { "Aura_NearDeath",         new Pick(AuraVfx + "Aura_NearDeath.prefab",         isLoop: true, minQuality: 0, poolSize: 2) },
+            { "Aura_HealingInProgress", new Pick(AuraVfx + "Aura_HealingInProgress.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+            { "Aura_ItemHeal",          new Pick(AuraVfx + "Aura_ItemHeal.prefab",          isLoop: true, minQuality: 1, poolSize: 2) },
+
+            // Harvest / economy node auras. Split by MOTION VECTOR, never hue (owner is
+            // red/green colourblind): Iron settles + glints, Wood drifts flat, Food rises
+            // sparsely, Crystal hangs suspended, Gold falls in short pops.
+            { "Harvest_Iron",           new Pick(HarvestVfx + "Harvest_Iron.prefab",    isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Harvest_Wood",           new Pick(HarvestVfx + "Harvest_Wood.prefab",    isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Harvest_Food",           new Pick(HarvestVfx + "Harvest_Food.prefab",    isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Harvest_Crystal",        new Pick(HarvestVfx + "Harvest_Crystal.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Harvest_Gold",           new Pick(HarvestVfx + "Harvest_Gold.prefab",    isLoop: true, minQuality: 1, poolSize: 3) },
+            { "Collector_Ready",        new Pick(HarvestVfx + "Collector_Ready.prefab", isLoop: true, minQuality: 1, poolSize: 4) },
+
+            // NOT WIRED, on purpose: Enemy_Spawn and Despawn_Dissolve. Their recipes
+            // (Misc/Respawn, Misc/Dissolve) are SCRIPTED effects carrying the pack's own
+            // SpawnEffect MonoBehaviour plus a demo mesh for it to dissolve. A CopyAsset
+            // would ship a demo mesh and a missing-script reference; those two moments need
+            // a runtime component driving the TARGET's material cutoff. Left procedural
+            // until that is authored - see ParticlePackVfxBatchBuilder's DeferredTypes.
 
             // -- Juice / Feedback ----------------------------------------------
             { "Juice_CriticalHit",      new Pick(Lana + "Burst/Flash_star.prefab") },
