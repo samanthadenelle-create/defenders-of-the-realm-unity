@@ -40,11 +40,24 @@ namespace DeNelle.Village
         public float TickInterval = 0.35f;
 
         // Catalog keys — must match the rows HovlVfxCatalogGenerator authors.
-        // Owner 2026-07-24: harvest NODES get a SUBTLE, DISTINCT aura (drifting motes, no ring) —
-        // TreeofLifeAura_Aura (ParticlePack FireFlies) instead of the old "Poi_NodeAura" magic-circle
-        // (which shared the "Magic circle sun loop" prefab with the Arcane Spire + Cathedral). Reads by
-        // MOTION/LUMINANCE, colorblind-safe. SWAPPABLE default — the owner may retag in the VFX Caster.
-        private const string NodeAuraKey = "TreeofLifeAura_Aura";
+        //
+        // OWNER RETAG 2026-08-06 — SUPERSEDES the 2026-07-24 "subtle drifting motes" pick.
+        // Felt-tested on the Seeker: "there is no vfx's i can see on nodes ... should be something
+        // more meaningful like an aura so i can really see". The motes DID play (capture:
+        // PlayKey('TreeofLifeAura_Aura') -> prefab 'FireFlies', scaleMul 0.60) - they are simply
+        // imperceptible in the hub's bright midday field, which is the one lighting condition a
+        // sparse low-luminance firefly effect cannot survive. Built-but-invisible, not dead.
+        //
+        // The ONLY reason nodes left "Poi_NodeAura" on 07-24 was that its "Magic circle sun loop"
+        // prefab was SHARED with the Arcane Spire + Cathedral. That collision is GONE: WO-788
+        // (2026-07-30) moved the Cathedral to "Cathedral_Aura" (Magic circle ELECTRO loop) and the
+        // Spire to "Aura_HeartPulse" (Buff white twist). Verified in HovlVfxCatalogGenerator - the
+        // sun loop is now UNIQUE to nodes, which also satisfies "nodes should have different ones".
+        //
+        // FireFlies stays on the Heart's tree crown (HeartAuraController.TreeAuraKey), where the
+        // owner confirmed it reads well: "the fireflies are great at the tree".
+        // Still a SWAPPABLE default — the owner may retag in the VFX Caster.
+        private const string NodeAuraKey = "Poi_NodeAura";
         private const string LandmarkKey = "Poi_Landmark";
 
         // ── Live callout handles (one per beacon currently showing) ──────────
