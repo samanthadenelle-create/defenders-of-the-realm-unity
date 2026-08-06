@@ -210,11 +210,18 @@ namespace DeNelle.Wallet
                 // HARD SDK CONSTRAINT (MobileWalletAdapterClient.cs:62-69):
                 // identityUri MUST be absolute, iconUri MUST be relative — the
                 // client throws ArgumentException otherwise, BEFORE any I/O.
-                return await client.Authorize(
+                // WO-913 instrumentation: the 2026-08-06 device capture went silent
+                // for 82s between "encrypted channel up" and the owner killing the
+                // app -- with NO exception and NO result. These three lines split
+                // that silence into request-never-sent / response-never-arrived.
+                FlowTrace.Step("Wallet", "MWA client ready - sending authorize request.");
+                var authResult = await client.Authorize(
                     new Uri(identityUri),
                     new Uri(iconUri, UriKind.Relative),
                     identityName,
                     cluster);
+                FlowTrace.Step("Wallet", "MWA authorize response received from wallet.");
+                return authResult;
             }
             finally
             {
@@ -488,7 +495,16 @@ namespace DeNelle.Wallet
         /// </summary>
         private void HandleEncryptedSessionPayload(byte[] payload)
         {
-            if (!_didConnect || _client == null) return;
+            // WO-913: this guard used to drop frames SILENTLY - a §12 violation, and
+            // indistinguishable from "the wallet never replied" in a capture. If the
+            // authorize response ever lands here while the guard is shut, say so.
+            if (!_didConnect || _client == null)
+            {
+                FlowTrace.Warn("Wallet",
+                    $"MWA frame DROPPED before the channel was ready (didConnect={_didConnect}, client={(_client != null)}, bytes={payload?.Length ?? 0}).");
+                return;
+            }
+            FlowTrace.Step("Wallet", $"MWA encrypted frame received ({payload?.Length ?? 0} bytes) - decoding.");
             try
             {
                 var decrypted = _session.DecryptSessionPayload(payload);
