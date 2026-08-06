@@ -370,7 +370,42 @@ namespace DeNelle.Editor
                 if (pScale != null) pScale.floatValue          = pick.DefaultScale;
                 if (pLife  != null) pLife.floatValue           = pick.DefaultLifetime;
                 if (pRecol != null) pRecol.boolValue           = pick.Recolorable;
-                if (pLoop  != null) pLoop.boolValue            = pick.IsLoop;
+
+                // IsLoop is DERIVED FROM THE PREFAB, never from the Map literal.
+                //
+                // WHY (2026-08-05): the Map's isLoop: argument is the same manual-truth
+                // defect that made this a P0 one layer down. 15 of these entries declared
+                // isLoop: true against rate-0 burst prefabs - including Poi_NodeAura and
+                // Poi_Landmark, whose source files are literally named "...loop.prefab"
+                // but emit a single burst at t=0. A burst row flagged as a loop NEVER
+                // returns its slot (only VFXHandle.Stop releases one, and fire-and-forget
+                // call sites discard the handle), so it permanently consumes one of the 20
+                // global loop slots. Six captured F8 sessions show that cap saturated -
+                // and Poi_NodeAura and Poi_Landmark appear in those captures as BOTH the
+                // leakers and the starved.
+                //
+                // Deriving here means a corrected catalog cannot be silently undone the
+                // next time someone regenerates, which is the only way the fix survives.
+                // The Map literal remains as the fallback for a prefab that cannot be
+                // read at all, and any disagreement is logged rather than swallowed.
+                if (pLoop != null)
+                {
+                    bool derived;
+                    string detail;
+                    if (DeNelle.Editor.Regression.VfxLoopFlagRegression.TryResolveExpected(key, prefab, out derived, out detail))
+                    {
+                        if (derived != pick.IsLoop)
+                            Debug.LogWarning($"[HovlVfxCatalogGenerator] '{key}' Map says isLoop:{pick.IsLoop} " +
+                                             $"but the prefab derives {derived} - using the PREFAB. {detail}");
+                        pLoop.boolValue = derived;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[HovlVfxCatalogGenerator] '{key}' could not be derived ({detail}) " +
+                                         $"- falling back to the Map literal isLoop:{pick.IsLoop}.");
+                        pLoop.boolValue = pick.IsLoop;
+                    }
+                }
             }
 
             so.ApplyModifiedPropertiesWithoutUndo();

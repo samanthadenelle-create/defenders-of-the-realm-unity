@@ -104,7 +104,21 @@ namespace DeNelle.Editor
 
         // Tag
         private string _tagBaseName = "";
+        // IsLoop is NOT an authoring preference -- it is a FACT about the prefab, so this
+        // field is DERIVED, never typed. It used to be a free-floating sticky checkbox that
+        // was additionally force-set true for the Projectile/Aura roles, and whatever it
+        // held got written into the catalog row. That is how 95 of 135 HovlVfxCatalog rows
+        // ended up IsLoop:1 while being rate-0 burst prefabs (PP_BigExplosion,
+        // PP_MuzzleFlash, PP_EarthShatter ...). A loop row NEVER auto-returns its pool slot
+        // -- VFXManager.Hovl.cs ~283-288 bumps _activeLoops and registers no reclaim
+        // deadline, and the only loop reclaim (PruneDestroyedFromSet, VFXManager.cs ~973)
+        // frees DESTROYED hosts, which pooled objects never are. So every fire-and-forget
+        // play of a mis-flagged burst permanently burned one of the 20 slots
+        // (_maxActiveLoops, VFXManager.cs:142); six F8 captures caught the cap saturated at
+        // 20/20 and starving a live effect. The prefab is the authority now.
         private bool _tagLoop;
+        private string _tagLoopPath;      // path _tagLoop was derived from (re-derive on change)
+        private string _tagLoopDetail = "";
         private Dictionary<string, List<string>> _overlayKeysByPath =
             new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -1142,16 +1156,56 @@ namespace DeNelle.Editor
             }
         }
 
+        // Re-derive the loop flag whenever the selection changes. Hooked here (and in
+        // TagSelected) rather than at each `_selected = ...` site so no future assignment
+        // path can leave a stale flag behind.
+        //
+        // Derived from the PREFAB ASSET on disk, never from _allSystems: the stage instance
+        // is mutated by DemoPlayFromStart (`if (_loop) main.loop = true;`) for preview
+        // scrubbing, so reading the instance would report every effect as a loop -- the
+        // exact untruth this fix removes.
+        private void EnsureTagLoopDerived()
+        {
+            string path = _selected != null ? _selected.Path : null;
+            if (string.Equals(path, _tagLoopPath, StringComparison.Ordinal)) return;
+            _tagLoopPath = path;
+            _tagLoop = false;
+            _tagLoopDetail = "no selection";
+            if (string.IsNullOrEmpty(path)) return;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            bool derived;
+            string detail;
+            if (!Regression.VfxLoopFlagRegression.TryDerive(prefab, out derived, out detail))
+            {
+                // Undeterminable (no prefab / no ParticleSystem) tags as ONESHOT: a oneshot
+                // is reclaimed on a deadline, so a wrong guess costs one pool slot for a few
+                // seconds. A wrong LOOP guess costs it for the whole session.
+                _tagLoopDetail = "undeterminable (" + detail + ") -- tagging as one-shot";
+                return;
+            }
+            _tagLoop = derived;
+            _tagLoopDetail = detail;
+        }
+
         private void DrawTagAndCatalog()
         {
+            EnsureTagLoopDerived();
+
             EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField("Tag & Catalog (manual = canon)", EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("Spell / base name", GUILayout.Width(110f));
                 _tagBaseName = EditorGUILayout.TextField(_tagBaseName);
-                _tagLoop = GUILayout.Toggle(_tagLoop, "Loop", GUILayout.Width(50f));
+                // READ-ONLY. Shown because the value matters to whoever is tagging, disabled
+                // because the prefab decides it. See the _tagLoop field comment for the leak.
+                using (new EditorGUI.DisabledScope(true))
+                    GUILayout.Toggle(_tagLoop, "Loop", GUILayout.Width(50f));
             }
+            EditorGUILayout.LabelField(
+                "Loop is DERIVED from the prefab emission (read-only): " + _tagLoopDetail,
+                EditorStyles.wordWrappedMiniLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 bool ok = !string.IsNullOrEmpty(_tagBaseName?.Trim());
@@ -1169,7 +1223,13 @@ namespace DeNelle.Editor
         private void TagSelected(string role)
         {
             string baseName = _tagBaseName.Trim().Replace(" ", "");
-            if (role == "Projectile" || role == "Aura") _tagLoop = true;
+            // The role-based force-set that used to live here (Projectile/Aura => loop) is
+            // DELETED: it manufactured most of the 95 bad IsLoop:1 rows. A role is a naming
+            // convention, not evidence about emission -- PP_MuzzleFlash is a "Projectile"
+            // key and a rate-0 burst. Re-derive instead, so the row written is the truth
+            // even if the window has been open across a prefab re-import.
+            _tagLoopPath = null;
+            EnsureTagLoopDerived();
             string key = $"{baseName}_{role}";
             var row = new HovlVfxCatalogGenerator.ManualPickRow
             {

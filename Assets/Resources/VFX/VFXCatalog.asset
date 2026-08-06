@@ -88,7 +88,7 @@ MonoBehaviour:
   - Type: 13
     Prefab: {fileID: 3069835964258947450, guid: 9d7886058ed12e34b901240a31cb5a8e, type: 3}
     PoolSize: 4
-    IsLoop: 1
+    IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 14
@@ -100,7 +100,7 @@ MonoBehaviour:
   - Type: 18
     Prefab: {fileID: 3995925170779068658, guid: c3f9cc642d2939049b616447ca5e3e90, type: 3}
     PoolSize: 4
-    IsLoop: 1
+    IsLoop: 0
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 19
@@ -214,7 +214,7 @@ MonoBehaviour:
   - Type: 33
     Prefab: {fileID: 8251054824596030187, guid: 9fc9ecc9ee97f644a80e287f1c5ac74e, type: 3}
     PoolSize: 4
-    IsLoop: 1
+    IsLoop: 0
     MinQuality: 1
     LifetimeOverride: 0
   - Type: 34

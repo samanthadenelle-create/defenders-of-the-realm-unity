@@ -280,7 +280,33 @@ namespace DeNelle.Village
                 f.Begin(follow);
             }
 
-            if (row.IsLoop)
+            // A LOOP WITH A DECLARED FINITE LIFETIME IS A TIMED EFFECT, NOT AN ENDLESS ONE.
+            //
+            // WHY THIS EXISTS (2026-08-05): the loop branch below does a bare _activeLoops++
+            // and hands back a handle with NO deadline. The ONLY thing that ever releases that
+            // slot is the caller calling VFXHandle.Stop() - PruneDestroyedFromSet frees
+            // destroyed hosts, and pooled objects are never destroyed. So a loop row played
+            // fire-and-forget (return value discarded) leaks one of the 20 global loop slots
+            // PERMANENTLY, for the whole session. Six captured F8 sessions show that cap
+            // saturated, starving tower projectiles, the Tree of Life aura and POI markers.
+            //
+            // Deriving IsLoop from the prefab fixed the rows that were never loops. But it
+            // also correctly promoted some genuinely-continuous prefabs TO loops - and at
+            // least one of those (UpgradeStructureComplete_Aura, the upgrade fireworks) is
+            // played fire-and-forget. Truthful flag, same leak. A celebration is FINITE; the
+            // catalog just had no way to say so.
+            //
+            // So: if a finite lifetime is declared - by the caller or by the row - route the
+            // effect through the oneshot path, which is already leak-proof (RegisterOneshot +
+            // deadline + SweepOneshots reclaim). No handle is surfaced, exactly as the oneshot
+            // path does, because a caller that also Stop()'d it would double-return.
+            // A row with NO lifetime is still a true endless loop: it keeps its handle and its
+            // caller still owns stopping it. At the time of writing all 44 loop rows declare
+            // no lifetime, so this changes nothing today - it is the guard that stops the next
+            // fire-and-forget loop from silently re-opening the same P0.
+            bool loopIsTimed = row.IsLoop && (lifetime > 0f || row.DefaultLifetime > 0f);
+
+            if (row.IsLoop && !loopIsTimed)
             {
                 _activeLoops++;
                 _hovlLoopObjects.Add(go);

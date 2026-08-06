@@ -19,28 +19,28 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Dungeon_Portal_Gate
     Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
     PoolSize: 3
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Aura_HeartPulse
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 4
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Collector_Full
     Prefab: {fileID: 1824691927606644, guid: 51f58a7ac453dab48a238fee31899d31, type: 3}
     PoolSize: 4
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 0
-    IsLoop: 1
+    IsLoop: 0
   - Key: Raid_Explosion
     Prefab: {fileID: 1850291782047516, guid: 39e6808e995d14e46aae8b87bde2a278, type: 3}
     PoolSize: 6
@@ -75,14 +75,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Aegis_Shield
     Prefab: {fileID: 1196366361853272, guid: 78afe2d2c6c430649b4c89b6b483db98, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 0
-    IsLoop: 1
+    IsLoop: 0
   - Key: Dash_Blink
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 6
@@ -96,42 +96,42 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 0
-    IsLoop: 1
+    IsLoop: 0
   - Key: Poi_Landmark
     Prefab: {fileID: 1973120614565466, guid: bb1e5545f071a4d4082042807f8ccc85, type: 3}
     PoolSize: 3
     DefaultScale: 4
     DefaultLifetime: 0
     Recolorable: 0
-    IsLoop: 1
+    IsLoop: 0
   - Key: ARcaneTower_Projectile
     Prefab: {fileID: 1171190231128718, guid: d9467a10b94fb3b428cc539326c9579b, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Aegis_Cast
     Prefab: {fileID: 1341365785022538, guid: 49f4a2628a72b0846afe42d196c02e6c, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcaneTower-Baselevel_Projectile
     Prefab: {fileID: 1699459221867030, guid: 2056b5f1031df8044a22500b4631ddb7, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Arcane_Cast
     Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Arcane_Impact
     Prefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}
     PoolSize: 6
@@ -145,49 +145,49 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcherTower-Fire_Projectile
     Prefab: {fileID: 1347034509603832, guid: 3c42b034bb8443e4fa9300af22f9fa12, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcherTower-Ice_Projectile
     Prefab: {fileID: 1580133494715678, guid: cfc911e7da8eb62499dff1c810e59571, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcherTowerLevel1_Projectile
     Prefab: {fileID: 1249710063744722, guid: b5142b50d0087484da65aa5c35349656, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcherTowerLevel2_Projectile
     Prefab: {fileID: 1481244868773408, guid: 61809825016d2464385a5703b4fe1d0b, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ArcherTower_Projectile
     Prefab: {fileID: 1082213743303154, guid: 7d01073e4f2f6184bb4515ded3368307, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: AuraOverArcaneTower_Aura
     Prefab: {fileID: 1531814124222292, guid: 0dc5d7207c20d6b4ab08f4ef524bdfc4, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: BurningStructure_Aura
     Prefab: {fileID: 190248, guid: 782858ba45394bd449001638b8382178, type: 3}
     PoolSize: 6
@@ -208,7 +208,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Cleave_Impact
     Prefab: {fileID: 1535640691960112, guid: d79f03dd3c9b07c41a430faecdcdf500, type: 3}
     PoolSize: 6
@@ -222,14 +222,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: DragonFire_Cast
     Prefab: {fileID: 786889566517218707, guid: 612cc49f17b4f1b4d8a7f19eb1baf850, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 0
+    IsLoop: 1
   - Key: DragonFire_Impact
     Prefab: {fileID: 1140696612886092, guid: 5b560e6b1f3f4494b8bf4b354497697e, type: 3}
     PoolSize: 6
@@ -243,7 +243,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: ElectricitySpell_Impact
     Prefab: {fileID: 1032096471364102, guid: 084af1218a1e0ee41a43bdf9d52aea29, type: 3}
     PoolSize: 6
@@ -264,21 +264,21 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: EnhamcingBuff_Cast
     Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: FireFromTower-ArcaneTowerLevel3_Aura
     Prefab: {fileID: 1171190231128718, guid: d9467a10b94fb3b428cc539326c9579b, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: FireImpact_Impact
     Prefab: {fileID: 1714524745656972, guid: 2e33bbd89680b744a8f2b0727a31b0ca, type: 3}
     PoolSize: 6
@@ -306,7 +306,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Fireball_Cast
     Prefab: {fileID: 1373873258365392, guid: cd5def2bb4f6b4e4ab15ba0b6f35b29d, type: 3}
     PoolSize: 6
@@ -327,7 +327,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Fountain_Heal_Aura
     Prefab: {fileID: 7598817718321102107, guid: 6571b8599edbfe641baf508e6a83a124, type: 3}
     PoolSize: 6
@@ -348,7 +348,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Frost_Impact
     Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
     PoolSize: 6
@@ -362,14 +362,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Heal_Aura
     Prefab: {fileID: 1315764361558410, guid: f99c3ed97779c5b4eb026cb91d4e4933, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Heal_Cast
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 6
@@ -390,7 +390,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Junk-DoNotuse_Cast
     Prefab: {fileID: 1839610603883104262, guid: 3fff46610e3e8a9448b12a4547cf04f4, type: 3}
     PoolSize: 6
@@ -418,7 +418,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: MageMeoteorAOE_Cast
     Prefab: {fileID: 7578768401371376505, guid: c3c0dc1cc2fbd554eafc2e4eed97cb72, type: 3}
     PoolSize: 6
@@ -453,14 +453,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_BigSplash
     Prefab: {fileID: 1722726733478836, guid: c1c88308ebb5d2541a282905b854ee4c, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_Candles
     Prefab: {fileID: 1529859801056418, guid: 86f883933a872f542994368197c83b5b, type: 3}
     PoolSize: 6
@@ -488,7 +488,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_DustMotesEffect
     Prefab: {fileID: 1000012882023006, guid: 5ca4c580b3888314581688fa46fb142d, type: 3}
     PoolSize: 6
@@ -509,7 +509,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_ElectricalSparks
     Prefab: {fileID: 1000011396044746, guid: 96b2ec0239d11fa4b9792311efceb8ed, type: 3}
     PoolSize: 6
@@ -544,7 +544,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_FireBall
     Prefab: {fileID: 1947871717301538, guid: a990e3ac1318b834488c784d851f42a9, type: 3}
     PoolSize: 6
@@ -656,7 +656,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_PlasmaExplosionEffect
     Prefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}
     PoolSize: 6
@@ -705,7 +705,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_SandImpacts
     Prefab: {fileID: 1312255355084822, guid: bca9020d2c9c915448fb5263a425faf4, type: 3}
     PoolSize: 6
@@ -726,14 +726,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 0
+    IsLoop: 1
   - Key: PP_SmallExplosion
     Prefab: {fileID: 1828176872806910, guid: 64891a0eb28db934898420d80ca07cb3, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_SmokeEffect
     Prefab: {fileID: 1273915125232972, guid: 73767e07adddc394d82b994801f89bbb, type: 3}
     PoolSize: 6
@@ -747,7 +747,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 0
+    IsLoop: 1
   - Key: PP_Steam
     Prefab: {fileID: 1735024089641582, guid: 378b2c30ef426554495292cb902cb8f4, type: 3}
     PoolSize: 6
@@ -768,7 +768,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_TinyFlames
     Prefab: {fileID: 1972207730512856, guid: ea4fb55d0227e604386f44f905cfe7c0, type: 3}
     PoolSize: 6
@@ -803,7 +803,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 0
+    IsLoop: 1
   - Key: PosionCloud_Cast
     Prefab: {fileID: 1327231448029640, guid: b0035d79b41032446a5de0e41abe9823, type: 3}
     PoolSize: 6
@@ -817,63 +817,63 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: RangedSpell-Powerful(Longcast)_Cast
     Prefab: {fileID: 1381080491605798, guid: 6a9f6dd49fc2acf409d12adb8fe3e3b1, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: RangerTowerBaseProjectile_Projectile
     Prefab: {fileID: 1261555563981962, guid: ca5824498d345274c9b259632f7755f0, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: RangerTowerUpgraded_Projectile
     Prefab: {fileID: 1699459221867030, guid: 281aabf73dcc5844faf849b3dc30c1aa, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: RangerTowerlevel2Projectile_Projectile
     Prefab: {fileID: 1580133494715678, guid: 7a4531df8185dbb468525ab8cdfae099, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: SimpleCast_Cast
     Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: SimpleCast_Projectile
     Prefab: {fileID: 1556169196827650, guid: 4f2f9845677ab3f49be1179d6bd15b78, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Spear_Projectile
     Prefab: {fileID: 1261555563981962, guid: ca5824498d345274c9b259632f7755f0, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Thunderbolt_Cast
     Prefab: {fileID: 1012013889074000, guid: 6dc968b09945e3845bdbf41de444f21c, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Thunderbolt_Impact
     Prefab: {fileID: 1032096471364102, guid: 084af1218a1e0ee41a43bdf9d52aea29, type: 3}
     PoolSize: 6
@@ -887,7 +887,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: TreeofLifeAura_Aura
     Prefab: {fileID: 1775406099119076, guid: 379785de5e39005469c875710d3cc5a7, type: 3}
     PoolSize: 6
@@ -908,14 +908,14 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Water_Projectile
     Prefab: {fileID: 1300573103503756, guid: 0f8db6274757dd4479c6d5db5b0d9e1a, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Weaponskillsword_Impact
     Prefab: {fileID: 1120835270511274, guid: 33cfc2755a55b7e4c86c9d7018efbaaa, type: 3}
     PoolSize: 6
@@ -936,7 +936,7 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: onweaponskillmaybe_Impact
     Prefab: {fileID: 1140696612886092, guid: 5b560e6b1f3f4494b8bf4b354497697e, type: 3}
     PoolSize: 6
@@ -950,11 +950,11 @@ MonoBehaviour:
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: subtleHealinginarea(EnemySkill-Mage)_Cast
     Prefab: {fileID: 1612411718768874, guid: 4ef343c2fedb6884aac07e8610d65212, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0

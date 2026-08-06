@@ -277,7 +277,9 @@ namespace DeNelle.Editor
             entries.arraySize = rows.Count;
             for (int i = 0; i < rows.Count; i++)
             {
-                var (enumValue, prefab, pick, _) = rows[i];
+                // typeName is no longer discarded - the IsLoop derivation below names the
+                // offending row when the Map literal and the prefab disagree.
+                var (enumValue, prefab, pick, typeName) = rows[i];
                 var e = entries.GetArrayElementAtIndex(i);
 
                 var pType    = e.FindPropertyRelative("Type");
@@ -290,7 +292,36 @@ namespace DeNelle.Editor
                 if (pType   != null) pType.enumValueIndex      = EnumIndexFor(enumType, enumValue);
                 if (pPrefab != null) pPrefab.objectReferenceValue = prefab;
                 if (pPool   != null) pPool.intValue            = pick.PoolSize;
-                if (pLoop   != null) pLoop.boolValue           = pick.IsLoop;
+
+                // IsLoop is DERIVED FROM THE PREFAB, never from the Map literal - see the
+                // long note in HovlVfxCatalogGenerator for the P0 this closes. Three entries
+                // here contradict their own art (Projectile_Arrow, Projectile_EnemyCasterBolt,
+                // Aura_EnemyCaster are all rate-0 + single burst but declared isLoop: true).
+                //
+                // The derivation is NOT simply "read the root". Lana's Fire_medium.prefab has
+                // a root ParticleSystem with its emission module DISABLED sitting over a child
+                // that emits 15/sec on loop; strict root-reading would call it a one-shot and
+                // cut Aura_Flame, Env_TorchFlame, Aura_Necromancer and Aura_SmokeReaper off
+                // mid-burn. TryDerive falls through a disabled shell to the first system that
+                // can actually emit, which is why those four correctly stay loops.
+                if (pLoop != null)
+                {
+                    bool derived;
+                    string detail;
+                    if (DeNelle.Editor.Regression.VfxLoopFlagRegression.TryResolveExpected(typeName, prefab, out derived, out detail))
+                    {
+                        if (derived != pick.IsLoop)
+                            Debug.LogWarning($"[VFXCatalogGenerator] '{typeName}' Map says isLoop:{pick.IsLoop} " +
+                                             $"but the prefab derives {derived} - using the PREFAB. {detail}");
+                        pLoop.boolValue = derived;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[VFXCatalogGenerator] '{typeName}' could not be derived ({detail}) " +
+                                         $"- falling back to the Map literal isLoop:{pick.IsLoop}.");
+                        pLoop.boolValue = pick.IsLoop;
+                    }
+                }
                 if (pMinQ   != null) pMinQ.intValue            = pick.MinQuality;
                 if (pLife   != null) pLife.floatValue          = 0f;   // auto-detect
             }

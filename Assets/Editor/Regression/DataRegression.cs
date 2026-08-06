@@ -531,6 +531,17 @@ namespace DeNelle.Editor
             // --- WO-879 daily-quest empty state: ONE empty-state fact owned by DailyQuestVM (assigned at a single site, IsEmpty projects it), proven on a live null-source VM, and DailyQuestHud reads it once + renders it once in one chrome (no BuildParchmentDetailEmpty second column, no View-authored copy, no View-side emptiness test), on fixed-pixel bands ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "daily-quest-empty suite", () => { if (!DeNelle.Editor.Regression.DailyQuestEmptyStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[daily-quest-empty] " + r); });
 
+            // --- VFX LOOP FLAGS (2026-08-05): a catalog row's IsLoop must equal what its
+            // prefab's emission actually does. IsLoop was a sticky manual checkbox in
+            // VfxCasterWindow (force-set true for the Projectile/Aura roles), so 95 of 135
+            // HovlVfxCatalog rows read IsLoop:1 -- including a pile of rate-0 burst prefabs
+            // (PP_BigExplosion, PP_MuzzleFlash, PP_EarthShatter ...). A loop row never
+            // auto-returns its pool slot (VFXManager.Hovl.cs ~283-288 registers no reclaim
+            // deadline; the only loop reclaim frees DESTROYED hosts, which pooled objects
+            // never are), so each fire-and-forget play permanently burned one of the 20
+            // slots -- six F8 captures caught the cap saturated at 20/20 ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-loop-flag suite", () => { if (!DeNelle.Editor.Regression.VfxLoopFlagRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-loop-flag] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

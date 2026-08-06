@@ -2397,8 +2397,17 @@ namespace DeNelle.Village
                 ? entry.displayName : "Structure";
             BuildFeedbackToast.Show($"{tellName} upgraded to Tier {newLevel}.");
             Vector3 burstAt = ps.transform.position + Vector3.up * 2.5f;
+            //       EXPLICIT 3.5s LIFETIME (2026-08-05): the Fireworks prefab emits
+            //       CONTINUOUSLY on loop (rate 5, no bursts). The catalog row is pinned to
+            //       IsLoop=false by a standing owner ruling - the "perma-fireworks" bug, where
+            //       the celebration never ended - so it takes the one-shot path and is
+            //       reclaimed. But without an explicit bound that path falls back to
+            //       DetectDuration, and a looping emitter has no natural end to detect. This
+            //       call also discards its handle, so nothing else would stop it. Stating the
+            //       duration is what makes a finite celebration finite; it is the same ruling
+            //       the pin encodes, said at the call site.
             VFXManager.PlayKey("UpgradeStructureComplete_Aura", burstAt,
-                               Quaternion.identity, null, null, 1.5f);
+                               Quaternion.identity, null, null, 1.5f, 3.5f);
             //   (c) CRACKLE SFX (owner: "a crackling sound tied to the fireworks/celebration").
             //       No dedicated Crackle clip exists in Resources/Sfx, so the closest AUTHORED event
             //       is used: SfxId.FireExplosion (doc = "boom + crackle", noisy synth). Layered with
