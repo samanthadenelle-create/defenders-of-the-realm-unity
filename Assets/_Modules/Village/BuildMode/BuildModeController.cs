@@ -1881,6 +1881,10 @@ namespace DeNelle.Village
             }
 
             // Append to the live BaseLayout so Exit() persists it.
+            // Owner ruling 2026-08-06 (first-build grace): set at the MarkEverBuilt seam below and
+            // read at the timer seam further down. Declared out here because `state` may be null.
+            bool firstEverBuild = false;
+
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (state != null)
             {
@@ -1889,7 +1893,12 @@ namespace DeNelle.Village
                 // WO-834: the ever-built ledger grows at the SAME commit seam (idempotent
                 // set-add; monotonic — selling never removes it, preserving WO-819
                 // sell->baked-twin-resurface). Rides the same Save() as the append above.
-                state.MarkEverBuilt(_armed.id);
+                // MarkEverBuilt returns TRUE only when the id was NEWLY added -- i.e. this is the
+                // player's first ever placement of it. Capture it HERE: this line runs at :1892 and
+                // the build timer starts ~40 lines below, so by then HasEverBuilt(_armed.id) is
+                // ALREADY true and a check down there would never fire. (Owner ruling 2026-08-06,
+                // first-build grace.)
+                firstEverBuild = state.MarkEverBuilt(_armed.id);
             }
 
             // Committed placement — announce it (tutorial build.tower_placed rides this; guarded so
@@ -1931,7 +1940,15 @@ namespace DeNelle.Village
                 // surcharge does not stretch the timer.
                 int tier = svc != null && svc.Config != null
                     ? svc.Config.TierForCost(CostFor(_armed)) : 0;
-                var job = svc != null ? svc.StartBuild(jobKey, tier) : null;
+                // OWNER CARVE-OUT 2026-08-06: "other than the pallets". The pallets are the STORAGE
+                // CONTAINERS -- lumberyard / foundry / silo, the three catalog entries that declare
+                // a storageCapacity and add to the town bank on top of baseCap. Keyed off the data
+                // (RepoProps.IsStorageContainer => storageCapacity > 0) rather than a hardcoded id
+                // list, so a container added later is excluded automatically. They are deliberate
+                // capacity-progression buildings (WO-837) and must pay their real timer.
+                bool isPallet = _armed != null && _armed.repo != null && _armed.repo.IsStorageContainer;
+                bool graceApplies = firstEverBuild && !isPallet;
+                var job = svc != null ? svc.StartBuild(jobKey, tier, graceApplies) : null;
                 // Sec.12 proving line: a capture must show the RESOLVED tier + duration, so
                 // "every building takes 15s" can never silently come back.
                 FlowTrace.Step("BuildTimer",

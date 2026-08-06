@@ -154,9 +154,40 @@ namespace DeNelle.Village
             bowRoot.transform.localPosition = GripLocalPosition;
             bowRoot.transform.localRotation = EquipmentController.ApplyGlobalWeaponYaw(Quaternion.Euler(GripLocalEuler));
 
+            // ================================================================
+            // THE FIX THAT NEVER REACHED THIS FILE (owner, 2026-08-06: "We had this
+            // problem, and we fixed it. But I don't think that fix applied here.")
+            // ----------------------------------------------------------------
+            // NormalizeInto sizes the bow at the WORLD ORIGIN at unit scale, then
+            // SetParent(bone, false) PRESERVES LOCAL scale -- so the rendered size gets
+            // multiplied by the bone's lossyScale, which carries VisualFactory.Fit's
+            // body-normalization factor. That is exactly the defect
+            // EquipmentController.cs:1913-1919 documents and fixes at :913 for hero
+            // weapons; this separate attach path never got it.
+            //
+            // Measured on the owner's device (313794): [Flow:EnemySize] orc-shaman
+            // scale=1.887 -- so a 0.92m BowHeldLength rendered at 0.92 * 1.887 = 1.74m,
+            // a bow nearly as tall as the 1.90m orc carrying it. She read it as a staff.
+            // The same line mis-scales the HERO's own Ranger bow by the hero body's Fit
+            // factor, so this is not enemy-only.
+            //
+            // Divide the parent's lossy scale back out so the world-size solve survives
+            // parenting. Applied AFTER pos/rot, which do not depend on scale.
+            //
+            // ParentScaleCompensation, NOT CompensateParentScale: the latter is PRIVATE to
+            // EquipmentController (:1940). The former is deliberately `internal static`
+            // (:1932) for exactly this - a same-asmdef, same-namespace third caller - and
+            // returns 1/parent.lossyScale, guarding against a degenerate (near-zero) scale.
+            // bowRoot's own localScale is 1 here (NormalizeInto scaled the CHILD prop, not
+            // this root), so assigning the compensation directly is correct; there is no
+            // owner-dialed authored scale on this path to preserve.
+            bowRoot.transform.localScale = EquipmentController.ParentScaleCompensation(leftHand);
+            // ================================================================
+
             _bow = bowRoot;
             FlowTrace.Step("Equip", $"bow ATTACHED + auto-oriented to LeftHand '{leftHand.name}' " +
-                $"(pos={GripLocalPosition} euler={GripLocalEuler})");
+                $"(pos={GripLocalPosition} euler={GripLocalEuler}, " +
+                $"parentLossy={leftHand.lossyScale.y:0.###} divided out -> localScale={bowRoot.transform.localScale.y:0.###})");
             enabled = false;
         }
 

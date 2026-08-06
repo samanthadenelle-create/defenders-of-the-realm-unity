@@ -74,12 +74,36 @@ namespace DeNelle.Core.Catalog
         // pushes late rows up. Re-check this table whenever catalog costs move.
         public float[] tierCostThresholds = { 140f, 260f, 420f, 900f, 2000f };
 
+        // OWNER RULING 2026-08-06. Crystals END a wait (immediate finish); an ad only
+        // DENTS it. Two different products, not one product at two speeds.
+        //
+        // THE CAP IS A CONVERSION TRIGGER, NOT A LIMIT ON REVENUE - that is the whole
+        // point and it is easy to get backwards. Her words: "if they've watched their ten
+        // videos within four hours and they're still playing, they're gonna have to spend."
+        // An impression pays cents; a crystal purchase pays dollars. Running out of free
+        // skips WHILE STILL PLAYING is the best moment in the session to show a price.
+        //
+        // The numbers land on purpose: a 20-minute troop clears in 2 watches (feels free),
+        // a 2-HOUR build needs 12 and the cap stops them at 10 - within sight of done and
+        // 20 minutes short. That near-miss is the sell. An 8h upgrade takes 100 minutes off
+        // and still leaves 6h20m, so late game leans on crystals by construction.
         [Header("Rewarded-ad skip (opt-in, store-build only)")]
-        [Tooltip("Seconds knocked off the remaining timer per rewarded-ad watch (the fixed chunk). Default 15 min.")]
-        [Min(0f)] public float adSkipSeconds = 15f * 60f;
+        [Tooltip("Seconds knocked off the remaining timer per rewarded-ad watch.")]
+        [Min(0f)] public float adSkipSeconds = 10f * 60f;
 
-        [Tooltip("Max rewarded-ad skips a player may use per day across ALL jobs (the daily cap). 0 = unlimited.")]
-        [Min(0)] public int adSkipsPerDay = 10;
+        // ROLLING WINDOW, not a calendar day. A day-reset punishes an evening player who
+        // spent their allowance that morning; rolling always offers a way back in.
+        //
+        // WARNING FOR WHOEVER WIRES THIS: the persisted ledger is DAY-SHAPED
+        // (SaveSchema AdSkipsUsedToday + AdSkipDayKey, since v13/WO-172) and CANNOT express
+        // a rolling window. Implementing this needs the timestamps of recent watches (or a
+        // decaying counter), i.e. a schema addition - not a config tweak. Reusing the day
+        // fields would silently ship day-reset behaviour and quietly lose the ruling.
+        [Tooltip("Max rewarded-ad skips allowed within the rolling window below. 0 = unlimited.")]
+        [Min(0)] public int adSkipsPerWindow = 10;
+
+        [Tooltip("Length of the ROLLING window the skip allowance is counted over. Default 4 hours.")]
+        [Min(0f)] public float adSkipWindowSeconds = 4f * 60f * 60f;
 
         [Header("Premium instant-finish (convenience IAP, not power)")]
         [Tooltip("Aether-crystal price to instantly finish a job, scaled by remaining minutes. " +
@@ -88,6 +112,24 @@ namespace DeNelle.Core.Catalog
 
         [Tooltip("Minimum crystal price for any instant-finish (so near-done jobs still cost something).")]
         [Min(0)] public int instantFinishMinCrystals = 5;
+
+        // OWNER RULING 2026-08-06: "for the free ones (first time builds, other than the pallets),
+        // can we make if free then timer is 5 seconds?"
+        //
+        // WHAT THE CATALOG ACTUALLY SAYS (checked before implementing, not assumed): NOTHING in the
+        // game is free. All 29 costed structures-catalog entries have a non-zero basket -- the
+        // cheapest is deco_torch at 5 wood, then wall_wood at 20. A literal "if cost == 0" rule
+        // would fire on ZERO structures. So the rule is keyed to what she actually meant: the FIRST
+        // time the player places a given structure, which the v36 ever-built ledger already tracks.
+        //
+        // This is deliberately NOT the same idea as BuildModeController's note that "a freebie does
+        // not make a build instant" (it keys the tier off CostFor, not EffectiveCostFor). That guard
+        // is about DISCOUNTS not shortening timers, and it stands. This is about ONBOARDING PACE:
+        // the first of anything is snappy, every one after it pays the real curve.
+        [Header("First-build grace (onboarding pace)")]
+        [Tooltip("Seconds for the FIRST build of a structure id the player has never built before. " +
+                 "0 disables the grace (every build pays the normal tier curve).")]
+        [Min(0f)] public float firstBuildSeconds = 5f;
 
         [Header("Build slots (concurrency / scarcity)")]
         [Tooltip("How many jobs may run at once for free. CoC-style scarcity — extra slots are a future unlock/purchase.")]

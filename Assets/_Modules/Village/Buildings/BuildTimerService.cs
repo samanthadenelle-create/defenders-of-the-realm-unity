@@ -37,6 +37,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;   // ad-skip window stamp: culture-invariant round-trip parse
 using UnityEngine;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Jobs;
@@ -214,8 +215,9 @@ namespace DeNelle.Village
         /// <paramref name="tier"/> on the Builder channel. Returns the job (running or pending),
         /// or null if one already runs/queues for this id. Caller charges cost BEFORE calling.
         /// </summary>
-        public BuildJobData? StartBuild(string structureId, int tier = 0)
-            => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier);
+        public BuildJobData? StartBuild(string structureId, int tier = 0, bool firstEverBuild = false)
+            => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier,
+                               firstEverBuild: firstEverBuild);
 
         /// <summary>
         /// Start (or QUEUE) an UPGRADE job for <paramref name="structureId"/> to
@@ -241,7 +243,8 @@ namespace DeNelle.Village
             }
         }
 
-        private BuildJobData? StartBuilderJob(string structureId, BuildJobType type, JobKind kind, int tier, int targetLevel = 0)
+        private BuildJobData? StartBuilderJob(string structureId, BuildJobType type, JobKind kind, int tier,
+                                              int targetLevel = 0, bool firstEverBuild = false)
         {
             if (string.IsNullOrEmpty(structureId)) return null;
             var ch = Builder;
@@ -252,6 +255,29 @@ namespace DeNelle.Village
 
             var curveKind = type == BuildJobType.Upgrade ? BuildJobKind.Upgrade : BuildJobKind.Build;
             double durationMs = Config.DurationSecondsForTier(tier, curveKind) * 1000.0;
+
+            // OWNER RULING 2026-08-06 -- first-build grace. The FIRST time the player places a
+            // given structure it builds in firstBuildSeconds (5s) instead of the tier curve, so
+            // onboarding never stalls on a timer. Storage containers (the "pallets" -- lumberyard
+            // / foundry / silo) are EXCLUDED by her explicit carve-out; the caller decides that,
+            // because only it knows the catalog id (structureId here is the JOB key, which for a
+            // placement is UnderConstructionVisual.KeyFor(data), NOT the catalog id).
+            //
+            // Upgrades never qualify: "first build" means the first BUILD. An upgrade of a
+            // structure you have never owned is not reachable anyway.
+            if (firstEverBuild && type != BuildJobType.Upgrade && Config.firstBuildSeconds > 0f)
+            {
+                double graceMs = Config.firstBuildSeconds * 1000.0;
+                // Only ever SHORTEN. A tier-0 curve already under the grace (or a retuned config)
+                // must not be made slower by this rule.
+                if (graceMs < durationMs)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                        $"FIRST-BUILD grace on '{structureId}': {durationMs / 1000.0:0.#}s -> " +
+                        $"{Config.firstBuildSeconds:0.#}s (tier {tier} curve bypassed).");
+                    durationMs = graceMs;
+                }
+            }
 
             // WO-676 STEWARD (Foreman's Pace): ONE HeroTalentModifiers read shortens every
             // build/upgrade timer at job start. StatSum is null-safe (0 with no service/tree)
@@ -597,35 +623,83 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
-        //  Daily ad-skip cap (unchanged)
+        //  Ad-skip cap - a ROLLING WINDOW anchored on first use (owner, 2026-08-06)
         // =====================================================================
+        //  Was a calendar-day cap. Her ruling: "when the first ad comes in, we mark a
+        //  timer, and that's their four hour rolling from there."
+        //
+        //  WHY FIXED-FROM-FIRST-USE AND NOT A SLIDING WINDOW - do not "improve" this:
+        //  a sliding window drips the allowance back one at a time, so a free player
+        //  limps along indefinitely. This one lets them burn the allowance and then hit
+        //  a HARD WALL AT ZERO for the rest of the window. The wall IS the conversion
+        //  trigger - the cap exists to create the spend moment, not to limit ad revenue.
+        //  A day-reset was also worse for a different reason: it punishes an evening
+        //  player who spent their allowance that morning. Rolling always offers a way back.
+        //
+        //  NO SCHEMA BUMP. The two persisted fields already existed (v13/WO-172) and only
+        //  change MEANING: AdSkipDayKey now holds the window-start instant (round-trip
+        //  "o" format), AdSkipsUsedToday the count within it. The names are now misleading
+        //  and worth renaming on the next schema touch.
+        //
+        //  KNOWN LIMIT - the window start is a DEVICE clock (UtcNow). Moving the device
+        //  clock forward past the window grants a fresh allowance. That is not just free
+        //  skips: once a real ad SDK is behind this it is FABRICATED IMPRESSIONS against
+        //  the ad account, which is what networks ban for. A trustworthy version needs the
+        //  window stamped/validated server-side where the save already round-trips. Tracked
+        //  in WO-912; deliberately not solved here because no ad SDK is wired yet.
 
         private bool UnderDailyAdCap()
         {
-            int cap = Config.adSkipsPerDay;
-            if (cap <= 0) return true;
-            RollDayIfNeeded();
+            int cap = Config.adSkipsPerWindow;
+            if (cap <= 0) return true;              // 0 = unlimited
+            RollWindowIfNeeded();
             var state = State;
             return state != null && state.AdSkipsUsedToday < cap;
         }
 
         private void RecordAdSkipUsed()
         {
-            RollDayIfNeeded();
+            RollWindowIfNeeded();
             var state = State;
             if (state == null) return;
+            // The FIRST watch of a window is what starts the clock, so stamp it here
+            // rather than on the check - merely opening a screen must not burn the window.
+            if (string.IsNullOrEmpty(state.AdSkipDayKey))
+                state.AdSkipDayKey = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
             state.AdSkipsUsedToday++;
             Persist();
         }
 
-        private void RollDayIfNeeded()
+        private void RollWindowIfNeeded()
         {
             var state = State;
             if (state == null) return;
-            string today = DateTime.Now.ToString("yyyy-MM-dd");
-            if (state.AdSkipDayKey != today)
+
+            float windowSeconds = Config.adSkipWindowSeconds;
+            if (windowSeconds <= 0f) return;        // no window configured => never rolls
+
+            if (string.IsNullOrEmpty(state.AdSkipDayKey)) return;   // no window open yet
+
+            DateTime start;
+            if (!DateTime.TryParse(state.AdSkipDayKey,
+                                   CultureInfo.InvariantCulture,
+                                   DateTimeStyles.RoundtripKind,
+                                   out start))
             {
-                state.AdSkipDayKey = today;
+                // A legacy "yyyy-MM-dd" day key (or anything unparseable) lands here.
+                // Treat it as a closed window rather than trusting it: the player gets a
+                // fresh allowance once, on upgrade, which is the forgiving direction.
+                state.AdSkipDayKey = null;
+                state.AdSkipsUsedToday = 0;
+                return;
+            }
+
+            double elapsed = (DateTime.UtcNow - start.ToUniversalTime()).TotalSeconds;
+            // A NEGATIVE elapsed means the clock moved backwards since the stamp - treat it
+            // as tampering and close the window rather than leaving it open forever.
+            if (elapsed < 0d || elapsed >= windowSeconds)
+            {
+                state.AdSkipDayKey = null;
                 state.AdSkipsUsedToday = 0;
             }
         }
