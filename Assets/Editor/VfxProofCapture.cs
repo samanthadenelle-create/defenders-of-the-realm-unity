@@ -196,6 +196,15 @@ namespace DeNelle.Editor
             public string Reason = "";
             public float  SimUsed;
             public string Played = "";
+            public int    TrailSlotsSkipped;
+            /// <summary>Content hash of the written PNG. Two shots with the same
+            /// fingerprint rendered the SAME picture -- which for a per-level ladder is
+            /// a finding about the game, not a harness fault, so it is surfaced rather
+            /// than left to be noticed.</summary>
+            public string Fingerprint = "-";
+            /// <summary>Every simulate time tried, with what each contributed. Makes the
+            /// retry ladder auditable instead of asking the reader to trust it.</summary>
+            public string Ladder = "-";
         }
 
         // Informational rows: things the shot list names that are DELIBERATELY not
@@ -764,7 +773,7 @@ namespace DeNelle.Editor
                     if (layer.Type != VFXType.None)
                         ProofUrpParticleShaders(inst);
 
-                    CollectShaderProblems(inst, layer.Label, shaderProblems);
+                    result.TrailSlotsSkipped += CollectShaderProblems(inst, layer.Label, shaderProblems);
                     fxRoots.Add(inst);
                     played.Add(layer.Label + " (x" + s.ToString("0.##", CultureInfo.InvariantCulture) + ")");
                 }
@@ -784,9 +793,15 @@ namespace DeNelle.Editor
 
                 // -- Deterministic simulation. Try the chosen time first; if the effect
                 // contributed nothing, walk a short ladder before calling it dead, so a
-                // mis-estimated peak is not reported as a missing effect. Whatever time
-                // produced the shot is what the index records.
-                float[] ladder = { shot.SimTime, shot.SimTime * 0.4f, shot.SimTime * 2.5f, 0.05f };
+                // mis-estimated peak is not reported as a missing effect.
+                //
+                // EVERY RUNG IS PROPORTIONAL TO THE SHOT'S OWN TIME. The first version
+                // ended in a fixed 0.05 s rung, which is meaningless for a slow effect --
+                // it made the portal's PP_GroundFog (a 2.5 s volumetric) report "0 px at
+                // t=0.05" as if that were the harness's considered answer. It was just the
+                // last rung of a ladder that had already given up. A slow effect now probes
+                // LATER (4x), not into milliseconds.
+                float[] ladder = { shot.SimTime, shot.SimTime * 0.4f, shot.SimTime * 2.5f, shot.SimTime * 4f };
 
                 // Frame the camera once, off the fully simulated stage at the requested
                 // time, so every retry renders from the SAME viewpoint and the baseline
@@ -816,16 +831,34 @@ namespace DeNelle.Editor
                 rt.Create();
                 cam.targetTexture = rt;
 
+                // THE REGION OF INTEREST: the effect's own projected screen footprint.
+                // "Did it draw" is judged in here, not against 3.2 megapixels of mostly
+                // empty frame. Computed once, at the framing time, so every rung of the
+                // ladder is measured against the same window.
+                RectInt roi = ComputeEffectRoi(cam, fxRoots);
+                long roiArea = (long)roi.width * roi.height;
+                long needed = Math.Max(MinChangedAbsolute, (long)(MinChangedRoiFraction * roiArea));
+
                 long changed = 0;
-                float changedPct = 0f;
+                var ladderLog = new List<string>();
+
+                // KEEP THE BEST ATTEMPT, NOT THE LAST. The first version overwrote SimUsed
+                // on every rung, so a shot that failed at all four reported the LAST time
+                // tried as though it were the chosen one -- which is how the portal came to
+                // claim t=0.05 in a table whose own text promised "the time that produced
+                // the picture". Now the rung with the largest contribution is the one that
+                // is kept, written, and reported, and the whole ladder is printed so the
+                // claim is auditable rather than trusted.
+                Texture2D best = null;
+                long bestChanged = -1;
+                float bestT = shot.SimTime;
+
                 for (int attempt = 0; attempt < ladder.Length; attempt++)
                 {
                     float t = Mathf.Max(0.01f, ladder[attempt]);
                     SimulateAll(fxRoots, t);
-                    result.SimUsed = t;
 
-                    if (withFx != null) { UnityEngine.Object.DestroyImmediate(withFx); withFx = null; }
-                    withFx = RenderToTexture(cam, rt);
+                    var frame = RenderToTexture(cam, rt);
 
                     if (without == null)
                     {
@@ -835,14 +868,29 @@ namespace DeNelle.Editor
                         without = RenderToTexture(cam, rt);
                         foreach (var go in fxRoots) go.SetActive(true);
                         SimulateAll(fxRoots, t);   // re-simulate: SetActive resets the systems
-                        UnityEngine.Object.DestroyImmediate(withFx);
-                        withFx = RenderToTexture(cam, rt);
+                        UnityEngine.Object.DestroyImmediate(frame);
+                        frame = RenderToTexture(cam, rt);
                     }
 
-                    changed = CountChangedPixels(withFx, without);
-                    changedPct = 100f * changed / (float)(ShotW * ShotH);
-                    if (changed > MinChangedFraction * ShotW * ShotH) break;
+                    long c = CountChangedPixels(frame, without, roi);
+                    ladderLog.Add(t.ToString("0.###", CultureInfo.InvariantCulture) + "s=" + c + "px");
+
+                    if (c > bestChanged)
+                    {
+                        if (best != null) UnityEngine.Object.DestroyImmediate(best);
+                        best = frame;
+                        bestChanged = c;
+                        bestT = t;
+                    }
+                    else UnityEngine.Object.DestroyImmediate(frame);
+
+                    if (c >= needed) break;
                 }
+
+                withFx = best;
+                changed = Math.Max(0, bestChanged);
+                result.SimUsed = bestT;
+                result.Ladder = string.Join(", ", ladderLog.ToArray());
 
                 // -- FAILURE MODE 1: magenta.
                 result.MagentaCount = CountMagenta(withFx);
@@ -850,11 +898,12 @@ namespace DeNelle.Editor
 
                 // -- FAILURE MODE 2: not drawn. Two independent measures.
                 float spread = LuminanceSpread(withFx);
-                bool drewSomething = changed > MinChangedFraction * ShotW * ShotH;
+                bool drewSomething = changed >= needed;
                 bool frameAlive = spread >= MinFrameSpread;
                 result.Uniformity = string.Format(CultureInfo.InvariantCulture,
-                    "changed {0} px ({1:0.000}%) vs baseline; frame luminance spread {2:0.000}",
-                    changed, changedPct, spread);
+                    "{0} px changed in a {1}x{2} ROI ({3:0.00}% of it, needed {4}); frame luminance spread {5:0.000}",
+                    changed, roi.width, roi.height,
+                    roiArea > 0 ? 100f * changed / roiArea : 0f, needed, spread);
 
                 // -- Verdict.
                 var reasons = new List<string>();
@@ -865,7 +914,9 @@ namespace DeNelle.Editor
                                              spread.ToString("0.000", CultureInfo.InvariantCulture) +
                                              " -- nothing rendered at all (dead stage / no graphics device)");
                 else if (!drewSomething) reasons.Add("NOT DRAWN: the effect changed " + changed +
-                                                     " px vs the same frame without it -- it contributed nothing visible");
+                                                     " px inside its own screen footprint (needed " + needed +
+                                                     "), across every simulate time tried [" + result.Ladder +
+                                                     "] -- it contributed nothing visible");
                 if (shaderProblems.Count > 0) reasons.Add("SHADER: " + string.Join("; ", shaderProblems.ToArray()));
 
                 result.Pass = reasons.Count == 0;
@@ -879,9 +930,11 @@ namespace DeNelle.Editor
                 {
                     File.WriteAllBytes(path, png);
                     result.Png = shot.FileName + ".png";
+                    result.Fingerprint = Fingerprint(png);
                     Debug.Log("[VfxProof] " + (result.Pass ? "PASS " : "FAIL ") + shot.FileName +
                               " -> " + Path.GetFullPath(path) + " (" + png.Length + " bytes, t=" +
-                              result.SimUsed.ToString("0.###", CultureInfo.InvariantCulture) + "s)");
+                              result.SimUsed.ToString("0.###", CultureInfo.InvariantCulture) +
+                              "s, fp=" + result.Fingerprint + ")");
                 }
                 else
                 {
@@ -1139,26 +1192,109 @@ namespace DeNelle.Editor
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// How many pixels the effect changed relative to the identical frame rendered
-        /// without it. This is the check a magenta scan cannot do: an effect that
-        /// renders BLACK on a dark stage, or does not render at all, moves zero pixels
-        /// here while looking perfectly ordinary to a colour test.
+        /// The effect's own screen footprint: the projected screen-space bounding box of
+        /// every effect renderer, padded, clamped to the frame. This is the window the
+        /// "did it draw" test is measured in -- a muzzle flash is SUPPOSED to be a small
+        /// part of a 2670x1200 frame, so judging it against the whole frame measures the
+        /// camera distance, not the effect. Degenerate cases fall back to the full frame,
+        /// which is the conservative direction (harder to pass, never falsely lenient).
         /// </summary>
-        private static long CountChangedPixels(Texture2D withFx, Texture2D without)
+        private static RectInt ComputeEffectRoi(Camera cam, List<GameObject> fxRoots)
+        {
+            var full = new RectInt(0, 0, ShotW, ShotH);
+            if (cam == null || fxRoots == null || fxRoots.Count == 0) return full;
+
+            bool any = false;
+            Bounds b = default;
+            foreach (var go in fxRoots)
+            {
+                if (go == null) continue;
+                if (!TryGetBounds(go, out Bounds gb)) continue;
+                if (!any) { b = gb; any = true; }
+                else b.Encapsulate(gb);
+            }
+            if (!any) return full;
+
+            // Project all eight corners: a box that is cheap to compute and never
+            // under-covers the effect the way a centre-plus-radius estimate would.
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+            Vector3 c = b.center, e = b.extents;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = c + new Vector3(
+                    ((i & 1) == 0 ? -e.x : e.x),
+                    ((i & 2) == 0 ? -e.y : e.y),
+                    ((i & 4) == 0 ? -e.z : e.z));
+                Vector3 sp = cam.WorldToScreenPoint(corner);
+                if (sp.z <= 0f) return full;   // straddles the camera plane -- do not guess
+                if (sp.x < minX) minX = sp.x;
+                if (sp.x > maxX) maxX = sp.x;
+                if (sp.y < minY) minY = sp.y;
+                if (sp.y > maxY) maxY = sp.y;
+            }
+
+            float padX = (maxX - minX) * RoiPadding;
+            float padY = (maxY - minY) * RoiPadding;
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(minX - padX), 0, ShotW - 1);
+            int y0 = Mathf.Clamp(Mathf.FloorToInt(minY - padY), 0, ShotH - 1);
+            int x1 = Mathf.Clamp(Mathf.CeilToInt(maxX + padX), 0, ShotW);
+            int y1 = Mathf.Clamp(Mathf.CeilToInt(maxY + padY), 0, ShotH);
+            int w = x1 - x0, h = y1 - y0;
+            if (w < 8 || h < 8) return full;   // nonsense box -- fall back rather than invent one
+            return new RectInt(x0, y0, w, h);
+        }
+
+        /// <summary>
+        /// How many pixels the effect changed, inside <paramref name="roi"/>, relative to
+        /// the identical frame rendered without it. This is the check a magenta scan
+        /// cannot do: an effect that renders BLACK on a dark stage, or does not render at
+        /// all, moves zero pixels here while looking perfectly ordinary to a colour test.
+        /// </summary>
+        private static long CountChangedPixels(Texture2D withFx, Texture2D without, RectInt roi)
         {
             if (withFx == null || without == null) return 0;
             var a = withFx.GetPixels32();
             var b = without.GetPixels32();
-            int n = Mathf.Min(a.Length, b.Length);
+            if (a.Length != b.Length) return 0;
+
             int eps = Mathf.Max(1, Mathf.RoundToInt(DiffEpsilon * 255f));
             long changed = 0;
-            for (int i = 0; i < n; i++)
+            int yEnd = Mathf.Min(roi.y + roi.height, ShotH);
+            int xEnd = Mathf.Min(roi.x + roi.width, ShotW);
+            for (int y = roi.y; y < yEnd; y++)
             {
-                if (Mathf.Abs(a[i].r - b[i].r) >= eps ||
-                    Mathf.Abs(a[i].g - b[i].g) >= eps ||
-                    Mathf.Abs(a[i].b - b[i].b) >= eps) changed++;
+                int row = y * ShotW;
+                for (int x = roi.x; x < xEnd; x++)
+                {
+                    int i = row + x;
+                    if (i < 0 || i >= a.Length) continue;
+                    if (Mathf.Abs(a[i].r - b[i].r) >= eps ||
+                        Mathf.Abs(a[i].g - b[i].g) >= eps ||
+                        Mathf.Abs(a[i].b - b[i].b) >= eps) changed++;
+                }
             }
             return changed;
+        }
+
+        /// <summary>
+        /// Content hash of a written PNG (FNV-1a, 8 hex chars). Two shots sharing a
+        /// fingerprint rendered the IDENTICAL picture. For a per-level ladder that is a
+        /// statement about the game, not a harness fault -- surfacing it turns "three
+        /// suspiciously equal numbers" into a documented finding.
+        /// </summary>
+        private static string Fingerprint(byte[] bytes)
+        {
+            unchecked
+            {
+                uint h = 2166136261u;
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    h ^= bytes[i];
+                    h *= 16777619u;
+                }
+                return h.ToString("x8", CultureInfo.InvariantCulture);
+            }
         }
 
         /// <summary>
@@ -1190,10 +1326,31 @@ namespace DeNelle.Editor
         /// material, null shader, or Unity error shader. A missing shader can render
         /// magenta, black, white or nothing -- so this asks the materials directly
         /// rather than inferring the answer from pixels.
+        ///
+        /// THE TRAIL SLOT (coordinator's first run, 2026-08-06 -- this check failed 14
+        /// of 20 shots for a non-defect). A ParticleSystemRenderer ALWAYS exposes TWO
+        /// material slots through sharedMaterials: [0] is `material` and [1] is
+        /// `trailMaterial`. Slot 1 is legitimately EMPTY on every particle system that
+        /// does not draw trails, which is most of them -- so reading it as a broken
+        /// material condemned healthy art (`ArcherTower_Projectile/Sparks[1]`,
+        /// `SimpleCast_Cast/Flash[1]`, `Fire_Cast/BigSparks[1]` ...). The Hovl pack was
+        /// verified fully present and its HS_Blend_CG shader graph resolves; there was
+        /// nothing wrong.
+        ///
+        /// So slot 1 on a ParticleSystemRenderer is only a defect when the system's
+        /// Trails module is actually ENABLED. It is skipped otherwise -- and the skips
+        /// are COUNTED and reported, so this stays a narrow, visible exclusion rather
+        /// than a blanket "ignore index 1" that could hide a real trail defect later.
+        /// Slot 0 is never excluded: a null there is the particle material itself, which
+        /// is exactly the genuine finding on BurningStructure_Aura. Non-particle
+        /// renderers keep every slot checked -- a trailing null there is the white-slab
+        /// defect and must still fail.
         /// </summary>
-        private static void CollectShaderProblems(GameObject go, string label, List<string> into)
+        private static int CollectShaderProblems(GameObject go, string label, List<string> into)
         {
-            if (go == null) return;
+            if (go == null) return 0;
+            int trailSlotsSkipped = 0;
+
             foreach (var r in go.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -1203,18 +1360,37 @@ namespace DeNelle.Editor
                     into.Add(label + "/" + r.name + ": no materials");
                     continue;
                 }
+
+                var psr = r as ParticleSystemRenderer;
+                bool trailsOn = false;
+                if (psr != null)
+                {
+                    var ps = psr.GetComponent<ParticleSystem>();
+                    trailsOn = ps != null && ps.trails.enabled;
+                }
+
                 for (int i = 0; i < mats.Length; i++)
                 {
+                    // The one exclusion: an unused trail slot on a non-trailing system.
+                    if (psr != null && i == 1 && !trailsOn && mats[i] == null)
+                    {
+                        trailSlotsSkipped++;
+                        continue;
+                    }
+
                     var m = mats[i];
-                    if (m == null) { into.Add(label + "/" + r.name + "[" + i + "]: NULL material"); continue; }
+                    string slot = psr != null ? (i == 0 ? "[0 material]" : i == 1 ? "[1 trailMaterial]" : "[" + i + "]")
+                                              : "[" + i + "]";
+                    if (m == null) { into.Add(label + "/" + r.name + slot + ": NULL material"); continue; }
                     var sh = m.shader;
-                    if (sh == null) { into.Add(label + "/" + r.name + "[" + i + "] '" + m.name + "': NULL shader"); continue; }
+                    if (sh == null) { into.Add(label + "/" + r.name + slot + " '" + m.name + "': NULL shader"); continue; }
                     string n = sh.name ?? string.Empty;
                     if (n.IndexOf("InternalErrorShader", StringComparison.Ordinal) >= 0 ||
                         n.IndexOf("Hidden/InternalError", StringComparison.Ordinal) >= 0)
-                        into.Add(label + "/" + r.name + "[" + i + "] '" + m.name + "': ERROR SHADER '" + n + "'");
+                        into.Add(label + "/" + r.name + slot + " '" + m.name + "': ERROR SHADER '" + n + "'");
                 }
             }
+            return trailSlotsSkipped;
         }
 
         // ---------------------------------------------------------------------
@@ -1373,26 +1549,46 @@ namespace DeNelle.Editor
             sb.AppendLine("| Check | What it catches | How |");
             sb.AppendLine("|---|---|---|");
             sb.AppendLine("| **Magenta px** | Unity's error-shader pink | pixels with R>0.90, B>0.90, G<0.30 |");
-            sb.AppendLine("| **Drawn?** | the invisible and the black-on-dark cases | the SAME camera renders the stage twice, with and without the effect; if fewer than " +
-                          (MinChangedFraction * 100f).ToString("0.00###", CultureInfo.InvariantCulture) +
-                          "% of pixels move, the effect contributed nothing. A whole-frame luminance spread is reported alongside it, so a dead stage is caught even if the diff is degenerate |");
+            sb.AppendLine("| **Drawn?** | the invisible and the black-on-dark cases | the SAME camera renders the stage twice, with and without the effect, and the difference is counted **inside the effect's own projected screen footprint** -- not against the whole frame. It must move at least " +
+                          MinChangedAbsolute + " px, or " +
+                          (MinChangedRoiFraction * 100f).ToString("0.0##", CultureInfo.InvariantCulture) +
+                          "% of that footprint, whichever is larger. A whole-frame luminance spread is reported alongside it, so a dead stage is caught even if the diff is degenerate |");
             sb.AppendLine("| **Shaders** | null material, null shader, `Hidden/InternalErrorShader` | the materials are asked directly, and named |");
+            sb.AppendLine();
+            sb.AppendLine("Two calibrations, both corrections to the first run of this harness (2026-08-06):");
+            sb.AppendLine();
+            sb.AppendLine("- **The \"drawn\" test is cropped to the effect, not the frame.** It used to be a " +
+                          "fraction of all 3.2 megapixels, so one muzzle flash failed at 468 px (0.015%) and the " +
+                          "next passed at 789 px (0.025%). Both were the same effect a few pixels across; a " +
+                          "0.01%-of-frame gap deciding pass/fail is measurement noise, not evidence. A muzzle " +
+                          "flash is *supposed* to be small -- what it must not be is absent, and an absent " +
+                          "effect moves zero pixels, not four hundred.");
+            sb.AppendLine("- **An empty trail slot is not a broken material.** A `ParticleSystemRenderer` always " +
+                          "exposes two material slots -- `[0] material` and `[1] trailMaterial` -- and slot 1 is " +
+                          "legitimately empty on every system that does not draw trails, which is most of them. " +
+                          "Reading it as a defect failed 14 of 20 shots against perfectly healthy art. Slot 1 is " +
+                          "now only checked when the system's Trails module is actually enabled, the skips are " +
+                          "counted below so the exclusion stays visible, and **slot 0 is never excluded** -- a " +
+                          "null there is the particle material itself and still fails.");
             sb.AppendLine();
 
             sb.AppendLine("## Shots");
             sb.AppendLine();
-            sb.AppendLine("| # | Subject | Level | VFX played | Sim t | PNG | Magenta px | Drawn? | Shaders | Verdict |");
-            sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
+            sb.AppendLine("| # | Subject | Level | VFX played | Sim t | PNG | Frame id | Magenta px | Drawn? | Shaders | Verdict |");
+            sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
             int n = 0;
+            int totalTrailSkips = 0;
             foreach (var r in results)
             {
                 n++;
+                totalTrailSkips += r.TrailSlotsSkipped;
                 sb.Append("| ").Append(n)
                   .Append(" | ").Append(Cell(r.Shot.Subject))
                   .Append(" | ").Append(Cell(r.Shot.Level))
                   .Append(" | ").Append(Cell(r.Played))
                   .Append(" | ").Append(r.SimUsed.ToString("0.###", CultureInfo.InvariantCulture)).Append(" s")
                   .Append(" | ").Append(Cell(r.Png))
+                  .Append(" | `").Append(Cell(r.Fingerprint)).Append("`")
                   .Append(" | ").Append(r.MagentaCount).Append(" (")
                   .Append(r.MagentaPct.ToString("0.000", CultureInfo.InvariantCulture)).Append("%)")
                   .Append(" | ").Append(Cell(r.Uniformity))
@@ -1401,6 +1597,55 @@ namespace DeNelle.Editor
                   .AppendLine(" |");
             }
             sb.AppendLine();
+            sb.AppendLine("Unused `trailMaterial` slots skipped across this run: **" + totalTrailSkips +
+                          "**. Each one is a particle system that draws no trails; none is a defect. " +
+                          "The count is printed so the exclusion is visible and can be re-audited.");
+            sb.AppendLine();
+
+            // -- IDENTICAL FRAMES -------------------------------------------------
+            // Three shots of the Sky Ballista at L1/L2/L3 came back with byte-identical
+            // measurements on the first run, which reads as a harness fault until you can
+            // see that it is not one. Group by content hash and say which it is.
+            var byFingerprint = new Dictionary<string, List<Result>>(StringComparer.Ordinal);
+            foreach (var r in results)
+            {
+                if (r.Fingerprint == "-" ) continue;
+                if (!byFingerprint.TryGetValue(r.Fingerprint, out var group))
+                {
+                    group = new List<Result>();
+                    byFingerprint[r.Fingerprint] = group;
+                }
+                group.Add(r);
+            }
+            var dupes = new List<KeyValuePair<string, List<Result>>>();
+            foreach (var kv in byFingerprint) if (kv.Value.Count > 1) dupes.Add(kv);
+
+            if (dupes.Count > 0)
+            {
+                sb.AppendLine("### Shots that rendered the IDENTICAL picture");
+                sb.AppendLine();
+                sb.AppendLine("Each stage is torn down and rebuilt from scratch per shot (one `GameObject` root " +
+                              "created at the top of the capture and `DestroyImmediate`d in the `finally`), and " +
+                              "the particle seed is pinned, so two shots match byte-for-byte only when they " +
+                              "genuinely play the same thing. **These are findings about the game, not repeats " +
+                              "of a stale frame:**");
+                sb.AppendLine();
+                foreach (var kv in dupes)
+                {
+                    var names = new List<string>();
+                    foreach (var r in kv.Value) names.Add(r.Shot.Subject + " " + r.Shot.Level);
+                    sb.AppendLine("- `" + kv.Key + "` -- " + Cell(string.Join(" == ", names.ToArray())));
+                }
+                sb.AppendLine();
+                sb.AppendLine("For a tower across L1/L2/L3 this is expected wherever the catalog row authors no " +
+                              "`repo.upgradeVisualPath` (so one model serves all three levels) AND the tower is " +
+                              "not the ground archer (the only tower whose projectile key reads the tier, " +
+                              "DefenseTower.cs:1156-1161) -- because `PlayFireVfx` (DefenseTower.cs:1050) never " +
+                              "reads the tier at all. Sky Ballista, Ballista and Catapult all meet both " +
+                              "conditions. **Upgrading those towers changes nothing the player can see at the " +
+                              "moment of fire.** That is a real gap in the tower ladder and belongs on the board.");
+                sb.AppendLine();
+            }
 
             bool anyNote = false;
             foreach (var r in results) if (!string.IsNullOrEmpty(r.Shot.Notes)) { anyNote = true; break; }
@@ -1421,8 +1666,19 @@ namespace DeNelle.Editor
             sb.AppendLine("A burst captured at t=0 is one particle -- a shot that proves nothing. " +
                           "Each effect is driven with `ParticleSystem.Simulate(t, true, true, true)` " +
                           "to a time chosen for its own shape. Where the first choice produced no visible " +
-                          "contribution the harness retried a short ladder, and the time in the table above " +
-                          "is the one that produced the picture.");
+                          "contribution the harness retries a ladder of `t`, `0.4t`, `2.5t`, `4t` -- every " +
+                          "rung PROPORTIONAL to the effect's own time, so a slow volumetric probes LATER " +
+                          "rather than being asked again at a few milliseconds. The **best** rung is the one " +
+                          "kept, written and reported; the full ladder is printed below so that claim is " +
+                          "auditable instead of merely asserted.");
+            sb.AppendLine();
+            sb.AppendLine("| Shot | Ladder tried (time = px changed in ROI) | Kept |");
+            sb.AppendLine("|---|---|---|");
+            foreach (var r in results)
+                sb.Append("| ").Append(Cell(r.Shot.Subject + " " + r.Shot.Level))
+                  .Append(" | ").Append(Cell(r.Ladder))
+                  .Append(" | ").Append(r.SimUsed.ToString("0.###", CultureInfo.InvariantCulture))
+                  .AppendLine(" s |");
             sb.AppendLine();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var r in results)
@@ -1472,6 +1728,15 @@ namespace DeNelle.Editor
                           "in game. Judge the EFFECT.");
             sb.AppendLine("- **Lighting.** Each stage builds and owns one directional light parented to the " +
                           "stage root and destroyed with it. Ambient is never touched and never relied on.");
+            sb.AppendLine("- **What a `[0 material]` null means.** Slot 0 of a `ParticleSystemRenderer` is the " +
+                          "particle material itself. A null there is not a spare slot -- the system has nothing " +
+                          "to draw its particles with, and Unity will substitute the error shader or draw " +
+                          "nothing at all depending on the path. It is always reported and always fails. Slot " +
+                          "`[1 trailMaterial]` is the one that is legitimately empty on a non-trailing system.");
+            sb.AppendLine("- **Every stage is rebuilt from scratch.** One root `GameObject` per shot, created " +
+                          "at the top of the capture and `DestroyImmediate`d in the `finally` -- light, camera, " +
+                          "subject prop and every effect instance hang off it. No state carries between shots, " +
+                          "so two shots that measure identically are playing identical content.");
             sb.AppendLine();
 
             if (_heldNotes.Count > 0)
