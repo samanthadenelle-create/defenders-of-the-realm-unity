@@ -140,6 +140,13 @@ namespace DeNelle.Wallet
         private MobileWalletAdapterClient _client;
         private TaskCompletionSource<MobileWalletAdapterClient> _clientReady;
         private bool _didConnect;
+
+        /// <summary>
+        /// WO-913: the project ships runInBackground=0, so the wallet launch freezes
+        /// the Unity main thread mid-handshake. We force it ON for the association and
+        /// put this value back in CloseAssociation.
+        /// </summary>
+        private bool _runInBackgroundToRestore;
         private bool _closed;
 
         /// <summary>
@@ -337,6 +344,30 @@ namespace DeNelle.Wallet
             _clientReady = new TaskCompletionSource<MobileWalletAdapterClient>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
+            // =================================================================
+            // WO-913 ROOT CAUSE (proven from the 2026-08-06 device capture).
+            // -----------------------------------------------------------------
+            // ProjectSettings runInBackground = 0. Launching the wallet PAUSES our
+            // activity (wm_pause_activity userLeaving=true, 20ms after the line
+            // below), which FREEZES the Unity main thread - and every await in this
+            // class resumes on Unity's SynchronizationContext.
+            //
+            // The capture shows it exactly: the last main-thread log (tid 27275) is
+            // "MWA association -> package=", 20ms before the pause. The socket open
+            // (tid 27635) and key exchange (tid 27521) still ran because
+            // WebSocketSharp owns its own threads - so the handshake COMPLETED while
+            // the thread that had to send `authorize` was stopped dead. The wallet
+            // sheet then sat blank waiting for a request that could never come, and
+            // timed out.
+            //
+            // Keep the main thread pumping for the duration of the association. The
+            // previous value is restored in CloseAssociation.
+            // =================================================================
+            _runInBackgroundToRestore = Application.runInBackground;
+            Application.runInBackground = true;
+            FlowTrace.Step("Wallet",
+                $"MWA main-thread pump held ON for the handshake (was runInBackground={_runInBackgroundToRestore}).");
+
             var pkg = ResolvePreferredWalletPackage();
             var intent = LocalAssociationIntentCreator.CreateAssociationIntent(_session.AssociationToken, _port);
 
@@ -531,6 +562,15 @@ namespace DeNelle.Wallet
             catch (Exception ex)
             {
                 FlowTrace.Warn("Wallet", $"MWA association close: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                // Restore only AFTER the socket is down. By this point the association
+                // is finished, so nothing is left pending that a frozen main thread
+                // could strand. Restoring any earlier re-opens the exact freeze above.
+                Application.runInBackground = _runInBackgroundToRestore;
+                FlowTrace.Step("Wallet",
+                    $"MWA main-thread pump restored to runInBackground={_runInBackgroundToRestore}.");
             }
         }
 #endif
