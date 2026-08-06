@@ -18,7 +18,15 @@
 param(
     [Parameter(Mandatory=$true)][string]$Method,
     [Parameter(Mandatory=$true)][string]$LogName,
-    [int]$TimeoutMin = 30
+    [int]$TimeoutMin = 30,
+    # Force the ACTIVE BUILD TARGET for this run (e.g. Win64, Android, WebGL).
+    # WHY THIS EXISTS (2026-08-05): an APK build leaves the project's active target on
+    # Android. A later DESKTOP build then dies with "Native extension for Android target
+    # not found" and an SBP/Addressables failure - and because the wrapper judges by log
+    # text rather than a marker, it reads as a generic failure rather than a target
+    # mismatch. Pass -BuildTarget Win64 after any Android build. Omitted => whatever the
+    # project's active target happens to be, i.e. today's behaviour, unchanged.
+    [string]$BuildTarget = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,7 +57,8 @@ $log = Join-Path $logDir $LogName
 if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 
 $unityArgs = @('-batchmode', '-quit', '-projectPath', $proj, '-executeMethod', $Method, '-logFile', $log)
-Write-Host "[run] editor=$($chosen.Name)  method=$Method"
+if ($BuildTarget -ne '') { $unityArgs = @('-buildTarget', $BuildTarget) + $unityArgs }
+Write-Host "[run] editor=$($chosen.Name)  method=$Method  buildTarget=$(if ($BuildTarget -ne '') { $BuildTarget } else { '(project active)' })"
 Write-Host "[run] log=$log"
 & $unity @unityArgs | Out-Null
 $wrapperExit = $LASTEXITCODE
