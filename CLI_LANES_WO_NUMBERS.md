@@ -1,6 +1,19 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **910**. **782–859 + 900–909 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **911**. **782–859 + 900–910 CONSUMED.**
+> - **910** = **Ranger + Mage talent trees: 31 player-reachable nodes have no consumer.** Surfaced the
+>   moment `TalentStrategyRegression`'s `HiddenTrees` was emptied — it had hardcoded `{"ranger","mage"}`,
+>   so guard G3 had NEVER audited 40 player-reachable nodes while reporting green. **Ranger collapses to
+>   ONE usable talent out of 20, Mage to five; both lose their entire tier-4 capstone row.** Knight (32)
+>   and shared (9) are fully green, so this is isolated to the two classes unlocked 2026-08-05.
+>   ⚠ **Hiding was CONSIDERED AND REJECTED** — `HeroTalentNodeDef.Hidden` had ZERO runtime readers
+>   (its own comment lied), so `"hidden": true` would have turned the gate green while leaving every node
+>   clickable; and hiding strands three whole tiers + orphans three nodes. `Hidden` is now genuinely
+>   wired, so an owner ruling to hide will actually work. The 31 are tracked as a dated, ratcheted
+>   baseline: new debt fails, and a baseline id that stops being dead ALSO fails.
+>   File `WORK_ORDER_910_ranger_mage_talent_consumers.md`. **READY FOR OWNER RULING.**
+>
+> *(banner bumped 910 → 911 in the SAME edit as the 910 mint — the rule that broke five times on 08-02.)*
 > - **909** = **Activate Mage + Ranger in character selection (re-enable + verify).** Owner: create a WO
 >   for CLI to make Mage/Ranger selectable. Gate `FeatureFlags.KnightOnly` already default-OFF
 >   (`9a0ff548`); WO-861 landed kits/loadout/portraits/copy/rename — so this is a **re-enable + verify +
@@ -154,10 +167,15 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **910** (782–859 + 900–909 consumed; 860–899 belongs to the UI seat) |
-> | **860–899 reserved** | UI seat | **885** (860–884 consumed) |
+> | **860–899 reserved** | UI seat | **895** (860–894 consumed) |
 >
-> *(UI-seat bumped 884 → 885 in the SAME edit as the WO-884 mint — Common VFX facade + 5 Particle-Pack
-> deliverables. Main-line mirror corrected 908 → 910 to match the header after the 909 Mage/Ranger mint.)*
+> *(UI-seat bumped 894 → 895 in the SAME edit as the WO-894 mint — Victory screen: real spinning 5-point
+> stars + exact wireframe layout, replacing the diamond/no-spin BuildStarRow in EndStateView.)*
+>
+> *(UI-seat bumped 885 → 894 in the SAME edit as the WO-885–893 VFX mints — 885 umbrella index +
+> 886 death · 887 on-hit · 888 heal/HP/item auras · 889 combat auras/nearest-N · 890 harvest ·
+> 891 healer structure · 892 building damage · 893 portals/spawn/dissolve. Earlier: 884 VFX facade,
+> 909 Mage/Ranger. Main-line mirror corrected 908 → 910 after the 909 mint.)*
 >
 > ⚠ **This table drifted AGAIN (corrected 2026-08-05).** The UI-seat row read `864` while
 > `WorkOrders/` holds an unbroken 860→883 — twenty numbers stale, and 864 itself is not only

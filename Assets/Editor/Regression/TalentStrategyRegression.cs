@@ -46,6 +46,37 @@
 //   shared.n7   Swift Recovery    (healthRegen — no consumer reads it)
 // G2's new-clamp probes fail until the A3 lane lands the clamped accessors.
 //
+// ── G3 STATE 2026-08-05 — READ THIS BEFORE "FIXING" THE RED ───────────────────
+// The Ranger and Mage classes were unlocked, but the HiddenTrees set below was not
+// updated in that commit (its own update rule said to). G3 therefore skipped BOTH
+// FULL TREES for as long as players could reach them: it audited 41 nodes and
+// reported green while 40 shipped nodes were never checked at all.
+// HiddenTrees is now EMPTY, so G3 audits all 81 shipped nodes — and it goes RED on
+// 31 PRE-EXISTING dead nodes (17 ranger + 14 mage). None of them are new breakage;
+// they are the stubs that were always there, finally visible. Split:
+//   * UNREGISTERED effect keys — no consumer exists anywhere for attackSpeed,
+//     moveSpeed, critChance, stealth, summon, dodge, onEvent, shieldStrength,
+//     manaCostReduction, modifyAbility:slow, modifyAbility:burn.
+//   * REGISTERED key + a "(V2)" / "(NEW ability - stub)" note — the note and the
+//     wiring disagree; the node advertises an effect its consumer does not deliver.
+// The knight tree (32 nodes) and shared (9) remain fully green.
+// THE ONLY TWO LEGAL MOVES REMAIN: wire a consumer (and register it with a
+// citation), or mark that NODE "hidden": true in hero-talents.json. Which of these
+// 31 nodes ship is a DESIGN call (they are player-reachable talents), so this pass
+// deliberately leaves the gate honest rather than making that call for the owner.
+// Re-adding a tree slug to HiddenTrees to get green is the bug, not the fix.
+//
+// RESOLUTION (orchestrator ruling, 2026-08-05): the 31 are recorded ONCE in
+// KnownDeadNodeBaseline below as dated tracked debt under WO-910, so the gate keeps
+// auditing them and names them as debt instead of blocking every other lane. The set
+// may only SHRINK — a non-baselined dead node still fails, and a stale baseline id
+// fails too. HIDING WAS CONSIDERED AND REJECTED for these 31: HeroTalentNodeDef.Hidden
+// had no runtime reader (so hiding would only have silenced the gate), and hiding all
+// 31 strands ranger t4 + mage t3/t4 entirely and orphans 3 more nodes — ranger would
+// drop to ONE reachable talent of 20, mage to five. Hidden is NOW genuinely wired
+// (HeroSkillTreeVM.Rebuild), but WHETHER to hide these is the owner's call: see
+// WorkOrders/WORK_ORDER_910_ranger_mage_talent_consumers.md.
+//
 // Wire into the suite from DataRegression.RunAll (one line):
 //   if (!TalentStrategyRegression.Run(out var talentStratReason)) failures.Add(talentStratReason); else log.AppendLine("[talent-strategy] " + talentStratReason);
 // =============================================================================
@@ -156,13 +187,87 @@ namespace DeNelle.Editor
             "towerAttackSpeed", "structureToughnessWave",
         };
 
-        // Trees hidden from the SHIPPED scope: ff.knightonly gates Ranger/Mage off
-        // in V1 (WO-676 "Knight + shared are the live scope"), so their stored-not-
-        // wired stubs are AUDITED (logged) but do not fail G3. UPDATE RULE: when a
-        // class unlocks (ff.knightonly retired for it), remove its slug here in the
-        // same commit — its stubs then become shipped and must be wired or hidden.
-        private static readonly HashSet<string> HiddenTrees = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "ranger", "mage" };
+        // Trees hidden from the SHIPPED scope: a tree listed here is AUDITED (logged)
+        // but cannot fail G3. UPDATE RULE: when a class unlocks, remove its slug here in
+        // the same commit — its stubs then become shipped and must be wired or hidden.
+        //
+        // 2026-08-05: EMPTIED. This set held { "ranger", "mage" } from the ff.knightonly
+        // era and was NOT updated when those two classes were actually unlocked, so G3 —
+        // the "no dead talent nodes" gate — silently skipped both entire trees while
+        // players could reach them. A coverage loss with no failing test to announce it is
+        // the worst kind, so the set stays EMPTY: hiding is now a per-NODE decision in
+        // hero-talents.json ("hidden": true), which is visible in the data the designer
+        // edits instead of buried in an editor-only C# constant. Do not re-add a tree slug
+        // here to make the suite green — that is exactly the failure this line caused.
+        private static readonly HashSet<string> HiddenTrees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // =====================================================================
+        //  KnownDeadNodeBaseline — TRACKED DEBT, dated 2026-08-05, WO-910
+        // ---------------------------------------------------------------------
+        //  31 nodes (17 ranger + 14 mage) are PLAYER-REACHABLE talents whose effect
+        //  has NO implemented consumer, pending an OWNER DESIGN PASS (WO-910). They
+        //  are listed here so G3 keeps AUDITING them and reports them as tracked debt
+        //  instead of either lying about them or blocking every other lane's gate.
+        //  Split: 16 unregistered-effect-key + 15 registered-key-with-a-stub-note.
+        //  Knight (32 nodes) and shared (9) are fully green — this is isolated to the
+        //  two classes unlocked on 2026-08-05.
+        //
+        //  WHY A BASELINE AND NOT "hidden": true ON EACH NODE (the rejected fix —
+        //  this reasoning must survive, or someone will "fix" this by hiding them):
+        //   1. On 2026-08-05 HeroTalentNodeDef.Hidden had ZERO runtime readers, so
+        //      hiding would have greened the gate while leaving all 31 nodes fully
+        //      clickable in the player's tree — suppression, just spelled in JSON.
+        //      (Hidden is now genuinely wired in HeroSkillTreeVM.Rebuild; the point
+        //      stands that hiding is the OWNER's call to make, not the gate's.)
+        //   2. Hiding all 31 STRANDS THREE WHOLE TIERS (ranger t4, mage t3 + t4) and
+        //      ORPHANS 3 survivors whose only prerequisite would be hidden. Ranger
+        //      would collapse to ONE reachable talent of 20; mage to five. Shipping
+        //      an unreachable tree is worse than the bug being fixed.
+        //
+        //  THE RATCHET (debt may only SHRINK — enforced below, not by good intentions):
+        //   * A dead node NOT in this set FAILS the gate. New debt cannot be added.
+        //   * A baseline id that NO LONGER fails (wired, hidden, renamed or deleted)
+        //     FAILS the gate too, naming the line to delete. A baseline entry can
+        //     therefore never outlive the debt it tracks and quietly rot into a lie.
+        //  There is no way to make this gate green by EDITING THIS SET — only by
+        //  wiring a consumer (or the owner ruling "hide it") and then pruning the id.
+        // =====================================================================
+        private static readonly HashSet<string> KnownDeadNodeBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // -- unregistered effect key: no consumer exists anywhere (16) --
+            "ranger.t1n1",  // Quick Draw            attackSpeed
+            "ranger.t2n1",  // Windstrider Boots     moveSpeed
+            "ranger.t2n3",  // Eagle Vision          critChance
+            "ranger.t2n4",  // Deep Freeze           modifyAbility:slow
+            "ranger.t2n5",  // Shadow Veil           stealth
+            "ranger.t3n2",  // Emberhead             modifyAbility:burn
+            "ranger.t3n3",  // Leafcloak             dodge
+            "ranger.t3n4",  // Beast Companion       summon
+            "ranger.t4n2",  // Windstrider Legend    moveSpeed
+            "ranger.t4n3",  // Phantom Hunter        stealth
+            "ranger.t4n4",  // Nature's Fury         onEvent
+            "mage.t2n1",    // Aether Surge          onEvent
+            "mage.t2n3",    // Arcane Shield         shieldStrength
+            "mage.t3n3",    // Aether Form           manaCostReduction
+            "mage.t3n4",    // Runic Overload        onEvent
+            "mage.t4n4",    // Reality Rift          onEvent
+            // -- registered key, but the note declares a stub the consumer does not deliver (15) --
+            "ranger.t1n2",  // Hunter's Mark         unlockAbility "(NEW ability - stub)"
+            "ranger.t1n3",  // Tumble Step           unlockAbility "(NEW ability - stub)"
+            "ranger.t1n5",  // Arrow Storm Prep      unlockAbility "(NEW ability - stub)"
+            "ranger.t3n5",  // Precision Strike      unlockAbility "(NEW ability - stub)"
+            "ranger.t4n1",  // Storm of Arrows       unlockAbility "(NEW ability - stub)"
+            "ranger.t4n5",  // Elarion's Arrow       modifyAbility: "pierce/chain (V2)"
+            "mage.t1n5",    // Rune Binding          modifyAbility: "chain (V2)"
+            "mage.t2n4",    // Flame Mastery         modifyAbility: "(V2)"
+            "mage.t3n1",    // Cataclysm Prep        modifyAbility: "(V2)"
+            "mage.t3n2",    // Spell Echo            proc "duplicate (V2)"
+            "mage.t3n5",    // Void Rift             unlockAbility "(NEW ability - stub)"
+            "mage.t4n1",    // Cataclysm             unlockAbility "(NEW ability - stub)"
+            "mage.t4n2",    // Aetherweaver Ascension damageBonus "(V2)"
+            "mage.t4n3",    // Eternal Arcana        damageBonus "+40% mana regen (V2)"
+            "mage.t4n5",    // Elarion's Legacy      proc "duplicate (V2)"
+        };
 
         public static bool Run(out string reason)
         {
@@ -185,7 +290,9 @@ namespace DeNelle.Editor
             {
                 Debug.Log(log.ToString() + "TALENT_STRATEGY_OK");
                 reason = "TALENT STRATEGY OK — hero-talents.json parse/dual-copy/vocabulary + StatSum " +
-                         "stacking/clamps + every shipped node's effect has an implemented consumer (WO-676 G1-G3)";
+                         "stacking/clamps + every shipped node's effect has an implemented consumer, except " +
+                         KnownDeadNodeBaseline.Count + " node(s) tracked as dated debt under WO-910 " +
+                         "(ranger/mage; awaiting the owner design pass) (WO-676 G1-G3)";
                 return true;
             }
             reason = "talent-strategy: " + string.Join("; ", failures);
@@ -416,6 +523,10 @@ namespace DeNelle.Editor
 
             int shipped = 0, hidden = 0, auditStubs = 0;
             var auditSample = new List<string>();
+            // Every baseline id we actually SAW fail this run. Anything in the baseline
+            // that is missing from this set at the end is stale debt -> the ratchet fires.
+            var baselineHits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var debtSample = new List<string>();
             foreach (var (treeSlug, node) in AllNodes(root))
             {
                 string id = Str(node, "id") ?? $"<{treeSlug} unnamed>";
@@ -441,20 +552,50 @@ namespace DeNelle.Editor
                 }
 
                 shipped++;
+
+                // The node's verdict is computed FIRST, then routed: a dead node that is
+                // TRACKED DEBT (WO-910 baseline) logs instead of failing; a dead node that
+                // is NOT baselined always fails. New debt can never be added silently.
+                string deadReason = null;
                 if (!TalentConsumerRegistry.Implemented.TryGetValue(key, out var consumer))
                 {
-                    failures.Add($"DEAD NODE '{id}' ({name}): effect key '{key}' has NO implemented consumer in TalentConsumerRegistry" +
-                                 (string.IsNullOrEmpty(note) ? "" : $" — note says '{note}'") +
-                                 " — wire a consumer (and register it with a citation) or mark the node \"hidden\": true (owner's wire-or-hide law)");
-                    continue;
+                    deadReason = $"effect key '{key}' has NO implemented consumer in TalentConsumerRegistry" +
+                                 (string.IsNullOrEmpty(note) ? "" : $" - note says '{note}'");
                 }
                 // Belt: a registered type whose NOTE still declares a dead stub is a
                 // half-truth — the note and the wiring must agree.
-                if (IsStubNote(note))
-                    failures.Add($"DEAD NODE '{id}' ({name}): effect note '{note}' declares a V2/V-later stub while shipped non-hidden — wire it (and fix the note) or hide it");
+                else if (IsStubNote(note))
+                {
+                    deadReason = $"effect note '{note}' declares a V2/V-later stub while shipped non-hidden";
+                }
+                if (deadReason == null) continue;
+
+                if (KnownDeadNodeBaseline.Contains(id))
+                {
+                    baselineHits.Add(id);
+                    if (debtSample.Count < 12) debtSample.Add(id);
+                    continue;   // tracked debt (WO-910) — audited + reported, not failing
+                }
+                failures.Add($"DEAD NODE '{id}' ({name}): {deadReason} - wire a consumer (and register it " +
+                             "with a citation) or mark the node \"hidden\": true (owner's wire-or-hide law). " +
+                             "Do NOT add it to KnownDeadNodeBaseline — that set is frozen debt (WO-910) and may only shrink");
             }
 
-            log.AppendLine($"  shipped nodes checked: {shipped}; hidden/gated-off: {hidden}");
+            log.AppendLine($"  shipped nodes checked: {shipped}; hidden/gated-off: {hidden}; " +
+                           $"tracked debt (WO-910): {baselineHits.Count}/{KnownDeadNodeBaseline.Count}");
+            if (debtSample.Count > 0)
+                log.AppendLine($"  DEBT (WO-910, non-failing, awaiting the owner design pass): {string.Join(", ", debtSample)}" +
+                               (baselineHits.Count > debtSample.Count ? $", +{baselineHits.Count - debtSample.Count} more" : ""));
+
+            // THE RATCHET: a baseline id that no longer fails (wired / hidden / renamed /
+            // deleted) is stale debt. Failing here is what forces the set to SHRINK — the
+            // one-line fix is to delete that id, and the baseline can never rot into a lie.
+            foreach (var id in KnownDeadNodeBaseline)
+                if (!baselineHits.Contains(id))
+                    failures.Add($"STALE BASELINE '{id}': listed in KnownDeadNodeBaseline (WO-910 tracked debt) but it no " +
+                                 "longer reports as a dead node - it was wired, hidden, renamed or deleted. DELETE that id " +
+                                 "from KnownDeadNodeBaseline in the same commit (the debt set may only shrink)");
+
             if (auditStubs > 0)
                 log.AppendLine($"  AUDIT (hidden trees, log-only): {auditStubs} stub effect(s) on the books — sample: {string.Join(", ", auditSample)}");
             if (shipped == 0)

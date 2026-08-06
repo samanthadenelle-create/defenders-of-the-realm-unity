@@ -105,8 +105,22 @@ namespace DeNelle.Village.Talents
         [JsonProperty("branch")] public string Branch;
 
         // WO-676 G3 (wire-or-hide, no dead nodes): a node whose effect type has NO
-        // registered runtime consumer must carry "hidden": true — the View skips it and
-        // the EditMode gate enforces the pairing. Defaults false (visible).
+        // registered runtime consumer must carry "hidden": true — the node is then omitted
+        // from the skill-tree View and the EditMode gate stops failing it. Defaults false.
+        //
+        // 2026-08-05 (WO-910): until today this comment CLAIMED "the View skips it" while
+        // NOTHING read this field at runtime — HeroSkillTreeVM.Rebuild enumerated every node
+        // unconditionally. The wire-or-hide law's second option therefore did not exist:
+        // setting "hidden": true silenced the EditMode gate and left the node fully clickable
+        // in the player's tree. A field whose comment asserts behaviour it does not have is
+        // worse than no field, so the READER was added (HeroSkillTreeVM.Rebuild, both the hero
+        // tree and the shared pool) rather than the field deleted — the law depends on hidden
+        // MEANING something.
+        //
+        // CAUTION when you do set it: hiding a node does NOT rewrite the prerequisite graph.
+        // Any visible node whose only prerequisite is the node you hide becomes permanently
+        // unreachable ("Requires <hidden node>"). Check downstream reachability first — see
+        // the stranding analysis in WORK_ORDER_910_ranger_mage_talent_consumers.md.
         [JsonProperty("hidden")] public bool Hidden;
 
         // Node-graph (Path B) layout: canvas-relative position (0..1; y 0=top, 1=bottom)

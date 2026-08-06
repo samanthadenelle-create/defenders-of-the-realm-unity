@@ -441,6 +441,7 @@ namespace DeNelle.Village.Talents
                 foreach (var n in tree.Nodes)
                 {
                     if (n == null || string.IsNullOrEmpty(n.Id)) continue;
+                    if (n.Hidden) continue;   // WO-910: the wire-or-hide law's hide half (see below)
                     // Column from the explicit v2 slot (1..5); fall back to legacy branch column.
                     int col = n.Slot > 0 ? n.Slot - 1 : LegacyColumn(n);
                     _nodes.Add(BuildNode(n, col, isShared: false, budget, owned, effective));
@@ -455,10 +456,28 @@ namespace DeNelle.Village.Talents
                 {
                     var n = shared[i];
                     if (n == null || string.IsNullOrEmpty(n.Id)) continue;
+                    if (n.Hidden) continue;   // WO-910: same hide rule as the hero tree above
                     int col = n.Slot > 0 ? n.Slot - 1 : i;
                     _shared.Add(BuildNode(n, col, isShared: true, budget, owned, effective));
                 }
             }
+
+            // WO-910 — WHY the two `n.Hidden` skips above exist, and what they do NOT do.
+            // HeroTalentNodeDef.Hidden shipped on 2026-07-11 with a comment claiming "the View
+            // skips it", but NO code ever read it: a node marked "hidden": true in
+            // hero-talents.json silenced the EditMode no-dead-nodes gate while staying fully
+            // clickable in this panel. The owner's wire-or-hide law only has two legal moves if
+            // BOTH work, so the reader lives here now — this VM is the one place the tree's node
+            // list is projected for the View, so one skip per collection covers every surface.
+            //
+            // DELIBERATELY NOT DONE HERE: hiding a node does NOT rewrite the prerequisite graph.
+            // A visible node whose only prerequisite is hidden keeps that prerequisite and reads
+            // "Requires <hidden node>" forever (LockReasonFor below), i.e. it is stranded. Auto-
+            // repointing prerequisites past a hidden node would be a silent DESIGN change to the
+            // tree's shape, which is the owner's call — so the honest failure mode (a visibly
+            // unreachable node) is preserved instead. Verify downstream reachability BEFORE
+            // marking anything hidden; see WORK_ORDER_910_ranger_mage_talent_consumers.md.
+            // No node currently sets hidden, so today this is a no-op on live behaviour.
 
             BuildQuickSlots();
         }

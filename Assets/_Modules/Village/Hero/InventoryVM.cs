@@ -247,6 +247,45 @@ namespace DeNelle.Village.Hero
         public int Coins    => _economy?.Coins ?? 0;
         public int Crystals => _economy?.Crystals ?? 0;
 
+        // Cached so the resolve (and its UNSET warning) happens ONCE per VM lifetime — the
+        // View may re-read this on every Render, and a per-frame warn would be log spam.
+        private string _activeHeroJobKey;
+
+        /// <summary>
+        /// The job key ("knight" / "ranger" / "mage" / "cleric") of the hero the player
+        /// actually PICKED, read from the PERSISTED GameState.HeroClass — the same source
+        /// HeroBodySwapper.ResolveHeroClass trusts, NOT whatever loadout happens to be in
+        /// the scene. The View reads THIS instead of GameStateService (strict-MVVM, the same
+        /// rule as Coins/Crystals above): the paper-doll portrait resolve used to call
+        /// GameStateService.Instance from the View partial, which is exactly the read the
+        /// UI-MVVM conformance oracle exists to catch. Behaviour is unchanged — only the
+        /// path the value travels. Never null/empty: an unset class falls back to the roster
+        /// default (PlayableHeroes.Default).
+        /// </summary>
+        public string ActiveHeroJobKey
+        {
+            get
+            {
+                if (_activeHeroJobKey != null) return _activeHeroJobKey;
+
+                var svc = DeNelle.Core.State.GameStateService.Instance;
+                var state = svc != null ? svc.State : null;
+                DeNelle.Core.State.HeroClass? picked = null;
+                if (state != null)
+                    picked = DeNelle.Core.State.HeroClassOptExtensions.ToNullable(state.HeroClass);
+
+                var cls = picked ?? DeNelle.Core.State.PlayableHeroes.Default;
+                if (!picked.HasValue)
+                    FlowTrace.Warn("Inventory",
+                        "ActiveHeroJobKey: HeroClass is UNSET in the persisted state - falling back to " +
+                        DeNelle.Core.State.PlayableHeroes.Default + ". That is a SOURCE regression " +
+                        "(selection/start-flow must persist the pick), not a portrait bug.");
+
+                _activeHeroJobKey = DeNelle.Core.State.PlayableHeroes.JobKey(cls);
+                return _activeHeroJobKey;
+            }
+        }
+
         // ── Commands ────────────────────────────────────────────────────────────
 
         /// <summary>Select the slot at <paramref name="index"/> (fills the detail pane).</summary>

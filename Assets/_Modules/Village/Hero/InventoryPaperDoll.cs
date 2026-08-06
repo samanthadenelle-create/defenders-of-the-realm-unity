@@ -207,6 +207,37 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// The portrait slug for the hero the player actually picked. The persisted-class
+        /// half of the resolve lives in <see cref="InventoryVM.ActiveHeroJobKey"/> (class ->
+        /// job key, sourced from GameState.HeroClass); this View only maps that job key onto
+        /// the ART FILE name via <see cref="PortraitSlug"/>.
+        ///
+        /// WHY the indirection (strict-MVVM, UI-MVVM conformance oracle): this partial builds
+        /// uGUI, so it is a VIEW — and a View must never read game state. The first cut of this
+        /// method called GameStateService.Instance directly and tripped the oracle. Routing it
+        /// through the bound VM is the SAME idiom the sibling partial already uses for the
+        /// wallet (InventoryUIBuilder.cs: "int coins = _vm != null ? _vm.Coins : 0") and that
+        /// RaidDeployScreen uses throughout. The value is unchanged — only its path.
+        ///
+        /// Never returns null/empty: no bound VM (ConstructViewModel threw) falls back to the
+        /// roster default's slug rather than blanking the medallion.
+        /// </summary>
+        private string ActiveHeroPortraitSlug()
+        {
+            const string DefaultSlug = "Grom";   // PlayableHeroes.Default (Knight) art slug
+
+            if (_vm == null)
+            {
+                FlowTrace.Warn("Inventory",
+                    "ActiveHeroPortraitSlug: no bound InventoryVM - showing the " + DefaultSlug +
+                    " portrait. The VM is constructed before BuildRoot in Open(), so a null here " +
+                    "means ConstructViewModel threw; that is the real defect, not the portrait.");
+                return DefaultSlug;
+            }
+            return PortraitSlug(_vm.ActiveHeroJobKey) ?? DefaultSlug;
+        }
+
         // (PaperDollRow + PaperDollBarTech retired in WO-713: the equipment-row column was
         //  already dead code [zero callers], and the decorative Tech bars are replaced by the
         //  kit BuildObsidianBar HP/MP-with-values + badge_level + XP strip above. Verified
