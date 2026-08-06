@@ -227,7 +227,16 @@ namespace DeNelle.Core.Catalog
         /// normalizes to the base ceiling (uniform, script-built town — the owner-locked model).
         /// Author an exception only for a class that should read taller/shorter: towers = 1.25
         /// (5 m at base 4), siege engines = 0.75 (3 m). Change the base in ONE place and the whole
-        /// town re-scales together. JSON deserializes "heightMul" straight in. SUPERSEDES the
+        /// town re-scales together.
+        /// <para>PER-ROW EXCEPTION (owner felt-test ruling 2026-08-05): the ARCHER TOWER
+        /// (<c>tower_ground_archer</c>) authors <b>1.2</b>, not the 1.25 tower class value - the owner
+        /// felt it "too big, both round as well as tall" on the Seeker and ruled "go with 1.2 on the
+        /// tower". 1.25 is still the tower-class default for every other tower row. NOTE the second
+        /// half of that ruling ("half the size of a house") needs NO separate field: the fit is a
+        /// UNIFORM scale, so lowering this multiplier shrinks the base footprint by the same 4% -
+        /// and StructureFactory.MeasureUprightFootprintMetres measures the real estate off the
+        /// height-fitted model, never off the authored placement.footprint (that is only the
+        /// prefab-missing fallback). Height and footprint are ONE number here, by design.</para> JSON deserializes "heightMul" straight in. SUPERSEDES the
         /// deprecated absolute <see cref="visualHeight"/> below.
         /// </summary>
         public float heightMul = 1.0f;

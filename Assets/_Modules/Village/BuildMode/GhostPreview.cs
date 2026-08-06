@@ -84,7 +84,8 @@ namespace DeNelle.Village
             // must do the SAME, not always FitLargest. Mirrors StructureFactory.cs:79-94. (`fit` stays
             // method-scoped — the pack-missing fallback disc below also uses it.)
             // WO-764: EVERY structure now fits-to-HEIGHT = YHeightVariable * repo.heightMul (uniform
-            // base × the per-item multiplier; buildings inherit 1.0, towers 1.25). The ghost must match
+            // base × the per-item multiplier; buildings inherit 1.0, towers 1.25, the archer tower 1.2
+            // per the owner's 2026-08-05 "go with 1.2 on the tower" ruling). The ghost must match
             // Create's centralized formula EXACTLY or the dragged ghost and the placed building end up
             // different sizes.
             SkinOptions opts = SkinOptions.Structure(0f);

@@ -44,7 +44,9 @@ namespace DeNelle.Village
         /// every structure is fit-to-height against:
         /// <c>EffectiveHeight = YHeightVariable * repo.heightMul</c>. Every building uses the
         /// default 1.0 multiplier so the whole script-built town reads at ONE uniform height;
-        /// towers author 1.25 (5 m here) and siege engines 0.75 (3 m). Change THIS ONE number and
+        /// towers author 1.25 (5 m here) and siege engines 0.75 (3 m) - EXCEPT the archer tower,
+        /// which the owner ruled down to 1.2 (4.8 m) on 2026-08-05 ("go with 1.2 on the tower")
+        /// after felt-testing it as too big both round and tall. Change THIS ONE number and
         /// the entire town re-scales together (the owner-locked model). Was the WO-751
         /// per-item-absolute DefaultVisualHeight (also 4 m); the old absolute overrides became
         /// per-item <c>heightMul</c> multipliers.
@@ -106,7 +108,8 @@ namespace DeNelle.Village
             // (fit-to-largest scaled a tower so its tallest axis = footprint ~2.5 m -> a
             // squashed/wrong-scaled tower). WO-764: every structure fits to YHeightVariable *
             // repo.heightMul — buildings inherit the uniform 1.0 base, towers/siege author a
-            // multiplier (1.25 / 0.75) so a tall structure stands tall while the town stays uniform.
+            // multiplier (1.25 / 0.75; the archer tower 1.2 per the owner's 2026-08-05 ruling) so a
+            // tall structure stands tall while the town stays uniform.
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
                 float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);
