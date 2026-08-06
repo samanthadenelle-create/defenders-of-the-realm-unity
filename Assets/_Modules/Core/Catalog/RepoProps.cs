@@ -225,18 +225,41 @@ namespace DeNelle.Core.Catalog
         /// (StructureFactory.YHeightVariable = 4 m). The skinned model is fit-to-HEIGHT so its
         /// world-bounds Y == <c>YHeightVariable * heightMul</c>. DEFAULT 1.0 = every building
         /// normalizes to the base ceiling (uniform, script-built town — the owner-locked model).
-        /// Author an exception only for a class that should read taller/shorter: towers = 1.25
-        /// (5 m at base 4), siege engines = 0.75 (3 m). Change the base in ONE place and the whole
-        /// town re-scales together.
-        /// <para>PER-ROW EXCEPTION (owner felt-test ruling 2026-08-05): the ARCHER TOWER
-        /// (<c>tower_ground_archer</c>) authors <b>1.2</b>, not the 1.25 tower class value - the owner
-        /// felt it "too big, both round as well as tall" on the Seeker and ruled "go with 1.2 on the
-        /// tower". 1.25 is still the tower-class default for every other tower row. NOTE the second
-        /// half of that ruling ("half the size of a house") needs NO separate field: the fit is a
-        /// UNIFORM scale, so lowering this multiplier shrinks the base footprint by the same 4% -
-        /// and StructureFactory.MeasureUprightFootprintMetres measures the real estate off the
+        /// Change the base in ONE place and the whole town re-scales together.
+        /// <para>THE CADENCE (owner ruling 2026-08-05, "I want all of the other structures to stay
+        /// within that cadence... relatively the same size... all scaled to the same point"). ONE
+        /// FAMILY, NOT ONE NUMBER - the full rationale per group lives in the catalog's top-level
+        /// <c>_heightCadence</c> key, which is the authority; this is the summary:
+        /// <list type="bullet">
+        /// <item>1.00 (4.0 m) - BUILDING BASE. Houses, production, vendors, storage, collectors,
+        /// civic. The width reference: House_Medieval_Medium fits to 5.562 m across.</item>
+        /// <item>1.20 (4.8 m) - TOWER, and the ANCHOR the rest of the family is expressed against.
+        /// Owner-ruled and MEASURED: 2.778 m across = 49.9% of a house diameter, i.e. the ruling's
+        /// "half as wide as the diameter of any of the houses". The WHOLE tower class sits here as
+        /// of 2026-08-05 (tower_wall_wizard and tower_arcane_spire came off the old 1.25).</item>
+        /// <item>0.75 (3.0 m) - SIEGE ENGINE (catapult, wall-walk sky ballista). Machines, not
+        /// architecture; deliberately under the house line.</item>
+        /// <item>1.25 (5.0 m) - LANDMARK, exactly one row (<c>arcane-tower</c>, the Cathedral of
+        /// Magic). The town's single apex.</item>
+        /// <item>0.35 (1.4 m) - DECORATION (<c>deco_torch</c>). Unauthored it inherited the 1.0
+        /// building base, i.e. a wall torch as tall as a house.</item>
+        /// </list></para>
+        /// <para>NOT A CADENCE VALUE - <c>collector_farm</c> = 1.4. This multiplier fits BOUNDS, so
+        /// a spindly silhouette reads SMALLER than a boxy one at the same number; the farm's windmill
+        /// blades inflate its Y bounds and 1.4 is the owner felt-report compensation that puts its
+        /// BODY back on the 4 m line. Never "normalize" it to 1.0. The same caveat applies to any
+        /// cross-row comparison: equal heightMul does NOT mean equal apparent size.</para>
+        /// <para>HEIGHT AND FOOTPRINT ARE ONE NUMBER, by design. The fit is a UNIFORM scale, so this
+        /// multiplier moves the base footprint by the same factor, and
+        /// StructureFactory.MeasureUprightFootprintMetres measures the real estate off the
         /// height-fitted model, never off the authored placement.footprint (that is only the
-        /// prefab-missing fallback). Height and footprint are ONE number here, by design.</para> JSON deserializes "heightMul" straight in. SUPERSEDES the
+        /// prefab-missing fallback). There is no width dial and none is needed. Corollary for
+        /// SAVE COMPAT: the grid claim is ceil(measured / 3 m), so RAISING a multiplier can grow a
+        /// claim and make an existing saved town reload with OVERLAPPING claims - always state the
+        /// before/after cell claim when you change one. (Lowering only shrinks a claim, which is
+        /// overlap-safe, but for WALLS a narrower segment opens pathable GAPS in already-placed
+        /// runs, which is why wall_wood/wall_stone/gate_stone were deliberately left at 1.0.)</para>
+        /// JSON deserializes "heightMul" straight in. SUPERSEDES the
         /// deprecated absolute <see cref="visualHeight"/> below.
         /// </summary>
         public float heightMul = 1.0f;

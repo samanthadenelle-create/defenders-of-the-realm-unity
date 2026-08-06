@@ -43,11 +43,16 @@ namespace DeNelle.Village
         /// WO-764 (Y-height normalization, centralized) - the ONE global base ceiling (metres)
         /// every structure is fit-to-height against:
         /// <c>EffectiveHeight = YHeightVariable * repo.heightMul</c>. Every building uses the
-        /// default 1.0 multiplier so the whole script-built town reads at ONE uniform height;
-        /// towers author 1.25 (5 m here) and siege engines 0.75 (3 m) - EXCEPT the archer tower,
-        /// which the owner ruled down to 1.2 (4.8 m) on 2026-08-05 ("go with 1.2 on the tower")
-        /// after felt-testing it as too big both round and tall. Change THIS ONE number and
-        /// the entire town re-scales together (the owner-locked model). Was the WO-751
+        /// default 1.0 multiplier so the whole script-built town reads at ONE uniform height.
+        /// THE CADENCE (owner ruling 2026-08-05, "all of the other structures stay within that
+        /// cadence... relatively the same size... all scaled to the same point") is ONE FAMILY,
+        /// NOT ONE NUMBER: 1.0 building base (4.0 m) / 1.2 TOWER ANCHOR (4.8 m, measured at 49.9%
+        /// of a house diameter) / 0.75 siege engines (3.0 m) / 1.25 for the ONE landmark, the
+        /// Cathedral of Magic / 0.35 decoration. The authority for the per-group rationale is the
+        /// catalog's top-level <c>_heightCadence</c> key; RepoProps.heightMul carries the summary
+        /// plus the two standing caveats (collector_farm's 1.4 is a BOUNDS compensation, not a
+        /// cadence value; walls are deliberately unauthored for save compat). Change THIS ONE
+        /// number and the entire town re-scales together (the owner-locked model). Was the WO-751
         /// per-item-absolute DefaultVisualHeight (also 4 m); the old absolute overrides became
         /// per-item <c>heightMul</c> multipliers.
         /// </summary>
@@ -107,9 +112,10 @@ namespace DeNelle.Village
             // A tall structure (tower) must fit to HEIGHT, not to its largest bounds dim
             // (fit-to-largest scaled a tower so its tallest axis = footprint ~2.5 m -> a
             // squashed/wrong-scaled tower). WO-764: every structure fits to YHeightVariable *
-            // repo.heightMul — buildings inherit the uniform 1.0 base, towers/siege author a
-            // multiplier (1.25 / 0.75; the archer tower 1.2 per the owner's 2026-08-05 ruling) so a
-            // tall structure stands tall while the town stays uniform.
+            // repo.heightMul - buildings inherit the uniform 1.0 base while a class that must read
+            // taller or shorter authors its multiplier off the 2026-08-05 cadence (tower 1.2 /
+            // siege 0.75 / landmark 1.25 / decoration 0.35), so a tall structure stands tall while
+            // the town stays one family.
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
                 float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);

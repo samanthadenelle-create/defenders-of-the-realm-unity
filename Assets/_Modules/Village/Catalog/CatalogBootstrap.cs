@@ -229,7 +229,13 @@ namespace DeNelle.Village
                         new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 75, crystals = 175 },   // L2â†’L3
                     },
                     navSurface = NavSurfaceKind.Blocker,
-                    heightMul = 1.25f,   // WO-764: tower = 1.25 Ã— base
+                    // 2026-08-05 cadence pass (owner ruling: every structure on ONE cadence,
+                    // "all relatively the same size... all scaled to the same point"). The TOWER
+                    // CLASS is now pinned to the owner-ruled archer ANCHOR of 1.2 x base = 4.8 m,
+                    // measured at 49.9% of a house's diameter. Was the WO-764 class value 1.25;
+                    // a tower sitting 4% off the anchor was the in-family outlier the ruling removes.
+                    // Mirrors structures-catalog.json "tower_wall_wizard" (parity gate 12 enforces).
+                    heightMul = 1.2f,
                     range = 22f, damage = 30f, fireRate = 0.5f,
                     canHitAir = true, element = DamageElement.None,
                     projectileStyle = "bolt",
@@ -282,7 +288,10 @@ namespace DeNelle.Village
                     upgradeVisualPath  = new[] { "Structures/ArcaneSpire_2",        "Structures/ArcaneSpire_3" },
                     upgradeTexturePath = new[] { "Structures/ArcaneSpire_2_Albedo", "Structures/ArcaneSpire_3_Albedo" },
                     navSurface = NavSurfaceKind.Blocker,
-                    heightMul = 1.25f,   // WO-764: tower = 1.25 Ã— base
+                    // 2026-08-05 cadence pass: pinned to the owner-ruled tower ANCHOR 1.2 x base
+                    // (4.8 m), same as tower_wall_wizard above. Was the WO-764 class value 1.25.
+                    // Mirrors structures-catalog.json "tower_arcane_spire" (parity gate 12 enforces).
+                    heightMul = 1.2f,
                     range = 16f, damage = 20f, fireRate = 0.6f,   // owner 2026-07-08: mid-range zone caster
                     canHitAir = true, element = DamageElement.Aether,
                     projectileStyle = "spell",

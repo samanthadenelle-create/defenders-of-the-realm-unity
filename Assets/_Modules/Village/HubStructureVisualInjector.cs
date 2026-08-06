@@ -67,12 +67,15 @@ namespace DeNelle.Village
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
             // WO-764: NO sizeM — every landmark is fit-to-HEIGHT (YHeightVariable × heightMul). All
-            // buildings inherit the uniform 1.0 base (heightMul unset); ONLY the arcane tower is a
-            // tower (heightMul 1.25). yaw/pitch/roll/pos/scale hand-dials are orientation/placement,
+            // buildings inherit the uniform 1.0 base (heightMul unset); the arcane tower is the ONE
+            // exception at 1.25. (2026-08-05 cadence pass: that 1.25 is the LANDMARK tier, not the
+            // tower tier - despite its name the Cathedral of Magic is a building, and it is the
+            // town's single apex. The TOWER class is 1.2, the owner-ruled archer anchor. Do not
+            // copy this 1.25 onto a tower row.) yaw/pitch/roll/pos/scale hand-dials are orientation/placement,
             // untouched. (Jeweler still carries an explicit scaleX so it keeps its bespoke proportions,
             // superseding the height fit — see note; clear its scaleX to make it obey uniform height.)
             new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
-            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", heightMul = 1.25f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // WO-764: tower = 1.25 × base. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
+            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", heightMul = 1.25f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // 1.25 x base = the LANDMARK tier (2026-08-05 cadence), NOT the 1.2 tower tier. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 0f,   pitchDeg = -90f, rollDeg = 180f },   // owner hand-dialed 2026-06-21
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f },
