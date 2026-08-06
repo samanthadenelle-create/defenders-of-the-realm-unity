@@ -786,6 +786,22 @@ namespace DeNelle.Village
                 "PERFECT stamp armed: perfect-timed melee hits route CombatText(Perfect) — no impact burst on basic hits (owner 2026-08-02).");
             Guard.Try("Combat", "perfect-hit stamp", () =>
                 CombatText.Show(CombatTextKind.Perfect, "PERFECT", hitPos + Vector3.up * 1.2f));
+
+            // VFX-FREE-WIN-1: the PERFECT window's ONLY visual payoff was the ASCII stamp above.
+            // A stamp is read by the eye that is already looking at the enemy; a flash at the
+            // contact point is read by peripheral vision, which is what a timing mechanic needs
+            // to teach itself under pressure. Juice_CriticalHit is ALREADY wired in
+            // VFXCatalog.asset (Lana/Burst/Flash_star, IsLoop:0 — a ONESHOT, so it takes a
+            // reclaimed oneshot slot and never one of the 20 leak-prone loop slots).
+            //
+            // This does NOT reinstate the owner-deleted basic-hit impact burst (owner ruling
+            // 2026-08-02): that fired on EVERY connect. This fires only on a landed perfect tap.
+            // The meaning is carried by the star SHAPE + the sudden flash, not by a colour, so it
+            // survives the red/green colourblind law. playSound:false — the perfect chime is
+            // already played by _perfectHitSound above; VFXManager must not layer a second cue.
+            Guard.Try("Combat", "perfect-hit burst vfx", () =>
+                VFXManager.Play(VFXType.Juice_CriticalHit, hitPos,
+                                Quaternion.identity, playSound: false));
         }
 
         // ── Audio ─────────────────────────────────────────────────────────────

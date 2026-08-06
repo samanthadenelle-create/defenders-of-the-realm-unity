@@ -613,6 +613,27 @@ namespace DeNelle.Village
                 _deathTraceLastPos = transform.position;
                 _deathTraceHasPos  = true;
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
+
+                // VFX-FREE-WIN-4: the player's OWN death was the least-marked event in the
+                // game — hit-stop plus a death animation, no burst at all, while every enemy
+                // kill gets one. The hit that killed already played Impact_Physical above
+                // (:584); this is the second beat, the fall itself, so the two read as
+                // "struck" then "down" rather than one ambiguous stumble.
+                //
+                // Death_Generic is ALREADY wired (VFXCatalog.asset row Type:32 ->
+                // Lana/Burst/Poof_generic, IsLoop:0 — a ONESHOT; nothing here may take one of
+                // the 20 leak-prone loop slots). No new catalog row, no new prefab. Meaning is
+                // carried by the outward poof SHAPE at the hero's own body, not by a colour
+                // (colourblind law). playSound:false is REQUIRED, not cosmetic: VfxToSfx maps
+                // every Death_* to SfxId.EnemyDeath, and firing the ENEMY death sound on the
+                // hero's death would misreport who just died. Guarded + null-safe — a missing
+                // catalog row or manager degrades to nothing and must never throw inside the
+                // lethal-hit path, which is mid-way through setting _isDead.
+                DeNelle.Core.Diagnostics.Guard.Try("Death", "hero death burst vfx", () =>
+                    VFXManager.Play(VFXType.Death_Generic,
+                                    transform.position + Vector3.up * 1.0f,
+                                    Quaternion.identity, playSound: false));
+
                 PlayDeathAnim();
                 // Freeze the NavMeshAgent IMMEDIATELY (before HandleDeath's down-beat / the
                 // deferred-battle wait) so the death pose settles instead of the agent shaking

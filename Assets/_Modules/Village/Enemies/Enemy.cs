@@ -1554,6 +1554,29 @@ namespace DeNelle.Village
             DealStructureDamage(_currentTarget, _contactDamage, contact: true);
             _actor?.PlayAttack();
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
+
+            // VFX-FREE-WIN-3: the BLOW LANDING was the only silent beat in the melee
+            // exchange. TelegraphThenAttack (:1507) draws the wind-up ground ring and this
+            // method plays the swing anim + grunt, but nothing marked the CONTACT — so the
+            // player learned they had been hit from a health bar, one full beat late. On a
+            // structure target there is not even a health bar in view.
+            //
+            // Impact_Physical is ALREADY wired (VFXCatalog.asset row Type:1 ->
+            // Lana/Burst/Slash_stone_once, IsLoop:0 — a ONESHOT, so it cannot consume one of
+            // the 20 leak-prone loop slots; enemy melee ticks every ~1.3s per attacker and a
+            // loop row here would saturate the cap in seconds). It is a stone-slash ARC:
+            // meaning carried by silhouette and direction, not by hue (colourblind law).
+            //
+            // Placed at the TARGET's chest, not the enemy's, because that is where the blow
+            // resolves and where the eye is. playSound:false — the attack grunt is already
+            // played by PlayTypeSound above; VFXManager must not layer a second cue.
+            if (targetMb != null)
+            {
+                DeNelle.Core.Diagnostics.Guard.Try("Enemy", "melee connect vfx", () =>
+                    VFXManager.Play(VFXType.Impact_Physical,
+                                    targetMb.transform.position + Vector3.up * 1.0f,
+                                    Quaternion.identity, playSound: false));
+            }
         }
 
         /// <summary>Feeds directional-death source position when the target is the hero.</summary>
@@ -2562,7 +2585,24 @@ namespace DeNelle.Village
                             if (deathGo != null) Destroy(deathGo, TypeVfxSelfDestructSeconds);
                         }
                         else
-                            VfxPool.SpawnDeathBurst(deathPos);
+                        {
+                            // VFX-FREE-WIN-2: before conceding to the one procedural grey poof,
+                            // ask the enemy's OWN species. Both fields consulted above
+                            // (_deathVFXOverride, _typeVfxSet) are per-PREFAB serialized fields,
+                            // and the pool/factory spawn path (EnemyFactory -> Configure) sets
+                            // NEITHER — so every wave, roam and camp enemy in the game reached
+                            // SpawnDeathBurst and a golem died exactly like a skeleton. _def is
+                            // the one thing that path DOES set (Configure, :567), so derive from
+                            // it. playSound:false — the death SFX is already fired by the
+                            // PlayTypeSound(CombatSfxFallback.Death) call below, and VfxToSfx
+                            // maps every Death_* to SfxId.EnemyDeath, which would double it.
+                            VFXType speciesDeath = SpeciesDeathVfx();
+                            if (speciesDeath != VFXType.None)
+                                VFXManager.Play(speciesDeath, deathPos,
+                                                Quaternion.identity, playSound: false);
+                            else
+                                VfxPool.SpawnDeathBurst(deathPos);
+                        }
                     }
 
                     // WO-84: secondary burst 0.28 s after the primary death VFX.
@@ -2683,6 +2723,49 @@ namespace DeNelle.Village
         {
             yield return new WaitForSeconds(0.28f);
             VFXManager.Play(VFXType.Impact_Physical, pos + Vector3.up * 0.3f);
+        }
+
+        /// <summary>
+        /// VFX-FREE-WIN-2: derive this enemy's death burst from its SPECIES, read off the
+        /// enemies.json stat block (<see cref="EnemyDef"/>) that <see cref="Configure"/>
+        /// stores in <c>_def</c> — the only species signal present on the pool/factory
+        /// spawn path, which sets neither <c>_deathVFXOverride</c> nor <c>_typeVfxSet</c>.
+        /// <para>
+        /// Every VFXType returned here is ALREADY wired to a prefab in
+        /// <c>Assets/Resources/VFX/VFXCatalog.asset</c> and every one of those rows is
+        /// <c>IsLoop: 0</c> (a ONESHOT) — deaths fire at high frequency during a wave, and a
+        /// loop-flagged row played fire-and-forget permanently burns one of the 20 global
+        /// loop slots (see the leak documented at the ranged-attack call site below).
+        /// </para>
+        /// <para>
+        /// Mapping is taken from the VFXType doc-comments verbatim, NOT invented:
+        /// Death_Boss = "Boss death"; Death_Brute = "Heavy brute / golem death";
+        /// Death_Skeleton = "Standard Hollow One death". Anything with no documented
+        /// species match returns <see cref="VFXType.None"/> so the caller keeps the exact
+        /// pre-existing generic burst — this is additive, never a substitution.
+        /// </para>
+        /// <para>
+        /// NOT mapped, deliberately: <c>Death_Wolf</c> and <c>Death_Tiefling</c> are wired
+        /// to real prefabs but enemies.json contains no wolf and no tiefling (families are
+        /// hollow / orc / troll; "Ice Wolf" is a PET, not an enemy). Assigning them to orc
+        /// or troll would be a creative pick, which is the owner's call — leave them unused
+        /// rather than guess.
+        /// </para>
+        /// </summary>
+        private VFXType SpeciesDeathVfx()
+        {
+            if (_def == null) return VFXType.None;
+
+            // Boss flag first — it outranks family and role.
+            if (_def.Boss) return VFXType.Death_Boss;
+
+            string role = (_def.Role ?? string.Empty).Trim().ToLowerInvariant();
+            if (role == "brute") return VFXType.Death_Brute;
+
+            string family = (_def.Family ?? string.Empty).Trim().ToLowerInvariant();
+            if (family == "hollow") return VFXType.Death_Skeleton;
+
+            return VFXType.None;
         }
 
         /// <summary>
