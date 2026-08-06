@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "_comment": "DATA-DRIVEN concept->icon map (WO concept-icon). A conceptId (abilityId / skillId / effect / itemId / owner concept token, lower-cased) maps to a real sprite addressed by { role, name, override? } in RpgUiCatalog (role 'icons' = Resources/RpgUi/icons/*, role 'potion' = Resources/RpgUi/potion/*, etc.). ConceptIconResolver loads this once and returns RpgUiCatalog.Get(role,name); a missing art file yields null so the caller keeps its glyph/class-art fallback. OPTIONAL per-entry boolean 'override' (default false/absent): when true the concept FORCES its Obsidian icon over a caller's own richer art (the defaults bar uses ResolveAnyOverride -> class art -> ResolveAny gap-fill). Leave override absent to keep today's behavior (class art wins on the defaults bar). This file is the SINGLE source of the mapping \u2014 no icon choices live in C#. Edit here to re-skin/override any concept. Real icons present today: icon_combat, icon_sword, icon_shield, icon_heart, icon_inventory, icon_quest, icon_compass, icon_talk, icon_tree, icon_settings. WO-681: role 'spellicons' = the Blink 500 RPG Spell Icons library mirrored by DeNelle.Editor.BlinkIconImporter into Resources/RpgUi/spellicons/<ArchetypeGroup>/<Class>/<Class><N> (plus roles 'emblem' = 25 class emblems, 'classslot' = themed action-bar slot frames). Icon names are class+number (e.g. Guardian13); every spellicons choice below was picked by SILHOUETTE/SHAPE (owner is red/green colorblind \u2014 never by color): arrows-stuck-in-shield=taunt, warrior-under-ward-dome=invuln, boot=dash, bear-trap=snare, arrow-volley=volley, sky-bolt=thunderbolt, burning-brand=ember dot, hands-channeling-light=heal, descending-light-rays=heal-over-time, axe-sweep-arc=cleave, slash-whirl=combo, roaring-figure=roar, radial-shockwave-figure=aoe, hammer-smiting-from-sky=meteor/radiant ult, spearhead=throwing spear, purple-dart=arcane bolt, radiant-suffused-figure=second wind, glowing-mended-figure=mend, shield-ram=bash.",
  "default": {
   "role": "icons",
@@ -209,6 +209,26 @@
   "crystal": {
    "role": "currency",
    "name": "currency_crystal"
+  },
+  "crystals": {
+   "role": "currency",
+   "name": "currency_crystal"
+  },
+  "woods": {
+   "role": "currency",
+   "name": "currency_wood"
+  },
+  "irons": {
+   "role": "currency",
+   "name": "currency_iron"
+  },
+  "foods": {
+   "role": "currency",
+   "name": "currency_food"
+  },
+  "golds": {
+   "role": "currency",
+   "name": "currency_gold"
   },
   "energy-sword": {
    "role": "icons",

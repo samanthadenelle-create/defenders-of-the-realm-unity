@@ -132,8 +132,14 @@ namespace DeNelle.Village.UI
                 if (mc != null) mc.overrideSorting = true;
                 ElarionUiKit.Scrim(canvas.transform, null);   // pure raycast-blocker — no second way out
                 float half = PanelHalfHeight(vm, ElarionUiKit.PostScaleCanvasHeight(canvas.transform));
+                // ORCHESTRATOR RULING (WO-894): vertical centre 0.53 -> 0.50. The panel is built at
+                // centre +- MaxPanelHalf(0.47), so a 0.53 centre put the TOP edge at 0.53 + 0.47 =
+                // 1.000 — flush with the screen top, i.e. clipping — while MaxPanelHalf's own comment
+                // documents the intent as "0.03..0.97". At 0.50 the clamp lands exactly on the
+                // documented 0.03..0.97 at IDENTICAL height. Costs 3% of downward drift toward the
+                // bottom HUD band; a screen touching the top edge is the worse defect.
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
-                    new Vector2(0.22f, 0.53f - half), new Vector2(0.78f, 0.53f + half),   // WO-433: narrower victory panel (was 0.08/0.92)
+                    new Vector2(0.22f, 0.50f - half), new Vector2(0.78f, 0.50f + half),   // WO-433: narrower victory panel (was 0.08/0.92)
                     onClose: null,   // no second way out
                     frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
@@ -186,7 +192,10 @@ namespace DeNelle.Village.UI
         /// <summary>Panel fraction available to the body well once the header, the gap and the
         /// CTA BAND ORIGIN are taken; the CTA's own 132 px come off in pixels.</summary>
         private const float BodyFracOfPanel = BodyTopY - CtaBandY0 - CtaGapY;   // 0.740
-        /// <summary>Panel may span 0.03..0.97 of the screen (the old grownHalf 0.47 clamp).</summary>
+        /// <summary>Panel may span 0.03..0.97 of the screen (the old grownHalf 0.47 clamp).
+        /// TRUE AGAIN as of WO-894: the panel is centred at 0.50, so 0.50 +- 0.47 really is
+        /// 0.03..0.97. It was built at centre 0.53 until now, which silently made the real span
+        /// 0.06..1.00 — the top edge flush with the screen edge.</summary>
         private const float MaxPanelHalf = 0.47f;
         private const float MinPanelHalf = 0.14f;
 
@@ -204,29 +213,140 @@ namespace DeNelle.Village.UI
         private static float PanelHalfHeight(EndStateVM vm, float canvasH)
         {
             if (canvasH < 100f) canvasH = 1920f;   // headless / no scaler — the kit's own fallback
-            float panelPx = (RequiredBodyPx(vm) + ElarionUiKit.CanonCtaHeight) / BodyFracOfPanel;
+            float panelPx = (RequiredBodyPx(vm, canvasH) + ElarionUiKit.CanonCtaHeight) / BodyFracOfPanel;
             return Mathf.Clamp(panelPx / (2f * canvasH), MinPanelHalf, MaxPanelHalf);
         }
 
-        /// <summary>Estimated WRAPPED line count for the subtitle at FontBody inside the
-        /// body well (~36 chars/line at the modal's width). Explicit '\n' segments each
-        /// wrap independently. Drives the band weight so a multi-line death message gets
-        /// a band tall enough to hold it (F8 flag_04: one-line band = text spilled over
-        /// the emblem above and the CTA below). Clamped 1..4.</summary>
-        private static int SubtitleLines(string subtitle)
+        // ── SUBTITLE MEASUREMENT (WO-894, orchestrator ruling) ────────────────────────
+        // This used to be `seg.Length / 36f` — a FIXED chars-per-line tuned for the portrait
+        // panel. 36 chars at FontBody 50 implies a ~900px text column, which is roughly right
+        // for the 2670x1200 landscape well (~985px) and nearly DOUBLE the portrait well
+        // (~495px). So the same constant over-reserved on the raid victory (the 4-line clamp,
+        // 240px) and under-reserved in portrait. Both the WIDTH and the TEXT are now measured.
+
+        /// <summary>Post-scale canvas WIDTH, in the SAME reference-px space as
+        /// <see cref="ElarionUiKit.PostScaleCanvasHeight"/>. The CanvasScaler divides BOTH axes
+        /// by one scaleFactor, so the post-scale canvas keeps the screen's aspect and the width
+        /// is simply height x aspect. DERIVED rather than measured for exactly the reason the
+        /// height is (ElarionUiKit.cs:1014-1018): a live rect read on the creation frame returns
+        /// RAW SCREEN pixels.</summary>
+        private static float PostScaleCanvasWidth(float canvasH)
+        {
+            float sw = Screen.width, sh = Screen.height;
+            if (sw < 1f || sh < 1f) return canvasH * (1080f / 1920f);   // headless: kit portrait reference
+            return canvasH * (sw / sh);
+        }
+
+        // The deterministic width chain down to the subtitle's own text column. Every link is a
+        // constant already in the tree, cited so a future reader can re-verify without measuring:
+        //   panel      x 0.22..0.78 of the canvas        (Show, above — WO-433)
+        //   body zone  x 0.055..0.945 of the panel       (ElarionUiKit ZonesFor, case FrameCore:
+        //                                                 z.body = (0.055, 0.075, 0.945, 0.835))
+        //   subtitle   x 0.04..0.96 of its band          (BuildBody, below)
+        private const float PanelWidthFrac    = 0.78f - 0.22f;     // 0.560
+        private const float BodyZoneWidthFrac = 0.945f - 0.055f;   // 0.890 (FrameCore)
+        private const float SubtitleInsetFrac = 0.96f - 0.04f;     // 0.920
+
+        /// <summary>Reference px of text column the subtitle actually gets.</summary>
+        private static float SubtitleWidthPx(float canvasH)
+        {
+            return PostScaleCanvasWidth(canvasH) * PanelWidthFrac * BodyZoneWidthFrac * SubtitleInsetFrac;
+        }
+
+        /// <summary>WRAPPED line count for the subtitle at FontBody inside the REAL body-well
+        /// width. Explicit '\n' segments each wrap independently. Drives the band height so a
+        /// multi-line death message gets a band tall enough to hold it (F8 flag_04: a one-line
+        /// band let the text spill over the emblem above and the CTA below). Clamped 1..4.</summary>
+        private static int SubtitleLines(string subtitle, float canvasH)
         {
             if (string.IsNullOrEmpty(subtitle)) return 0;
+            float columnPx = Mathf.Max(1f, SubtitleWidthPx(canvasH));
             int lines = 0;
             foreach (var seg in subtitle.Split('\n'))
-                lines += Mathf.Max(1, Mathf.CeilToInt(seg.Length / 36f));
+                lines += Mathf.Max(1, Mathf.CeilToInt(MeasureTextPx(seg, ElarionUi.FontBody) / columnPx));
             return Mathf.Clamp(lines, 1, 4);
+        }
+
+        private static TMPro.TMP_FontAsset _bodyFont;
+        private static bool _bodyFontTried;
+
+        /// <summary>Rendered width of <paramref name="text"/> at <paramref name="fontSize"/> in
+        /// reference px, summed from the BODY FONT'S OWN GLYPH ADVANCES — the same numbers TMP
+        /// lays the text out with. A MEASUREMENT, not a character estimate: it cannot drift when
+        /// the copy changes (which is precisely how the fixed "36 chars/line" went wrong).
+        ///
+        /// Falls back to a 0.5em average ONLY if the font asset is absent or its character table
+        /// is unpopulated (a dynamic atlas before anything has been rendered) — detected by how
+        /// much of the string actually resolved, never assumed. Even that fallback is derived
+        /// from the real font SIZE and applied against the real column width, so it is still
+        /// geometry-aware. Kerning is ignored (sub-1% on Latin copy at this size).</summary>
+        private static float MeasureTextPx(string text, float fontSize)
+        {
+            if (string.IsNullOrEmpty(text)) return 0f;
+
+            if (!_bodyFontTried)
+            {
+                _bodyFontTried = true;
+                try
+                {
+                    _bodyFont = Resources.Load<TMPro.TMP_FontAsset>(
+                        RpgUiCatalog.FontRoot + RpgUiCatalog.FontBodyAsset);
+                }
+                catch (Exception e)
+                {
+                    FlowTrace.Warn("EndState", "body font load failed for text measure: " + e.Message);
+                    _bodyFont = null;
+                }
+            }
+
+            var fa = _bodyFont;
+            if (fa != null && fa.faceInfo.pointSize > 0f)
+            {
+                float advance = 0f;
+                int matched = 0;
+                try
+                {
+                    var table = fa.characterLookupTable;
+                    if (table != null)
+                    {
+                        for (int i = 0; i < text.Length; i++)
+                        {
+                            if (table.TryGetValue(text[i], out var ch) && ch != null && ch.glyph != null)
+                            {
+                                advance += ch.glyph.metrics.horizontalAdvance;
+                                matched++;
+                            }
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    // §12 no silent failure: say the metric path failed, then use the estimate.
+                    FlowTrace.Throttle("EndState", "measure-fallback", 10f,
+                        "glyph-advance measure failed, using the em estimate: " + e.Message);
+                    matched = 0;
+                }
+                // Only trust the sum when most of the string really resolved — an empty/partial
+                // table would otherwise measure a long line as nearly zero and under-reserve.
+                if (matched >= Mathf.CeilToInt(text.Length * 0.6f))
+                    return advance * (fontSize / fa.faceInfo.pointSize) * fa.faceInfo.scale;
+            }
+
+            return text.Length * fontSize * 0.5f;   // ~0.5em average advance for Latin copy
         }
 
         // ── binding ───────────────────────────────────────────────────────────
 
+        /// <summary>Post-scale canvas height for THIS screen, captured once in <see cref="Bind"/>.
+        /// The subtitle's wrapped line count is measured against the real column width, which is
+        /// derived from this — so band sizing and the panel solve use the SAME number.</summary>
+        private float _canvasH;
+
         private void Bind(EndStateVM vm, ElarionUiKit.PanelChrome chrome)
         {
             _vm = vm;
+            _canvasH = ElarionUiKit.PostScaleCanvasHeight(
+                chrome.root != null ? chrome.root.transform : transform);
 
             // ── SPLASH TITLE HEADER BAND (F8 2026-07-08: "Wave 1 Cleared!" title rendered
             //    0 visible glyphs) ────────────────────────────────────────────────────────
@@ -259,7 +379,7 @@ namespace DeNelle.Village.UI
                 // span gives the height the fraction anchors will really resolve against.
                 var rootRt = (RectTransform)chrome.root.transform;
                 float panelFracH = Mathf.Max(0.05f, rootRt.anchorMax.y - rootRt.anchorMin.y);
-                float panelPx = ElarionUiKit.PostScaleCanvasHeight(chrome.root.transform) * panelFracH;
+                float panelPx = _canvasH * panelFracH;
                 float ctaBandH = ElarionUiKit.CanonCtaHeight / Mathf.Max(1f, panelPx);
                 float bodyFloor = CtaBandY0 + ctaBandH + CtaGapY;
 
@@ -299,7 +419,8 @@ namespace DeNelle.Village.UI
                 FlowTrace.Step("EndState",
                     $"geometry: panel={panelPx:0}px (frac {panelFracH:0.###}) header {HeaderY0:0.###}-{HeaderY1:0.###} " +
                     $"body {bodyFloor:0.###}-{BodyTopY:0.###} = {_wellPx:0}px cta band {CtaBandY0:0.###}-{CtaBandY0 + ctaBandH:0.###} " +
-                    $"need={RequiredBodyPx(vm):0}px");
+                    $"need={RequiredBodyPx(vm, _canvasH):0}px " +
+                    $"(subtitle column {SubtitleWidthPx(_canvasH):0}px -> {SubtitleLines(vm.Subtitle, _canvasH)} line(s))");
             }
             else if (chrome.layout != null && chrome.layout.header != null)
             {
@@ -468,7 +589,7 @@ namespace DeNelle.Village.UI
             {
                 Canvas.ForceUpdateCanvases();
                 float wellPx = rewardWell.rect.height;
-                float needPx = RequiredBodyPx(vm);
+                float needPx = RequiredBodyPx(vm, _canvasH);
                 if (wellPx > 1f && needPx > wellPx + 1f)
                 {
                     var rootRt = (RectTransform)chrome.root.transform;
@@ -526,22 +647,77 @@ namespace DeNelle.Village.UI
         // over-budgeted band, gives its surplus back):
         private const float EmblemPx  = 64f;   // 80 -> 64: the emblem scales, it never needed 80
         private const float SubLinePx = 60f;   // 54 -> 60: FontBody 50 line box is ~57.5px
-        private const float StarsPx   = 48f;   // 34 -> 48: seats the 45-deg diamond's rotated bbox
+        // WO-894 §3: 48 -> 72. The 48 was budgeted for the 45-deg DIAMOND's rotated bbox. A real
+        // 5-point star is RADIALLY bounded (it rotates inside its own circumscribed circle, so the
+        // bbox never grows during the spin) — the band instead has to seat the 56px hero star PLUS
+        // the §4.2 overshoot: 56 x 1.15 = 64.4px at the pop's peak, which 72 clears with 7.6px spare.
+        private const float StarsPx   = 72f;   // 48 -> 72: 56px hero star + the 1.15x spin overshoot
         private const float TimePx    = 48f;   // 44 -> 48: FontLabel 40 bold line box is ~46px
         private const float RowPx     = 64f;   // 56 -> 64: seats the fixed 40px icon + plate inset
         private const float BandGapPx = 8f;
 
-        /// <summary>Total body-well pixels the VM's bands demand (drives the panel extension).</summary>
-        private static float RequiredBodyPx(EndStateVM vm)
+        /// <summary>Total body-well pixels the VM's bands demand (drives the panel solve).
+        /// <paramref name="canvasH"/> is the post-scale canvas height — the subtitle's wrapped
+        /// line count depends on the real column width, which depends on it.</summary>
+        private static float RequiredBodyPx(EndStateVM vm, float canvasH)
         {
             float px = 0f; int n = 0;
             if (vm.Emblem != null) { px += EmblemPx; n++; }
-            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle); n++; }
+            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH); n++; }
             if (vm.Stars >= 0) { px += StarsPx; n++; }
             if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
-            px += vm.Spoils.Count * RowPx; n += vm.Spoils.Count;
+            int spoilBands = SpoilBandCount(vm, canvasH);
+            px += spoilBands * RowPx; n += spoilBands;
             if (n > 1) px += BandGapPx * (n - 1);
             return px;
+        }
+
+        // ── SPOILS COLUMNS (WO-894, orchestrator ruling — a DELIBERATE, DOCUMENTED deviation
+        //    from the WO's §2 wireframe, which draws spoils as one vertical list) ──────────
+        // WHY: the wireframe was drawn without knowing the content does not fit the surface.
+        // Measured at 2670x1200 (post-scale canvas 965.4 x 2148.0 ref px), an arena win with
+        // five spoils rows demands a 1027 ref px panel on a 965 ref px canvas — the content is
+        // literally TALLER THAN THE SCREEN, so it hit the MaxPanelHalf clamp and every band was
+        // squashed to 0.859. No spacing tweak can fix that; each one only moves the squeeze.
+        // Two columns takes the spoils stack 320px -> 192px and the whole body 628px -> 484px,
+        // which solves to an 832px panel UNCLAMPED at scale 1.000 — the only lever that clears
+        // it without shrinking the header band (which failed exactly this way on 2026-07-08,
+        // rendering zero title glyphs).
+        // It is also the right SHAPE: a single narrow column of five rows starves the axis we
+        // have most of (2148px of width) to overflow the one we have least.
+        // LANDSCAPE ONLY — see MinSpoilColumnPx.
+
+        /// <summary>Legibility floor for ONE spoils column, in reference px. DERIVED, not picked:
+        /// the label column is (0.62 - labelLeft) of the plate, the plate is 0.88 of the cell, and
+        /// the label's fixed furniture is 72px (18 inset + 40 icon + 14 gap). The longest stock
+        /// reward label, "Experience", measures ~250px at FontBody 50, so it stays above the
+        /// FontFloor(30) only while 0.62 * plate - 72 >= 250 * 30/50 = 150px, i.e. plate >= 358px,
+        /// i.e. cell >= 407px. 420 keeps a margin. At 2670x1200 a column is 535px (28% clear);
+        /// in portrait it is 269px, so portrait stays SINGLE-COLUMN as ruled.</summary>
+        private const float MinSpoilColumnPx = 420f;
+
+        /// <summary>Body-well width in reference px (the full width a spoils band spans).</summary>
+        private static float SpoilsBodyWidthPx(float canvasH)
+        {
+            return PostScaleCanvasWidth(canvasH) * PanelWidthFrac * BodyZoneWidthFrac;
+        }
+
+        /// <summary>Spoils columns for this screen: 2 only when a column clears
+        /// <see cref="MinSpoilColumnPx"/>. The test is on the derived WIDTH, so it keys off the
+        /// real aspect ratio and never off a hardcoded resolution. Compact banners stay single
+        /// (their damage-report rows carry long "Rebuild 120 wood, 40 iron" amounts), and a lone
+        /// reward stays single (one half-width plate beside nothing reads as a broken row).</summary>
+        private static int SpoilColumns(EndStateVM vm, float canvasH)
+        {
+            if (vm == null || vm.Compact || vm.Spoils.Count < 2) return 1;
+            return SpoilsBodyWidthPx(canvasH) * 0.5f >= MinSpoilColumnPx ? 2 : 1;
+        }
+
+        /// <summary>How many BANDS the spoils occupy — the number the panel solve must budget.</summary>
+        private static int SpoilBandCount(EndStateVM vm, float canvasH)
+        {
+            if (vm == null || vm.Spoils.Count == 0) return 0;
+            return Mathf.CeilToInt(vm.Spoils.Count / (float)SpoilColumns(vm, canvasH));
         }
 
         /// <summary>Stack the VM's content top-down inside the body zone. F8-35: bands are
@@ -579,7 +755,7 @@ namespace DeNelle.Village.UI
             // guard so the copy can NEVER escape its rect (§1.14: text never overlaps
             // siblings) if the estimate is ever short.
             if (!string.IsNullOrEmpty(vm.Subtitle))
-                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle), host =>
+                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle, _canvasH), host =>
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
@@ -609,12 +785,16 @@ namespace DeNelle.Village.UI
                     Track(l.gameObject, 0.20f, 1f);
                 }));
 
-            for (int i = 0; i < vm.Spoils.Count; i++)
+            // Spoils: one band per ROW of the grid (2 columns in landscape, 1 in portrait).
+            // SpoilBandCount is the same function RequiredBodyPx budgeted with, so the panel
+            // solve and the layout can never disagree about how many bands there are.
+            int spoilCols = SpoilColumns(vm, _canvasH);
+            float spoilBodyPx = SpoilsBodyWidthPx(_canvasH);
+            int spoilBands = SpoilBandCount(vm, _canvasH);
+            for (int b = 0; b < spoilBands; b++)
             {
-                int idx = i;
-                bands.Add((RowPx, host =>
-                    Guard.Try("EndState", "spoils row " + idx,
-                        () => BuildSpoilRow(host, vm.Spoils[idx], 0.25f + idx * 0.05f))));
+                int bandIdx = b;
+                bands.Add((RowPx, host => BuildSpoilBand(host, vm, bandIdx, spoilCols, spoilBodyPx)));
             }
 
             // Lay the bands out top-down at their OWN pixel heights. Only when the well is
@@ -647,10 +827,87 @@ namespace DeNelle.Village.UI
             }
         }
 
-        /// <summary>One spoils row: kit slot plate + icon (null-safe) + label + amount.</summary>
-        private void BuildSpoilRow(RectTransform host, SpoilRowVM row, float revealDelay)
+        /// <summary>One spoils BAND — up to <paramref name="cols"/> reward rows side by side.
+        ///
+        /// FILL ORDER = ROW-MAJOR (across, then down). The VM builds Spoils in descending
+        /// importance (Experience, Wisdom, Wood, Iron, gear), and row-major is the order the eye
+        /// already reads: it is the single vertical list of the wireframe simply folded, so
+        /// "earlier = higher up, then left" still holds. Column-major (down, then across) would
+        /// require the player to know the TOTAL count to know where the left column stops, which
+        /// is unreadable at 2-3 rows.
+        ///
+        /// ODD TAIL: a lone final reward spans the FULL band width rather than sitting in a half
+        /// cell beside an empty one. An empty cell reads as a reward that failed to load — the
+        /// exact "icons are missing" complaint this WO is already fixing. A full-width capstone
+        /// reads as deliberate, and on an arena win the odd tail IS the gear drop, the most
+        /// notable line on the screen. So 5 rewards lay out as [1][2] / [3][4] / [ 5 ].</summary>
+        private void BuildSpoilBand(RectTransform host, EndStateVM vm, int bandIdx, int cols, float bodyWidthPx)
+        {
+            if (vm == null || cols < 1) return;
+            int first = bandIdx * cols;
+            int remaining = vm.Spoils.Count - first;
+            if (remaining <= 0) return;
+            int inBand = Mathf.Min(cols, remaining);
+            bool fullWidth = inBand == 1;
+
+            for (int c = 0; c < inBand; c++)
+            {
+                int itemIdx = first + c;
+                // Cells split the band evenly with NO explicit gutter: each plate is already
+                // inset 0.06 of its own cell, so two neighbours leave ~2x6% of clear space
+                // between them. One less constant, and the single-column look is unchanged.
+                float x0 = fullWidth ? 0f : c / (float)cols;
+                float x1 = fullWidth ? 1f : (c + 1) / (float)cols;
+                float cellPx = fullWidth ? bodyWidthPx : bodyWidthPx / cols;
+                var cell = MakeZone(host, "SpoilCell" + itemIdx, x0, 0f, x1, 1f);
+                int captured = itemIdx;
+                // Stagger stays keyed to the ITEM index, so the reveal still sweeps in reading
+                // order and the CTA (Track'd at Spoils.Count * 0.05) still lands last.
+                Guard.Try("EndState", "spoils row " + captured,
+                    () => BuildSpoilRow(cell, vm.Spoils[captured], 0.25f + captured * 0.05f, cellPx));
+            }
+        }
+
+        /// <summary>The concept ids a spoils row offers the icon table, best first: its own label,
+        /// then the DE-PLURALISED label. Both are the row's OWN text — no icon name is chosen in
+        /// C#, the table still decides (ConceptIconResolver.ResolveAny takes the first that
+        /// resolves, and Resolve(null) is a no-op, so a singular label costs nothing).
+        ///
+        /// The plural is why the raid victory's crystal row was broken: FromRaidVictory labels it
+        /// "Crystals" (EndStateVM.cs:302) but concept-icons.json is keyed "crystal"
+        /// (concept-icons.json:209), so it missed the table and fell through to icon_inventory —
+        /// a CHEST (RpgUiCatalog.cs:220). The plural keys are now IN the table too (both the
+        /// Resources and StreamingAssets copies); this stays as the belt to that braces, so a
+        /// future plural label resolves even before someone remembers to add the key.</summary>
+        private static string[] RowConcepts(SpoilRowVM row)
+        {
+            string concept = (row != null ? row.Label ?? "" : "").Trim().ToLowerInvariant();
+            string singular = concept.Length > 3 && concept.EndsWith("s", StringComparison.Ordinal)
+                ? concept.Substring(0, concept.Length - 1)
+                : null;
+            return new[] { concept, singular };
+        }
+
+        // The row's horizontal furniture in FIXED reference px. These were fractions of the plate,
+        // which is why a 40px icon sat 105px away from its label on the wide landscape plate (the
+        // 0.17 label inset resolved to ~160px) while being correct in portrait. A fraction cannot
+        // hold a constant gap across a 2x width change; pixels can. Now the icon-to-label gap is
+        // 14px on EVERY plate width, which matters far more with two columns halving the plate.
+        private const float SpoilIconPx      = 40f;   // the fixed reward icon square (unchanged)
+        private const float SpoilIconInsetPx = 18f;   // icon's left inset inside the plate
+        private const float SpoilIconGapPx   = 14f;   // icon -> label
+        private const float SpoilEdgeInsetPx = 18f;   // amount's right inset inside the plate
+
+        /// <summary>One spoils row: kit slot plate + icon (null-safe) + label + amount.
+        /// <paramref name="cellWidthPx"/> is the row's own cell width in reference px (a full
+        /// body well in one column, half of it in two) — it converts the pixel insets above into
+        /// the fractions the anchors need.</summary>
+        private void BuildSpoilRow(RectTransform host, SpoilRowVM row, float revealDelay, float cellWidthPx)
         {
             if (row == null) return;
+            // The plate spans 0.06..0.94 of the cell, so it is 0.88 of it. Floored so a bad
+            // measurement can never produce inset fractions above 1 (which would invert a rect).
+            float platePx = Mathf.Max(200f, cellWidthPx * 0.88f);
             // WO-714 W2 (pack row-list grammar): the row plate is the REAL Blink Stat_Element
             // (element/element_stat, 9-sliced — the same plate CurrencyChip and the HUD stat rows
             // sit on), resolved sprite-first ALWAYS (P9 — never gated on ff.blinkchrome). On the
@@ -682,15 +939,40 @@ namespace DeNelle.Village.UI
             // — ItemIconCatalog.ForConsumable("mat_wood") resolves null today, EndStateVM.cs:120-122)
             // fall back to a generic resource/loot icon so a reward row NEVER blanks its slot. Same
             // RpgUiCatalog.Get path the other rows resolve through on the model side.
-            var iconSprite = row.Icon;
+            // WO-894: the reward CONCEPT gets first refusal via the resolver's designed OPT-IN
+            // path. ResolveAnyOverride returns a sprite ONLY for entries flagged `override:true`
+            // in concept-icons.json (ConceptIconResolver.cs:136-152), so today it returns null for
+            // every reward row and nothing changes — but it means any wrong reward icon can be
+            // repointed by adding ONE data entry, with no C# change and no icon name chosen in
+            // code. That is the lever for "Wisdom" (see the RESULT notes: it currently shows
+            // icon_tree, which RpgUiCatalog.cs:226 itself documents as a campfire stand-in, and
+            // Resources holds no sprite that reads as wisdom to swap it for).
+            var iconSprite = ConceptIconResolver.ResolveAnyOverride(RowConcepts(row));
+            if (iconSprite == null) iconSprite = row.Icon;
             // SWEEP 9413 R2 (#7): the generic IconInventory fallback painted a plain yellow
             // square beside every art-less reward line. Resolve the reward CONCEPT icon first
             // (concept-icons.json maps gold/wood/iron → the currency sprites) from the row label;
             // only then the generic kit fallback — never a bare placeholder square.
+            // WO-894 (owner F8 "reward icons are broken/missing"): the row LABEL is a plural
+            // display string — FromRaidVictory sets Label = "Crystals" (EndStateVM.cs:302) — but
+            // concept-icons.json is keyed SINGULAR ("crystal", concept-icons.json:209). "crystals"
+            // therefore missed the table outright and fell through to the generic fallback, which
+            // is icon_inventory — a CHEST (RpgUiCatalog.cs:220). That is the broken icon: not
+            // missing art (currency_crystal.png is committed and imported as a Sprite), a missed
+            // LOOKUP. Offer the singular as a second CANDIDATE; ResolveAny exists precisely for
+            // "let the DATA decide which of these ids resolves", so no icon name is chosen in C#.
             if (iconSprite == null)
-                iconSprite = ConceptIconResolver.ResolveAny((row.Label ?? "").Trim().ToLowerInvariant());
+                iconSprite = ConceptIconResolver.ResolveAny(RowConcepts(row));
             if (iconSprite == null)
                 iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            // Icon size first: the label's left inset is measured from the icon's REAL right
+            // edge, so a band-clamped (compressed) icon does not leave a hole beside itself.
+            float iconPx = Mathf.Min(SpoilIconPx, host.rect.height * 0.80f);
+            float labelLeftFrac = iconSprite != null
+                ? (SpoilIconInsetPx + iconPx + SpoilIconGapPx) / platePx
+                : SpoilIconInsetPx / platePx;
+            float amountRightFrac = 1f - SpoilEdgeInsetPx / platePx;
+
             if (iconSprite != null)
             {
                 var go = new GameObject("Icon", typeof(Image));
@@ -704,8 +986,9 @@ namespace DeNelle.Village.UI
                 // when the band stack squeezed the rows. Fixed 40x40 reference-unit square
                 // (>= 24 screen px at the 720p landscape scale), anchored middle-left —
                 // the icon never shrinks with its band.
-                rt.anchorMin = new Vector2(0.035f, 0.5f);
-                rt.anchorMax = new Vector2(0.035f, 0.5f);
+                float iconLeftFrac = SpoilIconInsetPx / platePx;
+                rt.anchorMin = new Vector2(iconLeftFrac, 0.5f);
+                rt.anchorMax = new Vector2(iconLeftFrac, 0.5f);
                 rt.pivot = new Vector2(0f, 0.5f);
                 rt.anchoredPosition = Vector2.zero;
                 // OWNER F8 2026-08-05 (icons floating off their bars): the 40px square is
@@ -713,7 +996,7 @@ namespace DeNelle.Village.UI
                 // ~10.6px above AND below the bar. 40 is still the size we want — RowPx 64
                 // seats it natively — but clamp it to the host band so a compressed row can
                 // never put the icon outside its own plate again.
-                rt.sizeDelta = Vector2.one * Mathf.Min(40f, host.rect.height * 0.80f);
+                rt.sizeDelta = Vector2.one * iconPx;
             }
             // F8-35: label left / value right, each FIT to ONE line in its own column —
             // "Equipped" wrapped to "Equipp/d" and long gear names spilled into the value
@@ -721,20 +1004,48 @@ namespace DeNelle.Village.UI
             // ellipsis so neither side can ever wrap or cross the column split again.
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
-                iconSprite != null ? 0.17f : 0.06f, 0.62f);
+                labelLeftFrac, 0.62f);
             ElarionUiKit.FitSingleLine(label);
             label.raycastTarget = false;
             var amount = ElarionUiKit.Label(plate.transform, row.Amount ?? "", 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineRight,
-                0.64f, 0.95f, bold: true);
+                0.64f, amountRightFrac, bold: true);
             ElarionUiKit.FitSingleLine(amount);
             amount.raycastTarget = false;
             Track(plate, revealDelay, 0.96f);
         }
 
-        /// <summary>Rating row: three procedural gold diamonds (filled/dim). Deliberately
-        /// sprite-free — the TMP star glyphs tofu'd on the build font and the crown art
-        /// carries a white fringe (owner F8), so the rating can never blank or fringe.</summary>
+        // ── ④ STAR ROW (WO-894) ───────────────────────────────────────────────────
+        // Every number here is the WO's §3 spacing table / §4.2 spin table, named so a
+        // future reader can diff the code against the spec without re-deriving anything.
+        private const float StarSizePx        = 56f;    // §3: star diameter (square bbox 56x56)
+        private const float StarSpacingPx     = 80f;    // §3: centre-to-centre => centres at -80 / 0 / +80
+        private const float StarsBaseDelay    = 0.18f;  // §4.3: between the subtitle (0.14) and time (0.20) beats
+        private const float StarStaggerSec    = 0.15f;  // §4.2: star i starts at base + i * 0.15, left->right
+        private const float StarSpinSec       = 0.40f;  // §4.2: rotation + scale duration
+        private const float StarSpinDegrees   = 540f;   // §4.2: +540 -> 0 = 1.5 clockwise turns
+        private const float StarFadeSec       = 0.12f;  // §4.2: alpha 0 -> 1 over the first 0.12s, linear
+        private const float StarLandPulseSec  = 0.12f;  // §4.2: the landing stamp
+        private const float StarLandPulse     = 0.08f;  // §4.2: 1.0 -> 1.08 -> 1.0
+        private const float StarTwinkleAmp    = 0.03f;  // §4.2: idle +-3% scale...
+        private const float StarTwinkleHz     = 0.5f;   // §4.2: ...at ~0.5 Hz (NEVER a perpetual full spin)
+        private const float StarOvershootC1   = 2.17f;  // ease-out-back constant solved for a 1.15 peak (see EaseOutBack)
+        private const float UnearnedStarAlpha = 0.14f;  // §4.1: dim OUTLINE variant at ~14%
+        private const float UnearnedFadeSec   = 0.20f;  // §4.1: unearned stars fade in, they never spin
+
+        /// <summary>Rating row (WO-894): three REAL 5-point stars — earned ones SPIN in
+        /// (540deg -> 0) with an overshoot pop, staggered left-to-right, then land and settle
+        /// into a gentle twinkle; unearned ones are a dim OUTLINE star that only fades.
+        ///
+        /// The old pips were 45-degree rotated squares (diamonds). That was NOT a font
+        /// fallback — it was a deliberate sprite-free workaround for the build font having no
+        /// TMP star glyph. See <see cref="StarSolidSprite"/> for why the replacement is a
+        /// generated sprite rather than a glyph or a pack asset.
+        ///
+        /// COLOURBLIND LAW (owner is red/green colourblind): the rating reads by the NUMBER OF
+        /// FILLED SHAPES and by SHAPE (solid star vs hollow outline) — never by hue. There is
+        /// deliberately no "n/3" numeral on this row either: the HUD font renders the numeral 1
+        /// as a bare vertical stroke, which would be unreadable beside a slash or a star point.</summary>
         private void BuildStarRow(RectTransform host, int stars)
         {
             var rowGo = new GameObject("Stars", typeof(RectTransform));
@@ -743,28 +1054,319 @@ namespace DeNelle.Village.UI
             rowRt.anchorMin = Vector2.zero; rowRt.anchorMax = Vector2.one;
             rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
 
-            // OWNER F8 2026-08-05 (the rating printed THROUGH the "Time 0:14" line): each pip is a
-            // 45-degree ROTATED square, so its axis-aligned bounding box is side * sqrt(2). The old
-            // CONSTANT 26 therefore occupied 36.8px inside a band that had resolved to 12.3px — it
-            // could only overprint its neighbours. Size the pip from the BAND so the rotated box
-            // always fits: side = h * 0.72 / sqrt(2)  =>  bbox = h * 0.72.
-            float pip = Mathf.Max(8f, host.rect.height * 0.72f / 1.414f);
+            // DEGRADE LADDER (orchestrator ruling: the row must never VANISH — a rating that
+            // silently disappears is worse than diamonds, because the player cannot tell 3 stars
+            // from 0). §12 no silent failure: every rung logs.
+            //   1. the generated 5-point star        (the deliverable)
+            //   2. the kit's circular pip            (a real sprite, still a countable shape)
+            //   3. the legacy 45-degree square       (the pre-WO diamond — ugly, but VISIBLE)
+            var solid   = StarSolidSprite;
+            var outline = StarOutlineSprite;
+            bool legacyDiamond = false;
+            if (solid == null)
+            {
+                solid = ElarionUiKit.CircleSprite;
+                outline = solid;
+                FlowTrace.Fail("EndState", solid != null
+                    ? "star sprite build failed - degraded to the kit circle pip"
+                    : "star AND circle sprite builds both failed - degraded to the legacy 45deg square");
+                legacyDiamond = solid == null;
+            }
+            if (outline == null) outline = solid;
+
+            // §3 wants a FIXED 56px star. Clamp it to the band anyway: when BuildBody's
+            // uniform compression fires (it logs a Fail when it does) the band resolves BELOW
+            // 72px, and a hard 56 would then overhang its own band and print through the Time
+            // line above/below — the very defect the 2026-08-05 pass fixed for the diamonds.
+            // 72 * 0.78 = 56.16, so at the authored band size this yields exactly the §3 56px.
+            float size = Mathf.Max(8f, Mathf.Min(StarSizePx, host.rect.height * 0.78f));
+            // A star (and a circle) is RADIALLY bounded, so its bbox is its size. A rotated
+            // SQUARE is not: its axis-aligned box is side * sqrt(2), so the legacy rung has to
+            // shrink or it overprints its neighbours (the original 2026-08-05 defect).
+            if (legacyDiamond) size /= 1.414f;
 
             for (int i = 0; i < 3; i++)
             {
+                bool earned = i < stars;
                 var go = new GameObject("Star" + i, typeof(Image));
                 go.transform.SetParent(rowRt, false);
                 var img = go.GetComponent<Image>();
-                img.color = i < stars ? ElarionUiKit.ObsidianTrim : new Color(1f, 1f, 1f, 0.14f);
-                img.raycastTarget = false;
+                // On the legacy rung sprite stays NULL on purpose: a sprite-less Image draws a
+                // white quad, which rotated 45deg is exactly the old diamond. Visible beats absent.
+                img.sprite = earned ? solid : outline;
+                img.preserveAspect = true;
+                img.raycastTarget = false;   // §4.1: the rating is never a touch target
+                if (legacyDiamond) img.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+
+                // Earned = solid GOLD star; unearned = the hollow outline at ~14%. The hue is the
+                // decoration; the SHAPE and the COUNT carry the meaning (colourblind law).
+                var tint = earned ? ElarionUiKit.ObsidianTrim
+                                  : new Color(1f, 1f, 1f, UnearnedStarAlpha);
+                img.color = new Color(tint.r, tint.g, tint.b, 0f);   // the reveal owns alpha
+
+                // §3 EXACT: anchor + pivot dead-centre, centres at anchoredPosition.x -80 / 0 / +80.
+                // FIXED PIXELS, never a fraction of the parent — the previous 0.13-of-width spacing
+                // resolved to ~144px on the 2670x1200 landscape panel and ~70px on a narrow one, so
+                // the group was a different shape on every device.
                 var rt = img.rectTransform;
-                float cx = 0.5f + (i - 1) * 0.13f;
-                rt.anchorMin = new Vector2(cx, 0.5f);
-                rt.anchorMax = new Vector2(cx, 0.5f);
-                rt.sizeDelta = new Vector2(pip, pip);
-                rt.localRotation = Quaternion.Euler(0f, 0f, 45f);   // diamond
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot     = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = new Vector2((i - 1) * StarSpacingPx, 0f);
+                rt.sizeDelta = new Vector2(size, size);
+
+                // §4.4: earned stars own their OWN tween — they must NOT ride the generic
+                // Track/RevealRoutine, which has no rotation curve. Unearned stars just fade.
+                // On the legacy rung NOTHING spins: the spin lands at rotation 0, which would
+                // straighten the diamond back into a square mid-animation.
+                float delay = StarsBaseDelay + i * StarStaggerSec;
+                if (earned && !legacyDiamond) StartCoroutine(SpinStarIn(img, rt, delay, tint.a));
+                else                          StartCoroutine(FadeStarIn(img, delay, tint.a));
             }
-            Track(rowGo, 0.18f, 1f);
+
+            FlowTrace.Step("EndState",
+                $"star row: {Mathf.Clamp(stars, 0, 3)}/3 earned, star={size:0.#}px (band {host.rect.height:0.#}px) " +
+                $"centres -{StarSpacingPx:0}/0/+{StarSpacingPx:0}px, spin {StarSpinDegrees:0}deg over {StarSpinSec:0.00}s");
+        }
+
+        // ── the SPIN (WO-894 §4.2) ────────────────────────────────────────────────
+        // All on Time.unscaledDeltaTime: this screen never pauses time, and the hero-death
+        // variant narrates a coroutine that runs on SCALED time — same rule as RevealRoutine.
+
+        /// <summary>Ease-out-back with the overshoot constant SOLVED for the WO's exact 1.15 peak.
+        /// The textbook c1 = 1.70158 only reaches 1.099. The peak of this curve is
+        /// 1 + 4c1^3 / (27(c1+1)^2), which equals 1.150 at c1 = 2.17. f(0) = 0 and f(1) = 1 hold
+        /// for any c1, so the "0.0 -> 1.15 -> 1.0" of the spec is exact, not approximated.</summary>
+        private static float EaseOutBack(float u)
+        {
+            const float c1 = StarOvershootC1;
+            const float c3 = c1 + 1f;
+            float p = u - 1f;
+            return 1f + c3 * p * p * p + c1 * p * p;
+        }
+
+        /// <summary>One EARNED star: spin 540deg -> 0 (ease-out-cubic) while popping 0 -> 1.15 -> 1
+        /// (ease-out-back) and fading in over the first 0.12s, then a land pulse, then a gentle
+        /// forever-twinkle. Never a continuous full spin — that reads as a loading spinner.</summary>
+        private IEnumerator SpinStarIn(Image img, RectTransform rt, float delay, float targetAlpha)
+        {
+            if (img == null || rt == null) yield break;
+            rt.localScale = Vector3.zero;
+            rt.localRotation = Quaternion.Euler(0f, 0f, StarSpinDegrees);
+
+            float t = 0f;
+            while (t < delay)
+            {
+                t += Time.unscaledDeltaTime;
+                if (img == null || rt == null) yield break;   // torn down before its turn
+                yield return null;
+            }
+
+            t = 0f;
+            while (t < StarSpinSec)
+            {
+                t += Time.unscaledDeltaTime;
+                if (img == null || rt == null) yield break;
+                float u = Mathf.Clamp01(t / StarSpinSec);
+                float spun = 1f - Mathf.Pow(1f - u, 3f);      // ease-out-cubic on the rotation
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(StarSpinDegrees, 0f, spun));
+                rt.localScale = Vector3.one * EaseOutBack(u);
+                var c = img.color;
+                c.a = targetAlpha * Mathf.Clamp01(t / StarFadeSec);   // linear, first 0.12s
+                img.color = c;
+                yield return null;
+            }
+            if (img == null || rt == null) yield break;
+            rt.localRotation = Quaternion.identity;
+            rt.localScale = Vector3.one;
+            var landed = img.color; landed.a = targetAlpha; img.color = landed;
+
+            // LAND PULSE: a half-sine stamp so the star arrives with weight.
+            t = 0f;
+            while (t < StarLandPulseSec)
+            {
+                t += Time.unscaledDeltaTime;
+                if (rt == null) yield break;
+                float u = Mathf.Clamp01(t / StarLandPulseSec);
+                rt.localScale = Vector3.one * (1f + StarLandPulse * Mathf.Sin(Mathf.PI * u));
+                yield return null;
+            }
+
+            // IDLE TWINKLE: +-3% at ~0.5 Hz, forever. Cheap (one scale write/frame/star) and it
+            // stops on its own when the screen tears down (the coroutine host dies with it).
+            t = 0f;
+            while (rt != null)
+            {
+                t += Time.unscaledDeltaTime;
+                rt.localScale = Vector3.one *
+                    (1f + StarTwinkleAmp * Mathf.Sin(2f * Mathf.PI * StarTwinkleHz * t));
+                yield return null;
+            }
+        }
+
+        /// <summary>One UNEARNED star (§4.1): a plain 0.2s fade to the dim alpha at its own slot.
+        /// No spin — only what you EARNED spins, so the count reads from the motion too.</summary>
+        private IEnumerator FadeStarIn(Image img, float delay, float targetAlpha)
+        {
+            if (img == null) yield break;
+
+            float t = 0f;
+            while (t < delay)
+            {
+                t += Time.unscaledDeltaTime;
+                if (img == null) yield break;
+                yield return null;
+            }
+
+            t = 0f;
+            while (t < UnearnedFadeSec)
+            {
+                t += Time.unscaledDeltaTime;
+                if (img == null) yield break;
+                var c = img.color;
+                c.a = targetAlpha * Mathf.Clamp01(t / UnearnedFadeSec);
+                img.color = c;
+                yield return null;
+            }
+            if (img == null) yield break;
+            var done = img.color; done.a = targetAlpha; img.color = done;
+        }
+
+        // ── the STAR SPRITE (WO-894 §4.1) ─────────────────────────────────────────
+        // WHY GENERATED, and not a glyph or a pack asset — verified in the tree, not assumed:
+        //   • NO star sprite is reachable at runtime. RpgUiCatalog exposes crown_tier1..3
+        //     (Resources/RpgUi/crown/) and no star role at all; the only star*.png in the
+        //     project live in VFX packs (Hovl / Lana / Mirza) OUTSIDE Assets/Resources, so
+        //     Resources.Load can never see them, and they are soft particle glows, not UI art.
+        //   • A TMP star glyph is out: the build font tofu'd it (that tofu is the whole reason
+        //     the row was drawing rotated squares in the first place).
+        //   • The crown art is out: it carries a white fringe (owner F8).
+        // So the star is BUILT — the same lazily-cached, try/catch-guarded, null-safe way the kit
+        // builds its own rounded / circle / ring sprites (ElarionUiKit.cs:2288-2424). No import
+        // step, no missing-art path, and it renders identically in a player build.
+        // KIT-PROMOTION CANDIDATE (alongside RevealRoutine) once a second screen needs a star.
+
+        private const int   StarTexSize    = 128;    // texture px; drawn at 56 ref px, so ~2x for crisp points
+        private const float StarInnerRatio = 0.45f;  // inner/outer radius — fatter than a pentagram (0.382)
+                                                     // so the points stay solid and legible at phone size
+        private const float StarStrokePx   = 5f;     // outline-variant stroke, texture px (~2.2px at 56)
+
+        private static Sprite _starSolid;   private static bool _starSolidTried;
+        private static Sprite _starOutline; private static bool _starOutlineTried;
+
+        /// <summary>Filled 5-point star, white with a baked top-lit bevel so an
+        /// <c>Image.color</c> gold tint reads as gilded metal. Null only if texture creation
+        /// itself failed (caller falls back — never a white quad).</summary>
+        private static Sprite StarSolidSprite
+        {
+            get
+            {
+                if (!_starSolidTried)
+                {
+                    _starSolidTried = true;
+                    try { _starSolid = BuildStarSprite(false); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[EndState] solid star sprite build failed: " + e.Message);
+                        _starSolid = null;
+                    }
+                }
+                return _starSolid;
+            }
+        }
+
+        /// <summary>Hollow 5-point star (stroke only) — the UNEARNED slot. A different SHAPE, not
+        /// just a dimmer colour, so the earned count survives any colour perception.</summary>
+        private static Sprite StarOutlineSprite
+        {
+            get
+            {
+                if (!_starOutlineTried)
+                {
+                    _starOutlineTried = true;
+                    try { _starOutline = BuildStarSprite(true); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[EndState] outline star sprite build failed: " + e.Message);
+                        _starOutline = null;
+                    }
+                }
+                return _starOutline;
+            }
+        }
+
+        private static Sprite BuildStarSprite(bool hollow)
+        {
+            const int size = StarTexSize;
+            const float half = size * 0.5f;
+            const float outerPx = half - 3f;   // 3px margin for the AA ramp / bevel
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            {
+                // Baked top-lit ramp: bright at the top point, ~0.72 at the bottom points. It is a
+                // MULTIPLIER on Image.color, so the gold tint comes out as a gilded gradient rather
+                // than a flat sticker. The outline variant stays flat white (it is barely visible
+                // at 14% alpha; a gradient there would just make it read as noise).
+                float lumRow = hollow ? 1f : Mathf.Lerp(0.72f, 1f, (y + 0.5f) / size);
+                for (int x = 0; x < size; x++)
+                {
+                    // Evaluate the SDF in UNIT space (outer radius 1.0) then scale back to texture
+                    // px, so the 1px alpha ramp below is a true 1px feather at any texture size.
+                    float d = Star5Distance((x + 0.5f - half) / outerPx,
+                                            (y + 0.5f - half) / outerPx,
+                                            StarInnerRatio) * outerPx;
+
+                    float a = hollow
+                        ? Mathf.Clamp01(StarStrokePx * 0.5f - Mathf.Abs(d) + 0.5f)   // ring around the edge
+                        : Mathf.Clamp01(0.5f - d);                                   // solid interior
+                    if (a <= 0f) { px[y * size + x] = new Color32(0, 0, 0, 0); continue; }
+
+                    // Soft ~2px bevel: darken the last band inside the edge so the star has a rim
+                    // and does not dissolve into a bright panel.
+                    float lum = lumRow;
+                    if (!hollow && d > -2.5f) lum *= 0.62f;
+
+                    byte c8 = (byte)Mathf.Clamp(Mathf.RoundToInt(lum * 255f), 0, 255);
+                    px[y * size + x] = new Color32(c8, c8, c8,
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(a * 255f), 0, 255));
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        }
+
+        /// <summary>Signed distance from (<paramref name="x"/>,<paramref name="y"/>) to a regular
+        /// POINT-UP 5-pointed star of outer radius 1 and inner/outer ratio <paramref name="inner"/>;
+        /// negative inside. The standard polar-fold star field: mirror in x, reflect across the two
+        /// pentagon edge normals (cos/sin of pi/5), mirror again — which folds the whole plane onto
+        /// ONE star edge, so the answer is the exact distance to that single segment. Exact distance
+        /// (not a bounded approximation) is what lets a flat 1px alpha ramp antialias all five points
+        /// and all five notches cleanly.</summary>
+        private static float Star5Distance(float x, float y, float inner)
+        {
+            const float k1x = 0.809016994f, k1y = -0.587785252f;   // cos(pi/5), -sin(pi/5)
+            const float k2x = -k1x, k2y = k1y;
+
+            x = Mathf.Abs(x);
+            float d1 = x * k1x + y * k1y;
+            if (d1 > 0f) { x -= 2f * d1 * k1x; y -= 2f * d1 * k1y; }
+            float d2 = x * k2x + y * k2y;
+            if (d2 > 0f) { x -= 2f * d2 * k2x; y -= 2f * d2 * k2y; }
+            x = Mathf.Abs(x);
+            y -= 1f;                                   // origin -> the star's tip
+
+            // The one surviving edge: tip (0,0) -> inner vertex, at radius `inner` and 54deg.
+            float bax = inner * -k1y;                  // = inner * sin(pi/5)
+            float bay = inner * k1x - 1f;
+            float h = Mathf.Clamp01((x * bax + y * bay) / (bax * bax + bay * bay));
+            float dx = x - bax * h, dy = y - bay * h;
+            return Mathf.Sqrt(dx * dx + dy * dy) * Mathf.Sign(y * bax - x * bay);
         }
 
         // ── actions / lifecycle ───────────────────────────────────────────────
