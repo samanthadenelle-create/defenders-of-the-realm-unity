@@ -182,9 +182,29 @@ namespace DeNelle.Village
         //    the Injured locomotion swap (ActorAnimator.SetInjured), a breathing red
         //    screen-edge vignette, a slight move slow, and an optional heartbeat cue.
         //    All flag-gated by FeatureFlags.HeroInjuredStance. ─────────────────────
-        private const float InjuredFraction = 0.30f;  // enter injured below this HP fraction
+        /// <summary>
+        /// The wounded cutoff. PUBLIC since WO-888 so the world-space HP aura
+        /// (<see cref="HeroHpStateAura"/>) drives its severity ramp off THIS number rather
+        /// than a second copy of 0.30 that could drift away from the stance/vignette.
+        /// </summary>
+        public const float InjuredFraction = 0.30f;  // enter injured below this HP fraction
+
+        /// <summary>
+        /// The near-death cutoff, WO-888. Deliberately the SAME number as
+        /// <see cref="AegisAutoThreshold"/>: "about to die" means one thing in this game, and
+        /// the emergency capstone and the near-death aura must agree on it or the player gets
+        /// a rescue at a moment the screen never warned them about. Aliased, never re-typed.
+        /// </summary>
+        public const float NearDeathFraction = AegisAutoThreshold;
+
         private bool  _injured;                        // current injured latch (set on threshold cross)
         private HeroInjuredVignette _vignette;         // optional edge vignette (resolved in Awake)
+
+        // WO-888 (ACCESSIBILITY): the world-space HP aura - the PRIMARY low-HP tell. The red
+        // edge vignette below it is now a SECONDARY, redundant cue: the owner is red/green
+        // colourblind, so a colour-only danger signal is a bug, but a colour signal ALONGSIDE
+        // a shape/rhythm signal is good redundancy and is kept for players who can see it.
+        private HeroHpStateAura _hpAura;
         private float _heartbeatCooldown;              // throttles the optional heartbeat cue
         private static AudioClip s_heartbeatClip;      // generated once, shared
 
@@ -222,6 +242,12 @@ namespace DeNelle.Village
             // WO-493 #5 / WO-497: the hero's low-HP screen-edge vignette. Self-attached so
             // it needs no prefab wiring (mirrors HeroHitReaction). Resolved up-front here.
             if (!TryGetComponent(out _vignette)) _vignette = gameObject.AddComponent<HeroInjuredVignette>();
+
+            // WO-888: the world-space HP aura, self-attached beside the vignette (same
+            // no-prefab-wiring pattern). It owns ONE loop handle and stops it on every exit
+            // path; see HeroHpStateAura's header for the full list.
+            _hpAura = HeroHpStateAura.Ensure(gameObject);
+
             MoveSpeedMultiplier = 1f;   // start un-slowed every fresh hero
 
             // Capture the spawn point as the respawn anchor. Resolved later in
@@ -633,6 +659,14 @@ namespace DeNelle.Village
                     VFXManager.Play(VFXType.Death_Generic,
                                     transform.position + Vector3.up * 1.0f,
                                     Quaternion.identity, playSound: false));
+
+                // WO-888: DEATH IS AN EXIT PATH FOR THE HELD HP AURA. The next UpdateInjuredState
+                // would stop it anyway (Drive(alive:false)), but a persistent loop must never
+                // depend on a later frame arriving - HandleDeath can disable components, warp the
+                // hero or hand off to the arena. Stopping here means the near-death gutter is gone
+                // on the SAME frame the death burst plays, which is also the right read: the
+                // "about to die" signal ends the instant it resolves.
+                _hpAura?.StopAll();
 
                 PlayDeathAnim();
                 // Freeze the NavMeshAgent IMMEDIATELY (before HandleDeath's down-beat / the
@@ -1113,6 +1147,12 @@ namespace DeNelle.Village
             if (amount <= 0f) return;
             _hp = Mathf.Min(MaxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, MaxHp);
+            // WO-888: the RISING restoration read. A discrete heal already fires the Impact_Heal
+            // contact burst below; this stamps the short-lived rising column too so "mending"
+            // reads by upward MOTION (the opposite direction to the wounded gutter and to the
+            // inward stab of damage) rather than by a green tint. Held only while restoration
+            // is actually happening, and outranked by either danger read - see HeroHpStateAura.
+            _hpAura?.NotifyRegen();
             UpdateInjuredState();   // T-HP fix (owner 2026-06-27): clear the limp/injured stance once healed back above the cutoff
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
@@ -1143,6 +1183,12 @@ namespace DeNelle.Village
             }
             _hp = Mathf.Min(MaxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, MaxHp);
+            // WO-888 (registry 6b, "Aura_HealingInProgress <- RegenTick"): a calm RISING column
+            // while the town footprint is topping the hero up. This method is called EVERY FRAME
+            // while standing in the ring, so it must never START a loop per call - it stamps a
+            // short keep-alive instead and HeroHpStateAura stops the loop on its own once the
+            // stamp lapses. That makes "regen ended" a guaranteed stop with no second call site.
+            _hpAura?.NotifyRegen();
             UpdateInjuredState();   // clears the injured vignette once regen climbs back above the cutoff
         }
 
@@ -1173,6 +1219,9 @@ namespace DeNelle.Village
                 if (_abilities  != null) _abilities.enabled  = true;
             }
             OnHealthChanged?.Invoke(_hp, MaxHp);
+            // WO-888: a restore to FULL leaves fraction == 1, so Drive resolves to Slot.None and
+            // whatever wounded aura was being held is stopped on this same call. No stamp here -
+            // a completed top-off has nothing left to show as "in progress".
             UpdateInjuredState();   // T-HP fix (owner 2026-06-27): a town-return restore to full must CLEAR the limp/injured stance carried out of the fight (was lingering -> "health full but still limping")
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
@@ -1184,8 +1233,24 @@ namespace DeNelle.Village
         // the optional heartbeat cue. All flag-gated (FeatureFlags.HeroInjuredStance);
         // when the flag is off the hero is forced healthy (no swap, full speed, dark
         // vignette) so the feature can be disabled cleanly without a rebuild.
+        //
+        // ── WO-888 (ACCESSIBILITY) ────────────────────────────────────────────
+        // The PRIMARY low-HP tell is now the world-space aura driven below, which reads by
+        // PULSE RATE + GUTTERING SHAPE and therefore survives greyscale. The red vignette is
+        // DEMOTED to a secondary, redundant cue - it is still useful to players who can see
+        // red, and redundancy is good accessibility; colour-ONLY was the bug (owner is
+        // red/green colourblind, registry section 8 item 7).
+        //
+        // The aura is driven OUTSIDE the HeroInjuredStance flag on purpose: that flag exists to
+        // switch off the injured stance + vignette, and WO-888's acceptance criterion is that
+        // low HP stays legible with the vignette disabled. A survival read must not sit behind
+        // the switch that turns off the thing it replaced.
         private void UpdateInjuredState()
         {
+            // Primary read first, and unconditionally: HP fraction in, one aura out.
+            // Null-safe - a hero without the component simply keeps the secondary cues.
+            _hpAura?.Drive(_hp > 0f && !_isDead, Fraction);
+
             bool flagOn = DeNelle.Core.FeatureFlags.HeroInjuredStance;
             // Injured only while alive + below the cutoff + the flag is on. A dead hero
             // is "not injured" — the Death anim/respawn owns that beat, not the limp.
@@ -1201,11 +1266,12 @@ namespace DeNelle.Village
                 // keeps its normal locomotion. The Injured param/state stays intact in the controller
                 // for enemies (Enemy.DriveAnimator) / future use — we simply never drive the HERO into it.
                 _actor?.SetInjured(false);
-                _vignette?.SetInjured(injured);
+                _vignette?.SetInjured(injured);   // WO-888: SECONDARY cue now (aura is primary)
                 MoveSpeedMultiplier = injured ? InjuredMoveScale : 1f;
                 _heartbeatCooldown = 0f;   // let the first beat land promptly on entry
-                Debug.Log($"[HeroHealth] Injured feedback (red edge vignette) {(injured ? "ON" : "OFF")} " +
-                          $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(MaxHp)}, frac={Fraction:F2}).");
+                Debug.Log($"[HeroHealth] Injured feedback {(injured ? "ON" : "OFF")} " +
+                          $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(MaxHp)}, frac={Fraction:F2}) - " +
+                          $"primary=world HP aura (pulse rate + guttering shape), secondary=red edge vignette.");
             }
 
             // Optional heartbeat cue while wounded — paced ~1/sec, routed through the

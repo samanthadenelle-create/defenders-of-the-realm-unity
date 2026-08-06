@@ -38,6 +38,15 @@ namespace DeNelle.Village
         public float  defense;     // ADDITIVE incoming-damage reduction (0 = no bonus)
         public int    hpBonus;     // flat HP add to the hero's max HP (0 = no bonus)
 
+        // WO-888: OPTIONAL persistent-aura tag, the accessory twin of WeaponDef.element.
+        // Empty/null (every authored row today) = no aura = unchanged behaviour. When an owner
+        // tags a row with "aura": "heal", GearAuraMap.TryBodyAura resolves it to Aura_ItemHeal
+        // and GearAura holds a soft RISING restoration column on the hero's body while it is
+        // worn. Which relic deserves that aura is a CREATIVE call, so the seam is wired and the
+        // tag is left for the owner rather than guessed at here (the standing VFX rule: map an
+        // owner-tagged key verbatim, never pick one). Newtonsoft leaves it null when absent.
+        public string aura;
+
         // WO-295 set linkage (see WeaponDef.setId). The Heartstone Locket carries "aegis".
         public string setId;
 

@@ -1,7 +1,20 @@
 // =============================================================================
-// HeroInjuredVignette - persistent low-HP red screen-edge vignette. Combat feel.
+// HeroInjuredVignette - low-HP red screen-edge vignette. A SECONDARY cue.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// ## STATUS: DEMOTED TO SECONDARY (WO-888, 2026-08-05)
+//   This used to be the ONLY low-HP tell in the game. The owner is red/green
+//   colourblind, so the single signal telling her she was about to die was one she
+//   could not reliably see - a real accessibility bug, not a nicety (registry
+//   section 8 item 7).
+//
+//   The PRIMARY tell is now HeroHpStateAura: a world-space aura whose PULSE RATE and
+//   GUTTERING SHAPE carry the severity, both of which survive greyscale. This vignette
+//   is deliberately KEPT and not deleted - it is a genuinely useful redundant cue for
+//   players who can see red, and redundancy is good accessibility. What was wrong was
+//   colour ONLY. It is therefore turned DOWN (see the alpha defaults below) so it frames
+//   without dominating, and it must never again be the only thing that changes at low HP.
 //
 // WHAT IT DOES (WO-493 #5 / WO-497, the HERO half of the injured stance):
 //   * While the hero is "injured" (HP below the low-HP cutoff, ~30%) a RED
@@ -31,11 +44,16 @@ namespace DeNelle.Village
     public sealed class HeroInjuredVignette : MonoBehaviour
     {
         [Header("Vignette feel")]
-        [Tooltip("Peak opacity of the red edge vignette at the trough->crest of the breath (0-1).")]
-        [SerializeField, Range(0f, 1f)] private float _peakAlpha = 0.42f;
+        // WO-888 DEMOTION: peak 0.42 -> 0.26, floor 0.16 -> 0.08. The world HP aura is the
+        // primary read now; this frame supports it instead of carrying it. Turned down rather
+        // than removed so the cue stays available to players who can see red (redundancy), and
+        // so it stops competing for attention on a 2670x1200 landscape phone where a heavy red
+        // frame eats the scarce vertical axis. Serialized bones - felt-tune freely.
+        [Tooltip("Peak opacity of the red edge vignette at the trough->crest of the breath (0-1). SECONDARY cue.")]
+        [SerializeField, Range(0f, 1f)] private float _peakAlpha = 0.26f;
 
-        [Tooltip("Floor opacity of the breath so the frame never fully clears while injured (0-1).")]
-        [SerializeField, Range(0f, 1f)] private float _floorAlpha = 0.16f;
+        [Tooltip("Floor opacity of the breath so the frame never fully clears while injured (0-1). SECONDARY cue.")]
+        [SerializeField, Range(0f, 1f)] private float _floorAlpha = 0.08f;
 
         [Tooltip("Breaths per second (the heartbeat-paced pulse of the vignette).")]
         [SerializeField, Min(0.1f)] private float _pulseHz = 1.1f;

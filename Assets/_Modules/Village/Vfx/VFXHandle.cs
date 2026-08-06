@@ -35,6 +35,27 @@ namespace DeNelle.Village
         /// <summary>The VFX type this handle represents (for debugging).</summary>
         public VFXType Type => _type;
 
+        /// <summary>
+        /// WO-888: the live modulator for this loop - the seam an aura's OWNER uses to drive
+        /// emission density / simulation speed / body-scale while the loop is held (the
+        /// colourblind-safe "pulse rate + guttering shape" read). Attached on demand and
+        /// baselined on first touch; every value is restored before the instance returns to
+        /// the pool (see <see cref="Stop"/> and VFXManager.ReturnToPool), so a modulated
+        /// effect can never contaminate the next user of that pool slot.
+        /// Null on a dead handle - callers use <c>handle?.Modulator?.SetX(...)</c>.
+        /// </summary>
+        public VfxLoopModulator Modulator
+        {
+            get
+            {
+                if (_go == null) return null;
+                var m = _go.GetComponent<VfxLoopModulator>();
+                if (m == null) m = _go.AddComponent<VfxLoopModulator>();
+                m.Capture();
+                return m;
+            }
+        }
+
         // Internal — only VFXManager creates handles.
         internal VFXHandle(GameObject go, VFXType type)
         {
@@ -64,6 +85,12 @@ namespace DeNelle.Village
 
             var go = _go;
             _go = null;   // clear first — prevents double-stop
+
+            // WO-888: hand back any runtime modulation (emission / sim speed / scale) BEFORE
+            // the instance can reach a pool. VFXManager.ReturnToPool repeats this for the
+            // return paths no handle owns (timed return, destroyed-host sweep) — cheap and
+            // idempotent, and between them a dirty instance cannot be handed out again.
+            go.GetComponent<VfxLoopModulator>()?.Restore();
 
             var mgr = VFXManager.Instance;
             if (mgr == null)
@@ -122,6 +149,9 @@ namespace DeNelle.Village
 
             var go = _go;
             _go = null;   // clear first - prevents double-stop
+
+            // WO-888: same restore as the graceful Stop path (see the note there).
+            go.GetComponent<VfxLoopModulator>()?.Restore();
 
             var mgr = VFXManager.Instance;
             if (mgr == null)

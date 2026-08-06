@@ -489,6 +489,14 @@ namespace DeNelle.Village
             // (armor/ring/amulet). Lazily attached, fully guarded (no-op without a hero mesh).
             EnsureRimLight().Refresh();
 
+            // WO-888: the item-granted persistent AURAS (elemental weapon smoulder + relic
+            // restoration column). Lazily attached, mirrors EnsureRimLight exactly. This is the
+            // reliable driver: WO-888 named GearVisualApplier.Apply as the seam, but that method
+            // returns early unless the retired primitive-gear switch is on, and HeroBodySwapper
+            // skips it entirely on the package / KnightV3 body paths - so the aura is also
+            // ensured + refreshed HERE, on the equip path every slot change already runs through.
+            EnsureGearAura().Refresh();
+
             // COMPANION gear: a companion body has no HeroAbilities damage chain, so push the
             // equipped weapon multiplier straight onto its StoryCompanion driver (no-op on the
             // player hero, which has no StoryCompanion). Its attacks then scale with gear.
@@ -554,6 +562,19 @@ namespace DeNelle.Village
                 if (!TryGetComponent(out _rimLight)) _rimLight = gameObject.AddComponent<HeroArmorRimLight>();
             }
             return _rimLight;
+        }
+
+        private GearAura _gearAura;
+
+        /// <summary>Lazily attaches the WO-888 item-aura holder (mirrors EnsureRimLight). It owns
+        /// its own loop handles and stops them on unequip / disable / destroy / scene unload.</summary>
+        private GearAura EnsureGearAura()
+        {
+            if (_gearAura == null)
+            {
+                if (!TryGetComponent(out _gearAura)) _gearAura = gameObject.AddComponent<GearAura>();
+            }
+            return _gearAura;
         }
 
         /// <summary>

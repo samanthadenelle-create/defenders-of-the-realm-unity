@@ -849,6 +849,14 @@ namespace DeNelle.Village
         {
             if (go == null) return;
 
+            // WO-888: a HELD loop may have been modulated while it played (emission density,
+            // simulation speed, body scale — the colourblind low-HP pulse read). Nothing else
+            // in this method resets instance state, so without this the NEXT user of this pool
+            // slot would silently inherit the last owner's modulation, with no error anywhere.
+            // Doing it HERE covers every return path — VFXHandle.Stop, the timed return, and
+            // the destroyed-host sweep reclaim — not just the ones a handle owns. Idempotent.
+            go.GetComponent<VfxLoopModulator>()?.Restore();
+
             StopAllParticles(go);
             go.transform.SetParent(_poolRoot, false);
             go.SetActive(false);

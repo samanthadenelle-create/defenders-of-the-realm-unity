@@ -43,6 +43,15 @@ namespace DeNelle.Village
             if (body == null) return;
             ClearExisting(body);   // always clear stale cubes (removes any existing squares too)
 
+            // WO-888 - THE ITEM-AURA SEAM, and it must sit ABOVE the EnablePrimitiveGear gate.
+            // A gear-granted aura is not placeholder primitive gear: the cubes below are retired
+            // stand-ins (EnablePrimitiveGear defaults FALSE), so anything placed after that early
+            // return would never run at all. GearAura is idempotent, self-subscribes to
+            // GearLoadout.OnGearChanged and holds/stops its own loops - see its header, which also
+            // records why this seam alone is not sufficient (HeroBodySwapper skips this whole call
+            // on the package / KnightV3 body paths).
+            GearAura.Ensure(loadout);
+
             if (!EnablePrimitiveGear) return;
             if (loadout == null) return;
 
