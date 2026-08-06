@@ -123,7 +123,18 @@ namespace DeNelle.HUD.Kit
         // WO-778: persistent Builders/Training status chip (CoC-feel; polls ObsidianQueueGate.Status).
         private TMP_Text _queueChipLabel;
         private QueueRailView _queueRail;     // WO-864: the CoC card rail replaces the WC3 text rows
+        private RectTransform _queueRailMount;   // the Builders EXPANDED section (collapsed by default)
         private int _queueStatusVersion = -1;
+        private int _queueRailSyncFrames;        // post-expand re-sync countdown (see SetRailSection)
+
+        // ── RIGHT RAIL, ONE CHIP STYLE (owner ruling 2026-08-05) ────────────────────
+        // "I love the builder screen on the right. However, it should be minimized like
+        //  everything else, like echoes until needed. The echoes, the builders, and the
+        //  resources should all be styled similarly. So they're all the same until you
+        //  click and open and expand them."
+        // The three rail sections open one at a time; this is the whole arbiter state.
+        private enum RailSection { None = 0, Builders = 1, Resources = 2 }
+        private RailSection _railOpen = RailSection.None;
 
         // model subscriptions (for teardown)
         private readonly List<Action> _unsubscribe = new List<Action>();
@@ -680,18 +691,55 @@ namespace DeNelle.HUD.Kit
             Register("waveBlock", WrapAsWidget("waveBlock", _waveBlockRoot));
         }
 
-        // WO-778: the always-visible CoC-style Builders chip — busy count + shortest
-        // remaining timer, tap opens the WORK QUEUE panel (same gate as the Work button).
-        // Player copy: "Builders"/"Training" — never "Obsidian". ASCII-only, text-encoded
-        // state (never colour-only). BuildObsidianButton carries the MinTouchPx floor.
-        // WO-864: the QueueStatus band is now a summary BUTTON over a CoC-style CARD RAIL.
-        // Both are laid out in FIXED PIXELS off the top of the band — never as fractions of
-        // it. That is the fix for the owner's 2026-08-03 capture, where the rows plate was
-        // 62% of a tall band and therefore reserved five rows' worth of dark plate to show
-        // one job, leaving a large empty region (WO-841/WO-852 fraction-band lesson).
-        private const float QueueChipHeightPx = ElarionUiKit.MinTouchPx;   // 112 — the tap floor
-        private const float QueueChipGapPx = 6f;
+        // =====================================================================
+        // THE RIGHT RAIL — ONE COLLAPSED CHIP STYLE, THREE INSTANCES
+        // ---------------------------------------------------------------------
+        // Owner ruling 2026-08-05 (verbatim at the _railOpen field). The device
+        // review (docs/qa/UI_REVIEW_2026-08-05_seeker.md, findings 11 + 13 + P2
+        // "three different right edges") measured three DIFFERENT treatments on
+        // one column: Builders drew as a large permanently-expanded gold-bordered
+        // panel, Echoes as a small dark chip, Resources as BOTH a chip AND a
+        // headered panel that repeated the word and overlapped the chip.
+        //
+        // The fix is a single authored chip: same height (AT the touch floor),
+        // same width, same Style1/Gray obsidian face, same right edge, collapsed
+        // by default; the expanded section hangs below it and only ONE section is
+        // ever open (SetRailSection). Every number below is FIXED REFERENCE PIXELS,
+        // never a fraction of the parent band — the WO-841/WO-852 defect class is a
+        // sub-MinTouchPx fraction band that ClampMinTouch then grows symmetrically
+        // about its centre, closing the gap to its neighbour.
+        //
+        // The width + gutter deliberately MATCH the third chip, which this class
+        // does not own: EchoUnlockFeedback.cs:56-60 authors EchoChipWidthPx = 220
+        // and insets it ElarionUi.PadPanel * 3 (54 ref px) from the SCREEN edge.
+        // HudRailGutter (bottom of this file) reproduces that screen-relative inset
+        // for chips whose parent is an AREA mount, so all three share one edge.
+        /// <summary>Collapsed chip height — authored AT the tap floor, so ClampMinTouch
+        /// has nothing to grow (growth is what pushed WO-868's chip off-screen).</summary>
+        private const float RailChipHeightPx = ElarionUiKit.MinTouchPx;   // 112
+        /// <summary>Collapsed chip width — == EchoUnlockFeedback.EchoChipWidthPx.</summary>
+        private const float RailChipWidthPx = 220f;
+        /// <summary>Gap between a chip and its expanded section.</summary>
+        private const float RailGapPx = 6f;
+        /// <summary>Expanded-section width. Shares the chip's right edge, grows LEFT.</summary>
+        private const float RailPanelWidthPx = 420f;
+        /// <summary>THE shared rail gutter: distance from the SCREEN's right edge to every
+        /// chip and every expanded panel. == the Echoes chip's authored inset, so the one
+        /// rail element this class cannot edit lands on the same edge.</summary>
+        internal const float RailGutterPx = ElarionUi.PadPanel * 3f;   // 54
+        // Resource panel interior, in fixed reference px. Sized so the whole section
+        // (chip 112 + gap 6 + panel 240 = 358) stays inside the ActionRail band, which
+        // resolves to ~367 ref px on the 2670x1200 Seeker (HudAreasHost 0.040..0.420).
+        private const float ResRowHeightPx = 40f;
+        private const float ResRowGapPx = 5f;
+        private const float ResPanelPadPx = 10f;
 
+        // WO-778: the always-visible CoC-style Builders chip — busy count, tap opens
+        // the WORK QUEUE. Player copy: "Builders"/"Training" — never "Obsidian".
+        // ASCII-only, text-encoded state (never colour-only).
+        // WO-864: the expanded section is a CoC-style CARD RAIL (QueueRailView).
+        // 2026-08-05: that rail is now COLLAPSED BY DEFAULT — the owner keeps the
+        // panel she likes, it just starts minimized like its two neighbours.
         private void BuildQueueStatusChip(Transform pool)
         {
             var root = new GameObject("QueueStatusChip", typeof(RectTransform));
@@ -700,49 +748,129 @@ namespace DeNelle.HUD.Kit
             rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
-            // Summary button — a fixed MinTouchPx band pinned to the top of the area.
-            var chipBand = PixelBand(rrt, "ChipBand", 0f, QueueChipHeightPx, 4f);
-            var chip = ElarionUiKit.BuildObsidianButton(chipBand, "Builders",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                Vector2.zero, Vector2.one, () =>
-                {
-                    FlowTrace.Step("HudKit", "queue chip tapped -> ObsidianQueueGate.RequestToggle");
-                    ObsidianQueueGate.RequestToggle();
-                });
-            _queueChipLabel = chip.GetComponentInChildren<TMP_Text>(true);
-            if (_queueChipLabel != null)
-            {
-                _queueChipLabel.enableWordWrapping = false;
-                _queueChipLabel.overflowMode = TextOverflowModes.Ellipsis;
-            }
+            // THE shared collapsed chip (identical build to the Resources chip below).
+            var chip = BuildRailChip(rrt, "BuildersChip", "Builders", 0f, OnBuildersChipTapped);
+            // Wrap + bounded auto-size come from BuildRailChip (see the note there) — the chip
+            // reports the SAME string it always did (FormatQueueChip), it just no longer has to
+            // ellipsize the Train count off the end of a narrower face.
+            _queueChipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>(true) : null;
 
             // The Builder card rail. The SHARED component (DeNelle.Core.UI.QueueRailView) —
             // the Work Queue modal hosts the very same one, so the two surfaces can never
             // show a different queue visual. This host supplies only the mount; the rail
-            // owns its own chrome, card anatomy and cheap tick.
-            var railMount = PixelBand(rrt, "QueueRailMount",
-                QueueChipHeightPx + QueueChipGapPx, 240f, 2f);
-            _queueRail = QueueRailView.Build(railMount, DeNelle.Core.Jobs.ChannelId.Builder,
+            // owns its own chrome, card anatomy and cheap tick. Height comes from the
+            // component (HeightOf), never a guessed literal, so the section can never
+            // reserve more band than the cards occupy.
+            _queueRailMount = RailBand(rrt, "QueueRailMount",
+                RailChipHeightPx + RailGapPx,
+                QueueRailView.HeightOf(QueueRailView.Options.Default),
+                RailPanelWidthPx);
+            _queueRail = QueueRailView.Build(_queueRailMount, DeNelle.Core.Jobs.ChannelId.Builder,
                 QueueRailView.Options.Default);
+            _queueRailMount.gameObject.SetActive(false);   // collapsed by default
 
             Register("queueStatusChip", WrapAsWidget("queueStatusChip", root));
         }
 
-        /// <summary>A FIXED-PIXEL-height band pinned to the top of <paramref name="parent"/>.
-        /// The kit's anchor helpers take fractions; queue chrome must not (WO-841).</summary>
-        private static RectTransform PixelBand(RectTransform parent, string name,
-            float yFromTopPx, float heightPx, float insetX)
+        // The Builders chip is the ONE Queues entry point (owner 2026-08-01; the bar's
+        // Queues button is retired and ObsidianQueueRegression 7c enforces it). So the
+        // chip must still reach ObsidianQueueGate.RequestToggle: tap once to PEEK the
+        // inline card rail, tap the open chip again to hand off to the full Work Queue
+        // (which hosts the same QueueRailView, arbitrated by PanelManager). The inline
+        // section collapses on that hand-off, so the rail never stacks under a modal.
+        private void OnBuildersChipTapped()
+        {
+            if (_railOpen == RailSection.Builders)
+            {
+                SetRailSection(RailSection.None);
+                FlowTrace.Step("HudKit", "Builders chip tapped while open -> ObsidianQueueGate.RequestToggle");
+                ObsidianQueueGate.RequestToggle();
+                return;
+            }
+            SetRailSection(RailSection.Builders);
+        }
+
+        /// <summary>THE one collapsed rail chip. Echoes, Builders and Resources are the same
+        /// object with a different word on it: Style1/Gray obsidian face, fixed 220x112 ref px,
+        /// pinned to the shared rail gutter. Fixed pixels only (WO-841).</summary>
+        private Button BuildRailChip(RectTransform parent, string name, string label,
+                                     float yFromTopPx, Action onTap)
+        {
+            var band = RailBand(parent, name + "Band", yFromTopPx, RailChipHeightPx, RailChipWidthPx);
+            var btn = ElarionUiKit.BuildObsidianButton(band, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                Vector2.zero, Vector2.one, onTap);
+            if (btn == null)
+            {
+                FlowTrace.Warn("HudKit", "rail chip '" + name + "' did not build - the kit returned no button");
+                return null;
+            }
+            btn.gameObject.name = "RailChip_" + name;
+            // BuildObsidianButton arms FitSingleLine (no-wrap + ellipsis), which is right for a
+            // wide bar face and WRONG here: the chip is 220 ref px wide because that is the width
+            // of the Echoes chip it must match, and "Builders 1/2 | Train 3" cannot seat 22
+            // characters on one 200 px line above the kit's 30 px legibility floor — it would
+            // ellipsize the Train count away, and the collapsed chip is the only HUD surface that
+            // reports it. The chip is 112 px TALL, so the label wraps instead: FitBlock keeps the
+            // same bounded auto-size and legibility floor, uses the height we already reserved,
+            // and nothing is clipped or dropped. Single-word chips ("Resources") are unaffected.
+            var lbl = btn.GetComponentInChildren<TMP_Text>(true);
+            if (lbl != null) ElarionUiKit.FitBlock(lbl);
+            return btn;
+        }
+
+        /// <summary>A FIXED-PIXEL band pinned to the TOP-RIGHT of <paramref name="parent"/> and
+        /// snapped onto the shared rail gutter by <see cref="HudRailGutter"/>. The kit's anchor
+        /// helpers take fractions; rail chrome must not (WO-841) — a fraction band can resolve
+        /// under MinTouchPx, and ClampMinTouch then grows it about its centre into its neighbour.</summary>
+        private static RectTransform RailBand(RectTransform parent, string name,
+            float yFromTopPx, float heightPx, float widthPx)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rt = (RectTransform)go.transform;
-            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMin = new Vector2(1f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(-insetX * 2f, heightPx);
+            rt.pivot = new Vector2(1f, 1f);
+            rt.sizeDelta = new Vector2(widthPx, heightPx);
             rt.anchoredPosition = new Vector2(0f, -yFromTopPx);
+            go.AddComponent<HudRailGutter>();
             return rt;
         }
+
+        /// <summary>THE rail arbiter: at most ONE expanded section, ever. Reused by the Builders
+        /// chip, the Resources chip and the calm(explore) tap-expand window, so no caller can
+        /// stack two panels on the right column.</summary>
+        private void SetRailSection(RailSection section)
+        {
+            bool builders = section == RailSection.Builders;
+            bool resources = section == RailSection.Resources;
+            if (_railOpen == section &&
+                (_queueRailMount == null || _queueRailMount.gameObject.activeSelf == builders) &&
+                (_resExpandedRow == null || _resExpandedRow.activeSelf == resources)) return;
+
+            _railOpen = section;
+            if (_queueRailMount != null && _queueRailMount.gameObject.activeSelf != builders)
+                _queueRailMount.gameObject.SetActive(builders);
+            // Repaint what was hidden. QueueRailView.Sync() takes its cheap text-only path
+            // unless the measured width moved — and on the FIRST expand the rail's rect has
+            // never been through a layout pass (it was built and deactivated in one frame),
+            // so sync AGAIN one frame later, once the fixed-px band has resolved. Without
+            // that second pass the cards would keep a zero-width shape until the publisher's
+            // next 1 s tick happened to move the version.
+            if (builders && _queueRail != null) { _queueRail.Sync(); _queueRailSyncFrames = 2; }
+            else _queueRailSyncFrames = 0;
+
+            _resPanelOpen = resources;
+            if (_resExpandedRow != null && _resExpandedRow.activeSelf != resources)
+                _resExpandedRow.SetActive(resources);
+
+            FlowTrace.Step("HudKit", "right rail: expanded section = " + section +
+                           " (one open at a time; the other two stay collapsed)");
+        }
+
+        private void ToggleRailSection(RailSection section) =>
+            SetRailSection(_railOpen == section ? RailSection.None : section);
 
         // "Builders 1/2" (+ " | Training N"). NO TIMER — WO-864 bug 1: the chip used to
         // print the soonest countdown AND the job row printed the same value right under
@@ -754,7 +882,18 @@ namespace DeNelle.HUD.Kit
             string line = "Builders " + s.BuilderBusy + "/" + s.BuilderSlots;
             // "Train", not "Training": at 1920x1080 the longer word ellipsized to
             // "Trainin..." in the 2026-08-03 capture. The counts are the load-bearing part.
-            if (s.TrainBusy > 0) line += " | Train " + s.TrainBusy;
+            //
+            // NEWLINE, NOT " | " (2026-08-05, from a 2670x1200 capture): this chip's font
+            // draws the numeral 1 as a BARE VERTICAL STROKE with no flag or base, so
+            // "Builders 1/2 | Train 1" rendered as three identical vertical marks carrying
+            // three different meanings - two counts and a separator. The pipe was the worst
+            // offender because it sat directly between the digits it was being confused with.
+            // The chip is MinTouchPx tall and its label wraps, so the height for a second
+            // line is already reserved and costs nothing. Two short lines also survive a
+            // narrow chip better than one wrapped line.
+            // The underlying glyph problem is wider than this chip - see the numeral-1
+            // legibility ticket - but no caller should have to depend on that being fixed.
+            if (s.TrainBusy > 0) line += "\nTrain " + s.TrainBusy;
             return line;
         }
 
@@ -991,56 +1130,38 @@ namespace DeNelle.HUD.Kit
 
         private void BuildResourceChips(Transform pool)
         {
-            // WO-431: Gold (primary) + Wood/Iron/Food/Crystal chips live in an OBSIDIAN dark
-            // frame under a gold "Resources" header, and the frame HUGS its content via a
-            // VerticalLayoutGroup + ContentSizeFitter (dynamic width — no fixed olive slab).
+            // WO-431: Gold + Wood/Iron/Food/Crystal chips live in an OBSIDIAN dark frame
+            // (near-black ObsidianFill + gold inner rim, never the olive Panel()).
             // Each chip draws OUR resource icon through the CurrencyChip concept resolver
             // (concept-icons.json gold/wood/iron/food/crystal -> Icons_Obsidian) — the icon
             // choice is DATA, never hard-coded here. Count-tween only, NO flash.
-            // WO-440: the always-visible resources panel now lives in a DOCK — a right-edge tab
-            // (always shown when the widget is occupied) + the collapsible chips panel that the tab
-            // toggles. Collapsed by default; tap the tab to expand, tap again to collapse. SetResources
-            // (OnEconomy) updates the chip values whether the panel is open or closed (labels persist).
+            // WO-440: the always-visible resources panel lives in a DOCK — a chip + the
+            // collapsible panel the chip toggles. Collapsed by default. SetResources (OnEconomy)
+            // updates the chip values whether the panel is open or closed (labels persist).
+            //
+            // 2026-08-05 REBUILD (device review findings 11 + 13, and the P2 "three different
+            // right edges"). What was measured on the Seeker, and what each line below fixes:
+            //   * the word "Resources" rendered TWICE — once on the collapsed tab, once as a
+            //     gold panel header in a different size and colour, with the panel's top edge
+            //     OVERLAPPING the tab. The header is GONE; the chip owns the word, once.
+            //   * the tab was a Style1/YELLOW fraction-anchored box with an icon stacked over
+            //     the word; its two neighbours were Style1/Gray text chips. It is now the SAME
+            //     BuildRailChip as Builders and the same as Echoes: Style1/Gray, 220x112 fixed.
+            //   * the panel was a ContentSizeFitter frame pinned -6 px off the AREA's right
+            //     edge (the area itself ends only 0.005 of the screen from the edge), so the
+            //     numbers ran into the screen edge with no padding. It is now a fixed-width
+            //     RailBand on the SHARED rail gutter (HudRailGutter), like every other element.
+            //   * rows were ICON-ONLY. CurrencyChip DROPS its text tag whenever the currency
+            //     icon resolves (ElarionUiKitObsidian.cs:846-857), so on a device with the art
+            //     present the five rows were distinguishable mainly by HUE at ~30 px — a
+            //     straight breach of the colourblind rule. Each row now carries its NAME as a
+            //     sibling label the chip cannot suppress, in its own sub-rect so it can never
+            //     collide with the amount.
             _resDock = new GameObject("ResourceDock", typeof(RectTransform));
             _resDock.transform.SetParent(pool, false);
             var drt = (RectTransform)_resDock.transform;
             drt.anchorMin = Vector2.zero; drt.anchorMax = Vector2.one;
             drt.offsetMin = Vector2.zero; drt.offsetMax = Vector2.zero;
-
-            _resExpandedRow = new GameObject("ResourceChips", typeof(RectTransform));
-            _resExpandedRow.transform.SetParent(_resDock.transform, false);
-            var rrt = (RectTransform)_resExpandedRow.transform;
-            // Top-RIGHT pivot so the fitter grows the frame down/left, tucked under the right-edge tab.
-            rrt.anchorMin = new Vector2(1f, 1f); rrt.anchorMax = new Vector2(1f, 1f);
-            // -84 (was -52): the toggle tab grew taller (y 0.80-0.99, F8 2026-07-08 label-fit fix),
-            // so the expanded panel drops further below the tab's new bottom edge — no overlap.
-            rrt.pivot = new Vector2(1f, 1f); rrt.anchoredPosition = new Vector2(-6f, -84f);
-
-            // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
-            // — NOT the olive Panel()). ignoreLayout so it stretches to the fitter-sized content.
-            var frame = ElarionUiKit.AddImage(_resExpandedRow.transform, "ResFrame",
-                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
-            ElarionUiKit.AddInnerRim(frame, ElarionUiKit.ObsidianTrim);
-            var frameImg = frame.GetComponent<Image>();
-            if (frameImg != null) frameImg.raycastTarget = false;
-            frame.AddComponent<LayoutElement>().ignoreLayout = true;
-
-            // Vertical stack + ContentSizeFitter => dynamic width/height to the content.
-            var vlg = _resExpandedRow.AddComponent<VerticalLayoutGroup>();
-            vlg.padding = new RectOffset(12, 12, 8, 10);
-            vlg.spacing = 4f;
-            vlg.childAlignment = TextAnchor.UpperLeft;
-            vlg.childControlWidth = true;  vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
-            var fitter = _resExpandedRow.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            fitter.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
-
-            // Gold "Resources" header (kit Label; no crest glyph — avoids build-font tofu).
-            var header = ElarionUiKit.Label(_resExpandedRow.transform, "Resources", 0f, 1f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0f, 1f, bold: true);
-            var headerLe = header.gameObject.AddComponent<LayoutElement>();
-            headerLe.minHeight = 26f; headerLe.preferredHeight = 26f; headerLe.minWidth = 168f;
 
             var kinds = new[]
             {
@@ -1048,65 +1169,62 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.CurrencyKind.Iron, ElarionUiKit.CurrencyKind.Food,
                 ElarionUiKit.CurrencyKind.Crystal,
             };
-            // WO-697 (RES-1) icon-first rows: the mirrored RpgUi/currency/* art now exists, so
-            // the chip builder shows the ICON as the identity carrier and DROPS the text label
-            // (colorblind-safe: icon = shape identity). The tags below are the no-art FALLBACK
-            // only (flag_03's never-a-naked-number law, now enforced inside the builder); values
-            // render compact via ElarionUi.CompactNumber and the chips content-fit their width.
-            var tags = new[] { "Gold", "Wood", "Iron", "Food", "Crystal" };
+            var names = new[] { "Gold", "Wood", "Iron", "Food", "Crystal" };
+
+            // The collapsed chip — THE shared rail chip, identical to Builders and Echoes.
+            BuildRailChip(drt, "ResourcesChip", "Resources", 0f,
+                          () => ToggleRailSection(RailSection.Resources));
+
+            // The expanded section: a fixed-pixel panel on the shared gutter, hanging under
+            // the chip. Fixed rows, never a fraction of the band (WO-841).
+            float panelH = ResPanelPadPx * 2f + kinds.Length * ResRowHeightPx +
+                           (kinds.Length - 1) * ResRowGapPx;
+            var rrt = RailBand(drt, "ResourceChips", RailChipHeightPx + RailGapPx,
+                               panelH, RailPanelWidthPx);
+            _resExpandedRow = rrt.gameObject;
+
+            // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
+            // — NOT the olive Panel()).
+            var frame = ElarionUiKit.AddImage(_resExpandedRow.transform, "ResFrame",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
+            ElarionUiKit.AddInnerRim(frame, ElarionUiKit.ObsidianTrim);
+            var frameImg = frame.GetComponent<Image>();
+            if (frameImg != null) frameImg.raycastTarget = false;
+
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
             for (int i = 0; i < kinds.Length; i++)
             {
+                // One row = a fixed-pixel band inside a fixed-pixel panel. Display only (no
+                // tap target), so the MinTouchPx floor does not apply to it and nothing grows.
+                var row = new GameObject("ResRow_" + names[i], typeof(RectTransform));
+                row.transform.SetParent(_resExpandedRow.transform, false);
+                var rowRt = (RectTransform)row.transform;
+                rowRt.anchorMin = new Vector2(0f, 1f);
+                rowRt.anchorMax = new Vector2(1f, 1f);
+                rowRt.pivot = new Vector2(0.5f, 1f);
+                rowRt.sizeDelta = new Vector2(-ResPanelPadPx * 2f, ResRowHeightPx);
+                rowRt.anchoredPosition =
+                    new Vector2(0f, -(ResPanelPadPx + i * (ResRowHeightPx + ResRowGapPx)));
+
+                // NAME — the colourblind-safe identity carrier. A sibling of the chip, in its
+                // own left sub-rect, so the icon-first rule inside CurrencyChip cannot drop it
+                // and a long amount can never overlap it.
+                var nameLbl = ElarionUiKit.Label(row.transform, names[i], 0f, 1f,
+                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft,
+                    0.02f, 0.44f);
+                nameLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(nameLbl);   // the name never clips its slot
+
                 // OWNER 2026-07-15 (colorblind): in THIS resource strip Gold must read the SAME
                 // size + color as Wood/Iron/Food/Crystal — the earlier primary:Gold gave it gilt
-                // digits + FontHead (bigger) + bold (ElarionUiKitObsidian CurrencyChip:850-853),
+                // digits + FontHead (bigger) + bold (ElarionUiKitObsidian CurrencyChip:859-867),
                 // so it stood out. All five chips are peers here; the icon carries identity, never
                 // color/size. primary:false makes every chip uniform (Parchment, FontLabel, normal).
-                _resChips[i] = ElarionUiKit.CurrencyChip(_resExpandedRow.transform, kinds[i],
-                    Vector2.zero, Vector2.one, primary: false,
-                    tag: tags[i]);
-                var le = _resChips[i].root.AddComponent<LayoutElement>();
-                le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;
+                _resChips[i] = ElarionUiKit.CurrencyChip(row.transform, kinds[i],
+                    new Vector2(0.46f, 0f), new Vector2(1f, 1f), primary: false,
+                    tag: names[i]);
             }
-            // WO-440: right-edge tab that toggles the chips panel (collapsed by default).
-            // F8-25a (flag_01/02): the old x 0.95..1.0 anchors are fractions of the actionRail
-            // ZONE mount (0.780..0.995 screen, ~232px at the 1080 ref — HudAreasHost.cs:97), NOT
-            // the screen — the tab rendered ~12px wide, squashing the ornate button1_yellow
-            // 9-slice (24px borders need >=48px) into a thin stretched vertical strip with the
-            // newly-resolving coin icon inside it. x 0.60 gives the tab ~93px — room for the
-            // sliced chrome, the coin icon and the "Resources" word.
-            // TAB HEIGHT FIX (F8 2026-07-08): the tab was only y 0.86-0.99 (~13% of the dock →
-            // ~50px), and with the coin icon riding above the word the "Resources" label was
-            // squished into the lower ~36% (~18px) — the guard CULLED its glyphs ("0 visible
-            // glyphs, rect 167x18"). Give the tab ~19% (y 0.80-0.99, ~73px) so the label band
-            // below the icon is tall enough to seat the ≥20px font.
-            var resTab = ElarionUiKit.BuildObsidianButton(_resDock.transform, "$",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.60f, 0.80f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
-            // Owner F8 07-06 (flag_03): the collapsed dock read as an anonymous box — the "$"
-            // glyph was swapped for a coin icon with NO text. The tab now ALWAYS says
-            // "Resources" (icon rides above the word when it resolves; text never hides).
-            var resTabLbl = resTab.GetComponentInChildren<TMP_Text>();
-            if (resTabLbl != null)
-            {
-                resTabLbl.text = "Resources";
-                resTabLbl.fontSize = ElarionUi.FontMicro;
-                ElarionUiKit.FitSingleLine(resTabLbl);   // narrow tab — never clip the word
-            }
-            var resTabIcon = UiStyle.Icon("gold", "coin", "resources");
-            if (resTabIcon != null && resTabLbl != null)
-            {
-                var ico = ElarionUiKit.AddImage(resTab.transform, "TabIcon",
-                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.96f), Color.white, rounded: false);
-                var icoImg = ico.GetComponent<Image>();
-                icoImg.sprite = resTabIcon; icoImg.preserveAspect = true; icoImg.raycastTarget = false;
-                // Word takes the LOWER HALF of the (now taller) tab so its rect can seat the font
-                // instead of clipping to nothing (F8 2026-07-08 guard FAIL). Icon rides the top.
-                var lblRt = (RectTransform)resTabLbl.transform;
-                lblRt.anchorMin = new Vector2(0.02f, 0.03f);
-                lblRt.anchorMax = new Vector2(0.98f, 0.52f);
-                lblRt.offsetMin = Vector2.zero; lblRt.offsetMax = Vector2.zero;
-            }
+
             _resPanelOpen = false;
             _resExpandedRow.SetActive(false);   // collapsed by default
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
@@ -1125,6 +1243,8 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Step("HudKit", "resource chips tap-expanded (6s window)");
             });
             _resGoldOnly.plate.raycastTarget = true;   // the chip is the tap target here
+            // Same shared gutter as the town rail — one right edge in every posture.
+            tapGo.AddComponent<HudRailGutter>();
             Register("resourceChipsCollapsed", WrapAsWidget("resourceChipsCollapsed", tapGo));
         }
 
@@ -1528,15 +1648,17 @@ namespace DeNelle.HUD.Kit
             FlowTrace.Step("HudKit", "flee armed (tap again within 2s to confirm)");
         }
 
-        // WO-440: right-edge resource tab toggle — expand/collapse the chips panel. Values are
+        // WO-440: resource chip toggle — expand/collapse the resource panel. Values are
         // still updated by OnEconomy regardless of this state (labels persist while hidden).
-        private void ToggleResourcePanel() => SetResourcePanelOpen(!_resPanelOpen);
+        // 2026-08-05: both entry points now route through the ONE rail arbiter, so opening
+        // Resources collapses Builders and vice versa — the right column can never stack two
+        // expanded panels (the state that produced the overlapping chip + panel in the review).
+        private void ToggleResourcePanel() => ToggleRailSection(RailSection.Resources);
 
         private void SetResourcePanelOpen(bool open)
         {
-            _resPanelOpen = open;
-            if (_resExpandedRow != null && _resExpandedRow.activeSelf != open)
-                _resExpandedRow.SetActive(open);
+            if (open) { SetRailSection(RailSection.Resources); return; }
+            if (_railOpen == RailSection.Resources) SetRailSection(RailSection.None);
         }
 
         // WO-835 §3c: the old OpenQuestOrUpgrade context relabel is SPLIT into two
@@ -1679,6 +1801,11 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Step("HudKit", "combat HUD is the active screen: CloseAll (posture " +
                                HudPostureKeys.Key(posture) + ")");
             }
+
+            // COLLAPSED IS THE DEFAULT STATE (owner 2026-08-05). A posture flip re-presents
+            // the rail, so it re-presents it minimized — the player never returns to town and
+            // finds a panel she left open in another posture already occupying the column.
+            SetRailSection(RailSection.None);
 
             var occupancy = _config.Occupancy(posture);
             int shown = 0;
@@ -1825,6 +1952,10 @@ namespace DeNelle.HUD.Kit
                 }
             }
 
+            // One post-expand re-sync, once the newly-shown fixed-px band has been laid out.
+            if (_queueRailSyncFrames > 0 && --_queueRailSyncFrames == 0 && _queueRail != null)
+                _queueRail.Sync();
+
             // (WO-835: the Raids army-dim poll and the Map Onboarded poll that lived here
             // moved into HudActionBarModel — the View consumes its events above.)
         }
@@ -1856,6 +1987,104 @@ namespace DeNelle.HUD.Kit
             if (_castBar != null) _castBar.Unbind();
             if (_evaluator != null) _evaluator.PostureChanged -= ApplyPosture;
             HudMoveInput.Set(Vector2.zero);
+        }
+    }
+
+    /// <summary>
+    /// THE SHARED RIGHT-RAIL GUTTER (owner ruling 2026-08-05; device review P2 "the right rail
+    /// has three different right edges, the '!' chip runs off-screen").
+    ///
+    /// WHY A COMPONENT AND NOT A CONSTANT. The rail's elements are parented to HudAreasHost AREA
+    /// mounts, which are anchored as FRACTIONS of the screen (QueueStatus and ActionRail both end
+    /// at x = 0.995 — HudAreasHost.cs:99/117). 0.005 of the canvas is ~5 ref px at the 1080 author
+    /// width and ~11 at the 2670x1200 Seeker, so any inset authored against the AREA lands on a
+    /// different SCREEN margin at every aspect — which is exactly how the column ended up with
+    /// three right edges. This component measures the live gap between its parent's right edge
+    /// and the ROOT CANVAS' right edge and writes the difference into anchoredPosition.x, so the
+    /// element's right edge sits <see cref="HudKitController.RailGutterPx"/> reference px from the
+    /// SCREEN edge at every resolution — the same 54 ref px EchoUnlockFeedback.cs:381 authors for
+    /// the Echoes chip, which lives on a different canvas entirely and cannot be edited from here.
+    ///
+    /// Presentation-only, allocation-free, and it writes ONLY on an actual change (a dirty flag
+    /// plus a screen-size compare), so it is not a per-frame layout cost.
+    /// Requires: anchorMin.x == anchorMax.x == 1 and pivot.x == 1 (what RailBand authors).
+    /// </summary>
+    internal sealed class HudRailGutter : MonoBehaviour
+    {
+        private static readonly Vector3[] Corners = new Vector3[4];
+
+        private RectTransform _rt, _canvasRt;
+        private bool _dirty = true;
+        private int _lastW = -1, _lastH = -1;
+        private bool _warned;
+
+        private void OnEnable() { _dirty = true; }
+        private void OnRectTransformDimensionsChange() { _dirty = true; }
+
+        private void LateUpdate()
+        {
+            if (Screen.width != _lastW || Screen.height != _lastH)
+            {
+                _lastW = Screen.width; _lastH = Screen.height; _dirty = true;
+            }
+            if (!_dirty) return;
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (_rt == null) _rt = transform as RectTransform;
+            if (_rt == null) { _dirty = false; return; }
+            var parent = _rt.parent as RectTransform;
+            if (parent == null) return;                      // re-parented by occupancy; retry
+            if (_canvasRt == null)
+            {
+                var c = GetComponentInParent<Canvas>();
+                if (c == null) return;                        // not mounted yet; retry
+                var root = c.rootCanvas != null ? c.rootCanvas : c;
+                _canvasRt = root.transform as RectTransform;
+            }
+            if (_canvasRt == null) return;
+
+            if (parent.rect.width < 1f || _canvasRt.rect.width < 1f) return;   // unresolved; retry
+
+            // Gap the parent already provides, measured in CANVAS-LOCAL units (== reference px,
+            // the unit RailGutterPx and MinTouchPx are authored in). Going through the canvas'
+            // own local space rather than lossyScale keeps this correct whatever scale the HUD
+            // host happens to be parented under.
+            parent.GetWorldCorners(Corners);
+            float parentRight = _canvasRt.InverseTransformPoint(Corners[2]).x;
+            float gap = _canvasRt.rect.xMax - parentRight;
+            float inset = HudKitController.RailGutterPx - gap;
+            if (inset < 0f)
+            {
+                // The parent already sits further inside than the shared gutter. Snapping the
+                // chip back OUT would put it on a fourth edge, so hold at the parent's edge and
+                // say so once — a real layout finding, never a silent swallow (CLAUDE.md 12.2).
+                if (!_warned)
+                {
+                    _warned = true;
+                    FlowTrace.Warn("HudKit", "rail gutter: parent '" + parent.name + "' already insets " +
+                                   gap.ToString("F1") + " ref px > the shared " +
+                                   HudKitController.RailGutterPx + " - pinning to the parent edge");
+                }
+                inset = 0f;
+            }
+
+            _dirty = false;
+            if (Mathf.Approximately(_rt.anchorMin.x, _rt.anchorMax.x))
+            {
+                // Point-anchored at the right edge (RailBand) — move it.
+                if (Mathf.Abs(_rt.anchoredPosition.x + inset) < 0.01f) return;
+                _rt.anchoredPosition = new Vector2(-inset, _rt.anchoredPosition.y);
+            }
+            else
+            {
+                // Right-STRETCHED (the calm(explore) collapsed gold chip) — inset its right edge
+                // so it lands on the same gutter instead of on a fourth edge.
+                if (Mathf.Abs(_rt.offsetMax.x + inset) < 0.01f) return;
+                _rt.offsetMax = new Vector2(-inset, _rt.offsetMax.y);
+            }
         }
     }
 

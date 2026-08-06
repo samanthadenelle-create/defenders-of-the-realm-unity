@@ -105,7 +105,14 @@ namespace DeNelle.HUD
             _card.anchorMax = new Vector2(1f, 0.46f);
             _card.pivot = new Vector2(1f, 0.5f);
             _card.sizeDelta = new Vector2(52f, 52f);
-            _card.anchoredPosition = new Vector2(-10f, 0f);
+            // SHARED RIGHT GUTTER (2026-08-05): every right-rail element - the Echoes chip,
+            // the Builders chip, the Resources chip - sits ElarionUi.PadPanel * 3f from the
+            // screen edge. This medallion was authored at -10f, so on the Seeker's 2670x1200
+            // it landed ~12 device px from the edge and read as running OFF-SCREEN against a
+            // rounded corner, while its neighbours sat ~67px in. Four different right edges on
+            // one rail is the defect; the number is now derived from the same constant they
+            // all use, so it cannot drift apart again.
+            _card.anchoredPosition = new Vector2(-(ElarionUi.PadPanel * 3f), 0f);
             // Kit-dressed plate: Obsidian action-slot sprite; translucent stone square fallback.
             var plateImg = card.GetComponent<Image>();
             var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
