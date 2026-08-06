@@ -1,6 +1,14 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **909**. **782–859 + 900–908 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **910**. **782–859 + 900–909 CONSUMED.**
+> - **909** = **Activate Mage + Ranger in character selection (re-enable + verify).** Owner: create a WO
+>   for CLI to make Mage/Ranger selectable. Gate `FeatureFlags.KnightOnly` already default-OFF
+>   (`9a0ff548`); WO-861 landed kits/loadout/portraits/copy/rename — so this is a **re-enable + verify +
+>   body-mesh finish**, not a build. Real open risk = Mage/Ranger body mesh (parked `.tripo-extracted`
+>   FBX → Blink base vs KayKit body). Owner steer: *"Mage should obviously live heavily in that realm"* →
+>   Mage is the magic/VFX showcase. File `WORK_ORDER_909_activate_mage_ranger_character_select.md`. **READY.**
+>
+> *(banner bumped 909 → 910 in the SAME edit as the 909 mint — the rule that broke five times on 08-02.)*
 > - **908** = **Side menu: duplicate gear icon + wrong icon formatting.** Owner felt-test on the Seeker
 >   (2670x1200): the left-side menu expands correctly, but TWO gear glyphs render in two different
 >   styles — a gold/tan boxed gear seated on the **Music** row and overhanging the panel's left border,
@@ -145,8 +153,11 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **908** (782–859 + 900–907 consumed; 860–899 belongs to the UI seat) |
-> | **860–899 reserved** | UI seat | **884** (860–883 consumed) |
+> | **main line** | CLI | **910** (782–859 + 900–909 consumed; 860–899 belongs to the UI seat) |
+> | **860–899 reserved** | UI seat | **885** (860–884 consumed) |
+>
+> *(UI-seat bumped 884 → 885 in the SAME edit as the WO-884 mint — Common VFX facade + 5 Particle-Pack
+> deliverables. Main-line mirror corrected 908 → 910 to match the header after the 909 Mage/Ranger mint.)*
 >
 > ⚠ **This table drifted AGAIN (corrected 2026-08-05).** The UI-seat row read `864` while
 > `WorkOrders/` holds an unbroken 860→883 — twenty numbers stale, and 864 itself is not only

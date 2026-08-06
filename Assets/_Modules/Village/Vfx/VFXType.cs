@@ -216,5 +216,52 @@ namespace DeNelle.Village
         /// family: catalog row IsLoop=true; played with PlayAura(type, socket) and ended
         /// with the returned VFXHandle.Stop(). WO-757/759.</summary>
         Boss_FireBreath,
+
+        // -- WO-884 / registry / handbook batch (Grok single-owner append 2026-08-05) --
+        // Sourced from docs/vfx/VFX_CREATIVE_PICKS_REGISTRY.md + VFX_PREFAB_HANDBOOK.md §3.3.
+        // CLI and builders REFERENCE these names only — do not append further without the
+        // single-owner rule (WO-884 §0.2). Healer structure field reuses Aura_Healer (no new value).
+
+        // Environment (P1 dungeon dress)
+        /// <summary>Dungeon / prop candle flame loop (Particle Pack Candles or TinyFlames). Family A Ambient. IsLoop=true.</summary>
+        Env_Candle,
+        /// <summary>Geothermal / vent rising steam loop (Particle Pack RisingSteam). Family A Ambient. IsLoop=true.</summary>
+        Env_SteamVent,
+        /// <summary>Pressurised steam jet oneshot or short stream (Particle Pack PressurisedSteam). Family B Impact or short A.</summary>
+        Env_SteamBurst,
+
+        // Combat release
+        /// <summary>Barrel / weapon muzzle flash oneshot (Particle Pack MuzzleFlash). Family B Muzzle. IsLoop=false.</summary>
+        Cast_MuzzleFlash,
+
+        // Spawn / despawn (scripted dissolve recipes — one-shot play, no demo loop)
+        /// <summary>Enemy / summon materialize (Particle Pack Respawn + SpawnEffect cutoff). Scripted oneshot.</summary>
+        Enemy_Spawn,
+        /// <summary>Blink / despawn dissolve (Particle Pack Dissolve + SpawnEffect reversed). Scripted oneshot.</summary>
+        Despawn_Dissolve,
+
+        // HP-state + item auras (colourblind primary read — world space, not red vignette)
+        /// <summary>Hero low-HP loop (SmokeEffect guttering wisps). Family A Aura. IsLoop=true. Stop when healed above threshold.</summary>
+        Aura_LowHealth,
+        /// <summary>Hero near-death loop (TinyFlames fast gutter). Family A Aura. IsLoop=true. Sub-tier under ~0.25 HP.</summary>
+        Aura_NearDeath,
+        /// <summary>Active regen / healing-in-progress loop (RisingSteam upward). Family A Aura. IsLoop=true.</summary>
+        Aura_HealingInProgress,
+        /// <summary>Item-granted heal aura held on body (RisingSteam low). Family A Aura. IsLoop=true. GearAura seat.</summary>
+        Aura_ItemHeal,
+
+        // Harvest / economy node auras (motion-differentiated, colourblind). Family A Aura. IsLoop=true.
+        /// <summary>Iron harvest node aura — heavy dust settling + metal spark glint.</summary>
+        Harvest_Iron,
+        /// <summary>Wood harvest node aura — flat sideways-drifting chip motes.</summary>
+        Harvest_Wood,
+        /// <summary>Food harvest node aura — sparse rising pollen motes.</summary>
+        Harvest_Food,
+        /// <summary>Crystal harvest node aura — suspended twinkle (no travel).</summary>
+        Harvest_Crystal,
+        /// <summary>Gold harvest node aura — short falling glint pops.</summary>
+        Harvest_Gold,
+        /// <summary>Collector / node ready-to-collect beacon (FireFlies rising bob). Family A Aura. IsLoop=true.</summary>
+        Collector_Ready,
     }
 }
