@@ -38,6 +38,9 @@ namespace DeNelle.Core.Platform
         // WO-603: the active currency/auth/branding skin. AuthMode==PiSdk is the live Pi path
         // (unchanged); AuthMode==SolanaWallet swaps this corner button to a wallet-connect entry.
         private CurrencySkin _skin;
+        // True when this corner is the wallet-connect entry (SolanaWallet auth mode). Set in
+        // BuildButton; everything wallet-related below is gated on it so the Pi path is untouched.
+        private bool _walletSkin;
 
         /// <summary>Spawns the controller once at boot if not already present.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -65,10 +68,55 @@ namespace DeNelle.Core.Platform
             // runs everywhere; once signed in the button is gone for good.
             UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, __) => UpdateButtonVisibility();
             UpdateButtonVisibility();
+            // 2026-08-05 Seeker capture: wallet connect succeeded end to end ("Connect OK -
+            // CHKK...sfkC") and this button still read "Connect Wallet", because nothing ever
+            // told it. Subscribe to the connected-state signal under the wallet skin only
+            // (the Pi path stays byte-identical); the current state was already applied in
+            // BuildButton, so a button built AFTER the connect is correct too.
+            if (_walletSkin)
+                CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
             // Only the Pi skin auto-triggers Pi sign-in. Under the Solana/$SKR skin the corner
             // button is a wallet-connect entry (see BuildButton) and Pi polling never runs.
             if (_skin != null && _skin.AuthMode == SkinAuthMode.PiSdk)
                 WaitForPiThenAutoSignIn().Forget();
+        }
+
+        private void OnDestroy()
+        {
+            // No leaks: this is a DDOL widget, but a domain reload / a second boot must not
+            // leave a dead subscriber holding a destroyed label. Unsubscribing an unsubscribed
+            // handler is a no-op, so this is safe under either skin.
+            CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged;
+        }
+
+        private void OnWalletConnectionChanged(bool connected, string shortAddress) => ApplyWalletConnectionState();
+
+        /// <summary>
+        /// Paints the corner button from the CURRENT wallet connection state
+        /// (CurrencySkinResolver). Called three ways on purpose: at BUILD time (a button
+        /// created after the connect must show connected, not just live transitions), on
+        /// the change event, and on every scene change. Idempotent — it no-ops when the
+        /// label already says the right thing, so the scene-change call cannot spam the trace.
+        /// </summary>
+        private void ApplyWalletConnectionState()
+        {
+            if (!_walletSkin || _label == null) return;
+
+            bool connected = CurrencySkinResolver.IsWalletConnected;
+            string shortAddress = CurrencySkinResolver.ConnectedWalletShortAddress;
+            // The TEXT carries the state — never colour alone. ASCII only ("Wallet CHKK...sfkC"),
+            // because TMP renders the U+2026 ellipsis of WalletAccount.ShortAddress as tofu.
+            string desired = connected && !string.IsNullOrEmpty(shortAddress)
+                ? "Wallet " + shortAddress
+                : "Connect Wallet";
+            if (_label.text == desired) return;
+
+            // Connected: stop it being tappable. There is no disconnect surface here and one
+            // is NOT invented — a tap would only early-out in the service anyway (the 0.0ms
+            // "-> Connect / <- Connect" pairs in the capture).
+            bool interactable = !connected;
+            SetButton(desired, interactable);
+            FlowTrace.Step("Wallet", $"Corner auth button updated: '{desired}' (interactable={interactable}).");
         }
 
         private void UpdateButtonVisibility()
@@ -77,6 +125,9 @@ namespace DeNelle.Core.Platform
             string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             bool menuContext = scene == "Title" || scene == "HeroSelect";
             _button.transform.parent.gameObject.SetActive(!IsSignedIn && menuContext);
+            // Cheap safety net: if the connect landed while this widget was between scenes,
+            // the state is re-read here rather than depending on catching the event.
+            ApplyWalletConnectionState();
         }
 
         /// <summary>Manual trigger (the button).</summary>
@@ -123,7 +174,7 @@ namespace DeNelle.Core.Platform
             _signingIn = true;
             try
             {
-                SetButton("Signing in…", false);
+                SetButton("Signing in...", false); // ASCII only - TMP renders U+2026 as tofu
 
                 // ROOT CAUSE of the 2026-07-01 break: the Pi SDK calls resolve only via a JS promise
                 // callback (WebGLPiPlatform HandleCallback). If the promise never settles — a dismissed
@@ -288,6 +339,7 @@ namespace DeNelle.Core.Platform
             // flagged follow-up — the button routes through CurrencySkinResolver.RequestWalletConnect(),
             // which warns (no silent failure) until that handler is subscribed.
             bool walletSkin = _skin != null && _skin.AuthMode == SkinAuthMode.SolanaWallet;
+            _walletSkin = walletSkin;
             string initialLabel = walletSkin ? "Connect Wallet" : "Sign in with Pi";
             Action onClick = walletSkin
                 ? (Action)CurrencySkinResolver.RequestWalletConnect
@@ -310,6 +362,12 @@ namespace DeNelle.Core.Platform
                 _label.enableWordWrapping = false;
                 _label.overflowMode = TMPro.TextOverflowModes.Overflow;
             }
+
+            // Read the CURRENT connected state now, not only on the next transition: the
+            // wallet may already be connected by the time this button is built (a panel
+            // opened after connecting, or a rebuild on scene change). This is the half that
+            // an event-only signal would have missed. No-ops under the Pi skin.
+            ApplyWalletConnectionState();
         }
 
         private void SetButton(string text, bool interactable)

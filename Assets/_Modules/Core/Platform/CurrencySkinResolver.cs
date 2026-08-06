@@ -101,6 +101,107 @@ namespace DeNelle.Core.Platform
             catch (Exception e) { FlowTrace.Fail("Skin", $"WalletConnectRequested handler threw: {e.Message}"); }
         }
 
+        // =====================================================================
+        //  Connected-wallet state — the RETURN LEG of the connect seam (2026-08-05)
+        // =====================================================================
+        //
+        // RequestWalletConnect (above) is the outbound half: view -> Wallet assembly.
+        // There was NO inbound half at all, and the 2026-08-05 Seeker capture is the
+        // proof: connect succeeded end to end ("Connect OK - CHKK...sfkC"), every
+        // repeat tap early-outed in 0.0ms because the service was already connected -
+        // and the corner button still read "Connect Wallet" forever, so the player
+        // could not tell she was connected. The Wallet assembly PUBLISHES here;
+        // Core/HUD views SUBSCRIBE (Core can never reference DeNelle.Wallet).
+        //
+        // Both an event AND a readable last-known state, deliberately: a view built
+        // AFTER the connect (any panel opened later) never sees the event, so it must
+        // be able to read the state at build time. Event-only was the other half of
+        // this class of bug.
+
+        /// <summary>
+        /// Raised whenever the wallet connection state changes: (connected, shortAddress).
+        /// The short address is the ASCII form - safe to put straight into a TMP label.
+        /// </summary>
+        public static event Action<bool, string> WalletConnectionChanged;
+
+        /// <summary>True once a wallet connect has succeeded this session (last-known state).</summary>
+        public static bool IsWalletConnected { get; private set; }
+
+        /// <summary>
+        /// The connected wallet's full base58 address, or empty when disconnected.
+        /// NEVER log or render this - FlowTrace lines ride WebTraceSink into plaintext
+        /// logs (see the WalletService.Connect privacy note); render
+        /// <see cref="ConnectedWalletShortAddress"/> instead.
+        /// </summary>
+        public static string ConnectedWalletAddress { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// ASCII short form ("CHKK...sfkC") for player-visible labels, or empty when
+        /// disconnected. ASCII on purpose: TMP renders the U+2026 ellipsis glyph that
+        /// WalletAccount.ShortAddress uses as tofu, so this does NOT reuse it.
+        /// </summary>
+        public static string ConnectedWalletShortAddress { get; private set; } = string.Empty;
+
+        /// <summary>Published by the Wallet assembly the moment a connect succeeds.</summary>
+        public static void PublishWalletConnected(string address)
+        {
+            if (string.IsNullOrEmpty(address))
+            {
+                FlowTrace.Warn("Wallet",
+                    "PublishWalletConnected called with an EMPTY address - connected state not published " +
+                    "(views would show a blank wallet label).");
+                return;
+            }
+
+            ConnectedWalletAddress = address;
+            ConnectedWalletShortAddress = ShortenAscii(address);
+            IsWalletConnected = true;
+            RaiseWalletConnectionChanged();
+        }
+
+        /// <summary>Published by the Wallet assembly on disconnect (idempotent).</summary>
+        public static void PublishWalletDisconnected()
+        {
+            if (!IsWalletConnected && string.IsNullOrEmpty(ConnectedWalletAddress)) return;
+
+            ConnectedWalletAddress = string.Empty;
+            ConnectedWalletShortAddress = string.Empty;
+            IsWalletConnected = false;
+            RaiseWalletConnectionChanged();
+        }
+
+        /// <summary>
+        /// ASCII "AbCd...WxYz" short form of a wallet address, or empty. Public so any
+        /// TMP surface can shorten an address it already holds without re-deriving the
+        /// masking rule (and without importing the ellipsis glyph).
+        /// </summary>
+        public static string ShortenAscii(string address)
+        {
+            if (string.IsNullOrEmpty(address)) return string.Empty;
+            if (address.Length <= 11) return address;   // shortening would not shorten
+            return address.Substring(0, 4) + "..." + address.Substring(address.Length - 4);
+        }
+
+        private static void RaiseWalletConnectionChanged()
+        {
+            // Masked only (privacy) - and this line is what proves the signal fired in the
+            // next capture, paired with the view-side "label updated" Step.
+            FlowTrace.Step("Wallet",
+                $"Wallet connection state published: connected={IsWalletConnected} " +
+                $"({(IsWalletConnected ? ConnectedWalletShortAddress : "none")}).");
+
+            var handler = WalletConnectionChanged;
+            if (handler == null)
+            {
+                FlowTrace.Warn("Wallet",
+                    "Wallet connection state changed but NO view is subscribed (WalletConnectionChanged) - " +
+                    "a connected wallet may still be reading as 'Connect Wallet' on screen.");
+                return;
+            }
+            try { handler.Invoke(IsWalletConnected, ConnectedWalletShortAddress); }
+            catch (Exception e) { FlowTrace.Fail("Wallet", $"WalletConnectionChanged subscriber threw: {e.Message}"); }
+        }
+
         /// <summary>Forces a re-resolve (tests / a config hot-swap). Rarely needed.</summary>
         public static void Reload() { _active = null; Resolve(); }
 
