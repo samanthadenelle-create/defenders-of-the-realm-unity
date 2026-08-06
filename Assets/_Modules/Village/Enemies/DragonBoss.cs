@@ -296,6 +296,55 @@ namespace DeNelle.Village
         // phase transition so only ONE aura is ever attached to the boss.
         private VFXHandle _auraHandle;
 
+        // -- Fire breath VFX (WO-757 / WO-759) -------------------------------------
+        // The sustained mouth cone that replaces the old instant-damage breath. The
+        // STREAM is a CONTINUOUS-family loop (Particle Pack FlameThrower recipe):
+        // PlayAura parents it to the mouth socket and it is ended through the handle.
+        // Aim is the SOCKET'S ROTATION (LookRotation toward the target) - never the
+        // particle Shape angle, which is spray WIDTH, not direction (WO-759 §2.4).
+
+        [Header("Fire breath VFX (WO-757/759)")]
+        [Tooltip("Master toggle for the sustained breath cone. Off = the breath still " +
+                 "deals its damage on the same timing, just with no mouth stream.")]
+        [SerializeField] private bool _breathVfxEnabled = true;
+
+        [Tooltip("The sustained mouth stream (catalog row IsLoop=true, MinQuality gates the Low-end skip).")]
+        [SerializeField] private VFXType _breathStreamVfx = VFXType.Boss_FireBreath;
+
+        [Tooltip("Impact burst at the target when the breath lands. Left equal to the shared " +
+                 "strike impact by default (DealStrike already fires that one); point it at a " +
+                 "dedicated breath impact to get a distinct burst instead.")]
+        [SerializeField] private VFXType _breathImpactVfx = VFXType.Boss_AttackImpact;
+
+        [Tooltip("Mouth socket the stream is parented to. Leave null - it is resolved at " +
+                 "runtime ('VFX_BreathSocket', then a jaw/mouth/snout/head bone, then the root).")]
+        [SerializeField] private Transform _breathSocket;
+
+        [Tooltip("Seconds the whole breath pass lasts (stream on -> stream off).")]
+        [SerializeField] private float _breathDuration = 1.4f;
+
+        [Tooltip("Seconds after the breath starts before its damage lands (the stream needs " +
+                 "to reach the target before the hit reads).")]
+        [SerializeField] private float _breathDamageDelay = 0.35f;
+
+        [Tooltip("How hard the socket re-aims at the target while the breath is running " +
+                 "(Slerp rate; <=0 snaps).")]
+        [SerializeField] private float _breathAimLerp = 12f;
+
+        /// <summary>The authored socket name looked up first on the rig (WO-759 §7.4).</summary>
+        private const string BreathSocketName = "VFX_BreathSocket";
+
+        /// <summary>Fallback bone-name hints, in preference order, when the socket is absent.</summary>
+        private static readonly string[] BreathSocketHints = { "jaw", "mouth", "snout", "head" };
+
+        // The ONE live breath stream handle - a second FireBreath kills this first, so a
+        // stream can never be leaked (WO-759 §10 "stream never stops").
+        private VFXHandle _breathHandle;
+        private Transform _resolvedBreathSocket;   // cached socket resolution (may be the root)
+        private bool _breathActive;                // true for the whole timed pass (VFX or not)
+        private float _breathElapsed;              // seconds into the current pass
+        private bool _breathStruck;                // true once this pass has dealt its damage
+
         // -- Phase thresholds (HP fraction) ----------------------------------------
 
         /// <summary>Phase 1 -> Phase 2 boundary - 60% HP.</summary>
@@ -494,6 +543,7 @@ namespace DeNelle.Village
             }
 
             ResolvePhase();   // HP-aggression phase (aura + boss-bar label)
+            TickBreath(dt);   // sustained fire-breath pass, if one is running (WO-757/759)
 
             float frameSpeed;
             switch (_state)
@@ -1277,12 +1327,198 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>A stationary fire-breath pass on the current target (the Heart).</summary>
+        /// <summary>
+        /// Opens a SUSTAINED fire-breath pass on the current target (the Heart in the
+        /// finale) - WO-757/759. The old implementation was an instant DealStrike with no
+        /// mouth stream; the breath is now a timed pass: the stream starts NOW, the damage
+        /// lands at <see cref="_breathDamageDelay"/>, and the stream is stopped at
+        /// <see cref="_breathDuration"/> by <see cref="TickBreath"/>.
+        ///
+        /// The DAMAGE arming is unconditional - a disabled/quality-skipped stream still
+        /// deals its damage and plays its telegraph + SFX (WO-759 §5.4 "Low: skip stream,
+        /// damage/SFX only"), so the encounter never depends on the VFX being present.
+        /// </summary>
         private void FireBreath()
         {
+            if (_dead) return;
+
             AnimTrigger(HAttack);
             PlayTelegraph();
-            DealStrike(_breathDamage);
+
+            // Re-entrancy: a second breath NEVER stacks a second stream on the socket.
+            // Kill the previous one first (immediate - it is being replaced this frame).
+            if (_breathActive || _breathHandle != null) StopBreath(true);
+
+            _breathActive  = true;
+            _breathElapsed = 0f;
+            _breathStruck  = false;
+
+            if (!_breathVfxEnabled || !_phaseVfxEnabled || _breathStreamVfx == VFXType.None)
+            {
+                FlowTrace.Throttle("DragonBoss", $"breath:{GetInstanceID()}", 1f,
+                    $"'{_bossId}' FireBreath (timed {_breathDuration:0.00}s, hit at {_breathDamageDelay:0.00}s) " +
+                    $"with NO stream - breathVfx={_breathVfxEnabled} phaseVfx={_phaseVfxEnabled} " +
+                    $"type={_breathStreamVfx}. Damage still lands.");
+                return;
+            }
+
+            var mgr = VFXManager.Instance;
+            if (mgr == null)
+            {
+                FlowTrace.Warn("DragonBoss",
+                    $"'{_bossId}' FireBreath: no VFXManager instance - breath runs damage-only this pass.");
+                return;
+            }
+
+            // Aim = ROTATE THE SOCKET toward the target (WO-759 §2.4 / §11): the cone's
+            // direction is the transform's forward. The particle Shape angle is the spray
+            // WIDTH and is art - it is never touched from code.
+            Transform socket = ResolveBreathSocket();
+            Vector3 aim = TargetPosition();
+            AimBreathSocket(socket, aim, 0f, snap: true);
+
+            // PlayAura parents the whole multi-layer prefab to the SOCKET, so the jet
+            // follows the head. It is never parented at the Heart (WO-759 §11).
+            _breathHandle = mgr.PlayAura(_breathStreamVfx, socket);
+
+            FlowTrace.Throttle("DragonBoss", $"breath:{GetInstanceID()}", 1f,
+                $"'{_bossId}' FireBreath -> stream {_breathStreamVfx} on socket '{socket.name}' " +
+                $"(socketPos={socket.position}) aimed at {aim} " +
+                $"[duration {_breathDuration:0.00}s, damage at {_breathDamageDelay:0.00}s, " +
+                $"handle={(_breathHandle != null ? "live" : "NULL - quality gate / loop cap / no catalog row")}].");
+        }
+
+        /// <summary>
+        /// Advances the running breath pass: holds the aim on the target, lands the damage
+        /// at <see cref="_breathDamageDelay"/>, and stops the stream at
+        /// <see cref="_breathDuration"/>. A no-op when no pass is running.
+        /// </summary>
+        private void TickBreath(float dt)
+        {
+            if (!_breathActive) return;
+
+            _breathElapsed += dt;
+
+            // Track the target for the whole pass so the jet stays on it as the dragon flies.
+            if (_breathHandle != null && _breathHandle.IsAlive)
+                AimBreathSocket(_resolvedBreathSocket, TargetPosition(), dt, snap: false);
+
+            if (!_breathStruck && _breathElapsed >= _breathDamageDelay)
+            {
+                _breathStruck = true;
+                DealStrike(_breathDamage);
+
+                // Optional DEDICATED breath impact. DealStrike already fires the shared
+                // _strikeImpactVfx, so this only plays when a designer pointed the breath
+                // impact somewhere else - otherwise it would double the same burst.
+                if (_phaseVfxEnabled && _breathImpactVfx != VFXType.None
+                    && _breathImpactVfx != _strikeImpactVfx)
+                    VFXManager.Play(_breathImpactVfx, TargetPosition());
+            }
+
+            // The pass can never end before its own damage beat, even if a designer sets
+            // duration < delay.
+            if (_breathElapsed >= Mathf.Max(_breathDuration, _breathDamageDelay))
+                StopBreath(false);   // graceful - the flame tail burns out naturally
+        }
+
+        /// <summary>
+        /// Ends the current breath pass and releases the stream handle. Safe to call at any
+        /// time (idempotent) - it is the single exit path used by normal completion, a
+        /// re-entrant <see cref="FireBreath"/>, <see cref="Die"/> and <c>OnDisable</c>.
+        /// </summary>
+        /// <param name="immediate">True kills the stream instantly (death / disable);
+        /// false stops emission and lets the existing particles die out.</param>
+        private void StopBreath(bool immediate)
+        {
+            if (_breathHandle != null)
+            {
+                if (_breathHandle.IsAlive) _breathHandle.Stop(immediate);
+                _breathHandle = null;
+            }
+            _breathActive  = false;
+            _breathElapsed = 0f;
+            _breathStruck  = false;
+        }
+
+        /// <summary>
+        /// Resolves the mouth socket the breath stream hangs off, in priority order:
+        /// the serialized reference -> a child named <see cref="BreathSocketName"/> ->
+        /// a jaw / mouth / snout / head bone -> the dragon root. EVERY step is
+        /// FlowTrace-warned and the final fallback is non-null, so a rig with no socket
+        /// authored degrades to a worse-LOOKING breath and never a nullref (WO-759 §7.4,
+        /// "Block compile if socket missing" / hard-crash is a listed DO-NOT).
+        /// The result is cached for the lifetime of the boss.
+        /// </summary>
+        private Transform ResolveBreathSocket()
+        {
+            if (_breathSocket != null) return _breathSocket;
+            if (_resolvedBreathSocket != null) return _resolvedBreathSocket;
+
+            Transform found = null;
+            Guard.Try("DragonBoss", "resolve fire-breath socket", () =>
+            {
+                var all = GetComponentsInChildren<Transform>(true);
+
+                // 1) The authored socket, by exact name (created on Boss_Dragon by the
+                //    prefab half of WO-759).
+                foreach (var t in all)
+                {
+                    if (t == null) continue;
+                    if (string.Equals(t.name, BreathSocketName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = t;
+                        return;
+                    }
+                }
+                FlowTrace.Warn("DragonBoss",
+                    $"'{_bossId}' breath socket '{BreathSocketName}' is NOT on this rig - " +
+                    "falling back to a jaw/mouth/snout/head bone. Author the socket for a correct mouth origin.");
+
+                // 2) A head-end bone by name hint, most specific first.
+                foreach (var hint in BreathSocketHints)
+                {
+                    foreach (var t in all)
+                    {
+                        if (t == null || t.name == null) continue;
+                        if (t.name.IndexOf(hint, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            found = t;
+                            return;
+                        }
+                    }
+                }
+                FlowTrace.Warn("DragonBoss",
+                    $"'{_bossId}' no jaw/mouth/snout/head bone found either - the breath will " +
+                    "emit from the dragon's transform root (visually wrong, but functional).");
+            });
+
+            // 3) Last resort - the root. Never null.
+            _resolvedBreathSocket = found != null ? found : transform;
+            FlowTrace.Step("DragonBoss",
+                $"'{_bossId}' breath socket resolved -> '{_resolvedBreathSocket.name}'" +
+                (_resolvedBreathSocket == transform ? " (ROOT fallback - no socket/bone match)." : "."));
+            return _resolvedBreathSocket;
+        }
+
+        /// <summary>
+        /// Points the breath socket's FORWARD at <paramref name="targetPos"/> - this is the
+        /// jet's direction. Refuses to rotate the dragon ROOT (the root-fallback case),
+        /// because that would fight the flight facing driven by FaceTravel/FacePoint.
+        /// </summary>
+        /// <param name="snap">True sets the rotation outright (breath open); false slerps
+        /// at <see cref="_breathAimLerp"/> so the jet tracks smoothly during the pass.</param>
+        private void AimBreathSocket(Transform socket, Vector3 targetPos, float dt, bool snap)
+        {
+            if (socket == null || socket == transform) return;   // never spin the body
+
+            Vector3 dir = targetPos - socket.position;
+            if (dir.sqrMagnitude < 1e-4f) return;
+
+            Quaternion want = Quaternion.LookRotation(dir.normalized, Vector3.up);
+            socket.rotation = (snap || _breathAimLerp <= 0f)
+                ? want
+                : Quaternion.Slerp(socket.rotation, want, Mathf.Clamp01(dt * _breathAimLerp));
         }
 
         /// <summary>
@@ -1343,6 +1579,7 @@ namespace DeNelle.Village
             UnsubTower();
             AnimBool(HDead, true);
 
+            StopBreath(true);   // WO-757/759: a mid-pass breath dies with the dragon
             StopPhaseAura();
             if (_phaseVfxEnabled && _deathVfx != VFXType.None)
                 VFXManager.Play(_deathVfx, transform.position);
@@ -1466,9 +1703,10 @@ namespace DeNelle.Village
             VFXManager.Play(_telegraphVfx, transform.position, transform.rotation);
         }
 
-        /// <summary>Tear down the live aura loop + tower subs so nothing leaks.</summary>
+        /// <summary>Tear down the live aura loop, the breath stream + tower subs so nothing leaks.</summary>
         private void OnDisable()
         {
+            StopBreath(true);   // WO-757/759: never leave a stream parented to a disabled rig
             StopPhaseAura();
             UnsubTower();
         }

@@ -207,5 +207,14 @@ namespace DeNelle.Village
         Boss_Aura_Phase2,
         /// <summary>Persistent phase aura loop — final/relentless phase (LastWing). WO-66.</summary>
         Boss_Aura_Phase3,
+
+        // -- WO-757 / WO-759 Particle Pack boss breath -----------------------------
+        // APPEND-ONLY: this enum is serialised by ordinal into VFXCatalog.asset, so a
+        // value INSERTED above would silently re-map every existing catalog row.
+        /// <summary>Sustained multi-layer fire-breath cone from the boss's mouth socket
+        /// (Particle Pack FlameThrower recipe — flame + embers + smoke). CONTINUOUS
+        /// family: catalog row IsLoop=true; played with PlayAura(type, socket) and ended
+        /// with the returned VFXHandle.Stop(). WO-757/759.</summary>
+        Boss_FireBreath,
     }
 }

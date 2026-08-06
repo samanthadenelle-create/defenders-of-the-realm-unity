@@ -27,9 +27,15 @@
 //   * Any VFXType NOT wired here keeps the procedural AbilityVfxKit fallback.
 //
 // WHY REFLECTION / SerializedObject:
-//   DeNelle.Editor.asmdef does NOT reference DeNelle.Village (CLAUDE.md section 5). The
-//   VFXCatalog / VFXType / Entry types are resolved by name and every field write
-//   goes through SerializedObject - no compile-time dependency on DeNelle.Village.
+//   CORRECTED 2026-08-05: this block used to claim "DeNelle.Editor.asmdef does NOT
+//   reference DeNelle.Village". It DOES - DeNelle.Village sits in the references array
+//   of Assets/Editor/DeNelle.Editor.asmdef, and has for some time. So the reflection
+//   here is BELT-AND-BRACES, not a necessity, and nobody should contort a new editor
+//   script to avoid a dependency that already exists.
+//   It still earns its keep for one real reason: resolving VFXType BY NAME means a type
+//   named in the Map but absent from the enum degrades to a skipped row, rather than
+//   fail-compiling the whole DeNelle.Editor assembly and taking the compile gate down
+//   for every parallel lane. Keep the by-name resolution; drop the false premise.
 //
 // THE PICKS ARE BONES: the exact prefab per type is the owner's to felt-tune. To
 // re-point any mapping, edit the Map table below and re-run. Idempotent.
@@ -78,6 +84,7 @@ namespace DeNelle.Editor
         private const string Lana   = "Assets/Lana Studio/Casual RPG VFX/Prefabs/";
         private const string Spells = "Assets/Spells Pack/Particles/Prefabs/";
         private const string Res    = "Assets/Resources/VFX/Projectiles/";
+        private const string BossVfx = "Assets/Resources/VFX/Boss/";
 
         // The curated table. Keep it minimal - high-traffic battle types first.
         private static readonly Dictionary<string, Pick> Map = new Dictionary<string, Pick>
@@ -161,6 +168,22 @@ namespace DeNelle.Editor
             { "Aura_EnemyCaster",       new Pick(Lana + "Orbs/Orbs_electric.prefab", isLoop: true, minQuality: 1) },
             { "Aura_Necromancer",       new Pick(Lana + "Fog/Fog_poison.prefab",     isLoop: true, minQuality: 1) },
             { "Aura_SmokeReaper",       new Pick(Lana + "Fog/Fog_speedSlow.prefab",  isLoop: true, minQuality: 1) },
+
+            // -- Boss (Particle Pack, WO-759) -----------------------------------
+            // The dragon's sustained mouth-cone breath. Its prefab is a TRACKED
+            // DUPLICATE under Assets/Resources/VFX/Boss/ - authored by
+            // BossFireBreathBuilder out of the gitignored UnityTechnologies pack,
+            // precisely so this row does not join the 117 catalog rows that point
+            // into gitignored art with no runtime fallback (WO-785).
+            //
+            // THIS ROW MUST LIVE HERE, not only in the builder. Build() does
+            // 'entries.arraySize = rows.Count' (see below) - it rebuilds Entries[]
+            // wholesale from this table, so any row written ONLY by the builder is
+            // silently dropped the next time someone runs Generate, and the boss
+            // falls back to a procedural loop that still LOOKS like a working
+            // breath. Curated table = the durable home; the builder is idempotent
+            // and re-runnable against it.
+            { "Boss_FireBreath",        new Pick(BossVfx + "Boss_FireBreath.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
 
             // -- Environment ---------------------------------------------------
             { "Env_TorchFlame",         new Pick(Lana + "Fire/Fire_small.prefab",   isLoop: true, minQuality: 1) },
