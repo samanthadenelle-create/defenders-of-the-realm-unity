@@ -1311,6 +1311,28 @@ namespace DeNelle.Editor
             Debug.Log("[PeopleCharacterImporter] Ranger (embedded) DONE\n" + string.Join("\n", report));
         }
 
+        /// <summary>Headless entry: the Mage twin of <see cref="ImportRangerEmbedded"/> —
+        /// an AccuRIG CC5 body exported with EMBEDDED textures. Added 2026-08-06 when the
+        /// owner supplied a rigged Wizard: ImportEmbeddedHero was already generic (src +
+        /// slug) but only the Ranger had a wrapper, so the Mage had no way in.
+        ///
+        /// WATCH THE ATLAS. HeroBodySwapper's Mage key is
+        /// "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse" — a texture from a PREVIOUS
+        /// mage model that is still on disk. ImportEmbeddedHero clears the slug's own
+        /// _tex folder, but NOT Heroes/Textures/, so importing a new body while that file
+        /// survives paints the OLD mage's skin onto the NEW mesh. Whoever lands a new Mage
+        /// must re-point that key (or replace the file) in the same breath.</summary>
+        [MenuItem("Defenders/Animation/Import Mage (embedded textures)")]
+        public static void ImportMageEmbedded()
+        {
+            var report = new List<string>();
+            report.Add("=== Import Mage (embedded textures) ===");
+            ImportEmbeddedHero("Assets/Models/People/Human/Human_Wizard.fbx", "Mage", report);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] Mage (embedded) DONE\n" + string.Join("\n", report));
+        }
+
         /// <summary>Import a CC5 FBX whose textures are EMBEDDED: copy over the slug,
         /// flip to Humanoid (copy Mage avatar if it doesn't auto-map), and import the
         /// FBX's standard materials (materialImportMode=ImportStandard) so the embedded

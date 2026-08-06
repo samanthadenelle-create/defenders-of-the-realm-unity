@@ -1713,7 +1713,17 @@ namespace DeNelle.Village
                 // atlas is its OWN embedded diffuse (Mage.fbm/tripo_mat_9b343081, copied into
                 // Textures/), NOT the actors/ dwarf basecolor (a different mesh). CC5 heroes
                 // (Ranger/Cleric) use the actors originals; Tripo heroes use their own.
-                HeroClass.Mage => "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse",
+                // RE-POINTED 2026-08-06. This was "tripo_mat_9b343081_Pbr_Diffuse" - the
+                // atlas of a PREVIOUS mage model, named after that model's Tripo material
+                // id. The file is still on disk, so when the owner's new AccuRIG Wizard
+                // body landed the swapper would have painted the OLD mage's skin onto the
+                // NEW mesh and it would have looked like a texturing bug rather than a
+                // stale key. ImportEmbeddedHero clears the slug's own _tex folder but NOT
+                // Heroes/Textures/, so nothing else would have caught it.
+                // The name now describes the CLASS, not whichever model happened to be
+                // current, so the next body swap does not need a code change - matching
+                // the Ranger's "ranger_basecolor" convention.
+                HeroClass.Mage => "Heroes/Textures/mage_basecolor",
                 // DEF-267: the Knight is also a LEGACY Tripo body whose FBX material remap doesn't
                 // resolve → grey. WO-35 had returned null (to dodge a blood-splatter look the owner
                 // disliked), but that left the Knight GREY in the build, which is worse. Bind the
