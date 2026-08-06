@@ -679,10 +679,37 @@ namespace DeNelle.Village
             if (_phase == WavePhase.Countdown && TutorialFlow.WaveLoopSuppressedForTutorial)
             {
                 FlowTrace.Warn("Wave", $"FTUE stand-down: wave {_currentWaveId} countdown was armed while the " +
-                    $"tutorial is live (cd {_countdownRemaining:F1}s) — returning the loop to Idle.");
+                    $"tutorial is live (cd {_countdownRemaining:F1}s) - returning the loop to Idle and " +
+                    "retracting the kickoff watchdogs (this Idle is deliberate, not a stall).");
                 _countdownRemaining = 0f;
                 _awaitingPlayerStart = false;
                 _phase = WavePhase.Idle;
+
+                // RETRACT THE KICKOFF WATCHDOGS -- otherwise this stand-down manufactures a FALSE
+                // P0 in the owner's first-ever run.
+                //
+                // WHY a kickoff is in flight at all on a fresh save: WaveManager.Start's auto-arm is
+                // gated by !IsFirstRun(), but IsFirstRun() fails OPEN when GameStateService has not
+                // bootstrapped yet (line ~617: no service => "not first run"), and so do BOTH FTUE
+                // predicates (null svc => false). So on a genuinely fresh save that wins the race
+                // against Core bootstrap, GuardedKickoff DOES fire, arms RetryTillActive +
+                // StallWatchdog, and the async BeginLoop reaches EnterCountdown a few frames later
+                // -- which is exactly the cd29.9 the owner captured with the tutorial live.
+                //
+                // WHY they must be cancelled: both watchdogs only ever ask "is the phase STILL
+                // Idle?". Neither can tell a DELIBERATE stand-down from a silent stall. Left armed
+                // they would re-fire BeginLoop StartRetryCap(3) times -- each correctly refused at
+                // the door -- then emit FlowTrace.Fail, and StallWatchdog would add a Debug.LogError
+                // at StallWatchdogWindow(9s). Per the F8 daemon contract those surface as a captured
+                // error mid-tutorial: a false alarm on the one run that must look perfect. This is
+                // the SAME regression GuardedKickoff's early-return below was written to prevent
+                // (see its comment), reached from the other side -- there the kickoff never starts;
+                // here it started legitimately and we forced it back. Idle is the CORRECT state, so
+                // retract the alarms. The loop still re-arms normally: TutorialFlow.FinishFlow calls
+                // BeginLoop() directly (never through these watchdogs) after Phase.Finished +
+                // FinishOnboarding, so cancelling them costs the post-tutorial handoff nothing.
+                if (_retryRoutine != null) { StopCoroutine(_retryRoutine); _retryRoutine = null; }
+                if (_stallWatchdogRoutine != null) { StopCoroutine(_stallWatchdogRoutine); _stallWatchdogRoutine = null; }
 
                 // Clear both countdown surfaces so neither keeps drawing its own clock after the
                 // stand-down: the HUD band (WaveHudBridge listens to OnCountdownTick — 0f is the
