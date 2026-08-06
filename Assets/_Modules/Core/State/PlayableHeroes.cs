@@ -12,10 +12,14 @@
 // and the store shelf could disagree with the select screen about who exists.
 // This type is the single truth all three now read.
 //
-// TODAY'S BEHAVIOUR IS UNCHANGED. ff.knightonly defaults ON, so All == { Knight }
-// exactly as before; Phase 0 removes the HARDCODING, it does not flip content on.
-// Flipping PlayerPrefs "ff.knightonly" = 0 widens every consumer at once with no
-// further code change - which is precisely what WO-861 Phase 1/2 need.
+// PHASE 0 (WO-861) shipped with ff.knightonly still ON, so All == { Knight } and
+// nothing changed behaviourally - Phase 0 removed the HARDCODING, it did not flip
+// content on.
+//
+// THE UNLOCK LANDED 2026-08-05 (owner ruling): ff.knightonly now defaults OFF, so
+// All == { Knight, Ranger, Mage } and every consumer widened at once with no
+// further code change - exactly what this registry was built for. Set PlayerPrefs
+// "ff.knightonly" = 1 to restore the solo-Knight V1 pivot.
 //
 // ROSTER NOTE (deliberate, WO-861): the flag-OFF set is Knight / Ranger / Mage -
 // the three heroes WO-861 makes playable (Grom / Sylas / Thrain). The CLERIC is
@@ -45,10 +49,11 @@ namespace DeNelle.Core.State
         public const HeroClass Default = HeroClass.Knight;
 
         // V1 pivot (owner 2026-06-22): one polished hero. ff.knightonly ON => this set.
+        // The flag now defaults OFF, so this is the opt-in rollback set, not the live one.
         private static readonly HeroClass[] SoloKnight = { HeroClass.Knight };
 
-        // WO-861: the full playable roster once the flag is off - Grom / Sylas / Thrain.
-        // Cleric is intentionally absent (see the header note).
+        // WO-861: the LIVE playable roster (ff.knightonly defaults OFF since 2026-08-05) -
+        // Grom / Sylas / Thrain. Cleric is intentionally absent (see the header note).
         private static readonly HeroClass[] Roster =
             { HeroClass.Knight, HeroClass.Ranger, HeroClass.Mage };
 

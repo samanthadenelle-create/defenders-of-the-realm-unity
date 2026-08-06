@@ -13,10 +13,12 @@
 //                NO UXML, NO borrowed PanelSettings. The kit's shared Close is
 //                HIDDEN (this is a forced-flow screen; confirm is the only exit).
 //   LEFT       : the CLASS COLUMN — one Obsidian button per HeroCatalog entry
-//                (data-driven; catalog order). V1: only the playable hero (Grom ==
-//                Knight, KnightOnly) is selectable-to-confirm; the other classes
-//                are still TAPPABLE for a PREVIEW but render visibly locked
-//                ("Coming soon" tag under the button + LOCKED scrim on the stage).
+//                (data-driven; catalog order). Selectable-to-confirm == in
+//                PlayableHeroes.All, which since 2026-08-05 is Grom/Sylas/Thrain
+//                (ff.knightonly defaults OFF). A non-playable class - today only
+//                the Cleric, Elara, who has no authored kit - is still TAPPABLE for
+//                a PREVIEW but renders visibly locked ("Coming soon" tag under the
+//                button + LOCKED scrim on the stage).
 //   CENTER     : the HERO — the large focal portrait (Resources/HeroPortraits/
 //                <slug>, sprite-first, texture fallback, accent-glyph last resort)
 //                in a dark well, hero name + role beneath it.
@@ -106,9 +108,9 @@ namespace DeNelle.Onboarding
         // WO-861 Phase 0: the playable set is no longer hardcoded HERE. It comes from the
         // ONE roster truth, DeNelle.Core.State.PlayableHeroes, which the save service and
         // the vendor shelf also read — so a hero cannot be selectable on this screen while
-        // the store still thinks he does not exist. Today that set is still { Knight }
-        // (ff.knightonly ON), so the screen looks and behaves exactly as before; when the
-        // flag opens, this screen widens with it and no layout code changes (the locked
+        // the store still thinks he does not exist. That set is { Knight, Ranger, Mage }
+        // since the 2026-08-05 unlock (ff.knightonly now defaults OFF) - the screen widened
+        // with the flag and needed no layout code change, exactly as designed (the locked
         // tag / stage scrim / CTA state all derive from IsPlayable).
         //
         // The screen OPENS on, and pre-persists, PlayableHeroes.Default (Grom == Knight).
@@ -861,7 +863,8 @@ namespace DeNelle.Onboarding
 //
 //   4. CLASS COLUMN: every catalog hero is tappable for a stage preview; only a
 //      PLAYABLE hero is confirmable. WO-861 Phase 0: the playable set is
-//      DeNelle.Core.State.PlayableHeroes (still { Knight } while ff.knightonly is
-//      ON). To unlock more heroes, edit that ONE registry (or flip ff.knightonly) —
-//      no change here; the locked tag/scrim/CTA state all derive from IsPlayable.
+//      DeNelle.Core.State.PlayableHeroes — { Knight, Ranger, Mage } since the
+//      2026-08-05 unlock (ff.knightonly defaults OFF); the Cleric is the one locked
+//      card left. To change the roster, edit that ONE registry — no change here;
+//      the locked tag/scrim/CTA state all derive from IsPlayable.
 // =============================================================================

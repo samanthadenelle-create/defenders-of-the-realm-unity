@@ -757,8 +757,9 @@ namespace DeNelle.Core.State
         public void ChooseHero(HeroClass cls)
         {
             // WO-861 Phase 0: the Knight force is no longer HARDCODED here. The single
-            // roster truth is PlayableHeroes (which still resolves to { Knight } while
-            // ff.knightonly is ON, so today's behaviour is unchanged) — a selection is
+            // roster truth is PlayableHeroes, which since the 2026-08-05 unlock resolves to
+            // { Knight, Ranger, Mage } (ff.knightonly defaults OFF) - so a Ranger or Mage
+            // pick is now KEPT, and only the Cleric still coerces. A selection is
             // coerced ONLY when it is not in the playable set, and the whole game widens
             // together the moment that set does. Never silently swallow the coercion:
             // "I picked Sylas and got Grom" must be readable in the trace.
@@ -780,9 +781,12 @@ namespace DeNelle.Core.State
         /// START-FLOW GUARANTEE — persists a default HeroClass at session/load init if (and only if)
         /// the loaded state left it unset, so a bypass entry path (headless/AutoPilot boot, fresh
         /// launch, or a save never picked in a prior session) can NEVER reach body-build with
-        /// HeroClass = None. Idempotent: a no-op when a real pick is already persisted. V1 is
-        /// single-hero, and <see cref="ChooseHero"/> applies the KnightOnly force, so the default
-        /// lands as Knight; this stays correct when KnightOnly is later turned off (default = Knight).
+        /// HeroClass = None. Idempotent: a no-op when a real pick is already persisted.
+        /// The default it persists is <see cref="PlayableHeroes.Default"/> (Knight), and that stayed
+        /// correct through the 2026-08-05 multi-hero unlock: only a player who never reached the
+        /// select screen lands here, and Knight is still the roster's opening slot. It is a
+        /// FALLBACK, not a force - a real Ranger/Mage pick is persisted by ChooseHero and never
+        /// touched by this method.
         /// </summary>
         private void EnsureHeroClassPersisted()
         {

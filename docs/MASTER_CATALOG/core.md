@@ -80,7 +80,7 @@ All 62, actual default, with the **12 XML-summary lies** marked ⚠ (XML states 
 | Arena (`arena`) | OFF | 33 | V1 descope; code kept |
 | SingleHero (`singlehero`) | ON | 40 | ATB party = hero only |
 | BlinkArmor (`blinkarmor`) | OFF | 52 | armor swap junked |
-| KnightOnly (`knightonly`) | ON | 58 | ChooseHero forces Knight |
+| KnightOnly (`knightonly`) | **OFF** (since 2026-08-05) | 67 | RETIRED as default — roster is Knight/Ranger/Mage via `PlayableHeroes`; set `ff.knightonly`=1 to restore solo-Knight |
 | BaseBuilding (`basebuilding`) | OFF | 67 | convert-on-clear etc. gated |
 | BuildTimers (`buildtimers`) | ON | 75 | WO-612 CoC timers |
 | ⚠ RaidContinuousWalk (`raidwalk`) | **OFF** | 88 | XML says "Default ON"; WO-771 comment locks Teleport/Deploy |

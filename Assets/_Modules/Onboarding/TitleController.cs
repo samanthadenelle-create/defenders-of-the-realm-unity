@@ -416,8 +416,10 @@ namespace DeNelle.Onboarding
             // START-FLOW GUARANTEE: Continue routes straight to the castle (no
             // hero-select), so if a loaded/stale save has no HeroClass persisted the
             // body builder would reach build with an unset class. Set it HERE at the
-            // load source before routing. V1 is single-hero (Knight); ChooseHero also
-            // applies the KnightOnly force.
+            // load source before routing. It persists PlayableHeroes.Default (Knight) -
+            // a FALLBACK for a save that never made a pick, not a force. Since the
+            // 2026-08-05 unlock (ff.knightonly defaults OFF) ChooseHero keeps a real
+            // Ranger/Mage pick; this branch only ever fires when there is no pick at all.
             var svc = GameStateService.Instance;
             if (svc != null && (svc.State == null || !svc.State.HeroClass.ToNullable().HasValue))
             {

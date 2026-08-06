@@ -4,14 +4,26 @@
 // -----------------------------------------------------------------------------
 // VillageSceneBuilder bakes the scene with a Wizard placeholder (since the
 // builder runs at edit time and doesn't see runtime state). This component
-// runs at runtime, reads GameStateService.State.HeroClass, and if the choice
-// isn't Mage it loads the matching FBX from Resources/Heroes/<slug>.fbx,
-// destroys the old "HeroBody" child, and instantiates the new mesh in its
-// place. Idempotent — only runs once per scene.
+// runs at runtime, reads GameStateService.State.HeroClass, destroys the old
+// "HeroBody" child, and instantiates the new mesh in its place. Idempotent —
+// only runs once per scene.
 //
-// Resources/Heroes/<slug>.fbx is the canonical pickup path because Resources
-// is auto-included in player builds (no Addressables wiring needed for the
-// hand-imported Tripo FBXs).
+// THE BODY CHAIN, in order (each step falls to the next; the chain NEVER ends
+// with nothing instantiated — Start() has already destroyed the placeholder):
+//   1. Knight only: KnightV3.fbx (ff.knightv3) -> KnightPackage.prefab (ff.heropackage)
+//   2. all other classes: the Blink LowPoly base via Addressables ("hero/base/HumanMale")
+//   3. legacy Resources/Heroes/<slug>.fbx
+//   4. BuildTrackedFallbackBody — the TRACKED KayKit humanoid stage (the floor)
+//
+// WHY STEP 4 EXISTS (latent P0, fixed 2026-08-05): steps 2 and 3 both depend on
+// assets that are NOT in git. Assets/Blink is gitignored, and Resources/Heroes
+// holds an FBX for Knight/KnightV3 ONLY — Ranger.fbx and Mage.fbx do not exist.
+// So on a fresh clone / CI, a Ranger or Mage fell out of step 3 with the old body
+// already destroyed: an INVISIBLE hero. A missing art pack must degrade to a
+// visible wrong-looking hero, never to nothing.
+//
+// Resources is the pickup path for the legacy + fallback bodies because it is
+// auto-included in player builds (no Addressables wiring needed).
 // =============================================================================
 
 using DeNelle.Core.Combat; // ActorAnimator for post-swap battle ready / full anim drive (Village + World)
@@ -219,8 +231,10 @@ namespace DeNelle.Village
             {
                 FlowTrace.Fail("HeroBody",
                     "DEF-229 — Blink base unavailable AND Resources/Heroes/" + slug +
-                    ".fbx is MISSING. The hero is left bodyless. Mark the Blink base Addressable " +
-                    "(Defenders → Catalog → Mark Blink Gear Addressable) or import the legacy FBX.");
+                    ".fbx is MISSING. Degrading to the TRACKED KayKit fallback body (never bodyless). " +
+                    "Mark the Blink base Addressable (Defenders -> Catalog -> Mark Blink Gear Addressable) " +
+                    "or import the legacy FBX.");
+                BuildTrackedFallbackBody(cls, slug, controllerSnapshot);
                 return;
             }
 
@@ -243,13 +257,100 @@ namespace DeNelle.Village
             if (body == null)
             {
                 FlowTrace.Fail("HeroBody",
-                    $"VisualFactory.Skin returned null for legacy Resources/Heroes/{slug} — hero left bodyless.");
+                    $"VisualFactory.Skin returned null for legacy Resources/Heroes/{slug} - degrading to the " +
+                    "TRACKED KayKit fallback body (never bodyless).");
+                BuildTrackedFallbackBody(cls, slug, controllerSnapshot);
                 return;
             }
             body.name = "HeroBody";
 
             WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
         }
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // TERMINAL FALLBACK (WO-910 latent P0): the LAST body in the chain, and the only one
+        // built from assets that are GIT-TRACKED.
+        //
+        // WHY THIS EXISTS. Every earlier body in the chain lives in a pack that is gitignored
+        // (Assets/Blink — .gitignore) or in an FBX that only some machines have (Resources/
+        // Heroes/Ranger.fbx and Mage.fbx do NOT exist in the tree — only their .controller and a
+        // 125-byte .tripo-extracted sentinel). On a fresh clone / CI / any machine without the
+        // Blink pack, a Ranger or Mage therefore reached BuildLegacyResourcesBody, missed, and
+        // RETURNED WITH NOTHING INSTANTIATED — while Start() had ALREADY destroyed the baked
+        // placeholder body. The player got an INVISIBLE hero, not a wrong-looking one.
+        //
+        // A missing art pack must degrade to a VISIBLE WRONG-LOOKING hero, never to nothing.
+        // Assets/Resources/NPCs/KayKit/*.fbx is the only humanoid body set that is actually
+        // tracked in git (staged by KayKitNpcImporter, Humanoid rig — animationType: 3), so it
+        // is the floor. It is deliberately NOT pretty: it is the "your pack is missing" body,
+        // and the FlowTrace.Fail above is what tells you so.
+        //
+        // No further fallback exists below this one, and this method never calls back into
+        // BuildLegacyResourcesBody — the chain terminates here.
+        // ─────────────────────────────────────────────────────────────────────────────
+        private void BuildTrackedFallbackBody(HeroClass cls, string slug,
+                                              RuntimeAnimatorController controllerSnapshot)
+        {
+            using var _ = FlowTrace.Enter("HeroBody", $"BuildTrackedFallbackBody class={cls}");
+
+            string res = KayKitNpcBody.ResourcesRoot + KayKitFallbackSlug(cls);
+            GameObject prefab = null;
+            Guard.Try("HeroBody", $"load tracked fallback body '{res}'", () =>
+            {
+                prefab = Resources.Load<GameObject>(res);
+            });
+            if (prefab == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"TRACKED FALLBACK MISSING at Resources/{res} - the hero IS bodyless and there is no " +
+                    "body below this one. The staged KayKit humanoids are git-tracked, so this means the " +
+                    "Assets/Resources/NPCs/KayKit stage was deleted; restore it (Defenders/Art KayKit NPC importer).");
+                return;
+            }
+
+            // KayKit's visual forward is local +Z (same convention AtbCombatantSwapper aims by), and
+            // HeroLocomotion drives the root's +Z — so identity rotation is already correct here; no
+            // per-rig yaw guess. FitHeight normalizes the KayKit import scale to the hero's height.
+            GameObject body = null;
+            Guard.Try("HeroBody", $"VisualFactory.Skin (tracked fallback {res})", () =>
+            {
+                body = VisualFactory.Skin(transform, prefab, new SkinOptions
+                {
+                    FitHeight = TargetHeightMeters,
+                    StripColliders = true,
+                    SeatOnGround = true,
+                    FixTripoMaterials = false,
+                });
+            });
+            if (body == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"VisualFactory.Skin returned null for the tracked fallback '{res}' - hero left bodyless " +
+                    "(nothing below this body in the chain).");
+                return;
+            }
+            body.name = "HeroBody"; // EquipmentController.CacheRig finds it by transform.Find("HeroBody")
+            FlowTrace.Step("HeroBody",
+                $"TRACKED FALLBACK body '{res}' skinned + named 'HeroBody' - visible degraded hero " +
+                $"(class={cls}); the class art pack is absent on this machine.");
+
+            // Wire exactly like the legacy path so the fallback still gets the class controller
+            // (Resources/Heroes/<slug>.controller — all four exist and are tracked), the ActorAnimator
+            // and the ability loadout. The KayKit rig is Humanoid, so those humanoid clips retarget.
+            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
+        }
+
+        // The tracked KayKit stage slug that stands in for each class when its own art pack is
+        // absent. Chosen for closest silhouette, and every one of these is git-tracked under
+        // Assets/Resources/NPCs/KayKit/ (verified: Paladin_with_Helmet / Ranger / Mage / Cleric).
+        private static string KayKitFallbackSlug(HeroClass cls) => cls switch
+        {
+            HeroClass.Knight => "Paladin_with_Helmet",
+            HeroClass.Ranger => "Ranger",
+            HeroClass.Mage   => "Mage",
+            HeroClass.Cleric => "Cleric",
+            _                => "Paladin_with_Helmet",
+        };
 
         // ─────────────────────────────────────────────────────────────────────────────
         // PACKAGE PATH (owner ruling 2026-07-03): build the Knight from the published PALADIN hero
@@ -1537,10 +1638,15 @@ namespace DeNelle.Village
         private static string SlugFor(HeroClass cls) => cls switch
         {
             HeroClass.Knight => "Knight",
+            // CANON CORRECTION 2026-08-05: the comments here used to claim Resources/Heroes/
+            // Ranger.fbx and Mage.fbx exist. They do NOT — `git ls-files` returns EMPTY for both.
+            // What IS in the tree is Ranger.controller / Mage.controller plus a 125-byte PLAIN-TEXT
+            // sentinel (`<slug>.fbx.tripo-extracted`, written by Editor/TripoAssetPostprocessor.cs)
+            // that is NOT a parked mesh and cannot be un-parked. Real Ranger/Mage bodies are
+            // content work needing art. Until then those two classes resolve through the Blink base
+            // (gitignored) and, on a machine without it, through BuildTrackedFallbackBody.
+            // The slug is still correct — it names the CONTROLLER + ability loadout, not a mesh.
             HeroClass.Ranger => "Ranger",
-            // Mage now has its own paid-for Tripo FBX at Resources/Heroes/Mage.fbx
-            // (24 MB) per docs/port-notes/tripo-asset-pipeline.md. Swap in like
-            // the other two; HeroAnimatorSetup writes Mage.controller alongside.
             HeroClass.Mage   => "Mage",
             // DEF-221: the Cleric now has a DEDICATED body (Resources/Heroes/Cleric.fbx,
             // from People/Human/human_Cleric) + Cleric.controller (a copy of the Mage
@@ -1651,18 +1757,12 @@ namespace DeNelle.Village
                 //   textured armored Knight, not the flat-steel stopgap. If this load fails,
                 //   ApplyExtractedTexture returns false and Start() falls back to flat steel.
                 HeroClass.Knight => "Heroes/Textures/KnightArmored_basecolor",
-                // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
-                // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
-                // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
-                // Resources/Heroes/Ranger.fbx with its baked diffuse copied to
-                // Resources/Heroes/Ranger_tex/. The combined bake is a single atlas, so
-                // painting that one diffuse onto every body slot (skin/body/tongue) is
-                // correct — each slot samples its UV region. Repointed off the retired
-                // Tripo "archer v2" basecolor (Textures/Ranger) to the CC5 bake so the
-                // selected archer reads as the adult ranger, not the old spiky youth.
-                // FIX (2026-06-06): bind the Ranger's ORIGINAL basecolor from the source actor's
-                // .fbm (ranger.fbm/ranger_basecolor) copied into Textures/ — the model's own
-                // shipped atlas. (Archer_basecolor read dark; it was a different/old archer bake.)
+                // STALE-COMMENT CORRECTION 2026-08-05: the DEF-229 note here described a CC5/CC_Base
+                // archer "imported into Resources/Heroes/Ranger.fbx". That FBX is NOT in the tree
+                // (`git ls-files Assets/Resources/Heroes/Ranger.fbx` returns EMPTY) — the mesh half of
+                // DEF-229 never landed. This atlas path is kept because it still applies to whatever
+                // body DOES get built for the Ranger (Blink base, or the tracked KayKit fallback), and
+                // it is load-guarded below: a miss returns false and the class tint takes over.
                 HeroClass.Ranger => "Heroes/Textures/ranger_basecolor",
                 // DEF-232/229 (2026-06-03): the Cleric (Healer/Elara body) is now the
                 // owner's fresh CC5/CC_Base adult cleric, imported Humanoid by

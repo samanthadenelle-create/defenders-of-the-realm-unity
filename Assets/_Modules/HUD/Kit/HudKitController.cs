@@ -1389,8 +1389,17 @@ namespace DeNelle.HUD.Kit
                 _vitals.HealthFill.fillAmount = v.MaxHp > 0 ? Mathf.Clamp01((float)v.Hp / v.MaxHp) : 0f;
             if (_vitals.ManaFill != null)   // MP LIVE (§0 fix)
                 _vitals.ManaFill.fillAmount = v.MaxMana > 0 ? Mathf.Clamp01((float)v.Mana / v.MaxMana) : 0f;
+            // FIX 2026-08-05: this rendered the CLASS WORD ("Ranger  Lv 1"), so nothing in the
+            // game ever told a player who picked the Ranger that he is SYLAS. The nameplate now
+            // shows the CANON NAME from Data/Canonical/en.json (hero.<job>.name), resolved through
+            // HeroCanonNames in Core - the one reader HUD may legally reach (HUD -> Core only).
+            // A missing file/key degrades to exactly the old capitalized class word, so the plate
+            // can never go blank. NOTE: the nameplate has NO portrait Image socket today; adding
+            // one is a layout change and is deliberately left as a follow-up, not smuggled in here.
             if (_vitals.NameLabel != null)
-                _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId) ? "Hero" : Cap(v.ClassId)) +
+                _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId)
+                                              ? "Hero"
+                                              : DeNelle.Core.State.HeroCanonNames.ForJob(v.ClassId)) +
                                          "  Lv " + Mathf.Max(1, v.Level);
             // Owner 07-06: in-plate XP strip — fillAmount = xp/xpToNext, mirroring the HP/MP
             // fill-binding contract (§1.1). XpToNext<=0 = no HeroProgression data yet (the model

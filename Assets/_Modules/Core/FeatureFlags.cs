@@ -51,10 +51,11 @@ namespace DeNelle.Core
         /// Blink armor swap: PlayerPrefs "ff.blinkarmor" = 1.</summary>
         public static bool BlinkArmor => Get("blinkarmor", defaultOn: false);
 
-        /// <summary>PIVOT (owner 2026-06-22): lock to ONE polished hero (Knight) for now — do it well,
-        /// then fold in the other classes. When ON (default), <see cref="DeNelle.Core.State.GameStateService"/>
-        /// ChooseHero forces the class to Knight. Flip OFF to restore free class choice:
-        /// PlayerPrefs "ff.knightonly" = 0.</summary>
+        /// <summary>PIVOT (owner 2026-06-22): lock to ONE polished hero (Knight) — do it well, then
+        /// fold in the other classes. RETIRED as the default 2026-08-05: this now defaults OFF, so
+        /// the playable roster is Knight/Ranger/Mage (see DeNelle.Core.State.PlayableHeroes) and
+        /// GameStateService.ChooseHero no longer coerces a Ranger/Mage pick to Knight. Set
+        /// PlayerPrefs "ff.knightonly" = 1 to restore the solo-Knight V1 pivot.</summary>
         // OWNER RULING 2026-08-05: Mage + Ranger are UNLOCKED. WO-861 Phase 0 (e1ae9403) built
         // the single-source-of-truth registry (DeNelle.Core.State.PlayableHeroes) precisely so
         // this one flag widens EVERY consumer at once - the select screen's lock state,

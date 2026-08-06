@@ -180,10 +180,17 @@ With 1 fight at a time + the close camera, every animation cycle is SEEN and has
 - Economical: a tight reused clip set (hero: idle/attack/shield-block/hit-react/heal-cast/ranged-cast/
   death; same core per enemy type), one Tripo rig animated once + retargeted. Highest-leverage art.
 
-## Hero scope: KNIGHT first (owner, 2026-06-22)
-Do ONE class well, then fold in the others. `ff.knightonly` (default ON) forces the class to Knight
-(GameStateService.ChooseHero). Build the whole single-hero loop — kit, skill tree, art, animation,
-weapon/shield flair — around the Knight; generalize the class once it's polished.
+## Hero scope: KNIGHT first (owner, 2026-06-22) — **UNLOCKED 2026-08-05**
+Do ONE class well, then fold in the others. That was the plan and it ran its course:
+`ff.knightonly` now **defaults OFF**, so `GameStateService.ChooseHero` no longer forces the class
+and the playable roster is **Knight / Ranger / Mage** (`DeNelle.Core.State.PlayableHeroes` — the
+single roster truth every consumer reads). The **Cleric stays out**: no authored kit.
+Set `ff.knightonly`=1 to restore the solo-Knight V1 pivot.
+
+⚠ The Knight is still the only class with a FINISHED body: `Resources/Heroes` holds an FBX for the
+Knight only — there is no Ranger or Mage mesh in the tree, so those two render from the Blink base
+(gitignored) or, where that pack is absent, from `HeroBodySwapper.BuildTrackedFallbackBody`'s
+tracked KayKit stand-in. Ranger/Mage body art is open content work.
 
 ## PHASING — V1 = offense only; base/CoC defense is gated to V2 (owner, 2026-06-22)
 Both modes fully exist EVENTUALLY and one feeds the other (offense earns resources -> build base ->

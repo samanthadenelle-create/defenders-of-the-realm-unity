@@ -112,8 +112,9 @@ namespace DeNelle.Village.Hero
         // and GameStateService.ChooseHero also read — so the shelf can never stock gear for
         // a hero the select screen says does not exist (or hide gear for one it offers).
         //
-        // BEHAVIOUR TODAY IS IDENTICAL: ff.knightonly defaults ON => { "knight" }.
-        // When the flag opens, the set becomes { knight, ranger, mage }. That is one row
+        // LIVE SET since the 2026-08-05 unlock: ff.knightonly defaults OFF, so the shelf
+        // roster is { knight, ranger, mage } (it was { "knight" } while the flag was ON, and
+        // setting ff.knightonly=1 narrows it back). That is one row
         // NARROWER than this file's old FullRoster, which also listed "cleric" — deliberate:
         // the Cleric has no authored kit and is not playable, so cleric-ONLY weapons are
         // noise on the shelf (armor is unaffected — it gates by WEIGHT, and the Cleric

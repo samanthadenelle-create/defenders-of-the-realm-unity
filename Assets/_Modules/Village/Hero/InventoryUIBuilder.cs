@@ -47,16 +47,23 @@ namespace DeNelle.Village
                 frameName: RpgUiCatalog.FrameInventory);
             var panel = panelChrome.content;
 
-            // Cosmetic flag B — drop the hero portrait (Grom) into the medallion socket. Grom.jpg
-            // is a plain Texture2D (spriteMode:0), so it MUST load as Texture2D into a RawImage,
-            // NOT as a Sprite (mirrors HeroSelectController.ApplyPortrait). preserveAspect=false via
-            // a full stretch fills the oval. FALLBACK: an ASCII "GROM" label if the texture is
-            // missing (zero-risk floor). Canon note: Resources/HeroPortraits/ DOES exist (Grom/
-            // Elara/Thrain/Sylas .jpg) — any stale doc claiming otherwise is wrong.
+            // Cosmetic flag B — drop the ACTIVE hero's portrait into the medallion socket.
+            // FIX 2026-08-05: this hardcoded "HeroPortraits/Grom", so a player who picked Sylas or
+            // Thrain still saw Grom's face in his own inventory. The slug now comes from the
+            // persisted class through the TWO maps that already exist — PlayableHeroes.JobKey
+            // (Core: class -> "ranger") then PortraitSlug (InventoryPaperDoll.cs: "ranger" ->
+            // "Sylas"). Deliberately NOT a third copy of the map: duplicated slug tables are exactly
+            // how the portrait drifted from the hero in the first place.
+            // The portraits are imported as plain Texture2D (spriteMode:0), so they MUST load as
+            // Texture2D into a RawImage, not as a Sprite (mirrors HeroSelectController.ApplyPortrait).
+            // preserveAspect=false via a full stretch fills the oval. FALLBACK: an ASCII name label
+            // if the texture is missing (zero-risk floor). Canon note: Resources/HeroPortraits/ DOES
+            // exist (Grom/Elara/Thrain/Sylas .jpg) — any stale doc claiming otherwise is wrong.
             var medallion = panelChrome.layout != null ? panelChrome.layout.medallion : null;
             if (medallion != null)
             {
-                var portraitTex = Resources.Load<Texture2D>("HeroPortraits/Grom");
+                string portraitSlug = ActiveHeroPortraitSlug();
+                var portraitTex = Resources.Load<Texture2D>("HeroPortraits/" + portraitSlug);
                 if (portraitTex != null)
                 {
                     var raw = new GameObject("HeroPortrait", typeof(RawImage));
@@ -73,9 +80,9 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    var grom = ElarionUiKit.Label(medallion, "GROM", 0f, 1f,
+                    var nameLbl = ElarionUiKit.Label(medallion, portraitSlug.ToUpperInvariant(), 0f, 1f,
                         ElarionUi.Gilt, 40, TextAlignmentOptions.Center, 0f, 1f, bold: true);
-                    grom.raycastTarget = false;
+                    nameLbl.raycastTarget = false;
                 }
             }
 
