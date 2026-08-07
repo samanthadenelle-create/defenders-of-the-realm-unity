@@ -451,7 +451,7 @@ namespace DeNelle.Core
         // Pure read-only inspection; always runs (control-flow safety, not behind a render check).
         private void VerifyAllRenderersUrp()
         {
-            int checkedSlots = 0, broken = 0;
+            int checkedSlots = 0, broken = 0, untextured = 0;
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -469,7 +469,38 @@ namespace DeNelle.Core
                     // Android white/magenta slab: a shader that fails to COMPILE on-device keeps a valid
                     // (even URP) name but renders magenta/white with isSupported==false — flag it too.
                     bool unsupported = m != null && m.shader != null && !m.shader.isSupported;
-                    if (isUrp && !isError && !unsupported) continue;
+                    if (isUrp && !isError && !unsupported)
+                    {
+                        // THE SHADER IS NOT THE WHOLE ANSWER. This verify used to stop here and
+                        // print VERIFY OK - which a URP/Lit material with NO ALBEDO BOUND passes
+                        // cleanly while rendering as a flat dark/untextured mesh. That is the same
+                        // false green as EnvTreeFix and the castle pink floor: the fix verified the
+                        // wrong property and reported success.
+                        //
+                        // Report what is ACTUALLY BOUND, so a run produces DATA instead of an
+                        // argument: material name, albedo texture name (or none), and the tint.
+                        Texture albedo = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : null;
+                        if (albedo == null && m.HasProperty("_MainTex")) albedo = m.GetTexture("_MainTex");
+                        Color tint = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor")
+                                   : (m.HasProperty("_Color") ? m.GetColor("_Color") : Color.white);
+                        string matName = string.IsNullOrEmpty(m.name) ? "<unnamed>" : m.name;
+
+                        if (albedo == null)
+                        {
+                            untextured++;
+                            FlowTrace.Warn("TripoMatFix",
+                                $"NO ALBEDO on '{gameObject.name}' renderer '{r.name}' slot {i}: material='{matName}' " +
+                                $"shader='{sn}' tint=({tint.r:0.00},{tint.g:0.00},{tint.b:0.00}) - the URP rebuild took " +
+                                "but bound NO base map, so this mesh renders as flat tint. A shader-only VERIFY calls this OK.");
+                        }
+                        else
+                        {
+                            FlowTrace.Step("TripoMatFix",
+                                $"albedo BOUND on '{gameObject.name}' renderer '{r.name}' slot {i}: material='{matName}' " +
+                                $"tex='{albedo.name}' tint=({tint.r:0.00},{tint.g:0.00},{tint.b:0.00}).");
+                        }
+                        continue;
+                    }
 
                     broken++;
                     FlowTrace.Fail("TripoMatFix",
@@ -481,7 +512,8 @@ namespace DeNelle.Core
             }
             if (broken == 0)
                 FlowTrace.Step("TripoMatFix",
-                    $"{gameObject.name}: VERIFY OK — all {checkedSlots} slot(s) on a URP shader (no magenta/error).");
+                    $"{gameObject.name}: VERIFY OK — all {checkedSlots} slot(s) on a URP shader " +
+                    $"(no magenta/error); {untextured} slot(s) with NO albedo bound.");
         }
     }
 }

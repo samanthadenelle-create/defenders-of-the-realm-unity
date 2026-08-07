@@ -1,10 +1,57 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-05 (CLI / Grok timers): main line next free = **912**. **782–859 + 900–911 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-07 (CLI / Grok wider rooms): main line next free = **923**. **782–859 + 900–922 CONSUMED.**
+> - **922** = **RoomForge: all rooms much wider** — master `Cell` 6→**10** m (optional 12);
+>   1×1 rooms 6×6→10×10; rebuild prefabs + recompose graphs + rebake. Combine bake with WO-919.
+>   File `WORK_ORDER_922_roomforge_wider_rooms.md`. **READY.**
+>
+> *(banner bumped 922 → 923 in the SAME edit as the 922 mint — the rule that broke five times on 08-02.)*
+> - **921** = **Dungeon fire cosmetic vs hazard** — torch_lit + intensity-2 lights make rooms look
+>   “encased in fire” but do zero damage; real traps (spike/grate) damage but are invisible; no fire
+>   kind. Dial cosmetic torches, telegraph traps, optional fire trap kind off spawn.
+>   File `WORK_ORDER_921_dungeon_fire_cosmetic_vs_hazard.md`. **READY.**
+>
+> *(banner bumped 921 → 922 in the SAME edit as the 921 mint — the rule that broke five times on 08-02.)*
+> - **920** = **Dungeon camera: stationary exploration** — default OFF free-look FPV; locked OTS;
+>   kill AvoidObstacles bounce; calm combat framing (prefer no FPV↔OTS thrash). Owner: camera
+>   bouncing + wants stationary dungeon view. File `WORK_ORDER_920_dungeon_stationary_camera.md`.
+>   **READY** (prefer after 919 enclose). Updates `DungeonFpvRegression` deliberately.
+> - **919** = **RoomForge enclose: taller walls + ceilings + kill blue sky.** Composed rooms are
+>   2.8 m open-top boxes (`DefaultDungeonRoomsBuilder`); baker never fog/sky-kills. Owner shots
+>   2026-08-07 show half-frame blue sky. Raise walls ≥4 m, ceiling pass, Healer’s ambient recipe,
+>   re-bake composed layouts. File `WORK_ORDER_919_roomforge_enclose_taller_walls_ceilings.md`.
+>   **READY.** WO-1000 remains the separate KayKit **outpost** builder.
+>
+> *(banner bumped 919 → 921 in the SAME edit as the 919–920 mint — the rule that broke five times on 08-02.)*
+> - **918** = **Board hygiene: close shipped WOs + RESULT files** for the audit five-findings
+>   (`f329c8d5`), WO-899 PARTIAL, WO-1001, without closing READY VFX (890/892/1002). Notion mirror.
+>   File `WORK_ORDER_918_board_hygiene_close_shipped_wos.md`. **READY.**
+> - **917** = **WO-899 §4 residual** — dodge icon + empty skill-slot “+” placeholder. Stick/compass/
+>   attack landed in `a35163e1`; §4 deliberately not smuggled (no style-matched dodge art yet).
+>   File `WORK_ORDER_917_hud_dodge_icon_empty_skill_slot.md`. **READY** (owner art pick if no icon).
+> - **916** = **Marketing site vercel --prod** — repo tagline is canon (“Echoes of a Forgotten
+>   Civilization”); production may still serve retired “last light” until verified deploy.
+>   File `WORK_ORDER_916_site_canon_tagline_vercel_prod.md`. **READY.**
+> - **915** = **RealmStorePurchase public-release re-gate + payment path.** Q9 turned Buy ON for the
+>   sole tester; mainnet hard-block + empty SkrMintDevnet remain ship blockers. Owner rules A/B.
+>   File `WORK_ORDER_915_realm_store_public_release_regate.md`. **READY FOR OWNER RULING.**
+> - **914** = **Status mount: compass strip vs waveBlock layout.** WO-899 widened the strip; no UI
+>   capture; calm posture co-occupies both widgets — measure rects first, fix only if collision.
+>   File `WORK_ORDER_914_status_mount_compass_waveblock_layout.md`. **READY.**
+> - **913** = **Arcane Element==visual regression.** `BoltVisualElement` is Aether in source but
+>   `TowerProjectileMapRegression` never asserts Element/BoltVisualElement — Flame can ship green again.
+>   File `WORK_ORDER_913_arcane_element_equals_visual_regression.md`. **READY.**
+>
+> *(banner bumped 912 → 919 in the SAME edit as the 913–918 mint — the rule that broke five times on 08-02.)*
+> - **912** = **Ad revenue for the FREE PATH** (provider, rolling window, remote config, ad-boost packs).
+>   File `WORK_ORDER_912_ad_revenue_free_path.md`. **READY FOR OWNER RULING.** ⚠ Was on disk while the
+>   banner still read next-free 912 — reconciled 2026-08-07; do not re-mint 912.
 > - **911** = **Timer speed-ups actually available** — Instant crystals + Ad skip on ALL channels
 >   (Builder/Train/Research); root cause: Instant only resolved Builder + dead Ad hid all CTAs.
 >   Crystal packs stay existing currency (no new type). File
 >   `WORK_ORDER_911_timer_speedup_crystals_all_channels.md`. **READY.**
+>   ⚠ Also on disk: `WORK_ORDER_911_unified_queue_screen.md` (second 911 title — historical collision;
+>   do not mint another 911).
 > - **910** = **Ranger + Mage talent trees: 31 player-reachable nodes have no consumer.** Surfaced the
 >   moment `TalentStrategyRegression`'s `HiddenTrees` was emptied — it had hardcoded `{"ranger","mage"}`,
 >   so guard G3 had NEVER audited 40 player-reachable nodes while reporting green. **Ranger collapses to
@@ -81,8 +128,14 @@
 > ### ⛔ THE MAIN LINE HAS COLLIDED WITH THE UI-SEAT BLOCK — READ BEFORE MINTING
 > The main line consumed 859 and the next number, 860, is **inside the UI seat's reserved 860–899**
 > (860/861/862/863 already consumed there). **The two blocks have MET.** The main line therefore
-> **jumps to 900+**; the UI seat keeps 860–899 (next free 864). Any main-line mint below 900 from here
-> is a guaranteed collision. Owner ratification of a permanent main-line range is now overdue.
+> **jumps to 900+**. Any main-line mint below 900 from here is a guaranteed collision.
+>
+> ⚠ **THIS PARAGRAPH WENT STALE AND IS CORRECTED 2026-08-07.** It read "the UI seat keeps 860–899
+> (next free 864)". That is no longer true and was the SAME self-contradiction that seeded the
+> earlier collision — a head that says one thing and a body row that says another. **Owner ruling:
+> the UI seat moved to 1000–1099**; 860–899 is CLOSED (full at 899), and 1000 / 1001 / 1004 / 1005
+> are already minted in the new block. The main line's next free is the HEAD BANNER (923), which is
+> the sole authority — never this paragraph, never a number copied anywhere else.
 >
 > - **903** = **Storage pallet fill stacks (SMALL)** — lumberyard/foundry/silo show logs/ingots/sacks
 >   as bank fill rises (~5% steps); reuse CollectorStackView/prop catalog. No economy rewrite.
@@ -170,8 +223,22 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **912** (782–859 + 900–**911** consumed; 860–899 was the UI seat's old block) |
-> | **1000–1099 reserved** | UI seat | **1002** (1000–1001 consumed) |
+> | **main line** | CLI | **923** (782–859 + 900–**922** consumed; 860–899 was the UI seat's old block) |
+> | **1000–1099 reserved** | UI seat | **1006** (1000–1005 consumed) |
+>
+> *(UI-seat bumped 1005 → 1006 with the WO-1005 mint — dungeon UI cohesion: reskin the flat-purple "Descend"
+> prompt to the Obsidian kit + fix the mirrored "EXIT" world label + one obsidian-gold theme for all dungeon overlays.)*
+>
+> *(UI-seat bumped 1004 → 1005 with the WO-1004 mint — composed-dungeon (Pipeline A) visual fixes: kill the
+> rainbow-atlas floor, strip stray purple/green debug/socket/magenta markers from the build, and extend the
+> WO-1000 enclose+relight (ceiling, dark ambient+fog, candle-VFX light) to the composer so every baked dungeon is clean.)*
+>
+> *(UI-seat bumped 1003 → 1004 with the WO-1003 mint — replace town NPCs (KayKit adventurers + CGTrader
+> civilians) with the CraftPix Free Medieval People pack (14 dressed townsfolk, shared atlas, license
+> commercial-green), staged tracked in Resources/NPCs/People, Humanoid-retargeted onto the shared animator.)*
+>
+> *(UI-seat bumped 1002 → 1003 with the WO-1002 mint — remove the yellow aura plume at the hub Heart of
+> Elarion tree base (HeartAuraController tree-ambient loop; extend the hub withhold to cover it).)*
 >
 > *(UI-seat bumped 1001 → 1002 with the WO-1001 mint — Deep Dungeon Program: extend Pipeline A (JSON
 > room-graph composer) into a full complex-dungeon engine (deep multi-level stairs, enemy families, boss

@@ -451,8 +451,22 @@ namespace DeNelle.HUD.Kit
             // resource chips (expanded row) + collapsed gold-only variant (tap-expand).
             BuildResourceChips(pool);
 
-            // WO-778: persistent Builders/Training status chip (CoC-feel, own area under System).
-            BuildQueueStatusChip(pool);
+            // ⚠ OWNER RULING 2026-08-07 — THE BUILDERS CHIP IS RETIRED.
+            // Verbatim: "with the manage section in the hud we can remove the open builders queue
+            // on right side of hud in town ... since it has a natural home ... i had them expanded
+            // in manage tab". The Manage/Queues screen now shows every line (Defense / Buildings /
+            // Troops / Research) with progress bars, Finish-Now, cancel+refund and bump - so the
+            // right-column chip is duplicate furniture on the busiest edge of the screen.
+            //
+            // This SUPERSEDES WO-911 ruling Q10/Q13, which kept the chip as a status glance after
+            // retiring its double-tap door. That ruling's real intent - exactly ONE Queues entry -
+            // is unchanged and now simply lands on the bar's Manage face alone.
+            //
+            // BuildQueueStatusChip and its QueueRailView are LEFT INTACT below, unreferenced: the
+            // rail is the shared component the Manage screen also hosts, and the chip is two lines
+            // from returning if the owner wants it back. Deleting them would make a reversal a
+            // rewrite.
+            // BuildQueueStatusChip(pool);   // retired 2026-08-07 (owner)
 
             // ── town action bar (WO-835 APPLICABILITY REPACK): Build / Talk / Bag /
             // Raids / Map / Quests / Upgrade ──

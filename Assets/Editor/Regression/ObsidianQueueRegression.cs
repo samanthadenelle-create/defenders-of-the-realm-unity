@@ -315,17 +315,24 @@ namespace DeNelle.Editor
                 if (kitSrc.IndexOf("OnManageAction") < 0)
                     failures.Add("HudKitController missing OnManageAction — the re-pointed bar face has no handler (WO-911)");
 
-                // The chip SURVIVES (ruling Q10) but as a STATUS GLANCE ONLY. Its second tap must
-                // no longer open the queue, or there are two doors and "one Queues entry" means
-                // nothing. The old double-tap hand-off is B4's undiscoverable path.
-                if (kitSrc.IndexOf("queueStatusChip") < 0)
-                    failures.Add("HudKitController missing queueStatusChip (persistent Builders status, WO-778)");
-                else if (kitSrc.IndexOf("chip tapped while open -> ObsidianQueueGate.RequestToggle") >= 0)
+                // ⚠ RULING SUPERSEDED 2026-08-07. Q10 kept the chip as a STATUS GLANCE; the owner
+                // has now RETIRED it outright ("we can remove the open builders queue on right side
+                // of hud in town ... since it has a natural home"). The rule Q10 protected - exactly
+                // ONE Queues entry - is unchanged and now lands on the bar's Manage face alone.
+                //
+                // So this case INVERTED: it used to fail when the chip was absent, and now fails
+                // when it is BUILT. The builder method is deliberately left in the file unreferenced
+                // (two lines from returning), so the assertion is on the CALL, not the definition.
+                if (kitSrc.IndexOf("BuildQueueStatusChip(pool);") >= 0 &&
+                    kitSrc.IndexOf("// BuildQueueStatusChip(pool);") < 0)
+                    failures.Add("HudKitController still CALLS BuildQueueStatusChip — the owner retired the " +
+                                 "right-column Builders chip on 2026-08-07 now that the Manage screen owns every " +
+                                 "line; leaving it gives the player duplicate furniture on the busiest screen edge");
+                if (kitSrc.IndexOf("chip tapped while open -> ObsidianQueueGate.RequestToggle") >= 0)
                     failures.Add("HudKitController still opens the queue from the Builders chip double-tap — " +
-                                 "WO-911 makes the chip a status glance and the bar face the single door");
-                else
-                    log.AppendLine("  HudKitController Manage bar face -> ObsidianQueueGate.RequestToggle OK " +
-                                   "(WO-911 2026-08-06: the 08-01 bar-button retirement is REVERSED; the chip is a status glance)");
+                                 "WO-911 makes the bar face the single door");
+                log.AppendLine("  HudKitController: Manage bar face is the SINGLE Queues door; the " +
+                               "right-column Builders chip is retired (owner 2026-08-07).");
             }
 
             // OCCUPANCY ORACLE (the Work-button-dark lesson, 2026-07-30): a widget that is
