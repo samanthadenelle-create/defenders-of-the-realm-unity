@@ -2787,7 +2787,14 @@ namespace DeNelle.Village
             {
                 "pet-house",
                 "collector_lumbermill",
-                "lumberyard",
+                // "lumberyard" REMOVED 2026-08-07 — WO-837 is BINDING canon: stockpiles
+                // (lumberyard / foundry / silo) are CAPACITY-CAP PROGRESSION buildings, never
+                // founding freebies. A free lumberyard hands the player +500 wood cap for nothing,
+                // which is the whole progression step it is supposed to sell. WO-901 §5 named this
+                // as a hard blocker on its Phase F and Phase F shipped past it anyway.
+                // NOTE collector_lumbermill above is a DIFFERENT building and stays: it is a
+                // harvester, not a stockpile, and the tutorial step awaits it (removing it
+                // soft-locks a zero-resource founding).
                 "tower_ground_archer",
             };
 

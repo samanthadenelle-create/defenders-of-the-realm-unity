@@ -58,17 +58,32 @@ namespace DeNelle.Village
         public Color BlastColor = new Color(0.6f, 0.4f, 1f, 1f);   // arcane violet
 
         // VFX CHAIN (visual only — gameplay damage stays on <see cref="Element"/>).
-        // Full Arcane-Fire tower roster (docs/MAGIC_VFX_LIBRARY.md), all mirrored under
-        // Assets/Resources/VFX/Projectiles/ via SpellsPackVfxMirror:
-        //   Casting_Fire_2 → Projectile_Fire_3 (travel) → Explosion_Fire + Spell_Fire_6 (detonation).
-        // Spell_Fire_6 is a stationary swirl — never parent it to ProjectileMover; only on impact.
+        //
+        // ⚠ OWNER RULING (WO-870/872 §3.3, applied 2026-08-07): "do NOT ship 'deals Aether, looks
+        // Fire'." This tower's gameplay Element is AETHER, so its visuals must be Aether too. It
+        // was shipping DamageElement.Flame — a fire bolt, a fire detonation, a fire cast wind-up
+        // and a fire swirl — which is exactly the mismatch the ruling forbids, and it survived
+        // because TowerProjectileMapRegression gated only the Hovl string key and reported GREEN.
+        //
+        // The Aether TRAVEL + IMPACT art was already on disk and already mapped the whole time:
+        //   ProjectileVFXCatalog: Aether -> Projectile_Arcane, Explosion_Arcane. Both verified
+        //   present under Assets/Resources/VFX/Projectiles/.
+        //
+        // The CAST wind-up and the extra IMPACT SWIRL are now EMPTY, deliberately. The only art of
+        // those kinds on disk is Casting_Fire / Casting_Fire_2 / Spell_Fire_6 — there is no
+        // Casting_Arcane and no Spell_Arcane (verified by listing the folder, not assumed). Keeping
+        // the fire ones would re-commit the very "deals Aether, looks Fire" mismatch this change
+        // exists to end, and substituting some other pack effect would be a CREATIVE PICK, which is
+        // the owner's call, never an implementer's (memory: vfx-map-owner-tags-no-creative-pick).
+        // So the tower fires a real arcane bolt with a real arcane detonation and simply has no
+        // wind-up flourish until the owner tags Aether art for those two hooks.
         [Header("VFX (visual only)")]
-        [Tooltip("Element for travel + base impact burst (Explosion_*).")]
-        public DamageElement BoltVisualElement = DamageElement.Flame;
-        [Tooltip("Resources/VFX/Projectiles/<name> cast wind-up at the spire muzzle.")]
-        public string BoltCastVfx = "Casting_Fire_2";
-        [Tooltip("Resources/VFX/Projectiles/<name> extra AoE detonation layered on impact.")]
-        public string BoltImpactExtraVfx = "Spell_Fire_6";
+        [Tooltip("Element for travel + base impact burst (Explosion_*). MUST match the gameplay Element.")]
+        public DamageElement BoltVisualElement = DamageElement.Aether;
+        [Tooltip("Resources/VFX/Projectiles/<name> cast wind-up. EMPTY until Aether cast art is tagged.")]
+        public string BoltCastVfx = "";
+        [Tooltip("Resources/VFX/Projectiles/<name> extra AoE detonation. EMPTY until Aether swirl art is tagged.")]
+        public string BoltImpactExtraVfx = "";
 
         // Elevation perk (wall-mounted): a spire seated on a wall-walk TOP gets the high-ground
         // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when

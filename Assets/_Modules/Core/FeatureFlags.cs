@@ -564,7 +564,21 @@ namespace DeNelle.Core
         /// RELEASE/store APK so the honest ZERO-CRYPTO build ships NO dead "Buy" button routed to the
         /// stub wallet. Reversible: PlayerPrefs "ff.realmstorepurchase" = 1 re-enables the rail on any
         /// build. NOT URL-activatable (monetization surface — excluded from the allow-list).</summary>
-        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: IsDevBuild);
+        // OWNER RULING 2026-08-07 (WO-911 Q9, resolved): default ON. The gate existed so a public
+        // ZERO-CRYPTO build would not ship a dead Buy button - but we are DEVNET-ONLY and the owner
+        // is the only registered tester, so there is no player to hand a failing button to. Leaving
+        // it dev-gated was the worse harm: every broke-case Finish-Now route dead-ended on
+        // "Coming soon", which the ruling calls out as worse than no route at all.
+        //
+        // ⛔ SHIP BLOCKER - RE-GATE OR COMPLETE THE PAYMENT PATH BEFORE A PUBLIC STORE RELEASE.
+        // Two independent things still make a real purchase impossible, both verified at source:
+        //   * SolanaWalletProvider.SendPayment HARD-BLOCKS WalletNetwork.Mainnet (defence in depth
+        //     that survives this flag - a mainnet build still cannot take money), and
+        //   * WalletEndpoints.SkrMintDevnet is "" so even a DEVNET **SKR** transfer cannot resolve
+        //     a mint. SKR is the default currency, so an SKR buy fails today; USDC/SOL is the only
+        //     rail with a chance of completing.
+        // Reversible on any build with PlayerPrefs "ff.realmstorepurchase" = 0.
+        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
 
         /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
         /// the "Ad" CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
