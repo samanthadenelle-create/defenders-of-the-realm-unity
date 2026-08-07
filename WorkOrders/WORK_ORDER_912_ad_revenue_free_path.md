@@ -6,6 +6,49 @@
 **Roles:** Owner rules sec.9 open questions; CLI implements only after those rulings
 **Type:** SCOPE + ACCEPTANCE ONLY. No implementation plan, no code.
 
+> ### ★ 2026-08-07 - THE SEEKER CHECK IS DONE. sec.10.3's CENTRAL UNCERTAINTY IS RESOLVED. ★
+>
+> sec.10.3 named the check ("confirm on the physical Seeker whether the Play Store app is present and
+> the device is GMS-certified") and said it "reframes everything". It was run against the attached
+> device over adb. **Measured, not sourced from articles:**
+>
+> ```
+> Play Store    com.android.vending  v52.5.22-34  flags=[ SYSTEM ... UPDATED_SYSTEM_APP ]  enabled=1
+> Play Services com.google.android.gms  v26.28.33
+> GSF           com.google.android.gsf  present
+> ro.com.google.gmsversion = 16_202509
+> fingerprint   solanamobile/seeker/seeker:16/BP2A.260611.100.A3/mp1V1155:user/release-keys
+> Google accounts signed in: yes ; only gms.supervision (parental controls) disabled
+> Android 16 / API 36
+> ```
+>
+> **The Play Store is a SYSTEM app carrying UPDATED_SYSTEM_APP, on release-keys, with a licensed
+> `ro.com.google.gmsversion`.** Solana Mobile shipped it IN THE SYSTEM IMAGE, which is not possible
+> without a Google Mobile Services license. **The Seeker is GMS-certified and Seeker users have Play.**
+>
+> **CONSEQUENCE FOR D2 - Unity's only weakness is gone.** Unity's restriction is about the USER
+> (*"unless the user also has access to the Google Play Store"*), so Unity's first-party demand
+> monetizes Seeker users normally. LevelPlay is no longer handicapped mediation running without its
+> house demand - it is a full-strength network that is ALSO the only one offering written crypto
+> pre-approval before integration. sec.10.5's "two-horse race" was framed as a trade between
+> governance (Unity) and technical fit (AppLovin); **that trade is now lopsided in Unity's favour.**
+> AppLovin's remaining edge is a lighter dependency graph (sec.10.4) and a cleaner no-fill code -
+> real, but not worth trading the pre-approval for.
+>
+> **AdMob is STILL OUT, and this finding does NOT rescue it.** Its restriction is on where the APP is
+> listed (*"publicly available in a supported store"*), not on what the DEVICE has. Device Play access
+> cannot cure an app-listing restriction, and the Solana dApp Store is not a supported store. AdMob
+> re-enters only if we also publish to Google Play. **sec.10.5's "the whole comparison re-opens -
+> including AdMob" is too broad on this point; it re-opens for Unity only.**
+>
+> **Q3a is also DEFUSED as a blocker.** It asked whether AppLovin rewarded video serves without Play
+> Services. The device HAS Play Services, so the question stops being decisive for the Seeker - it
+> only matters for non-GMS Android targets we do not currently ship to.
+>
+> **Still owner-only and unchanged:** Q2a (AppLovin's silent crypto policy) if AppLovin is pursued,
+> and the Unity pre-approval request itself. **Also unchanged: sec.10.1 risk 4** - the device is
+> API 36 while `AndroidTargetSdkVersion: 0` is unpinned. Pin it before integrating anything.
+
 ---
 
 ## 0. THE COVENANT (verbatim, owner - binding on everything below)
