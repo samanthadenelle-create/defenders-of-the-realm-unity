@@ -107,7 +107,7 @@ namespace DeNelle.Editor.RoomForge
                 return;
             }
 
-            float cell = layout.cellSize > 0.1f ? layout.cellSize : 6f;
+            float cell = layout.cellSize > 0.1f ? layout.cellSize : RoomForgeCanon.Cell;
             var rules = layout.rules ?? new ComposeRules();
             int connCount = layout.connections != null ? layout.connections.Count : 0;
             FlowTrace.Step(Sys, $"layout loaded id='{layout.dungeonId}' rooms={layout.rooms.Count} " +
@@ -195,6 +195,20 @@ namespace DeNelle.Editor.RoomForge
             // Lighting defaults (dim)
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.08f, 0.09f, 0.12f);
+
+            // WO-919 sky kill. A NewScene(EmptyScene) inherits the PROCEDURAL SKYBOX in its
+            // lighting settings, and RenderSettings persist into the saved .unity - so every
+            // composed dungeon shipped a bright blue dome over its (until now, open-top) rooms.
+            // Nulling it is safe with ambientMode=Flat above: flat ambient never samples the
+            // skybox, so no light changes; only the sky stops being drawn.
+            // SCOPE NOTE: this is the geometry-wave half only. The in-room CAMERA background is
+            // NOT set here - the composed bake seats no camera (the runtime HeroControlEnsurer
+            // rig does), so per WO-919 Phase B the clear-flags/background belongs to exactly ONE
+            // owner and that owner is the runtime rig (WO-920/WO-1004). Do not also set it here.
+            RenderSettings.skybox = null;
+            FlowTrace.Step(Sys, "sky killed: RenderSettings.skybox=null ambientMode=Flat " +
+                                "(camera background stays owned by the runtime rig - WO-920/1004)");
+
             var lightGo = new GameObject("DirLight");
             lightGo.transform.SetParent(root, false);
             var light = lightGo.AddComponent<Light>();
@@ -332,21 +346,28 @@ namespace DeNelle.Editor.RoomForge
             var meta = go.AddComponent<RoomPrefabMeta>();
             meta.roomId = id;
             meta.archetype = "combat";
-            meta.cellSize = 6f;
+            meta.cellSize = RoomForgeCanon.Cell;
             meta.footprintCells = Vector2Int.one;
+
+            // WO-922: derived from the canon cell, not a hardcoded 6. A placeholder that stayed
+            // 6x6 inside a 10u kit would mate at the wrong reach AND under-report its footprint
+            // to the overlap check - a missing prefab would have silently produced a broken
+            // layout instead of an obviously-stubbed one.
+            float span = RoomForgeCanon.Cell;
+            float half = span * 0.5f;
 
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "Floor";
             floor.transform.SetParent(go.transform, false);
-            floor.transform.localPosition = new Vector3(0f, -0.05f, 0f);
-            floor.transform.localScale = new Vector3(6f, 0.1f, 6f);
+            floor.transform.localPosition = new Vector3(0f, -RoomForgeCanon.FloorSlabThickness * 0.5f, 0f);
+            floor.transform.localScale = new Vector3(span, RoomForgeCanon.FloorSlabThickness, span);
             GameObjectUtility.SetStaticEditorFlags(floor, StaticEditorFlags.NavigationStatic);
 
             // Four door sockets at cardinals (short ids match rooms-catalog.json convention).
-            AddPlaceholderSocket(go, "n_door_01", "N", new Vector3(0, 0, 3f), Vector3.forward);
-            AddPlaceholderSocket(go, "s_door_01", "S", new Vector3(0, 0, -3f), Vector3.back);
-            AddPlaceholderSocket(go, "e_door_01", "E", new Vector3(3f, 0, 0), Vector3.right);
-            AddPlaceholderSocket(go, "w_door_01", "W", new Vector3(-3f, 0, 0), Vector3.left);
+            AddPlaceholderSocket(go, "n_door_01", "N", new Vector3(0, 0, half), Vector3.forward);
+            AddPlaceholderSocket(go, "s_door_01", "S", new Vector3(0, 0, -half), Vector3.back);
+            AddPlaceholderSocket(go, "e_door_01", "E", new Vector3(half, 0, 0), Vector3.right);
+            AddPlaceholderSocket(go, "w_door_01", "W", new Vector3(-half, 0, 0), Vector3.left);
             return go;
         }
 

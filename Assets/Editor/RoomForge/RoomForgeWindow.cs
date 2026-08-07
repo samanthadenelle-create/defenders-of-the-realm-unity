@@ -2,7 +2,8 @@
 // RoomForgeWindow — visual authoring surface for socketed dungeon room prefabs.
 // -----------------------------------------------------------------------------
 // Menu: Defenders/Dungeon/Room Forge
-// Grid grain = 6u cells. Drag KayKit pieces onto the working room root, add
+// Grid grain = RoomForgeCanon.Cell (10u since WO-922, was 6u). Drag KayKit pieces
+// onto the working room root, add
 // N/E/S/W door sockets, save prefab + append rooms-catalog.json.
 // =============================================================================
 
@@ -22,7 +23,9 @@ namespace DeNelle.Editor.RoomForge
     {
         private const string RoomsFolder = "Assets/Dungeon/Rooms";
         private const string CatalogPath = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts/rooms-catalog.json";
-        private const float CellSize = 6f;
+        // WO-922: hand-authored rooms must land on the SAME grain as the generated kit or they
+        // cannot mate with it. Read the canon; never re-type the number.
+        private const float CellSize = RoomForgeCanon.Cell;
 
         /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
         /// write canonical JSON: that overload emits a leading EF BB BF which fails the
@@ -59,7 +62,7 @@ namespace DeNelle.Editor.RoomForge
 
             EditorGUILayout.LabelField("Room Forge", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Socketed room authoring (6u cells). Save writes a prefab under Assets/Dungeon/Rooms " +
+                $"Socketed room authoring ({CellSize:0.#}u cells). Save writes a prefab under Assets/Dungeon/Rooms " +
                 "and appends StreamingAssets/.../rooms-catalog.json. Bake layouts via Defenders/Dungeon/Bake Compose Layout.",
                 MessageType.Info);
 

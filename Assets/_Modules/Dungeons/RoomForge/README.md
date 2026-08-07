@@ -7,7 +7,7 @@
 
 | Menu | Action |
 |------|--------|
-| `Defenders/Dungeon/Room Forge` | Author a room (6u cells, sockets, KayKit pieces) |
+| `Defenders/Dungeon/Room Forge` | Author a room (canon cells, sockets, KayKit pieces) |
 | `Defenders/Dungeon/Bake Compose Layout (default spine)` | Bake `d4_sunken_crypt_spine.json` |
 | `Defenders/Dungeon/Bake Compose Layout From Selected JSON` | Bake selected layout asset |
 
@@ -28,6 +28,48 @@
 ### Why one atlas for walls
 
 KayKit dungeon pieces already share `dungeon_texture.png`. Room shells are procedural cubes — tiling that atlas on **all** walls/floors is the fast, consistent look. Dress with real KayKit **props** from the carousel for readable variety (props keep their own materials via `Fix KayKit Materials`).
+
+## Room metric canon (BINDING — WO-919 + WO-922)
+
+**All room-shell numbers live in `RoomForgeCanon.cs` (this folder). Read them; never re-type
+them.** The builder, the baker's placeholder room, the dresser's fallback footprint and the
+regression oracles all consume the same consts, which is what stops the four from drifting.
+It sits in the runtime `DeNelle.Dungeons` assembly for the same reason `DungeonBakerChecks`
+does: `DeNelle.Editor` → `DeNelle.EditorRegression`, so an oracle cannot reference the builder.
+
+| Const | Value | Note |
+|-------|-------|------|
+| `Cell` | **10 m** | WO-922, was 6 m. 1×1 room = 10×10 m; 2×2 (combat/boss) = 20×20 m. |
+| `WallHeight` | **4.0 m** | WO-919, was 2.8 m (chest-height → open-top box maze under blue sky). |
+| `ChokeWallHeight` | **3.8 m** | `WallHeight − 0.2`, the WO-919 floor for interior masses. |
+| `DoorGap` | 2.2 m | Doorway clear width — unchanged by the widen. |
+| `WallThickness` | 0.4 m | |
+| `FloorSlabThickness` | 0.1 m | Slab top face is local `y = 0`. |
+| `CeilingThickness` | 0.3 m | WO-919 slab, seated on the wall top. |
+| `FloorOccupiedHeight` | **4.4 m** | slab + wall + ceiling. Must stay under `FloorSeparationY`. |
+
+`DungeonBakerChecks.FloorSeparationY` stays **6 m**: its constraint is clearance, not the cell,
+and 4.4 < 6 with 1.6 m to spare. `RoomForgeRegression` case 11 and
+`DungeonMultiLevelRegression` case 2 both assert that relation against the canon.
+
+**A source edit here changes nothing on disk.** `Assets/Dungeon/Rooms/*.prefab` are generated —
+re-run `Defenders/Dungeon/Build Default Room Prefabs`, recompose every graph, then re-bake.
+Case 11 fails loudly while the prefabs are stale, which is the point.
+
+### Enclose (WO-919)
+
+Each room gets a **`Ceiling`** child: a solid slab spanning the footprint plus the wall
+thickness, underside flush with the wall top. It carries **no collider** (the baker's NavMesh
+uses `NavMeshCollectGeometry.PhysicsColliders`, so a collider would voxelize into a walkable
+roof that `SamplePosition` could snap a hero seat or spawner onto) and is **not**
+`NavigationStatic`. `DungeonBaker` also nulls `RenderSettings.skybox` on the composed scene;
+`ambientMode` is already `Flat`, so no light changes — only the blue dome stops drawing. The
+in-room **camera background** is deliberately NOT set at bake: the composed bake seats no
+camera, so that stays owned by the runtime rig (WO-920 / WO-1004) — one owner, not two.
+
+Unmated doorways seal with a slab that now spans the **full** wall height. It used to be a
+2.5 m cube centred on a floor-level socket (so it plugged y −1.25…+1.25 — half of it under the
+floor); at 4 m walls that left a 2.75 m letterbox of open sky at every dead end.
 
 ## Socket types
 
@@ -53,11 +95,15 @@ The pipeline's permission gate is `Assets/Editor/Regression/RoomForgeRegression.
 - Standalone: `run-unity-method DeNelle.Editor.Regression.RoomForgeRegression.RunAll`
   → prints `ROOMFORGE_REGRESSION_OK` / `ROOMFORGE_REGRESSION_FAIL`.
 - Wired into `DataRegression.RunAll` as `[room-forge]` (headless batch gate).
-- 10 cases: catalog integrity (17 rooms) · dual-copy law · TypesCompatible matrix ·
+- 11 cases: catalog integrity (17 rooms) · dual-copy law · TypesCompatible matrix ·
   mate math (touch/nudge/distance/alignment/yaw) · seal (wall vs secret vs off) ·
   hard gate (fix 1 abort) · re-verify+overlap (fix 2) · navmesh path-connectivity ·
   **sample layouts green** (`d4_sunken_crypt_spine` + `demo_branching_kit`, each
-  `matesOk == connections`, `matesFail == 0`, **`sealed == 1`**) · determinism.
+  `matesOk == connections`, `matesFail == 0`, **`sealed == 1`**) · determinism ·
+  **shipped room shells match `RoomForgeCanon`** (cell / floor span / wall height /
+  ceiling present, collider-free, nav-inert, flush with the wall top — WO-919 + WO-922).
+- Cases 4–7 use a deliberate **6 m fixture cell** (`FixtureCell`), pinned by their own ±3
+  socket literals, NOT the kit canon. Kit geometry is case 11's job.
 - Every case builds throwaway in-memory GameObjects (torn down after); it NEVER opens or
   saves a shipping `.unity` scene and references NO KayKit art (passes with the pack absent).
 

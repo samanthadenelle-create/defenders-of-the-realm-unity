@@ -18,9 +18,13 @@
 // JSON and hands it to the existing DungeonBaker (ONE bake path: mate-verify ->
 // NavMesh -> save). Mate/compat/verify math is REUSED from DungeonBakerChecks.
 //
-// Output positions land on integer world units for the default 6u room kit
-// (sockets at multiples of 3u, yaws at multiples of 90), so the emitted layout
-// uses cellSize=1 with cell=[round(x),round(y),round(z)] -> lossless round-trip.
+// Output positions land on integer world units for the default room kit: every
+// socket sits on the room's HALF-CELL grid (RoomForgeCanon.Cell / 2 - 3u when the
+// cell was 6, 5u after WO-922's 10) and yaws are multiples of 90, so the emitted
+// layout uses cellSize=1 with cell=[round(x),round(y),round(z)] -> lossless
+// round-trip. This survives the widen because Cell stayed EVEN; an odd cell would
+// put sockets on halves and RoundToInt would quantise a whole unit of drift per
+// stairwell (the dg_bonecrypt / dg_ember_deep abort). Keep Cell even.
 // =============================================================================
 
 using System;

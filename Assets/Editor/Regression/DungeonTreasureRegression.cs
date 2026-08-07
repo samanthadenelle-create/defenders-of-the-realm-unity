@@ -614,7 +614,10 @@ namespace DeNelle.Editor.Regression
 
         private static DungeonComposeLayout Layout(params string[] roomIds)
         {
-            var l = new DungeonComposeLayout { dungeonId = "synthetic", cellSize = 6f };
+            // cellSize is inert here - this fixture exercises the deepest-room GRAPH walk, and no
+            // room is ever instantiated - but keep it on the kit canon so it does not read as a
+            // stale 6u claim (WO-922).
+            var l = new DungeonComposeLayout { dungeonId = "synthetic", cellSize = RoomForgeCanon.Cell };
             l.rooms = new List<ComposeRoomPlacement>();
             l.connections = new List<ComposeConnection>();
             foreach (var id in roomIds)

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dungeonId": "d4_sunken_crypt",
-  "cellSize": 6,
+  "cellSize": 10,
   "rooms": [
     {
       "prefab": "EntryHall",

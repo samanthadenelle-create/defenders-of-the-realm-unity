@@ -93,7 +93,16 @@ namespace DeNelle.Dungeons.RoomForge
         /// A StairDown socket sits half this BELOW its room origin and a StairUp socket half
         /// this ABOVE, so mating the pair drops the child room exactly one floor - which is how
         /// a multi-level dungeon is expressed without adding an elevation field to the graph
-        /// schema. 6u matches the 6u room cell and clears the 2.8u wall height.
+        /// schema.
+        ///
+        /// THE CONSTRAINT IS CLEARANCE, NOT THE CELL. 6u originally read as "matches the 6u room
+        /// cell", which made it look like WO-922's cell widen (6 -> 10) had to drag it along. It
+        /// does not: the only thing this number has to do is exceed what one floor OCCUPIES
+        /// vertically - RoomForgeCanon.FloorOccupiedHeight = floor slab + wall + ceiling. After
+        /// WO-919 that is 0.1 + 4.0 + 0.3 = 4.4u, so 6u still clears it with 1.6u of dead space
+        /// between floors and STAYS 6. DungeonMultiLevelRegression Case 2 asserts exactly that
+        /// relation against the canon, so a future wall/ceiling raise past 6u fails the gate
+        /// instead of silently interpenetrating stacked floors.
         /// </summary>
         public const float FloorSeparationY = 6f;
 
@@ -190,7 +199,11 @@ namespace DeNelle.Dungeons.RoomForge
         // World half-extents on XZ, accounting for a 90/270 yaw that swaps width/depth.
         private static Vector2 HalfExtents(RoomPrefabMeta meta, float yawDeg)
         {
-            Vector2 fp = meta != null ? meta.FootprintWorld : new Vector2(6f, 6f);
+            // Fallback for a meta-less instance: one canon cell square (WO-922 moved this off a
+            // hardcoded 6, which would have under-reported every footprint by 4u after the widen).
+            Vector2 fp = meta != null
+                ? meta.FootprintWorld
+                : new Vector2(RoomForgeCanon.Cell, RoomForgeCanon.Cell);
             float half = 0.5f;
             int q = Mathf.RoundToInt(Mathf.Repeat(yawDeg, 360f) / 90f) % 4;
             if (q == 1 || q == 3) return new Vector2(fp.y * half, fp.x * half);
@@ -237,9 +250,19 @@ namespace DeNelle.Dungeons.RoomForge
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = $"Seal_{s.id}";
             wall.transform.SetParent(s.transform, false);
-            wall.transform.localPosition = Vector3.forward * 0.15f;
+            // WO-919. The seal used to be a 2.5u slab centred ON the socket, and a door socket
+            // sits at FLOOR level (local y = 0) - so it actually spanned y -1.25..+1.25 and plugged
+            // barely half of a 2.8u doorway while the other half hung below the floor. Nobody
+            // caught it because the oracles pin the seal's WIDTH, never its height. At WO-919's
+            // 4.0u walls that band becomes a 2.75u letterbox of open sky at the end of every
+            // dead-end corridor, which is precisely the symptom this WO exists to kill. Seat the
+            // slab so it spans the FULL doorway, floor to wall top. Local up == world up here:
+            // a door socket's LookRotation uses a horizontal forward, so its up stays world up.
+            // (Vertical/stair sockets never reach this line - they return above.)
+            wall.transform.localPosition =
+                Vector3.forward * 0.15f + Vector3.up * (RoomForgeCanon.WallHeight * 0.5f);
             wall.transform.localRotation = Quaternion.identity;
-            wall.transform.localScale = new Vector3(s.halfWidth * 2f, 2.5f, 0.35f);
+            wall.transform.localScale = new Vector3(s.halfWidth * 2f, RoomForgeCanon.WallHeight, 0.35f);
             s.matedTo = "SEALED_WALL";
             return true;
         }

@@ -17,12 +17,13 @@
 // throwaway in-memory GameObjects (torn down in finally); it NEVER opens or saves a
 // shipping .unity scene, and it references NO KayKit art (passes with the pack ABSENT).
 //
-// The 10 cases (WO-745 §4):
+// The 11 cases (WO-745 §4, + case 11 from WO-919/WO-922):
 //   1  catalog integrity        6  hard gate (fix 1 — abort on any failure)
 //   2  dual-copy law            7  re-verify (drift) + overlap (fix 2)
 //   3  TypesCompatible matrix   8  navmesh path-connectivity (best-effort headless)
 //   4  mate math (synthetic)    9  sample layouts green (spine + demo, sealed pin)
 //   5  seal behavior           10  determinism + hygiene
+//                              11  SHIPPED room shells match RoomForgeCanon (cell/wall/ceiling)
 // =============================================================================
 
 using System;
@@ -78,6 +79,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "navmesh", () => Case8_NavMesh(failures, notes));
                 Case(failures, "samples", () => Case9_SampleLayouts(failures));
                 Case(failures, "determinism", () => Case10_Determinism(failures));
+                Case(failures, "room-shell", () => Case11_ShippedShellsMatchCanon(failures, notes));
             }
             finally
             {
@@ -87,8 +89,9 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "ROOM-FORGE OK - 10/10 cases pass (17-room catalog, dual-copy, mate/seal/drift/overlap " +
-                         "contract, spine+demo green sealed=1)" + noteStr;
+                reason = "ROOM-FORGE OK - 11/11 cases pass (17-room catalog, dual-copy, mate/seal/drift/overlap " +
+                         $"contract, spine+demo green sealed=1, shipped shells @ cell {RoomForgeCanon.Cell:0.#}m " +
+                         $"wall {RoomForgeCanon.WallHeight:0.#}m + ceiling)" + noteStr;
                 return true;
             }
             reason = "ROOM-FORGE FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -519,6 +522,114 @@ namespace DeNelle.Editor.Regression
             // against duplicate paths); not exercised here to avoid mutating the project's build list.
         }
 
+        // =====================================================================
+        //  CASE 11 — the SHIPPED room prefabs match RoomForgeCanon (WO-919 + WO-922)
+        // =====================================================================
+        // Same reasoning as DungeonMultiLevelRegression Case 5, applied to the room SHELL:
+        // Assets/Dungeon/Rooms/*.prefab are GENERATED, so editing DefaultDungeonRoomsBuilder
+        // changes nothing on disk until "Defenders/Dungeon/Build Default Room Prefabs" is re-run.
+        // Without this case a widened-and-enclosed builder and a stale 6u open-top prefab library
+        // both read as green, and the first evidence would be a screenshot after a full bake.
+        //
+        // EXPECT THIS TO FAIL until the prefab rebuild lands. That is the case working.
+        private static void Case11_ShippedShellsMatchCanon(List<string> failures, List<string> notes)
+        {
+            string path = LayoutsDir + "/rooms-catalog.json";
+            if (!File.Exists(path)) { notes.Add("rooms-catalog.json absent - shell check skipped"); return; }
+            RoomCatalogFile cat;
+            try { cat = JsonConvert.DeserializeObject<RoomCatalogFile>(File.ReadAllText(path)); }
+            catch { notes.Add("rooms-catalog.json unparseable - shell check skipped (case 1 owns that failure)"); return; }
+            if (cat?.rooms == null || cat.rooms.Count == 0) return;
+
+            int checkedRooms = 0;
+            foreach (var entry in cat.rooms)
+            {
+                if (entry == null || string.IsNullOrEmpty(entry.prefabPath)) continue;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(entry.prefabPath);
+                if (prefab == null) continue;   // case 1 already fails on a dead prefabPath
+                var meta = prefab.GetComponent<RoomPrefabMeta>();
+                if (meta == null) continue;     // case 1 owns that too
+                checkedRooms++;
+
+                // --- WO-922: the room was forged at the canon cell ---
+                if (Mathf.Abs(meta.cellSize - RoomForgeCanon.Cell) > 0.01f)
+                {
+                    failures.Add($"[room-shell] '{entry.id}' cellSize={meta.cellSize:0.##} expected " +
+                                 $"{RoomForgeCanon.Cell:0.##} - the room prefabs are STALE. Re-run " +
+                                 "Defenders/Dungeon/Build Default Room Prefabs (DefaultDungeonRoomsBuilder.BuildAll), " +
+                                 "then recompose every graph and re-bake.");
+                    continue;   // every metric below is derived from the cell; one message is enough
+                }
+
+                Vector2 fp = meta.FootprintWorld;
+
+                // --- WO-922: the floor slab actually spans the widened footprint ---
+                var floor = FindChild(prefab.transform, "Floor");
+                if (floor == null)
+                    failures.Add($"[room-shell] '{entry.id}' has no 'Floor' child");
+                else if (Mathf.Abs(floor.localScale.x - fp.x) > 0.01f ||
+                         Mathf.Abs(floor.localScale.z - fp.y) > 0.01f)
+                    failures.Add($"[room-shell] '{entry.id}' floor spans {floor.localScale.x:0.##}x{floor.localScale.z:0.##} " +
+                                 $"but the authored footprint is {fp.x:0.##}x{fp.y:0.##} - stale prefab");
+
+                // --- WO-919: walls reach the canon height ---
+                float tallest = 0f;
+                foreach (var t in prefab.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t == null || !t.name.StartsWith("Wall", StringComparison.Ordinal)) continue;
+                    tallest = Mathf.Max(tallest, t.localScale.y);
+                }
+                if (tallest <= 0.01f)
+                    failures.Add($"[room-shell] '{entry.id}' has no 'Wall*' children - the shell was not built");
+                else if (Mathf.Abs(tallest - RoomForgeCanon.WallHeight) > 0.01f)
+                    failures.Add($"[room-shell] '{entry.id}' tallest wall is {tallest:0.##}u, expected " +
+                                 $"{RoomForgeCanon.WallHeight:0.##}u (WO-919) - stale prefab, re-run BuildAll");
+
+                // --- WO-919: a ceiling exists, roofs the whole footprint, and is nav-inert ---
+                var ceiling = FindChild(prefab.transform, "Ceiling");
+                if (ceiling == null)
+                {
+                    failures.Add($"[room-shell] '{entry.id}' has NO 'Ceiling' child - the room is open to sky " +
+                                 "(WO-919). Re-run BuildAll.");
+                    continue;
+                }
+                // Must cover at least the full footprint, or sky shows at the wall seam.
+                if (ceiling.localScale.x + 0.01f < fp.x || ceiling.localScale.z + 0.01f < fp.y)
+                    failures.Add($"[room-shell] '{entry.id}' ceiling spans {ceiling.localScale.x:0.##}x{ceiling.localScale.z:0.##} " +
+                                 $"- smaller than the {fp.x:0.##}x{fp.y:0.##} footprint, sky leaks at the edge");
+                // Underside must sit ON the wall top: no gap band, no slab dropped into head height.
+                float underside = ceiling.localPosition.y - ceiling.localScale.y * 0.5f;
+                if (Mathf.Abs(underside - RoomForgeCanon.WallHeight) > 0.01f)
+                    failures.Add($"[room-shell] '{entry.id}' ceiling underside y={underside:0.##}, expected " +
+                                 $"{RoomForgeCanon.WallHeight:0.##} (flush with the wall top)");
+                // A collider here would voxelize into a WALKABLE roof under the baker's
+                // PhysicsColliders NavMesh, which SamplePosition can then snap a hero seat or an
+                // enemy spawner onto. Nav-static would be the same bug by a different route.
+                if (ceiling.GetComponent<Collider>() != null)
+                    failures.Add($"[room-shell] '{entry.id}' ceiling has a Collider - the NavMesh bakes from " +
+                                 "PhysicsColliders and would produce a walkable roof surface");
+                var flags = GameObjectUtility.GetStaticEditorFlags(ceiling.gameObject);
+                if ((flags & StaticEditorFlags.NavigationStatic) != 0)
+                    failures.Add($"[room-shell] '{entry.id}' ceiling is NavigationStatic - it must be geometry only");
+
+                // --- the whole shell has to fit inside one floor of a descent ---
+                float top = ceiling.localPosition.y + ceiling.localScale.y * 0.5f;
+                if (top + RoomForgeCanon.FloorSlabThickness >= DungeonBakerChecks.FloorSeparationY)
+                    failures.Add($"[room-shell] '{entry.id}' occupies {top + RoomForgeCanon.FloorSlabThickness:0.##}u " +
+                                 $"of vertical space but floors are stacked {DungeonBakerChecks.FloorSeparationY:0.##}u " +
+                                 "apart - a multi-level bake would interpenetrate");
+            }
+
+            if (checkedRooms == 0) notes.Add("no loadable room prefabs - shell check had nothing to verify");
+        }
+
+        private static Transform FindChild(Transform root, string name)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.name == name) return t;
+            return null;
+        }
+
         // ---- shared helpers -----------------------------------------------------
 
         private static DungeonComposeLayout LoadLayout(string file)
@@ -537,7 +648,7 @@ namespace DeNelle.Editor.Regression
             order = new List<string>();
             err = null;
             var instances = new Dictionary<string, GameObject>();
-            float cell = layout.cellSize > 0.1f ? layout.cellSize : 6f;
+            float cell = layout.cellSize > 0.1f ? layout.cellSize : RoomForgeCanon.Cell;
             foreach (var place in layout.rooms)
             {
                 if (place == null || string.IsNullOrEmpty(place.prefab)) continue;
@@ -563,6 +674,16 @@ namespace DeNelle.Editor.Regression
         private static SockSpec Sock(string id, RoomSocketType type, Vector3 local, Vector3 outward, bool secret = false)
             => new SockSpec { id = id, type = type, local = local, outward = outward, secret = secret };
 
+        /// <summary>
+        /// Metres per cell for this suite's SYNTHETIC fixtures. Deliberately NOT
+        /// RoomForgeCanon.Cell: cases 4/5/6/7 hand-author their sockets at +/-3 and place rooms
+        /// 6u apart, so the fixture cell is pinned by those literals, not by the shipping kit.
+        /// Binding it to the canon would silently turn case 7's touching drift fixture into an
+        /// overlap the moment the kit widened. The SHIPPED prefabs are checked against the real
+        /// canon in case 11 - that is where kit geometry belongs.
+        /// </summary>
+        private const float FixtureCell = 6f;
+
         // Build a throwaway room GameObject with RoomPrefabMeta + the given sockets.
         private static GameObject MakeRoom(string id, Vector2Int footprint, params SockSpec[] socks)
         {
@@ -571,7 +692,7 @@ namespace DeNelle.Editor.Regression
             var meta = go.AddComponent<RoomPrefabMeta>();
             meta.roomId = id;
             meta.archetype = "combat";
-            meta.cellSize = 6f;
+            meta.cellSize = FixtureCell;
             meta.footprintCells = footprint;
             foreach (var s in socks)
             {

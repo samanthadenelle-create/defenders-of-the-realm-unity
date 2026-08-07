@@ -12,7 +12,9 @@
         0
       ],
       "yawDeg": 0.0,
-      "archetype": "hub"
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Straight",
@@ -20,10 +22,12 @@
       "cell": [
         0,
         0,
-        6
+        10
       ],
       "yawDeg": 0.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Intersection",
@@ -31,7 +35,7 @@
       "cell": [
         0,
         0,
-        12
+        20
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -46,30 +50,38 @@
           "slack": 2.0,
           "returnHome": true,
           "wakeRadius": 6.0
-        }
-      }
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null
+      },
+      "chests": null
     },
     {
       "prefab": "StairUp",
       "instanceId": "stair_up",
       "cell": [
-        -6,
+        -10,
         0,
-        12
+        20
       ],
       "yawDeg": 270.0,
-      "archetype": "hub"
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "StairDown",
       "instanceId": "stair_down",
       "cell": [
-        6,
+        10,
         0,
-        12
+        20
       ],
       "yawDeg": 90.00001,
-      "archetype": "hub"
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Straight",
@@ -77,7 +89,7 @@
       "cell": [
         0,
         0,
-        18
+        30
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -92,8 +104,12 @@
           "slack": 2.0,
           "returnHome": true,
           "wakeRadius": 6.0
-        }
-      }
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null
+      },
+      "chests": null
     },
     {
       "prefab": "TurnRight",
@@ -101,40 +117,46 @@
       "cell": [
         0,
         0,
-        24
+        40
       ],
       "yawDeg": 0.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Straight",
       "instanceId": "loop2",
       "cell": [
-        6,
+        10,
         0,
-        24
+        40
       ],
       "yawDeg": 90.00001,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "TurnRight",
       "instanceId": "turn2",
       "cell": [
-        12,
+        20,
         0,
-        24
+        40
       ],
       "yawDeg": 90.00001,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Straight",
       "instanceId": "loop3",
       "cell": [
-        12,
+        20,
         0,
-        18
+        30
       ],
       "yawDeg": 180.0,
       "archetype": "combat",
@@ -149,19 +171,25 @@
           "slack": 2.0,
           "returnHome": true,
           "wakeRadius": 6.0
-        }
-      }
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null
+      },
+      "chests": null
     },
     {
       "prefab": "TurnRight",
       "instanceId": "turn3",
       "cell": [
-        12,
+        20,
         0,
-        12
+        20
       ],
       "yawDeg": 180.0,
-      "archetype": "combat"
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     }
   ],
   "connections": [
@@ -234,5 +262,10 @@
     "pacingCombat": 0.6,
     "pacingLore": 0.2,
     "pacingReward": 0.2
-  }
+  },
+  "oilStones": [],
+  "traps": [],
+  "keys": [],
+  "locks": [],
+  "extracts": []
 }

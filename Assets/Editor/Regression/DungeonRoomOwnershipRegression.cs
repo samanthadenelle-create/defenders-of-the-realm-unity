@@ -259,6 +259,12 @@ namespace DeNelle.Editor.Regression
         private static void Case4_RoomBounds(List<string> failures, List<string> notes)
         {
             // Synthetic 1x1 room @6u at (0,0,12): 6x6 XZ footprint centred on the room.
+            // The 6 here is a FIXTURE, deliberately NOT RoomForgeCanon.Cell (10 since WO-922).
+            // Every expectation below - the 3u half-extent, the 14.9 inside / 15.5 outside edge
+            // pair, the 8.1 gap - is hand-derived from it, and the pair 14.9/15.5 straddles the
+            // 15 boundary by 0.1 on purpose. This case proves DungeonRoomBounds ARITHMETIC, which
+            // is cell-agnostic; the shipping kit's real cell is asserted in
+            // RoomForgeRegression case 11 against the canon.
             var room = new GameObject("__wo797_room");
             s_spawned.Add(room);
             var meta = room.AddComponent<RoomPrefabMeta>();
@@ -296,7 +302,7 @@ namespace DeNelle.Editor.Regression
             if (!File.Exists(LayoutSA)) return;
             var layout = JsonConvert.DeserializeObject<DungeonComposeLayout>(File.ReadAllText(LayoutSA));
             if (layout?.rooms == null) return;
-            float cell = layout.cellSize > 0.1f ? layout.cellSize : 6f;
+            float cell = layout.cellSize > 0.1f ? layout.cellSize : RoomForgeCanon.Cell;
             foreach (var place in layout.rooms)
             {
                 if (place == null || place.encounter == null) continue;

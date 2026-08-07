@@ -69,7 +69,7 @@ namespace DeNelle.Editor
                 int after = CountDressingChildren(room);
                 int seated = after - before;
 
-                log.AppendLine($"  built minimal room (RoomPrefabMeta 6u footprint + floor + 4 door sockets); " +
+                log.AppendLine($"  built minimal room (RoomPrefabMeta {RoomForgeCanon.Cell:0.#}u footprint + floor + 4 door sockets); " +
                                $"DressRoom returned {reported}; room gained {seated} 'Dressing_*' prop child(ren) (before={before} after={after})");
 
                 if (seated < MinProps)
@@ -107,19 +107,26 @@ namespace DeNelle.Editor
             var meta = room.AddComponent<RoomPrefabMeta>();
             meta.roomId = "DressingRegressionRoom";
             meta.archetype = "combat";
-            meta.cellSize = 6f;
+            // WO-922: derived from the canon cell, not a hardcoded 6. The dresser insets props
+            // from halfW/halfD and skips anchors NearSocket(...) - both of which are measured in
+            // metres - so a fixture stuck at 6u while the kit ships 10u would stop exercising the
+            // real corner/doorway clearances this suite exists to guard.
+            float span = RoomForgeCanon.Cell;
+            float half = span * 0.5f;
+
+            meta.cellSize = span;
             meta.footprintCells = Vector2Int.one;
 
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "Floor";
             floor.transform.SetParent(room.transform, false);
-            floor.transform.localPosition = new Vector3(0f, -0.05f, 0f);
-            floor.transform.localScale = new Vector3(6f, 0.1f, 6f);
+            floor.transform.localPosition = new Vector3(0f, -RoomForgeCanon.FloorSlabThickness * 0.5f, 0f);
+            floor.transform.localScale = new Vector3(span, RoomForgeCanon.FloorSlabThickness, span);
 
-            AddSocket(room, "n_door_01", new Vector3(0f, 0f, 3f), Vector3.forward);
-            AddSocket(room, "s_door_01", new Vector3(0f, 0f, -3f), Vector3.back);
-            AddSocket(room, "e_door_01", new Vector3(3f, 0f, 0f), Vector3.right);
-            AddSocket(room, "w_door_01", new Vector3(-3f, 0f, 0f), Vector3.left);
+            AddSocket(room, "n_door_01", new Vector3(0f, 0f, half), Vector3.forward);
+            AddSocket(room, "s_door_01", new Vector3(0f, 0f, -half), Vector3.back);
+            AddSocket(room, "e_door_01", new Vector3(half, 0f, 0f), Vector3.right);
+            AddSocket(room, "w_door_01", new Vector3(-half, 0f, 0f), Vector3.left);
             return room;
         }
 

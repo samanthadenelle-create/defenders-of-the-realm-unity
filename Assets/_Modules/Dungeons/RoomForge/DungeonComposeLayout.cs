@@ -22,7 +22,10 @@ namespace DeNelle.Dungeons.RoomForge
         // oracle catches it. Emitting it here fixes that for every future compose.
         [JsonProperty("version")] public int version = 1;
         [JsonProperty("dungeonId")] public string dungeonId = "untitled";
-        [JsonProperty("cellSize")] public float cellSize = 6f;
+        /// <summary>Metres per grid cell for the authored <c>cell</c> coords. Defaults to the kit
+        /// canon (WO-922: 10, was 6); GraphDungeonComposer emits 1 and puts solved world ints in
+        /// <c>cell</c>, so this only bites hand-authored layouts that omit the field.</summary>
+        [JsonProperty("cellSize")] public float cellSize = RoomForgeCanon.Cell;
         [JsonProperty("rooms")] public List<ComposeRoomPlacement> rooms = new List<ComposeRoomPlacement>();
         [JsonProperty("connections")] public List<ComposeConnection> connections = new List<ComposeConnection>();
         [JsonProperty("rules")] public ComposeRules rules = new ComposeRules();
@@ -212,7 +215,8 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("archetype")] public string archetype;
         [JsonProperty("themePalette")] public string themePalette;
         [JsonProperty("footprintCells")] public int[] footprintCells = new[] { 1, 1 };
-        [JsonProperty("cellSize")] public float cellSize = 6f;
+        /// <summary>Metres per cell this room was forged at. Kit canon (WO-922: 10, was 6).</summary>
+        [JsonProperty("cellSize")] public float cellSize = RoomForgeCanon.Cell;
         [JsonProperty("sockets")] public List<RoomCatalogSocket> sockets = new List<RoomCatalogSocket>();
     }
 

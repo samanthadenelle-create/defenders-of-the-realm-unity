@@ -8,7 +8,9 @@
 // layouts can compose: entrance, straight, turns, T, cross, dead-end, choke,
 // combat, lore, reward, secret, stairs. Geometry is procedural (floor + walls)
 // dressed with SHARED KayKit dungeon atlas materials (RoomForgeMaterials).
-// Sockets match DungeonBaker mate convention (6u cells).
+// Sockets match the DungeonBaker mate convention; the cell grain, wall height,
+// door gap and ceiling thickness all come from RoomForgeCanon (WO-919 + WO-922) —
+// NEVER re-type those numbers here, the regression oracles read the same file.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -29,7 +31,9 @@ namespace DeNelle.Editor.RoomForge
             "Assets/StreamingAssets/Data/Canonical/dungeon-layouts/rooms-catalog.json";
         private const string CatalogPathRes =
             "Assets/Resources/Data/Canonical/dungeon-layouts/rooms-catalog.json";
-        private const float Cell = 6f;
+        // WO-922: the master room-size knob now lives in the SHARED runtime canon so the
+        // baker, the dresser and the regression oracles cannot drift from it. 6f -> 10f.
+        private const float Cell = RoomForgeCanon.Cell;
         private const string Sys = "RoomForgeDefaults";
 
         /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
@@ -53,6 +57,7 @@ namespace DeNelle.Editor.RoomForge
         [MenuItem("Defenders/Dungeon/Build Default Room Prefabs")]
         public static void BuildAll()
         {
+            using var _ = FlowTrace.Enter("RoomForge", "BuildAll");
             EnsureFolder(RoomsFolder);
             EnsureFolder("Assets/StreamingAssets/Data/Canonical/dungeon-layouts");
             EnsureFolder("Assets/Resources/Data/Canonical/dungeon-layouts");
@@ -61,7 +66,12 @@ namespace DeNelle.Editor.RoomForge
             RoomForgeMaterials.EnsureMenu();
 
             var specs = DefaultSpecs();
-            FlowTrace.Step("RoomForge", $"BuildDefaultRoomPrefabs specs={specs.Count} folder='{RoomsFolder}'");
+            FlowTrace.Step("RoomForge", $"BuildDefaultRoomPrefabs specs={specs.Count} folder='{RoomsFolder}' " +
+                                        $"cell={Cell:F1}m wallH={RoomForgeCanon.WallHeight:F1}m " +
+                                        $"chokeH={RoomForgeCanon.ChokeWallHeight:F1}m " +
+                                        $"ceilingT={RoomForgeCanon.CeilingThickness:F2}m " +
+                                        $"floorOccupied={RoomForgeCanon.FloorOccupiedHeight:F2}m " +
+                                        $"floorSep={DungeonBakerChecks.FloorSeparationY:F1}m (WO-919 + WO-922)");
             var catalog = new RoomCatalogFile { version = 1, rooms = new List<RoomCatalogEntry>() };
             int ok = 0;
             foreach (var spec in specs)
@@ -256,12 +266,13 @@ namespace DeNelle.Editor.RoomForge
                 meta.footprintCells = spec.footprint;
                 meta.cellSize = Cell;
 
-                // Floor
+                // Floor. The slab's TOP face is local y = 0 (it hangs below), which is what
+                // makes wall/ceiling seating arithmetic readable everywhere else.
                 var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 floor.name = "Floor";
                 floor.transform.SetParent(root.transform, false);
-                floor.transform.localPosition = new Vector3(0f, -0.05f, 0f);
-                floor.transform.localScale = new Vector3(wx, 0.1f, wz);
+                floor.transform.localPosition = new Vector3(0f, -RoomForgeCanon.FloorSlabThickness * 0.5f, 0f);
+                floor.transform.localScale = new Vector3(wx, RoomForgeCanon.FloorSlabThickness, wz);
                 GameObjectUtility.SetStaticEditorFlags(floor,
                     StaticEditorFlags.NavigationStatic | StaticEditorFlags.BatchingStatic);
 
@@ -270,6 +281,10 @@ namespace DeNelle.Editor.RoomForge
 
                 if (spec.choke)
                     BuildChokeInterior(root.transform, hx, hz);
+
+                // WO-919: roof the room. Must come BEFORE ApplyToRoomRoot so the slab picks up
+                // the shared stone material instead of shipping as a raw white primitive.
+                BuildCeiling(root.transform, spec.id, wx, wz);
 
                 // ONE KayKit atlas for every wall/floor (simple + consistent).
                 RoomForgeMaterials.ApplyToRoomRoot(root, useAccentFloor: spec.accentFloor);
@@ -326,9 +341,11 @@ namespace DeNelle.Editor.RoomForge
         private static void BuildPerimeterWalls(Transform parent, float hx, float hz, string[] openFacings)
         {
             var open = new HashSet<string>(openFacings);
-            float wallH = 2.8f;
-            float thick = 0.4f;
-            float gap = 2.2f; // doorway clear width
+            // WO-919: 2.8 -> 4.0. At 2.8 the wall line sat at/below the third-person camera
+            // seat, so every composed room framed procedural blue sky above chest-height walls.
+            float wallH = RoomForgeCanon.WallHeight;
+            float thick = RoomForgeCanon.WallThickness;
+            float gap = RoomForgeCanon.DoorGap; // doorway clear width (unchanged by the widen)
 
             // North wall (+Z)
             if (open.Contains("N"))
@@ -361,6 +378,52 @@ namespace DeNelle.Editor.RoomForge
             else
                 BuildSolidWall(parent, "Wall_W", new Vector3(-hx, wallH * 0.5f, 0f),
                     new Vector3(thick, wallH, hz * 2f));
+        }
+
+        /// <summary>
+        /// WO-919 — roof one room with a solid slab seated ON the wall top, so an in-room
+        /// camera cannot see sky at ANY pitch. A slab (not a KayKit ceiling_tile retile) is the
+        /// deliberate V1: the room shells are primitive cubes with no authored UVs, so a tiled
+        /// atlas piece would rainbow exactly the way RoomForgeMaterials documents for the walls.
+        ///
+        /// Three properties this MUST hold, each of which broke something when assumed:
+        ///  * It overhangs the perimeter by the wall thickness, so the wall tops are capped and
+        ///    no hairline of sky shows down the seam between slab edge and wall face.
+        ///  * It carries NO COLLIDER. DungeonBaker bakes its NavMesh with
+        ///    NavMeshCollectGeometry.PhysicsColliders, so a collider here would voxelize into a
+        ///    second WALKABLE surface on the roof - which NavMesh.SamplePosition can snap a hero
+        ///    seat, an enemy spawner or a stair port onto. No collider = not collected at all,
+        ///    and it can never block the agent either.
+        ///  * It is NOT NavigationStatic. BatchingStatic only: geometry, never navigation.
+        /// </summary>
+        private static void BuildCeiling(Transform parent, string roomId, float wx, float wz)
+        {
+            // Band "RoomForge" (not Sys) so the ceiling lines land in the same [Flow:RoomForge]
+            // band as every other room-save line the F8 harvester groups.
+            bool ok = Guard.Try("RoomForge", $"build ceiling for room '{roomId}'", () =>
+            {
+                var ceiling = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ceiling.name = "Ceiling";
+                ceiling.transform.SetParent(parent, false);
+                ceiling.transform.localPosition =
+                    new Vector3(0f, RoomForgeCanon.WallHeight + RoomForgeCanon.CeilingThickness * 0.5f, 0f);
+                ceiling.transform.localScale = new Vector3(
+                    wx + RoomForgeCanon.WallThickness,
+                    RoomForgeCanon.CeilingThickness,
+                    wz + RoomForgeCanon.WallThickness);
+
+                var col = ceiling.GetComponent<Collider>();
+                if (col != null) Object.DestroyImmediate(col);
+
+                GameObjectUtility.SetStaticEditorFlags(ceiling, StaticEditorFlags.BatchingStatic);
+            });
+
+            if (!ok)
+                FlowTrace.Fail("RoomForge", $"ceiling NOT built for room '{roomId}' - it will render open to sky");
+            else
+                FlowTrace.Step("RoomForge", $"ceiling room='{roomId}' span={wx + RoomForgeCanon.WallThickness:F1}x" +
+                                    $"{wz + RoomForgeCanon.WallThickness:F1} underside y={RoomForgeCanon.WallHeight:F1} " +
+                                    $"thick={RoomForgeCanon.CeilingThickness:F2} collider=none navStatic=false");
         }
 
         private static void BuildSolidWall(Transform parent, string name, Vector3 localPos, Vector3 scale)
@@ -417,7 +480,9 @@ namespace DeNelle.Editor.RoomForge
         private static void BuildChokeInterior(Transform parent, float hx, float hz)
         {
             // Two side masses leaving a ~2u walk lane along +Z (N/S sockets).
-            float wallH = 2.4f;
+            // WO-919: 2.4 -> 3.8. The masses have to be un-see-over-able like the perimeter,
+            // so canon pins them at WallHeight - 0.2 (the WO's stated floor).
+            float wallH = RoomForgeCanon.ChokeWallHeight;
             float laneHalf = 1.05f;
             float massW = Mathf.Max(0.6f, hx - laneHalf - 0.15f);
             BuildSolidWall(parent, "Choke_W",
@@ -483,8 +548,9 @@ namespace DeNelle.Editor.RoomForge
             // X/Z MUST stay 0. The door helper offsets sockets 0.5u off the wall face, and this
             // socket inherited that - but a stair socket is a hole in the FLOOR and has no wall to
             // stand off from, so the 0.5 bought nothing and broke the composer's stated invariant:
-            // "sockets at multiples of 3u ... so cell=[round(x),round(y),round(z)] is a lossless
-            // round-trip". Each stairwell injected a half unit that RoundToInt quantised into a
+            // "sockets sit on the room's HALF-CELL grid (Cell/2 — 3u when the cell was 6, 5u now
+            // at WO-922's 10) ... so cell=[round(x),round(y),round(z)] is a lossless round-trip".
+            // Each stairwell injected a half unit that RoundToInt quantised into a
             // FULL unit of drift, accumulating down a descent until rooms that should exactly touch
             // sat 1u too close and the bake aborted on overlap (dg_bonecrypt, dg_ember_deep).
             go.transform.localPosition = new Vector3(0f, down ? -halfFloor : halfFloor, 0f);

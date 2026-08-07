@@ -22,7 +22,7 @@
       "cell": [
         0,
         0,
-        6
+        10
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -33,9 +33,9 @@
       "prefab": "LoreShrine",
       "instanceId": "shrine0",
       "cell": [
-        -6,
+        -10,
         0,
-        6
+        10
       ],
       "yawDeg": 270.0,
       "archetype": "lore",
@@ -46,9 +46,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_0",
       "cell": [
-        6,
+        10,
         0,
-        6
+        10
       ],
       "yawDeg": 90.00001,
       "archetype": "hub",
@@ -59,9 +59,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_1",
       "cell": [
-        6,
+        10,
         -6,
-        6
+        10
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -72,7 +72,7 @@
       "prefab": "Straight",
       "instanceId": "corr1",
       "cell": [
-        6,
+        10,
         -6,
         0
       ],
@@ -100,9 +100,9 @@
       "prefab": "CombatChamber",
       "instanceId": "combat1",
       "cell": [
-        6,
+        10,
         -6,
-        -9
+        -15
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -139,9 +139,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_1",
       "cell": [
-        6,
+        10,
         -6,
-        -18
+        -30
       ],
       "yawDeg": 180.0,
       "archetype": "hub",
@@ -152,9 +152,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_2",
       "cell": [
-        6,
+        10,
         -12,
-        -18
+        -30
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -165,9 +165,9 @@
       "prefab": "TJunction",
       "instanceId": "tj2",
       "cell": [
-        6,
+        10,
         -12,
-        -24
+        -40
       ],
       "yawDeg": 180.0,
       "archetype": "combat",
@@ -178,9 +178,9 @@
       "prefab": "SecretAlcove",
       "instanceId": "keyvault2",
       "cell": [
-        12,
+        20,
         -12,
-        -24
+        -40
       ],
       "yawDeg": 90.00002,
       "archetype": "secret",
@@ -204,7 +204,7 @@
       "cell": [
         0,
         -12,
-        -24
+        -40
       ],
       "yawDeg": 90.0,
       "archetype": "combat",
@@ -230,9 +230,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_2",
       "cell": [
-        -6,
+        -10,
         -12,
-        -24
+        -40
       ],
       "yawDeg": 270.0,
       "archetype": "hub",
@@ -243,9 +243,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_3",
       "cell": [
-        -6,
+        -10,
         -18,
-        -24
+        -40
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -256,9 +256,9 @@
       "prefab": "Intersection",
       "instanceId": "inter3",
       "cell": [
-        -6,
+        -10,
         -18,
-        -30
+        -50
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -269,9 +269,9 @@
       "prefab": "RewardVault",
       "instanceId": "vault3",
       "cell": [
-        -12,
+        -20,
         -18,
-        -30
+        -50
       ],
       "yawDeg": 270.0,
       "archetype": "reward",
@@ -295,7 +295,7 @@
       "cell": [
         0,
         -18,
-        -30
+        -50
       ],
       "yawDeg": 90.00001,
       "archetype": "lore",
@@ -306,9 +306,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_3",
       "cell": [
-        -6,
+        -10,
         -18,
-        -36
+        -60
       ],
       "yawDeg": 180.0,
       "archetype": "hub",
@@ -319,9 +319,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_4",
       "cell": [
-        -6,
+        -10,
         -24,
-        -36
+        -60
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -332,9 +332,9 @@
       "prefab": "ChokePoint",
       "instanceId": "approach4",
       "cell": [
-        -6,
+        -10,
         -24,
-        -42
+        -70
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -360,9 +360,9 @@
       "prefab": "BossKeep",
       "instanceId": "necromancer_keep",
       "cell": [
-        -6,
+        -10,
         -24,
-        -51
+        -85
       ],
       "yawDeg": 180.0,
       "archetype": "boss",

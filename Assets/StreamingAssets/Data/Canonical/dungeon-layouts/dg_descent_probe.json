@@ -22,7 +22,7 @@
       "cell": [
         0,
         0,
-        6
+        10
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -50,7 +50,7 @@
       "cell": [
         0,
         0,
-        12
+        20
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -63,7 +63,7 @@
       "cell": [
         0,
         -6,
-        12
+        20
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -76,7 +76,7 @@
       "cell": [
         0,
         -6,
-        6
+        10
       ],
       "yawDeg": 180.0,
       "archetype": "reward",

@@ -143,10 +143,26 @@ namespace DeNelle.Editor.Regression
             if (Mathf.Abs(solved.x) > 0.001f || Mathf.Abs(solved.z) > 0.001f)
                 failures.Add($"[floor-drop] a vertical mate must not drift on XZ (got x={solved.x:0.###} z={solved.z:0.###})");
 
-            // And the drop must be big enough to clear the room walls, or floors interpenetrate.
-            const float WallHeight = 2.8f;   // DefaultDungeonRoomsBuilder.BuildPerimeterWalls
-            if (sep <= WallHeight)
-                failures.Add($"[floor-drop] FloorSeparationY {sep:0.##} does not clear the {WallHeight:0.##}u walls - stacked floors would interpenetrate");
+            // And the drop must be big enough to clear what a floor OCCUPIES, or floors
+            // interpenetrate.
+            //
+            // THIS ASSERTION USED TO BE A LIE. It read `const float WallHeight = 2.8f; //
+            // DefaultDungeonRoomsBuilder.BuildPerimeterWalls` - a hand-copied duplicate of a
+            // number that lives in another assembly. The moment WO-919 raised the builder's walls
+            // to 4.0 the comment became false, and the case would have kept passing at a builder
+            // wall height of 7u while stacked floors ran through each other. An oracle that
+            // re-types the value it is guarding guards nothing.
+            //
+            // It now reads the SHARED canon the geometry is actually built from, and guards the
+            // whole occupied stack (floor slab + wall + ceiling), not just the wall - because
+            // WO-919 also added a ceiling above the wall top, and a wall-only check would miss it.
+            float occupied = RoomForgeCanon.FloorOccupiedHeight;
+            if (sep <= occupied)
+                failures.Add($"[floor-drop] FloorSeparationY {sep:0.##}u does not clear a floor's occupied " +
+                             $"height {occupied:0.##}u (slab {RoomForgeCanon.FloorSlabThickness:0.##} + wall " +
+                             $"{RoomForgeCanon.WallHeight:0.##} + ceiling {RoomForgeCanon.CeilingThickness:0.##}) - " +
+                             "stacked floors would interpenetrate. Raise DungeonBakerChecks.FloorSeparationY " +
+                             "(and re-bake every multi-level layout) or lower the shell in RoomForgeCanon.");
         }
 
         // =====================================================================
@@ -175,7 +191,11 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[stack-not-overlap] a 0.4u Y jitter is not a floor change - the rooms still overlap");
 
             // Side by side on the same floor - a shared wall, not an overlap (unchanged contract).
-            if (DungeonBakerChecks.RoomsOverlap(ma, Vector3.zero, 0f, mb, new Vector3(6f, 0f, 0f), 0f, tol))
+            // Offset is ONE canon cell, read from the same const MakeRoom stamps on the meta, so
+            // this stays an exact touch through WO-922's 6 -> 10 widen and any future change. A
+            // literal 6 here would have started reporting a 4u "overlap" the moment the cell grew.
+            if (DungeonBakerChecks.RoomsOverlap(ma, Vector3.zero, 0f, mb,
+                                                new Vector3(RoomForgeCanon.Cell, 0f, 0f), 0f, tol))
                 failures.Add("[stack-not-overlap] adjacent rooms sharing a wall must not count as overlapping");
         }
 
@@ -313,7 +333,10 @@ namespace DeNelle.Editor.Regression
             var meta = go.AddComponent<RoomPrefabMeta>();
             meta.roomId = id;
             meta.archetype = "hub";
-            meta.cellSize = 6f;
+            // Canon cell, not a literal: Case 3's shared-wall offset is derived from the same
+            // const, so the pair moves together (WO-922). The +/-3 socket literals elsewhere in
+            // this suite are pure mate-math distances and never touch the footprint.
+            meta.cellSize = RoomForgeCanon.Cell;
             meta.footprintCells = Vector2Int.one;
             foreach (var s in socks)
             {

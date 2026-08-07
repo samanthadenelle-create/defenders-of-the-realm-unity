@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dungeonId": "demo_branching_kit",
-  "cellSize": 6,
+  "cellSize": 10,
   "_comment": "Default room kit demo. Socket ids match rooms-catalog.json (n_/s_/e_/w_door_01). Branch turns are yaw-oriented so mating sockets are coincident AND oppose (WO-745 fix): leftArm/rightArm rotated so their S door faces the cross arm; leftEnd/shrine yaw180 so their S door faces back up the arm.",
   "rooms": [
     { "prefab": "Entrance", "instanceId": "start", "cell": [0, 0, 0], "yawDeg": 0, "archetype": "hub" },

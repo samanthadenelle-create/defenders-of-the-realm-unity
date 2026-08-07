@@ -84,7 +84,9 @@ namespace DeNelle.Tests.EditMode
             var l = new DungeonComposeLayout
             {
                 dungeonId = "unit_test",
-                cellSize = 6f,
+                // Inert for this fixture (no room is instantiated), but kept on the kit canon so
+                // it does not read as a stale 6u claim after WO-922 widened the cell.
+                cellSize = RoomForgeCanon.Cell,
                 rooms = new List<ComposeRoomPlacement>(),
                 connections = new List<ComposeConnection>()
             };

@@ -61,8 +61,11 @@ namespace DeNelle.Editor.RoomForge
 
             var rng = new System.Random(unchecked(seedIndex * 486187739 + 17));
 
-            // Room floor extent (world footprint on XZ). Default to the 6u kit cell.
-            Vector2 fp = new Vector2(6f, 6f);
+            // Room floor extent (world footprint on XZ). Default to ONE canon kit cell (WO-922
+            // moved this off a hardcoded 6; a meta-less room would otherwise have been dressed
+            // to a 6x6 footprint inside a 10x10 shell, stranding every prop 2m off its wall).
+            // With meta present this scales with the room automatically - nothing else to do.
+            Vector2 fp = new Vector2(RoomForgeCanon.Cell, RoomForgeCanon.Cell);
             var meta = room.GetComponent<RoomPrefabMeta>();
             if (meta != null) fp = meta.FootprintWorld;
             float halfW = Mathf.Max(1.5f, fp.x * 0.5f);
