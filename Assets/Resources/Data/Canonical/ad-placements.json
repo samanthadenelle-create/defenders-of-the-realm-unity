@@ -14,6 +14,7 @@
 
   "_LAW_1_NO_PREMIUM_CURRENCY": "★ NO AD REWARD MAY EVER GRANT CRYSTALS, OR ANY CURRENCY BOUGHT WITH REAL MONEY. ★ This is not a balance preference, it is the thing that keeps the ad account alive. WO-912 sec.9.3: AdMob forbids rewards 'directly convertible into direct monetary items' and Unity forbids incentivising with 'anything of value'; our reward passes ONLY because minutes off a build timer cannot be transferred, traded, sold or cashed out. Crystals are the SKR on-ramp - the moment an ad pays them out, the reward becomes arguably convertible and the policy protection evaporates along with the covenant. Enforced by AdPlacementCovenantRegression case [no-premium-grant], which is a HARD FAIL, not a warning.",
   "_LAW_2_TIMESKIP_HAS_ONE_AUTHORITY": "The timeskip amount is BuildTimerConfig.adSkipSeconds (Assets/_Modules/Core/Catalog/BuildTimerConfig.cs:92, currently 600s = 10 min). The number below is a MIRROR for the spec's readability and is pinned equal to it by regression. Change the config, never this file alone - a second copy of a number is how the two drift and nobody notices.",
+  "_LAW_3_AD_UNIT_IDS": "Every enabled placement carries the LevelPlay adUnitId it maps to. These are NOT secrets - they ship inside the APK and are visible to anyone who unpacks it - but they ARE the join between a dashboard and this repo, and an unrecorded join is one that drifts the first time somebody creates a unit and forgets to tell anyone. Recorded here so the mapping is reviewable in a diff. Per owner ruling D5 remote config (Neon + the existing api/ rail) may OVERRIDE these at runtime, so a unit can be swapped without shipping a build; these are the defaults and the record, not a hardcode. Pinned by AdPlacementCovenantRegression case [ad-unit-mapped].",
 
   "version": 2,
   "global": {
@@ -81,6 +82,9 @@
       "id": "place.build.skip",
       "enabled": true,
       "surface": "build",
+      "adUnitId": "2ibxid58jat3sxyd",
+      "_adUnitDashboardName": "rewarded_build_skip_android",
+      "_adUnitNameNote": "THE ONE INCONSISTENT NAME. The other two units are named after their placement id; this one follows a <format>_<purpose>_<platform> convention I suggested before checking what the game already called the placement. Matching the placement id is better - it gives 1:1 attribution between LevelPlay revenue and our telemetry with no mapping table to drift - so this unit should be renamed to 'place.build.skip' in the dashboard. Renaming does NOT change the adUnitId, so nothing here needs editing when it happens; delete this note instead.",
       "rewardId": "reward.build.timeskip",
       "cooldownSeconds": 480,
       "dailyCap": 10,
@@ -93,6 +97,7 @@
       "id": "place.harvest.doubler",
       "enabled": true,
       "surface": "harvest",
+      "adUnitId": "imk56dcdi5mym2wq",
       "rewardId": "reward.harvest.doubler",
       "cooldownSeconds": 3600,
       "dailyCap": 3,
@@ -105,6 +110,7 @@
       "id": "place.daily.chest",
       "enabled": true,
       "surface": "daily",
+      "adUnitId": "it6izgx1flbj5rce",
       "rewardId": "reward.daily.chest",
       "cooldownSeconds": 0,
       "dailyCap": 1,

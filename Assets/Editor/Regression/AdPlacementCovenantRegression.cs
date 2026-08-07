@@ -228,7 +228,39 @@ namespace DeNelle.Editor
                                  "the rest of the codebase refuses to honour.");
             }
 
-            // ── CASE 7 [deny-list-current] ────────────────────────────────────
+            // ── CASE 7 [ad-unit-mapped] — the dashboard/repo join ─────────────
+            //  An enabled placement with no adUnitId is an ad offer the SDK cannot fulfil: the
+            //  interpreter would ask for an ad, pass no unit, and the player would tap a button
+            //  that quietly does nothing. Duplicated ids are the subtler failure - two placements
+            //  sharing one unit still SERVE, so nothing looks broken, while revenue attribution
+            //  silently merges and the per-placement caps stop meaning what they say.
+            var seenUnits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in placements)
+            {
+                string pid = (string)p["id"] ?? "(no id)";
+                bool isEnabled = p["enabled"] != null && (bool)p["enabled"];
+                string unit = (string)p["adUnitId"];
+
+                if (isEnabled && string.IsNullOrWhiteSpace(unit))
+                {
+                    failures.Add($"[ad-unit-mapped] placement '{pid}' is ENABLED but has no adUnitId. The provider " +
+                                 "cannot be asked for an ad without one, so the offer would appear and do nothing. " +
+                                 "Create the unit in the LevelPlay dashboard and record its id here.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(unit)) continue;   // disabled + unmapped is fine
+
+                if (seenUnits.TryGetValue(unit, out string owner))
+                    failures.Add($"[ad-unit-mapped] placements '{owner}' and '{pid}' BOTH map to adUnitId '{unit}'. " +
+                                 "Shared units still serve, so this does not look broken - it silently merges revenue " +
+                                 "attribution and makes the two placements' dailyCaps draw on one bucket.");
+                else
+                    seenUnits[unit] = pid;
+            }
+            log.AppendLine($"  ad units mapped: {seenUnits.Count}");
+
+            // ── CASE 8 [deny-list-current] ────────────────────────────────────
             //  Force the deny-list to keep up with the currencies that actually exist. If a new
             //  premium currency is added to packs.json and not here, case 1 goes quietly blind.
             if (Array.IndexOf(PremiumCurrencies, "crystals") < 0)
