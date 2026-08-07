@@ -118,6 +118,14 @@ namespace DeNelle.Village.World
             // starter east + cottage south). Same ~141m radius class as the east portal.
             // (x,z) = (-100, 100) ≈ 141m; yaw faces castle (SE).
             new AuthoredPortal("dg_sunken_vault", new Vector3(-100f, 0f, 100f), 142f),
+            // WO-1001 Phase 2B: the Bonecrypt — SOUTH-WEST, the fourth compass pull (E starter,
+            // NW vault, S cottage). Same ~141m radius class as the others: (-100,-100) ~= 141m.
+            // Yaw 45 fronts the arch back toward the castle (atan2 of origin - pos).
+            new AuthoredPortal("dg_bonecrypt", new Vector3(-100f, 0f, -100f), 45f),
+            // WO-1001 Phase 2C: the Ember Deep — DUE NORTH, and deliberately the longest walk of
+            // the set (~145m on a clear axis) because it is the hardest crawl: 6 floors, orc into
+            // troll, and the richest deep-boss table. Yaw 180 faces the castle.
+            new AuthoredPortal("dg_ember_deep", new Vector3(0f, 0f, 145f), 180f),
             // WEST row REMOVED (WO-776, 2026-07-30): Folk's Granary is a contentless stub
             // (no DungeonController, no layout JSON, zero lore, one canned encounter) — a
             // real door into a hollow room, and the owner's felt-test walked straight into
@@ -816,6 +824,22 @@ namespace DeNelle.Village.World
                 && !built.Exists(x => x != null && string.Equals(x.DungeonId, SunkenVault, System.StringComparison.OrdinalIgnoreCase)))
             {
                 built.Add(MakeDef(SunkenVault, SunkenVault, "Sunken Vault of Elarion", new Color(0.45f, 0.62f, 0.85f)));
+            }
+
+            // WO-1001 Phase 2B: the Bonecrypt (5 floors, key-gated deep floor, Necromancer).
+            const string Bonecrypt = "dg_bonecrypt";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(Bonecrypt)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, Bonecrypt, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(Bonecrypt, Bonecrypt, "The Bonecrypt", new Color(0.38f, 0.66f, 0.44f)));
+            }
+
+            // WO-1001 Phase 2C: the Ember Deep (6 floors, orc into troll, Ogre warlord).
+            const string EmberDeep = "dg_ember_deep";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(EmberDeep)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, EmberDeep, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(EmberDeep, EmberDeep, "The Ember Deep", new Color(0.92f, 0.55f, 0.28f)));
             }
 
             if (built.Count > 0) return built;

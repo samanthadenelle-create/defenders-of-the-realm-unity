@@ -159,6 +159,47 @@ harvest window.
 
 ---
 
+## 4d. PHASE 2 — all three themed dungeons bake as real descents
+
+| Dungeon | Rooms | Floors | Boss | Portal |
+|---|---|---|---|---|
+| `dg_sunken_vault` | 17 | 4 (Y 0 → −18) | Hollow Warden | NW `(-100, 0, 100)` |
+| `dg_bonecrypt` | 21 | 5 (Y 0 → −24) | Necromancer, key-gated deep floor | SW `(-100, 0, -100)` |
+| `dg_ember_deep` | 22 | 6 (Y 0 → −30) | Ember Warlord, orc → troll | N `(0, 0, 145)` |
+
+All three: `matesFail=0`, `saved=True`. Floor counts match the WO §3 spec (4–5 / 5–6 / 6+).
+Authoring is **data only** — three graph JSONs. `Phase2DungeonBatch.cs` is deliberately a separate
+file from `GraphDungeonComposer.cs` (which the other seat was editing) so there is no merge point.
+
+Portals go on four distinct compass pulls — E starter, NW vault, SW crypt, N ember, S cottage — so
+no two dungeons send the player the same way. Ember Deep gets the longest walk because it is the
+hardest crawl.
+
+### The slice-1 defect Phase 2 exposed
+
+Bonecrypt and Ember Deep first **aborted, one overlap each**. Read from the emitted layout, not
+guessed: `stair_up_1` landed at `z=5` when its `StairDown` parent sat at `z=6`.
+
+The stair socket was at local `(0, ±3, 0.5)`. That `0.5` is a wall standoff inherited from the
+door-socket helper, which I never stripped when I repurposed the pose in slice 1 — **a hole in the
+floor has no wall to stand off from.** It silently violated the composer's own documented invariant
+(*"sockets at multiples of 3u … so `cell=[round(x),round(y),round(z)]` is a lossless round-trip"*):
+every stairwell injected a half unit, `RoundToInt` quantised it into a **full** unit of drift, and
+it accumulated down the descent until rooms that should exactly touch sat 1u too close. Four floors
+survived it; five and six did not.
+
+The regression now pins the invariant that actually broke — a stair socket with a fractional X or Z
+fails, naming the whole-unit-per-floor drift — rather than only the symptom.
+
+### A false green I shipped and then caught
+
+`Phase2DungeonBatch` printed `composed=3/3` while **two of the three bakes had aborted**. It counted
+"the call returned"; the baker aborts *without throwing*, it simply does not save. It now judges by
+the scene file moving on disk and `FlowTrace.Fail`s any bake that did not save. Worth recording
+because it is precisely the failure mode this project treats as worse than a red.
+
+---
+
 ## 5. Two standing rules the probe tripped (caught by the oracle, not by me)
 
 Worth recording because both were *reasoned past* and both were right:
