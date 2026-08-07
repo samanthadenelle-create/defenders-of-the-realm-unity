@@ -55,6 +55,18 @@ namespace DeNelle.Editor
     {
         private const string SceneFolder = "Assets/Scenes/DungeonCompose";
         private const string OutFolder = "Builds/dungeon-capture";
+
+        /// <summary>
+        /// Dungeon scenes that live OUTSIDE the composed folder because a different builder makes
+        /// them. The starter outpost is hand-coded (KayKitChallengeOutpostBuilder), so none of the
+        /// composed pipeline's fixes reach it — which is exactly why it needs photographing under
+        /// the same lens. A capture harness that only sees one pipeline will keep reporting the
+        /// project clean while a whole scene rots.
+        /// </summary>
+        private static readonly string[] ExtraScenes =
+        {
+            "Assets/Scenes/KayKitChallengeOutpost.unity",
+        };
         private const int Width = 1280;
         private const int Height = 720;
 
@@ -88,6 +100,16 @@ namespace DeNelle.Editor
                 Debug.LogError(log + $"DUNGEON_CAPTURE_FAIL: cannot enumerate {SceneFolder}: {ex.Message}");
                 return;
             }
+
+            // Fold in the out-of-folder scenes, naming any that are missing rather than silently
+            // shooting fewer scenes than the caller believes.
+            var sceneList = new List<string>(scenes);
+            foreach (var extra in ExtraScenes)
+            {
+                if (File.Exists(extra)) sceneList.Add(extra);
+                else log.AppendLine($"  [extra] {extra} NOT FOUND - skipped (this is a gap, not a pass)");
+            }
+            scenes = sceneList.ToArray();
 
             if (scenes.Length == 0)
             {
