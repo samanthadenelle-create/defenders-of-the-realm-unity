@@ -836,6 +836,7 @@ namespace DeNelle.Village
                     {
                         var brain = enemy.gameObject.AddComponent<EnemyBrain>();
                         brain.Role = EnemyBrain.RoleForId(id);
+                        brain.RosterId = id;   // owner ruling 2026-08-06: gates weapon attach (casters carry nothing)
                         // Owner 2026-07-10 F8: ranged followers KITE, not rush to melee — turn on the
                         // existing kite system the wave/arena spawners already enable. Ranged -> Kiter.
                         EnemyBrain.ApplyRoleTactics(brain, brain.Role);

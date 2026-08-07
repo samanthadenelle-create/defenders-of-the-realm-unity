@@ -376,6 +376,41 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// The roster/family id this brain was classified from (e.g. "orc-shaman"). Set by whoever
+        /// assigns <see cref="Role"/> from an id. May be null on paths that assign a role directly
+        /// from wave composition data rather than from an id.
+        /// </summary>
+        public string RosterId;
+
+        /// <summary>
+        /// OWNER RULING 2026-08-06: casters carry NO weapon.
+        /// -------------------------------------------------------------------------
+        /// <see cref="EnemyRole.Ranged"/> was doing DOUBLE DUTY -- it means "attacks from a
+        /// distance", and the gear code at the bow-attach seam also read it as "is an archer".
+        /// Because <see cref="RoleForId"/> folds mage/caster/shaman into Ranged, EVERY caster in
+        /// the game was issued a longbow. The owner saw an orc shaman holding one and read it as a
+        /// staff (device 313794).
+        ///
+        /// This splits the two meanings apart: the ROLE still drives combat behaviour unchanged,
+        /// and this predicate alone decides whether a bow is attached. Casters return false, so
+        /// they carry nothing until staff art is chosen (deliberately NOT substituted here -- the
+        /// owner tags the art, we map it verbatim).
+        ///
+        /// A null/unknown id returns FALSE: paths that never set RosterId are wave-composition
+        /// spawns, which already tag their casters Healer and never wanted a bow. Failing closed
+        /// keeps a bow off anything we cannot positively identify as an archer.
+        /// </summary>
+        public static bool CarriesBow(string id)
+        {
+            string s = (id ?? "").ToLowerInvariant();
+            if (s.Length == 0) return false;
+            if (s.Contains("mage") || s.Contains("caster") || s.Contains("shaman")) return false;
+            if (s.Contains("heal") || s.Contains("acolyte") || s.Contains("necro")) return false;
+            return s.Contains("archer") || s.Contains("ranger") || s.Contains("bow")
+                || s.Contains("hunter") || s.Contains("scout");
+        }
+
+        /// <summary>
         /// Assign the shared runtime <see cref="TacticalData"/> archetype for a wave/arena role.
         /// Null-safe; no-op when <paramref name="brain"/> is null.
         /// </summary>
@@ -735,7 +770,15 @@ namespace DeNelle.Village
             if (!_bowEquipChecked)
             {
                 _bowEquipChecked = true;
-                if (Role == EnemyRole.Ranged)
+                // OWNER RULING 2026-08-06: Ranged no longer implies "carries a bow". CarriesBow
+                // is the sole gate now, so casters/shamans/healers get NOTHING (see its doc).
+                if (Role == EnemyRole.Ranged && !CarriesBow(RosterId))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                        $"enemy '{name}' is Ranged but id '{RosterId ?? "<none>"}' is not an archer " +
+                        "— NO weapon attached (owner ruling: casters carry nothing).");
+                }
+                else if (Role == EnemyRole.Ranged)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
                         $"enemy '{name}' is Ranged — attaching bow to bow hand");

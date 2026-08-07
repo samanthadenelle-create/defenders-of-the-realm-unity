@@ -63,6 +63,67 @@ namespace DeNelle.Village
         // grip at origin, then scales Y to this target. Grip* applied after on the LeftHand bone.
         private const float BowHeldLength = 0.92f;
 
+        // Scale-sanity band (owner 2026-08-06). Generous on purpose - a catastrophe
+        // detector, not a tuning assert. 0.92m intended => pass anything 0.23m..2.76m.
+        private const float ScaleSanityMin = 0.25f;
+        private const float ScaleSanityMax = 3.0f;
+        // Any single bounds component beyond this is nonsense for a hand prop and means
+        // the renderer's bounds are corrupt rather than merely mis-scaled.
+        private const float AbsurdBoundsMeters = 10f;
+
+        /// <summary>
+        /// Measures what the attached prop ACTUALLY renders as and rejects it if that bears no
+        /// relation to <see cref="BowHeldLength"/>. Returns true to keep the prop.
+        /// Never throws: a prop we cannot measure is KEPT (fail-open), because stripping a
+        /// weapon on a measurement failure would be a worse regression than the bug it guards.
+        /// </summary>
+        private static bool PassesScaleSanity(GameObject bowRoot, Transform hand)
+        {
+            if (bowRoot == null) return false;
+
+            Bounds wb = default;
+            bool has = false;
+            foreach (var r in bowRoot.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                if (!has) { wb = r.bounds; has = true; } else wb.Encapsulate(r.bounds);
+            }
+            if (!has)
+            {
+                FlowTrace.Warn("Equip", "bow scale check: prop has NO renderer to measure - kept (fail-open).");
+                return true;
+            }
+
+            Vector3 s = wb.size;
+            float longest = Mathf.Max(s.x, Mathf.Max(s.y, s.z));
+
+            // Corrupt bounds: NaN/Inf, or a hand prop claiming to be bigger than a building.
+            bool finite = !(float.IsNaN(longest) || float.IsInfinity(longest))
+                       && !(float.IsNaN(wb.center.y) || float.IsInfinity(wb.center.y));
+            if (!finite || longest > AbsurdBoundsMeters || Mathf.Abs(wb.min.y) > AbsurdBoundsMeters)
+            {
+                FlowTrace.Fail("Equip",
+                    $"bow REMOVED - corrupt bounds. size={s:0.##} min.y={wb.min.y:0.##} " +
+                    $"(limit {AbsurdBoundsMeters}m). This is the -33.56m class of defect: the prop's " +
+                    "renderer bounds do not describe its geometry. Showing nothing beats showing that.");
+                return false;
+            }
+
+            float ratio = longest / Mathf.Max(0.0001f, BowHeldLength);
+            if (ratio < ScaleSanityMin || ratio > ScaleSanityMax)
+            {
+                FlowTrace.Fail("Equip",
+                    $"bow REMOVED - scale out of band. rendered longest={longest:0.###}m vs intended " +
+                    $"{BowHeldLength:0.##}m (ratio {ratio:0.##}x, allowed {ScaleSanityMin:0.##}..{ScaleSanityMax:0.##}x). " +
+                    $"handLossy={(hand != null ? hand.lossyScale.y : 1f):0.###}.");
+                return false;
+            }
+
+            FlowTrace.Step("Equip",
+                $"bow scale OK: rendered longest={longest:0.###}m vs intended {BowHeldLength:0.##}m (ratio {ratio:0.##}x).");
+            return true;
+        }
+
         private Animator _animator;
         private GameObject _bow;
         private int _retries;
@@ -183,6 +244,29 @@ namespace DeNelle.Village
             // owner-dialed authored scale on this path to preserve.
             bowRoot.transform.localScale = EquipmentController.ParentScaleCompensation(leftHand);
             // ================================================================
+
+            // ================================================================
+            // LAST-MINUTE SCALE SANITY CHECK (owner, 2026-08-06: "or enforce a last
+            // minute scaling check, if it fails remove weapon").
+            // ----------------------------------------------------------------
+            // The compensation above fixes the KNOWN cause. This catches the UNKNOWN
+            // ones. A prop whose rendered size bears no relation to BowHeldLength is
+            // broken art or broken bounds, and showing it is worse than showing
+            // nothing -- on device a BowProp reported bounds.min.y = -33.56m, which
+            // then dragged the ground-snap 36m and was only survivable because of a
+            // MaxFootGap clamp in Enemy.cs. A guard that strips the prop turns a
+            // silent visual catastrophe into a loud, single log line.
+            //
+            // Deliberately generous band: this is a CATASTROPHE detector, not a
+            // tuning assert. Anything inside 0.25x..3x of the intended held length
+            // passes untouched.
+            if (!PassesScaleSanity(bowRoot, leftHand))
+            {
+                Destroy(bowRoot);
+                _bow = null;
+                enabled = false;
+                return;
+            }
 
             _bow = bowRoot;
             FlowTrace.Step("Equip", $"bow ATTACHED + auto-oriented to LeftHand '{leftHand.name}' " +

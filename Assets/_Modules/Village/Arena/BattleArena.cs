@@ -1431,6 +1431,7 @@ namespace DeNelle.Village.Arena
                     var brain = enemy.gameObject.AddComponent<EnemyBrain>();
                     EnemyRole role = EnemyBrain.RoleForId(id);
                     brain.Role = role;
+                    brain.RosterId = id;   // owner ruling 2026-08-06: gates weapon attach (casters carry nothing)
                     // WO-482 (felt-fix 2026-06-24): the arena is an ISOLATED duel -- there is NO
                     // base to siege here. Mark the brain hero-only so target selection ALWAYS
                     // picks the hero and never falls back to the home-scene HeartOfElarion (~7000m

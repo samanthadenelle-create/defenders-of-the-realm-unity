@@ -331,6 +331,7 @@ namespace DeNelle.Village.World.Camps
             if (guardBrain == null) guardBrain = guard.gameObject.AddComponent<EnemyBrain>();
             EnemyRole guardRole = EnemyBrain.RoleForId(def.Id);
             guardBrain.Role = guardRole;
+            guardBrain.RosterId = def.Id;   // owner ruling 2026-08-06: gates weapon attach (casters carry nothing)
             EnemyBrain.ApplyRoleTactics(guardBrain, guardRole);   // SHARED singletons — never mutate
 
             Track(guard);
