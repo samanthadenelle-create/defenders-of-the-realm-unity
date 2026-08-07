@@ -5,6 +5,17 @@
 **Owner:** *"create other full complex dungeon instructions … for large real depth levels … we use a portal that takes you to a new scene."*
 **Related:** WO-1000 (starter-dungeon visual overhaul), the VFX facade (WO-884/885 — candles/fog), the harvest-VFX subtlety ruling (WO-890).
 
+> **⚠ SPEC CORRECTION 2026-08-07 (CLI, verified at source).** §1 below claims Pipeline A
+> "supports **multi-level via `StairDown`/`StairUp`** sockets". **It did not.** Not partially — at
+> all, and in a way no oracle noticed. Three things each independently forbade a vertical mate:
+> both stair sockets pointed **down** at local Y=0 (so a pair scored `align = -1` against a +0.25
+> threshold and carried no height to mate across); `TryMate`'s corrective nudge was planar-only (a
+> Y gap could never close); and `RoomsOverlap` was XZ-only, so a *correct* stack — whose footprints
+> coincide by design — was reported as an overlap, which is a hard bake abort. There had never been
+> a multi-level bake in the tree, and no graph JSON referenced a stair socket in any edge.
+> **Slice 1 has since fixed all three** (commits `6e2ceb1b` + the descent probe). Read §2.1 as
+> "build it", not "verify it".
+
 ## 0. The vision
 Each dungeon is a **portal-loaded standalone scene** that is a **large multi-level DESCENT**: you climb *down* level after level, each deeper floor darker + harder with richer loot, culminating in a **boss** at the bottom. The tension engine is the existing **oil/lantern darkness** pillar: your light burns down as you go deeper — **push for the deep-boss legendary loot, or extract and bank what you have.** Themed distinctly so dungeons feel different, not recolored.
 

@@ -6,7 +6,8 @@
 
 **Branch:** `wip/village2-and-f8-tickets` · **HEAD:** `2e6c4709` · **63+ commits ahead of origin,
 NOTHING PUSHED** (push only on the owner's explicit word).
-**Gates as of this file:** `COMPILE_GATE_OK` + **`REGRESSION_OK 123/123 suites`**.
+**Gates as of this file:** `COMPILE_GATE_OK` + **`REGRESSION_OK 124/124 suites`** (124th =
+`[dungeon-multilevel]`, added with WO-1001 slice 1).
 
 ---
 
@@ -102,6 +103,28 @@ hidden. Restore with `ff.devresourcetool=1` / `ff.flagbutton=1`.
 **Only `dg_starter_loop` is a proven-working dungeon end to end** (owner cleared it: loot, caches,
 torch recipe unlock, first-clear recorded). `Dungeon_FolksGranary` is a STUB with no
 `DungeonController`.
+
+**WO-1001 slice 1 (multi-level descents) LANDED — read this before planning any dungeon work.**
+- **Composed dungeons can now descend floors.** Before 2026-08-07 they could not, at all: both stair
+  sockets pointed DOWN at local Y=0 (a pair scored `align = -1`), the mate nudge was planar-only, and
+  a *correct* vertical stack was reported as an OVERLAP — a hard bake abort. All three are fixed.
+  Proven by `dg_descent_probe`: `mate OK ... align=1.00`, `matesFail=0 saved=True`, two Y levels.
+- **The WO's own §1 premise was WRONG** ("supports multi-level via StairDown/StairUp"). It is now
+  banner-corrected in the WO. Do not re-plan against it.
+- **⚠ PLACED, NOT WALKABLE.** `path[entry->deep_vault]=PathPartial`. The stair rooms are flat 6x6
+  rooms with a socket marker — **no stair geometry, no floor cut, no NavMeshLink**. Floors are two
+  disconnected navmesh islands. Slice 1b, task #37. **Do not seat a hero in a multi-level composed
+  dungeon until then** — it would look enterable and dead-end.
+- **The composed path has NO `DungeonController`, `Lantern`, `EncounterTrigger`, or chests.**
+  `PopulateForPlay` seats a hero root + enemy spawner markers and nothing else; the oil/lantern
+  pillar is hand-wired into the single Healer's Cottage scene. WO-1001 slices 3-6 therefore each
+  need the composed path to gain a controller FIRST — a shared prerequisite the WO does not name.
+- **Dungeon enemies ignore `enemies.json`.** `OutpostEnemyGroupSpawner` hardcodes four Hollow ids and
+  hand-writes their stat blocks (which disagree with the JSON). `EncounterSpec.kind` is only ever
+  compared to `"none"` — authoring `"orc-group"` today silently spawns hollows.
+- New suite `[dungeon-multilevel]` (5/5) pins all of it, including a case that reads the **shipped**
+  stair prefabs — the room prefabs are GENERATED, so a builder edit is inert until
+  `DefaultDungeonRoomsBuilder.BuildAll` re-runs.
 
 ---
 
