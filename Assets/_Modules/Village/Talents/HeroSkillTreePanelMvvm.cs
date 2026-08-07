@@ -3,14 +3,24 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Talents
 //
-// NODE-GRAPH layout (Obsidian dark): nodes are placed at AUTHORED canvas x/y
-// (SkillNodeVM.X/Y, 0..1; y 0=top) inside a scrollable fixed-pixel content rect,
-// and gilt CONNECTOR lines are drawn from each node back to its prerequisite
-// nodes (the unlock path reads as a graph, not a grid). A node click STAGES /
-// UNSTAGES it into a plan; nothing is spent until the player presses CONFIRM
-// (plan→commit flow). ALL state/logic (positions, owned/stageable/lock reasons,
-// pending set, plan cost) lives in HeroSkillTreeVM — the View never reads game
-// state (ui-mvvm-binding-seam rule).
+// WO-896 (2026-08-05) — PROGRESSION LINE, not a grid. Owner ruling: "this skill tree
+// is hard to read - simplify the tree, just have the skills connected by a line showing
+// progression." The authored-x/y NODE GRAPH is retired. The panel now draws vm.Tracks:
+// each track is one horizontal LINE of nodes (left = earlier, right = later) with a
+// title block on its left and a connecting line running THROUGH the node centres; tracks
+// stack top-down and scroll. A node click STAGES / UNSTAGES it into a plan; nothing is
+// spent until CONFIRM (plan→commit flow, unchanged). ALL state/logic (track order, node
+// state, lock reasons, pending set, plan cost) lives in HeroSkillTreeVM — the View never
+// reads game state (ui-mvvm-binding-seam rule). The LOADOUT (quick-swap) band, the detail
+// column, Cancel/Respec/CONFIRM and the WISDOM chip are untouched by WO-896.
+//
+// COLOURBLIND LAW (owner is red/green colourblind — the binding constraint of WO-896):
+// every state is separable with COLOUR STRIPPED OUT. Owned = the only FILLED plate +
+// check tick; Next = the only OVERSIZED plate (132 vs 112) + double ring + a "NEXT: "
+// label prefix; Locked = thinnest border + PADLOCK glyph; Inert (WO-910: no runtime
+// consumer) = a SLASH across the plate + "!" badge + "[!] " prefix. Connectors differ by
+// THICKNESS and DASH PATTERN (solid 8 / solid 4 / dashed 3 / dotted 2), never by hue.
+// See the full matrix above BuildTrackNode.
 //
 // WO-865 (2026-08-04, from the real Seeker capture 07-skills-panel.png): the panel
 // body is laid out as DISJOINT FIXED-PIXEL BANDS, never fractions of the body well.
@@ -20,22 +30,25 @@
 // each button to the 112 px touch floor SYMMETRICALLY, straight over the graph well
 // and the quick-swap slots. Same failure class as WO-841 / WO-852. The stack now is
 //   columns region (graph well + ability band | detail column)  /  action row
-// and the node graph lives on a fixed-pixel lattice inside a RectMask2D scroll well
-// with a reserved row for the "Universal - any class" band.
+// and the tracks live on a fixed-pixel row lattice inside a RectMask2D scroll well
+// (WO-896 replaced the authored x/y lattice + its reserved section-band row with
+// stacked track rows; every row still clears the SectionClearPx floor).
 //
-// WO-676 §B (owner-approved icon-only redesign, 2026-07-11): nodes are ICON-ONLY
-// plates carrying exactly ONE state affordance — cost pip (unlockable),
-// −n pip + ring (planned), check stamp (owned), dim (locked). ALL name/desc/state
-// text lives in the right-hand detail column. Wisdom is a CurrencyChip (top-right);
+// WO-676 §B (owner-approved icon-only redesign, 2026-07-11; AMENDED by WO-896): nodes
+// are icon plates carrying ONE state badge — cost pip (available), -n pip + ring
+// (planned), check stamp (owned), padlock (locked), "!" + slash (inert). WO-896 adds
+// the SHORT NAME under each plate (the line has to be readable without tapping); the
+// full desc/state text still lives in the right-hand detail column. Wisdom is a
+// CurrencyChip (top-right);
 // the plan summary folds into the CONFIRM label ("CONFIRM n · −cost"); quick-swap
 // and respec feedback are transient toasts (BuildFeedbackToast) — target ≤2
 // persistent text strips outside the graph. Colorblind law: every state carries a
 // shape/stamp/pip, never hue alone (dim = luminance, pips/stamps = shape+text).
 //
-// Code-built uGUI ONLY (no UXML — §8). Edge geometry uses a fixed-pixel content
-// rect (sized in RebuildGraph from the authored bounds) so rotated connector images
-// are deterministic at build time (no dependence on a layout pass). The content
-// scrolls (owner: one scrollable canvas, Knight + Shared, no pagination yet).
+// Code-built uGUI ONLY (no UXML — §8). Line geometry uses a fixed-pixel content rect
+// (sized in RebuildTracks from the track/row count) so every connector is an axis-
+// aligned bar with deterministic bounds at build time (no dependence on a layout
+// pass). The content scrolls (owner: one scrollable canvas, Knight + Shared).
 //
 // OWNER F8 2026-07-11 (minimal pass): node FACES are deliberately MINIMAL — a flat
 // obsidian plate + thin gilt line border, small tinted-down icon ("remove the
@@ -50,6 +63,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 
@@ -145,28 +159,69 @@ namespace DeNelle.Village.Talents
         /// <summary>Ability tile: pad above the numeral / below the name (ref px).</summary>
         public const float SlotPadPx = 6f;
 
-        /// <summary>The "Universal - any class" section band's own line box (FontMicro+2 -> line ~44).</summary>
+        /// <summary>A section label's own line box (FontMicro+2 -> line ~44).</summary>
         public const float SectionBandPx = 46f;
-        /// <summary>Clear air above and below the section band's label.</summary>
+        /// <summary>Clear air above and below a section label.</summary>
         public const float SectionGapPx = 14f;
-        /// <summary>The MINIMUM node-row pitch across the section band: one node plate plus the
-        /// band's own reserved row. RebuildGraph shifts every node authored BELOW the band down
-        /// by whatever is missing, so a node plate can never paint over the label again
-        /// (the capture's "Univers[icon]y class": band y 0.965 vs shared row y 0.98 were 15.6 px
-        /// apart with 96 px plates, and nodes are built after the band).</summary>
+        /// <summary>The MINIMUM clear pitch a node row must own: one node plate plus a label
+        /// band plus air on both sides. WO-865 introduced it to stop a plate painting over the
+        /// "Universal - any class" divider; WO-896 keeps it as the FLOOR every track row is
+        /// clamped to in RebuildTracks, so a row can never squeeze its plate against its name.</summary>
         public const float SectionClearPx = NodeSizePx + SectionGapPx * 2f + SectionBandPx;
 
-        /// <summary>Graph lattice: reference px per 1.0 of authored node X. Sized so the tightest
-        /// authored column gap (0.12 on the shared row) still clears a node plate.</summary>
-        public const float GraphUnitWpx = 1180f;
-        /// <summary>Graph lattice: reference px per 1.0 of authored node Y.</summary>
-        public const float GraphUnitHpx = 780f;
-        /// <summary>Graph content padding: half a node plate plus air, so the extreme nodes are
-        /// wholly INSIDE the scroll content and are never sliced at the mask edge at rest.</summary>
-        public const float GraphPadPx = NodeSizePx * 0.5f + 16f;
+        // ── RETIRED LATTICE (WO-896) — the authored x/y node GRAPH no longer drives layout.
+        // These four constants stayed because they are still TRUE of the authored data in
+        // hero-talents.json (which keeps its x/y/section authoring) and because
+        // SkillsPanelLayoutRegression [grid] pins them against that data. Re-pointing that
+        // oracle at the track layout is its own ticket — deleting the constants here would
+        // simply blind it. NOTHING in this file positions a node from them any more.
 
-        /// <summary>Authored Y the "Universal - any class" band divides the graph at.</summary>
+        /// <summary>Retired lattice: reference px per 1.0 of authored node X (see the note above).</summary>
+        public const float GraphUnitWpx = 1180f;
+        /// <summary>Retired lattice: reference px per 1.0 of authored node Y.</summary>
+        public const float GraphUnitHpx = 780f;
+        /// <summary>Retired lattice: content padding of half a node plate plus air.</summary>
+        public const float GraphPadPx = NodeSizePx * 0.5f + 16f;
+        /// <summary>Retired lattice: authored Y the "Universal - any class" band divided the graph at.</summary>
         public const float SectionBandY = 0.965f;
+
+        // ── WO-896 PROGRESSION-LINE LATTICE (the live one) ───────────────────────
+        // A TRACK ROW is: [ title block ][ node | line | node | line | node | node ]
+        // Every number is a FIXED reference pixel (the WO-865 law), so a row can never be
+        // squeezed under its own touch/line-box floors no matter the device aspect.
+
+        /// <summary>Width of a track's left-hand title block (kind tag + name + note).</summary>
+        public const float TrackTitleWpx = 200f;
+        /// <summary>Centre-to-centre pitch of two nodes on a track: a node plate plus clear air.
+        /// It is also the width of the name label under each node.</summary>
+        public const float NodePitchPx = 200f;
+        /// <summary>The FOCUS ("next") plate is deliberately LARGER than every other plate — a
+        /// SIZE difference, readable with colour stripped out (the owner is red/green colourblind).</summary>
+        public const float NodeNextPx = 132f;
+        /// <summary>The name label under a node: TWO whole FontFloor line boxes (30 x 1.25 = 37.5),
+        /// so a two-word talent ("Farsight Emplacements") wraps instead of ellipsizing.</summary>
+        public const float NodeLabelBandPx = 78f;
+        /// <summary>Air between a node plate and its name label.</summary>
+        public const float NodeLabelGapPx = 6f;
+        /// <summary>Air above the node band inside a row — also the headroom the oversized "next"
+        /// plate and its outer ring grow into.</summary>
+        public const float TrackTopPadPx = 10f;
+        /// <summary>One track row: pad + node plate + gap + a two-line name band.</summary>
+        public const float TrackRowPx = TrackTopPadPx + NodeSizePx + NodeLabelGapPx + NodeLabelBandPx;
+        /// <summary>Clear air between two track rows.</summary>
+        public const float TrackGapPx = 18f;
+        /// <summary>Nodes per row before a track wraps to a continuation row. Four keeps the whole
+        /// content rect inside the graph well's width at the reference device (no side-scrolling
+        /// for a normal tier-1..tier-4 chain).</summary>
+        public const int TrackWrapCount = 4;
+        /// <summary>Inset around the whole scroll content, so the first row is WHOLE at rest.</summary>
+        public const float ContentPadPx = 14f;
+        /// <summary>Title block: the small-caps kind tag ("WAR PATH") line box.</summary>
+        public const float TrackKindBandPx = 38f;
+        /// <summary>Title block: the track name — two line boxes.</summary>
+        public const float TrackNameBandPx = 76f;
+        /// <summary>Title block: the qualifier note ("after Thunderbolt") line box.</summary>
+        public const float TrackNoteBandPx = 38f;
 
         // ── The only FRACTIONS left in the layout: the column split and the in-tile text
         // insets. Both are WIDTHS, never a text band's height -- the class of failure the
@@ -182,12 +237,14 @@ namespace DeNelle.Village.Talents
         /// <summary>Side inset of every label in the detail column (fraction of the column).</summary>
         public const float DetailTextInsetFrac = 0.03f;
 
-        // Graph lattice origin + the section band's reserved-row shift, recomputed from the VM's
-        // authored nodes on every rebuild (fixed PIXELS derived from data -- never a parent fraction).
-        private float _minX, _maxX, _minY, _maxY;
-        private float _bandShiftPx;
-        private float _bandCentrePy;
-        private bool _bandPlaced;
+        // Last drawn layout signature — §12 instrumentation logs a line only when the drawn
+        // shape CHANGES, never once per Render (Render fires on every selection tap).
+        private string _lastLayoutSig;
+        // "MORE BELOW" overflow cue, pinned to the WELL (not the scrolling content) and shown
+        // only when the tracks are taller than the well. The well resolves to ~221 ref px at
+        // 2340x1080 — about one track row — so without a cue a player can believe the tree ends
+        // at the first path. Text, not an icon: it survives greyscale (colourblind law).
+        private GameObject _scrollHint;
 
         public bool IsOpen => _ui != null;
 
@@ -335,7 +392,7 @@ namespace DeNelle.Village.Talents
                 BuildFeedbackToast.Show(respec);
             _lastRespecStatus = respec;
 
-            RebuildGraph();
+            RebuildTracks();
             RenderDetail();
             RebuildQuickSlots();
         }
@@ -365,307 +422,316 @@ namespace DeNelle.Village.Talents
             _lastQuickStatus = quick;
         }
 
-        // ── Build the node graph (edges behind, nodes in front) ──────────────────
+        // ── WO-896: build the PROGRESSION LINE (tracks of connected nodes) ───────
+        // The dense authored-x/y GRID is retired (owner ruling: "this skill tree is hard to
+        // read - simplify the tree, just have the skills connected by a line showing
+        // progression"). Every vm.Tracks entry becomes a ROW: a title block on the left, then
+        // up to TrackWrapCount node plates sitting ON a line that runs THROUGH their centres,
+        // left = earlier, right = later. Rows stack top-down inside the SAME RectMask2D scroll
+        // well, on a fixed-pixel content rect that is padded on all sides — so the first row is
+        // WHOLE at rest (no clipped top row, the WO-896 §0 defect) and a long tree just scrolls.
 
-        private void RebuildGraph()
+        private void RebuildTracks()
         {
+            if (_graphContent == null || _vm == null) { ClearContent(); return; }
+            // Render() re-runs on EVERY tap (selection is VM state), so the line is rebuilt
+            // constantly. Keep where the player had scrolled to — snapping back to the top on
+            // each tap would make the lower tracks unusable now that tracks stack vertically.
+            Vector2 keptScroll = _graphContent.anchoredPosition;
             ClearContent();
-            if (_graphContent == null || _vm == null) return;
 
-            // WO-865 step 1 — the FIXED-PIXEL lattice. Authored x/y (0..1) are normalised to the
-            // authored MINIMUM and scaled by a fixed px-per-unit, so the scroll content is an exact
-            // pixel rect at every aspect. No leading dead space, no fraction of the viewport.
-            MeasureGraphBounds();
+            var tracks = _vm.Tracks;
+            int trackCount = tracks != null ? tracks.Count : 0;
+            float contentW = ContentPadPx * 2f + TrackTitleWpx + TrackWrapCount * NodePitchPx;
+            // The row height can never fall under the section-clearance floor (a node plate plus
+            // a label band plus air) — the same floor SkillsPanelLayoutRegression pins.
+            float rowH = Mathf.Max(TrackRowPx, SectionClearPx);
 
-            // WO-865 step 2 — the section band's RESERVED ROW. Everything authored below the band
-            // is pushed down by exactly the pixels missing from a clear row, so a node plate can
-            // never paint over the "Universal - any class" label again.
-            _bandShiftPx = ComputeBandShiftPx();
-
-            float contentW = GraphPadPx * 2f + (_maxX - _minX) * GraphUnitWpx;
-            float contentH = GraphPadPx * 2f + (_maxY - _minY) * GraphUnitHpx + _bandShiftPx;
-            _graphContent.sizeDelta = new Vector2(contentW, contentH);
-            _graphContent.anchoredPosition = Vector2.zero;   // rest = flush top-LEFT, never mid-plate
-
-            // Lookup id -> node + pixel centre, for the prerequisite connectors.
-            var center = new Dictionary<string, Vector2>(64);
-            var nodeById = new Dictionary<string, SkillNodeVM>(64);
-            CollectPositions(_vm.Nodes, center, nodeById);
-            CollectPositions(_vm.Shared, center, nodeById);
-
-            // Edges first (drawn behind the node plates).
-            DrawEdges(_vm.Nodes, center, nodeById);
-            DrawEdges(_vm.Shared, center, nodeById);
-
-            // Section divider (above the shared band) — WO-675 crown-glyph band grammar, now
-            // seated in the middle of the row the shift above reserved for it.
-            if (_bandPlaced) BuildSectionBand("Universal - any class", _bandCentrePy, contentW);
-
-            // Nodes on top.
-            foreach (var n in _vm.Nodes) BuildGraphNode(n, center);
-            foreach (var n in _vm.Shared) BuildGraphNode(n, center);
-        }
-
-        // Authored x/y bounds across BOTH lists (the lattice origin). Defaults match
-        // CollectPositions so an unset (-1) node lands at the same 0.5/0.5 centre.
-        private void MeasureGraphBounds()
-        {
-            _minX = _minY = 1f; _maxX = _maxY = 0f;
-            bool any = false;
-            any |= AccumulateBounds(_vm.Nodes);
-            any |= AccumulateBounds(_vm.Shared);
-            if (!any) { _minX = _minY = 0f; _maxX = _maxY = 1f; }
-            if (_maxX < _minX) _maxX = _minX;
-            if (_maxY < _minY) _maxY = _minY;
-        }
-
-        private bool AccumulateBounds(IReadOnlyList<SkillNodeVM> list)
-        {
-            if (list == null) return false;
-            bool any = false;
-            foreach (var n in list)
+            float y = ContentPadPx;
+            int rowsBuilt = 0;
+            for (int t = 0; t < trackCount; t++)
             {
-                if (string.IsNullOrEmpty(n.Id)) continue;
-                float x = n.X >= 0f ? n.X : 0.5f;
-                float y = n.Y >= 0f ? n.Y : 0.5f;
-                if (x < _minX) _minX = x;
-                if (x > _maxX) _maxX = x;
-                if (y < _minY) _minY = y;
-                if (y > _maxY) _maxY = y;
-                any = true;
-            }
-            return any;
-        }
-
-        // How many pixels the rows BELOW the section band must move down so the band's label
-        // gets a whole clear row. Computed from the data (never a hard-coded guess): the raw
-        // pitch between the last row above the band and the first row below it, versus the
-        // SectionClearPx floor (one node plate + the band + air on both sides).
-        private float ComputeBandShiftPx()
-        {
-            _bandPlaced = false;
-            float lastAbove = float.NegativeInfinity, firstBelow = float.PositiveInfinity;
-            ScanBandRows(_vm.Nodes, ref lastAbove, ref firstBelow);
-            ScanBandRows(_vm.Shared, ref lastAbove, ref firstBelow);
-            if (float.IsNegativeInfinity(lastAbove) || float.IsPositiveInfinity(firstBelow))
-                return 0f;   // nothing on one side of the band — no row to reserve
-
-            float rawPitch = (firstBelow - lastAbove) * GraphUnitHpx;
-            float shift = Mathf.Max(0f, SectionClearPx - rawPitch);
-
-            // The band sits at the midpoint of the cleared gap: below the plate bottom of the
-            // last row above, above the plate top of the (already shifted) first row below.
-            float abovePlateBottom = -(GraphPadPx + (lastAbove - _minY) * GraphUnitHpx) - NodeSizePx * 0.5f;
-            float belowPlateTop = -(GraphPadPx + (firstBelow - _minY) * GraphUnitHpx) - shift + NodeSizePx * 0.5f;
-            _bandCentrePy = (abovePlateBottom + belowPlateTop) * 0.5f;
-            _bandPlaced = true;
-            return shift;
-        }
-
-        private static void ScanBandRows(IReadOnlyList<SkillNodeVM> list, ref float lastAbove, ref float firstBelow)
-        {
-            if (list == null) return;
-            foreach (var n in list)
-            {
-                if (string.IsNullOrEmpty(n.Id)) continue;
-                float y = n.Y >= 0f ? n.Y : 0.5f;
-                if (y <= SectionBandY) { if (y > lastAbove) lastAbove = y; }
-                else { if (y < firstBelow) firstBelow = y; }
-            }
-        }
-
-        private void CollectPositions(IReadOnlyList<SkillNodeVM> list,
-                                      Dictionary<string, Vector2> center,
-                                      Dictionary<string, SkillNodeVM> nodeById)
-        {
-            if (list == null) return;
-            foreach (var n in list)
-            {
-                if (string.IsNullOrEmpty(n.Id)) continue;
-                float x = n.X >= 0f ? n.X : 0.5f;
-                float y = n.Y >= 0f ? n.Y : 0.5f;
-                center[n.Id] = CenterPx(x, y);
-                nodeById[n.Id] = n;
-            }
-        }
-
-        private void DrawEdges(IReadOnlyList<SkillNodeVM> list,
-                               Dictionary<string, Vector2> center,
-                               Dictionary<string, SkillNodeVM> nodeById)
-        {
-            if (list == null) return;
-            foreach (var n in list)
-            {
-                if (n.Prereqs == null || !center.TryGetValue(n.Id, out var to)) continue;
-                bool childActive = n.Owned || n.IsPending;
-                foreach (var pr in n.Prereqs)
+                var track = tracks[t];
+                if (track == null || track.Nodes == null || track.Nodes.Count == 0) continue;
+                int seats = track.Nodes.Count;
+                int rowsInTrack = (seats + TrackWrapCount - 1) / TrackWrapCount;
+                for (int r = 0; r < rowsInTrack; r++)
                 {
-                    if (string.IsNullOrEmpty(pr) || !center.TryGetValue(pr, out var from)) continue;
-                    bool parentActive = nodeById.TryGetValue(pr, out var pn) && (pn.Owned || pn.IsPending);
-                    // A connector glows once BOTH ends are owned/planned (the path is live).
-                    bool live = childActive && parentActive;
-                    BuildEdge(from, to, live);
+                    var captured = track;
+                    int rowIndex = r;
+                    int from = r * TrackWrapCount;
+                    int count = Mathf.Min(TrackWrapCount, seats - from);
+                    float rowTop = y;
+                    // One bad node can never blank the whole tree (§12 / Guard law).
+                    Guard.Try("SkillTree", "build track row '" + captured.Title + "' #" + rowIndex,
+                        () => BuildTrackRow(captured, rowIndex, from, count, rowTop, contentW, rowH));
+                    y += rowH + TrackGapPx;
+                    rowsBuilt++;
                 }
             }
+
+            if (rowsBuilt == 0)
+            {
+                var empty = ElarionUiKit.Label(_graphContent, "No talents to show yet.", 0f, 1f,
+                    ElarionUi.ParchmentDim, ElarionUi.FontBody,
+                    TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                ElarionUiKit.FitSingleLine(empty);
+                FlowTrace.Warn("SkillTree", "progression line drew ZERO rows - the graph well is empty");
+            }
+
+            float contentH = Mathf.Max(rowH + ContentPadPx * 2f, y - TrackGapPx + ContentPadPx);
+            _graphContent.sizeDelta = new Vector2(contentW, contentH);
+            // Rest position = flush top-LEFT (the first row WHOLE, never mid-plate); a scrolled
+            // player keeps their place, clamped so the content can never sit off its own well.
+            var well = _graphContent.parent as RectTransform;
+            float wellW = well != null ? well.rect.width : 0f;
+            float wellH = well != null ? well.rect.height : 0f;
+            float maxDown = wellH > 1f ? Mathf.Max(0f, contentH - wellH) : 0f;
+            float maxRight = wellW > 1f ? Mathf.Max(0f, contentW - wellW) : 0f;
+            _graphContent.anchoredPosition = new Vector2(
+                Mathf.Clamp(keptScroll.x, -maxRight, 0f),
+                Mathf.Clamp(keptScroll.y, 0f, maxDown));
+
+            UpdateScrollHint();   // (also re-evaluated live on every scroll — see BuildScrollGraph)
+
+            string sig = trackCount + "/" + rowsBuilt + "/" + contentH.ToString("F0");
+            if (sig != _lastLayoutSig)
+            {
+                _lastLayoutSig = sig;
+                FlowTrace.Step("SkillTree", "progression line drawn: " + trackCount + " track(s), " +
+                                            rowsBuilt + " row(s), content " + contentW.ToString("F0") +
+                                            "x" + contentH.ToString("F0") + " px");
+            }
         }
 
-        // px centre for an authored (x,y): content anchored top-LEFT, y grows down. Normalised to
-        // the authored minimum and padded by GraphPadPx (>= half a node plate), so the extreme
-        // rows/columns sit WHOLLY inside the content rect and are never sliced mid-plate at rest.
-        // Rows below the section band carry the reserved-row shift.
-        private Vector2 CenterPx(float x, float y)
+        // One track row: the title block, then the connectors (behind), then the plates + labels.
+        private void BuildTrackRow(SkillTrackVM track, int rowIndex, int from, int count,
+                                   float rowTop, float contentW, float rowH)
         {
-            float px = GraphPadPx + (x - _minX) * GraphUnitWpx;
-            float py = -(GraphPadPx + (y - _minY) * GraphUnitHpx);
-            if (y > SectionBandY) py -= _bandShiftPx;
-            return new Vector2(px, py);
+            var row = PxRect(_graphContent, "Track" + rowIndex + "_" + track.Title, 0f, rowTop, contentW, rowH);
+            BuildTrackTitle(row, track, rowIndex);
+
+            var seats = track.Nodes;
+            float cy = -(TrackTopPadPx + NodeSizePx * 0.5f);   // plate centre, px DOWN from the row top
+
+            // Connectors FIRST so the opaque plates draw over their ends.
+            for (int i = 1; i < count; i++)
+                BuildConnector(row, seats[from + i - 1], seats[from + i], NodeCenterX(i - 1), NodeCenterX(i), cy);
+
+            for (int i = 0; i < count; i++)
+            {
+                var seat = seats[from + i];
+                BuildTrackNode(row, seat, NodeCenterX(i), cy);
+                BuildNodeLabel(row, seat, NodeCenterX(i), cy);
+            }
         }
 
-        private void BuildEdge(Vector2 a, Vector2 b, bool live)
+        /// <summary>Centre X (content px) of the i-th node seat in a row.</summary>
+        private static float NodeCenterX(int i)
         {
-            var go = new GameObject("Edge", typeof(Image));
-            go.transform.SetParent(_graphContent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
-            r.pivot = new Vector2(0.5f, 0.5f);
-            Vector2 mid = (a + b) * 0.5f;
-            float len = Vector2.Distance(a, b);
-            float ang = Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg;
-            r.anchoredPosition = mid;
-            // §B.3 — quiet the string-web: live path 4px gilt, inactive 1.5px @ ~0.12 alpha.
-            r.sizeDelta = new Vector2(len, live ? 4f : 1.5f);
-            r.localRotation = Quaternion.Euler(0f, 0f, ang);
+            return ContentPadPx + TrackTitleWpx + i * NodePitchPx + NodePitchPx * 0.5f;
+        }
+
+        // The left-hand title block: kind tag over the track name over an optional qualifier
+        // ("after Thunderbolt" / "no order - pick any" / "prerequisite is hidden"). Continuation
+        // rows carry "(cont.)" instead, so a wrapped pool never reads as a second track.
+        private static void BuildTrackTitle(Transform row, SkillTrackVM track, int rowIndex)
+        {
+            var host = PxRect(row, "TrackTitle", ContentPadPx, 0f, TrackTitleWpx, TrackRowPx);
+            if (rowIndex > 0)
+            {
+                var cont = ElarionUiKit.Label(host, "(cont.)", 0f, 1f, ElarionUi.ParchmentDim,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineRight, 0.04f, 0.96f);
+                PinBandFromTop(cont.rectTransform, TrackTopPadPx + NodeSizePx * 0.5f - TrackKindBandPx * 0.5f,
+                               TrackKindBandPx);
+                ElarionUiKit.FitSingleLine(cont);
+                return;
+            }
+
+            var kind = ElarionUiKit.Label(host, track.Kind, 0f, 1f, ElarionUi.Gilt,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.04f, 0.98f, bold: true);
+            PinBandFromTop(kind.rectTransform, TrackTopPadPx, TrackKindBandPx);
+            ElarionUiKit.FitSingleLine(kind);
+
+            var name = ElarionUiKit.Label(host, track.Title, 0f, 1f, ElarionUi.Parchment,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.TopLeft, 0.04f, 0.98f, bold: true);
+            PinBandFromTop(name.rectTransform, TrackTopPadPx + TrackKindBandPx + 2f, TrackNameBandPx);
+            ElarionUiKit.FitBlock(name);
+
+            if (!string.IsNullOrEmpty(track.Note))
+            {
+                var note = ElarionUiKit.Label(host, track.Note, 0f, 1f, ElarionUi.ParchmentDim,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.04f, 0.98f);
+                PinBandFromTop(note.rectTransform, TrackTopPadPx + TrackKindBandPx + TrackNameBandPx + 4f,
+                               TrackNoteBandPx);
+                ElarionUiKit.FitSingleLine(note);
+            }
+        }
+
+        // ── The connecting PROGRESSION LINE (weight + dash pattern carry the meaning) ──
+        // COLOURBLIND LAW: the four connector readings differ by THICKNESS and DASH PATTERN,
+        // never by hue — they are all the same gilt ink at different weights/alphas.
+        //   earned path (both ends owned/planned) : SOLID, 8 px
+        //   live frontier (parent owned, child not): SOLID, 4 px
+        //   not earned yet                         : DASHED, 3 px
+        //   unordered shelf (no prerequisite link) : DOTTED, 2 px
+        private static void BuildConnector(Transform row, SkillTrackNodeVM prev, SkillTrackNodeVM seat,
+                                           float xPrev, float xNext, float cy)
+        {
+            float x0 = xPrev + NodeSizePx * 0.5f;
+            float x1 = xNext - NodeSizePx * 0.5f;
+            if (x1 <= x0) return;
+
+            bool prevActive = prev.State == SkillNodeState.Owned || prev.State == SkillNodeState.Planned;
+            bool thisActive = seat.State == SkillNodeState.Owned || seat.State == SkillNodeState.Planned;
+
+            // No prerequisite link = an unordered SHELF: a fine dotted rail and NO arrowhead,
+            // so the line can never imply a pick order the data does not have.
+            if (!seat.LinksToPrev) { BuildDashRun(row, x0, x1, cy, 2f, 6f, 12f, 0.28f); return; }
+
+            if (prevActive && thisActive) BuildBar(row, x0, x1, cy, 8f, 0.90f);
+            else if (prevActive) BuildBar(row, x0, x1, cy, 4f, 0.78f);
+            else BuildDashRun(row, x0, x1, cy, 3f, 16f, 12f, 0.42f);
+            // Every REAL progression link ends in an arrowhead: the unlock DIRECTION is a
+            // shape on the line, not an inference from left-to-right reading order.
+            BuildArrowHead(row, x1, cy, prevActive ? 0.90f : 0.55f);
+        }
+
+        private static void BuildBar(Transform row, float x0, float x1, float cy, float thickness, float alpha)
+        {
+            var go = new GameObject("Line", typeof(Image));
+            go.transform.SetParent(row, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(x1 - x0, thickness);
+            rt.anchoredPosition = new Vector2((x0 + x1) * 0.5f, cy);
             var img = go.GetComponent<Image>();
-            img.color = live
-                ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f)
-                : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.12f);
+            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, alpha);
             img.raycastTarget = false;
         }
 
-        // Section divider band (WO-675 §2 grammar shared with the upgrade panel): crown
-        // glyph + small gilt label + a thin gilt rule running the rest of the row.
-        private void BuildSectionBand(string text, float centrePy, float contentW)
+        // A ">" head built from two rotated bars, tip on the receiving node's edge.
+        private static void BuildArrowHead(Transform row, float tipX, float cy, float alpha)
         {
-            var host = new GameObject("SectionBand", typeof(RectTransform));
-            host.transform.SetParent(_graphContent, false);
-            var r = (RectTransform)host.transform;
-            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
-            r.pivot = new Vector2(0.5f, 0.5f);
-            // FIXED-PIXEL band height (was 36 against a font-34 line box of ~44 — the band
-            // could not seat its own line, the ObsidianQueueHud.HeaderHeightPx failure class).
-            r.sizeDelta = new Vector2(contentW * 0.92f, SectionBandPx);
-            r.anchoredPosition = new Vector2(contentW * 0.5f, centrePy);
-
-            // Crown glyph (sprite-first, hidden on miss — the rule+label still carry the band).
-            Sprite crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, RpgUiCatalog.CrownTier1);
-            if (crown != null)
-            {
-                var cGo = new GameObject("Crown", typeof(Image));
-                cGo.transform.SetParent(host.transform, false);
-                var cr = (RectTransform)cGo.transform;
-                cr.anchorMin = new Vector2(0f, 0.10f); cr.anchorMax = new Vector2(0.030f, 0.90f);
-                cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
-                var cImg = cGo.GetComponent<Image>();
-                cImg.sprite = crown;
-                cImg.preserveAspect = true;
-                cImg.color = ElarionUi.Gilt;
-                cImg.raycastTarget = false;
-            }
-
-            // Widened 0.40 -> 0.46: "Universal - any class" at FontMicro+2 needs ~393 px and the
-            // old cell resolved to ~386 — it was one glyph from ellipsizing its own band label.
-            var label = ElarionUiKit.Label(host.transform, text, 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.MidlineLeft, 0.038f, 0.46f, bold: true);
-            label.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(label);
-
-            // Thin gilt rule filling the remainder of the band row.
-            var rule = new GameObject("Rule", typeof(Image));
-            rule.transform.SetParent(host.transform, false);
-            var rr = (RectTransform)rule.transform;
-            rr.anchorMin = new Vector2(0.47f, 0.5f); rr.anchorMax = new Vector2(1f, 0.5f);
-            rr.offsetMin = new Vector2(0f, -0.75f); rr.offsetMax = new Vector2(0f, 0.75f);
-            var rImg = rule.GetComponent<Image>();
-            rImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f);
-            rImg.raycastTarget = false;
+            ArrowBar(row, tipX - 5f, cy + 3.5f, -35f, alpha);
+            ArrowBar(row, tipX - 5f, cy - 3.5f, 35f, alpha);
         }
 
-        // ── One graph node (§B.1 icon-only: plate + icon + ONE affordance) ───────
-        // cost pip (unlockable) / −n pip + ring (planned) / check stamp (owned) /
-        // dim (locked). ALL text lives in the detail column. Click = select+stage.
-
-        private void BuildGraphNode(SkillNodeVM node, Dictionary<string, Vector2> center)
+        private static void ArrowBar(Transform row, float cx, float cy, float angle, float alpha)
         {
-            if (string.IsNullOrEmpty(node.Id) || !center.TryGetValue(node.Id, out var c)) return;
+            var go = new GameObject("Arrow", typeof(Image));
+            go.transform.SetParent(row, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(13f, 3.5f);
+            rt.anchoredPosition = new Vector2(cx, cy);
+            rt.localRotation = Quaternion.Euler(0f, 0f, angle);
+            var img = go.GetComponent<Image>();
+            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, alpha);
+            img.raycastTarget = false;
+        }
+
+        private static void BuildDashRun(Transform row, float x0, float x1, float cy,
+                                         float thickness, float dashPx, float gapPx, float alpha)
+        {
+            float step = Mathf.Max(4f, dashPx + gapPx);
+            for (float x = x0; x < x1; x += step)
+                BuildBar(row, x, Mathf.Min(x + dashPx, x1), cy, thickness, alpha);
+        }
+
+        /// <summary>Show the "MORE BELOW" cue only while there IS more track under the fold and
+        /// the player has not already scrolled to it. Cheap enough to run per scroll event.</summary>
+        private void UpdateScrollHint()
+        {
+            if (_scrollHint == null || _graphContent == null) return;
+            var well = _graphContent.parent as RectTransform;
+            float wellH = well != null ? well.rect.height : 0f;
+            float maxDown = wellH > 1f ? Mathf.Max(0f, _graphContent.rect.height - wellH) : 0f;
+            _scrollHint.SetActive(maxDown > 8f && _graphContent.anchoredPosition.y < maxDown - 8f);
+        }
+
+        /// <summary>A fixed-pixel child rect seated from its parent's TOP-LEFT corner
+        /// (<paramref name="y"/> counts DOWN). The whole line layout is built from these.</summary>
+        private static RectTransform PxRect(Transform parent, string name, float x, float y, float w, float h)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(w, h);
+            rt.anchoredPosition = new Vector2(x, -y);
+            return rt;
+        }
+
+        // ── ONE NODE ON THE LINE ─────────────────────────────────────────────────
+        // COLOURBLIND LAW (the single most important constraint in WO-896): the six states
+        // are separable with ALL COLOUR STRIPPED OUT. Nothing below is carried by hue.
+        //
+        //  state      plate FILL        border   size   badge SHAPE          label prefix
+        //  ---------  ----------------  -------  -----  -------------------  ------------
+        //  Owned      SOLID (light)     2 px     112    check tick (2 bars)  -
+        //  Planned    solid + ring      3 px     112    "-n" text pip        "PLANNED: "
+        //  Next       hollow (dark)     6 px +   132    cost number pip      "NEXT: "
+        //                               outer ring      (biggest plate)
+        //  Available  hollow (dark)     3 px     112    cost number pip      -
+        //  Inert      hollow + SLASH    3 px     112    "!" pip              "[!] "
+        //  Locked     hollow (dimmest)  1.5 px   112    PADLOCK glyph        -
+        //
+        // Click = select (+ stage/unstage for an actionable node) — unchanged plan->CONFIRM flow.
+
+        private void BuildTrackNode(Transform row, SkillTrackNodeVM seat, float cx, float cy)
+        {
+            var node = seat.Node;
+            if (string.IsNullOrEmpty(node.Id)) return;
+            var state = seat.State;
+
+            float size = state == SkillNodeState.Next ? NodeNextPx : NodeSizePx;
 
             var go = new GameObject("Node_" + node.Id, typeof(Image), typeof(Button));
-            go.transform.SetParent(_graphContent, false);
+            go.transform.SetParent(row, false);
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = c;
-            // A node is a BUTTON — it carries the kit touch floor (was 96 px, below it).
-            rt.sizeDelta = new Vector2(NodeSizePx, NodeSizePx);
+            rt.anchoredPosition = new Vector2(cx, cy);
+            // A node is a BUTTON — it always carries the kit touch floor, even at 112.
+            rt.sizeDelta = new Vector2(size, size);
 
+            // Root image = the gilt LINE border; the dark fill is a child inset by the line
+            // width, so the border reads as a crisp ring whose THICKNESS encodes the state.
             var img = go.GetComponent<Image>();
-            // OWNER F8 2026-07-11 ("remove the background image and just a simple icon with the
-            // lines, simple and minimalistic"): the node face is MINIMAL — a flat obsidian plate
-            // with a THIN gilt LINE border. The painted talent_1..4 plate art is retired from the
-            // node face (the ornate look stays on the panel frame); the graph reads as quiet
-            // icons + connector lines. Root image = the gilt border; the dark fill is a child
-            // inset by the line width, so the border renders as a crisp ~1.5px line.
             ElarionUiKit.ApplyRounded(img);
-            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlpha(node));
+            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlphaFor(state));
 
+            float border = BorderWidthFor(state);
             var fillGo = new GameObject("Fill", typeof(Image));
             fillGo.transform.SetParent(go.transform, false);
             var fillRt = (RectTransform)fillGo.transform;
             fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
-            fillRt.offsetMin = new Vector2(1.5f, 1.5f);
-            fillRt.offsetMax = new Vector2(-1.5f, -1.5f);
+            fillRt.offsetMin = new Vector2(border, border);
+            fillRt.offsetMax = new Vector2(-border, -border);
             var fillImg = fillGo.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(fillImg);
-            fillImg.color = PlateFill(node);
+            fillImg.color = PlateFillFor(state);
             fillImg.raycastTarget = false;
 
-            // Capstone — a THICKER gilt rim (procedural, no art) so the tier-capper still reads
-            // special without reintroducing painted borders. Behind the plate, peeks ~5px.
-            if (node.IsCapstone)
-            {
-                var frame = new GameObject("CapstoneFrame", typeof(Image));
-                frame.transform.SetParent(go.transform, false);
-                var fr = frame.GetComponent<RectTransform>();
-                fr.anchorMin = new Vector2(-0.05f, -0.05f);
-                fr.anchorMax = new Vector2(1.05f, 1.05f);
-                fr.offsetMin = Vector2.zero; fr.offsetMax = Vector2.zero;
-                var fImg = frame.GetComponent<Image>();
-                ElarionUiKit.ApplyRounded(fImg);
-                fImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
-                                       node.Owned || node.CanUnlock || node.IsPending ? 0.85f : 0.40f);
-                fImg.raycastTarget = false;
-                frame.transform.SetAsFirstSibling();
-            }
+            // Capstone — a THICKER gilt rim behind the plate (procedural, no art), so the
+            // tier-capper still reads special on the line.
+            if (node.IsCapstone) BuildOuterRing(go.transform, 0.05f,
+                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
+                          state == SkillNodeState.Locked ? 0.40f : 0.85f));
 
-            // Planned ring — a CLEAN rounded ring (owner F8 2026-07-11: the old un-rounded raw
-            // Image drew a solid square that peeked past the plate as a "rough yellow scribble").
-            // Rounded + behind the opaque plate → reads as a thin ~5px ring around the border.
-            if (node.IsPending)
-            {
-                var ring = new GameObject("PlanRing", typeof(Image));
-                ring.transform.SetParent(go.transform, false);
-                var rr = ring.GetComponent<RectTransform>();
-                rr.anchorMin = new Vector2(-0.05f, -0.05f);
-                rr.anchorMax = new Vector2(1.05f, 1.05f);
-                rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
-                var rImg = ring.GetComponent<Image>();
-                ElarionUiKit.ApplyRounded(rImg);
-                rImg.color = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f);
-                rImg.raycastTarget = false;
-                ring.transform.SetAsFirstSibling();
-            }
+            // The FOCUS node wears a second, wider ring — with the +20 px plate it is the one
+            // node on the row you can pick out at arm's length with the colour gone.
+            if (state == SkillNodeState.Next) BuildOuterRing(go.transform, 0.055f,
+                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f));
 
-            // Click → SELECT (always, so a locked perk can be read in the detail strip);
-            // the VM folds the plan toggle (stage/unstage) in for actionable nodes.
+            // Planned ring (unchanged plan->CONFIRM affordance).
+            if (state == SkillNodeState.Planned) BuildOuterRing(go.transform, 0.05f,
+                new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f));
+
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
             ElarionUiKit.StyleButtonColors(btn);
@@ -673,11 +739,10 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
-            // Icon — SMALL and quiet in the plate centre (owner F8 2026-07-11 minimal pass).
-            // The Talents/* sprites are full-bleed paintings; at ~60% of the plate, tinted
-            // down toward parchment-grey, they read as quiet emblems instead of background art.
+            // Icon — quiet in the plate centre. On an OWNED (light-filled) plate the glyph
+            // flips to near-black ink: the contrast reversal is itself a colour-free tell.
+            bool dim = state == SkillNodeState.Locked || state == SkillNodeState.Inert;
             var sprite = LoadIcon(node.IconPath);
-            bool locked = !node.Owned && !node.CanUnlock && !node.IsPending;
             if (sprite != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
@@ -690,30 +755,132 @@ namespace DeNelle.Village.Talents
                 iImg.sprite = sprite;
                 iImg.preserveAspect = true;
                 iImg.raycastTarget = false;
-                iImg.color = locked
-                    ? new Color(0.82f, 0.80f, 0.77f, 0.35f)  // dim = the locked affordance
-                    : new Color(0.86f, 0.84f, 0.81f, 0.95f); // tinted-down glyph read
+                iImg.color = state == SkillNodeState.Owned ? new Color(0.10f, 0.09f, 0.08f, 0.95f)
+                           : dim ? new Color(0.82f, 0.80f, 0.77f, 0.35f)
+                           : new Color(0.86f, 0.84f, 0.81f, 0.95f);
             }
             else
             {
-                // No icon art yet — a two-letter monogram keeps the node identifiable
-                // (never a blank plate; name/desc still live in the detail column).
-                string mono = string.IsNullOrEmpty(node.Name) ? "?" : node.Name.Substring(0, Mathf.Min(2, node.Name.Length));
+                // No icon art yet — a two-letter monogram keeps the node identifiable.
+                string mono = string.IsNullOrEmpty(node.Name)
+                    ? "?" : node.Name.Substring(0, Mathf.Min(2, node.Name.Length));
                 var monoLbl = ElarionUiKit.Label(go.transform, mono, 0.24f, 0.76f,
-                    locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                    state == SkillNodeState.Owned ? new Color(0.10f, 0.09f, 0.08f, 1f)
+                        : dim ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
                 ElarionUiKit.FitSingleLine(monoLbl);
             }
 
-            // ONE affordance per state (colorblind law — shape/stamp/pip, never hue alone):
-            //   owned  → check stamp   · planned → ring (above) + "−n" pip
-            //   can-unlock → cost pip  · locked  → dim (icon alpha + plate tint, luminance)
-            if (node.Owned)
-                BuildNodeCheckStamp(go.transform);                                        // check STAMP (shape, font-free)
-            else if (node.IsPending)
-                BuildNodeStamp(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable); // planned -n pip (+ ring above)
-            else if (node.CanUnlock)
-                BuildNodeStamp(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment); // cost pip
+            // WO-910 — an INERT node (reachable, but nothing in the game reads its effect yet)
+            // wears a SLASH across the plate. It is the loudest possible "this grants nothing",
+            // it survives greyscale, and it is presentation only: the node stays selectable and
+            // purchasable, so the owner's pending hide-or-wire ruling is not pre-empted here.
+            if (state == SkillNodeState.Inert) BuildNodeSlash(go.transform, size);
+
+            // ONE badge per state (shape/stamp/pip — never hue alone).
+            switch (state)
+            {
+                case SkillNodeState.Owned:
+                    BuildNodeCheckStamp(go.transform);
+                    break;
+                case SkillNodeState.Planned:
+                    BuildNodeStamp(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable);
+                    break;
+                case SkillNodeState.Next:
+                case SkillNodeState.Available:
+                    BuildNodeStamp(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment);
+                    break;
+                case SkillNodeState.Inert:
+                    BuildNodeStamp(go.transform, "!", ElarionUi.Parchment);
+                    break;
+                default:
+                    BuildNodeLockGlyph(go.transform);
+                    break;
+            }
+        }
+
+        // The short name UNDER the node (WO-896 §1). The state prefix is ASCII text — the
+        // last, hue-free line of defence for a player who cannot separate the plate colours.
+        private static void BuildNodeLabel(Transform row, SkillTrackNodeVM seat, float cx, float cy)
+        {
+            string prefix;
+            switch (seat.State)
+            {
+                case SkillNodeState.Next: prefix = "NEXT: "; break;
+                case SkillNodeState.Planned: prefix = "PLANNED: "; break;
+                case SkillNodeState.Inert: prefix = "[!] "; break;
+                default: prefix = ""; break;
+            }
+            string name = string.IsNullOrEmpty(seat.Node.Name) ? seat.Node.Id : seat.Node.Name;
+
+            float top = -cy + NodeSizePx * 0.5f + NodeLabelGapPx;   // px DOWN from the row top
+            var host = PxRect(row, "NodeLabel", cx - NodePitchPx * 0.5f, top, NodePitchPx, NodeLabelBandPx);
+            var lbl = ElarionUiKit.Label(host, prefix + name, 0f, 1f,
+                seat.State == SkillNodeState.Locked || seat.State == SkillNodeState.Inert
+                    ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Top, 0.04f, 0.96f,
+                bold: seat.State == SkillNodeState.Next || seat.State == SkillNodeState.Owned);
+            ElarionUiKit.FitBlock(lbl);   // wraps to two whole line boxes, never spills
+        }
+
+        // A rounded ring behind the plate, peeking <paramref name="grow"/> of the plate on
+        // every side (the plate is opaque and drawn over it).
+        private static void BuildOuterRing(Transform nodeRoot, float grow, Color color)
+        {
+            var ring = new GameObject("Ring", typeof(Image));
+            ring.transform.SetParent(nodeRoot, false);
+            var rr = ring.GetComponent<RectTransform>();
+            rr.anchorMin = new Vector2(-grow, -grow);
+            rr.anchorMax = new Vector2(1f + grow, 1f + grow);
+            rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
+            var rImg = ring.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(rImg);
+            rImg.color = color;
+            rImg.raycastTarget = false;
+            ring.transform.SetAsFirstSibling();
+        }
+
+        // WO-910 inert mark — one bar struck across the plate face.
+        private static void BuildNodeSlash(Transform nodeRoot, float size)
+        {
+            var bar = new GameObject("InertSlash", typeof(Image));
+            bar.transform.SetParent(nodeRoot, false);
+            var br = (RectTransform)bar.transform;
+            br.anchorMin = br.anchorMax = new Vector2(0.5f, 0.5f);
+            br.pivot = new Vector2(0.5f, 0.5f);
+            br.anchoredPosition = Vector2.zero;
+            br.sizeDelta = new Vector2(size * 0.74f, 5f);
+            br.localRotation = Quaternion.Euler(0f, 0f, -22f);
+            var bImg = bar.GetComponent<Image>();
+            bImg.color = new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, 0.75f);
+            bImg.raycastTarget = false;
+        }
+
+        // Locked = a PADLOCK drawn from four bars inside the badge disc (font-free: the TMP
+        // font has no lock glyph, and a SHAPE satisfies the colourblind law).
+        private static void BuildNodeLockGlyph(Transform nodeRoot)
+        {
+            var pr = BuildNodeStamp(nodeRoot, null, Color.clear);
+            var ink = new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, 0.85f);
+
+            LockBar(pr, new Vector2(0.5f, 0.36f), new Vector2(26f, 20f), ink);   // body
+            LockBar(pr, new Vector2(0.34f, 0.62f), new Vector2(4f, 16f), ink);   // shackle left
+            LockBar(pr, new Vector2(0.66f, 0.62f), new Vector2(4f, 16f), ink);   // shackle right
+            LockBar(pr, new Vector2(0.5f, 0.74f), new Vector2(20f, 4f), ink);    // shackle top
+        }
+
+        private static void LockBar(Transform parent, Vector2 anchor, Vector2 size, Color ink)
+        {
+            var go = new GameObject("Lock", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = size;
+            var img = go.GetComponent<Image>();
+            img.color = ink;
+            img.raycastTarget = false;
         }
 
         // Small bottom-right pip disc: dark plate + a short glyph ("-2", "3").
@@ -768,24 +935,53 @@ namespace DeNelle.Village.Talents
             lImg.raycastTarget = false;
         }
 
-        // Flat obsidian fill (minimal face — owner F8 2026-07-11): state lives in the ONE
-        // affordance (check/ring+pip/cost pip/dim); the fill only carries the locked-dim
-        // luminance step (colorblind law — never hue alone).
-        private static Color PlateFill(SkillNodeVM node)
+        // Plate FILL by state. OWNED is the only FILLED plate — a solid light face against
+        // five dark ones, i.e. a luminance step, not a hue (colourblind law). PLANNED is
+        // half-filled, so "already yours" and "about to be yours" still differ in greyscale.
+        private static Color PlateFillFor(SkillNodeState state)
         {
-            bool locked = !node.Owned && !node.CanUnlock && !node.IsPending;
-            return locked
-                ? new Color(0.030f, 0.028f, 0.040f, 0.96f)
-                : new Color(0.055f, 0.050f, 0.070f, 0.96f);
+            switch (state)
+            {
+                case SkillNodeState.Owned:
+                    return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.88f);
+                case SkillNodeState.Planned:
+                    return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
+                case SkillNodeState.Locked:
+                    return new Color(0.030f, 0.028f, 0.040f, 0.96f);
+                case SkillNodeState.Inert:
+                    return new Color(0.040f, 0.038f, 0.050f, 0.96f);
+                default:
+                    return new Color(0.055f, 0.050f, 0.070f, 0.96f);
+            }
         }
 
-        // Thin gilt LINE border: actionable/live nodes carry a brighter line; locked recedes
-        // (luminance step, still visible so the graph shape always reads).
-        private static float BorderAlpha(SkillNodeVM node)
+        // Gilt LINE border alpha by state (paired with BorderWidthFor — the WIDTH is the
+        // colour-free signal; the alpha only reinforces it).
+        private static float BorderAlphaFor(SkillNodeState state)
         {
-            if (node.Owned || node.IsPending) return 0.90f;
-            if (node.CanUnlock) return 0.70f;
-            return 0.28f;
+            switch (state)
+            {
+                case SkillNodeState.Owned: return 0.95f;
+                case SkillNodeState.Planned: return 0.90f;
+                case SkillNodeState.Next: return 1.00f;
+                case SkillNodeState.Available: return 0.75f;
+                case SkillNodeState.Inert: return 0.45f;
+                default: return 0.28f;
+            }
+        }
+
+        // Border WIDTH in px — the focus node's ring is 4x the locked node's.
+        private static float BorderWidthFor(SkillNodeState state)
+        {
+            switch (state)
+            {
+                case SkillNodeState.Next: return 6f;
+                case SkillNodeState.Planned: return 3f;
+                case SkillNodeState.Available: return 3f;
+                case SkillNodeState.Inert: return 3f;
+                case SkillNodeState.Owned: return 2f;
+                default: return 1.5f;
+            }
         }
 
         // ── Chrome (presentation only) ────────────────────────────────────────────
@@ -964,13 +1160,35 @@ namespace DeNelle.Village.Talents
             _graphContent = contentGo.GetComponent<RectTransform>();
             // TOP-LEFT anchored + pivoted (was centre-anchored). Centring a content rect WIDER
             // than the mask is exactly what sliced a node plate off BOTH frame edges in the
-            // 2026-08-04 capture. Flush top-left + GraphPadPx of padding means the rest position
-            // always shows whole plates at the leading edges; the trailing edge peeks, which is
-            // the scroll affordance. RebuildGraph sizes the rect in exact pixels.
+            // 2026-08-04 capture. Flush top-left + ContentPadPx of padding means the rest
+            // position always shows the FIRST TRACK ROW WHOLE — plate and name label — which is
+            // the WO-896 "no clipped top row" criterion; later rows are reached by scrolling.
+            // RebuildTracks sizes the rect in exact pixels.
             _graphContent.anchorMin = _graphContent.anchorMax = new Vector2(0f, 1f);
             _graphContent.pivot = new Vector2(0f, 1f);
-            _graphContent.sizeDelta = new Vector2(GraphUnitWpx, GraphUnitHpx);
+            _graphContent.sizeDelta = new Vector2(
+                ContentPadPx * 2f + TrackTitleWpx + TrackWrapCount * NodePitchPx,
+                TrackRowPx + ContentPadPx * 2f);
             _graphContent.anchoredPosition = Vector2.zero;
+
+            // WO-896 overflow cue — a fixed corner tag on the WELL (never inside the scrolling
+            // content, or it would scroll away with the thing it is describing).
+            var hintGo = new GameObject("ScrollHint", typeof(Image));
+            hintGo.transform.SetParent(viewportGo.transform, false);
+            var hr = (RectTransform)hintGo.transform;
+            hr.anchorMin = hr.anchorMax = Vector2.zero;
+            hr.pivot = Vector2.zero;
+            hr.anchoredPosition = new Vector2(6f, 6f);
+            hr.sizeDelta = new Vector2(200f, 40f);
+            var hImg = hintGo.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(hImg);
+            hImg.color = new Color(0.05f, 0.045f, 0.06f, 0.88f);
+            hImg.raycastTarget = false;   // never eats a drag-scroll
+            var hLbl = ElarionUiKit.Label(hintGo.transform, "MORE BELOW", 0f, 1f, ElarionUi.Gilt,
+                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(hLbl);
+            hintGo.SetActive(false);
+            _scrollHint = hintGo;
 
             var scroll = areaGo.GetComponent<ScrollRect>();
             scroll.content = _graphContent;
@@ -980,6 +1198,7 @@ namespace DeNelle.Village.Talents
             scroll.movementType = ScrollRect.MovementType.Elastic;
             scroll.elasticity = 0.08f;
             scroll.scrollSensitivity = 28f;
+            scroll.onValueChanged.AddListener(_ => UpdateScrollHint());
         }
 
         // Cancel / Respec / CONFIRM (§B.2 — no plan-summary strip; the plan folds into
@@ -1220,6 +1439,8 @@ namespace DeNelle.Village.Talents
             _detailDesc = null;
             _detailState = null;
             _quickRoot = null;
+            _scrollHint = null;
+            _lastLayoutSig = null;
             _lastQuickStatus = null;
             _lastRespecStatus = null;
             _detailGroup = null;

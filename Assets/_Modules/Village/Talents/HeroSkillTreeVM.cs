@@ -20,6 +20,23 @@
 // (Skill | Stat) + `abilityId`. A Skill-kind node grants an equippable ability the
 // loadout panel can slot; a Stat node is a passive stat bump. We read both off the
 // def reflectively-free (the fields exist in the combined tree at gate time).
+//
+// WO-896 (2026-08-05) — PROGRESSION TRACKS. The View no longer draws an authored
+// x/y node GRAPH; it draws TRACKS (a track = one ordered line of nodes connected by a
+// progression line). This VM owns the track derivation, because a track is DATA, not
+// presentation: it is a chain decomposition of the prerequisite graph over the VISIBLE
+// nodes (Hidden already filtered), so hiding a node re-forms the tracks with no view
+// change at all. Each node in a track carries a resolved SkillNodeState so the View
+// only has to skin it (owned / planned / next / available / inert / locked).
+//
+// WO-910 (open, owner ruling pending) — DEAD NODES MUST NOT READ AS "NEXT". 31 of the
+// ranger/mage nodes are player-reachable talents with no implemented consumer: the
+// player can spend Wisdom and receive nothing. Presenting one of those as the shining
+// "next step" would be the panel lying. TalentEffectLiveness (below) answers "does this
+// node's effect actually do anything at runtime?"; a reachable node that answers NO
+// resolves to SkillNodeState.Inert instead of Next, and says so in the detail strip.
+// This is a PRESENTATION honesty fix only — it does not hide, block or re-price any
+// node, so it stands whichever way the owner rules on hiding.
 // =============================================================================
 
 using System;
@@ -59,12 +76,16 @@ namespace DeNelle.Village.Talents
         public readonly bool IsPending;      // staged in the current plan (not yet committed)
         public readonly float X;             // node-graph canvas position (0..1; -1 = unset/auto)
         public readonly float Y;             // 0=top, 1=bottom
+        /// <summary>WO-896/WO-910: false when this node's effect has NO implemented runtime
+        /// consumer — buying it grants nothing today. Such a node is never presented as the
+        /// track's "next" step; the View marks it and the detail strip says so out loud.</summary>
+        public readonly bool EffectLive;
 
         public SkillNodeVM(string id, string name, int tier, int column, string branch,
                            IReadOnlyList<string> prereqs, SkillNodeKind kind, string abilityId,
                            string iconPath, bool isCapstone, bool isShared,
                            bool owned, bool canUnlock, string lockReason, int wisdomCost, bool isEquipped,
-                           bool isPending, float x, float y)
+                           bool isPending, float x, float y, bool effectLive = true)
         {
             Id = id;
             Name = name;
@@ -85,6 +106,230 @@ namespace DeNelle.Village.Talents
             IsPending = isPending;
             X = x;
             Y = y;
+            EffectLive = effectLive;
+        }
+    }
+
+    /// <summary>
+    /// How one node reads on the progression line. The View skins these WITHOUT relying on
+    /// hue (the owner is red/green colourblind): fill, plate size, badge SHAPE, label prefix
+    /// and connector weight carry every distinction — see the state matrix in
+    /// HeroSkillTreePanelMvvm's header.
+    /// </summary>
+    public enum SkillNodeState
+    {
+        /// <summary>Already unlocked and paid for.</summary>
+        Owned,
+        /// <summary>Staged in the current plan, not yet committed.</summary>
+        Planned,
+        /// <summary>The ONE frontier step of an ordered track: reachable, affordable, and its
+        /// effect has a real runtime consumer. At most one per ordered track.</summary>
+        Next,
+        /// <summary>Reachable + affordable + live, but not the track's frontier (a pool node,
+        /// or a second live option on the same rung).</summary>
+        Available,
+        /// <summary>Reachable + affordable, but the effect has NO implemented consumer (WO-910):
+        /// buying it grants nothing today. Never rendered as the "next" step.</summary>
+        Inert,
+        /// <summary>Not reachable yet (prerequisite / cost / capstone rule). LockReason says why.</summary>
+        Locked
+    }
+
+    /// <summary>One node's seat on a progression track: the node, its resolved state, and
+    /// whether the node to its LEFT on the track is its actual prerequisite (a real progression
+    /// link) or merely the previous item on an unordered shelf.</summary>
+    public readonly struct SkillTrackNodeVM
+    {
+        public readonly SkillNodeVM Node;
+        public readonly SkillNodeState State;
+        public readonly bool LinksToPrev;
+
+        public SkillTrackNodeVM(SkillNodeVM node, SkillNodeState state, bool linksToPrev)
+        {
+            Node = node;
+            State = state;
+            LinksToPrev = linksToPrev;
+        }
+    }
+
+    /// <summary>
+    /// One PROGRESSION TRACK — an ordered line of nodes the View draws left-to-right with a
+    /// connecting line (WO-896). An ORDERED track is a prerequisite chain (earlier -> later);
+    /// an UNORDERED track is a free-pick pool (the Universal shelf), which the View draws with
+    /// a dotted rail + a "no order" note so the line never implies a sequence that isn't real.
+    /// </summary>
+    public sealed class SkillTrackVM
+    {
+        /// <summary>Small caps tag above the title ("WAR PATH", "UNIVERSAL", ...). ASCII only.</summary>
+        public string Kind { get; }
+        /// <summary>The track's name — the root node's name for a chain. ASCII only.</summary>
+        public string Title { get; }
+        /// <summary>Optional qualifier ("after Thunderbolt", "no order - pick any",
+        /// "prerequisite is hidden"). ASCII only, may be "".</summary>
+        public string Note { get; }
+        /// <summary>True when the line means "unlock order"; false for a free-pick pool.</summary>
+        public bool Ordered { get; }
+        public IReadOnlyList<SkillTrackNodeVM> Nodes { get; }
+
+        public SkillTrackVM(string kind, string title, string note, bool ordered,
+                            IReadOnlyList<SkillTrackNodeVM> nodes)
+        {
+            Kind = kind ?? "";
+            Title = title ?? "";
+            Note = note ?? "";
+            Ordered = ordered;
+            Nodes = nodes ?? Array.Empty<SkillTrackNodeVM>();
+        }
+    }
+
+    /// <summary>
+    /// WO-910 answer to "would buying this node actually DO anything?" — asked at RUNTIME, from
+    /// the node's own data, so the progression line can never advertise a dead node as the next
+    /// step to spend Wisdom on.
+    ///
+    /// THREE RULES, cheapest-proof first:
+    ///   1. NOTE FLAG (the data's own confession) — an effect note carrying "V2" / "stub" /
+    ///      "no consumer" / "hidden until" / "not wired" is the same belt check the EditMode
+    ///      gate (TalentStrategyRegression G3) uses. Authored by whoever wrote the stub.
+    ///   2. EFFECT KEY — the effect type (plus the modifyAbility stat discriminator) must be a
+    ///      key some system actually reads. See the mirror note on ConsumedEffectKeys.
+    ///   3. ABILITY PROOF — an unlockAbility / kind=skill node must name an ability that
+    ///      resolves in AbilityCatalog, or the loadout has nothing to equip. This one is a
+    ///      PROOF, not a list: it re-checks itself against the shipped catalog every run.
+    ///
+    /// FAILURE DIRECTION IS DELIBERATE: if a consumer is wired and rule 2's mirror is not
+    /// updated, the node reads "no effect yet" — an under-claim the player can still buy. The
+    /// panel never over-claims. (The reverse — a stale mirror promising an effect that does not
+    /// exist — is the exact WO-910 defect and is what this class exists to prevent.)
+    /// </summary>
+    public static class TalentEffectLiveness
+    {
+        // Rule 1 — lowercase substrings that mark an authored-but-not-wired effect. These are
+        // the tokens actually used in hero-talents.json today ("(V2)", "(NEW ability - stub)",
+        // "NO rider consumer for a slow yet", "hidden until a crit mechanic exists").
+        private static readonly string[] NotWiredNoteTokens =
+        {
+            "v2", "v-later", "stub", "no consumer", "no rider consumer",
+            "not wired", "not implemented", "hidden until"
+        };
+
+        // Rule 2 — MIRROR of TalentConsumerRegistry.Implemented in
+        // Assets/Editor/Regression/TalentStrategyRegression.cs. That registry is the AUTHORITY
+        // (it carries the file+member citation the gate enforces); it lives in the Editor
+        // assembly, which runtime code cannot reference, so the keys are mirrored here.
+        // UPDATE RULE: wiring a consumer means adding the key in BOTH places in the same commit.
+        // Drift is safe in one direction only (see the class summary) — never delete a key here
+        // to make a node look alive.
+        private static readonly HashSet<string> ConsumedEffectKeys =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "damagereduction", "defense", "allstatspct", "maxhppct", "blockchance",
+            "damagebonus", "cdreduction", "unlockability", "modifyability:heal",
+            "reflect", "laststand", "invuln", "revive", "proc", "healthregen", "manaregen",
+            "harvestrate", "collectorcap", "repaircost", "buildtime", "salvage", "wavereward",
+            "towerdamage", "towerrange", "structuretoughness", "structuretoughnesswave",
+            "towerattackspeed", "modifyability:poison", "modifyability:"
+        };
+
+        /// <summary>True when this node's effect is read by a real runtime system.
+        /// <paramref name="why"/> carries the plain-words reason when it is NOT (ASCII, safe to
+        /// show a player).</summary>
+        public static bool HasRuntimeConsumer(HeroTalentNodeDef n, out string why)
+        {
+            why = "";
+            if (n == null) { why = "no node"; return false; }
+
+            var e = n.Effect;
+            bool grantsAbility = !string.IsNullOrEmpty(n.AbilityId)
+                                 || (e != null && string.Equals(e.Type, "unlockAbility", StringComparison.OrdinalIgnoreCase));
+
+            if (e == null || string.IsNullOrEmpty(e.Type))
+            {
+                if (!grantsAbility) { why = "no effect is authored on this talent yet"; return false; }
+            }
+
+            // Rule 1 — the data's own not-yet-wired confession.
+            if (e != null && NoteFlagsNotWired(e.Note, out string token))
+            {
+                why = "not implemented yet (data note: '" + token + "')";
+                return false;
+            }
+
+            // Rule 2 — the effect key has to be one somebody reads.
+            if (e != null && !string.IsNullOrEmpty(e.Type))
+            {
+                string key = EffectKey(e);
+                if (!ConsumedEffectKeys.Contains(key))
+                {
+                    why = "nothing reads the '" + e.Type + "' effect yet";
+                    return false;
+                }
+            }
+
+            // Rule 3 — an ability-granting node must name an ability that EXISTS.
+            if (grantsAbility)
+            {
+                string ids = !string.IsNullOrEmpty(n.AbilityId) ? n.AbilityId
+                           : (e != null ? e.Ability : null);
+                if (string.IsNullOrEmpty(ids))
+                {
+                    why = "it unlocks an ability but names none";
+                    return false;
+                }
+                foreach (var raw in ids.Split(','))
+                {
+                    string id = raw.Trim();
+                    if (id.Length == 0) continue;
+                    if (AbilityCatalog.FindById(id) != null) continue;
+                    // A MISS is only meaningful while the catalog itself is up. If
+                    // abilities.json failed to load, every id would miss and the whole tree
+                    // would grey out on a data fault — so say so in the trace and DON'T
+                    // slander the talents (fail the check open, never blank the screen).
+                    if (!AbilityCatalogAlive())
+                    {
+                        FlowTrace.Warn("SkillTree", "AbilityCatalog looks EMPTY - cannot verify ability '" +
+                                                    id + "'; treating talents as live rather than dead");
+                        return true;
+                    }
+                    why = "the ability '" + id + "' does not exist yet";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>The registry key for an effect: the type, lowercased, with the modifyAbility
+        /// stat discriminator appended ("modifyability:heal"). An UNSET stat is itself a
+        /// discriminator ("modifyability:" = the taunt-burn rider), never a wildcard.</summary>
+        private static string EffectKey(HeroTalentEffectDef e)
+        {
+            if (e == null || string.IsNullOrEmpty(e.Type)) return "";
+            string type = e.Type.Trim().ToLowerInvariant();
+            if (type != "modifyability") return type;
+            return "modifyability:" + (e.Stat ?? "").Trim().ToLowerInvariant();
+        }
+
+        /// <summary>True when abilities.json actually loaded (any class has a Q/W/E/R loadout).
+        /// Guards rule 3 against a data-load fault reading as "every talent is dead".</summary>
+        private static bool AbilityCatalogAlive()
+        {
+            var knight = AbilityCatalog.GetLoadout("knight");
+            if (knight != null && knight.Count > 0) return true;
+            var mage = AbilityCatalog.GetLoadout("mage");
+            return mage != null && mage.Count > 0;
+        }
+
+        private static bool NoteFlagsNotWired(string note, out string token)
+        {
+            token = "";
+            if (string.IsNullOrEmpty(note)) return false;
+            string lower = note.ToLowerInvariant();
+            foreach (var t in NotWiredNoteTokens)
+            {
+                if (lower.IndexOf(t, StringComparison.Ordinal) >= 0) { token = t; return true; }
+            }
+            return false;
         }
     }
 
@@ -108,6 +353,8 @@ namespace DeNelle.Village.Talents
         private readonly List<SkillNodeVM> _shared = new List<SkillNodeVM>();
         // Ordered, de-duped branch column labels (index == SkillNodeVM.Column).
         private readonly List<string> _branches = new List<string>();
+        // WO-896: the progression TRACKS the View draws (derived from the two lists above).
+        private readonly List<SkillTrackVM> _tracks = new List<SkillTrackVM>();
         // Plan→CONFIRM: nodes staged this session but not yet committed/spent.
         private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
 
@@ -163,6 +410,11 @@ namespace DeNelle.Village.Talents
 
         /// <summary>Branch column display names, left-to-right (index == node.Column). Never null.</summary>
         public IReadOnlyList<string> Branches => _branches;
+
+        /// <summary>WO-896: the progression TRACKS the panel draws — each an ordered line of
+        /// nodes with a resolved state per seat. Hero chains first (reading order), then the
+        /// unordered Universal pool. Never null.</summary>
+        public IReadOnlyList<SkillTrackVM> Tracks => _tracks;
 
         /// <summary>Current Wisdom balance (the talent-unlock currency).</summary>
         public int RemainingWisdom
@@ -479,7 +731,196 @@ namespace DeNelle.Village.Talents
             // marking anything hidden; see WORK_ORDER_910_ranger_mage_talent_consumers.md.
             // No node currently sets hidden, so today this is a no-op on live behaviour.
 
+            RebuildTracks();
             BuildQuickSlots();
+        }
+
+        // ── WO-896: PROGRESSION TRACKS (the data behind the connected line) ──────
+        // A track is a CHAIN in the prerequisite graph over the VISIBLE nodes, walked
+        // left-to-right = earlier-to-later. Chain decomposition, in one pass over the nodes
+        // sorted by (tier, column, id): a node extends the chain whose TAIL is one of its
+        // prerequisites; otherwise it starts a new track. A tier-1 root therefore opens a
+        // track and each following tier extends it, while a second child of the same parent
+        // (e.g. Venombrand off Thunderbolt) opens its own short track labelled "after <parent>".
+        //
+        // WHY IN THE VM: hiding a node (the WO-910 ruling the owner still owes) changes only
+        // _nodes/_shared; the tracks then RE-FORM from whatever is left, and a survivor whose
+        // only prerequisite was hidden opens its own track carrying an explicit
+        // "prerequisite is hidden" note instead of silently looking like a fresh start.
+
+        private void RebuildTracks()
+        {
+            _tracks.Clear();
+            Guard.Try("SkillTree", "build progression tracks", () =>
+            {
+                BuildHeroTracks();
+                BuildSharedTrack();
+            });
+            LogTrackCensus();
+        }
+
+        private void BuildHeroTracks()
+        {
+            var byId = new Dictionary<string, SkillNodeVM>(StringComparer.Ordinal);
+            foreach (var n in _nodes)
+                if (!string.IsNullOrEmpty(n.Id)) byId[n.Id] = n;
+
+            var ordered = new List<SkillNodeVM>(_nodes);
+            ordered.Sort(CompareForTrack);
+
+            var chains = new List<List<SkillNodeVM>>();
+            var links = new List<List<bool>>();
+            var notes = new List<string>();
+            var tails = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (var n in ordered)
+            {
+                if (string.IsNullOrEmpty(n.Id)) continue;
+
+                string tailParent = null, visibleParent = null;
+                bool hasPrereq = false;
+                if (n.Prereqs != null)
+                {
+                    foreach (var pr in n.Prereqs)
+                    {
+                        if (string.IsNullOrEmpty(pr)) continue;
+                        hasPrereq = true;
+                        if (!byId.ContainsKey(pr)) continue;          // prerequisite is hidden
+                        if (visibleParent == null) visibleParent = pr;
+                        if (tails.ContainsKey(pr)) { tailParent = pr; break; }
+                    }
+                }
+
+                if (tailParent != null && tails.TryGetValue(tailParent, out int chain))
+                {
+                    tails.Remove(tailParent);
+                    chains[chain].Add(n);
+                    links[chain].Add(true);
+                    tails[n.Id] = chain;
+                    continue;
+                }
+
+                chains.Add(new List<SkillNodeVM> { n });
+                links.Add(new List<bool> { false });
+                notes.Add(visibleParent != null ? "after " + NameOf(visibleParent, byId)
+                        : hasPrereq ? "prerequisite is hidden"
+                        : "");
+                tails[n.Id] = chains.Count - 1;
+            }
+
+            for (int i = 0; i < chains.Count; i++)
+            {
+                var root = chains[i][0];
+                _tracks.Add(new SkillTrackVM(
+                    BranchTagOf(root.Id),
+                    string.IsNullOrEmpty(root.Name) ? root.Id : root.Name,
+                    notes[i],
+                    ordered: true,
+                    nodes: ResolveStates(chains[i], links[i], ordered: true)));
+            }
+        }
+
+        // The Universal pool is NOT a chain: every node is free-standing, so a solid line
+        // between them would invent an unlock order that does not exist. It ships as ONE
+        // unordered track (the View draws a dotted rail + the "no order" note).
+        private void BuildSharedTrack()
+        {
+            if (_shared.Count == 0) return;
+            var seats = new List<SkillNodeVM>(_shared);
+            var links = new List<bool>(seats.Count);
+            for (int i = 0; i < seats.Count; i++) links.Add(false);
+            _tracks.Add(new SkillTrackVM("UNIVERSAL", "Any class", "no order - pick any",
+                ordered: false, nodes: ResolveStates(seats, links, ordered: false)));
+        }
+
+        // Resolve each seat's state. On an ORDERED track exactly ONE node may be Next: the
+        // first reachable node whose effect actually does something (WO-910). A reachable node
+        // with no consumer resolves Inert and therefore never takes the Next seat, so the
+        // panel's focus can never point at a talent that grants nothing.
+        private static IReadOnlyList<SkillTrackNodeVM> ResolveStates(
+            List<SkillNodeVM> seats, List<bool> links, bool ordered)
+        {
+            var outSeats = new List<SkillTrackNodeVM>(seats.Count);
+            bool nextTaken = false;
+            for (int i = 0; i < seats.Count; i++)
+            {
+                var n = seats[i];
+                SkillNodeState state;
+                if (n.Owned) state = SkillNodeState.Owned;
+                else if (n.IsPending) state = SkillNodeState.Planned;
+                else if (!n.CanUnlock) state = SkillNodeState.Locked;
+                else if (!n.EffectLive) state = SkillNodeState.Inert;
+                else if (ordered && !nextTaken) { state = SkillNodeState.Next; nextTaken = true; }
+                else state = SkillNodeState.Available;
+                outSeats.Add(new SkillTrackNodeVM(n, state, i > 0 && links[i]));
+            }
+            return outSeats;
+        }
+
+        // Deterministic reading order: tier row first, then the authored slot column, then id.
+        private static int CompareForTrack(SkillNodeVM a, SkillNodeVM b)
+        {
+            int c = a.Tier.CompareTo(b.Tier);
+            if (c != 0) return c;
+            c = a.Column.CompareTo(b.Column);
+            if (c != 0) return c;
+            return string.CompareOrdinal(a.Id, b.Id);
+        }
+
+        private static string NameOf(string id, Dictionary<string, SkillNodeVM> byId)
+        {
+            if (!string.IsNullOrEmpty(id) && byId.TryGetValue(id, out var n) && !string.IsNullOrEmpty(n.Name))
+                return n.Name;
+            return id ?? "";
+        }
+
+        // WO-676 strategic branch, straight off the def ("war" | "steward" | "bulwark";
+        // absent = war). NOT SkillNodeVM.Branch — that field carries the legacy v1 a/b/c
+        // column mapping ("Ranged"/"Heal-Sustain"/"Control"), which v2 nodes do not set.
+        private static string BranchTagOf(string nodeId)
+        {
+            var def = HeroTalentCatalog.FindNode(nodeId);
+            string b = def != null ? (ReadStringField(def, "Branch") ?? "") : "";
+            switch (b.Trim().ToLowerInvariant())
+            {
+                case "steward": return "STEWARD PATH";
+                case "bulwark": return "BULWARK PATH";
+                default: return "WAR PATH";
+            }
+        }
+
+        // §12 instrumentation: one line per CHANGE of the census (never per Raise), so the F8
+        // break-log shows how many nodes resolved to each state and how many are inert.
+        private string _lastCensus;
+        private void LogTrackCensus()
+        {
+            int owned = 0, planned = 0, next = 0, avail = 0, inert = 0, locked = 0, nodes = 0;
+            foreach (var t in _tracks)
+            {
+                if (t == null || t.Nodes == null) continue;
+                foreach (var s in t.Nodes)
+                {
+                    nodes++;
+                    switch (s.State)
+                    {
+                        case SkillNodeState.Owned: owned++; break;
+                        case SkillNodeState.Planned: planned++; break;
+                        case SkillNodeState.Next: next++; break;
+                        case SkillNodeState.Available: avail++; break;
+                        case SkillNodeState.Inert: inert++; break;
+                        default: locked++; break;
+                    }
+                }
+            }
+            string census = "tracks=" + _tracks.Count + " nodes=" + nodes + " owned=" + owned
+                          + " planned=" + planned + " next=" + next + " available=" + avail
+                          + " inert=" + inert + " locked=" + locked;
+            if (census == _lastCensus) return;
+            _lastCensus = census;
+            FlowTrace.Step("SkillTree", "progression line rebuilt: " + census);
+            if (nodes == 0)
+                FlowTrace.Warn("SkillTree", "progression line has NO nodes - hero '" + _heroSlug +
+                                            "' has no visible talents (catalog empty or all hidden?)");
         }
 
         private SkillNodeVM BuildNode(HeroTalentNodeDef n, int col, bool isShared, int budget,
@@ -502,6 +943,15 @@ namespace DeNelle.Village.Talents
 
             int tier = isShared ? 0 : TierIndex(n.Tier);
 
+            // WO-910: does buying this node actually DO anything at runtime? A "no" never hides
+            // or blocks the node (that ruling is the owner's) — it only stops the View selling
+            // it as the next step, and is logged ONCE per node id so the gap is visible in F8.
+            bool effectLive = TalentEffectLiveness.HasRuntimeConsumer(n, out string deadWhy);
+            if (!effectLive)
+                FlowTrace.Once("SkillTree", "deadnode:" + n.Id,
+                    "node '" + n.Id + "' (" + (n.Name ?? "?") + ") has NO runtime consumer - " + deadWhy +
+                    " (WO-910); it will never be shown as the next step");
+
             return new SkillNodeVM(
                 n.Id,
                 string.IsNullOrEmpty(n.Name) ? n.Id : n.Name,
@@ -521,7 +971,8 @@ namespace DeNelle.Village.Talents
                 equipped,
                 isPending,
                 n.X,
-                n.Y);
+                n.Y,
+                effectLive);
         }
 
         // Legacy fallback when a node has no v2 slot: derive a column from its branch.
@@ -689,6 +1140,12 @@ namespace DeNelle.Village.Talents
                 if (n == null) return "";
                 var svc = WisdomCurrencyService.Instance;
                 var owned = BuildUnlockedSet(svc);
+                // WO-910 — say it OUT LOUD before the player spends: a talent with no
+                // implemented consumer grants nothing. This line replaces the usual
+                // cost/lock line for an unowned dead node, so the panel can never imply
+                // otherwise; an owned one still explains itself below.
+                if (!owned.Contains(n.Id) && !TalentEffectLiveness.HasRuntimeConsumer(n, out string deadWhy))
+                    return "NO EFFECT YET - " + deadWhy + ". Costs " + n.Cost + " Wisdom.";
                 if (owned.Contains(n.Id))
                 {
                     // Owner 2026-06-28: make an owned node EXPLAIN itself so the screen isn't
