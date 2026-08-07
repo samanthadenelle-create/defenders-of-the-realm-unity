@@ -78,12 +78,26 @@ namespace DeNelle.Dungeons
             // their own exit) - nothing to do.
             if (composeRoot == null) return;
 
-            // Idempotent: never add a second exit (a future bake-time exit, or a prior inject).
-            if (UnityEngine.Object.FindAnyObjectByType<DungeonExitInteractable>() != null)
+            // Idempotent: never add a SECOND return exit. WO-1001 slice 8 made this subtle - baked
+            // per-floor EXTRACT PADS are also DungeonExitInteractables, so a bare
+            // FindAnyObjectByType made the injector skip on every composed dungeon that authors
+            // extracts. Those pads sit on the stair landings, all BELOW floor 0 (dg_ember_deep has
+            // five, none on the entry floor), so the entry room was left with no way out at all.
+            // Match only a previously-INJECTED return exit, which Spawn names "DungeonExit ...";
+            // the baker renames pads to "Extract_<id>" (DungeonBaker.PlaceComposeExtracts).
+            var existing = UnityEngine.Object.FindObjectsByType<DungeonExitInteractable>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < existing.Length; i++)
             {
-                FlowTrace.Step(Sys, $"exit already present in '{scene.name}' - skip inject");
-                return;
+                if (existing[i] == null) continue;
+                if (!existing[i].name.StartsWith("Extract_", System.StringComparison.Ordinal))
+                {
+                    FlowTrace.Step(Sys, $"return exit already present in '{scene.name}' ('{existing[i].name}') - skip inject");
+                    return;
+                }
             }
+            if (existing.Length > 0)
+                FlowTrace.Step(Sys, $"'{scene.name}' has {existing.Length} extract pad(s) but no return exit - injecting one at the entry");
 
             Vector3 pos = ResolveExitPosition(composeRoot);
             var exit = DungeonExitInteractable.Spawn(pos);
@@ -153,8 +167,12 @@ namespace DeNelle.Dungeons
         // WO-770.1: a RICH dungeon (DungeonController) supplies a leave action so the exit routes
         // through ExitToVillage (banks the run's crafting scatter + ends the run cleanly) instead
         // of the composed-scene default (direct SceneRouter.Castle). Null => composed-scene behavior.
-        private System.Action _onLeave;
-        private string _label = "Leave Dungeon";      // prompt text (e.g. "Secret Exit" for the boss back-door)
+        private System.Action _onLeave;               // delegate - intentionally NOT serializable
+        // WO-1001 slice 8: [SerializeField] is load-bearing. Extract pads are Spawn()ed at BAKE
+        // time and the scene is then saved, so a plain private silently reverted every authored
+        // label to "Leave Dungeon" - dg_descent_probe authors "Extract (deep)" and the string is
+        // absent from the baked scene entirely.
+        [SerializeField] private string _label = "Leave Dungeon";
 
         /// <summary>Create the exit at <paramref name="position"/> and build its visual.</summary>
         /// <param name="onLeave">Optional rich-scene leave action (ExitToVillage). Null => Castle route.</param>

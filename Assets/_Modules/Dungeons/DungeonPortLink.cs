@@ -44,19 +44,27 @@ namespace DeNelle.Dungeons
 
         // ── Configured at author time (DressTraversalLinks) ─────────────────
 
-        private string _prompt = "Open Door";
-        private Vector3 _target;
-        private float _targetFacingY;
-        private Transform _hero;
-        private DungeonHero _heroController;
-        private float _radius = 2.5f;
-        private string _fromLabel = "?";
-        private string _toLabel = "?";
+        // [SerializeField] IS LOad-BEARING, not decoration (WO-1001 slice 1b fix).
+        // The COMPOSED path configures these AT BAKE TIME (DungeonBaker.PlaceStairPort) and then
+        // saves the scene. Unity serializes only public fields and [SerializeField] privates, so
+        // while these were plain privates every value was DISCARDED by SaveScene — and Update()'s
+        // first line bails on `_hero == null`, so every baked stair port was inert forever. The
+        // bake still reported saved=True and no gate noticed. The cottage path was unaffected
+        // because DungeonController re-Configures at runtime, which is exactly why this hid.
+        [SerializeField] private string _prompt = "Open Door";
+        [SerializeField] private Vector3 _target;
+        [SerializeField] private float _targetFacingY;
+        [SerializeField] private Transform _hero;
+        private DungeonHero _heroController;   // runtime-only (cottage assigns; composed passes null)
+        [SerializeField] private float _radius = 2.5f;
+        [SerializeField] private string _fromLabel = "?";
+        [SerializeField] private string _toLabel = "?";
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
         private bool _inRange;
         private bool _porting;
+        private bool _heroRebindTried;
 
         /// <summary>
         /// Wires the link. <paramref name="target"/> is the paired point on the
@@ -79,9 +87,32 @@ namespace DeNelle.Dungeons
             _radius = Mathf.Max(0.5f, radius);
         }
 
+        /// <summary>
+        /// Safety net for the composed path: a serialized Transform reference survives the bake,
+        /// but a hero re-created at runtime would leave it null and silently kill the port. Rebind
+        /// ONCE off the Player tag and say so, rather than sitting inert with no explanation.
+        /// </summary>
+        private bool TryRebindHero()
+        {
+            if (_hero != null) return true;
+            if (_heroRebindTried) return false;
+            _heroRebindTried = true;
+
+            var tagged = GameObject.FindGameObjectWithTag("Player");
+            if (tagged == null)
+            {
+                FlowTrace.Warn("Dungeon", $"PortLink '{name}': no serialized hero AND no Player-tagged object - this port is INERT.");
+                return false;
+            }
+            _hero = tagged.transform;
+            FlowTrace.Step("Dungeon", $"PortLink '{name}': hero reference was null - rebound to '{tagged.name}' via the Player tag.");
+            return true;
+        }
+
         private void Update()
         {
-            if (_hero == null || _porting) return;
+            if (_porting) return;
+            if (_hero == null && !TryRebindHero()) return;
 
             // FULL 3D distance — the cottage stacks three levels over the same
             // XZ footprint (ground Y=0 / loft Y=6 / cellar Y=-6), so a planar
@@ -117,6 +148,12 @@ namespace DeNelle.Dungeons
 
         private async UniTaskVoid PortAsync()
         {
+            // Step IN / step OUT around the whole traversal: the scope logs "-> ..." here and
+            // "<- ... (Xms)" on dispose, so a port that starts and never finishes (a fade that
+            // never returns, a warp that throws) is visible as an ENTER with no matching EXIT
+            // rather than as silence.
+            using var _scope = FlowTrace.Enter("Dungeon", $"PortLink '{name}' {_fromLabel}->{_toLabel}");
+
             FlowTrace.Step("Dungeon",
                 $"PortLink '{name}': '{_prompt}' from '{_fromLabel}' {_hero.position} " +
                 $"-> '{_toLabel}' {_target}.");

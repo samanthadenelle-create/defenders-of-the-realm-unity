@@ -73,6 +73,11 @@ namespace DeNelle.Dungeons
 
         private static void Arm(Scene scene, Transform composeRoot)
         {
+            // Step IN / step OUT of the whole arm: an ENTER with no matching EXIT is the signature
+            // of a throw or an early return partway through, which is otherwise indistinguishable
+            // from "the dungeon just has no pillars".
+            using var _scope = FlowTrace.Enter(Sys, $"arm '{scene.name}'");
+
             var host = new GameObject("ComposedDungeonHost");
             host.transform.SetParent(composeRoot, false);
 
@@ -131,6 +136,17 @@ namespace DeNelle.Dungeons
             var ambush = host.AddComponent<ComposedAmbushDirector>();
             ambush.Configure(lantern, heroGo.transform, state, tier: 1);
             FlowTrace.Step(Sys, "ComposedAmbushDirector armed (slice 6 darkness ambush)");
+
+            // WO-1001 1b/7: count what the bake actually left in the scene. These are the pillars
+            // whose bake-time Configure used to be discarded by SaveScene, so a zero here on a
+            // dungeon that authored them is the exact signature of that class of defect returning.
+            int ports = composeRoot.GetComponentsInChildren<DungeonPortLink>(true).Length;
+            int locks = composeRoot.GetComponentsInChildren<ComposedLockedPort>(true).Length;
+            int keys = composeRoot.GetComponentsInChildren<ComposedKeyPickup>(true).Length;
+            int traps = composeRoot.GetComponentsInChildren<ComposedTrapHazard>(true).Length;
+            FlowTrace.Step(Sys,
+                $"pillars present in '{scene.name}': stairPorts={ports} lockedPorts={locks} " +
+                $"keys={keys} traps={traps} oilStones={stones.Count}");
         }
     }
 }
