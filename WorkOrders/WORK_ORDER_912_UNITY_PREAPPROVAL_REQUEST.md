@@ -1,10 +1,45 @@
-# WO-912 — Unity LevelPlay pre-approval request (DRAFT for the owner to send)
+# WO-912 — Unity pre-approval request (DRAFT for the owner to send)
 
 **Status: READY TO SEND** · **Drafted:** 2026-08-07 (CLI) · **Blocks:** WO-912 D3 (no SDK until this returns in writing)
 
-Owner ruled D2 = **Unity LevelPlay** on 2026-08-07. Unity's Content Policy names *"cryptocurrency
-trading"* among Regulated Activities permitted *"only with prior approval by Unity."* This is that
-request. **Do not integrate the SDK until a written answer comes back** (WO-912 D3).
+> ### ★ ARCHITECTURE AMENDED 2026-08-07 — MAX MEDIATOR + UNITY BIDDING (not LevelPlay direct) ★
+>
+> D2 first ruled **Unity LevelPlay direct**. A Grok-proposed alternative — **AppLovin MAX as the
+> mediator with Unity demand pulled through its bidding adapter** — was checked against Unity's own
+> docs and is **better**, so it is adopted: it keeps MAX's lightest-in-class dependency profile and
+> cleanest no-fill signal (204 vs -5001) *and* still gets Unity demand.
+>
+> **Two claims in that proposal did NOT survive the check** ([Unity's setup doc](https://docs.unity.com/en-us/grow/dashboard/bidding/applovin), fetched at source):
+>
+> - *"Do not install the separate Unity Ads SDK"* — **FALSE.** *"you first need to install and
+>   initialize the latest version of the Unity Ads SDK"* (4.9.2+) **and** the MAX Unity Ads adapter.
+>   Both ship in the binary.
+> - *"No need to email Unity"* — **DOES NOT FOLLOW.** Setup *"requires you to create a new ad unit and
+>   a bidding placement in the Monetization dashboard"*, then copy the **bidding Placement ID** into
+>   MAX. You hold a Unity publisher account with live placements, so Unity's Content Policy applies to
+>   your **inventory**. Mediation changes who fills the ad, not whose policy governs the app.
+>
+> *(That proposal was right about the rest, including "set AppLovin MAX as the mediation partner in the
+> Unity Monetization dashboard", which matches the doc verbatim: project → Settings → Mediation Partner.)*
+>
+> **CORRECTION TO MY OWN EARLIER CLAIM:** I described the Unity adapter as a *waterfall* adapter needing
+> a **Game ID**. It is **bidding**, and the credential is a **bidding Placement ID**. The conclusion
+> (you need your own Unity account) held; the mechanism I gave for it was wrong.
+>
+> **UNVERIFIED, FLAGGED RATHER THAN GLOSSED:** `unity.com/legal/content-policy` returns **HTTP 403** to
+> direct fetch, so the Regulated Activities wording quoted below comes from a **search snippet, not a
+> page opened at source**. Confirm it in the case itself. Separately, a search result claiming
+> *"waterfall mediation for Unity Ads ends January 31, 2026"* is **wrong** — the real event is
+> [ironSource Ads **direct demand** sunsetting **April 30, 2026**](https://unity.com/products/ironsource-ads-sunset)
+> (already past); iSX programmatic continues and **LevelPlay is explicitly unaffected**.
+>
+> **BECAUSE BOTH NETWORKS NOW HOLD AN ACCOUNT, Q2a GOES LIVE TOO.** AppLovin's publisher policy is
+> **silent** on crypto — no provision at all. Send the AppLovin question in parallel with this one.
+> That is the price of the better technical stack, and it is worth paying with eyes open.
+
+Unity's Content Policy names *"cryptocurrency trading"* among Regulated Activities permitted *"only
+with prior approval by Unity."* This is that request. **Do not integrate the SDK until a written answer
+comes back** (WO-912 D3).
 
 ---
 
