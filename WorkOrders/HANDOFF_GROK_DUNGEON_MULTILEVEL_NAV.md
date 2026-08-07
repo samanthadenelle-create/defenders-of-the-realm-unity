@@ -160,6 +160,77 @@ invites a scale mistake.) An authored wedge mesh is also fine if it ships a conv
 4. **Cut the hole.** The ramp has to pass through the lower room's **ceiling** and the upper room's **floor
    slab**. Both are currently solid. A ramp that ends at a ceiling is a ramp into a wall.
 
+### ★★ 2b-zero. THE SHAPE OF THE SOLUTION — a STAIR PREFAB, built once, instantiated everywhere ★★
+
+> **Owner, 2026-08-07:** *"you can even better create a prefab that is stairs … and just call the prefab."*
+
+**Take this as the architecture.** Do not compute stair geometry during the dungeon bake. Build **one stair
+prefab** (a `Stair_Down` / `Stair_Up` pair, or one prefab flipped), verify it once, and have the composer simply
+**instantiate it at the stair socket.**
+
+**This is already the project's own pattern.** `DefaultDungeonRoomsBuilder` builds 17 room prefabs into
+`Assets/Dungeon/Rooms/`, and `GraphDungeonComposer` / `DungeonBaker` just instantiate them. Stairs should sit in
+exactly that pipeline, not in a special path.
+
+Why it is strictly better than measuring per bake:
+
+| | Prefab | Compute-at-bake |
+|---|---|---|
+| When the geometry maths runs | **once**, at prefab build | every bake, every dungeon |
+| Can a human open and inspect it? | **yes** | no |
+| Can an oracle read the SHIPPED artifact? | **yes** — the way `[room-shell]` already reads the room prefabs | only the source that generates it |
+| Ramp ↔ nose-line alignment | **frozen and provable** | recomputed, can drift |
+| Cost of a wrong number | fix the prefab, re-run one builder | every dungeon silently wrong until someone looks |
+
+**What the prefab contains, pre-assembled:**
+- the **visual step geometry** (renderer on, **collider off** — see §2b item 3)
+- the **invisible ramp**: a thin Cube on the nose line, **`MeshRenderer` + `MeshFilter` destroyed, `BoxCollider`
+  kept** (`HideMesh` pattern), extending slightly **onto both landings** so navmesh regions connect
+- **rise exactly `DungeonBakerChecks.FloorSeparationY` (6.0)**, so the composer never scales it
+- optional side walls / railing, and the ceiling/floor-slab **cut-outs** the shaft needs
+
+**Then the bake is one line:** instantiate at the stair socket, yaw to the socket's travel direction. No maths,
+no per-asset offsets, no guessing.
+
+### The VARIANT FAMILY — straight / left / right (owner, 2026-08-07)
+
+> *"you can create stairs left stairs right or stairs vertical"*
+
+**Build a small stair KIT, the same way the room kit is a family of 17.** Three variants, and the reason is
+geometric rather than decorative:
+
+| Variant | Shape | Rise ÷ run | Footprint | Why it exists |
+|---|---|---|---|---|
+| **Straight** (`vertical`) | one flight along the run axis | 6.0 m over **10.0 m** = **31°** | consumes a **full 1×1 cell** end to end | simplest; but it eats the entire room and forces the descent to continue in one direction |
+| **Left** | half-flight → landing → quarter-turn left → half-flight | two 3.0 m rises over **5.0 m** each = **31°** | ~**5×5 m + landing** — fits a 1×1 with room to spare | same slope, **half the linear footprint**, and the exit heading turns 90° |
+| **Right** | mirror of Left | identical | identical | lets a descent turn either way |
+
+**The footprint is the real argument.** A straight flight needs the whole 10 m cell for a 6 m rise at a sane
+angle. Splitting into two 3 m half-flights around a landing gives the **same 31° slope in half the run**, which
+leaves space in the stair room for anything else — and a landing is a natural place to put the ceiling/floor
+cut-out.
+
+**The turn variants also matter to the COMPOSER, not just the art.** With only a straight stair, every descent
+continues along one heading — descents get repetitive and are far more likely to collide with already-placed
+rooms (which is the class of failure that produced the original `dg_bonecrypt` / `dg_ember_deep` overlap
+aborts). Left/right give the solver somewhere to go.
+
+**Left and Right must be genuinely mirrored, not one rotated 180°.** A rotated left-turn is still a left turn;
+it just faces the other way. Mirroring flips the handedness — and if the art has any asymmetry (railing on one
+side, a wall torch), mirroring must not leave it inside geometry.
+
+**Each variant is still ONE prefab with the frozen contract above** — visual steps (no collider), hidden ramp
+collider on the nose line, rise exactly `FloorSeparationY`, landings overlapped. The `[stair-shell]` oracle
+should run over **every** variant, not just the straight one, or the two that get used least are the two that rot.
+
+**And it gets an oracle for free.** `RoomForgeRegression` case 11 `[room-shell]` already reads the *shipped*
+room prefabs and asserts cell, floor span, wall height and ceiling presence. A `[stair-shell]` case in the same
+shape should read the shipped stair prefab and assert: rise == `FloorSeparationY`; a collider-bearing ramp
+exists; that ramp has **no renderer**; its slope is under the agent max; and it **overlaps both landings**. That
+is the difference between "we think stairs connect" and "the build fails if they ever stop".
+
+The algorithm below is then **how you BUILD the prefab**, run once — not something the dungeon bake repeats.
+
 ### ★ 2b-bis. THE SEATING ALGORITHM — owner's rule, and it removes the guessing entirely ★
 
 > **Owner, 2026-08-07:** *"when visualizing stairs the width does not change — tells you one position. The
