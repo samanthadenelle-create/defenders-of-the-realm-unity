@@ -16,6 +16,11 @@ namespace DeNelle.Dungeons.RoomForge
     [Serializable]
     public sealed class DungeonComposeLayout
     {
+        // Every canonical catalog carries a top-level "version" (CoreDataHub/data-web oracle) or
+        // it fails the gate. The composer never emitted one, so each composed layout had to have
+        // it hand-added afterwards - which is silent until someone composes a NEW dungeon and the
+        // oracle catches it. Emitting it here fixes that for every future compose.
+        [JsonProperty("version")] public int version = 1;
         [JsonProperty("dungeonId")] public string dungeonId = "untitled";
         [JsonProperty("cellSize")] public float cellSize = 6f;
         [JsonProperty("rooms")] public List<ComposeRoomPlacement> rooms = new List<ComposeRoomPlacement>();
