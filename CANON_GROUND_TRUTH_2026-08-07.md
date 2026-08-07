@@ -53,6 +53,25 @@ screen; Map moved into Bag as a tab and is **flag-gated OFF** (`ff.maptab`) beca
 `RealmMapPanel.cs:30` says travel is a DISABLED stub until WO-827 — the areas genuinely do not
 connect. `ButtonCount` stays 7 (enum identity); a new `MaxVisibleFaces = 6` drives geometry.
 
+**RESEARCH IS TIME-BASED, and the research LINE is global until player-owned bases** (owner ruling
+2026-08-07). Building-perk research used to grant INSTANTLY for Gold; it now pays up front, runs on
+the Research channel for a real duration, and applies on completion — the Warcraft 3 Blacksmith
+model, which also makes it cancellable at the flat 100% refund (ruling Q1) and rushable with
+crystals (the Clash half of the lens; WC3 has no rush).
+- **The divergence from WC3 is deliberate and TEMPORARY.** In Warcraft the *building* is occupied,
+  so a second Blacksmith buys parallel research. We run ONE global Research line with slots, which
+  is the Clash single-Laboratory model and fits the Echo-gated crystal-priced extra slot already
+  built.
+- **Player-owned bases are where the lines FAN OUT** (owner, 2026-08-07). Each owned base runs its
+  OWN queue lines, so three bases means three research lines — that is the payoff that makes owning
+  a base worth the investment, and it is why the WC3 per-building model is deferred rather than
+  rejected. Until bases ship, a second research building must NOT silently grant a second line.
+- **Implementation constraint, cheap now and expensive later:** do not bake "one global Research
+  channel" into anything that would have to be unpicked to shard per base. Callers must resolve a
+  channel through `BuildTimerService` rather than assuming a process-wide singleton, and any new
+  state keyed "the queue" should be keyed "the queue OF a base". The fan-out is a known future
+  requirement, not a hypothetical — write for it.
+
 **Queue channels are ONLY Builder / Train / Research.** Upgrades ride Builder. The owner's CONTENT
 tabs CROSS those channels: Defence AND Buildings share the ONE Builder rail. Weapons/armour have no
 queue at all and are deliberately omitted.
