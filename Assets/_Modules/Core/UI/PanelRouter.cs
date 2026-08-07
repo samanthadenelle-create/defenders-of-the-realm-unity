@@ -90,6 +90,14 @@ namespace DeNelle.Core.UI
         /// button and the DevPanel "Open Realm Map" entry. Travel stays a disabled stub
         /// until the WO-827 discovery/travel ledger.</summary>
         RealmMap = 15,
+        /// <summary>WO-911 — the unified MANAGE / QUEUES screen: one tabbed door onto all three
+        /// production lines (Builder / Train / Research) with per-item Finish Now, cancel-with-
+        /// 100%-refund, bump-up and the Echo-gated extra-slot purchase, plus the affordability
+        /// browser absorbed from WO-905. Registered scene-independently by ManageScreenPanel
+        /// (spawned by ManageScreenBootstrap). This is what the bar's re-pointed "Upgrade" face
+        /// opens (owner ruling Q10+Q13, 2026-08-06); it SUPERSEDES the old ObsidianQueueHud modal
+        /// and the undiscoverable Builders-chip double-tap.</summary>
+        Manage = 16,
     }
 
     /// <summary>

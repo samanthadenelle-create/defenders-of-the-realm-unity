@@ -28,6 +28,14 @@ namespace DeNelle.Core.UI
         /// <summary>Raised when the work-queue button is tapped. The panel subscribes and toggles.</summary>
         public static event Action ToggleRequested;
 
+        /// <summary>
+        /// WO-911 — true when a panel is actually listening. The re-pointed bar face checks this so
+        /// a boot race (face tapped before ManageScreenPanel installs) falls back to
+        /// <c>PanelRouter.Open(PanelId.Manage)</c> instead of being a dead tap the player has no way
+        /// to distinguish from a broken button.
+        /// </summary>
+        public static bool HasSubscriber => ToggleRequested != null;
+
         /// <summary>Raise the toggle request (null-safe; safe from any assembly referencing DeNelle.Core).</summary>
         public static void RequestToggle()
         {

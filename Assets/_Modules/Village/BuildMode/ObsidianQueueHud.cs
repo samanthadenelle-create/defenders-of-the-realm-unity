@@ -88,13 +88,31 @@ namespace DeNelle.Village
         // ── Self-install (mirrors BuildTimerService.Bootstrap) ────────────────
         private static ObsidianQueueHud _instance;
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  ⚠ SUPERSEDED 2026-08-06 BY WO-911 — this modal NO LONGER SELF-INSTALLS.
+        //  -------------------------------------------------------------------
+        //  The unified Manage/Queues screen (ManageScreenPanel) is now the ONE
+        //  queue surface and the ONE door: it subscribes to the same
+        //  ObsidianQueueGate.ToggleRequested verb the re-pointed bar face raises.
+        //  If BOTH panels installed, a single tap would open two stacked modals.
+        //
+        //  The CLASS is deliberately kept, not deleted:
+        //   • ObsidianQueueRegression reflects on OpenWorkQueue() and on this
+        //     file's shape (checks 7c / 9);
+        //   • its public FormatKindLabel / FormatJobTarget / FormatJobLine
+        //     helpers are the shared job-label vocabulary and are consumed by
+        //     ManageScreenVM — the labels stay defined in exactly one place.
+        //
+        //  A developer can still raise it explicitly via OpenWorkQueue() after
+        //  adding the component; nothing spawns it automatically any more.
+        // ─────────────────────────────────────────────────────────────────────
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (_instance != null) return;
-            var go = new GameObject("ObsidianQueueHud");
-            DontDestroyOnLoad(go);
-            go.AddComponent<ObsidianQueueHud>();
+            FlowTrace.Step("HUD",
+                "ObsidianQueueHud NOT installed — superseded by the WO-911 Manage/Queues screen " +
+                "(ManageScreenPanel owns ObsidianQueueGate.ToggleRequested; two subscribers would " +
+                "stack two modals on one tap).");
         }
 
         private void Awake()
@@ -270,7 +288,11 @@ namespace DeNelle.Village
             // InstantFinish/AdSkip only resolve Builder jobs via structureId — price>0
             // gates the Instant button so Train/Research never show a false Instant CTA.
             int price = svc.InstantFinishPrice(job.StructureId);
-            bool adOk = svc.CanWatchAdToSkip(job.StructureId);
+            // RELEASE BLOCKER GATE (2026-08-07): no ad SDK exists, so the "Ad" button is ABSENT
+            // (not greyed, not silently dead) until FeatureFlags.RewardedAdSkip's prerequisites
+            // land — a real SDK plus WO-912 server-side ad-window validation. The row falls back
+            // to Instant-only, or renders nothing at all when there is no Instant either.
+            bool adOk = DeNelle.Core.FeatureFlags.RewardedAdSkip && svc.CanWatchAdToSkip(job.StructureId);
             if (price <= 0 && !adOk) return;
 
             var row = MakeRowHost("JobActions", ActionRowHeightPx);
@@ -349,12 +371,13 @@ namespace DeNelle.Village
         {
             var svc = BuildTimerService.Instance;
             if (svc == null) return;
-            // BuySlot does not spend crystals itself — V1 wires the button; premium
-            // spend is a future economy hook (documented for owner felt-verify).
-            svc.BuySlot(channel);
-            FlowTrace.Warn("HUD",
-                "ObsidianQueueHud BuySlot(" + channel + ") — premium crystal spend is STUB (caller-side economy not wired).");
-            ElarionUiKit.ShowToast("Extra " + channel + " slot added.", ElarionUiKit.ToastTone.Confirm);
+            // WO-911 (Q6 / B3): the free increment is GONE. TryBuySlot applies the owner's
+            // TWO-STEP gate — the Echo count unlocks the RIGHT to buy, crystals complete it — and
+            // reports a player-readable reason instead of silently granting a free worker.
+            if (svc.TryBuySlot(channel, out string failure))
+                ElarionUiKit.ShowToast("Extra " + channel + " slot unlocked.", ElarionUiKit.ToastTone.Confirm);
+            else
+                ElarionUiKit.ShowToast(failure ?? "Could not buy a slot.", ElarionUiKit.ToastTone.Danger);
         }
 
         private static void OnInstantFinish(string structureId)

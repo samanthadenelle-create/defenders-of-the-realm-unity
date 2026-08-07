@@ -41,6 +41,54 @@ namespace DeNelle.Core.State
     }
 
     /// <summary>
+    /// WO-911 (M2) — the resource basket a job was CHARGED at commit, carried on the job so a
+    /// cancel can refund exactly 100% of it (owner ruling Q1). Deliberately a plain 5-int value
+    /// in <c>DeNelle.Core</c>: the tree has three different <c>ResourceCost</c> types
+    /// (Core.Catalog, Village, Village.Ledger) and the job layer must not depend on any of them.
+    /// All-zero means "nothing was charged" (a free build, or a pre-v37 save).
+    /// </summary>
+    [Serializable]
+    public struct JobCost
+    {
+        /// <summary>Wood charged.</summary>
+        public int Wood;
+        /// <summary>Food charged.</summary>
+        public int Food;
+        /// <summary>Iron charged.</summary>
+        public int Iron;
+        /// <summary>Crystals charged.</summary>
+        public int Crystals;
+        /// <summary>Magic/tech points charged (the TrySpendWithMagic sites).</summary>
+        public int Magic;
+
+        /// <summary>Build a paid basket.</summary>
+        public JobCost(int wood, int food, int iron, int crystals, int magic = 0)
+        {
+            Wood = wood;
+            Food = food;
+            Iron = iron;
+            Crystals = crystals;
+            Magic = magic;
+        }
+
+        /// <summary>True when nothing was charged (free build, or a pre-v37 job).</summary>
+        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0 && Magic == 0;
+
+        /// <summary>ASCII, player-readable summary ("400 wood, 200 food"); "nothing" when zero.</summary>
+        public string Describe()
+        {
+            if (IsZero) return "nothing";
+            var sb = new System.Text.StringBuilder();
+            if (Wood > 0) sb.Append(Wood).Append(" wood");
+            if (Food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Food).Append(" food"); }
+            if (Iron > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Iron).Append(" iron"); }
+            if (Crystals > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Crystals).Append(" crystals"); }
+            if (Magic > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Magic).Append(" magic"); }
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
     /// One persisted, real-time construction/upgrade timer. Completes at
     /// <see cref="FinishMs"/> = <see cref="StartMs"/> + <see cref="DurationMs"/>.
     /// Counts down offline because the clock is wall-clock unix-ms, not frame time.
@@ -89,6 +137,54 @@ namespace DeNelle.Core.State
         /// apply" — additive, back-compatible.
         /// </summary>
         [JsonProperty("targetTier")] public int TargetTier;
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  WO-911 (M2) — THE PAID BASKET. Save schema v37.
+        //  -------------------------------------------------------------------
+        //  Cancel refunds 100% of what was PAID (owner ruling Q1, 2026-08-06),
+        //  flat, regardless of elapsed time. That is only computable if the job
+        //  remembers its own price: re-deriving it at cancel time is wrong for
+        //  BuildModeController.Place (SoftcappedCostFor depends on the LIVE tower
+        //  count, and a free-build charged nothing) — the same exploit
+        //  TowerPlacementSystem._prepaidCost was introduced to close.
+        //
+        //  Additive default-on-read: absent on a pre-v37 save → 0, so an
+        //  in-flight legacy job cancels cleanly with a ZERO refund. That case is
+        //  traced, never silent (see BuildTimerService.CancelChannelJobWithRefund).
+        //  Units match the wallet BuildTimerService refunds into
+        //  (ResourceLedger.Credit → GameState.Wood/Iron/Resources.Food/Crystals),
+        //  which is the SAME wallet EconomyService.TrySpend debits.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>WO-911 v37 — wood actually charged for this job (0 = free/legacy).</summary>
+        [JsonProperty("paidWood")] public int PaidWood;
+
+        /// <summary>WO-911 v37 — food actually charged for this job (0 = free/legacy).</summary>
+        [JsonProperty("paidFood")] public int PaidFood;
+
+        /// <summary>WO-911 v37 — iron actually charged for this job (0 = free/legacy).</summary>
+        [JsonProperty("paidIron")] public int PaidIron;
+
+        /// <summary>WO-911 v37 — crystals actually charged for this job (0 = free/legacy).</summary>
+        [JsonProperty("paidCrystals")] public int PaidCrystals;
+
+        /// <summary>WO-911 v37 — magic/tech points charged (ResourceLedger.TrySpendWithMagic sites).</summary>
+        [JsonProperty("paidMagic")] public int PaidMagic;
+
+        /// <summary>The paid basket as one value (WO-911 M2). Never null; all-zero when nothing was charged.</summary>
+        [JsonIgnore]
+        public JobCost Paid
+        {
+            get => new JobCost(PaidWood, PaidFood, PaidIron, PaidCrystals, PaidMagic);
+            set
+            {
+                PaidWood = value.Wood;
+                PaidFood = value.Food;
+                PaidIron = value.Iron;
+                PaidCrystals = value.Crystals;
+                PaidMagic = value.Magic;
+            }
+        }
 
         /// <summary>Unix-ms the job completes. Convenience = StartMs + DurationMs (not stored).</summary>
         [JsonIgnore] public double FinishMs => StartMs + DurationMs;

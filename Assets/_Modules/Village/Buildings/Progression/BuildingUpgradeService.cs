@@ -75,10 +75,25 @@ namespace DeNelle.Village.Buildings.Progression
                             $"upgrade '{id}' REJECTED (busy: {timerSvc.RemainingSeconds(id):0}s)");
                         return false;
                     }
+                    // WO-895: a FULL crew set no longer rejects. The Obsidian Builder channel
+                    // QUEUES the job (StartUpgrade -> ObsidianQueueEngine.Enqueue returns the
+                    // pending job) and auto-pulls it when a crew frees. The old rejection here
+                    // was a leftover from the pre-queue era and was the reason the panel could
+                    // never reach a "Queued" state. The spend still happens exactly once, at
+                    // enqueue, and the tier still applies at completion.
                     if (!timerSvc.HasFreeSlot)
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                            $"upgrade '{id}' will QUEUE (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+
+                    // WO-911 (M1, ruling Q4) — a full SLOT set still queues (above); a full LINE
+                    // refuses. Checked here, inside the before-the-spend block, so the refusal costs
+                    // the player nothing. Depth and concurrency are different axes (WO-911 sec.2d).
+                    if (timerSvc.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
                     {
                         DeNelle.Core.Diagnostics.FlowTrace.Warn("BuildTimer",
-                            $"upgrade '{id}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+                            $"upgrade '{id}' REFUSED — Builders queue is full " +
+                            $"({timerSvc.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
+                            $"{timerSvc.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). Nothing charged.");
                         return false;
                     }
                 }
@@ -103,7 +118,10 @@ namespace DeNelle.Village.Buildings.Progression
                     // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyTier,
                     // offline-fair). A null job (raced) degrades to the instant apply so a
                     // paid charge is never lost.
-                    if (timerSvc != null && timerSvc.StartUpgrade(id, targetTier) != null)
+                    // WO-911 (M2): `cost` is exactly what ResourceLedger.TrySpend just debited, so
+                    // it rides the job and a cancel refunds 100% of it (ruling Q1).
+                    if (timerSvc != null &&
+                        timerSvc.StartUpgrade(id, targetTier, BuildTimerService.ToJobCost(cost)) != null)
                     {
                         // F8 (owner 2026-07-17 "an upgrade timer that doesn't tell"): show the
                         // CoC-style on-building countdown so the player SEES the upgrade working —

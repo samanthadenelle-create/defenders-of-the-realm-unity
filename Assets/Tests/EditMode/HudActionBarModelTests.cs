@@ -45,14 +45,20 @@ namespace DeNelle.Tests.EditMode
 
         // ── the WO-835 acceptance baseline: no NPC, no raids, onboarded ──────
 
+        // ⚠ WO-911 (owner ruling Q10+Q13, 2026-08-06): the baseline set CHANGED.
+        // Map left the bar for a tab inside Bag, and the Upgrade face was re-pointed to the
+        // unified Manage/Queues screen — which makes it always-applicable in town rather than
+        // context-gated. Bar: 7 -> 6 faces. These expectations are UPDATED, not relaxed.
         [Test]
-        public void town_baseline_shows_build_bag_map_quests_packed()
+        public void town_baseline_shows_build_bag_quests_manage_packed()
         {
             var (model, _) = TownModel();
             Assert.AreEqual(
-                new[] { ActionBarButtonId.Build, ActionBarButtonId.Bag, ActionBarButtonId.Map, ActionBarButtonId.Quests },
+                new[] { ActionBarButtonId.Build, ActionBarButtonId.Bag, ActionBarButtonId.Quests,
+                        ActionBarButtonId.Upgrade },
                 Ids(model),
-                "in town with no NPC near, no raid capability and no focus, the bar is exactly Build/Bag/Map/Quests");
+                "in town with no NPC near and no raid capability, the bar is exactly Build/Bag/Quests/Manage " +
+                "(WO-911: Map moved into Bag; Upgrade re-pointed to Manage and is always applicable)");
         }
 
         [Test]
@@ -103,47 +109,48 @@ namespace DeNelle.Tests.EditMode
             CollectionAssert.Contains(Ids(model), ActionBarButtonId.Raids);
         }
 
-        // ── Map: Onboarded gate (WO-825 R4) — absent means SHORTER array, never a hole ──
+        // ── Map: OFF THE BAR ENTIRELY (WO-911 ruling Q10+Q13) ────────────────
 
         [Test]
-        public void map_absent_pre_onboarding_and_array_stays_contiguous()
+        public void map_never_packs_into_the_bar_in_either_onboarded_state()
         {
             var (model, src) = TownModel();
             src.Onboarded = false;
             model.Tick();
-            var ids = Ids(model);
-            CollectionAssert.DoesNotContain(ids, ActionBarButtonId.Map, "pre-onboard => no Map face");
-            Assert.AreEqual(
-                new[] { ActionBarButtonId.Build, ActionBarButtonId.Bag, ActionBarButtonId.Quests },
-                ids,
-                "the array simply shrinks — the View packs it, so a hole is impossible by construction");
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Map, "pre-onboard => no Map face");
 
             src.Onboarded = true;
             model.Tick();
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Map, "Onboarded => Map packs in");
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Map,
+                "WO-911: Map moved INTO Bag as a (feature-flagged) tab. It must never return to the bar — " +
+                "that move is half of how the bar went 7 -> 6 faces without needing an 8th slot. " +
+                "ActionBarButtonId.Map stays DORMANT at ordinal 4 so the other faces keep their indices.");
         }
 
-        // ── §3c split: Upgrade is its own face; Quests is never replaced ─────
+        // ── The re-pointed Manage face: always in town, focus or not ─────────
 
         [Test]
-        public void focused_building_adds_upgrade_and_keeps_quests()
+        public void manage_face_is_always_in_town_regardless_of_building_focus()
         {
             var (model, src) = TownModel();
+            src.Focused = false;
+            model.Tick();
+            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Upgrade,
+                "WO-911: the Upgrade face is RE-POINTED to the Manage/Queues screen and is the single door to " +
+                "all three production lines. Gating it on a focused building is precisely the undiscoverability " +
+                "the work order exists to remove.");
+            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Quests);
+
             src.Focused = true;
             model.Tick();
             var ids = Ids(model);
-            CollectionAssert.Contains(ids, ActionBarButtonId.Upgrade, "focus => Upgrade packs in");
+            CollectionAssert.Contains(ids, ActionBarButtonId.Upgrade, "focus must not remove the Manage face");
             CollectionAssert.Contains(ids, ActionBarButtonId.Quests,
                 "Quests STAYS while a building is focused (owner: 'quests active more often')");
-
-            src.Focused = false;
-            model.Tick();
-            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Upgrade, "focus lost => Upgrade packs out");
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Quests);
         }
 
         [Test]
-        public void all_signals_on_yields_the_full_seven_in_canonical_order()
+        public void all_signals_on_yields_the_full_six_in_canonical_order()
         {
             var (model, src) = TownModel();
             src.Talk = true; src.Capable = true; src.Onboarded = true; src.Focused = true;
@@ -152,11 +159,12 @@ namespace DeNelle.Tests.EditMode
                 new[]
                 {
                     ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
-                    ActionBarButtonId.Raids, ActionBarButtonId.Map, ActionBarButtonId.Quests,
-                    ActionBarButtonId.Upgrade,
+                    ActionBarButtonId.Raids, ActionBarButtonId.Quests, ActionBarButtonId.Upgrade,
                 },
                 Ids(model),
-                "the 7-face MAX renders in enum order regardless of activation sequence");
+                "the 6-face MAX renders in enum order regardless of activation sequence (WO-911)");
+            Assert.LessOrEqual(model.Active.Count, HudActionBarModel.MaxVisibleFaces,
+                "the View sizes a bar slot from MaxVisibleFaces; more faces than that would overflow the zone");
         }
 
         // ── posture layer: explore subset; non-calm postures drop the bar ────

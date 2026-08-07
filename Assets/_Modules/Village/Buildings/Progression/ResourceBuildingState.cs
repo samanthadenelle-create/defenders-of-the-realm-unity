@@ -157,11 +157,22 @@ namespace DeNelle.Village.Buildings.Progression
                         $"upgrade '{buildingId}' REJECTED (busy: {timerSvc.RemainingSeconds(buildingId):0}s)");
                     return UpgradeResult.InProgress;
                 }
+                // WO-895: a FULL crew set no longer rejects — the Obsidian Builder channel
+                // QUEUES the job and pulls it when a crew frees, so the panel's one true
+                // button can honestly show "Queued" instead of a dead refusal.
                 if (!timerSvc.HasFreeSlot)
+                    FlowTrace.Step("BuildTimer",
+                        $"upgrade '{buildingId}' will QUEUE (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+
+                // WO-911 (M1, ruling Q4) — a full LINE refuses (a full SLOT set only queues).
+                // Checked BEFORE the atomic spend below so the refusal costs the player nothing.
+                if (timerSvc.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
                 {
                     FlowTrace.Warn("BuildTimer",
-                        $"upgrade '{buildingId}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
-                    return UpgradeResult.InProgress;
+                        $"upgrade '{buildingId}' REFUSED — Builders queue is full " +
+                        $"({timerSvc.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
+                        $"{timerSvc.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). Nothing charged.");
+                    return UpgradeResult.Insufficient;
                 }
             }
 
@@ -175,7 +186,12 @@ namespace DeNelle.Village.Buildings.Progression
             // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyCompletedUpgrade,
             // offline-fair). A null job here (raced) degrades to the instant apply below so a
             // paid charge is never lost.
-            if (timerSvc != null && timerSvc.StartUpgrade(buildingId, next) != null)
+            // WO-911 (M2): the harvestable lines AND the magic charged above ride the job so a
+            // cancel refunds 100% of both (ruling Q1) — magic included, since TrySpendWithMagic
+            // debited it in the same atomic transaction.
+            if (timerSvc != null &&
+                timerSvc.StartUpgrade(buildingId, next,
+                    BuildTimerService.ToJobCost(lvlDef.UpgradeCost, lvlDef.MagicCost)) != null)
             {
                 // F8 (owner 2026-07-17): CoC-style on-building countdown for a resource-building
                 // upgrade too (reuses the WO-612 scaffold + world countdown; Guard-wrapped inside,

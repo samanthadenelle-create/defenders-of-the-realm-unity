@@ -27,6 +27,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.UI.Mvvm;
 // Disambiguate the two ResourceCost types in scope: the build-economy cost (Wood/Food/
@@ -36,6 +37,30 @@ using EcoCost = DeNelle.Village.ResourceCost;
 
 namespace DeNelle.Village.Buildings.Progression
 {
+    /// <summary>
+    /// WO-895 — the ONE action button's state on the building upgrade panel. The View is a pure
+    /// reflection of this; it never invents a second state. Resolved from the SAME authorities the
+    /// build/queue system uses (BuildTimerService active/pending jobs + the tier catalog gates +
+    /// the GameState wallet), so the button can never disagree with the Obsidian queue.
+    /// </summary>
+    public enum UpgradeActionState
+    {
+        /// <summary>Affordable + not gated: tapping starts (or queues) the upgrade.</summary>
+        Ready = 0,
+        /// <summary>The wallet is short of the next tier's cost.</summary>
+        MissingResources = 1,
+        /// <summary>The job is in the Builder channel's PENDING queue, waiting for a free crew.</summary>
+        Queued = 2,
+        /// <summary>A crew is actively working this building's upgrade (live countdown).</summary>
+        InProgress = 3,
+        /// <summary>The next tier is behind the global Village Tier gate — the button raises THAT.</summary>
+        VillageGated = 4,
+        /// <summary>Every tier/level here is already owned.</summary>
+        Maxed = 5,
+        /// <summary>No ladder for this building (nothing to show).</summary>
+        Unavailable = 6,
+    }
+
     /// <summary>
     /// Pure ViewModel for the building enhancement (perk-grid) panel. Exposes every tier +
     /// research perk as <see cref="Perks"/> (one <see cref="ItemVM"/> tile each: owned=lit,
@@ -236,6 +261,139 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
+        // ── WO-895 NEXT-UPGRADE surface (the "next only" card) ──────────────────
+        // The panel no longer renders a 6-tier rail — it renders WHERE YOU ARE plus ONE
+        // next-upgrade card. Everything that card needs is composed HERE (View stays a dumb
+        // skin): the next tier's name, a plain description, its bonuses as SEPARATE lines,
+        // its cost as STRUCTURED lines (so the short resource is flagged as TEXT, never a
+        // red tint — colourblind law), and the ONE action button's state.
+
+        /// <summary>One structured cost line for the next upgrade — amount, wallet balance, and
+        /// whether the wallet is SHORT. The View renders the shortfall as words + a glyph; the
+        /// owner is red/green colourblind, so a colour tint may never be the only signal.</summary>
+        public struct UpgradeCostLine
+        {
+            /// <summary>ASCII resource name ("Wood", "Food", "Crystals", "Iron", "Magic").</summary>
+            public string Label;
+            /// <summary>Amount the upgrade charges.</summary>
+            public int Amount;
+            /// <summary>Wallet balance for this resource right now.</summary>
+            public int Have;
+            /// <summary>True when <see cref="Have"/> &lt; <see cref="Amount"/>.</summary>
+            public bool Short;
+            /// <summary>How many more units are needed (0 when not short).</summary>
+            public int Missing => Short ? Amount - Have : 0;
+        }
+
+        private string _currentTierName = "";
+        private string _nextTierName = "";
+        private string _nextDescription = "";
+        private readonly List<string> _nextBonuses = new List<string>();
+        private readonly List<UpgradeCostLine> _nextCostLines = new List<UpgradeCostLine>();
+        private bool _nextAffordable;
+        private int _nextRequiresVillageTier;   // 0 = no village gate on the next tier
+        private int _villageTierNow;
+
+        /// <summary>"Tier" for a city building, "Level" for a legacy resource building. The card's
+        /// copy is composed from this so ONE card serves both families (owner: a drill-in from the
+        /// Manage screen lands here and must stand alone).</summary>
+        public string TierWord => _isResource ? "Level" : "Tier";
+
+        /// <summary>True when there is a next tier/level to show (i.e. not maxed and a ladder exists).</summary>
+        public bool HasNextUpgrade => MaxTier > 0 && CurrentTier < MaxTier;
+
+        /// <summary>The tier/level number the next upgrade lands on (CurrentTier + 1).</summary>
+        public int NextTier => CurrentTier + 1;
+
+        /// <summary>Display name of the tier/level the player is on now ("" before the first tier).</summary>
+        public string CurrentTierName => _currentTierName;
+
+        /// <summary>Display name of the NEXT tier ("Drill Yard"). "" when maxed.</summary>
+        public string NextTierName => _nextTierName;
+
+        /// <summary>Plain sentence describing what the next upgrade does structurally
+        /// ("Raises Barracks to Tier 3 of 6."). Never truncated by the View.</summary>
+        public string NextDescription => _nextDescription;
+
+        /// <summary>The next tier's bonuses as SEPARATE lines — each renders on its own row, so
+        /// nothing is jammed into one clipped run-on string (WO-895 §1).</summary>
+        public IReadOnlyList<string> NextBonuses => _nextBonuses;
+
+        /// <summary>The next tier's cost, one structured line per resource.</summary>
+        public IReadOnlyList<UpgradeCostLine> NextCostLines => _nextCostLines;
+
+        /// <summary>True when the whole next-upgrade cost is affordable from the wallet the tap charges.</summary>
+        public bool NextAffordable => _nextAffordable;
+
+        /// <summary>Village Tier required by the next tier (0 = ungated).</summary>
+        public int NextRequiresVillageTier => _nextRequiresVillageTier;
+
+        /// <summary>The Village Tier the player holds right now (the gate copy reads from this).</summary>
+        public int VillageTierNow => _villageTierNow;
+
+        /// <summary>
+        /// WO-895 — the ONE action button's live state. Read from the REAL authorities in the same
+        /// order the tap path checks them, so the button always states the true blocker:
+        /// maxed -&gt; queue (pending = Queued, active = InProgress) -&gt; village gate -&gt; cost -&gt; Ready.
+        /// A full crew set no longer blocks Ready: the tap QUEUES the job (Obsidian Builder channel).
+        /// </summary>
+        public UpgradeActionState ActionState
+        {
+            get
+            {
+                if (!_isCity && !_isResource) return UpgradeActionState.Unavailable;
+                if (!HasNextUpgrade) return UpgradeActionState.Maxed;
+
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                if (t != null && t.IsBuilding(_buildingId))
+                    return IsPendingInBuilderQueue(t) ? UpgradeActionState.Queued : UpgradeActionState.InProgress;
+
+                if (_nextRequiresVillageTier > _villageTierNow) return UpgradeActionState.VillageGated;
+                if (!_nextAffordable) return UpgradeActionState.MissingResources;
+                return UpgradeActionState.Ready;
+            }
+        }
+
+        /// <summary>Whole seconds left on this building's in-flight upgrade (0 when idle).
+        /// While QUEUED this is the job's FULL duration — what it will take once a crew frees.</summary>
+        public int ActionRemainingSeconds => UnderConstructionSeconds;
+
+        /// <summary>0..1 progress of the in-flight job (0 while queued) — the button's fill bar
+        /// reads this, so "in progress" is distinguishable by SHAPE, never by colour alone.</summary>
+        public float ActionProgress
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                if (t == null || !t.IsBuilding(_buildingId)) return 0f;
+                return t.Progress(_buildingId);
+            }
+        }
+
+        /// <summary>True when this building's Builder job is waiting in the PENDING queue rather
+        /// than running. The Obsidian queue is the sole authority — no second state is invented.</summary>
+        private bool IsPendingInBuilderQueue(BuildTimerService t)
+        {
+            var pending = t.PendingJobsOf(ChannelId.Builder);
+            if (pending == null) return false;
+            for (int i = 0; i < pending.Count; i++)
+                if (string.Equals(pending[i].StructureId, _buildingId, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// WO-895 — the ONE command behind the panel's one true button. Starts (or queues) the next
+        /// tier/level. Routes to the SAME <see cref="UpgradeNext"/> execute path the old rail used,
+        /// so there is exactly one spend/queue mechanism.
+        /// </summary>
+        public void StartNextUpgrade()
+        {
+            FlowTrace.Step("Upgrade", _buildingId + " StartNextUpgrade tapped: state=" + ActionState
+                + " next=" + TierWord.ToLowerInvariant() + "-" + NextTier
+                + " affordable=" + _nextAffordable);
+            UpgradeNext();
+        }
+
         /// <summary>Live wallet readout (View rebuilds its "Wood … Food … Crystals" line from these).</summary>
         public int Wood     => _economy?.Wood ?? 0;
         public int Food     => _economy?.Food ?? 0;
@@ -304,13 +462,10 @@ namespace DeNelle.Village.Buildings.Progression
                     Raise();
                     return;
                 }
-                if (timerSvc != null && !timerSvc.HasFreeSlot)
-                {
-                    Status = "All build crews are busy — finish a construction first.";
-                    FlowTrace.Step("Upgrade", _buildingId + " tier-" + next + " refused: no free build crew.");
-                    Raise();
-                    return;
-                }
+                // WO-895: a FULL crew set no longer REFUSES the tap — the Obsidian Builder
+                // channel QUEUES the job and pulls it the moment a crew frees (the engine has
+                // always done this; only these mirror gates rejected). The button then shows
+                // "Queued" until the pull. No second state, no dead click.
 
                 bool ok = BuildingUpgradeService.TryUpgrade(_buildingId, next);
                 if (ok)
@@ -319,8 +474,10 @@ namespace DeNelle.Village.Buildings.Progression
                     // lands at completion (the tile lights up then).
                     if (timerSvc != null && timerSvc.IsBuilding(_buildingId))
                     {
-                        Status = "Tier " + next + " under construction — "
-                                 + (int)timerSvc.RemainingSeconds(_buildingId) + "s.";
+                        Status = IsPendingInBuilderQueue(timerSvc)
+                            ? "Tier " + next + " queued - it starts when a builder frees up."
+                            : "Tier " + next + " under construction - "
+                              + (int)timerSvc.RemainingSeconds(_buildingId) + "s.";
                         FlowTrace.Step("Upgrade", _buildingId + " tier-" + next + " timer started");
                     }
                     else
@@ -369,7 +526,11 @@ namespace DeNelle.Village.Buildings.Progression
                     {
                         var t = BuildTimerService.Instance;
                         int rem = t != null ? (int)t.RemainingSeconds(_buildingId) : 0;
-                        Status = "Upgrade under construction — " + rem + "s.";
+                        // WO-895 — a full crew set QUEUES the job now (it no longer refuses),
+                        // so say which of the two actually happened.
+                        Status = t != null && IsPendingInBuilderQueue(t)
+                            ? "Upgrade queued - it starts when a builder frees up."
+                            : "Upgrade under construction - " + rem + "s.";
                         FlowTrace.Step("Upgrade", _buildingId + " level timer started");
                         break;
                     }
@@ -458,10 +619,21 @@ namespace DeNelle.Village.Buildings.Progression
             _effectById.Clear();
             _keyLineById.Clear();
             _gateById.Clear();
+            _nextBonuses.Clear();
+            _nextCostLines.Clear();
+            _currentTierName = "";
+            _nextTierName = "";
+            _nextDescription = "";
+            _nextAffordable = false;
+            _nextRequiresVillageTier = 0;
+            _villageTierNow = GameStateService.Instance?.State?.VillageTier ?? 0;
 
             if (_isCity) BuildCity();
             else if (_isResource) BuildResource();
             else BuildUnknown();
+
+            // WO-895 — compose the NEXT-upgrade card's content from whichever ladder just built.
+            ComposeNextUpgrade();
 
             // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST tile of every
             // building's grid (the enhancement panel is the surface the player already opens with F
@@ -690,6 +862,146 @@ namespace DeNelle.Village.Buildings.Progression
             CurrentTier = 0;
             MaxTier = 0;
             if (string.IsNullOrEmpty(Status)) Status = "This building has no enhancements.";
+        }
+
+        // ── WO-895 — compose the NEXT-upgrade card content ───────────────────────
+        // Runs at the tail of every Rebuild, so the card is always in step with the ladder
+        // that just built. Pure composition from catalog + wallet reads; no mutation.
+
+        private void ComposeNextUpgrade()
+        {
+            if (_isCity) ComposeNextCity();
+            else if (_isResource) ComposeNextResource();
+
+            FlowTrace.Step("Upgrade", _buildingId + " next-card: has=" + HasNextUpgrade
+                + " " + TierWord.ToLowerInvariant() + "=" + CurrentTier + "/" + MaxTier
+                + " name='" + _nextTierName + "' bonuses=" + _nextBonuses.Count
+                + " costLines=" + _nextCostLines.Count + " affordable=" + _nextAffordable
+                + " villageGate=" + _nextRequiresVillageTier + "/" + _villageTierNow);
+        }
+
+        private void ComposeNextCity()
+        {
+            var def = BuildingTierCatalog.Find(_buildingId);
+            if (def == null) return;
+
+            if (CurrentTier >= 1) _currentTierName = Ascii(TierDisplayName(def, CurrentTier));
+            if (!HasNextUpgrade) return;
+
+            int next = NextTier;
+            var nextDef = BuildingTierCatalog.TierOf(_buildingId, next);
+            if (nextDef == null) return;
+
+            _nextTierName = Ascii(!string.IsNullOrEmpty(nextDef.Name) ? nextDef.Name : ("Tier " + next));
+            _nextDescription = "Raises " + Ascii(Title) + " to Tier " + next + " of " + MaxTier + ".";
+            _nextRequiresVillageTier = nextDef.RequiresVillageTier;
+
+            AppendEffectClauses(nextDef.Effect, _nextBonuses);
+            if (nextDef.Perks != null)
+                foreach (var p in nextDef.Perks)
+                {
+                    if (p == null) continue;
+                    string pn = !string.IsNullOrEmpty(p.Name) ? p.Name : p.Id;
+                    if (!string.IsNullOrEmpty(pn)) _nextBonuses.Add("Opens research: " + Ascii(pn));
+                }
+
+            AddCostLine(HarvestResource.Wood, nextDef.CostWood);
+            AddCostLine(HarvestResource.Food, nextDef.CostFood);
+            AddCostLine(HarvestResource.Crystals, nextDef.CostCrystal);
+            _nextAffordable = BuildingUpgradeService.CanAffordTier(nextDef);
+        }
+
+        private void ComposeNextResource()
+        {
+            var def = ResourceBuildingProgression.Find(_buildingId);
+            if (def == null) return;
+
+            _currentTierName = "Level " + CurrentTier;
+            if (!HasNextUpgrade) return;
+
+            int next = NextTier;
+            var cur = def.LevelDef(CurrentTier);      // the cost to LEAVE the current level
+            var nextLvl = def.LevelDef(next);
+            _nextTierName = "Level " + next;
+            _nextDescription = "Raises " + Ascii(Title) + " to Level " + next + " of " + MaxTier + ".";
+
+            if (nextLvl != null)
+            {
+                _nextBonuses.Add("+" + nextLvl.YieldPerTick + " "
+                    + ResourceBuildingProgression.LabelFor(nextLvl.Yields) + " per harvest");
+                if (cur != null && nextLvl.HarvestInterval < cur.HarvestInterval - 0.01f)
+                    _nextBonuses.Add("Harvests every " + nextLvl.HarvestInterval.ToString("0.#")
+                        + "s (was " + cur.HarvestInterval.ToString("0.#") + "s)");
+                if (nextLvl.YieldSizeMultiplier > 1.01f)
+                    _nextBonuses.Add("Haul size x" + nextLvl.YieldSizeMultiplier.ToString("0.##"));
+            }
+
+            if (cur != null)
+            {
+                if (cur.UpgradeCost != null)
+                    foreach (var c in cur.UpgradeCost) AddCostLine(c.Resource, c.Amount);
+                if (cur.MagicCost > 0)
+                    _nextCostLines.Add(new UpgradeCostLine
+                    {
+                        Label = "Magic",
+                        Amount = cur.MagicCost,
+                        Have = ResourceLedger.MagicBalance(),
+                        Short = ResourceLedger.MagicBalance() < cur.MagicCost,
+                    });
+                _nextAffordable = ResourceLedger.CanAfford(cur.UpgradeCost)
+                                  && (cur.MagicCost <= 0 || ResourceLedger.MagicBalance() >= cur.MagicCost);
+            }
+        }
+
+        private void AddCostLine(HarvestResource r, int amount)
+        {
+            if (amount <= 0) return;
+            int have = ResourceLedger.Balance(r);
+            _nextCostLines.Add(new UpgradeCostLine
+            {
+                Label = ResourceBuildingProgression.LabelFor(r),
+                Amount = amount,
+                Have = have,
+                Short = have < amount,
+            });
+        }
+
+        /// <summary>Split an authored one-line effect ("Unlocks Spearman. Troop health +8%. Structure
+        /// HP +45%") into SEPARATE bonus lines. Sentence boundaries only — commas inside a clause
+        /// ("damage +15%, health +10%") belong together and are never split.</summary>
+        private static void AppendEffectClauses(string effect, List<string> into)
+        {
+            if (string.IsNullOrEmpty(effect) || into == null) return;
+            var parts = effect.Split(new[] { ". " }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var raw in parts)
+            {
+                string s = Ascii(raw).Trim().TrimEnd('.').Trim();
+                if (s.Length > 0) into.Add(s);
+            }
+        }
+
+        /// <summary>ASCII-fold the punctuation authored data carries (em/en dash, middle dot,
+        /// ellipsis, curly quotes). TMP renders non-ASCII as tofu boxes (CLAUDE.md §7 law), and
+        /// building-tiers.json does contain em dashes — so every string the card shows is folded
+        /// HERE rather than trusting the data.</summary>
+        private static string Ascii(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? "";
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            foreach (char ch in s)
+            {
+                switch (ch)
+                {
+                    case '—': case '–': case '−': sb.Append('-'); break;   // em/en dash, minus
+                    case '·': case '•': sb.Append('-'); break;                  // middle dot, bullet
+                    case '…': sb.Append("..."); break;                               // ellipsis
+                    case '‘': case '’': sb.Append('\''); break;                 // curly single quotes
+                    case '“': case '”': sb.Append('"'); break;                  // curly double quotes
+                    case ' ': sb.Append(' '); break;                                 // nbsp
+                    default: sb.Append(ch <= 127 ? ch : '?'); break;
+                }
+            }
+            return sb.ToString();
         }
 
         // ── Helpers (pure) ───────────────────────────────────────────────────────

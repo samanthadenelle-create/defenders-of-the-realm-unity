@@ -75,6 +75,7 @@ namespace DeNelle.Core.State
                 { 34, MigrateToV34 },
                 { 35, MigrateToV35 },
                 { 36, MigrateToV36 },
+                { 37, MigrateToV37 },
             };
 
         /// <summary>
@@ -647,6 +648,50 @@ namespace DeNelle.Core.State
                     Add(DefaultTownTemplateIdsV36[i]);
 
             s.EverBuiltStructureIds = built;
+            return s;
+        }
+
+        /// <summary>
+        /// v36 → v37 (WO-911 M2) — the PAID BASKET on a queue job.
+        /// -------------------------------------------------------------------------
+        /// <see cref="BuildJobData"/> gained paidWood/paidFood/paidIron/paidCrystals/paidMagic so a
+        /// cancel can refund 100% of what was actually charged (owner ruling Q1, flat, regardless of
+        /// elapsed time). The fields are additive default-on-read: absent on a v36 payload → 0.
+        ///
+        /// This step is therefore a DELIBERATE, DOCUMENTED NO-OP on the data — there is nothing to
+        /// back-fill, because the cost a pre-v37 job was charged was never recorded anywhere and
+        /// CANNOT be honestly reconstructed (BuildModeController.Place charges SoftcappedCostFor
+        /// against the live tower count; a first-build freebie charged nothing). Inventing a number
+        /// here would refund resources the player never paid. So an in-flight legacy job cancels
+        /// with a ZERO refund, and <see cref="ChannelState"/> jobs that carry no basket are TRACED
+        /// at the cancel seam rather than silently refunding nothing.
+        ///
+        /// It exists as a registered step so the CORE_SAVE version triple stays aligned (the
+        /// migrator's top step must equal <see cref="SaveSchema.CurrentVersion"/>) and so the
+        /// no-op is a decision on the record rather than a gap someone later "fixes" by guessing.
+        /// </summary>
+        private static PersistedState MigrateToV37(PersistedState s)
+        {
+            int legacy = 0;
+            var q = s?.ObsidianQueue;
+            if (q?.Channels != null)
+            {
+                foreach (var kv in q.Channels)
+                {
+                    var ch = kv.Value;
+                    if (ch == null) continue;
+                    if (ch.ActiveJobs != null) legacy += ch.ActiveJobs.Count;
+                    if (ch.PendingQueue != null) legacy += ch.PendingQueue.Count;
+                }
+            }
+
+            if (legacy > 0)
+                FlowTrace.Warn("Save",
+                    $"v36->v37: {legacy} in-flight job(s) carry NO paid basket (pre-WO-911). " +
+                    "Cancelling one refunds ZERO — the charge was never recorded and is not reconstructable.");
+            else
+                FlowTrace.Step("Save", "v36->v37: no in-flight jobs; paid-basket defaults apply cleanly.");
+
             return s;
         }
 

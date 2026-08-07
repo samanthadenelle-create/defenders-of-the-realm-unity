@@ -1,6 +1,47 @@
+> # ⚠ SUPERSEDED 2026-08-06 — ABSORBED BY **WO-911**
+>
+> **Status: SUPERSEDED. Do NOT implement this work order. One screen exists, not two.**
+>
+> Owner ruling **Q13** (`WORK_ORDER_911_unified_queue_screen.md` §8, 2026-08-06) merged this WO into
+> **WO-911 — Unified Manage/Queues Screen**. The "Manage" screen specified below **IS** WO-911's
+> screen: same three channel rails, same tabbed browser, same entry point (the bar face already named
+> "Upgrade", which WO-911 re-points). Two screens doing the same job was the single biggest scope risk
+> identified in the WO-911 audit; the ruling closed it by building **once**.
+>
+> **Implemented 2026-08-06** as `Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs` +
+> `ManageScreenVM.cs` + `ManageScreenBootstrap.cs`.
+>
+> **What of this WO survives, and where it went:**
+> - §2's *"five content tabs over three queues"* structural catch — **honoured**. `ManageScreenVM.ChannelOf`
+>   is the single home of the tab→channel crossing, and Defense + Buildings share ONE Builder rail.
+> - §2(b) *"gear has NO wall-clock cost"* — **honoured**. Weapons/Armor are NOT built (they were already
+>   resolved FUTURE in §7.3, and WO-911's ruled tab set excludes them).
+> - §3 *affordable-first sorting*, per-row cost + shortfall text, and drill-in to the EXISTING
+>   `BuildingUpgradePanelMvvm` — **all carried over verbatim**.
+> - §5 constraints (MinTouchPx, fixed-pixel bands, text-encoded state, ASCII-only, no UXML) — **binding
+>   on WO-911 too and applied**.
+>
+> **What CHANGED under WO-911's rulings (this WO's text is stale on these points):**
+> - §3.0 entry point: it is **not** a new dedicated button. The existing **Upgrade** bar face is
+>   RE-POINTED (ruling Q10+Q13) — no 8th face, no `ButtonCount` bump.
+> - §6 AC "reachable from **Bag**": superseded — it is reachable from the **bar face**. (Map is what
+>   moved into Bag.)
+> - §6 AC "the always-on queue panel is REMOVED from the play HUD": superseded by ruling Q10 — the
+>   right-column Builders **chip SURVIVES as a status glance**; what was retired is its double-tap
+>   *door*, so the bar face is the single entry.
+> - §7 open question 2 ("should troop TRAINING appear?"): **YES** — Troops is a ruled tab (Q3).
+> - This WO's §1/§6 wireframe shows all three rails stacked at once; WO-911's screen shows the ACTIVE
+>   tab's rail full-width plus an always-visible three-line TEXT strip, so every channel stays
+>   glanceable without starving the list of vertical space on a handheld.
+>
+> Read this file for the browser/affordability detail and the tab model. Take the **rulings and the
+> acceptance criteria from WO-911**, which is the authority.
+
+---
+
 # WORK ORDER 905 — "Manage": one screen for every upgrade, sorted by what you can afford
 
-**Status:** SPEC — READY for design review. Depends on WO-864's rail component.
+**Status:** ⚠ SUPERSEDED by WO-911 (2026-08-06) — see the banner above. *(Was: SPEC — READY for design review.)*
 **Minted:** 2026-08-04 (CLI), owner directive
 **Lane:** HUD/UI. Presentation + a read-only affordability model. **No economy or timer logic changes.**
 **Depends on:** WO-864 (the queue card rail — must expose a REUSABLE component)
@@ -53,6 +94,40 @@ separate WO and an economy change, explicitly out of scope here.** Recommend the
 
 ---
 
+## 2.6 WIREFRAME (UI refinement 2026-08-05 — the visual target)
+
+```
+┌ Manage ─────────────────────────────────── "sorted by what you can afford" ┐
+│  ┌ Builders 2/3 ─────┐  ┌ Training 1/2 ────┐  ┌ Research 0/1 ───┐          │  ← 3 LIVE QUEUE RAILS
+│  │ Barracks → T2 2:45│  │ 5× Spearman 1:10 │  │ Idle            │          │    (active + queued
+│  │ Farm queued·1 free│  │ 1 free           │  │ 1 free          │          │     per channel)
+│  └───────────────────┘  └──────────────────┘  └─────────────────┘          │
+│  [ DEFENSIVE ]   [ Buildings ]   [ Troops ]                                 │  ← content TABS
+│  ◆ Arrow Tower → L3     wood 400 · food 200        [Ready]            >     │  ← AFFORDABLE-FIRST rows
+│  ◆ Stone Wall → L2      stone 300                  [Ready]            >     │    state is TEXT
+│  ◆ Cannon Tower → L2    wood 900 · crystal 150     [Short 150 wood]   >     │    (not colour-only)
+│  ◆ Arcane Spire → L4    crystal 800 · food 500     [Short 320 crystal] >    │    > = drill-in to
+│                              [ Close ]                                      │        BuildingUpgradePanelMvvm
+└────────────────────────────────────────────────────────────────────────────┘
+```
+Rails on top = the "…and queues" view. Rows sorted affordable-first; each names its shortfall when short.
+Defensive + Buildings tabs both filter the browse list but share ONE Builders rail (§2a). Drill-in reuses the
+existing upgrade panel (WO-895's redesigned "next-only" card). Built with `ElarionUiKit` / `docs/UI_BLINK_TEMPLATE_CANON.md`.
+
+## 2.7 ⚠ BUILD-1 FELT-TEST FIXES (owner 2026-08-07) — the first build collides; match §2.6
+
+**Owner (2026-08-07): "text is close, just overlapping."** The CONTENT is right — this is a **SPACING/OVERLAP bug, not a rebuild.** THE PRIMARY FIX is #5: give each top element its own vertical band with real spacing so the text stops overprinting (the rail line is overlapping the extra-slot/Buy-slot row above the tabs). #1–4 are polish toward §2.6 once the overlap is gone.
+
+The first build has the right structure (4 tabs, rails, affordability header) but the **top region overlaps and the body is a cavernous void.** Punch-list to reach §2.6:
+
+1. **Rails are a run-on overlapping line — make them the 3 CARDS (§2.6).** Today "Builders 0/2 busy - 0/5 queued | Training … | Research …" is ONE wrapping text line that collides with the row below it. Render **three separate bordered cards** (Builders / Training / Research), evenly spaced across the top, each showing its own `N/M busy · Q/5 queued` — no wrapping, no overlap.
+2. **"Buy slot" + "Extra slot: locked – awaken a 3rd Echo" + the two "FREE" chips overlap the rails.** Move the extra-slot control OUT of the rail band: the **FREE** indicators belong INSIDE their rail card (free-slot count), and **Buy slot** is a single clean button placed on its own row **below** the rails (right-aligned), with "locked – awaken a 3rd Echo" as its disabled reason line. Nothing floats over the rail text.
+3. **Cavernous black void below the list.** The panel is far taller than its content. Either (a) size the panel to content (no empty half-screen), or (b) let the upgrade list fill the body as the scrollable section (§2.6). An empty tab shows a **centered empty-state** ("Nothing to upgrade here yet"), never a black void.
+4. **The upgrade list renders NO rows.** "UPGRADES – what you can afford first" has an empty body. Verify the affordability rows populate for the active tab; if genuinely empty in this state, show the empty-state (#3), don't leave blank.
+5. **Strict vertical bands, no overlap** — the top three elements (rails / extra-slot / tabs) each own their own band (the §5 fixed-pixel-band rule was violated here). Header → rails(3 cards) → extra-slot row → tabs → scrollable list → Close, each in its own band.
+
+Target = the §2.6 wireframe exactly. Re-capture headless after the fix and open the PNG.
+
 ## 3. What to build
 
 ### ⚠ 3.0 THE POINT OF THE SCREEN — upgrades get a HOME, and the HUD gets its space back
@@ -72,18 +147,31 @@ real estate on a 2340x1080 handheld. **Sequencing: Manage must land FIRST and be
 panel is removed — never the reverse**, or the player loses all queue visibility with nothing replacing
 it. Removing it is a checklist item on THIS WO, not a follow-up to forget.
 
-**Entry point:** a **Manage** section reachable from the **Bag** button (the bottom bar already carries
-Build / Talk / Bag / Map / Quests). Bag is inventory; Manage is progression. Confirm with the owner
-whether Manage is a tab INSIDE Bag or a sibling button — she said "under Bag", which reads as inside.
+**Entry point (RESOLVED, owner 2026-08-05):** a **dedicated HUD button** that opens the Manage screen — owner:
+*"a button in the HUD that allows all upgrades from a screen."* It is its OWN button (Manage / Upgrades), not
+buried inside Bag (Bag = inventory, Manage = progression — different mental models). The screen opens straight to
+the tabbed browser + the three rails. (Supersedes the earlier "under Bag" phrasing.)
+
+**"…and queues" (owner 2026-08-05):** the queue visibility the owner is asking for IS the three rails shown at the
+TOP of this screen (Builders / Training / Research — active + queued jobs per channel). That is the queues view;
+there is no separate Queues content-tab needed (the rails already surface every channel's live jobs).
 
 **Top of screen — the three rails.** Reuse WO-864's rail component verbatim; do NOT re-implement it.
 WO-864 has been told to expose it as a reusable builder taking `(ChannelId, RectTransform mount)`. Three
 rails: Builders, Training, Research — each showing its own `SlotCount`, active jobs, queued jobs and free
 slots.
 
-**Below — the browse list, tabbed by content type. V1 SHIPS THREE TABS** (Defensive structures / Building upgrades / Troop upgrades). **Weapons and Armor are explicitly FUTURE** (owner: *"those are future ideas... things like that"*) and are documented in §2 only so the tab model is designed to take them later without a rewrite. Do not build them now. Each row: what it is, its next
-level, its cost, and — the point of the whole screen — **whether the player can afford it right now**,
-and if not, what is short.
+**Below — the browse list, tabbed by content type. V1 SHIPS FOUR TABS, one per queue channel** (owner 2026-08-05,
+resolving old open-Q2): **Defensive** (Builder rail) · **Buildings** (Builder rail — shares it) · **Training**
+(Train rail — troop training + the WO-897 army muster) · **Research** (Research rail — troop/tech upgrades). Every
+rail now has a home tab. **Weapons and Armor are explicitly FUTURE** and documented in §2 only so the tab model
+takes them later without a rewrite. Do not build them now. Each row: what it is, its next level, its cost, and —
+the point of the whole screen — **whether the player can afford it right now**, and if not, what is short.
+
+**⚠ The per-tab item list is a SCROLLABLE section (owner 2026-08-05):** each tab's list can hold many rows
+(every tower / every building / every troop line), so it is a `ScrollRect` that scrolls vertically inside its
+band — the rails, tabs, and Close stay pinned; only the list scrolls. Same for a rail's queued-jobs list if it
+overflows. Fixed-pixel rows (MinTouchPx 112), never fraction-of-parent (§5).
 
 **Sorting is the feature.** Default the list to *affordable first*, then by cost ascending. A player
 opening Manage should see what they can act on immediately, without arithmetic. Everything else is a
@@ -149,8 +237,7 @@ before writing anything:
 
 ## 7. Open owner questions
 
-1. **Manage inside Bag, or a sibling button?** "Under Bag" reads as a tab inside it, but Bag is inventory
-   and Manage is progression — they are different mental models sharing a button.
+1. RESOLVED (owner 2026-08-05): **a dedicated HUD button** (Manage / Upgrades), not inside Bag. See §3.0.
 2. **Should troop TRAINING appear?** The owner named five upgrade categories; training is not an upgrade,
    but it owns one of the three rails she wants shown.
 3. RESOLVED — Weapons/Armor are FUTURE, not v1 (owner 2026-08-04). Retained in section 2 so the tab model anticipates them. Original note: they have no queue and are instant, so they may be better held

@@ -58,8 +58,26 @@ namespace DeNelle.Core.HudModel
         Talk = 1,
         Bag = 2,
         Raids = 3,
+
+        /// <summary>
+        /// ⚠ RETIRED FROM THE BAR (WO-911, owner ruling Q10+Q13, 2026-08-06) — Map moved INTO Bag
+        /// as a tab. The enum VALUE is kept DORMANT on purpose, not deleted: the ordinal is the bar
+        /// order AND the index into the View's face arrays, so renumbering would silently re-point
+        /// every other face. Nothing ever sets this bit any more (see <c>ComputeMask</c>), so it
+        /// never renders. Do not reuse the value for a new face.
+        /// </summary>
         Map = 4,
+
         Quests = 5,
+
+        /// <summary>
+        /// RE-POINTED, NOT ADDED (WO-911, ruling Q10+Q13). This face was the context-sensitive
+        /// "Upgrade" button; it is now the single door to the unified MANAGE / QUEUES screen
+        /// (<c>PanelId.Manage</c>) and is always applicable in town rather than gated on a focused
+        /// building. Keeping the VALUE at 6 is what dissolves the 8th-face problem entirely — no
+        /// enum extension, no <see cref="HudActionBarModel.ButtonCount"/> increase, no new
+        /// hud-areas.json widget id (the row stays "upgradeButton").
+        /// </summary>
         Upgrade = 6,
     }
 
@@ -70,8 +88,31 @@ namespace DeNelle.Core.HudModel
     /// </summary>
     public sealed class HudActionBarModel
     {
-        /// <summary>Number of button identities (array sizing for the View).</summary>
+        /// <summary>
+        /// Number of button IDENTITIES — the array-sizing / mask-iteration bound for the View.
+        /// -------------------------------------------------------------------------------------
+        /// ⚠ THIS IS NOT THE NUMBER OF FACES THAT RENDER. The rendered list is
+        /// <see cref="Active"/>, whose length varies 0..<see cref="MaxVisibleFaces"/> per posture;
+        /// the View lays out <c>Active.Count</c> faces and centres them, so a shorter set can never
+        /// leave a dead trailing slot.
+        ///
+        /// WO-911 (ruling Q10+Q13) settled this at source, because the ruling's "no ButtonCount
+        /// change is needed" is exact for the Upgrade->Manage RE-POINT but Map's REMOVAL is a
+        /// separate count question: this stays 7 because <see cref="ActionBarButtonId.Map"/> is kept
+        /// DORMANT rather than renumbered, and every face array is indexed by the enum ORDINAL
+        /// (Upgrade = 6). Dropping this to 6 would put Upgrade out of bounds. The count that
+        /// actually changed 7 -> 6 is <see cref="MaxVisibleFaces"/>, which is what the View's slot
+        /// geometry must derive from.
+        /// </summary>
         public const int ButtonCount = 7;
+
+        /// <summary>
+        /// WO-911 — the MAXIMUM number of faces that can render at once (the widest posture set).
+        /// The calm(town) bar is Build, Talk, Bag, Raids, Quests, Manage = SIX since Map moved into
+        /// Bag as a tab. This is the number the View must size a slot from; <see cref="ButtonCount"/>
+        /// is the enum-identity bound and is deliberately larger (Map stays dormant at ordinal 4).
+        /// </summary>
+        public const int MaxVisibleFaces = 6;
 
         // Posture keys the model maps to button sets (HudPostureKeys spellings —
         // the owner's hud-areas.json vocabulary; any other key => empty bar,
@@ -211,13 +252,22 @@ namespace DeNelle.Core.HudModel
         {
             if (_postureKey == PostureTown)
             {
+                // WO-911 (ruling Q10+Q13, 2026-08-06): the bar goes 7 -> 6 faces.
+                //  • Map is GONE from the bar — it is a tab inside Bag now. The
+                //    ActionBarButtonId.Map bit is never set here again; _source.MapUnlocked stays on
+                //    the ISource seam because it is still the Onboarded gate other code reads, but
+                //    it no longer packs a face.
+                //  • Upgrade is RE-POINTED to the unified Manage/Queues screen and is therefore
+                //    ALWAYS applicable in town — it is the single door to the three production
+                //    lines, so gating it on _source.BuildingFocused (the old WO-835 §3c split-out)
+                //    would make the queues reachable only while standing next to a building, which
+                //    is the exact undiscoverability this WO exists to remove.
                 int mask = Bit(ActionBarButtonId.Build)      // always in town (posture gates)
                          | Bit(ActionBarButtonId.Bag)        // always applicable
-                         | Bit(ActionBarButtonId.Quests);    // owner: "quests active more often"
+                         | Bit(ActionBarButtonId.Quests)     // owner: "quests active more often"
+                         | Bit(ActionBarButtonId.Upgrade);   // WO-911: the Manage/Queues door
                 if (_source.TalkAvailable) mask |= Bit(ActionBarButtonId.Talk);
                 if (_source.RaidCapable) mask |= Bit(ActionBarButtonId.Raids);      // WO-835 §3d hide default
-                if (_source.MapUnlocked) mask |= Bit(ActionBarButtonId.Map);        // WO-825 R4 semantics
-                if (_source.BuildingFocused) mask |= Bit(ActionBarButtonId.Upgrade); // §3c split-out
                 return mask;
             }
             if (_postureKey == PostureExplore)
