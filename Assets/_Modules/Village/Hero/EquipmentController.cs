@@ -1897,11 +1897,26 @@ namespace DeNelle.Village
                 if (composeRot)
                     t.localRotation = t.localRotation * Quaternion.Euler(fo.eulerRot);
             }
+            // THROTTLED (owner F8 seq=2153, 2026-08-06). These two were FlowTrace.Step and this
+            // method runs EVERY FRAME via the ApplyHoldPose re-assert, so they emitted ~120 lines
+            // per second. The F8 harness harvests only the LAST 60 signal lines - so her capture of
+            // "BUILDING IS ON fire but there is no option to repair" contained SIXTY lines of
+            // sheathed-offset spam and not one line about the fire, the building, or the repair
+            // path. Three captures in a row were blinded the same way.
+            //
+            // This is the exact failure the parent file already documents at :1959-1971 for the
+            // parent-scale-compensate line ("a diagnostic that blinds the diagnostics is worse than
+            // no diagnostic") - the same fix was applied there and these two were missed.
+            //
+            // Throttle key includes meshKey + source, so a CHANGE (different weapon, or explicit
+            // flipping to fallback) still prints promptly instead of being swallowed for a second.
             if (source == SheathedOffsetSource.Explicit)
-                FlowTrace.Step("Offset", $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
+                FlowTrace.Throttle("Offset", $"sheathed-explicit-{meshKey}", 1f,
+                    $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
                     $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
             else
-                FlowTrace.Step("Offset", $"sheathed FALLBACK (drawn '{meshKey}' on back pose): " +
+                FlowTrace.Throttle("Offset", $"sheathed-fallback-{meshKey}", 1f,
+                    $"sheathed FALLBACK (drawn '{meshKey}' on back pose): " +
                     $"pos={fo.pos} rot={(DeNelle.Core.FeatureFlags.SheathedDrawnRotFallback ? fo.eulerRot.ToString() : "SKIPPED (pos-only, ff.sheathdrawnrot=0)")}");
         }
 

@@ -1055,6 +1055,24 @@ namespace DeNelle.Editor
                 report.Append("prefab REUSED (GUID preserved); ");
             }
 
+            // The RAW import pose of the model child, read fresh from the FBX asset. This is the
+            // ORIGIN the idempotency test compares against: an angle test alone cannot tell
+            // "correction not yet applied" from "correction applied once", because both sit a
+            // fixed angle from the target - which is how L1 ended up with 1.9 baked TWICE.
+            Quaternion? importPose = null;
+            {
+                var srcModel = AssetDatabase.LoadAssetAtPath<GameObject>(spec.FbxPath);
+                if (srcModel != null)
+                {
+                    var srcChild = FindModelChild(srcModel.transform, spec.Level);
+                    if (srcChild != null) importPose = srcChild.localRotation;
+                }
+                if (importPose == null)
+                    Debug.LogWarning(Tag + "L" + spec.Level + ": could not read the FBX import pose from '" +
+                                     spec.FbxPath + "' - falling back to the angle-delta test, which is " +
+                                     "NOT idempotent for a non-zero correction. Verify the result by eye.");
+            }
+
             // -- Assert the pose on the contents (create + reuse take this path). --
             GameObject contents = PrefabUtility.LoadPrefabContents(spec.PrefabPath);
             try
@@ -1088,18 +1106,57 @@ namespace DeNelle.Editor
                 // import pose, not the final absolute rotation. Composing is what makes
                 // both cases work with one rule: L1's 1.9 becomes a small lean on a model
                 // that already stands, and L2/L3's -90 stands up a model that does not.
-                var want = child.localRotation * Quaternion.Euler(upright);
-                bool changed = Quaternion.Angle(child.localRotation, want) > 0.01f;
-                if (changed)
+                // IDEMPOTENCY (bug found 2026-08-06). Composing is correct - see
+                // the reasoning above - but the old guard was:
+                //     bool changed = Quaternion.Angle(child.localRotation, want) > 0.01f;
+                // With want = current * upright, that angle IS the correction, so it is ALWAYS
+                // greater than 0.01 whenever upright != 0. Every run therefore composed AGAIN.
+                // The header's claim that "a second run reports already-correct and writes
+                // nothing" only ever held for a ZERO correction.
+                //
+                // Measured damage: L1 sits at -86.14 = -90 + 1.93 + 1.93 - the 1.9 correction
+                // applied TWICE. An angle test cannot tell "not yet applied" from "applied once",
+                // because both are a fixed angle away from the target. So compare against the
+                // ORIGIN instead: the FBX's own import pose. If the child already differs from
+                // the raw import pose by the correction we are about to add, it is already baked.
+                var want       = child.localRotation * Quaternion.Euler(upright);
+                var alreadyBaked = importPose.HasValue &&
+                                   Quaternion.Angle(child.localRotation,
+                                                    importPose.Value * Quaternion.Euler(upright)) <= 0.5f;
+                bool atImportPose = importPose.HasValue &&
+                                    Quaternion.Angle(child.localRotation, importPose.Value) <= 0.5f;
+
+                bool changed;
+                if (alreadyBaked && !Mathf.Approximately(upright.sqrMagnitude, 0f))
                 {
-                    child.localRotation = want;
-                    report.Append("upright BAKED on child '").Append(child.name).Append("' ")
-                          .Append(Fmt(before)).Append(" -> ").Append(Fmt(upright)).Append("; ");
+                    changed = false;
+                    report.Append("upright ALREADY BAKED on child '").Append(child.name)
+                          .Append("' (child is import-pose * correction; skipping to stay idempotent); ");
+                }
+                else if (!atImportPose && importPose.HasValue && !Mathf.Approximately(upright.sqrMagnitude, 0f))
+                {
+                    // Neither raw nor correctly-baked: someone (an earlier double-run) left it in a
+                    // third state. Rebuild from the import pose rather than compounding the drift.
+                    changed = true;
+                    child.localRotation = importPose.Value * Quaternion.Euler(upright);
+                    report.Append("upright REBASED on child '").Append(child.name)
+                          .Append("' - was neither raw nor baked (drifted by a previous double-run); ")
+                          .Append("restored from import pose ").Append(Fmt(upright)).Append("; ");
                 }
                 else
                 {
-                    report.Append("upright already correct on child '").Append(child.name)
-                          .Append("' (idempotent no-op); ");
+                    changed = Quaternion.Angle(child.localRotation, want) > 0.01f;
+                    if (changed)
+                    {
+                        child.localRotation = want;
+                        report.Append("upright BAKED on child '").Append(child.name).Append("' ")
+                              .Append(Fmt(before)).Append(" -> ").Append(Fmt(upright)).Append("; ");
+                    }
+                    else
+                    {
+                        report.Append("upright already correct on child '").Append(child.name)
+                              .Append("' (idempotent no-op); ");
+                    }
                 }
 
                 if (changed) PrefabUtility.SaveAsPrefabAsset(contents, spec.PrefabPath);
