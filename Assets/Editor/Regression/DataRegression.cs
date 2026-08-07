@@ -325,6 +325,14 @@ namespace DeNelle.Editor
             if (!CoreSaveRegression.Run(out var coreSaveSmeReason)) failures.Add(coreSaveSmeReason); else log.AppendLine("[core-save-sme] " + coreSaveSmeReason);
             if (!BuildEconomyRegression.Run(out var buildEconReason)) failures.Add(buildEconReason); else log.AppendLine("[build-econ] " + buildEconReason);
             if (!ObsidianQueueRegression.Run(out var obsidianQueueReason)) failures.Add(obsidianQueueReason); else log.AppendLine("[obsidian-queue] " + obsidianQueueReason);
+            // --- WO-897: army composition musters the whole build-out onto the EXISTING Train queue
+            //     (no second queue) and never silently drops what does not fit the five-per-line cap ---
+            if (!ArmyMusterRegression.Run(out var armyMusterReason)) failures.Add(armyMusterReason); else log.AppendLine("[army-muster] " + armyMusterReason);
+            // --- 2026-08-07: two fixes that shipped WITHOUT a pin, both "must never come back":
+            //     the rewarded-ad stub that GRANTED THE REWARD with no SDK (a free timer skip on
+            //     every channel), and the arena home-return that lived on a UI object three paths
+            //     destroy without firing - which stranded the owner 7km out on BOTH platforms ---
+            if (!AdGateAndArenaReturnRegression.Run(out var adArenaReason)) failures.Add(adArenaReason); else log.AppendLine("[ad-gate-arena] " + adArenaReason);
             // --- WO-781: wounded-troop recovery advance (TickRecovery live+offline callers) ---
             if (!ArmyRecoveryRegression.Run(out var troopRecoveryReason)) failures.Add(troopRecoveryReason); else log.AppendLine("[troop-recovery] " + troopRecoveryReason);
             if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);

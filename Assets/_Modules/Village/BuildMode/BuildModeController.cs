@@ -1775,6 +1775,26 @@ namespace DeNelle.Village
                 Debug.Log($"[BuildMode] Not enough resources to place '{_armed.id}' — placement aborted.");
                 return;
             }
+            // WO-911 (M1, ruling Q4) — BUILDER LINE DEPTH GATE, checked AT COMMIT, BEFORE the spawn
+            // and BEFORE the charge. This is the right seam: refusing further down (at the
+            // StartBuild call ~180 lines below) would leave a structure standing with no timer, and
+            // the charge in this method already lands after loader.Spawn (a known ordering debt
+            // documented at the ChargeLedger site). Refusing here costs the player nothing.
+            {
+                var timerForCap = BuildTimerService.Instance;
+                if (timerForCap != null && timerForCap.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
+                {
+                    // Player-readable, colour-independent (owner is red/green colourblind).
+                    string why = $"Builders queue is full ({timerForCap.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
+                                 $"{timerForCap.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). " +
+                                 "Cancel or finish an item first.";
+                    BuildFeedbackToast.Show(why);
+                    FlowTrace.Warn("BuildMode", $"Place refused for '{_armed.id}' — {why}");
+                    CancelArmed();
+                    return;
+                }
+            }
+
             // WO-707 singleton gate, re-checked AT COMMIT (defensive — the arm gate could
             // be stale if a placement landed between arm and click).
             if (SingletonAlreadyBuilt(_armed))
@@ -1943,12 +1963,18 @@ namespace DeNelle.Village
                 // OWNER CARVE-OUT 2026-08-06: "other than the pallets". The pallets are the STORAGE
                 // CONTAINERS -- lumberyard / foundry / silo, the three catalog entries that declare
                 // a storageCapacity and add to the town bank on top of baseCap. Keyed off the data
-                // (RepoProps.IsStorageContainer => storageCapacity > 0) rather than a hardcoded id
+                // (via TownBankCapacity, the ONE reader of that seam) rather than a hardcoded id
                 // list, so a container added later is excluded automatically. They are deliberate
                 // capacity-progression buildings (WO-837) and must pay their real timer.
-                bool isPallet = _armed != null && _armed.repo != null && _armed.repo.IsStorageContainer;
+                bool isPallet = _armed != null && DeNelle.Core.Economy.TownBankCapacity.IsStorageContainer(_armed.repo);
                 bool graceApplies = firstEverBuild && !isPallet;
-                var job = svc != null ? svc.StartBuild(jobKey, tier, graceApplies) : null;
+                // WO-911 (M2): record what was ACTUALLY charged (line 1772 — default for a
+                // freebie, else SoftcappedCostFor at the tower count that applied at charge time)
+                // so a cancel refunds 100% of it (ruling Q1) instead of re-deriving a number the
+                // player never paid. `cost` is the same value ChargeLedger debited above.
+                var job = svc != null
+                    ? svc.StartBuild(jobKey, tier, graceApplies, BuildTimerService.ToJobCost(cost))
+                    : null;
                 // Sec.12 proving line: a capture must show the RESOLVED tier + duration, so
                 // "every building takes 15s" can never silently come back.
                 FlowTrace.Step("BuildTimer",
@@ -2316,6 +2342,20 @@ namespace DeNelle.Village
                     ShowSelectionPanel(ps);
                     return;
                 }
+
+                // WO-911 (M1, ruling Q4) — DEPTH GATE, in this same before-any-charge block so a
+                // refusal costs the player nothing. Distinct from the busy check above: that one is
+                // "this structure is already working", this one is "the whole Builders LINE is full".
+                if (timerSvc.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
+                {
+                    string why = $"Builders queue is full ({timerSvc.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
+                                 $"{timerSvc.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). " +
+                                 "Cancel or finish an item first.";
+                    FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' REFUSED — {why}");
+                    BuildFeedbackToast.Show(why);
+                    ShowSelectionPanel(ps);
+                    return;
+                }
             }
 
             // Charge ONLY after the affordability gate passes (mirrors the place-charge rule).
@@ -2339,7 +2379,9 @@ namespace DeNelle.Village
             {
                 if (timerSvc != null)
                 {
-                    var job = timerSvc.StartUpgrade(jobKey, newLevel);
+                    // WO-911 (M2): the basket ChargeLedger debited at :2328 rides the job so a
+                    // cancel refunds 100% of it (ruling Q1).
+                    var job = timerSvc.StartUpgrade(jobKey, newLevel, BuildTimerService.ToJobCost(cost));
                     if (job != null)
                     {
                         UnderConstructionVisual.Attach(ps, jobKey);

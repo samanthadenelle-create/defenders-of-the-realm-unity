@@ -80,10 +80,19 @@ namespace DeNelle.Core.Dev
         // ------------------------------------------------------------------
         private static bool ShouldShow()
         {
-            // Editor + any Development build: always available.
-            if (Application.isEditor || Debug.isDebugBuild) return true;
-            // Release build (incl. the release-signed local tester APK): only when the
-            // flag is ON. Default ON now; ff.flagbutton=0 hides it for a public release.
+            // OWNER RULING 2026-08-07: "remove the flag and dev button ... only leave hard f8
+            // click ... for better screenshots."
+            //
+            // The on-screen FLAG chip used to appear in the editor and in ANY development build
+            // unconditionally, so it photobombed every capture - it is visible in the owner's own
+            // marketing frames. Capture itself is UNAFFECTED: the F8 KEY still fires
+            // BreakCaptureHarness exactly as before. This hides only the on-screen chip.
+            //
+            // The flag is now the SOLE gate, so the chip is opt-in on every platform. On a
+            // touch device with no keyboard, set ff.flagbutton=1 to get it back.
+            //
+            // NOTE the flag is PlayerPrefs-backed and STICKY: a device where it was switched on
+            // earlier keeps it on until cleared. A clean install is the only honest check.
             return FeatureFlags.FlagButton;
         }
 

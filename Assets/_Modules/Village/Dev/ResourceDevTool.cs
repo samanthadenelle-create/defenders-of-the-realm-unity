@@ -76,11 +76,15 @@ namespace DeNelle.Village.Dev
         // ------------------------------------------------------------------
         private static bool ShouldShow()
         {
-            // Editor + any Development build: always available.
-            if (Application.isEditor || Debug.isDebugBuild) return true;
-            // Release build (incl. the release-signed local tester APK): only when the
-            // flag is ON. Default ON now for the local tester APK; ff.devresourcetool=0
-            // (or default OFF) hides it for a real public/store release.
+            // OWNER RULING 2026-08-07: "remove the flag and dev button ... for better screenshots."
+            //
+            // The DEV chip used to appear in the editor and in ANY development build
+            // unconditionally, so it sat in shot alongside the FLAG chip. The flag is now the
+            // SOLE gate on every platform - set ff.devresourcetool=1 to bring it back when you
+            // actually want to grant resources (e.g. staging a town for captures).
+            //
+            // NOTE the flag is PlayerPrefs-backed and STICKY: a machine where it was switched on
+            // earlier keeps it on until cleared. A clean profile is the only honest check.
             return FeatureFlags.DevResourceTool;
         }
 

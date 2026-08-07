@@ -57,8 +57,29 @@ namespace DeNelle.Editor
             string cathKey  = Extract(factory,   @"ArcaneAura\.Ensure\(\s*root\s*,\s*""([^""]+)""", "StructureFactory arcane-tower aura", fails);
             string cathKey2 = Extract(hubInject, @"ArcaneAura\.Ensure\(\s*target\.gameObject\s*,\s*""([^""]+)""", "HubStructureVisualInjector cathedral aura", fails);
 
-            if (nodeKey != null && (nodeKey == OldNodeKey || nodeKey == OldArcKey))
-                fails.Add($"node aura key is still the old shared '{nodeKey}' — nodes must have a DISTINCT subtle aura");
+            // OWNER RETAG 2026-08-06 — this check was REWRITTEN, not weakened.
+            //
+            // It used to BLACKLIST the name "Poi_NodeAura" for nodes. That was only ever correct
+            // while that key's "Magic circle sun loop" prefab was SHARED with the Arcane Spire and
+            // the Cathedral - sharing was the actual defect, the name was just its symptom.
+            // WO-788 (2026-07-30) moved the Cathedral to "Cathedral_Aura" (Magic circle ELECTRO
+            // loop) and the Spire to "Aura_HeartPulse" (Buff white twist), so the sun loop is now
+            // UNIQUE to nodes and the blacklist had outlived its premise.
+            //
+            // The owner then felt-tested the 07-24 "subtle drifting motes" pick on the Seeker and
+            // retagged it: "there is no vfx s i can see on nodes ... should be something more
+            // meaningful like an aura so i can really see." The motes DID play - they are simply
+            // imperceptible in a bright midday field. Nodes went back to Poi_NodeAura, which this
+            // oracle then failed, i.e. the test was enforcing a superseded ruling against a
+            // deliberate owner decision.
+            //
+            // So assert the INVARIANT that actually matters - the three auras must be MUTUALLY
+            // DISTINCT - rather than forbidding one name. A future regression that points two of
+            // them at the same key still fails, which is the whole point.
+            if (nodeKey != null && spireKey != null && nodeKey == spireKey)
+                fails.Add($"node and arcane-spire share the aura key '{nodeKey}' — the two must be DISTINCT");
+            if (nodeKey != null && cathKey != null && nodeKey == cathKey)
+                fails.Add($"node and cathedral share the aura key '{nodeKey}' — the two must be DISTINCT");
             if (spireKey != null && (spireKey == OldNodeKey || spireKey == OldArcKey))
                 fails.Add($"arcane-spire aura key is still the old shared '{spireKey}' — the combat spire must have a DISTINCT aura");
             if (cathKey != null && (cathKey == OldNodeKey || cathKey == OldArcKey))

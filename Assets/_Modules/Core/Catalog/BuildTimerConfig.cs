@@ -135,6 +135,36 @@ namespace DeNelle.Core.Catalog
         [Tooltip("How many jobs may run at once for free. CoC-style scarcity — extra slots are a future unlock/purchase.")]
         [Min(1)] public int freeBuildSlots = 2;
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  WO-911 (M1) — QUEUE DEPTH. A DIFFERENT AXIS FROM freeBuildSlots.
+        //  -------------------------------------------------------------------
+        //  Owner: "max of five things in the queue, maybe upgradable later"
+        //  (ruled Q4: 5 TOTAL PER LINE — per channel, NOT global).
+        //
+        //  ⚠ DEPTH is how many items may be LINED UP on one channel (active +
+        //  pending). CONCURRENCY (freeBuildSlots, above) is how many run AT ONCE.
+        //  DO NOT implement the cap of 5 by raising freeBuildSlots: that would
+        //  hand the player five simultaneous builders, collapse the CoC scarcity
+        //  the timer economy rests on, and delete the waiting pain the crystal
+        //  Finish-Now sink exists to monetize. freeBuildSlots is also oracle-
+        //  pinned at 2 (BuildEconomyRegression). See WO-911 section 2d.
+        //
+        //  Authored as DATA so "upgradable later" is a data change, not a code
+        //  change. The per-player lever on top of this is the Echo-gated
+        //  purchased slot (BuildTimerService.TryBuySlot, ruling Q6), which
+        //  raises DEPTH and CONCURRENCY together via ChannelState.BoughtSlots.
+        // ─────────────────────────────────────────────────────────────────────
+        [Header("Queue depth (WO-911 — line length, NOT concurrency)")]
+        [Tooltip("Max items lined up on ONE channel (active + pending). Owner ruling Q4: 5 per line. 0 = uncapped.")]
+        [Min(0)] public int queueDepthPerLine = 5;
+
+        [Header("Extra queue slot (Echo-gated crystal sink, WO-911 Q6/Q7)")]
+        [Tooltip("Crystals for the FIRST purchased slot on a channel. Each further slot on that channel costs this x (1 + slots already bought).")]
+        [Min(0)] public int extraSlotBaseCrystals = 250;
+
+        [Tooltip("Echoes the player must own BEFORE the first extra slot may be bought. Ruling Q6: 'each Echo above 2'.")]
+        [Min(0)] public int extraSlotEchoFloor = 2;
+
         /// <summary>
         /// Hybrid curve: duration (seconds) for a <paramref name="tier"/> job of
         /// <paramref name="type"/>. Super-linear via <see cref="tierGrowth"/>,

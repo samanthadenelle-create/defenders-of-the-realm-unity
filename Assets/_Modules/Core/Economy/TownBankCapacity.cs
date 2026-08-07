@@ -257,6 +257,23 @@ namespace DeNelle.Core.Economy
         /// </summary>
         public static bool IsClampable(BankGrantKind kind) => kind == BankGrantKind.EarnedIncome;
 
+        /// <summary>
+        /// Is this structure a STORAGE CONTAINER (the owner's "pallets" - lumberyard / foundry /
+        /// silo)? The one place outside this file that may ask.
+        /// -------------------------------------------------------------------------------
+        /// Added 2026-08-07 because the first-build 5s grace needs the owner's carve-out ("other
+        /// than the pallets") and reached for repo.IsStorageContainer directly - which the
+        /// [one-reader] guard correctly flagged. That guard exists so capacity math cannot be
+        /// re-derived in two places and disagree.
+        ///
+        /// This is a CLASSIFICATION passthrough, not capacity math - it answers "is this a
+        /// container", never "how much does it hold". Routing it here keeps the raw seam
+        /// (repo.storageCapacity / repo.IsStorageContainer) read in exactly one file while letting
+        /// callers ask the question they actually have. A future container needs no caller change.
+        /// </summary>
+        public static bool IsStorageContainer(DeNelle.Core.Catalog.RepoProps repo)
+            => repo != null && repo.IsStorageContainer;
+
         /// <summary>True when this resource has a storage ceiling at all. False for Crystals/Coins,
         /// unconditionally and un-overridably (Law 1).</summary>
         public static bool IsCapped(BankResource r)

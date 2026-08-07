@@ -79,13 +79,19 @@ namespace DeNelle.Editor
             var model = new HudActionBarModel(src);
             model.SetPosture(HudActionBarModel.PostureTown);
 
-            ExpectSet(model, failures, "town baseline (no NPC/raid/focus)",
-                ActionBarButtonId.Build, ActionBarButtonId.Bag, ActionBarButtonId.Map, ActionBarButtonId.Quests);
+            // ⚠ WO-911 (owner ruling Q10+Q13, 2026-08-06) — THE EXPECTED SET CHANGED, 7 -> 6.
+            // Map LEFT the bar (it is a tab inside Bag now) and the Upgrade face was RE-POINTED to
+            // the unified Manage/Queues screen, which makes it always-applicable in town instead of
+            // context-gated on a focused building. These oracles are UPDATED to the new set and
+            // order — never deleted or weakened to make a smaller bar pass.
+            ExpectSet(model, failures, "town baseline (no NPC/raid)",
+                ActionBarButtonId.Build, ActionBarButtonId.Bag, ActionBarButtonId.Quests,
+                ActionBarButtonId.Upgrade);
 
             src.Talk = true; model.Tick();
             ExpectSet(model, failures, "NPC in range",
                 ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
-                ActionBarButtonId.Map, ActionBarButtonId.Quests);
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
             src.Talk = false; model.Tick();
             if (model.Active.Contains(ActionBarButtonId.Talk))
                 failures.Add("Talk did not repack OUT when the NPC left range (hide, not dim)");
@@ -105,27 +111,36 @@ namespace DeNelle.Editor
             if (model.RaidsDimmed)
                 failures.Add("full army did not restore the Raids face");
 
-            // Map Onboarded gate (WO-825 R4) — shorter array, contiguity by construction.
+            // WO-911 — Map must NEVER pack into the bar again, in EITHER Onboarded state. The
+            // WO-825 R4 gate is not "lost": the whole face moved into Bag (flag-gated there by
+            // FeatureFlags.MapTab). A returning Map face is the regression now.
             src.Onboarded = false; model.Tick();
             if (model.Active.Contains(ActionBarButtonId.Map))
-                failures.Add("Map visible pre-onboard (WO-825 R4 gate lost in the relocation)");
+                failures.Add("Map is back on the bar (pre-onboard) — WO-911 moved it into Bag as a tab");
             src.Onboarded = true; model.Tick();
-            if (!model.Active.Contains(ActionBarButtonId.Map))
-                failures.Add("Map absent when Onboarded");
+            if (model.Active.Contains(ActionBarButtonId.Map))
+                failures.Add("Map is back on the bar (Onboarded) — WO-911 moved it into Bag as a tab; the bar is 6 faces");
 
-            // §3c split: Upgrade packs in on focus and Quests STAYS.
+            // WO-911 — the re-pointed Manage face is ALWAYS applicable in town, focus or not.
+            // Gating it on a focused building is exactly the undiscoverability the WO removes.
+            src.Focused = false; model.Tick();
+            if (!model.Active.Contains(ActionBarButtonId.Upgrade))
+                failures.Add("the Manage face (ActionBarButtonId.Upgrade, re-pointed) is absent with no focused " +
+                             "building — it is the single door to the queues and must always be in town");
             src.Focused = true; model.Tick();
             if (!model.Active.Contains(ActionBarButtonId.Upgrade))
-                failures.Add("focused building did not pack the Upgrade face in");
+                failures.Add("the Manage face vanished when a building took focus");
             if (!model.Active.Contains(ActionBarButtonId.Quests))
                 failures.Add("Quests vanished while a building is focused — the §3c split regressed to the relabel hijack");
 
-            // Canonical order at the 7-face MAX.
+            // Canonical order at the 6-face MAX (WO-911: Build, Talk, Bag, Raids, Quests, Manage).
             src.Talk = true; model.Tick();
-            ExpectSet(model, failures, "7-face MAX order",
+            ExpectSet(model, failures, "6-face MAX order",
                 ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
-                ActionBarButtonId.Raids, ActionBarButtonId.Map, ActionBarButtonId.Quests,
-                ActionBarButtonId.Upgrade);
+                ActionBarButtonId.Raids, ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
+            if (model.Active.Count > HudActionBarModel.MaxVisibleFaces)
+                failures.Add($"the bar renders {model.Active.Count} faces but the View sizes slots from " +
+                             $"MaxVisibleFaces = {HudActionBarModel.MaxVisibleFaces} — the group would overflow its zone");
 
             // Explore parity with its occupancy row; non-calm postures drop the bar.
             model.SetPosture(HudActionBarModel.PostureExplore);

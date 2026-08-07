@@ -664,8 +664,18 @@ namespace DeNelle.Editor.Regression
                 try { src = File.ReadAllText(file); } catch { continue; }
                 // Anyone else READING the raw seam (member access, not a doc mention) is re-deriving
                 // capacity outside the one reader -- that is how two ceilings come to disagree.
-                if (src.IndexOf(".storageCapacity", StringComparison.Ordinal) >= 0 ||
-                    src.IndexOf(".IsStorageContainer", StringComparison.Ordinal) >= 0)
+                //
+                // BUT: calling the one reader's OWN accessor is the compliant thing to do, and the
+                // substring scan cannot tell "repo.IsStorageContainer" (the violation) from
+                // "TownBankCapacity.IsStorageContainer(repo)" (the fix) -- the sanctioned call
+                // literally CONTAINS the forbidden substring. Caught 2026-08-07: the first-build
+                // grace was routed through the accessor exactly as this guard intends, and the
+                // guard failed it anyway, which would teach the next reader to route AROUND the
+                // one reader instead of through it. Blank the sanctioned calls before scanning.
+                var scan = src.Replace("TownBankCapacity.IsStorageContainer", "<sanctioned>")
+                              .Replace("TownBankCapacity.storageCapacity", "<sanctioned>");
+                if (scan.IndexOf(".storageCapacity", StringComparison.Ordinal) >= 0 ||
+                    scan.IndexOf(".IsStorageContainer", StringComparison.Ordinal) >= 0)
                     offenders.Add(norm.Substring(norm.IndexOf("_Modules", StringComparison.Ordinal)));
             }
             if (offenders.Count > 0)

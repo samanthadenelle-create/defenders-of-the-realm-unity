@@ -567,8 +567,14 @@ namespace DeNelle.Editor
             // v33; v34-v36 are additive + reviewed; WO-830 extended the TOKEN GRAMMAR ONLY
             // (resource:level — same wire shape, NO bump). Update this pin in the SAME breath as
             // any future reviewed bump (CLAUDE.md §15).
-            if (SaveSchema.CurrentVersion != 36)
-                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 36; echoLanes token must survive the current schema)");
+            //
+            // v37 REVIEWED 2026-08-07 (WO-911): BuildJobData gained paidWood/Food/Iron/Crystals/
+            // Magic so a cancel can refund the EXACT basket that was charged (owner ruling Q1,
+            // 100% flat). Additive only - no echoLanes field changed shape, and a pre-v37 job
+            // simply refunds zero, traced rather than silent. The canary did its job: the bump
+            // landed without this pin moving, and this suite caught it on the next run.
+            if (SaveSchema.CurrentVersion != 37)
+                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 37; echoLanes token must survive the current schema)");
 
             // A rich WO-830 resource token survives the REAL serialize → deserialize → validate path.
             const string richToken = "crystals:3,idle,wood:1,gold:2";

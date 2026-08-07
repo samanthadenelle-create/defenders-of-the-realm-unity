@@ -52,6 +52,9 @@ namespace DeNelle.Editor
                 CheckReachabilityAndLayout(failures, log);
                 CheckMigration(failures, log);
                 CheckCardRail(failures, log);
+                CheckWo911DepthCap(failures, log);
+                CheckWo911PaidBasketAndPricing(failures, log);
+                CheckWo911Seams(failures, log);
             }
             catch (System.Exception ex)
             {
@@ -163,8 +166,21 @@ namespace DeNelle.Editor
             if (t.GetMethod("PendingJobsOf") == null) failures.Add("BuildTimerService.PendingJobsOf(ChannelId) missing");
             if (t.GetEvent("QueueChanged") == null) failures.Add("BuildTimerService.QueueChanged event missing (the HUD seam)");
             // WO-172 back-compat API still present.
-            if (t.GetMethod("StartBuild") == null) failures.Add("BuildTimerService.StartBuild missing (build flow seam)");
-            if (t.GetMethod("StartUpgrade") == null) failures.Add("BuildTimerService.StartUpgrade missing (upgrade flow seam)");
+            // TYPED lookups, not bare GetMethod(name). WO-911 added paid-basket overloads so the
+            // Q1 100%-flat refund can return exactly what was charged:
+            //     StartBuild  (string,int,bool)          / (string,int,bool,JobCost)
+            //     StartUpgrade(string,int)               / (string,int,JobCost)
+            // A bare GetMethod("StartUpgrade") then throws AmbiguousMatchException and the WHOLE
+            // suite reports as thrown rather than failed - which is how one overload took out an
+            // entire oracle. Pin BOTH shapes: the base seam must exist, and so must the paid one,
+            // because dropping the paid overload would silently make every cancel refund nothing.
+            if (t.GetMethod("StartBuild", new[] { typeof(string), typeof(int), typeof(bool) }) == null)
+                failures.Add("BuildTimerService.StartBuild(string,int,bool) missing (build flow seam)");
+            if (t.GetMethod("StartUpgrade", new[] { typeof(string), typeof(int) }) == null)
+                failures.Add("BuildTimerService.StartUpgrade(string,int) missing (upgrade flow seam)");
+            if (t.GetMethod("StartUpgrade", new[] { typeof(string), typeof(int), typeof(JobCost) }) == null)
+                failures.Add("BuildTimerService.StartUpgrade(string,int,JobCost) missing - the paid-basket " +
+                             "overload is what makes a cancel refund the EXACT charge (owner ruling Q1)");
             log.AppendLine("  BuildTimerService queue seam (Enqueue/SlotCount/ActiveJobsOf/PendingJobsOf/QueueChanged + StartBuild/StartUpgrade) OK");
         }
 
@@ -277,15 +293,39 @@ namespace DeNelle.Editor
                 string kitSrc = File.ReadAllText(kitPath);
                 if (kitSrc.IndexOf("ObsidianQueueGate.RequestToggle") < 0)
                     failures.Add("HudKitController does not call ObsidianQueueGate.RequestToggle (queue still dark)");
-                // Owner 2026-08-01: the bar's Queues button is RETIRED — the right-column
-                // Builders chip (QueueStatus band, above the resources dock) is the one
-                // Queues entry. A live workQueueButton widget id reappearing = regression.
-                if (kitSrc.IndexOf("Register(\"workQueueButton\"") >= 0)
-                    failures.Add("HudKitController re-registers the retired workQueueButton (owner 2026-08-01: Queues entry = the Builders chip)");
+
+                // ── WO-911 (owner ruling Q10+Q13, 2026-08-06): THE 08-01 RETIREMENT IS REVERSED,
+                //    AND THIS ORACLE IS INVERTED RATHER THAN DELETED. ─────────────────────────
+                // The 08-01 rule was "exactly ONE Queues entry", enforced by BANNING a bar button.
+                // The rule still holds; the entry MOVED. The bar now carries the single door, so a
+                // MISSING bar registration is the regression — the inverse of what this asserted.
+                //
+                // ⚠ The door is the RE-POINTED "upgradeButton" face, not a new "workQueueButton".
+                // Ruling Q10+Q13 dissolved the 8th-face problem by re-pointing an existing face in
+                // place (ActionBarButtonId.Upgrade = 6 keeps its value, its widget id and its
+                // hud-areas.json row). Requiring a separate workQueueButton widget here would force
+                // a phantom widget that the bar does not and must not have — so the inversion binds
+                // to the id that actually carries the door. Do NOT "fix" a failure here by deleting
+                // the check: the reversal is a deliberate owner decision and the oracle must keep
+                // guarding the NEW state.
+                if (kitSrc.IndexOf("Register(\"upgradeButton\"") < 0 &&
+                    kitSrc.IndexOf("RegisterBarButton(ActionBarButtonId.Upgrade, \"upgradeButton\"") < 0)
+                    failures.Add("HudKitController no longer registers the upgradeButton bar face — WO-911 " +
+                                 "re-points it to the Manage/Queues screen and it is the SINGLE queue door");
+                if (kitSrc.IndexOf("OnManageAction") < 0)
+                    failures.Add("HudKitController missing OnManageAction — the re-pointed bar face has no handler (WO-911)");
+
+                // The chip SURVIVES (ruling Q10) but as a STATUS GLANCE ONLY. Its second tap must
+                // no longer open the queue, or there are two doors and "one Queues entry" means
+                // nothing. The old double-tap hand-off is B4's undiscoverable path.
                 if (kitSrc.IndexOf("queueStatusChip") < 0)
                     failures.Add("HudKitController missing queueStatusChip (persistent Builders status, WO-778)");
+                else if (kitSrc.IndexOf("chip tapped while open -> ObsidianQueueGate.RequestToggle") >= 0)
+                    failures.Add("HudKitController still opens the queue from the Builders chip double-tap — " +
+                                 "WO-911 makes the chip a status glance and the bar face the single door");
                 else
-                    log.AppendLine("  HudKitController Builders chip -> ObsidianQueueGate.RequestToggle OK (bar button retired 2026-08-01)");
+                    log.AppendLine("  HudKitController Manage bar face -> ObsidianQueueGate.RequestToggle OK " +
+                                   "(WO-911 2026-08-06: the 08-01 bar-button retirement is REVERSED; the chip is a status glance)");
             }
 
             // OCCUPANCY ORACLE (the Work-button-dark lesson, 2026-07-30): a widget that is
@@ -299,7 +339,13 @@ namespace DeNelle.Editor
             {
                 if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
                 string j = File.ReadAllText(p);
-                if (j.IndexOf("workQueueButton") >= 0) failures.Add("hud-areas.json still carries the retired workQueueButton row (owner 2026-08-01: Queues entry = the Builders chip): " + p);
+                // WO-911 (Q10+Q13) — INVERTED, not deleted. The queue's bar row is REQUIRED now,
+                // and it is the re-pointed "upgradeButton" (no new widget id was minted). A
+                // separate workQueueButton row would be the phantom widget, so it stays banned.
+                if (j.IndexOf("workQueueButton") >= 0) failures.Add("hud-areas.json carries a workQueueButton row — WO-911 re-points the EXISTING upgradeButton face instead of minting a new widget: " + p);
+                if (j.IndexOf("upgradeButton") < 0) failures.Add("hud-areas.json missing the upgradeButton row — the Manage/Queues bar face would never render (occupancy oracle, WO-911): " + p);
+                // Map left the bar for a tab inside Bag (ruling Q10+Q13). A returning row = regression.
+                if (j.IndexOf("mapButton") >= 0) failures.Add("hud-areas.json still carries the mapButton bar row — WO-911 moved Map into Bag as a tab (bar is 6 faces): " + p);
                 if (j.IndexOf("queueStatusChip") < 0) failures.Add("hud-areas.json missing queueStatusChip row: " + p);
             }
             if (File.Exists(resJson) && File.Exists(samJson) &&
@@ -324,6 +370,169 @@ namespace DeNelle.Editor
                     failures.Add("ObsidianQueueHud.Build missing MakeScrollZone (overflow/clip risk)");
                 else
                     log.AppendLine("  ObsidianQueueHud list host = layout.body + MakeScrollZone OK");
+            }
+        }
+
+        // =====================================================================
+        //  WO-911 — the unified Manage/Queues screen's engine guarantees
+        // =====================================================================
+
+        /// <summary>
+        /// Ruling Q4 — the DEPTH cap is 5 TOTAL PER LINE, per channel, never global, and it is a
+        /// DIFFERENT axis from freeBuildSlots (concurrency). Driven through the REAL engine.
+        /// </summary>
+        private static void CheckWo911DepthCap(List<string> failures, StringBuilder log)
+        {
+            var cfg = DeNelle.Core.Catalog.BuildTimerConfig.CreateDefault();
+            if (cfg.queueDepthPerLine != 5)
+                failures.Add($"BuildTimerConfig.queueDepthPerLine is {cfg.queueDepthPerLine} — owner ruling Q4 is 5 per line");
+            if (cfg.freeBuildSlots != 2)
+                failures.Add($"freeBuildSlots moved to {cfg.freeBuildSlots} — WO-911 sec.2d: the depth cap must NEVER be " +
+                             "implemented by raising concurrency (it would delete the waiting pain the crystal sink monetizes)");
+
+            const int slots = 2, depth = 5;
+            var builder = new ChannelState();
+            for (int i = 0; i < depth; i++)
+            {
+                var job = new BuildJobData { StructureId = "b" + i, DurationMs = 60000 };
+                ObsidianQueueEngine.Enqueue(builder, slots, job, 1000, depth, out bool ok);
+                if (!ok) { failures.Add($"depth cap refused item {i + 1} of {depth} — the line must hold {depth}"); return; }
+            }
+            if (!ObsidianQueueEngine.IsFull(builder, depth))
+                failures.Add("channel at 5 items does not report IsFull");
+
+            ObsidianQueueEngine.Enqueue(builder, slots, new BuildJobData { StructureId = "overflow", DurationMs = 1000 },
+                                        1000, depth, out bool accepted);
+            if (accepted)
+                failures.Add("a 6th item was ACCEPTED on a 5-deep line — the depth cap does not hold");
+            if (builder.Count != depth)
+                failures.Add($"the refused item mutated the channel (count {builder.Count}, expected {depth})");
+            if (builder.ActiveJobs.Count != slots)
+                failures.Add($"depth cap changed CONCURRENCY: {builder.ActiveJobs.Count} active, expected {slots} " +
+                             "(depth and slots are different axes)");
+
+            // Per-line, never global: a full Builder must not block Research.
+            var research = new ChannelState();
+            ObsidianQueueEngine.Enqueue(research, slots, new BuildJobData { StructureId = "r0", DurationMs = 1000 },
+                                        1000, depth, out bool otherOk);
+            if (!otherOk)
+                failures.Add("a full Builder line blocked an enqueue on Research — ruling Q4 is PER LINE, not global");
+            else
+                log.AppendLine("  WO-911 depth cap: 5 per line, refuses the 6th, per-channel, concurrency untouched OK");
+        }
+
+        /// <summary>
+        /// Ruling Q1 (the paid basket a 100% refund needs) and Q5 + the monetization spine (the ONE
+        /// pricing curve, its minimum, and a QUEUED job being priced at all).
+        /// </summary>
+        private static void CheckWo911PaidBasketAndPricing(List<string> failures, StringBuilder log)
+        {
+            if (SaveSchema.CurrentVersion < 37)
+                failures.Add($"SaveSchema.CurrentVersion is {SaveSchema.CurrentVersion} — WO-911's paid basket requires >= 37");
+
+            var t = typeof(BuildJobData);
+            foreach (var f in new[] { "PaidWood", "PaidFood", "PaidIron", "PaidCrystals", "PaidMagic" })
+                if (t.GetField(f) == null)
+                    failures.Add($"BuildJobData.{f} missing — a cancel cannot refund what the job does not remember (WO-911 M2)");
+
+            // A pre-v37 job carries no basket and must refund NOTHING rather than a guessed number.
+            var legacy = new BuildJobData { StructureId = "legacy", DurationMs = 1000 };
+            if (!legacy.Paid.IsZero)
+                failures.Add("a job with no recorded cost does not report a zero basket — a legacy cancel would mint resources");
+
+            var round = new BuildJobData { StructureId = "x", Paid = new JobCost(400, 200, 0, 0) };
+            if (round.PaidWood != 400 || round.PaidFood != 200)
+                failures.Add("BuildJobData.Paid does not round-trip through the persisted fields");
+
+            // THE curve — priced from REMAINING TIME with a MINIMUM. No second curve may exist.
+            var cfg = DeNelle.Core.Catalog.BuildTimerConfig.CreateDefault();
+            int nearlyDone = cfg.InstantFinishPrice(5);          // ~5 seconds left
+            if (nearlyDone < cfg.instantFinishMinCrystals)
+                failures.Add($"a near-done job prices at {nearlyDone} crystals, under the authored minimum " +
+                             $"{cfg.instantFinishMinCrystals} — a free instant on a short job kills the feel");
+            int tenMinutes = cfg.InstantFinishPrice(600);
+            if (tenMinutes <= nearlyDone)
+                failures.Add("price does not rise with remaining time — the curve is not time-derived");
+
+            // Ruling Q5: a QUEUED job (StartMs = 0) must be priceable, so the service's
+            // channel-generic overloads must exist and must not be Builder-only.
+            var svc = typeof(BuildTimerService);
+            // EXISTENCE-BY-NAME, not GetMethod(name).
+            //
+            // This loop asserts a set of seams EXISTS. Several of them deliberately carry BOTH a
+            // Builder-only and a channel-generic overload - which is precisely what the comment
+            // above demands. A bare GetMethod(name) on an overloaded member throws
+            // AmbiguousMatchException, and because that escapes the whole Run(), the ENTIRE suite
+            // reported as "threw" instead of listing its real findings. So the test was made
+            // unrunnable by the very design it exists to enforce.
+            //
+            // Scanning GetMethods() for the name is the honest question here: "is there at least
+            // one seam called this?" The exact-signature pins that follow do the precise work.
+            var allSvcMethods = svc.GetMethods(BindingFlags.Public | BindingFlags.Instance |
+                                               BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            foreach (var m in new[] { "InstantFinishPrice", "TryInstantFinish", "RemainingSeconds",
+                                      "CanWatchAdToSkip", "WatchAdToSkip", "CompleteAnyJob",
+                                      "CancelChannelJobWithRefund", "TryBuySlot", "QueueDepthLimit", "IsLineFull" })
+            {
+                bool present = false;
+                for (int i = 0; i < allSvcMethods.Length; i++)
+                    if (allSvcMethods[i].Name == m) { present = true; break; }
+                if (!present)
+                    failures.Add($"BuildTimerService.{m} missing — WO-911's all-channel Finish Now / cancel-refund seam is incomplete");
+            }
+
+            if (svc.GetMethod("InstantFinishPrice", new[] { typeof(ChannelId), typeof(string) }) == null)
+                failures.Add("BuildTimerService.InstantFinishPrice(ChannelId,string) missing — Finish Now would stay Builder-only");
+            if (svc.GetMethod("TryInstantFinish", new[] { typeof(ChannelId), typeof(string) }) == null)
+                failures.Add("BuildTimerService.TryInstantFinish(ChannelId,string) missing — Finish Now would stay Builder-only");
+
+            log.AppendLine("  WO-911 paid basket + one pricing curve (min holds, rises with time) + all-channel seams OK");
+        }
+
+        /// <summary>
+        /// The screen itself: one Manage panel exists, it is the single door, and the old modal no
+        /// longer self-installs (two subscribers on one gate verb = two stacked modals on one tap).
+        /// </summary>
+        private static void CheckWo911Seams(List<string> failures, StringBuilder log)
+        {
+            if (typeof(DeNelle.Village.UI.ManageScreenVM).GetMethod("ChannelOf") == null)
+                failures.Add("ManageScreenVM.ChannelOf missing — the tab->channel mapping has no single home");
+
+            // Defense and Buildings MUST share the Builder line — they are one capacity, not two.
+            if (DeNelle.Village.UI.ManageScreenVM.ChannelOf(DeNelle.Village.UI.ManageTab.Defense) != ChannelId.Builder ||
+                DeNelle.Village.UI.ManageScreenVM.ChannelOf(DeNelle.Village.UI.ManageTab.Buildings) != ChannelId.Builder)
+                failures.Add("Defense/Buildings tabs do not both map to the Builder channel — they share ONE rail (WO-905 sec.2a)");
+            if (DeNelle.Village.UI.ManageScreenVM.ChannelOf(DeNelle.Village.UI.ManageTab.Troops) != ChannelId.Train)
+                failures.Add("Troops tab does not map to the Train channel");
+            if (DeNelle.Village.UI.ManageScreenVM.ChannelOf(DeNelle.Village.UI.ManageTab.Research) != ChannelId.Research)
+                failures.Add("Research tab does not map to the Research channel");
+
+            string hudPath = Path.Combine(Application.dataPath, "_Modules/Village/BuildMode/ObsidianQueueHud.cs");
+            if (File.Exists(hudPath))
+            {
+                string src = File.ReadAllText(hudPath);
+                // The superseded modal must NOT re-arm itself: it and ManageScreenPanel would both
+                // subscribe to ObsidianQueueGate.ToggleRequested and stack two modals on one tap.
+                if (src.IndexOf("go.AddComponent<ObsidianQueueHud>()") >= 0)
+                    failures.Add("ObsidianQueueHud self-installs again — WO-911's Manage screen owns the gate verb; " +
+                                 "two subscribers stack two modals on a single tap");
+            }
+
+            string managePath = Path.Combine(Application.dataPath, "_Modules/Village/UI/Manage/ManageScreenPanel.cs");
+            if (!File.Exists(managePath))
+                failures.Add("ManageScreenPanel.cs missing — the WO-911 screen does not exist");
+            else
+            {
+                string src = File.ReadAllText(managePath);
+                if (src.IndexOf("ObsidianQueueGate.ToggleRequested") < 0)
+                    failures.Add("ManageScreenPanel does not subscribe to ObsidianQueueGate.ToggleRequested — the bar face's tap goes nowhere");
+                if (src.IndexOf("PanelManager.NotifyOpened") < 0)
+                    failures.Add("ManageScreenPanel never calls PanelManager.NotifyOpened — PanelRouter reports the open as failed (WO-465)");
+                // UXML does not work in builds; this screen must stay code-built.
+                if (src.IndexOf(".uxml") >= 0 || src.IndexOf("UIDocument") >= 0)
+                    failures.Add("ManageScreenPanel references UXML/UIDocument — UXML does not work in builds");
+                else
+                    log.AppendLine("  WO-911 Manage screen: single door, code-built, tab->channel map OK");
             }
         }
 

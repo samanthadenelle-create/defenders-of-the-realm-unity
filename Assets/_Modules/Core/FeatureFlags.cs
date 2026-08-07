@@ -306,7 +306,10 @@ namespace DeNelle.Core
         /// STORE-HARDENING (Path A, S2): default is now <see cref="IsDevBuild"/> — ON in Editor/Development
         /// (owner keeps the tool while developing) but OFF in a RELEASE/store APK, so no unlimited-resource
         /// exploit ships publicly. PlayerPrefs "ff.devresourcetool" = 1 still re-enables it on any build.</summary>
-        public static bool DevResourceTool => Get("devresourcetool", defaultOn: IsDevBuild);
+        // OWNER RULING 2026-08-07 ("remove the flag and dev button ... for better screenshots"):
+        // default OFF everywhere, including dev builds. Was defaultOn: IsDevBuild, which put the
+        // chip in shot on every editor/dev capture. Opt in with ff.devresourcetool=1.
+        public static bool DevResourceTool => Get("devresourcetool", defaultOn: false);
 
         /// <summary>MOBILE FLAG BUTTON (owner felt-tests on Android and CANNOT press F8 - no keyboard).
         /// Gates the on-screen tap-to-capture chip <see cref="DeNelle.Core.Dev.FlagCaptureButton"/>, the
@@ -322,7 +325,10 @@ namespace DeNelle.Core
         /// STORE-HARDENING (Path A, S2): default is now <see cref="IsDevBuild"/> — ON in Editor/Development
         /// (owner keeps the on-device flag chip while developing) but OFF in a RELEASE/store APK. PlayerPrefs
         /// "ff.flagbutton" = 1 still re-enables it on any build.</summary>
-        public static bool FlagButton => Get("flagbutton", defaultOn: IsDevBuild);
+        // OWNER RULING 2026-08-07: default OFF everywhere. The F8 KEY still captures - only the
+        // on-screen chip is hidden. Opt in with ff.flagbutton=1 (needed on a touch device with
+        // no keyboard). Was defaultOn: IsDevBuild.
+        public static bool FlagButton => Get("flagbutton", defaultOn: false);
 
         /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
         /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
@@ -553,6 +559,50 @@ namespace DeNelle.Core
         /// stub wallet. Reversible: PlayerPrefs "ff.realmstorepurchase" = 1 re-enables the rail on any
         /// build. NOT URL-activatable (monetization surface — excluded from the allow-list).</summary>
         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: IsDevBuild);
+
+        /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
+        /// the "Ad" CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
+        /// <c>BuildTimerService.CanWatchAdToSkip</c> / <c>WatchAdToSkip</c>. DEFAULT OFF, and it must
+        /// STAY OFF until BOTH prerequisites below are met.
+        ///
+        /// WHY: there is NO ad SDK in this project. No AdMob / Unity Ads / ironSource / AppLovin package
+        /// in Packages/manifest.json, no ad unit id, no mediation.
+        /// <see cref="DeNelle.Village.RewardedAdManager"/>.ShowAdInternal is a stub and
+        /// <c>IsAdReady</c> is a plain 480s stopwatch, NOT a fill check. Shipping the CTA would hand out
+        /// unlimited free timer skips with no ad shown and no revenue earned. WO-911 widened the CTA from
+        /// the Builder channel to ALL THREE channels (Builder/Train/Research), which made the blast radius
+        /// bigger, so the gate lands here rather than by reverting that work. When OFF the button is
+        /// ABSENT (not greyed) — every build site checks this flag before constructing the control.
+        ///
+        /// HARD PREREQUISITES before this flag is EVER switched on (both, not either):
+        ///   1. A REAL rewarded-ad SDK is integrated and the reward is granted ONLY from that SDK's
+        ///      genuine completion callback (OnUserEarnedReward). Granting on "we showed it" is fraud
+        ///      against the network, so the stub deliberately refuses instead of rewarding.
+        ///   2. WO-912 — SERVER-SIDE ad-window validation. Today the rolling-window start is stamped from
+        ///      the DEVICE clock (<c>DateTime.UtcNow</c> in BuildTimerService.RecordAdSkipUsed /
+        ///      RollWindowIfNeeded, and that file's own KNOWN LIMIT note says so). Moving the device clock
+        ///      forward past the window grants a fresh allowance. With a real SDK behind it that is not
+        ///      merely free skips — it is FABRICATED IMPRESSIONS against the ad account, which is exactly
+        ///      what ad networks ban accounts for. The window must be stamped/validated server-side (the
+        ///      save already round-trips) BEFORE any real ad rail goes live.
+        ///
+        /// Everything the gate protects is INTACT, not removed: the rolling-window ledger, adSkipSeconds,
+        /// adSkipsPerWindow, the cap logic and the UI rows all stay. This is a gate, not a deletion.
+        /// NOT URL-activatable (monetization surface — deliberately excluded from s_urlActivatableFlags).
+        /// Local testing only: PlayerPrefs "ff.rewardedadskip" = 1.</summary>
+        public static bool RewardedAdSkip => Get("rewardedadskip", defaultOn: false);
+
+        /// <summary>WO-911 (owner 2026-08-06) — gates the MAP TAB inside the Bag/Inventory panel.
+        /// The Q10+Q13 ruling moved Map OFF the bottom action bar and INTO Bag as a tab (net 7 -> 6
+        /// faces); that ruling STANDS and this flag does not re-open it. What the flag controls is
+        /// only whether the tab is OFFERED right now. Default OFF: the realm's areas do not connect
+        /// yet — <c>RealmMapPanel</c>'s own header records travel as a DISABLED stub until WO-827 —
+        /// so a visible tab would promise a journey the game cannot take. When OFF the tab is ABSENT
+        /// (not greyed): <c>ElarionUiKit.BuildTabRow</c> divides width by the tab count, so the
+        /// remaining tabs reflow with no dead gap. Flip back ON without a rebuild via PlayerPrefs
+        /// "ff.maptab" = 1 (or the Defenders/Debug menu). The suppression is FlowTrace'd at the build
+        /// site so a UI capture shows WHY the tab is missing instead of reading as a vanished tab.</summary>
+        public static bool MapTab => Get("maptab", defaultOn: false);
 
         /// <summary>WO-611 — when ON, the owner-designed COMBAT HUD renders inside the HudKit: a
         /// VIRTUAL D-PAD (cross/plus, steel body + gold chevrons + centre hub) for movement instead of

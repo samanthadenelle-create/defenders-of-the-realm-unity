@@ -987,6 +987,15 @@ namespace DeNelle.Village
             _heroOnlyTarget = false;
             _bowEquipChecked = false;
 
+            // RosterId — the classification id the weapon gate reads (added 2026-08-07 with the
+            // caster-carries-nothing ruling). Caught by [brain-latch-coverage] on its first run:
+            // it is stamped by the spawner and was NOT cleared here, so a pooled body kept its
+            // PREVIOUS life's id. Paired with _bowEquipChecked above that is the exact latch the
+            // guard exists to catch — an archer body reused as a shaman would re-read "archer"
+            // and arm a bow on a caster, undoing the ruling silently. Cleared to empty so
+            // CarriesBow FAILS CLOSED (no weapon) until a spawner re-stamps it.
+            RosterId = string.Empty;
+
             // Leash + room ownership (dungeon-only opt-ins; MUST be off for a village wave).
             _homeAnchor  = Vector3.zero;
             _leashRadius = 0f;

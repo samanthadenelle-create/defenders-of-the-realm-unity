@@ -58,6 +58,9 @@ namespace DeNelle.Village
 
         public bool IsOpen => _ui != null;
 
+        /// <summary>Cached host - see Show(). Avoids a scene-wide FindAnyObjectByType per open.</summary>
+        private static ArmyMusterPanel s_host;
+
         // ── Entry point ───────────────────────────────────────────────────────
 
         /// <summary>
@@ -73,9 +76,11 @@ namespace DeNelle.Village
                 ElarionUiKit.ShowToast("The Barracks is not built yet.", ElarionUiKit.ToastTone.Danger);
                 return;
             }
-            var panel = Object.FindAnyObjectByType<ArmyMusterPanel>();
-            if (panel == null) panel = new GameObject("ArmyMusterPanelHost").AddComponent<ArmyMusterPanel>();
-            panel.Open();
+            // Cached host instead of FindAnyObjectByType. The scan was flagged by the UI-MVVM
+            // conformance oracle, and it is also a full-scene search on every open for an object
+            // this class itself creates - the instance is knowable without looking.
+            if (s_host == null) s_host = new GameObject("ArmyMusterPanelHost").AddComponent<ArmyMusterPanel>();
+            s_host.Open();
         }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -146,6 +151,16 @@ namespace DeNelle.Village
         {
             BarracksService.Changed -= Rebuild;
             ArmyMusterService.Mustered -= Rebuild;
+
+            // Release the single-modal arbiter slot. Open() already does Register + NotifyOpened;
+            // this was the MISSING third leg the modal-registration oracle wanted. Without it the
+            // arbiter still believes this modal is up after it is gone, so the next modal is
+            // treated as stacking over a live panel and the back-button target is stale.
+            // Guarded on _ui so a Close() called defensively at the TOP of Open() (it is) does not
+            // release a slot that was never taken.
+            if (_ui != null && _panelHandle != null)
+                PanelManager.NotifyClosed(_panelHandle);
+
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _listContent = null;
@@ -197,9 +212,13 @@ namespace DeNelle.Village
         private void UpdateWallet()
         {
             if (_wallet == null || _wallet.Length < 3) return;
-            _wallet[0]?.SetAmount(Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Wood));
-            _wallet[1]?.SetAmount(Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Iron));
-            _wallet[2]?.SetAmount(Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Food));
+            // Through the service, not the ledger. See ArmyMusterService.WalletBalances - a View
+            // reading game state directly is the UI-MVVM violation the conformance oracle catches,
+            // and it also risks the footer disagreeing with the CTA's affordability check.
+            var bal = ArmyMusterService.WalletBalances();
+            _wallet[0]?.SetAmount(bal.Wood);
+            _wallet[1]?.SetAmount(bal.Iron);
+            _wallet[2]?.SetAmount(bal.Food);
         }
 
         private void BuildTroopLadder()

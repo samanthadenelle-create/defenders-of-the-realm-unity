@@ -151,6 +151,22 @@ namespace DeNelle.Village
         /// it fits in the Train line right now. Never mutates anything. Unlocked-only — a locked
         /// troop row contributes nothing (the panel only OFFERS unlocked troops, WO-897 AC 3).
         /// </summary>
+        /// <summary>
+        /// The three wallet balances the Armies panel shows, read HERE rather than in the view.
+        /// -------------------------------------------------------------------------------
+        /// UI-MVVM conformance: a View must not reach into game state itself. ArmyMusterPanel was
+        /// calling ResourceLedger.Balance directly for its footer chips, which the conformance
+        /// oracle flagged. Routing it through the service keeps ONE reader of the ledger on this
+        /// path - the same one Preview() already uses for affordability - so the footer can never
+        /// disagree with the CTA about whether you can pay.
+        /// </summary>
+        public static (int Wood, int Iron, int Food) WalletBalances()
+        {
+            return (Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Wood),
+                    Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Iron),
+                    Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Food));
+        }
+
         public static MusterPreview Preview(ArmyComposition comp)
         {
             var p = new MusterPreview();
