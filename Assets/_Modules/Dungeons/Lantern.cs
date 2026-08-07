@@ -140,6 +140,13 @@ namespace DeNelle.Dungeons
         public bool IsLowOil => OilFraction <= _lowOilFraction;
 
         /// <summary>
+        /// WO-1001 slice 6: true when the flask is critically low or empty — the dark
+        /// has closed in. Drives higher ambush odds (RandomEncounterTable darkness mult)
+        /// and the "push vs extract" tension for legendary loot gates.
+        /// </summary>
+        public bool IsInDarkness => OilFraction <= Mathf.Min(_lowOilFraction, 0.12f);
+
+        /// <summary>
         /// The oil fraction at or below which the lantern reads as "low oil" —
         /// the warning band the HUD oil meter tints amber/red against.
         /// </summary>

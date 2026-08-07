@@ -50,6 +50,10 @@ namespace DeNelle.Editor.RoomForge
         [JsonProperty("rules")] public ComposeRules rules;
         /// <summary>WO-1001 slice 5: oil stones for composed lantern (carried into layout).</summary>
         [JsonProperty("oilStones")] public List<ComposeOilStone> oilStones;
+        [JsonProperty("traps")] public List<ComposeTrap> traps;
+        [JsonProperty("keys")] public List<ComposeKey> keys;
+        [JsonProperty("locks")] public List<ComposeLock> locks;
+        [JsonProperty("extracts")] public List<ComposeExtract> extracts;
     }
 
     /// <summary>One room instance in the graph.</summary>
@@ -399,6 +403,10 @@ namespace DeNelle.Editor.RoomForge
                     connections = keptConnections,
                     rules = rules,
                     oilStones = graph.oilStones ?? new List<ComposeOilStone>(),
+                    traps = graph.traps ?? new List<ComposeTrap>(),
+                    keys = graph.keys ?? new List<ComposeKey>(),
+                    locks = graph.locks ?? new List<ComposeLock>(),
+                    extracts = graph.extracts ?? new List<ComposeExtract>(),
                 };
 
                 foreach (var n in graph.nodes)

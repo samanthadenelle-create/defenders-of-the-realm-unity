@@ -125,6 +125,12 @@ namespace DeNelle.Dungeons
             FlowTrace.Step(Sys,
                 $"lantern armed standalone: stones={stones.Count} hero='{heroGo.name}' " +
                 $"(WO-1001 slice 5 oil drain active)");
+
+            // WO-1001 slice 6: darkness ambush director (higher odds when oil critical).
+            ComposedKeyBag.Clear();
+            var ambush = host.AddComponent<ComposedAmbushDirector>();
+            ambush.Configure(lantern, heroGo.transform, state, tier: 1);
+            FlowTrace.Step(Sys, "ComposedAmbushDirector armed (slice 6 darkness ambush)");
         }
     }
 }

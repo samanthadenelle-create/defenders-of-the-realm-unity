@@ -279,10 +279,13 @@ namespace DeNelle.Dungeons
             if (_table == null || _pool == null || _hero == null) return;
             if (_currentRoomKind == "checkpoint" || _currentRoomKind == "boss") return;
 
+            // WO-1001 slice 6: pass real darkness from the Keeper's lantern (was hardcoded false,
+            // so DarknessRateMult never applied). Low oil → higher ambush chance.
+            bool dark = ResolveInDarkness();
             var verdict = _table.Roll(
                 secondsSinceLastEncounter: _runtimeState.SecondsSinceLastEncounter,
                 randomEncounterCount: _runtimeState.RandomEncounterCount,
-                inDarkness: false,
+                inDarkness: dark,
                 dtSeconds: dt,
                 seed: _runtimeState.DungeonRunSeed + _runtimeState.RandomEncounterCount);
             if (!verdict.Fire) return;
@@ -292,7 +295,20 @@ namespace DeNelle.Dungeons
             _runtimeState.BeginEncounterHandoff(
                 "random-encounter", false, _hero.position);
             EncounterFired.Invoke("random-encounter");
+            if (dark)
+                FlowTrace.Step("Dungeon",
+                    "EncounterTrigger.TickRandom: FIRING ambush IN DARKNESS (lantern low/empty) — " +
+                    $"rate mult x{RandomEncounterTable.DarknessRateMult:0.0}");
             LaunchBattle(roster, "Ambush in the dark").Forget();
+        }
+
+        /// <summary>WO-1001 slice 6: lantern low/empty = darkness for the random table.</summary>
+        private bool ResolveInDarkness()
+        {
+            var lantern = _hero != null
+                ? _hero.GetComponentInChildren<Lantern>(true)
+                : FindFirstObjectByType<Lantern>();
+            return lantern != null && lantern.IsInDarkness;
         }
 
         // ── Resume — called by DungeonController on dungeon re-entry ─────────

@@ -28,6 +28,14 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("rules")] public ComposeRules rules = new ComposeRules();
         /// <summary>WO-1001 slice 5: oil refill points for composed lantern drain.</summary>
         [JsonProperty("oilStones")] public List<ComposeOilStone> oilStones = new List<ComposeOilStone>();
+        /// <summary>WO-1001 slice 7: step-on traps.</summary>
+        [JsonProperty("traps")] public List<ComposeTrap> traps = new List<ComposeTrap>();
+        /// <summary>WO-1001 slice 7: key pickups (run-local).</summary>
+        [JsonProperty("keys")] public List<ComposeKey> keys = new List<ComposeKey>();
+        /// <summary>WO-1001 slice 7: locked ports (need keyId to pass).</summary>
+        [JsonProperty("locks")] public List<ComposeLock> locks = new List<ComposeLock>();
+        /// <summary>WO-1001 slice 8: extra extract/exit points (per-floor bank-and-leave).</summary>
+        [JsonProperty("extracts")] public List<ComposeExtract> extracts = new List<ComposeExtract>();
     }
 
     /// <summary>One room instance in the layout.</summary>
@@ -104,6 +112,50 @@ namespace DeNelle.Dungeons.RoomForge
         /// <summary>World offset from room centre, or absolute if roomId empty [x,y,z].</summary>
         [JsonProperty("offset")] public float[] offset;
         [JsonProperty("radius")] public float radius = 2.5f;
+    }
+
+    /// <summary>WO-1001 slice 7: floor trap (spike/grate).</summary>
+    [Serializable]
+    public sealed class ComposeTrap
+    {
+        [JsonProperty("id")] public string id;
+        [JsonProperty("roomId")] public string roomId;
+        [JsonProperty("kind")] public string kind = "spike"; // spike | grate
+        [JsonProperty("damage")] public float damage = 12f;
+        [JsonProperty("radius")] public float radius = 1.4f;
+        [JsonProperty("offset")] public float[] offset;
+    }
+
+    /// <summary>WO-1001 slice 7: key pickup.</summary>
+    [Serializable]
+    public sealed class ComposeKey
+    {
+        [JsonProperty("id")] public string id;
+        [JsonProperty("keyId")] public string keyId = "crypt-key";
+        [JsonProperty("roomId")] public string roomId;
+        [JsonProperty("offset")] public float[] offset;
+    }
+
+    /// <summary>WO-1001 slice 7: locked traversal to a target room centre.</summary>
+    [Serializable]
+    public sealed class ComposeLock
+    {
+        [JsonProperty("id")] public string id;
+        [JsonProperty("keyId")] public string keyId = "crypt-key";
+        [JsonProperty("fromRoomId")] public string fromRoomId;
+        [JsonProperty("toRoomId")] public string toRoomId;
+        [JsonProperty("fromOffset")] public float[] fromOffset;
+        [JsonProperty("toOffset")] public float[] toOffset;
+    }
+
+    /// <summary>WO-1001 slice 8: bank-and-leave extract point (mirrors entry exit).</summary>
+    [Serializable]
+    public sealed class ComposeExtract
+    {
+        [JsonProperty("id")] public string id;
+        [JsonProperty("roomId")] public string roomId;
+        [JsonProperty("offset")] public float[] offset;
+        [JsonProperty("label")] public string label = "Extract";
     }
 
     /// <summary>WO-797 confinement rules: pin the room's mobs to the room footprint.</summary>

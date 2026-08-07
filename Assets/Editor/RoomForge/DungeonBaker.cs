@@ -523,13 +523,17 @@ namespace DeNelle.Editor.RoomForge
             // pairs get DungeonPortLink ports so the Keeper can Descend/Climb between floors.
             int stairPorts = DressVerticalStairPorts(root, instances, hero.transform);
 
-            // WO-1001 slices 4–5: chests (breakables) + oil stones (lantern refill markers).
+            // WO-1001 slices 4–8: chests, oil, traps, keys/locks, extract points.
             int chests = PlaceComposeChests(root, instances, layout);
             int oil = PlaceComposeOilStones(root, instances, layout);
+            int traps = PlaceComposeTraps(root, instances, layout);
+            int keys = PlaceComposeKeys(root, instances, layout);
+            int locks = PlaceComposeLocks(root, instances, layout, hero.transform);
+            int extracts = PlaceComposeExtracts(root, instances, layout);
 
             FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 encounterRooms={specs} spawners={placed} " +
-                $"stairPorts={stairPorts} chests={chests} oilStones={oil} " +
-                $"(WO-797 + WO-1001 1b/3/4/5)");
+                $"stairPorts={stairPorts} chests={chests} oilStones={oil} traps={traps} " +
+                $"keys={keys} locks={locks} extracts={extracts} (WO-1001 1b–8)");
         }
 
         /// <summary>
@@ -757,7 +761,14 @@ namespace DeNelle.Editor.RoomForge
                     var create = bcType.GetMethod("Create",
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                     if (create == null) continue;
-                    create.Invoke(null, new object[] { chestRoot.transform, pos, table, visual });
+                    var created = create.Invoke(null, new object[] { chestRoot.transform, pos, table, visual });
+                    // WO-1001 slice 6: deepboss legendary gated on darkness.
+                    if (created is Component bcComp &&
+                        table.IndexOf("deepboss", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        var gateType = FindType("DeNelle.Dungeons.ComposedLegendaryGate");
+                        if (gateType != null) bcComp.gameObject.AddComponent(gateType);
+                    }
                     n++;
                     FlowTrace.Step(Sys, $"CHEST '{c.id ?? visual}' table='{table}' @ {pos} room='{id}'");
                 }
@@ -815,6 +826,137 @@ namespace DeNelle.Editor.RoomForge
             float y = o.Length > 1 ? o[1] : 0f;
             float z = o.Length > 2 ? o[2] : 0f;
             return new Vector3(x, y, z);
+        }
+
+        private static Vector3 RoomSeat(Dictionary<string, GameObject> instances, string roomId, float[] offset)
+        {
+            if (!string.IsNullOrEmpty(roomId) && instances.TryGetValue(roomId, out var rGo) && rGo != null)
+            {
+                Bounds b = DungeonRoomBounds.Compute(rGo);
+                return SampleNav(new Vector3(b.center.x, rGo.transform.position.y, b.center.z) + Offset3(offset), 4f);
+            }
+            return SampleNav(Offset3(offset), 4f);
+        }
+
+        /// <summary>WO-1001 slice 7: step-on traps.</summary>
+        private static int PlaceComposeTraps(Transform root, Dictionary<string, GameObject> instances,
+                                            DungeonComposeLayout layout)
+        {
+            if (layout?.traps == null || layout.traps.Count == 0) return 0;
+            var trapRoot = new GameObject("Traps");
+            trapRoot.transform.SetParent(root, false);
+            var trapType = FindType("DeNelle.Dungeons.ComposedTrapHazard");
+            if (trapType == null) { FlowTrace.Warn(Sys, "ComposedTrapHazard missing"); return 0; }
+            int n = 0;
+            foreach (var t in layout.traps)
+            {
+                if (t == null) continue;
+                Vector3 pos = RoomSeat(instances, t.roomId, t.offset);
+                var go = new GameObject(string.IsNullOrEmpty(t.id) ? "Trap" : $"Trap_{t.id}");
+                go.transform.SetParent(trapRoot.transform, false);
+                go.transform.position = pos;
+                var comp = go.AddComponent(trapType);
+                trapType.GetMethod("Configure")?.Invoke(comp, new object[]
+                {
+                    t.id ?? "trap", t.kind ?? "spike", t.damage > 0f ? t.damage : 12f,
+                    t.radius > 0f ? t.radius : 1.4f
+                });
+                n++;
+                FlowTrace.Step(Sys, $"TRAP '{t.id}' kind='{t.kind}' dmg={t.damage} @ {pos}");
+            }
+            return n;
+        }
+
+        /// <summary>WO-1001 slice 7: key pickups.</summary>
+        private static int PlaceComposeKeys(Transform root, Dictionary<string, GameObject> instances,
+                                           DungeonComposeLayout layout)
+        {
+            if (layout?.keys == null || layout.keys.Count == 0) return 0;
+            var keyRoot = new GameObject("Keys");
+            keyRoot.transform.SetParent(root, false);
+            var keyType = FindType("DeNelle.Dungeons.ComposedKeyPickup");
+            if (keyType == null) { FlowTrace.Warn(Sys, "ComposedKeyPickup missing"); return 0; }
+            int n = 0;
+            foreach (var k in layout.keys)
+            {
+                if (k == null) continue;
+                Vector3 pos = RoomSeat(instances, k.roomId, k.offset) + Vector3.up * 0.4f;
+                var go = new GameObject(string.IsNullOrEmpty(k.id) ? "Key" : $"Key_{k.id}");
+                go.transform.SetParent(keyRoot.transform, false);
+                go.transform.position = pos;
+                var sphere = go.AddComponent<SphereCollider>();
+                sphere.isTrigger = true;
+                sphere.radius = 1.1f;
+                var comp = go.AddComponent(keyType);
+                keyType.GetMethod("Configure")?.Invoke(comp, new object[] { k.keyId ?? "key" });
+                n++;
+                FlowTrace.Step(Sys, $"KEY '{k.keyId}' @ {pos}");
+            }
+            return n;
+        }
+
+        /// <summary>WO-1001 slice 7: locked ports between rooms.</summary>
+        private static int PlaceComposeLocks(Transform root, Dictionary<string, GameObject> instances,
+                                            DungeonComposeLayout layout, Transform hero)
+        {
+            if (layout?.locks == null || layout.locks.Count == 0 || hero == null) return 0;
+            var lockRoot = new GameObject("Locks");
+            lockRoot.transform.SetParent(root, false);
+            var lockType = FindType("DeNelle.Dungeons.ComposedLockedPort");
+            if (lockType == null) { FlowTrace.Warn(Sys, "ComposedLockedPort missing"); return 0; }
+            int n = 0;
+            foreach (var L in layout.locks)
+            {
+                if (L == null) continue;
+                Vector3 from = RoomSeat(instances, L.fromRoomId, L.fromOffset);
+                Vector3 to = RoomSeat(instances, L.toRoomId, L.toOffset);
+                float face = YawToward(from, to);
+                var go = new GameObject(string.IsNullOrEmpty(L.id) ? "Lock" : $"Lock_{L.id}");
+                go.transform.SetParent(lockRoot.transform, false);
+                go.transform.position = from;
+                var comp = go.AddComponent(lockType);
+                lockType.GetMethod("Configure")?.Invoke(comp, new object[]
+                {
+                    L.keyId ?? "key", to, face, hero,
+                    "Locked — need key", "Unlock & pass", 2.2f
+                });
+                n++;
+                FlowTrace.Step(Sys, $"LOCK '{L.id}' key='{L.keyId}' {from} -> {to}");
+            }
+            return n;
+        }
+
+        /// <summary>WO-1001 slice 8: per-floor extract pads (bank-and-leave via DungeonExitInteractable.Spawn).</summary>
+        private static int PlaceComposeExtracts(Transform root, Dictionary<string, GameObject> instances,
+                                               DungeonComposeLayout layout)
+        {
+            if (layout?.extracts == null || layout.extracts.Count == 0) return 0;
+            var exitType = FindType("DeNelle.Dungeons.DungeonExitInteractable");
+            if (exitType == null)
+            {
+                FlowTrace.Warn(Sys, "DungeonExitInteractable missing — extracts not placed");
+                return 0;
+            }
+            var spawn = exitType.GetMethod("Spawn",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (spawn == null) return 0;
+            int n = 0;
+            foreach (var e in layout.extracts)
+            {
+                if (e == null) continue;
+                Vector3 pos = RoomSeat(instances, e.roomId, e.offset);
+                string label = string.IsNullOrEmpty(e.label) ? "Extract" : e.label;
+                // Spawn(position, onLeave, label)
+                var exit = spawn.Invoke(null, new object[] { pos, null, label }) as Component;
+                if (exit != null)
+                {
+                    exit.gameObject.name = string.IsNullOrEmpty(e.id) ? "Extract" : $"Extract_{e.id}";
+                    exit.transform.SetParent(root, true);
+                    n++;
+                    FlowTrace.Step(Sys, $"EXTRACT '{e.id}' label='{label}' @ {pos}");
+                }
+            }
+            return n;
         }
 
         private static void SetString(SerializedObject so, string field, string value)
