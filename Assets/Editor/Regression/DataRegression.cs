@@ -573,6 +573,16 @@ namespace DeNelle.Editor
             // it silently coming back ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-self-contained suite", () => { if (!DeNelle.Editor.Regression.VfxResourceSelfContainmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-self-contained] " + r); });
 
+            // --- DUNGEON ENCOUNTER FAMILY (WO-1001 slice 2): EncounterSpec.kind was
+            // compared ONLY to "none" by DungeonBaker, and OutpostEnemyGroupSpawner's
+            // id picker was four hardcoded hollow-* literals whose hand-written stats
+            // ignored enemies.json outright -- so authoring "orc-group" SILENTLY SPAWNED
+            // HOLLOWS. This oracle pins that every family table emits REAL non-boss
+            // roster ids, that hollow-group still reproduces the retired picker's stream
+            // exactly, that an unknown kind falls back LOUDLY, and that the baker/binder
+            // still write the serialized kind the bake depends on ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-encounter-family suite", () => { if (!DeNelle.Editor.Regression.DungeonEncounterFamilyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-encounter-family] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

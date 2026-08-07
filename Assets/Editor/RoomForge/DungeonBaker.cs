@@ -505,6 +505,7 @@ namespace DeNelle.Editor.RoomForge
                     placed++;
                     FlowTrace.Step(Sys, $"SPAWNER '{id}' (OutpostEnemyGroupSpawner) at {pos} - room-bound " +
                         $"c{roomBounds.center} s{roomBounds.size} count {enc.min}-{enc.max} " +
+                        $"kind '{(string.IsNullOrEmpty(enc.kind) ? "<empty>" : enc.kind)}' " +
                         $"wake {(enc.confine != null ? enc.confine.wakeRadius : 6f):F1} " +
                         $"slack {(enc.confine != null ? enc.confine.slack : 2f):F1}");
                 }
@@ -529,6 +530,14 @@ namespace DeNelle.Editor.RoomForge
         {
             var so = new SerializedObject(spawner);
             SetString(so, "roomId", roomId);
+            // WO-1001 slice 2: the AUTHORED encounter family. Before this, EncounterSpec.kind
+            // was compared ONLY to "none" and every other value fell through to the same
+            // hollow spawn - authoring "orc-group" SILENTLY SPAWNED HOLLOWS. Written raw (not
+            // normalised) on purpose: DeNelle.Editor cannot reference DeNelle.Village, so the
+            // spawner owns the one kind-resolution table and warns at runtime on an unknown
+            // value. DungeonEncounterFamilyRegression fails the gate if a shipped layout
+            // authors a kind the spawner does not know.
+            SetString(so, "encounterKind", string.IsNullOrEmpty(enc.kind) ? "hollow-group" : enc.kind.Trim());
             SetVector3(so, "areaCenter", roomBounds.center);
             SetVector3(so, "areaSize", roomBounds.size);
             SetFloat(so, "areaSlack", enc.confine != null ? enc.confine.slack : 2f);

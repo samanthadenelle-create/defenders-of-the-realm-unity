@@ -138,6 +138,10 @@ namespace DeNelle.Dungeons
                 float wake = 6f, slack = 2f;
                 int min = -1, max = -1;
                 float formation = -1f;
+                // WO-1001 slice 2: the authored ENEMY FAMILY travels with the encounter block
+                // so a scene baked BEFORE the encounterKind field existed still fields the
+                // family its layout asks for. null = leave the serialized kind alone.
+                string kind = null;
                 if (encounters != null && encounters.TryGetValue(roomId, out var enc) && enc != null)
                 {
                     if (enc.confine != null)
@@ -148,12 +152,14 @@ namespace DeNelle.Dungeons
                     min = enc.min;
                     max = enc.max;
                     if (enc.formationRadius > 0f) formation = enc.formationRadius;
+                    if (!string.IsNullOrEmpty(enc.kind)) kind = enc.kind.Trim();
                 }
 
-                spawner.ConfigureRoomArea(roomId, roomBounds, wake, slack, min, max, formation);
+                spawner.ConfigureRoomArea(roomId, roomBounds, wake, slack, min, max, formation, kind);
                 bound++;
                 FlowTrace.Step(Sys, $"bound spawner '{spawner.gameObject.name}' -> room '{roomId}' " +
-                    $"bounds c{roomBounds.center} s{roomBounds.size} wake {wake:F1} slack {slack:F1}");
+                    $"bounds c{roomBounds.center} s{roomBounds.size} wake {wake:F1} slack {slack:F1} " +
+                    $"kind '{(string.IsNullOrEmpty(kind) ? "<serialized>" : kind)}'");
             }
 
             FlowTrace.Step(Sys, $"'{scene.name}': room binding done - rooms={rooms.Count} " +
