@@ -66,11 +66,22 @@ crystals (the Clash half of the lens; WC3 has no rush).
   OWN queue lines, so three bases means three research lines — that is the payoff that makes owning
   a base worth the investment, and it is why the WC3 per-building model is deferred rather than
   rejected. Until bases ship, a second research building must NOT silently grant a second line.
+- **THE SINGLETON IS TO THE BASE, not to the process** (owner ruling 2026-08-07). This is the whole
+  architecture in one line: `BuildTimerService` / `ObsidianQueueState` is scoped to a BASE, so a
+  player with three bases has three sets of Builder/Train/Research lines. Every line-count question
+  answers itself from that — fan-out is not a feature to add later, it is what falls out of scoping
+  the singleton correctly.
+- **Extra queue slots are therefore PER BASE** (owner). Purchased slots already live on
+  `ChannelState.boughtSlots` inside `ObsidianQueueState` (v35), so base-scoping the singleton makes
+  the slot purchase per-base **for free** — no new save field. That also protects the crystal sink:
+  an account-wide slot would get *diluted* as the player takes more bases (more free lines, less
+  reason to buy), whereas a per-base slot scales WITH the empire.
 - **Implementation constraint, cheap now and expensive later:** do not bake "one global Research
-  channel" into anything that would have to be unpicked to shard per base. Callers must resolve a
-  channel through `BuildTimerService` rather than assuming a process-wide singleton, and any new
-  state keyed "the queue" should be keyed "the queue OF a base". The fan-out is a known future
-  requirement, not a hypothetical — write for it.
+  channel" into anything that would have to be unpicked. Callers resolve a channel through
+  `BuildTimerService` rather than assuming a process-wide singleton, and any new state keyed "the
+  queue" is keyed "the queue OF a base". ⚠ `ObsidianQueueState` is currently ONE global instance on
+  the save (`SaveSchema` v35) — sharding it per base is a future save bump, so **do not add fields
+  to it that assume a single town**.
 
 **Queue channels are ONLY Builder / Train / Research.** Upgrades ride Builder. The owner's CONTENT
 tabs CROSS those channels: Defence AND Buildings share the ONE Builder rail. Weapons/armour have no
