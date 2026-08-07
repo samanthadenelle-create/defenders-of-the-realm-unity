@@ -192,44 +192,92 @@ namespace DeNelle.Editor.RoomForge
                 return;
             }
 
-            // Lighting defaults (dim)
+            // =================================================================
+            // RELIGHT (WO-1004 §1.3) — baked into the SCENE's RenderSettings.
+            // -----------------------------------------------------------------
+            // RenderSettings persist into the saved .unity, so setting them HERE is what makes
+            // EVERY composed dungeon come out moody by default — pipeline-level, never a
+            // per-scene hand-fix. Bake Wave 1 (commit 94c23be3) already closed the GEOMETRY half
+            // (RoomForgeCanon.WallHeight 2.8->4.0 + DefaultDungeonRoomsBuilder.BuildCeiling) and
+            // the skybox half below; the ATMOSPHERE half is this block.
+            //
+            // The numbers are NOT invented. They are DungeonSceneBuilder's proven WO-1000 values,
+            // read at source so both dungeon pipelines light identically:
+            //   Assets/Editor/DungeonSceneBuilder.cs L170  AmbientIntensity = 0.05f
+            //   Assets/Editor/DungeonSceneBuilder.cs L1987-2000 ConfigureAmbient (fog 14->42 #0a0a10)
+            //   Assets/Editor/DungeonSceneBuilder.cs L2018-2029 CreateDirectionalLight (#39414f @ 0.18)
+            // WAS: ambient (0.08,0.09,0.12) with NO fog and a 0.35 WHITE directional — i.e. a
+            // second sun indoors, which is half of why the enclosed rooms still read as daylight
+            // greybox even after the ceilings landed.
+            const float ambient = 0.05f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.08f, 0.09f, 0.12f);
+            RenderSettings.ambientLight = new Color(ambient, ambient, ambient * 1.1f);
+            RenderSettings.ambientIntensity = ambient;
+            RenderSettings.fog = true;
+            // LINEAR (not the Exponential the other builders use): a start/end pair is what gives
+            // a corridor a readable near field and a swallowed far end at a KNOWN distance, which
+            // is the property WO-1000 tuned. 14 m clear, gone by 42 m.
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.039f, 0.039f, 0.063f); // #0a0a10 dark blue
+            RenderSettings.fogStartDistance = 14f;
+            RenderSettings.fogEndDistance = 42f;
 
             // WO-919 sky kill. A NewScene(EmptyScene) inherits the PROCEDURAL SKYBOX in its
             // lighting settings, and RenderSettings persist into the saved .unity - so every
             // composed dungeon shipped a bright blue dome over its (until now, open-top) rooms.
             // Nulling it is safe with ambientMode=Flat above: flat ambient never samples the
             // skybox, so no light changes; only the sky stops being drawn.
-            // SCOPE NOTE: this is the geometry-wave half only. The in-room CAMERA background is
-            // NOT set here - the composed bake seats no camera (the runtime HeroControlEnsurer
-            // rig does), so per WO-919 Phase B the clear-flags/background belongs to exactly ONE
-            // owner and that owner is the runtime rig (WO-920/WO-1004). Do not also set it here.
+            // SCOPE NOTE (still true, and now MEASURED): the composed bake seats no camera, so the
+            // clear-flags/background belongs to exactly ONE owner and that owner is the runtime
+            // rig. Verified at source 2026-08-07: Assets/_Modules/Village/Hero/HeroControlEnsurer.cs
+            // L283-290 creates "GameplayCamera (ensured)" and sets NEITHER clearFlags NOR
+            // backgroundColor — so it keeps Unity's defaults (Skybox / #314D79 blue) and, with
+            // RenderSettings.skybox null, URP clears to that DEFAULT BLUE. Any hairline the shell
+            // leaves therefore still reads as "sky". Fixing that is a Village-side edit and is
+            // reported, NOT done here — two owners of one camera field is how it drifts.
             RenderSettings.skybox = null;
-            FlowTrace.Step(Sys, "sky killed: RenderSettings.skybox=null ambientMode=Flat " +
-                                "(camera background stays owned by the runtime rig - WO-920/1004)");
 
             var lightGo = new GameObject("DirLight");
             lightGo.transform.SetParent(root, false);
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 0.35f;
+            // Faint cold FILL, not a key. Shadows deliberately OFF: with shadows on, the WO-919
+            // ceiling slab occludes this light completely and the only illumination left is
+            // ambient 0.05 + torches + the runtime Lantern — a near-black room. Shadowless at
+            // 0.18 it acts as a uniform legibility floor from above (and costs no shadow pass on
+            // mobile, which a whole-dungeon real-time directional shadow map would).
+            light.color = new Color(0.224f, 0.255f, 0.310f);      // #39414f
+            light.intensity = 0.18f;
+            light.shadows = LightShadows.None;
             light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+
+            FlowTrace.Step(Sys, $"RELIGHT: ambient=Flat {ambient:F2} fog=Linear #0a0a10 " +
+                                $"{RenderSettings.fogStartDistance:F0}->{RenderSettings.fogEndDistance:F0}m " +
+                                $"skybox=null dirLight=#39414f @{light.intensity:F2} shadows=None " +
+                                "(camera background stays owned by the runtime rig - HeroControlEnsurer L283)");
 
             // Dress each composed room with real props (torches at the corners + barrels/crates/
             // decor against the walls). Props have colliders STRIPPED, and the NavMesh below bakes
             // from PhysicsColliders, so dressing does NOT block or carve the mesh regardless of
             // order; placed against walls with doorway clearance so paths stay clear. Seeded by
             // room index for reproducible bakes. Runs BEFORE the bake so dress+bake is one pass.
-            int dressedRooms = 0, dressedProps = 0, roomIdx = 0;
+            //
+            // WO-921 Phase A option A3: the ENTRY/spawn room keeps its torch MESHES but gets NO
+            // torch point lights, so the hero never spawns inside the glow. Which rooms those are
+            // is layout knowledge, so the BAKER decides and the dresser just obeys.
+            var entryRoomIds = ResolveEntryRoomIds(layout);
+            int dressedRooms = 0, dressedProps = 0, roomIdx = 0, entryRooms = 0;
             foreach (var kv in instances)
             {
                 if (kv.Value == null) { roomIdx++; continue; }
-                int seated = DungeonDresser.DressRoom(kv.Value, roomIdx);
+                bool isEntry = entryRoomIds.Contains(kv.Key);
+                if (isEntry) entryRooms++;
+                int seated = DungeonDresser.DressRoom(kv.Value, roomIdx, isEntry);
                 if (seated > 0) { dressedRooms++; dressedProps += seated; }
                 roomIdx++;
             }
-            FlowTrace.Step("Dungeon", $"DRESS complete: rooms={dressedRooms}/{instances.Count} props={dressedProps}");
+            FlowTrace.Step("Dungeon", $"DRESS complete: rooms={dressedRooms}/{instances.Count} props={dressedProps} " +
+                                      $"entryRooms={entryRooms} (torch LIGHTS skipped there - WO-921 A3)");
 
             // NavMesh + path-connectivity (stronger than a single origin sample): confirm a path
             // from the first placed room centre to the last actually completes.
@@ -307,6 +355,43 @@ namespace DeNelle.Editor.RoomForge
                                 $"matesOk={mateOk} matesFail=0 sealed={sealedN} saved={saved} " +
                                 $"path={scenePath} {navResult}");
         }
+
+        /// <summary>
+        /// WO-921 Phase A: which instance ids are the ENTRY/spawn room(s). Used ONLY to suppress
+        /// cosmetic torch LIGHTS there (option A3) — the meshes still seat, and nothing about
+        /// gameplay placement changes.
+        ///
+        /// The rule deliberately mirrors <see cref="PopulateForPlay"/>'s own hero seat, which is
+        /// <c>instances["entry"]</c> and FALLS BACK to <see cref="Vector3.zero"/> when no such id
+        /// exists — so the room parked at cell [0,0,0] is the spawn room in that case. Encoding
+        /// both halves here keeps "where the hero starts" a single rule rather than two that can
+        /// drift apart. Prefab/archetype name matches ("EntryHall", "Entrance") catch layouts that
+        /// name the node something else.
+        /// </summary>
+        private static HashSet<string> ResolveEntryRoomIds(DungeonComposeLayout layout)
+        {
+            var set = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            if (layout?.rooms == null) return set;
+            foreach (var place in layout.rooms)
+            {
+                if (place == null) continue;
+                string id = string.IsNullOrEmpty(place.instanceId) ? place.prefab : place.instanceId;
+                if (string.IsNullOrEmpty(id)) continue;
+
+                bool atOrigin = place.cell != null && place.cell.Length >= 3 &&
+                                place.cell[0] == 0 && place.cell[1] == 0 && place.cell[2] == 0;
+                bool isEntry = id.Equals("entry", System.StringComparison.OrdinalIgnoreCase) ||
+                               Mentions(place.archetype, "entry") || Mentions(place.archetype, "entrance") ||
+                               Mentions(place.prefab, "entry") || Mentions(place.prefab, "entrance") ||
+                               atOrigin;
+                if (isEntry) set.Add(id);
+            }
+            return set;
+        }
+
+        private static bool Mentions(string s, string token)
+            => !string.IsNullOrEmpty(s) &&
+               s.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0;
 
         private static void EnsureOutputFolder()
         {

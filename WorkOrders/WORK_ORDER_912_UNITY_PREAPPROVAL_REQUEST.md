@@ -148,6 +148,50 @@ declines. Revoke it in that case rather than leaving a dormant data path to a pr
 
 ---
 
+## THE INTEGRATION RUNBOOK (Unity's own, captured 2026-08-07 — do NOT start it before D3 clears)
+
+Source: [Get started with Unity Ads in-app bidding in AppLovin MAX](https://docs.unity.com/en-us/monetization/bidding/in-app-bidding/applovin)
+(owner-supplied canonical path; *last updated a month ago*. The `/grow/dashboard/` path serves the
+same content).
+Recorded here because it is the exact sequence, and because step 4 is the reason this whole
+document exists.
+
+**Prerequisites**
+1. Install the latest **Unity Ads SDK** (4.9.2+).
+2. Install the **MAX Mediation SDK with the Unity Ads adapter** (4.9.2.1+; Interstitial/Rewarded 4.6.0.0+).
+3. Set **AppLovin MAX** as the Mediation Partner in the Unity **Monetization dashboard**
+   (project → Settings → Mediation Partner → Save).
+
+**Then**
+4. Create a **bidding placement** in the Unity Monetization dashboard and **copy its bidding Placement ID**.
+5. Create matching **ad units** in the AppLovin MAX dashboard.
+6. **Map** the Unity bidding Placement ID to the AppLovin bidding placement. The IDs must match exactly.
+
+### ⚠ THE ONE-WAY DOOR, quoted because it is easy to walk through by accident
+
+> *"The Unity Ads network can only be set up for **bidding or waterfall, not both** simultaneously. If
+> both bidding and waterfall placements are created, bidding placements take precedence by default for
+> ad fill requests over waterfall placements. **You can't repurpose waterfall placements for in-app
+> bidding** because you need to generate a bidding Placement ID from the Monetization dashboard."*
+
+Choosing bidding closes the waterfall path for Unity demand. Fine for us — bidding is the whole point
+of the MAX-mediator architecture — but it is not casually reversible, so do not create placements to
+"try it out" before the policy answer lands.
+
+### ★ WHY THIS RUNBOOK IS ITSELF THE ARGUMENT FOR SENDING THE REQUEST ★
+
+Step 4 has you **creating live placements in a Unity Monetization account you own**. That is *your
+inventory*, and Unity's Content Policy governs inventory tied to Regulated Activities. Mediation
+changes which network fills the impression; it does not change whose policy governs the app. Any
+reading of "MAX mediates, so Unity is not our counterparty" dies at step 4.
+
+**CLI PREREQUISITE BEFORE STEP 1** (WO-912 sec.10.1 risk 4): `AndroidTargetSdkVersion` is still `0`
+(unpinned) while the Seeker measures **API 36**. Pin it, build, verify the payload — as its own change
+with its own verification — *before* any SDK is installed, so a targetSdk break is legible on its own
+rather than blamed on the ad SDK.
+
+---
+
 ## When the answer arrives
 
 | Answer | Action |

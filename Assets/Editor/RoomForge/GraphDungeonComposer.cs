@@ -173,6 +173,59 @@ namespace DeNelle.Editor.RoomForge
         /// Batchmode: re-bake probe + sunken vault for playtests.
         /// -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeProbeAndSunkenBatch
         /// </summary>
+        /// <summary>
+        /// Recompose + re-bake EVERY graph in the graphs folder, in one batchmode call.
+        ///
+        /// Added 2026-08-07 (Bake Wave 1 step 2). Until now the batch entry points named
+        /// individual dungeons — starter loop, descent probe, sunken vault — and there was NO
+        /// entry that covered dg_bonecrypt or dg_ember_deep, so the two biggest dungeons could
+        /// only be rebuilt by hand. Any pipeline-wide change (materials, lighting, dressing) has
+        /// to reach all of them or the fleet silently diverges: some scenes carry the new bake,
+        /// some carry whatever they were last built with, and nothing reports the difference.
+        ///
+        /// Enumerates the folder rather than listing names, so a graph added later is picked up
+        /// without editing this method — a hardcoded list is how bonecrypt got orphaned.
+        /// </summary>
+        [MenuItem("Defenders/Dungeon/Compose ALL Dungeons From Graphs")]
+        public static void ComposeAllBatch()
+        {
+            string[] graphs;
+            try { graphs = Directory.GetFiles(GraphsFolder, "*.json", SearchOption.TopDirectoryOnly); }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[Flow:{Sys}] COMPOSE_ALL_FAIL: cannot enumerate {GraphsFolder}: {ex.Message}");
+                return;
+            }
+
+            System.Array.Sort(graphs, System.StringComparer.OrdinalIgnoreCase);
+            Debug.Log($"[Flow:{Sys}] -> ComposeAll: {graphs.Length} graph(s) in {GraphsFolder}");
+
+            int ok = 0;
+            var failed = new List<string>();
+            foreach (var g in graphs)
+            {
+                string name = Path.GetFileNameWithoutExtension(g);
+                try
+                {
+                    ComposeAndBake(g.Replace('\\', '/'), populateForPlay: true);
+                    ok++;
+                }
+                catch (System.Exception ex)
+                {
+                    // One bad graph must not abort the fleet - the whole point of a sweep is
+                    // that the others still get the new bake, and that the failure is NAMED.
+                    failed.Add($"{name} ({ex.GetType().Name}: {ex.Message})");
+                    Debug.LogError($"[Flow:{Sys}] compose FAILED for '{name}': {ex}");
+                }
+            }
+
+            if (failed.Count > 0)
+                Debug.LogError($"[Flow:{Sys}] COMPOSE_ALL_FAIL {ok}/{graphs.Length} composed; failed: " +
+                               string.Join(", ", failed.ToArray()));
+            else
+                Debug.Log($"[Flow:{Sys}] COMPOSE_ALL_OK {ok}/{graphs.Length}");
+        }
+
         public static void ComposeProbeAndSunkenBatch()
         {
             ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: true);

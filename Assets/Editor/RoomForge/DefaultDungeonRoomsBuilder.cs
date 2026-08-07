@@ -7,7 +7,11 @@
 // Produces Assets/Dungeon/Rooms/*.prefab with RoomPrefabMeta + RoomSockets so
 // layouts can compose: entrance, straight, turns, T, cross, dead-end, choke,
 // combat, lore, reward, secret, stairs. Geometry is procedural (floor + walls)
-// dressed with SHARED KayKit dungeon atlas materials (RoomForgeMaterials).
+// surfaced with the SHARED SOLID-STONE materials (RoomForgeMaterials). Those mats are
+// deliberately TEXTURELESS: these shells are primitive cubes, so the KayKit atlas maps
+// its whole swatch grid onto every face = the WO-1004 rainbow. The comment here used to
+// call them "KayKit dungeon atlas materials", which is the opposite of what they are and
+// is how a later author talks themselves into re-adding the atlas.
 // Sockets match the DungeonBaker mate convention; the cell grain, wall height,
 // door gap and ceiling thickness all come from RoomForgeCanon (WO-919 + WO-922) —
 // NEVER re-type those numbers here, the regression oracles read the same file.
@@ -62,7 +66,10 @@ namespace DeNelle.Editor.RoomForge
             EnsureFolder("Assets/StreamingAssets/Data/Canonical/dungeon-layouts");
             EnsureFolder("Assets/Resources/Data/Canonical/dungeon-layouts");
 
-            // One shared wall + floor mat from KayKit dungeon_texture.png (all rooms).
+            // One shared wall + floor + accent mat, solid stone and textureless (all rooms).
+            // EnsureMenu also re-runs the exhaustive strip, so a mat asset that picked up the
+            // atlas (or an atlas-era 1.5x/2.5x tiling) in an older revision is cleaned here
+            // before a single prefab is written against it.
             RoomForgeMaterials.EnsureMenu();
 
             var specs = DefaultSpecs();
@@ -83,7 +90,7 @@ namespace DeNelle.Editor.RoomForge
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             FlowTrace.Step("RoomForge", $"built {ok}/{specs.Count} default room prefabs -> {RoomsFolder} + rooms-catalog.json " +
-                                        $"(shared KayKit atlas mats on all walls/floors)");
+                                        $"(shared TEXTURELESS stone mats on every surfaced slot - no atlas)");
         }
 
         /// <summary>Batchmode: Unity -executeMethod DeNelle.Editor.RoomForge.DefaultDungeonRoomsBuilder.BuildAll</summary>
@@ -282,12 +289,8 @@ namespace DeNelle.Editor.RoomForge
                 if (spec.choke)
                     BuildChokeInterior(root.transform, hx, hz);
 
-                // WO-919: roof the room. Must come BEFORE ApplyToRoomRoot so the slab picks up
-                // the shared stone material instead of shipping as a raw white primitive.
+                // WO-919: roof the room.
                 BuildCeiling(root.transform, spec.id, wx, wz);
-
-                // ONE KayKit atlas for every wall/floor (simple + consistent).
-                RoomForgeMaterials.ApplyToRoomRoot(root, useAccentFloor: spec.accentFloor);
 
                 // Door sockets
                 var socketList = new List<RoomCatalogSocket>();
@@ -308,6 +311,27 @@ namespace DeNelle.Editor.RoomForge
                 var marker = new GameObject("Anchor_Center");
                 marker.transform.SetParent(root.transform, false);
                 marker.transform.localPosition = Vector3.zero;
+
+                // WO-1004 — the surfacing pass is now the LAST thing that happens before the
+                // prefab is written, and it is followed by a proof.
+                //
+                // It used to sit in the middle of BuildOne, immediately after BuildCeiling,
+                // guarded only by a comment telling the next author to keep the ceiling above
+                // it. That ordering rule is exactly the kind that gets broken silently: ANY
+                // piece added below the call ships with whatever material the primitive was
+                // born with (the pipeline default — never stone), and nothing fails. Running
+                // it here instead makes "every renderer that exists has been surfaced" true by
+                // position rather than by discipline, no matter what future geometry lands
+                // above it. VerifyRoomSurfaces then walks every renderer and every material
+                // slot and refuses to let a textured/foreign/NULL slot reach disk unnoticed —
+                // a textured surface on these un-UV'd primitive shells IS the rainbow.
+                RoomForgeMaterials.ApplyToRoomRoot(root, useAccentFloor: spec.accentFloor);
+                int badSlots = RoomForgeMaterials.VerifyRoomSurfaces(root, spec.id, spec.accentFloor);
+                if (badSlots > 0)
+                    // Band "RoomForge" (not Sys) so this lands beside the room-save + ceiling
+                    // lines the F8 harvester groups.
+                    FlowTrace.Warn("RoomForge", $"room '{spec.id}' had {badSlots} non-stone surface slot(s) at save " +
+                                        "time - corrected, but a piece is being created outside the surfacing pass");
 
                 string prefabPath = $"{RoomsFolder}/{spec.id}.prefab";
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out bool success);
