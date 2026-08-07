@@ -53,6 +53,22 @@ namespace DeNelle.Core.Jobs
         BarracksUpgrade = 9,
         /// <summary>Upgrade a single TROOP's progression track — reach/strength/ability (Research channel, WO-771.9).</summary>
         TroopUpgrade = 10,
+        /// <summary>
+        /// Research ONE building perk from building-tiers.json (Research channel) — the WC3
+        /// "research at the Blacksmith" pillar, now TIME-BASED (owner ruling 2026-08-07).
+        /// Job id: <c>BuildingPerkService.ResearchJobPrefix + buildingId + ":" + perkId</c>.
+        /// <para>
+        /// ⚠ WHY THIS IS A NEW VALUE AND NOT A REUSE OF <see cref="UnlockTier"/> (=3, which has
+        /// zero producers and would have been "free"): <c>UnlockTier</c> means "unlock a
+        /// building/tech TIER" — the tier ladder, which is already served by <see cref="Upgrade"/>
+        /// / <see cref="BarracksUpgrade"/> and is a DIFFERENT thing from a per-perk purchase off a
+        /// tier's shelf. Squatting on it would (a) hand a future tier-unlock WO a JobKind whose
+        /// registered IJobEffect silently applies a PERK, and (b) force both features to share one
+        /// job-id namespace. <see cref="BuildJobData.Kind"/> persists as an int and this is an
+        /// APPEND (11), so no existing saved job is renumbered and no migration is needed.
+        /// </para>
+        /// </summary>
+        BuildingResearch = 11,
     }
 
     /// <summary>
@@ -75,8 +91,8 @@ namespace DeNelle.Core.Jobs
     {
         /// <summary>
         /// The channel a job of <paramref name="kind"/> runs on by default:
-        /// TrainTroop → Train; UnlockTier/LearnMagic → Research; everything else
-        /// (Build/Repair/Upgrade/Tower*/Wall*) → Builder.
+        /// TrainTroop → Train; UnlockTier/LearnMagic/TroopUpgrade/BuildingResearch → Research;
+        /// everything else (Build/Repair/Upgrade/Tower*/Wall*) → Builder.
         /// </summary>
         public static ChannelId DefaultChannel(JobKind kind)
         {
@@ -87,6 +103,7 @@ namespace DeNelle.Core.Jobs
                 case JobKind.UnlockTier:
                 case JobKind.LearnMagic:
                 case JobKind.TroopUpgrade:      // WO-771.9 — per-troop upgrade track runs on the research/lab queue
+                case JobKind.BuildingResearch:  // 2026-08-07 — WC3 timed building-perk research, same lab queue
                     return ChannelId.Research;
                 default:                         // Build/Repair/Upgrade/Tower*/Wall*/BarracksUpgrade → Builder
                     return ChannelId.Builder;

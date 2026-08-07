@@ -587,14 +587,18 @@ namespace DeNelle.Village.Buildings.Progression
                 Raise();
                 return;
             }
-            // WO-432 — a research-perk tile ("perk:<perkId>"): unlock it with Gold (Coins).
+            // WO-432 — a research-perk tile ("perk:<perkId>"): START its research with Gold (Coins).
+            // 2026-08-07: this no longer unlocks the perk on the spot. TryResearch charges the gold
+            // and QUEUES a JobKind.BuildingResearch job on the Research channel; the perk lands when
+            // the timer does. The status copy says "started", not "unlocked" — the old wording would
+            // now be a straight lie about state the player can go and check on the Manage screen.
             if (tierId.StartsWith("perk:", StringComparison.Ordinal))
             {
                 string perkId = tierId.Substring("perk:".Length);
                 if (BuildingPerkService.TryResearch(_buildingId, perkId))
                 {
-                    Status = "Perk unlocked.";
-                    FlowTrace.Step("Upgrade", _buildingId + " unlocked perk " + perkId);
+                    Status = "Research started - check the Research queue.";
+                    FlowTrace.Step("Upgrade", _buildingId + " started research on perk " + perkId);
                 }
                 else
                 {
@@ -753,6 +757,12 @@ namespace DeNelle.Village.Buildings.Progression
                     {
                         if (p == null || string.IsNullOrEmpty(p.Id)) continue;
                         bool owned = BuildingPerkService.IsOwned(_buildingId, p.Id);
+                        // 2026-08-07 — research is TIMED, so a third state exists between "buyable"
+                        // and "unlocked": in the Research queue. CanResearch already refuses an
+                        // in-flight perk with "Research already in progress.", which would render it
+                        // as a plain locked tile; reading the flag directly lets the cost cell say
+                        // what is actually happening instead of still advertising a price.
+                        bool researching = !owned && BuildingPerkService.IsResearching(_buildingId, p.Id);
                         string why = null;
                         bool can = !owned && BuildingPerkService.CanResearch(_buildingId, p.Id, out why);
                         bool affordable = can && (_economy == null || _economy.Coins >= p.GoldCost);
@@ -763,6 +773,7 @@ namespace DeNelle.Village.Buildings.Progression
                         // like StarRatingRow/EndStateView), so the font-safe ASCII star it is.
                         string pname = (p.IsSignature ? "* " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
                         _costById[rid] = owned ? "Unlocked"
+                            : researching ? "Researching"
                             : (DeNelle.Core.UI.ElarionUi.CompactNumber(p.GoldCost) + " Gold");   // WO-697
                         _effectById[rid] = p.Effect ?? "";
                         string iconKey = string.IsNullOrEmpty(p.IconId) ? p.Id : p.IconId;

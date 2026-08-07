@@ -597,44 +597,77 @@ namespace DeNelle.Village.UI
 
         private void BuildResearchBrowse()
         {
-            // Research's "items" are the per-building perk grid. Its costs are authored inside the
-            // perk defs and are already rendered by BuildingUpgradeVM, so this tab BROWSES the
-            // buildings that have something researchable and DRILLS IN to the existing panel rather
-            // than duplicating a second cost model that could disagree with the one that charges.
+            // ⚠ REWRITTEN 2026-08-07 (owner ruling: building-perk research is now TIME-BASED, like
+            // Warcraft 3). The old version emitted ONE row per BUILDING with CostText="",
+            // Affordable=false and StateText="Open to see costs", pinned to CostWeight=MaxValue so
+            // it always sorted last. That was correct while research was an instant purchase this
+            // screen had no business pricing — but it made the Research tab the one tab that could
+            // never answer the question the whole screen exists to answer ("can I act on this
+            // now?"), and it could never produce a Research QUEUE row because "Open" only drilled
+            // into another panel.
+            //
+            // Now a perk is a real priced+timed action, so this browses PER PERK and states the
+            // real numbers: the authored goldCost (perks are the ONLY gold-priced work in the
+            // game — the other three tabs are wood/food/iron/crystals, which is why this method
+            // cannot reuse AddBrowseRow / CoreCost, whose struct has no coins field), the derived
+            // duration, and a CTA that calls the same BuildingPerkService.TryResearch the panel
+            // calls. This screen still charges NOTHING itself.
             var all = BuildingTierCatalog.All;
             if (all == null) return;
+
+            int gold = GoldBalance();
 
             for (int i = 0; i < all.Count; i++)
             {
                 var def = all[i];
                 if (def == null || string.IsNullOrEmpty(def.Id) || def.Tiers == null) continue;
-                if (ModifierService.TierOf(def.Id) < 1) continue;        // not built
+                if (ModifierService.TierOf(def.Id) < 1) continue;        // not built -> nothing to research
 
-                bool hasPerk = false;
-                for (int t = 0; t < def.Tiers.Count && !hasPerk; t++)
+                string buildingName = Ascii(string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName);
+
+                for (int t = 0; t < def.Tiers.Count; t++)
                 {
                     var tierDef = def.Tiers[t];
                     if (tierDef?.Perks == null) continue;
+
                     for (int p = 0; p < tierDef.Perks.Count; p++)
                     {
                         var perk = tierDef.Perks[p];
                         if (perk == null || string.IsNullOrEmpty(perk.Id)) continue;
-                        if (!Buildings.Progression.BuildingPerkService.IsOwned(def.Id, perk.Id)) { hasPerk = true; break; }
+
+                        // Captured by the CTA closure — never the loop variables.
+                        string bId = def.Id;
+                        string pId = perk.Id;
+                        if (Buildings.Progression.BuildingPerkService.IsOwned(bId, pId)) continue;
+
+                        bool can = Buildings.Progression.BuildingPerkService.CanResearch(bId, pId, out string why);
+                        int price = Mathf.Max(0, perk.GoldCost);
+                        bool affordable = can && gold >= price;
+                        float seconds = Buildings.Progression.BuildingPerkService.ResearchSeconds(bId, pId);
+
+                        // Colourblind law: the state is a SENTENCE. "Ready" now also carries the
+                        // WAIT, because with a timed research the price is no longer the only cost.
+                        string state;
+                        if (!can) state = Ascii(string.IsNullOrEmpty(why) ? "Locked." : why);
+                        else if (!affordable) state = "Short " + (price - gold) + " gold";
+                        else state = "Ready - takes " + FormatTime(seconds);
+
+                        BrowseRows.Add(new BrowseRowVM
+                        {
+                            Label = buildingName + " - " +
+                                    Ascii(string.IsNullOrEmpty(perk.Name) ? pId : perk.Name),
+                            CostText = price > 0 ? price + " gold" : "free",
+                            StateText = state,
+                            Affordable = affordable,
+                            // Every row on THIS tab is priced in gold, so a raw gold weight sorts
+                            // cheapest-first consistently. It is never compared against the other
+                            // tabs' CostBasket weight — BrowseRows is rebuilt per tab.
+                            CostWeight = price,
+                            ActionText = "Research",
+                            Activate = () => Research(bId, pId),
+                        });
                     }
                 }
-                if (!hasPerk) continue;
-
-                string id = def.Id;
-                BrowseRows.Add(new BrowseRowVM
-                {
-                    Label = (string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName) + " research",
-                    CostText = "",
-                    StateText = "Open to see costs",
-                    Affordable = false,
-                    CostWeight = float.MaxValue,     // sorts after everything priced here
-                    ActionText = "Open",
-                    Activate = () => OpenUpgradePanel(id),
-                });
             }
         }
 
@@ -798,6 +831,43 @@ namespace DeNelle.Village.UI
                 FlowTrace.Warn("Manage", $"BuildingUpgrade opener not registered — cannot drill into '{id}'.");
         }
 
+        /// <summary>
+        /// Start ONE building perk's research (the Research tab's CTA). Routes through
+        /// BuildingPerkService so the gate, the gold charge, the Research-channel enqueue and the
+        /// depth cap all behave identically to the building panel's perk tile — this screen never
+        /// charges or enqueues anything itself. Unlike the other tabs' CTAs this is an INSTANCE
+        /// method: starting a research puts a row on the line the player is currently looking at,
+        /// so it sets a Notice and rebuilds rather than leaving the screen stale.
+        /// </summary>
+        private void Research(string buildingId, string perkId)
+        {
+            using var _ = FlowTrace.Enter("Manage", $"Research CTA '{buildingId}:{perkId}'");
+
+            if (!Buildings.Progression.BuildingPerkService.CanResearch(buildingId, perkId, out string reason))
+            {
+                FlowTrace.Warn("Manage", $"research '{buildingId}:{perkId}' refused: {reason}");
+                Notice = ManageScreenVM.Ascii(string.IsNullOrEmpty(reason) ? "Cannot research that yet." : reason);
+                NoticeIsBrokeCase = false;
+                Rebuild();
+                return;
+            }
+
+            if (Buildings.Progression.BuildingPerkService.TryResearch(buildingId, perkId))
+            {
+                Notice = "Research started.";
+                NoticeIsBrokeCase = false;
+            }
+            else
+            {
+                // TryResearch only gets here on a spend failure, a missing service or a refused
+                // enqueue - each of which has already left its own [Flow:Research] line naming
+                // which one it was, so this message never has to guess in the log.
+                Notice = "Could not start that research - check your gold.";
+                NoticeIsBrokeCase = false;
+            }
+            Rebuild();
+        }
+
         private static void UpgradeTroop(string troopId)
         {
             // Routes through the existing service so the charge, the queue and the cap all behave
@@ -814,6 +884,20 @@ namespace DeNelle.Village.UI
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             return state != null ? state.Resources.Crystals : 0;
+        }
+
+        /// <summary>
+        /// GOLD (economy Coins) — the currency building-perk research charges, and the ONLY one of
+        /// the four tabs that uses it. Reads EconomyService.Coins, which is itself a view onto
+        /// GameState.Resources.Coins, so the number shown is the number the spend will check; the
+        /// direct-state read is the headless / pre-boot fallback (same shape as <see cref="CanAfford"/>).
+        /// </summary>
+        private static int GoldBalance()
+        {
+            var econ = EconomyService.Instance;
+            if (econ != null) return econ.Coins;
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return state != null ? state.Resources.Coins : 0;
         }
 
         private static bool CanAfford(CoreCost cost)

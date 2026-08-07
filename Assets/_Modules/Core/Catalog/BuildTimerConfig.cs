@@ -165,6 +165,46 @@ namespace DeNelle.Core.Catalog
         [Tooltip("Echoes the player must own BEFORE the first extra slot may be bought. Ruling Q6: 'each Echo above 2'.")]
         [Min(0)] public int extraSlotEchoFloor = 2;
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  BUILDING-PERK RESEARCH — the WC3 timed-research curve (owner ruling
+        //  2026-08-07: "building perk research must be TIME-BASED, like WC3").
+        //  -------------------------------------------------------------------
+        //  WHAT THE DATA ACTUALLY CARRIES (checked at source before authoring a
+        //  number, not assumed): BuildingPerkDef has id/name/effect/goldCost/
+        //  iconId/isSignature/modifiers and NOTHING ELSE - there is no
+        //  researchSeconds field in building-tiers.json, in either copy
+        //  (Assets/Resources/... and Assets/StreamingAssets/...). BuildingTierDef
+        //  carries no duration either. So the ONLY per-perk signal that already
+        //  exists is goldCost, and the curve is derived from it here rather than
+        //  hard-coded at the call site (WO-172 constraint: "all durations in a
+        //  tunable SO/constants, never hard-coded").
+        //
+        //  Authoring a researchSeconds field per perk is the RIGHT long-term
+        //  home and is deliberately NOT done here: it is a content pass across
+        //  16 perks x 2 json copies plus a catalog-shape change, i.e. an owner
+        //  decision, not a side effect of making research timed. When it lands,
+        //  BuildingPerkService.ResearchSeconds prefers the authored value and
+        //  this curve becomes the fallback - one call site to change.
+        //
+        //  THE BAND THIS PRODUCES against the LIVE catalog (goldCost 250..2000):
+        //    250g -> 3m 30s | 300g -> 4m | 600g -> 7m | 800g -> 9m
+        //    1200g -> 13m   | 1600g -> 17m | 2000g -> 21m
+        //  Early perks are a coffee break; the tier-3 signature capstones are a
+        //  real session-length wait, which is what makes the crystal Finish-Now
+        //  sink (1 crystal/minute) and the 10-minute ad chunk meaningful here.
+        //  Deliberately SHORTER than a building upgrade of comparable price:
+        //  research is a parallel Research-channel line the player runs
+        //  alongside their builders, not the main-line time sink.
+        // ─────────────────────────────────────────────────────────────────────
+        [Header("Building-perk research (WC3 timed research)")]
+        [Tooltip("Flat floor added to every building-perk research, in seconds. Guarantees research is " +
+                 "never felt as instant even for the cheapest perk. 0 = no floor.")]
+        [Min(0f)] public float researchBaseSeconds = 60f;
+
+        [Tooltip("Seconds of research time per 1 gold of the perk's authored goldCost. The whole per-perk " +
+                 "curve: seconds = researchBaseSeconds + goldCost * this, clamped to maxDurationSeconds.")]
+        [Min(0f)] public float researchSecondsPerGold = 0.6f;
+
         /// <summary>
         /// Hybrid curve: duration (seconds) for a <paramref name="tier"/> job of
         /// <paramref name="type"/>. Super-linear via <see cref="tierGrowth"/>,
@@ -219,6 +259,20 @@ namespace DeNelle.Core.Catalog
         /// of the REACHABLE ladder, not at an arbitrary tier number.
         /// </summary>
         public int MaxReachableTier => tierCostThresholds != null ? tierCostThresholds.Length : 0;
+
+        /// <summary>
+        /// Wall-clock seconds one building-perk research takes, derived from the perk's authored
+        /// <c>goldCost</c> (the only per-perk signal building-tiers.json carries — see the block
+        /// comment above). <c>researchBaseSeconds + goldCost * researchSecondsPerGold</c>, clamped
+        /// to <see cref="maxDurationSeconds"/>. A negative/zero gold cost still pays the base floor,
+        /// so a free perk is a short wait rather than an instant grant.
+        /// </summary>
+        public float ResearchSecondsForGold(int goldCost)
+        {
+            float seconds = Mathf.Max(0f, researchBaseSeconds)
+                          + Mathf.Max(0, goldCost) * Mathf.Max(0f, researchSecondsPerGold);
+            return Mathf.Min(seconds, Mathf.Max(0f, maxDurationSeconds));
+        }
 
         /// <summary>Crystal price to instant-finish a job with <paramref name="remainingSeconds"/> left.</summary>
         public int InstantFinishPrice(double remainingSeconds)

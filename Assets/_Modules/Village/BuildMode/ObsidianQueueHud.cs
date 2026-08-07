@@ -46,6 +46,10 @@ using DeNelle.Core.UI;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+// Alias, not a plain using: this file lives in DeNelle.Village and C# does NOT search INNER
+// namespaces, so BuildingPerkService (DeNelle.Village.Buildings.Progression) is unreachable
+// unqualified. Mirrors BarracksService's `using Ledger = ...` convention.
+using Perks = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -452,6 +456,19 @@ namespace DeNelle.Village
                 return tier > 0 ? (name + " -> L" + tier) : (name + " upgrade");
             }
 
+            // Building-perk research: building-research:<buildingId>:<perkId> -> "Arcane Basics"
+            // (the perk's authored player-facing Name, falling back to a spaced id). Without this
+            // the row read as the raw job id, which is the exact "player-facing leak" the WO-778
+            // label oracle exists to stop.
+            if (kind == JobKind.BuildingResearch || id.StartsWith(Perks.BuildingPerkService.ResearchJobPrefix))
+            {
+                // ASK THE SERVICE for the name; do NOT resolve the catalog row here. A View reading
+                // BuildingTierCatalog directly is an MVVM conformance violation and the oracle
+                // rightly failed the gate on it (UiMvvmConformance: "NEW View reading game state
+                // without a ViewModel"). The service owns the lookup + the spaced-id fallback.
+                return Perks.BuildingPerkService.DisplayNameForJob(id) ?? "Research";
+            }
+
             // Barracks building upgrade.
             if (kind == JobKind.BarracksUpgrade || id == BarracksService.BarracksJobId)
             {
@@ -496,6 +513,7 @@ namespace DeNelle.Village
                 case JobKind.WallUpgrade: return "Wall upgrade";
                 case JobKind.BarracksUpgrade: return "Barracks upgrade";
                 case JobKind.TroopUpgrade: return "Troop upgrade";
+                case JobKind.BuildingResearch: return "Research";
                 default: return kind.ToString();
             }
         }
