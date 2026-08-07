@@ -49,6 +49,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using DeNelle.Core.Diagnostics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -67,12 +68,10 @@ namespace DeNelle.Editor
         // ── Project paths ────────────────────────────────────────────────────
         private const string ScenesDir = "Assets/Scenes";
         private const string VillageScenePath = ScenesDir + "/Village.unity";
-        // WO-173 Option A: the exterior terrain now belongs to OuterWorld.unity (loaded
-        // additively over Village by WorldSceneLoader) so a Village/castle rebake can't
-        // wipe the world ground again. Build order: BuildOuterWorld (regions+nodes) THEN
-        // BuildExterior (terrain) -- BuildExterior opens the existing OuterWorld and only
-        // nukes its own ExteriorRoot, preserving OuterWorldRoot.
-        private const string OuterWorldScenePath = ScenesDir + "/OuterWorld.unity";
+        // Merged hub (2026): OuterWorld.unity was deleted — exterior lives on
+        // Main_Castle_Overworld (one navmesh). BuildExterior opens that scene and only
+        // nukes ExteriorRoot so castle/hub content is preserved.
+        private const string OuterWorldScenePath = ScenesDir + "/Main_Castle_Overworld.unity";
         private const string GeneratedDir = "Assets/Generated";
         private const string TerrainAssetDir = GeneratedDir + "/Terrain";
         private const string TerrainDataPath = TerrainAssetDir + "/ExteriorTerrainData.asset";
@@ -146,7 +145,9 @@ namespace DeNelle.Editor
         // 0..1) maps cleanly. The terrain GameObject is offset DOWN by
         // TerrainBaseDepth so heightmap value 0 sits below Y=0 and the village
         // baseline (Y=0) lands at a known normalised height.
-        private const float TerrainHeight = 30f;       // total heightmap span (mountains ~30 m above village)
+        // Raised 30 → 42 (2026-08-07): stronger biomes + multi-scale relief need headroom
+        // so peaks aren't Clamp01-clipped into a pancake. baseLevel01 still maps Y=0 correctly.
+        private const float TerrainHeight = 42f;
         // Owner 2026-05-20 ("same level as village" → black hex Z-fight →
         // settled depth). 1.5 m caused Z-fighting between the village hex
         // tiles at Y≈0.015 and the seam-blended terrain at Y≈0. 0.5 m
@@ -207,7 +208,8 @@ namespace DeNelle.Editor
         // hole under the castle is carved separately (NavMeshModifierVolume), so 0f is visual-only.
         private const float CastleDepressionDepth = 0f;
 
-        // ── WORLDFEEL relief (owner felt-test 2026-07-01: "very flat — I want TERRAIN") ──
+        // ── WORLDFEEL relief (owner 2026-07-01 + 2026-08-07: "mostly flat" → unique land) ──
+        // Multi-scale undulation + regional character so each compass sector reads differently.
         // Gentle long-wavelength perlin undulation layered onto the biome heights so the
         // mid-band lawn (the flat ring between the castle clear-zone and the biome ramps)
         // reads as rolling ground instead of a billiard table. DELIBERATELY gentle
@@ -224,10 +226,14 @@ namespace DeNelle.Editor
         //     relief is added BEFORE the WO-468 corridor flatten, so CorridorWeight
         //     lerps it back to Y=0 exactly like the biome heights;
         //   * the castle footprint itself: the SeamWeight depression lerp flattens last.
-        private const float ReliefAmplitude   = 1.8f;   // max undulation (m) — gentle, walkable everywhere
-        private const float ReliefFrequency   = 0.009f; // ~110 m dominant wavelength (long, rolling)
-        private const float ReliefFlatRadius  = 95f;    // full-flat disc around origin (covers moat/spawns/outpost anchors)
-        private const float ReliefBlendRadius = 140f;   // relief fades in between FlatRadius and this
+        // 2026-08-07 owner: "mostly flat, should be unique". Play loop lived inside
+        // ~95m full-flat disc with only ±1.8m relief — lawn. Bump multi-scale amplitude,
+        // shrink flat disc to just past moat/clear, add RegionalCharacter landmarks.
+        private const float ReliefAmplitude   = 5.8f;   // was 1.8 — real hills, still walkable
+        private const float ReliefFrequency   = 0.011f; // was 0.009 — ~90 m dominant rolls
+        private const float ReliefFlatRadius  = 70f;    // was 95 — past castle clear (62) + moat
+        private const float ReliefBlendRadius = 108f;   // was 140 — full character sooner
+        private const float CharacterAmplitude = 4.2f;  // compass-asymmetric hills/hollows (m)
 
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
@@ -287,10 +293,8 @@ namespace DeNelle.Editor
             // ── Open the Village scene (must exist -- interior agent owns it) ─
             if (!File.Exists(OuterWorldScenePath))
             {
-                Debug.LogError("[ExteriorTerrainBuilder] OuterWorld.unity not found at " +
-                               OuterWorldScenePath + " -- run Defenders/World/Build Outer World " +
-                               "(OuterWorldBuilder.BuildOuterWorld) FIRST so the terrain composes " +
-                               "with the regions/nodes. Aborting.");
+                Debug.LogError("[ExteriorTerrainBuilder] hub scene not found at " +
+                               OuterWorldScenePath + " -- expected Main_Castle_Overworld.unity. Aborting.");
                 return;
             }
             var scene = EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Single);
@@ -500,12 +504,10 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// WORLDFEEL undulation term (world metres): long-wavelength fbm perlin,
-        /// amplitude <see cref="ReliefAmplitude"/>, masked to ZERO inside
-        /// <see cref="ReliefFlatRadius"/> of the terrain-centered origin (castle
-        /// surroundings / moat / bridge landings / spawn arcs / walk-to outpost
-        /// anchors) and smoothly fading to full beyond <see cref="ReliefBlendRadius"/>.
-        /// Coordinates are terrain-CENTERED (same space as the biome fields).
+        /// WORLDFEEL undulation (world metres): multi-scale FBM + compass-asymmetric
+        /// character, masked to ZERO inside <see cref="ReliefFlatRadius"/> (castle /
+        /// moat / critical spawns) and full beyond <see cref="ReliefBlendRadius"/>.
+        /// Terrain-CENTERED coords (same space as the biome fields).
         /// </summary>
         private static float ReliefHeight(float x, float cz)
         {
@@ -514,64 +516,115 @@ namespace DeNelle.Editor
             float mask = r >= ReliefBlendRadius
                 ? 1f
                 : Mathf.SmoothStep(0f, 1f, (r - ReliefFlatRadius) / (ReliefBlendRadius - ReliefFlatRadius));
-            // PerlinFbm returns ~±0.5 -> x2 gives ±1 -> scale by amplitude.
-            float n = PerlinFbm(x * ReliefFrequency + 101f, cz * ReliefFrequency + 57f, 3) * 2f;
-            return n * ReliefAmplitude * mask;
+
+            // Multi-scale: long hills + medium rolls + fine bumps (not one soft sine).
+            float f = ReliefFrequency;
+            float large = PerlinFbm(x * f + 101f, cz * f + 57f, 3) * 2f;           // ±1
+            float mid   = PerlinFbm(x * f * 2.4f + 40f, cz * f * 2.4f + 88f, 3) * 2f;
+            float fine  = PerlinFbm(x * f * 5.5f + 17f, cz * f * 5.5f + 203f, 2) * 2f;
+            float n = large * 0.52f + mid * 0.33f + fine * 0.15f;
+
+            // Compass character so NW ≠ SE (unique landmarks, not tiled noise).
+            float character = RegionalCharacter(x, cz);
+
+            return (n * ReliefAmplitude + character) * mask;
+        }
+
+        /// <summary>
+        /// Asymmetric land features (metres) so each direction of travel feels different:
+        /// NW foothills, NE farm rolls, SW broken shelves, SE soft hollows + a few
+        /// signature mounds/hollows the player can navigate by eye.
+        /// </summary>
+        private static float RegionalCharacter(float x, float cz)
+        {
+            // Soft quadrant weights (0 at origin, grow with distance into that sector).
+            float len = Mathf.Max(1f, Mathf.Sqrt(x * x + cz * cz));
+            float n = Mathf.Clamp01(cz / len);
+            float s = Mathf.Clamp01(-cz / len);
+            float e = Mathf.Clamp01(x / len);
+            float w = Mathf.Clamp01(-x / len);
+
+            // NW foothills — bigger rises toward the forest mountains.
+            float nwHills = Mathf.Max(0f, PerlinFbm(x * 0.014f + 3f, cz * 0.014f + 9f, 3)) * 7f * n * w;
+            // NE rolling farmland knolls.
+            float neRolls = Mathf.Sin(x * 0.04f + cz * 0.02f) * 2.8f * n * e
+                            + PerlinFbm(x * 0.02f + 21f, cz * 0.02f + 5f, 2) * 2.2f * n * e;
+            // SW broken shelves / terraces (more angular).
+            float swShelf = (Mathf.PerlinNoise(x * 0.05f + 70f, cz * 0.05f + 12f) - 0.35f) * 6.5f * s * w;
+            // SE soft hollows (negative = dips that can hold ponds).
+            float seHollow = Mathf.Min(0f, PerlinFbm(x * 0.016f + 55f, cz * 0.016f + 33f, 3) * 2f) * 6f * s * e;
+
+            // Signature landmarks (hand-placed mounds/hollows) — navigate-by-eye.
+            float landmarks =
+                SignatureBump(x, cz,  165f,  130f, 32f,  7.5f) +  // NE knoll
+                SignatureBump(x, cz, -175f,  145f, 38f,  9.0f) +  // NW foothill
+                SignatureBump(x, cz, -155f, -160f, 30f,  6.0f) +  // SW shelf
+                SignatureBump(x, cz,  170f, -150f, 36f, -5.5f) +  // SE hollow (negative)
+                SignatureBump(x, cz,   90f, -220f, 28f,  4.5f) +  // south ridge freckle
+                SignatureBump(x, cz, -220f,   40f, 34f,  5.5f);   // west river-ridge freckle
+
+            float raw = nwHills + neRolls + swShelf + seHollow + landmarks;
+            return Mathf.Clamp(raw, -CharacterAmplitude * 1.4f, CharacterAmplitude * 1.6f);
+        }
+
+        /// <summary>Smooth radial mound (or hollow if amp &lt; 0) centered at (cx,cz).</summary>
+        private static float SignatureBump(float x, float z, float cx, float cz, float radius, float amp)
+        {
+            float dx = x - cx, dz = z - cz;
+            float d2 = dx * dx + dz * dz;
+            float r2 = radius * radius;
+            if (d2 >= r2) return 0f;
+            float t = 1f - d2 / r2;                 // 1 at center → 0 at edge
+            return amp * t * t;                     // smooth falloff
         }
 
         // ── North: rising forest -> pine -> rock -> snow (§9.2) ──────────────
-        // Gentle slopes within ~50u, then steeper hills climbing to +15..+30.
+        // Steeper silhouette + outcrops so the north reads "mountain country".
         private static float NorthHeight(float x, float z)
         {
             float d = Mathf.Max(0f, z - VillageHalfZ);          // distance past wall
             float t = Mathf.Clamp01(d / (TerrainSizeXZ * 0.5f - VillageHalfZ));
-            // Eased rise: gentle near the wall, steeper toward the edge.
             float rise = Mathf.SmoothStep(0f, 1f, t);
-            float baseH = Mathf.Lerp(0f, 28f, rise);
-            // A mountain ridge silhouetted at the very northern edge.
-            float ridge = Mathf.Pow(t, 4f) * 9f;
-            // Stone outcrops -- mid-frequency lumps poking through.
-            float lumps = PerlinFbm(x * 0.018f + 11f, z * 0.018f + 4f, 3) * 6f * t;
+            float baseH = Mathf.Lerp(0f, 32f, rise);            // was 28
+            float ridge = Mathf.Pow(t, 3.2f) * 12f;             // was pow4 * 9 — earlier silhouette
+            float lumps = PerlinFbm(x * 0.018f + 11f, z * 0.018f + 4f, 3) * 8f * t;
             return baseH + ridge + lumps;
         }
 
-        // ── East: gentle rolling farmland, +/-5u (§9.2) ──────────────────────
+        // ── East: rolling farmland with real knolls (not ±2m whispers) ───────
         private static float EastHeight(float x, float z)
         {
             float d = Mathf.Max(0f, x - VillageHalfX);
             float t = Mathf.Clamp01(d / (TerrainSizeXZ * 0.5f - VillageHalfX));
-            // Soft long-wavelength rolls -- cropland feel.
-            float rolls = Mathf.Sin(z * 0.035f) * Mathf.Cos(x * 0.028f) * 4.5f;
-            float gentle = PerlinFbm(x * 0.012f + 31f, z * 0.012f + 19f, 2) * 4f;
-            return (rolls + gentle - 2f) * t;
+            float rolls = Mathf.Sin(z * 0.032f) * Mathf.Cos(x * 0.024f) * 7f;   // was 4.5
+            float gentle = PerlinFbm(x * 0.012f + 31f, z * 0.012f + 19f, 3) * 6.5f;
+            float knolls = Mathf.Max(0f, PerlinFbm(x * 0.025f + 8f, z * 0.025f + 44f, 2)) * 5f;
+            return (rolls + gentle + knolls - 2.5f) * t;
         }
 
-        // ── South: descending barren toward "the Wound", -10..-15 (§9.2) ─────
+        // ── South: descending barren toward "the Wound" ─────────────────────
         private static float SouthHeight(float x, float z)
         {
             float d = Mathf.Max(0f, -z - VillageHalfZ);
             float t = Mathf.Clamp01(d / (TerrainSizeXZ * 0.5f - VillageHalfZ));
             float sink = Mathf.SmoothStep(0f, 1f, t);
-            float baseH = Mathf.Lerp(0f, -14f, sink);
-            // Cracked, broken micro-relief as the land nears the Wound.
-            float cracks = PerlinFbm(x * 0.03f + 7f, z * 0.03f + 23f, 3) * 3.5f * t;
-            return baseH + cracks - 1.5f * sink;
+            float baseH = Mathf.Lerp(0f, -16f, sink);           // was -14 — deeper wound approach
+            float cracks = PerlinFbm(x * 0.03f + 7f, z * 0.03f + 23f, 3) * 5f * t;
+            float shelves = Mathf.Sin(x * 0.05f) * 2.5f * t;    // broken terraces
+            return baseH + cracks + shelves - 2f * sink;
         }
 
-        // ── West: river valley -- ridge +12 / valley -5 / ridge +10 (§9.2) ───
+        // ── West: river valley — deeper cut, higher flanking ridges ──────────
         private static float WestHeight(float x, float z)
         {
             float d = Mathf.Max(0f, -x - VillageHalfX);
             float t = Mathf.Clamp01(d / (TerrainSizeXZ * 0.5f - VillageHalfX));
-            // The river runs roughly north-south at a meandering X line.
-            float riverX = -VillageHalfX - 48f + Mathf.Sin(z * 0.02f) * 14f;
+            float riverX = -VillageHalfX - 48f + Mathf.Sin(z * 0.02f) * 18f;
             float distToRiver = Mathf.Abs(x - riverX);
-            // Valley carve: a smooth U-channel ~26u wide cut down to ~-5u.
-            float valley = -5f * Mathf.Clamp01(1f - distToRiver / 26f);
-            // Ridges flanking the valley.
-            float ridgeNear = 12f * Mathf.Clamp01(1f - Mathf.Abs(distToRiver - 40f) / 30f);
-            float ridgeFar = 10f * Mathf.Clamp01(1f - Mathf.Abs(distToRiver - 86f) / 34f);
-            float relief = PerlinFbm(x * 0.02f + 51f, z * 0.02f + 61f, 3) * 4f;
+            float valley = -7.5f * Mathf.Clamp01(1f - distToRiver / 30f);       // was -5 / 26
+            float ridgeNear = 15f * Mathf.Clamp01(1f - Mathf.Abs(distToRiver - 42f) / 28f);
+            float ridgeFar = 12f * Mathf.Clamp01(1f - Mathf.Abs(distToRiver - 90f) / 36f);
+            float relief = PerlinFbm(x * 0.02f + 51f, z * 0.02f + 61f, 3) * 5.5f;
             return (valley + Mathf.Max(ridgeNear, ridgeFar) + relief) * t;
         }
 
@@ -1243,38 +1296,83 @@ namespace DeNelle.Editor
         /// </summary>
         private static void PlacePonds(Transform parent)
         {
-            // Owner direction 2026-05-20 ("leftover from heart pond" — blue
-            // discs read as a puddle around the cathedral spire). All
-            // wilderness ponds disabled until we re-balance placements.
-            return;
-            #pragma warning disable CS0162
+            // Re-enabled 2026-08-07 with hard exclusion near the castle (old bug:
+            // blue discs read as a leftover "heart pond" under the spire). Only seat
+            // ponds outside the clear/moat ring, off the cave road, in real low spots.
             var pondRoot = new GameObject("Ponds");
             pondRoot.transform.SetParent(parent, false);
 
-            var spots = new[]
-            {
-                V(72, 96),    V(-58, 84),
-                V(118, -36),  V(146, 58),
-                V(-44, -132), V(-150, -40),
-            };
+            // Seeded candidates across wilderness rings — then keep the lowest.
+            const int candidates = 48;
+            const int keep = 10;
+            const float minCastleDist = 110f;   // never near moat/spire
+            var scored = new System.Collections.Generic.List<(float x, float z, float y, float score)>(candidates);
 
-            foreach (var s in spots)
+            for (int i = 0; i < candidates; i++)
             {
-                float y = WorldHeightAt(s.x, s.y);
+                // Annulus 120..420 from origin (play wilderness, not horizon only).
+                float ang = (float)_rng.NextDouble() * Mathf.PI * 2f;
+                float dist = 120f + (float)_rng.NextDouble() * 300f;
+                float px = Mathf.Cos(ang) * dist;
+                float pz = Mathf.Sin(ang) * dist;
+
+                if (Mathf.Sqrt(px * px + pz * pz) < minCastleDist) continue;
+                // Keep the south cave road corridor dry.
+                if (Mathf.Abs(px) < CavePathFlattenHalf + 8f && pz < CavePathStartZ && pz > CavePathEndZ)
+                    continue;
+                // Avoid portal seats (starter east, sunken NW, cottage south).
+                if (Vector2.Distance(new Vector2(px, pz), new Vector2(140f, 20f)) < 28f) continue;
+                if (Vector2.Distance(new Vector2(px, pz), new Vector2(-100f, 100f)) < 28f) continue;
+                if (Vector2.Distance(new Vector2(px, pz), new Vector2(20f, -140f)) < 28f) continue;
+
+                float y = WorldHeightAt(px, pz);
+                // Prefer natural hollows (lower than neighbourhood).
+                float yN = WorldHeightAt(px, pz + 12f);
+                float yS = WorldHeightAt(px, pz - 12f);
+                float yE = WorldHeightAt(px + 12f, pz);
+                float yW = WorldHeightAt(px - 12f, pz);
+                float neigh = 0.25f * (yN + yS + yE + yW);
+                float score = neigh - y; // positive = local low
+                if (score < 0.35f) continue; // not a real hollow
+                scored.Add((px, pz, y, score));
+            }
+
+            scored.Sort((a, b) => b.score.CompareTo(a.score));
+            int placed = 0;
+            for (int i = 0; i < scored.Count && placed < keep; i++)
+            {
+                var s = scored[i];
+                // Min spacing against already placed ponds.
+                bool near = false;
+                for (int c = 0; c < pondRoot.transform.childCount; c++)
+                {
+                    var other = pondRoot.transform.GetChild(c).position;
+                    if (Vector2.Distance(new Vector2(s.x, s.z), new Vector2(other.x, other.z)) < 40f)
+                    {
+                        near = true;
+                        break;
+                    }
+                }
+                if (near) continue;
+
                 var pond = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                pond.name = "Pond";
+                pond.name = $"Pond_{placed}";
                 pond.transform.SetParent(pondRoot.transform, false);
-                // Cylinder default height 2u -> scale to a thin disc.
-                float radius = 7f + (float)_rng.NextDouble() * 6f;
-                pond.transform.localScale = new Vector3(radius, 0.12f, radius);
-                // Seat the water surface just below local ground.
-                pond.transform.position = new Vector3(s.x, y - 0.35f, s.y);
+                float radius = 6f + (float)_rng.NextDouble() * 7f;
+                pond.transform.localScale = new Vector3(radius, 0.1f, radius);
+                // Water surface just under the local hollow floor.
+                pond.transform.position = new Vector3(s.x, s.y - 0.45f, s.z);
                 var col = pond.GetComponent<Collider>();
                 if (col != null) UnityEngine.Object.DestroyImmediate(col);
-                ApplyWater(pond, new Color(0.28f, 0.46f, 0.58f, 0.78f));
+                // Quiet teal — not bright "heart pond" blue.
+                ApplyWater(pond, new Color(0.18f, 0.38f, 0.42f, 0.82f));
+                placed++;
                 _pondCount++;
             }
-            #pragma warning restore CS0162
+
+            FlowTrace.Step("Exterior",
+                $"PlacePonds: kept {placed}/{keep} from {scored.Count} hollow candidates " +
+                $"(castle exclusion r>{minCastleDist})");
         }
 
         // =====================================================================
