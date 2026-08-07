@@ -160,6 +160,53 @@ invites a scale mistake.) An authored wedge mesh is also fine if it ships a conv
 4. **Cut the hole.** The ramp has to pass through the lower room's **ceiling** and the upper room's **floor
    slab**. Both are currently solid. A ramp that ends at a ceiling is a ramp into a wall.
 
+### ★ 2b-bis. THE SEATING ALGORITHM — owner's rule, and it removes the guessing entirely ★
+
+> **Owner, 2026-08-07:** *"when visualizing stairs the width does not change — tells you one position. The
+> lowest vertical is where you connect from (if going up) and highest is top. That logic allows AI to determine
+> how stairs should seat and not guess."*
+
+**This is the important one. Write the builder to MEASURE a stair asset and derive its seating, rather than
+carrying a hardcoded offset per asset.** The same discipline that fixed the torches today: their glTF `POSITION`
+bounds told us `torch_mounted` was a wall bracket and the other two were floor-standing, which no amount of
+reading filenames would have.
+
+A staircase has exactly one invariant and two anchors, and all three are readable from the mesh:
+
+| Property | How you find it | What it gives you |
+|---|---|---|
+| **WIDTH axis** | the horizontal axis along which the top surface height **does not change** | the lateral axis — fixes orientation |
+| **RUN axis** | the other horizontal axis: top surface height **climbs monotonically** along it | the travel direction |
+| **BOTTOM anchor** | `bounds.min.y`, at the run-axis end where height is lowest | where it connects to the LOWER floor |
+| **TOP anchor** | `bounds.max.y`, at the opposite run-axis end | where it connects to the UPPER floor |
+
+**The test is computable, not visual.** Sample the mesh's upper surface at several points along each horizontal
+axis. Along the **width** axis the sampled height is constant; along the **run** axis it increases. That single
+comparison resolves orientation for *any* stair asset, including ones nobody has imported yet.
+
+**Then seating is arithmetic, with no free parameters:**
+```
+rise            = bounds.size.y
+requiredRise    = DungeonBakerChecks.FloorSeparationY        // 6.0
+seatY           = lowerFloorWalkSurfaceY - bounds.min.y      // bottom nose lands on the lower floor
+yaw             = align RUN axis to the socket's travel direction
+```
+- If `rise == requiredRise` → one flight, seat and done.
+- If `rise < requiredRise` → **tile flights with landings**, do not scale. Scaling a stair distorts tread depth
+  and riser height together, and the moment treads stop matching stride the stairs read as toy-sized or
+  monumental. Tiling preserves the authored proportions.
+- If `rise > requiredRise` → wrong asset for a 6 m floor gap, or `FloorSeparationY` needs a ruling. **Fail loudly
+  and name both numbers** — do not silently squash it.
+
+**Log what was measured, every bake.** `DefaultDungeonRoomsBuilder` already does this for the room kit
+(`KIT MEASURED wall=4.00L x 4.00H …`) and `KayKitChallengeOutpostBuilder` for the outpost. A stair pass must
+print its measured width axis, run axis, rise, and chosen flight count, so a wrong seat is a readable line rather
+than a screenshot argument.
+
+**This also gives the ramp for free.** Once the run axis and both anchors are known, the invisible ramp is the
+segment from the bottom nose to the top nose along the run axis, at the constant width — i.e. the nose line
+(§2b item 1) is *derived*, not authored.
+
 ### 2c. The slope maths
 
 Rise is fixed at **6.0 m** (`FloorSeparationY`). Unity's default agent max slope is **45°**.
