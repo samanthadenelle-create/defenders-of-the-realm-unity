@@ -1,60 +1,475 @@
 /* ---------------------------------------------------------------------------
-   Echoes of Elarion — public one-pager + privacy policy
-   WO-863. Plain static CSS. No framework, no CDN, no webfonts, no remote assets.
-   The page commits to a single dark "lantern in the dark" look (the game's own
-   palette) rather than following the OS light/dark preference — deliberate.
+   Echoes of Elarion — public marketing one-pager
+   Brand: obsidian + gold lantern + life-force teal (Heart glow).
+   Constraints (site/README): no framework, no CDN, no webfonts, no remote images.
+   Atmosphere is pure CSS. Sigils are inline SVG only.
    --------------------------------------------------------------------------- */
 
 :root {
-  --ink:        #0a0908;   /* page base                */
-  --ink-raise:  #14110d;   /* cards / raised surfaces  */
-  --ink-line:   #2a2318;   /* hairlines                */
-  --gold:       #e8b84b;   /* the lantern              */
-  --gold-dim:   #a88a3c;
-  --parch:      #efe6d4;   /* body text                */
-  --parch-dim:  #a89e8d;   /* secondary text           */
-  --alarm:      #ff2d6f;   /* PLACEHOLDER markers only */
-  --measure:    68ch;
+  --ink:         #07060a;
+  --ink-raise:   #12101a;
+  --ink-card:    #16131f;
+  --ink-line:    #2a2438;
+  --ink-line-hi: #3d3450;
+  --gold:        #e8b84b;
+  --gold-soft:   #f0d078;
+  --gold-dim:    #a88a3c;
+  --teal:        #5ee4b0;
+  --teal-dim:    #2a8f6e;
+  --parch:       #efe6d4;
+  --parch-dim:   #9a9080;
+  --measure:     62ch;
+  --radius:      14px;
+  --shadow:      0 24px 60px rgba(0, 0, 0, 0.45);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--ink);
   color: var(--parch);
   font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   font-size: 17px;
   line-height: 1.65;
   overflow-wrap: break-word;
+  position: relative;
+}
+
+/* Atmosphere layers sit behind content */
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.atmosphere__glow {
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 70vh;
+  background:
+    radial-gradient(ellipse 55% 50% at 50% 18%, rgba(94, 228, 176, 0.09), transparent 62%),
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(232, 184, 75, 0.14), transparent 70%);
+}
+.atmosphere__vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 80% at 50% 40%, transparent 30%, rgba(7, 6, 10, 0.55) 100%),
+    linear-gradient(180deg, transparent 0%, var(--ink) 96%);
+}
+.atmosphere__roots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28vh;
+  opacity: 0.35;
+  background:
+    radial-gradient(ellipse 40% 80% at 12% 100%, rgba(168, 138, 60, 0.12), transparent 70%),
+    radial-gradient(ellipse 35% 70% at 88% 100%, rgba(42, 143, 110, 0.08), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 50% 120%, rgba(232, 184, 75, 0.06), transparent 60%);
+}
+
+/* Content above atmosphere */
+.topbar,
+.hero,
+main,
+.site-footer {
+  position: relative;
+  z-index: 1;
 }
 
 img { max-width: 100%; height: auto; display: block; }
 
-a { color: var(--gold); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-a:hover { color: #ffd88a; }
+a {
+  color: var(--gold);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+a:hover { color: var(--gold-soft); }
 
 .wrap {
   width: 100%;
-  max-width: 900px;
+  max-width: 960px;
   margin-inline: auto;
-  padding-inline: 20px;
+  padding-inline: clamp(18px, 4vw, 28px);
 }
 
 /* ---------------------------------------------------------------------------
-   PRE-DEPLOY BANNER + PLACEHOLDER MARKERS
-   These exist so an unfinished page cannot be published by accident.
-   DELETE the .predeploy-banner block from each page, and replace every
-   .placeholder span, before any production deploy. See site/README.md.
+   TOP BAR
+   --------------------------------------------------------------------------- */
+
+.topbar {
+  border-bottom: 1px solid rgba(42, 36, 56, 0.85);
+  background: rgba(7, 6, 10, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.topbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding-block: 10px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.brand:hover { color: var(--gold-soft); }
+.brand__mark { color: var(--gold); flex-shrink: 0; }
+.brand__text {
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.topbar__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.topbar__nav a {
+  color: var(--parch-dim);
+  text-decoration: none;
+}
+.topbar__nav a:hover { color: var(--gold); }
+
+@media (max-width: 520px) {
+  .brand__text { display: none; }
+  .topbar__nav { gap: 6px 10px; font-size: 0.7rem; }
+}
+
+/* ---------------------------------------------------------------------------
+   HERO
+   --------------------------------------------------------------------------- */
+
+.hero {
+  padding: clamp(48px, 10vw, 88px) 0 clamp(56px, 9vw, 96px);
+  text-align: center;
+  border-bottom: 1px solid var(--ink-line);
+}
+
+.hero__inner { max-width: 720px; }
+
+.hero__sigil-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.hero__sigil {
+  width: min(140px, 36vw);
+  height: auto;
+  filter: drop-shadow(0 0 28px rgba(94, 228, 176, 0.18))
+          drop-shadow(0 0 48px rgba(232, 184, 75, 0.12));
+}
+
+.eyebrow {
+  margin: 8px 0 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+}
+
+.hero h1 {
+  margin: 14px 0 0;
+  font-size: clamp(2.35rem, 9.5vw, 4rem);
+  line-height: 1.02;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  font-weight: 600;
+  text-shadow: 0 0 40px rgba(232, 184, 75, 0.18);
+}
+
+.series {
+  margin: 14px 0 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+}
+.series em {
+  font-style: normal;
+  color: var(--parch);
+  letter-spacing: 0.12em;
+}
+
+.tagline {
+  margin: 28px auto 0;
+  max-width: 18ch;
+  font-size: clamp(1.25rem, 4.8vw, 1.65rem);
+  font-style: italic;
+  line-height: 1.25;
+  color: var(--parch);
+  text-shadow: 0 0 24px rgba(94, 228, 176, 0.12);
+}
+
+.hero__sub {
+  margin: 18px auto 0;
+  max-width: 36ch;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--parch-dim);
+}
+
+.hero__actions {
+  margin-top: 36px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+}
+
+.badge {
+  display: inline-block;
+  padding: 11px 20px;
+  border: 1px solid rgba(168, 138, 60, 0.65);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(232, 184, 75, 0.12), rgba(232, 184, 75, 0.04));
+  color: var(--gold);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(232, 184, 75, 0.08);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.btn--ghost {
+  border: 1px solid var(--ink-line-hi);
+  color: var(--parch-dim);
+  background: rgba(22, 19, 31, 0.6);
+}
+.btn--ghost:hover {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  background: rgba(232, 184, 75, 0.06);
+}
+
+/* ---------------------------------------------------------------------------
+   SECTIONS
+   --------------------------------------------------------------------------- */
+
+.section {
+  padding: clamp(48px, 8vw, 72px) 0;
+  border-bottom: 1px solid var(--ink-line);
+}
+
+.section__label {
+  margin: 0 0 10px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--teal-dim);
+  font-weight: 600;
+}
+
+.section__title {
+  margin: 0 0 22px;
+  font-size: clamp(1.55rem, 4.5vw, 2.1rem);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.lede {
+  margin: 0 0 22px;
+  max-width: var(--measure);
+  font-size: clamp(1.12rem, 3.2vw, 1.32rem);
+  line-height: 1.5;
+  color: var(--parch);
+}
+
+.prose p {
+  margin: 0 0 1.1em;
+  max-width: var(--measure);
+  color: var(--parch-dim);
+}
+.prose p:last-child { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------------
+   PILLARS
+   --------------------------------------------------------------------------- */
+
+.pillars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 680px) {
+  .pillars { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+}
+
+.pillar {
+  position: relative;
+  background:
+    linear-gradient(155deg, rgba(232, 184, 75, 0.06), transparent 42%),
+    var(--ink-card);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius);
+  padding: 22px 22px 20px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.pillar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--gold), var(--teal-dim));
+  opacity: 0.75;
+}
+.pillar__num {
+  display: block;
+  margin-bottom: 10px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  color: var(--teal);
+  opacity: 0.85;
+}
+.pillar h3 {
+  margin: 0 0 8px;
+  font-size: 1.08rem;
+  color: var(--gold-soft);
+  font-weight: 600;
+}
+.pillar p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--parch-dim);
+  max-width: none;
+  line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------------------
+   SUPPORT
+   --------------------------------------------------------------------------- */
+
+.section--support { border-bottom: 0; }
+
+.support-card {
+  background:
+    radial-gradient(ellipse 80% 70% at 20% 0%, rgba(94, 228, 176, 0.07), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 90% 30%, rgba(232, 184, 75, 0.08), transparent 50%),
+    var(--ink-card);
+  border: 1px solid var(--ink-line);
+  border-radius: calc(var(--radius) + 4px);
+  padding: clamp(28px, 5vw, 40px);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.support-card .section__title { margin-bottom: 12px; }
+.support-card p {
+  margin: 0 auto;
+  max-width: 40ch;
+  color: var(--parch-dim);
+}
+.support-card__mail {
+  margin-top: 20px !important;
+  font-size: 1.15rem;
+}
+.support-card__mail a {
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(232, 184, 75, 0.35);
+  padding-bottom: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   FOOTER
+   --------------------------------------------------------------------------- */
+
+.site-footer {
+  padding: 36px 0 56px;
+  border-top: 1px solid var(--ink-line);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  color: var(--parch-dim);
+  text-align: center;
+}
+.site-footer__inner { max-width: 640px; }
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  margin-bottom: 16px;
+}
+.site-footer nav a {
+  color: var(--parch-dim);
+  text-decoration: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+.site-footer nav a:hover { color: var(--gold); }
+.site-footer__legal {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.8rem;
+  color: var(--parch-dim);
+  opacity: 0.9;
+}
+
+/* ---------------------------------------------------------------------------
+   PRIVACY DOCUMENT (privacy.html)
    --------------------------------------------------------------------------- */
 
 .predeploy-banner {
   position: sticky;
   top: 0;
   z-index: 99;
-  background: var(--alarm);
+  background: #ff2d6f;
   color: #fff;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 13px;
@@ -67,203 +482,16 @@ a:hover { color: #ffd88a; }
 .predeploy-banner strong { display: block; font-size: 15px; letter-spacing: 0.08em; }
 .predeploy-banner a { color: #fff; }
 
-.placeholder {
-  display: inline-block;
-  background: var(--alarm);
-  color: #fff;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.82em;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 8px;
-  border-radius: 3px;
-  border: 2px dashed #fff;
-  white-space: nowrap;
-}
-.placeholder::before { content: "\26A0 "; }
-
-/* Unfilled {{...}} fields carried over VERBATIM from docs/PRIVACY_POLICY.md.
-   Highlight only — no character is added to or removed from the text. */
 .tofill {
   background: rgba(255, 45, 111, 0.22);
-  border-bottom: 2px solid var(--alarm);
+  border-bottom: 2px solid #ff2d6f;
   color: #ffd7e4;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 0.9em;
   padding: 1px 3px;
 }
 
-/* ---------------------------------------------------------------------------
-   HERO
-   --------------------------------------------------------------------------- */
-
-.hero {
-  padding: 64px 0 48px;
-  text-align: center;
-  border-bottom: 1px solid var(--ink-line);
-  background:
-    radial-gradient(70% 90% at 50% 0%, rgba(232, 184, 75, 0.10), transparent 70%),
-    var(--ink);
-}
-
-.sigil {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 22px;
-}
-
-.hero h1 {
-  margin: 0;
-  font-size: clamp(2.1rem, 9vw, 3.6rem);
-  line-height: 1.05;
-  letter-spacing: 0.01em;
-  color: var(--gold);
-  font-weight: 600;
-}
-
-.series {
-  margin: 10px 0 0;
-  font-size: 0.78rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--parch-dim);
-}
-
-.tagline {
-  margin: 22px auto 0;
-  max-width: 22ch;
-  font-size: clamp(1.05rem, 4.4vw, 1.45rem);
-  font-style: italic;
-  color: var(--parch);
-}
-
-.badge {
-  display: inline-block;
-  margin-top: 30px;
-  padding: 10px 20px;
-  border: 1px solid var(--gold-dim);
-  border-radius: 999px;
-  background: rgba(232, 184, 75, 0.07);
-  color: var(--gold);
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-/* ---------------------------------------------------------------------------
-   SECTIONS
-   --------------------------------------------------------------------------- */
-
-section { padding: 52px 0; border-bottom: 1px solid var(--ink-line); }
-
-h2 {
-  margin: 0 0 20px;
-  font-size: 0.78rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--gold-dim);
-  font-weight: 600;
-}
-
-.lede {
-  margin: 0 0 20px;
-  max-width: var(--measure);
-  font-size: clamp(1.1rem, 4.6vw, 1.3rem);
-  line-height: 1.5;
-}
-
-p { max-width: var(--measure); }
-
-.pillars {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 18px;
-}
-@media (min-width: 640px) {
-  .pillars { grid-template-columns: repeat(2, 1fr); gap: 22px; }
-}
-
-.pillars li {
-  background: var(--ink-raise);
-  border: 1px solid var(--ink-line);
-  border-radius: 10px;
-  padding: 18px 20px;
-}
-.pillars h3 {
-  margin: 0 0 6px;
-  font-size: 1.02rem;
-  color: var(--gold);
-  font-weight: 600;
-}
-.pillars p { margin: 0; font-size: 0.95rem; color: var(--parch-dim); max-width: none; }
-
-/* ---------------------------------------------------------------------------
-   SCREENSHOT SLOTS
-   Sized to the game's landscape capture ratio (2340 x 1080). Empty on purpose —
-   see site/README.md: no approved marketing frame exists yet.
-   --------------------------------------------------------------------------- */
-
-.shots {
-  display: grid;
-  gap: 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-@media (min-width: 760px) {
-  .shots { grid-template-columns: repeat(2, 1fr); }
-  .shots li:first-child { grid-column: 1 / -1; }
-}
-
-.shot {
-  aspect-ratio: 2340 / 1080;
-  border: 2px dashed var(--alarm);
-  border-radius: 10px;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(255, 45, 111, 0.07) 0 12px,
-    transparent 12px 24px
-  );
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  text-align: center;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.06em;
-  color: var(--alarm);
-}
-.shot b { font-size: 0.86rem; letter-spacing: 0.1em; }
-.shot span { color: var(--parch-dim); letter-spacing: 0.02em; max-width: 42ch; }
-
-/* ---------------------------------------------------------------------------
-   SUPPORT + FOOTER
-   --------------------------------------------------------------------------- */
-
-.support p { margin-top: 0; }
-
-footer {
-  padding: 40px 0 64px;
-  font-size: 0.88rem;
-  color: var(--parch-dim);
-  text-align: center;
-}
-footer nav { margin-bottom: 12px; }
-footer nav a { margin: 0 10px; }
-
-/* ---------------------------------------------------------------------------
-   PRIVACY DOCUMENT
-   Long-form reading column. The policy text itself is rendered verbatim from
-   docs/PRIVACY_POLICY.md — no wording is changed here, only presented.
-   --------------------------------------------------------------------------- */
-
-.doc { padding: 40px 0 72px; }
+.doc { padding: 40px 0 72px; position: relative; z-index: 1; }
 .doc .wrap { max-width: 760px; }
 
 .doc h1 {
@@ -281,11 +509,11 @@ footer nav a { margin: 0 10px; }
   color: var(--gold);
   font-weight: 600;
 }
-.doc p, .doc li { max-width: none; }
+.doc p, .doc li { max-width: none; color: var(--parch-dim); }
 .doc ul { padding-left: 22px; }
 .doc li { margin-bottom: 10px; }
 .doc hr { border: 0; border-top: 1px solid var(--ink-line); margin: 36px 0; }
-.doc strong { color: #fff; }
+.doc strong { color: var(--parch); }
 
 .docmeta {
   background: var(--ink-raise);
@@ -295,24 +523,44 @@ footer nav a { margin: 0 10px; }
   margin: 0 0 28px;
   font-size: 0.95rem;
 }
-.docmeta p { margin: 4px 0; }
+.docmeta p { margin: 4px 0; color: var(--parch-dim); }
 
 blockquote.draftnote {
   margin: 0 0 28px;
   padding: 16px 20px;
-  border: 2px dashed var(--alarm);
+  border: 2px dashed #ff2d6f;
   border-radius: 10px;
   background: rgba(255, 45, 111, 0.06);
   font-size: 0.95rem;
 }
-blockquote.draftnote p { margin: 0; }
+blockquote.draftnote p { margin: 0; color: var(--parch-dim); }
 
 .doc em.closing { color: var(--parch-dim); font-size: 0.92rem; }
 
 .backlink {
   display: inline-block;
   margin-bottom: 28px;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 0.8rem;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Screenshot slots (when re-added) */
+.shots {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 760px) {
+  .shots { grid-template-columns: repeat(2, 1fr); }
+  .shots li:first-child { grid-column: 1 / -1; }
+}
+.shots img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--ink-line);
+  box-shadow: var(--shadow);
 }

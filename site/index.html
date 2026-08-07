@@ -4,127 +4,175 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Echoes of Elarion — DeNelle Studios</title>
-<meta name="description" content="Echoes of a Forgotten Civilization. A town-building and defense game from DeNelle Studios. Coming to the Solana dApp Store (Seeker).">
+<meta name="description" content="The Heart of Elarion still stands. Build the last village, wake the Echoes, hold the dark back. Coming to the Solana dApp Store on Seeker.">
+<meta name="theme-color" content="#07060a">
+<meta property="og:title" content="Echoes of Elarion">
+<meta property="og:description" content="A town-builder and defense game. Raise the village around the Heart, wake the Echoes, take the Realm back.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://echoes-of-elarion.vercel.app/">
+<meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 
+<div class="atmosphere" aria-hidden="true">
+  <div class="atmosphere__glow"></div>
+  <div class="atmosphere__vignette"></div>
+  <div class="atmosphere__roots"></div>
+</div>
+
+<header class="topbar">
+  <div class="wrap topbar__inner">
+    <a class="brand" href="/" aria-label="Echoes of Elarion home">
+      <svg class="brand__mark" viewBox="0 0 48 48" width="28" height="28" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55"/>
+        <path d="M24 8v32M24 16l-9 8M24 16l9 8M24 26l-7 8M24 26l7 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="24" cy="14" r="3.2" fill="currentColor"/>
+      </svg>
+      <span class="brand__text">Echoes of Elarion</span>
+    </a>
+    <nav class="topbar__nav" aria-label="Primary">
+      <a href="#about">About</a>
+      <a href="#pillars">Play</a>
+      <a href="#support">Support</a>
+      <a href="/privacy">Privacy</a>
+    </nav>
+  </div>
+</header>
+
 <header class="hero">
-  <div class="wrap">
+  <div class="wrap hero__inner">
 
-    <!-- Local inline SVG sigil. No image files, no remote assets. -->
-    <svg class="sigil" viewBox="0 0 64 64" role="img" aria-label="Heart of Elarion sigil" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="29" fill="none" stroke="#a88a3c" stroke-width="1.5"/>
-      <path d="M32 10 L32 54 M32 22 L20 32 M32 22 L44 32 M32 34 L23 42 M32 34 L41 42"
-            fill="none" stroke="#e8b84b" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="32" cy="18" r="4.5" fill="#e8b84b"/>
-    </svg>
+    <!-- Heart of Elarion — world-tree sigil (inline; no remote assets) -->
+    <div class="hero__sigil-wrap">
+      <svg class="hero__sigil" viewBox="0 0 120 140" role="img" aria-label="Heart of Elarion — the world tree" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="heartGlow" cx="50%" cy="42%" r="55%">
+            <stop offset="0%" stop-color="#7dffc8" stop-opacity="0.55"/>
+            <stop offset="45%" stop-color="#e8b84b" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="#e8b84b" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="trunkGold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f0d078"/>
+            <stop offset="100%" stop-color="#8a6a28"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="60" cy="58" rx="48" ry="52" fill="url(#heartGlow)"/>
+        <!-- canopy -->
+        <path d="M60 18c-18 2-32 16-34 34 8-6 18-8 28-6-4 10-2 20 4 28 10-8 22-10 34-6-4-16-12-30-28-36-2-6-4-12-4-14z"
+              fill="none" stroke="#e8b84b" stroke-width="1.6" opacity="0.9"/>
+        <path d="M42 42c6-10 14-16 22-18 10 4 18 14 22 28-10-4-20-2-28 4-4-6-10-10-16-14z"
+              fill="#e8b84b" opacity="0.12"/>
+        <!-- trunk + roots -->
+        <path d="M56 52c0 18 1 34 2 48M64 52c0 18-1 34-2 48"
+              fill="none" stroke="url(#trunkGold)" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M58 98c-14 8-22 16-26 26M62 98c14 8 22 16 26 26M60 100c0 12 0 18 0 26"
+              fill="none" stroke="#a88a3c" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+        <!-- echo motes -->
+        <circle cx="38" cy="56" r="1.6" fill="#7dffc8" opacity="0.9"/>
+        <circle cx="84" cy="48" r="1.2" fill="#7dffc8" opacity="0.7"/>
+        <circle cx="72" cy="72" r="1.4" fill="#e8b84b" opacity="0.8"/>
+        <circle cx="48" cy="78" r="1" fill="#7dffc8" opacity="0.6"/>
+      </svg>
+    </div>
 
-    <!-- ==================================================================
-         TITLE — canon-strings.json: gameTitle = "Echoes of Elarion",
-         gameSubtitle = "Defenders of the Realm" (the SERIES/franchise label).
-         Package id is com.denellestudios.echoesofelarion. canon-strings.json
-         "_gameSubtitleNote" states the full title verbatim: "Defenders of the
-         Realm: Echoes of Elarion" — rendered below as the store title.
-         ================================================================== -->
+    <p class="eyebrow">DeNelle Studios presents</p>
     <h1>Echoes of Elarion</h1>
-    <p class="series">A chapter of Defenders of the Realm</p>
-    <p class="series">Full title: Defenders of the Realm: Echoes of Elarion</p>
+    <p class="series">A chapter of <em>Defenders of the Realm</em></p>
+    <p class="tagline">The last light of the Heart</p>
+    <p class="hero__sub">
+      Build the village. Hold the line. Wake the Echoes.<br>
+      Take back what the dark has claimed.
+    </p>
 
-    <!-- Canon tagline (canon-strings.json "tagline" / "titleTagline"). -->
-    <p class="tagline">Echoes of a Forgotten Civilization</p>
-
-    <!-- Accurate framing. The game is NOT live on the store. Do not change this
-         to "Available now" / "Download now" until it actually ships. -->
-    <p><span class="badge">Coming to the Solana dApp Store &mdash; Seeker</span></p>
+    <div class="hero__actions">
+      <span class="badge">Coming to the Solana dApp Store — Seeker</span>
+      <a class="btn btn--ghost" href="#about">Enter the story</a>
+    </div>
   </div>
 </header>
 
 <main>
 
-  <!-- ====================================================================
-       DESCRIPTION COPY — DRAFT, pending owner approval (WO-863 §4 item 3).
-       Every claim below is limited to systems that exist in the build.
-       Do not add features, ratings, reviews, or availability claims.
-       ==================================================================== -->
-  <section class="wrap" id="about">
-    <h2>About</h2>
+  <section class="wrap section" id="about">
+    <div class="section__label">About</div>
+    <h2 class="section__title">The Heart still stands</h2>
     <p class="lede">
       The Heart of Elarion still stands, and it still remembers. Raise the last village
       around it, wake the Echoes sleeping in its roots, and hold the dark back one night
       at a time.
     </p>
-    <p>
-      Echoes of Elarion is a town-builder and defense game. You lay out your own village
-      around the Heart &mdash; the world tree at its centre &mdash; place and upgrade its
-      buildings, walls and towers, keep the builder, training and research queues turning,
-      and defend it when the waves come. Between defenses you range out across the Realm
-      Map to raid what the dark has taken.
-    </p>
-    <p>
-      The Echoes are the awakened essences of the people the Heart once guarded. Each
-      returns with a calling of its own, and you decide what each one tends &mdash; match
-      an Echo to its calling and it gives back double.
-    </p>
+    <div class="prose">
+      <p>
+        Echoes of Elarion is a town-builder and defense game. You lay out your own village
+        around the Heart — the world tree at its centre — place and upgrade its
+        buildings, walls and towers, keep the builder, training and research queues turning,
+        and defend it when the waves come. Between defenses you range out across the Realm
+        Map to raid what the dark has taken.
+      </p>
+      <p>
+        The Echoes are the awakened essences of the people the Heart once guarded. Each
+        returns with a calling of its own, and you decide what each one tends — match
+        an Echo to its calling and it gives back double.
+      </p>
+    </div>
   </section>
 
-  <section class="wrap" id="pillars">
-    <h2>What you do</h2>
+  <section class="wrap section" id="pillars">
+    <div class="section__label">What you do</div>
+    <h2 class="section__title">Four pillars of the night</h2>
     <ul class="pillars">
-      <li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">I</span>
         <h3>Build the village you want</h3>
         <p>Place every building yourself, move it later, and grow the layout around the Heart as your stockpiles allow.</p>
       </li>
-      <li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">II</span>
         <h3>Hold the line</h3>
         <p>Walls, gates and towers you position and upgrade, tested by waves that come for the Heart.</p>
       </li>
-      <li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">III</span>
         <h3>Wake the Echoes</h3>
         <p>Six essences the Heart kept. Each has a calling; you choose what each one gathers.</p>
       </li>
-      <li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">IV</span>
         <h3>Take the Realm back</h3>
         <p>Ride out from the village to raid the places the dark has claimed, then bring it home.</p>
       </li>
     </ul>
   </section>
 
-  <!-- ====================================================================
-       SCREENSHOTS — the section is REMOVED, not left as empty slots.
-       Reviewed the full headless capture set (Builds/ui-capture/, Builds/UICaps/)
-       on 2026-08-04: every frame carried debug overlays, clipped text, empty
-       states or unauthored placeholder data ("Upgrade cost not authored for this
-       tower", a leaked internal content id, a debug button, an exploded mesh).
-       None is fit for a page a store reviewer visits.
+  <!-- Screenshots: intentionally omitted until approved marketing frames exist.
+       See site/README.md. Re-add #screens with local /assets/*.png when ready. -->
 
-       An honest page with no screenshot section reads as minimal. A page with
-       three "SLOT — EMPTY" placeholders reads as unfinished, which is worse in
-       front of a reviewer. So the section is gone until real frames exist.
-
-       TO RESTORE: copy approved PNGs into site/assets/ and re-add a
-       <section class="wrap" id="screens"> with
-       <li><img src="/assets/<name>.png" width="2340" height="1080" alt="..."
-       loading="lazy"></li> per shot. Local files only — never hotlink.
-       ==================================================================== -->
-
-  <!-- ====================================================================
-       SUPPORT — the owner's personal address must NEVER appear here or
-       anywhere else in this site. Only a studio/support inbox she designates.
-       ==================================================================== -->
-  <section class="wrap support" id="support">
-    <h2>Support</h2>
-    <p>Questions, bug reports or data requests:</p>
-    <p><a href="mailto:support.EoA@icloud.com">support.EoA@icloud.com</a></p>
+  <section class="wrap section section--support" id="support">
+    <div class="support-card">
+      <div class="section__label">Support</div>
+      <h2 class="section__title">We are listening</h2>
+      <p>Questions, bug reports, or data requests — write the studio.</p>
+      <p class="support-card__mail">
+        <a href="mailto:support.EoA@icloud.com">support.EoA@icloud.com</a>
+      </p>
+    </div>
   </section>
 
 </main>
 
-<footer class="wrap">
-  <nav>
-    <a href="/privacy">Privacy Policy</a>
-  </nav>
-  <p>&copy; 2026 DeNelle Studios. All rights reserved.</p>
+<footer class="site-footer">
+  <div class="wrap site-footer__inner">
+    <nav aria-label="Footer">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="#about">About</a>
+      <a href="mailto:support.EoA@icloud.com">Support</a>
+    </nav>
+    <p class="site-footer__legal">
+      Defenders of the Realm: Echoes of Elarion<br>
+      &copy; 2026 DeNelle Studios. All rights reserved.
+    </p>
+  </div>
 </footer>
 
 </body>

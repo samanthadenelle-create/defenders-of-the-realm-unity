@@ -14,7 +14,7 @@
     "economy": "In-game currency top-ups (§5.2). GameState applies crystals/food/coins; glimmer is carried for catalogue completeness (not yet applied at runtime per the audit).",
     "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable)."
   },
-  "version": 2,
+  "version": 4,
   "currencyDisclaimer": "Token price moves with the market.",
   "packs": [
     {
@@ -23,12 +23,28 @@
       "name": "Hearth Spark",
       "tagline": "A tiny welcome — the Heart kindles a spark for a new tender.",
       "theme": "Tiny welcome — beginner cosmetic + small economy bump.",
-      "pricing": { "usd": 1.99, "usdc": 1.99, "sol": 0.018, "skr": 25 },
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
       "contents": {
-        "cosmetics": ["cosmetic.hearth-spark.exclusive"],
-        "economy": { "glimmer": 25, "crystals": 200, "food": 50, "coins": 100 },
+        "cosmetics": [
+          "cosmetic.hearth-spark.exclusive"
+        ],
+        "economy": {
+          "glimmer": 25,
+          "crystals": 200,
+          "food": 50,
+          "coins": 100
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 1, "description": "Skip the build animation for one building." }
+          {
+            "kind": "instant-build",
+            "count": 1,
+            "description": "Skip the build animation for one building."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.hearth-spark.exclusive"
@@ -39,13 +55,34 @@
       "name": "Lanternlight",
       "tagline": "Light carried forward — the value tier most tenders choose.",
       "theme": "The \"value\" tier — what most players who buy something will buy.",
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "contents": {
-        "cosmetics": ["cosmetic.lanternlight.hero-outfit", "cosmetic.lanternlight.exclusive"],
-        "economy": { "glimmer": 75, "crystals": 700, "food": 200, "coins": 400 },
+        "cosmetics": [
+          "cosmetic.lanternlight.hero-outfit",
+          "cosmetic.lanternlight.exclusive"
+        ],
+        "economy": {
+          "glimmer": 75,
+          "crystals": 700,
+          "food": 200,
+          "coins": 400
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." },
-          { "kind": "harvest-auto-collect", "count": 1, "description": "Resources auto-tick into inventory for 1 hour." }
+          {
+            "kind": "instant-build",
+            "count": 3,
+            "description": "Skip the build animation for three buildings."
+          },
+          {
+            "kind": "harvest-auto-collect",
+            "count": 1,
+            "description": "Resources auto-tick into inventory for 1 hour."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.lanternlight.exclusive"
@@ -56,14 +93,40 @@
       "name": "Folk's Thanks",
       "tagline": "The Folk send a small thanks for tending the Heart.",
       "theme": "The supporter-edition slot — themed cosmetic set + named seasonal recognition.",
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.folks-thanks.hero-outfit", "cosmetic.folks-thanks.pet-skin", "cosmetic.folks-thanks.exclusive"],
-        "economy": { "glimmer": 175, "crystals": 1800, "food": 500, "coins": 1000 },
+        "cosmetics": [
+          "cosmetic.folks-thanks.hero-outfit",
+          "cosmetic.folks-thanks.pet-skin",
+          "cosmetic.folks-thanks.exclusive"
+        ],
+        "economy": {
+          "glimmer": 175,
+          "crystals": 1800,
+          "food": 500,
+          "coins": 1000
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 5, "description": "Skip the build animation for five buildings." },
-          { "kind": "instant-repair", "count": 5, "description": "Skip the repair queue for five buildings." },
-          { "kind": "harvest-auto-collect", "count": 1, "description": "Resources auto-tick into inventory for 24 hours." }
+          {
+            "kind": "instant-build",
+            "count": 5,
+            "description": "Skip the build animation for five buildings."
+          },
+          {
+            "kind": "instant-repair",
+            "count": 5,
+            "description": "Skip the repair queue for five buildings."
+          },
+          {
+            "kind": "harvest-auto-collect",
+            "count": 1,
+            "description": "Resources auto-tick into inventory for 24 hours."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.folks-thanks.exclusive"
@@ -74,15 +137,46 @@
       "name": "Patron of Elarion",
       "tagline": "A patron's gift to Elarion — a meaningful headstart for the Heart.",
       "theme": "Heavyweight cosmetic suite + meaningful economy headstart.",
-      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "pricing": {
+        "usd": 19.99,
+        "usdc": 19.99,
+        "sol": 0.18,
+        "skr": 240
+      },
       "contents": {
-        "cosmetics": ["cosmetic.patron-of-elarion.hero-outfit-a", "cosmetic.patron-of-elarion.hero-outfit-b", "cosmetic.patron-of-elarion.pet-skin", "cosmetic.patron-of-elarion.exclusive"],
-        "economy": { "glimmer": 400, "crystals": 5000, "food": 1500, "coins": 3000 },
+        "cosmetics": [
+          "cosmetic.patron-of-elarion.hero-outfit-a",
+          "cosmetic.patron-of-elarion.hero-outfit-b",
+          "cosmetic.patron-of-elarion.pet-skin",
+          "cosmetic.patron-of-elarion.exclusive"
+        ],
+        "economy": {
+          "glimmer": 400,
+          "crystals": 5000,
+          "food": 1500,
+          "coins": 3000
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 10, "description": "Skip the build animation for ten buildings." },
-          { "kind": "instant-repair", "count": 10, "description": "Skip the repair queue for ten buildings." },
-          { "kind": "harvest-auto-collect", "count": 2, "description": "Resources auto-tick into inventory for 24 hours, twice." },
-          { "kind": "xp-weekend", "count": 1, "description": "A 24-hour 2x-XP buff." }
+          {
+            "kind": "instant-build",
+            "count": 10,
+            "description": "Skip the build animation for ten buildings."
+          },
+          {
+            "kind": "instant-repair",
+            "count": 10,
+            "description": "Skip the repair queue for ten buildings."
+          },
+          {
+            "kind": "harvest-auto-collect",
+            "count": 2,
+            "description": "Resources auto-tick into inventory for 24 hours, twice."
+          },
+          {
+            "kind": "xp-weekend",
+            "count": 1,
+            "description": "A 24-hour 2x-XP buff."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.patron-of-elarion.exclusive"
@@ -94,15 +188,47 @@
       "tagline": "A thank-you to early believers — a vow kept, not a flex.",
       "theme": "One-time only, available v1 launch only — special founder cosmetic + permanent in-village banner.",
       "founderOnly": true,
-      "pricing": { "usd": 49.99, "usdc": 49.99, "sol": 0.45, "skr": 600 },
+      "pricing": {
+        "usd": 49.99,
+        "usdc": 49.99,
+        "sol": 0.45,
+        "skr": 600
+      },
       "contents": {
-        "cosmetics": ["cosmetic.founders-vow.hero-outfit", "cosmetic.founders-vow.pet-skin", "cosmetic.founders-vow.building-palette", "cosmetic.founders-vow.exclusive", "cosmetic.founders-vow.permanent-banner"],
-        "economy": { "glimmer": 1000, "crystals": 15000, "food": 5000, "coins": 10000 },
+        "cosmetics": [
+          "cosmetic.founders-vow.hero-outfit",
+          "cosmetic.founders-vow.pet-skin",
+          "cosmetic.founders-vow.building-palette",
+          "cosmetic.founders-vow.exclusive",
+          "cosmetic.founders-vow.permanent-banner"
+        ],
+        "economy": {
+          "glimmer": 1000,
+          "crystals": 15000,
+          "food": 5000,
+          "coins": 10000
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 25, "description": "Skip the build animation for twenty-five buildings." },
-          { "kind": "instant-repair", "count": 25, "description": "Skip the repair queue for twenty-five buildings." },
-          { "kind": "harvest-auto-collect", "count": 5, "description": "Resources auto-tick into inventory for 24 hours, five times." },
-          { "kind": "xp-weekend", "count": 3, "description": "Three 24-hour 2x-XP weekend buffs." }
+          {
+            "kind": "instant-build",
+            "count": 25,
+            "description": "Skip the build animation for twenty-five buildings."
+          },
+          {
+            "kind": "instant-repair",
+            "count": 25,
+            "description": "Skip the repair queue for twenty-five buildings."
+          },
+          {
+            "kind": "harvest-auto-collect",
+            "count": 5,
+            "description": "Resources auto-tick into inventory for 24 hours, five times."
+          },
+          {
+            "kind": "xp-weekend",
+            "count": 3,
+            "description": "Three 24-hour 2x-XP weekend buffs."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.founders-vow.exclusive"
@@ -114,12 +240,31 @@
       "tagline": "Winter comes to Elarion — armour the Heart in pale frost and rime.",
       "theme": "Seasonal cosmetic-forward bundle (winter): Frostfall Knight regalia + Glacierborn companion + Frozen Hearth palette.",
       "founderOnly": false,
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.frostfall-bundle.hero-outfit", "cosmetic.frostfall-bundle.pet-skin", "cosmetic.frostfall-bundle.building-palette", "cosmetic.frostfall-bundle.exclusive"],
-        "economy": { "glimmer": 150, "crystals": 1200, "food": 400, "coins": 800 },
+        "cosmetics": [
+          "cosmetic.frostfall-bundle.hero-outfit",
+          "cosmetic.frostfall-bundle.pet-skin",
+          "cosmetic.frostfall-bundle.building-palette",
+          "cosmetic.frostfall-bundle.exclusive"
+        ],
+        "economy": {
+          "glimmer": 150,
+          "crystals": 1200,
+          "food": 400,
+          "coins": 800
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." }
+          {
+            "kind": "instant-build",
+            "count": 3,
+            "description": "Skip the build animation for three buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.frostfall-bundle.exclusive"
@@ -131,12 +276,31 @@
       "tagline": "Autumn embers drift through the grove — warm the village in banked-forge gold.",
       "theme": "Seasonal cosmetic-forward bundle (autumn): Embergrove Mage vestments + Emberkin companion + Embergrove palette.",
       "founderOnly": false,
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.embergrove-bundle.hero-outfit", "cosmetic.embergrove-bundle.pet-skin", "cosmetic.embergrove-bundle.building-palette", "cosmetic.embergrove-bundle.exclusive"],
-        "economy": { "glimmer": 150, "crystals": 1200, "food": 400, "coins": 800 },
+        "cosmetics": [
+          "cosmetic.embergrove-bundle.hero-outfit",
+          "cosmetic.embergrove-bundle.pet-skin",
+          "cosmetic.embergrove-bundle.building-palette",
+          "cosmetic.embergrove-bundle.exclusive"
+        ],
+        "economy": {
+          "glimmer": 150,
+          "crystals": 1200,
+          "food": 400,
+          "coins": 800
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." }
+          {
+            "kind": "instant-build",
+            "count": 3,
+            "description": "Skip the build animation for three buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.embergrove-bundle.exclusive"
@@ -148,12 +312,31 @@
       "tagline": "The first thaw greens the realm — raise the Bloomtide banners and welcome the season.",
       "theme": "Seasonal cosmetic bundle (spring), value-priced: Bloomtide Ranger garb + Bloomtide banners + first-thaw palette.",
       "founderOnly": false,
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "contents": {
-        "cosmetics": ["cosmetic.bloomtide-bundle.hero-outfit", "cosmetic.bloomtide-bundle.permanent-banner", "cosmetic.bloomtide-bundle.building-palette", "cosmetic.bloomtide-bundle.exclusive"],
-        "economy": { "glimmer": 75, "crystals": 600, "food": 200, "coins": 400 },
+        "cosmetics": [
+          "cosmetic.bloomtide-bundle.hero-outfit",
+          "cosmetic.bloomtide-bundle.permanent-banner",
+          "cosmetic.bloomtide-bundle.building-palette",
+          "cosmetic.bloomtide-bundle.exclusive"
+        ],
+        "economy": {
+          "glimmer": 75,
+          "crystals": 600,
+          "food": 200,
+          "coins": 400
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 2, "description": "Skip the build animation for two buildings." }
+          {
+            "kind": "instant-build",
+            "count": 2,
+            "description": "Skip the build animation for two buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.bloomtide-bundle.exclusive"
@@ -165,13 +348,33 @@
       "tagline": "A steady hand for a new tender — everything you need to get the Heart growing.",
       "theme": "Onboarding value pack: economy-heavy headstart + early instant-build/repair + one welcome cosmetic. The 'best first buy'.",
       "founderOnly": false,
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "contents": {
-        "cosmetics": ["cosmetic.starters-hand.exclusive"],
-        "economy": { "glimmer": 50, "crystals": 900, "food": 300, "coins": 600 },
+        "cosmetics": [
+          "cosmetic.starters-hand.exclusive"
+        ],
+        "economy": {
+          "glimmer": 50,
+          "crystals": 900,
+          "food": 300,
+          "coins": 600
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." },
-          { "kind": "instant-repair", "count": 2, "description": "Skip the repair queue for two buildings." }
+          {
+            "kind": "instant-build",
+            "count": 3,
+            "description": "Skip the build animation for three buildings."
+          },
+          {
+            "kind": "instant-repair",
+            "count": 2,
+            "description": "Skip the repair queue for two buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.starters-hand.exclusive"
@@ -183,13 +386,34 @@
       "tagline": "Patron of the echoes — set the harvest loop humming and let the workforce roll.",
       "theme": "Harvest-loop economy headstart: heavy resources + harvest-auto-collect tokens + workshop palette. Built around the echo workforce.",
       "founderOnly": false,
-      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "pricing": {
+        "usd": 19.99,
+        "usdc": 19.99,
+        "sol": 0.18,
+        "skr": 240
+      },
       "contents": {
-        "cosmetics": ["cosmetic.echo-patron-pack.building-palette", "cosmetic.echo-patron-pack.exclusive"],
-        "economy": { "glimmer": 300, "crystals": 4000, "food": 2000, "coins": 2500 },
+        "cosmetics": [
+          "cosmetic.echo-patron-pack.building-palette",
+          "cosmetic.echo-patron-pack.exclusive"
+        ],
+        "economy": {
+          "glimmer": 300,
+          "crystals": 4000,
+          "food": 2000,
+          "coins": 2500
+        },
         "convenience": [
-          { "kind": "harvest-auto-collect", "count": 3, "description": "Resources auto-tick into inventory for 24 hours, three times." },
-          { "kind": "instant-build", "count": 5, "description": "Skip the build animation for five buildings." }
+          {
+            "kind": "harvest-auto-collect",
+            "count": 3,
+            "description": "Resources auto-tick into inventory for 24 hours, three times."
+          },
+          {
+            "kind": "instant-build",
+            "count": 5,
+            "description": "Skip the build animation for five buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.echo-patron-pack.exclusive"
@@ -201,12 +425,31 @@
       "tagline": "A full wardrobe for the Knight — four ways to wear the watch over Elarion.",
       "theme": "Cosmetic-forward Knight wardrobe set (ties into Wardrobe/Dressable): four swappable outfit pieces, light economy.",
       "founderOnly": false,
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.hero-wardrobe-pack.hero-outfit-a", "cosmetic.hero-wardrobe-pack.hero-outfit-b", "cosmetic.hero-wardrobe-pack.hero-outfit-c", "cosmetic.hero-wardrobe-pack.exclusive"],
-        "economy": { "glimmer": 200, "crystals": 800, "food": 200, "coins": 500 },
+        "cosmetics": [
+          "cosmetic.hero-wardrobe-pack.hero-outfit-a",
+          "cosmetic.hero-wardrobe-pack.hero-outfit-b",
+          "cosmetic.hero-wardrobe-pack.hero-outfit-c",
+          "cosmetic.hero-wardrobe-pack.exclusive"
+        ],
+        "economy": {
+          "glimmer": 200,
+          "crystals": 800,
+          "food": 200,
+          "coins": 500
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 1, "description": "Skip the build animation for one building." }
+          {
+            "kind": "instant-build",
+            "count": 1,
+            "description": "Skip the build animation for one building."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.hero-wardrobe-pack.exclusive"
@@ -218,12 +461,31 @@
       "tagline": "Bear the colours of the realm — flair for blade and shield, no edge but the eye's.",
       "theme": "Visual weapon/shield flair (cosmetic only, zero combat power per the covenant) + a defender's banner.",
       "founderOnly": false,
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.realm-defender-bundle.weapon-flair", "cosmetic.realm-defender-bundle.shield-flair", "cosmetic.realm-defender-bundle.permanent-banner", "cosmetic.realm-defender-bundle.exclusive"],
-        "economy": { "glimmer": 150, "crystals": 1000, "food": 300, "coins": 700 },
+        "cosmetics": [
+          "cosmetic.realm-defender-bundle.weapon-flair",
+          "cosmetic.realm-defender-bundle.shield-flair",
+          "cosmetic.realm-defender-bundle.permanent-banner",
+          "cosmetic.realm-defender-bundle.exclusive"
+        ],
+        "economy": {
+          "glimmer": 150,
+          "crystals": 1000,
+          "food": 300,
+          "coins": 700
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 2, "description": "Skip the build animation for two buildings." }
+          {
+            "kind": "instant-build",
+            "count": 2,
+            "description": "Skip the build animation for two buildings."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.realm-defender-bundle.exclusive"
@@ -235,14 +497,39 @@
       "tagline": "For the tender who builds without pause — skip the queue, raise the realm.",
       "theme": "Convenience-forward (needs the token tray): large instant-build/repair stacks + xp-weekends + a master-builder palette.",
       "founderOnly": false,
-      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "pricing": {
+        "usd": 19.99,
+        "usdc": 19.99,
+        "sol": 0.18,
+        "skr": 240
+      },
       "contents": {
-        "cosmetics": ["cosmetic.builders-cache.building-palette", "cosmetic.builders-cache.exclusive"],
-        "economy": { "glimmer": 250, "crystals": 3500, "food": 1000, "coins": 2000 },
+        "cosmetics": [
+          "cosmetic.builders-cache.building-palette",
+          "cosmetic.builders-cache.exclusive"
+        ],
+        "economy": {
+          "glimmer": 250,
+          "crystals": 3500,
+          "food": 1000,
+          "coins": 2000
+        },
         "convenience": [
-          { "kind": "instant-build", "count": 15, "description": "Skip the build animation for fifteen buildings." },
-          { "kind": "instant-repair", "count": 15, "description": "Skip the repair queue for fifteen buildings." },
-          { "kind": "xp-weekend", "count": 2, "description": "Two 24-hour 2x-XP weekend buffs." }
+          {
+            "kind": "instant-build",
+            "count": 15,
+            "description": "Skip the build animation for fifteen buildings."
+          },
+          {
+            "kind": "instant-repair",
+            "count": 15,
+            "description": "Skip the repair queue for fifteen buildings."
+          },
+          {
+            "kind": "xp-weekend",
+            "count": 2,
+            "description": "Two 24-hour 2x-XP weekend buffs."
+          }
         ]
       },
       "packExclusiveCosmetic": "cosmetic.builders-cache.exclusive"

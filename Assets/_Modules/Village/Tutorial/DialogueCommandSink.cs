@@ -165,6 +165,8 @@ namespace DeNelle.Village
 
                 // ── Barracks troop training (WO-453) → TroopDialogueCommands ───────
                 case "ShowTrainingUI": TroopDialogueCommands.ShowTrainingUI(); break;
+                // WO-897: the Armies surface - compose an army once, muster the whole build-out.
+                case "ShowMusterUI":   TroopDialogueCommands.ShowMusterUI(); break;
                 case "StartTraining":  if (!string.IsNullOrEmpty(a0)) TroopDialogueCommands.StartTraining(a0, ParseInt(a1)); break;
 
                 // ── Pets → PetDeployer / PetAcquisitionService ────────────────────

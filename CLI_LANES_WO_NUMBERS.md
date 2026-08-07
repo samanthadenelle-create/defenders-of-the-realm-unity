@@ -171,7 +171,11 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **912** (782–859 + 900–**911** consumed; 860–899 was the UI seat's old block) |
-> | **1000–1099 reserved** | UI seat | **1001** (1000 consumed) |
+> | **1000–1099 reserved** | UI seat | **1002** (1000–1001 consumed) |
+>
+> *(UI-seat bumped 1001 → 1002 with the WO-1001 mint — Deep Dungeon Program: extend Pipeline A (JSON
+> room-graph composer) into a full complex-dungeon engine (deep multi-level stairs, enemy families, boss
+> wiring, loot/chests, oil/darkness risk-reward), then three large themed deep dungeons authored as graphs.)*
 >
 > *(UI-seat bumped 1000 → 1001 with the WO-1000 mint — Starter dungeon (KayKit Challenge Outpost) visual
 > overhaul: enclose the top / kill daylight, KayKit textured shell + ceiling, candle-VFX lighting, fog/haze,

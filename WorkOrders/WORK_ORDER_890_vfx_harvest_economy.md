@@ -24,6 +24,14 @@
 - `Assets/_Modules/Village/Harvest/NodeFillIndicator.cs` — host the harvest aura on the node's `collecting` state; stop on `idle`/`depleted`.
 - `Assets/_Modules/Village/Buildings/Progression/CollectorStackView.cs` — add the `Collector_Ready` beacon when `IsFull`/cap reached (decorate the existing tell — the "!" + glint stay).
 
+## ⚠ SUBTLETY RULING (owner felt-test 2026-08-07) — read before wiring
+Owner: *"the VFX is nice but the coloring should be MUCH more subtle — you cannot see what node type it is."*
+The first pass rendered a **huge saturated flame plume** that swallowed the node. **Harvest/node VFX is a SUBTLE ACCENT, never a plume.** Binding tuning rules:
+- **The node + its resource type MUST stay clearly visible** through/around the VFX at all times. If the effect hides the mesh, it's wrong.
+- **Low emission, small scale, low opacity/tint.** The aura sits at/around the node base (≈ node footprint), not a tall column. Cap height ≈ the node's own height, not a screen-filling flame.
+- **Colour is a faint hint, not a floodlight** — a light tint + sparse motes, not a solid glow. (Iron = faint dust + occasional glint, NOT a fire.) Read the resource by the node mesh first; the VFX only *reinforces* it.
+- Reuse the ratified subtle recipes (DustMotes / sparse FireFlies / short Sparks) at **reduced rate + scale + alpha** — do not swap in a big Fire/flame recipe. If a recipe reads too hot, dial rate/startSize/startColor-alpha down before anything else.
+
 ## Acceptance criteria
 **Engineering:**
 - [ ] Each resource aura resolves to its committed Resources prefab; loops start on harvest, `Stop()` on idle/depleted.

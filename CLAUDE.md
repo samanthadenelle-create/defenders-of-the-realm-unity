@@ -182,9 +182,27 @@ Use `CoreServices.Hud` and `CoreServices.Audio` for cross-module calls.
   still exists on disk as a LEGACY file — it is NOT the hub; that ambiguity keeps re-seeding stale docs.
   `Village.unity` + `OuterWorld.unity` are DELETED from the tree.
 - Player-facing renames (canon-strings.json): tagline = **"Echoes of a Forgotten Civilization"**
-  (retired "Hold the last light", 2026-07-24); HUD "Pets" → **"Echoes"**; HUD "Work" → **"Queues"** —
-  and (owner 2026-08-01) the bar Queues BUTTON is RETIRED: the right-column Builders chip
-  (QueueStatus band) is the one Queues entry; calm(town) bar = 6 faces.
+  (retired "Hold the last light", 2026-07-24); HUD "Pets" → **"Echoes"**; HUD "Work" → **"Queues"**.
+- **BOTTOM ACTION BAR — the 08-01 retirement is REVERSED (owner ruling WO-911 Q10+Q13, 2026-08-06).**
+  The 2026-08-01 rule ("the bar Queues BUTTON is RETIRED; the Builders chip is the one Queues entry")
+  **no longer holds as written.** The rule it protected — **exactly ONE Queues entry** — still holds; the
+  entry MOVED. Current canon:
+  - The **`Upgrade` bar face is RE-POINTED** to the unified **Manage/Queues** screen (`PanelId.Manage`,
+    `ManageScreenPanel`). It is **RE-POINTED, NOT ADDED**: `ActionBarButtonId.Upgrade = 6` keeps its
+    value, its widget id (`upgradeButton`) and its `hud-areas.json` row, which is what dissolves the
+    8th-face problem entirely. It is now **always applicable in town**, not context-gated on a focused
+    building.
+  - **Map LEFT the bar** and is a **tab inside Bag**, **feature-flagged OFF** (`FeatureFlags.MapTab`,
+    PlayerPrefs `ff.maptab`) because realm travel is a WO-827 stub and the areas do not connect yet.
+    `ActionBarButtonId.Map` stays **dormant at ordinal 4** — never renumber it, the face arrays are
+    indexed by ordinal.
+  - **calm(town) bar = SIX faces: Build, Talk, Bag, Raids, Quests, Manage.** *(The old "6 faces" line
+    here was stale for a different reason — it was 7 once `upgradeButton` landed. Six is now correct
+    for the new membership.)* `HudActionBarModel.ButtonCount` stays **7** (enum-identity / array bound);
+    the number that went 7 → 6 is `HudActionBarModel.MaxVisibleFaces`, which the View's slot geometry
+    derives from.
+  - The right-column **Builders chip SURVIVES as a STATUS GLANCE ONLY** (count/timer + the inline peek
+    rail). Its old **double-tap door is retired**, so the bar face is the single entry.
 - **Echo harvest affinity is a MATCH BONUS, NEVER a lock** (owner ruling WO-830, 2026-08-02): each of the
   six Echoes carries a unique affinity, but **the player picks each Echo's harvest resource** from a
   picker — matching that Echo's affinity **doubles** the yield. Never gate an Echo to one resource.
@@ -199,7 +217,7 @@ See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (
 - Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only `Resources/PatriciaLight/tower2` kept
 - Home hub: **`Main_Castle_Overworld`** (merged world, one navmesh); **Village2** = raid target; `Village.unity`/`OuterWorld.unity` DELETED
 - Village wave loop: WIRED — **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters). **The WO-783 D1 ruling is CLOSED** (owner, 2026-07-30): both `WaveDataTest` cases were rewritten to assert the batches are EMPTY, so a re-add now FAILS. Any doc calling this "open" is stale.
-- Save schema **v36** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work; Realm Map (WO-826) shipped
+- Save schema **v37** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown; **v37 = WO-911 the per-job PAID BASKET** — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1); a pre-v37 job refunds ZERO and says so); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
 - Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
 - Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs).
   **The markers are now DISTINCT per entry point (2026-08-02)** — `DataRegression.RunAll` emits

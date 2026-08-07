@@ -276,18 +276,64 @@ namespace DeNelle.Village
         // PanelRouter (PanelManager swaps the inventory out, one-modal-at-a-time). The row is
         // rebuilt from the VM's active tab on every Render (RebuildTabsRow), so the VM stays
         // the source of truth for selection.
+        // WO-911 (ruling Q10+Q13, 2026-08-06) adds a SIXTH entry: "Map". The Realm Map left the
+        // bottom action bar (that is half of how the bar went 7 -> 6 faces) and lives here now.
+        // Like "Skills" it is a PSEUDO-tab — not a content category, it just routes out via
+        // PanelRouter — so it needs no InventoryTabKind and no VM change.
+        //
+        // ⚠ FEATURE-FLAGGED OFF (owner 2026-08-06, "we can ff map for now since those dont
+        // connect right?"). RealmMapPanel's own header records travel as a DISABLED STUB until
+        // WO-827: the realm's areas do not connect, so a visible tab would promise a journey the
+        // game cannot take. When the flag is off the tab is ABSENT, never a greyed dead entry —
+        // ElarionUiKit.BuildTabRow divides the width by the tab COUNT, so the remaining five
+        // reflow with no gap. PlayerPrefs "ff.maptab" = 1 turns it back on with no rebuild.
         private void BuildTabs(Transform host)
         {
-            string[] labels = { "Weapons", "Armor", "Trinkets", "Potions", "Skills" };
-            Tab[] tabs = { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables, Tab.Weapons };
+            bool mapTab = DeNelle.Core.FeatureFlags.MapTab;
+
+            var labelList = new System.Collections.Generic.List<string>
+                { "Weapons", "Armor", "Trinkets", "Potions", "Skills" };
+            var tabList = new System.Collections.Generic.List<Tab>
+                { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables, Tab.Weapons };
             const int skillsIndex = 4;
-            ElarionUiKit.BuildTabRow(host, labels,
+            int mapIndex = -1;
+
+            if (mapTab)
+            {
+                mapIndex = labelList.Count;
+                labelList.Add("Map");
+                tabList.Add(Tab.Weapons);       // never selected; the route fires first
+            }
+            else
+            {
+                // §12: the absence must be READABLE in a capture, or the next person hunts a
+                // vanished tab instead of finding the flag that hid it.
+                FlowTrace.Step("UI",
+                    "Bag: Map tab SUPPRESSED by FeatureFlags.MapTab (default OFF — realm travel is a " +
+                    "WO-827 stub). Tab row reflows to " + labelList.Count + " tabs with no gap.");
+            }
+
+            int captureMapIndex = mapIndex;
+            ElarionUiKit.BuildTabRow(host, labelList.ToArray(),
                 idx =>
                 {
                     if (idx == skillsIndex) { OpenSkillTree(); return; }
-                    SelectTab(tabs[idx]);
+                    if (captureMapIndex >= 0 && idx == captureMapIndex) { OpenRealmMap(); return; }
+                    SelectTab(tabList[idx]);
                 },
                 initial: (int)_tab);
+        }
+
+        // The "Map" pseudo-tab (WO-911): open the Realm Map parchment overworld. Routes through
+        // PanelRouter so the inventory needs NO reference to RealmMapPanel; PanelManager swaps this
+        // modal out (one-panel-at-a-time). Never a dead-end tap — an unregistered opener closes the
+        // bag and reports, exactly like the Skills route above.
+        private void OpenRealmMap()
+        {
+            if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.RealmMap))
+                return;
+            Close();
+            FlowTrace.Warn("UI", "Map tab: PanelId.RealmMap has no registered opener — nothing to open.");
         }
 
         // The "Skills" pseudo-tab: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).

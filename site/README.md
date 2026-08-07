@@ -8,8 +8,12 @@ The two stable public URLs the Solana dApp Store Publisher Portal asks for:
 | Privacy policy (required) | `/privacy` | `privacy.html` (served without the extension via `cleanUrls`) |
 
 Plain static HTML + one stylesheet. **No framework, no build step, no CDN, no webfonts, no
-remote images** — everything the page loads is in this directory. The only graphic is an
-inline SVG sigil.
+remote images** — everything the page loads is in this directory. Graphics are **inline SVG**
+only (Heart-of-Elarion tree sigil + brand mark). Atmosphere is pure CSS (gold + teal glow).
+
+**Design (2026-08 redesign):** cinematic “last light of the Heart” marketing page —
+obsidian ink, gold lantern, life-force teal; sticky top nav; hero + four pillars + support
+card. Canon copy unchanged (build-accurate claims only). No fake “Available now” CTAs.
 
 ## ⛔ NOT DEPLOYED. Do not deploy until this checklist is clear.
 
