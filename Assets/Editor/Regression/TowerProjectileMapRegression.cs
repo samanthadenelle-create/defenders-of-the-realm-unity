@@ -206,6 +206,60 @@ namespace DeNelle.Editor
             }
             log.AppendLine($"  (f) {towers.Count} tower row(s) size-banded at fraction={fraction:0.###}");
 
+            // (g) WO-913 — ELEMENT == VISUAL. The Arcane Spire shipped "deals Aether, looks Fire"
+            //     for days: gameplay Element was Aether while BoltVisualElement was Flame, driving
+            //     a fire bolt, a fire detonation, a fire cast and a fire swirl. THIS SUITE WAS
+            //     GREEN THROUGHOUT, because (a)-(f) only ever checked Hovl string keys and never
+            //     read either element field. A gate that reports OK over a violated owner ruling is
+            //     worse than no gate, so (g) reads the fields themselves.
+            //     Owner ruling (WO-870/872): do NOT ship "deals Aether, looks Fire".
+            {
+                // atSrc is already read at the top of this method via ReadOrFail - reuse it rather
+                // than opening the file a second time.
+                string arc = atSrc;
+                if (string.IsNullOrEmpty(arc))
+                {
+                    failures.Add($"{ArcaneTowerRel}: unreadable - (g) element==visual could not be checked");
+                }
+                else
+                {
+                    var mEl = Regex.Match(arc, @"DamageElement\s+Element\s*=\s*DamageElement\.(\w+)");
+                    var mVis = Regex.Match(arc, @"DamageElement\s+BoltVisualElement\s*=\s*DamageElement\.(\w+)");
+
+                    string el = mEl.Success ? mEl.Groups[1].Value : null;
+                    string vis = mVis.Success ? mVis.Groups[1].Value : null;
+
+                    if (el == null)
+                        failures.Add("ArcaneTower.cs: could not find 'DamageElement Element = DamageElement.<X>' - (g) cannot verify the gameplay element");
+                    if (vis == null)
+                        failures.Add("ArcaneTower.cs: could not find 'DamageElement BoltVisualElement = DamageElement.<X>' - (g) cannot verify the visual element");
+
+                    if (el != null && el != "Aether")
+                        failures.Add($"ArcaneTower.Element is '{el}', expected 'Aether' - the Arcane Spire's gameplay element changed; if deliberate, rewrite (g) rather than loosening it");
+
+                    if (el != null && vis != null && el != vis)
+                        failures.Add($"ArcaneTower: Element='{el}' but BoltVisualElement='{vis}' - this is EXACTLY the " +
+                                     "'deals Aether, looks Fire' mismatch the owner forbade (WO-870/872). The visual " +
+                                     "element must equal the gameplay element.");
+
+                    // Fire art must never hang off an Aether tower's hooks. EMPTY is allowed and is
+                    // the honest current state: no Casting_Arcane / Spell_Arcane exists on disk, and
+                    // substituting some other pack effect would be a creative pick, which is the
+                    // owner's call (memory: vfx-map-owner-tags-no-creative-pick).
+                    foreach (string hook in new[] { "BoltCastVfx", "BoltImpactExtraVfx" })
+                    {
+                        var mh = Regex.Match(arc, @"string\s+" + hook + @"\s*=\s*""([^""]*)""");
+                        if (!mh.Success) continue;
+                        string val = mh.Groups[1].Value;
+                        if (val.IndexOf("Fire", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                            failures.Add($"ArcaneTower.{hook} = '{val}' - FIRE art on an Aether tower. Empty is " +
+                                         "allowed (no Aether cast/swirl art exists yet); fire is not.");
+                    }
+
+                    log.AppendLine($"  (g) ArcaneTower Element='{el}' == BoltVisualElement='{vis}'; cast/extra fire hooks forbidden (empty allowed)");
+                }
+            }
+
             if (failures.Count == 0)
             {
                 reason = "TOWER_PROJECTILE_MAP_OK";
