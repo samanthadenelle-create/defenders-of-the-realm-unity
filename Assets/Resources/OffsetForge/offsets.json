@@ -303,7 +303,7 @@
     {
       "id": "Tower_Wooden_Watchtower",
       "rot": {
-        "x": 1.9,
+        "x": 1.8999999761581421,
         "y": 0.0,
         "z": 0.0
       },
@@ -343,7 +343,7 @@
     {
       "id": "Tower_Wooden_Watchtower_L3",
       "rot": {
-        "x": 0.0,
+        "x": -90.0,
         "y": 0.0,
         "z": 0.0
       },

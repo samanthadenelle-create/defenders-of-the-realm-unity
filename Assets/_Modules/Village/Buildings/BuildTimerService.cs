@@ -1343,6 +1343,14 @@ namespace DeNelle.Village
 
         // A card record for one job: player-facing name + the VERB (owner ruling 2026-08-03 —
         // the card is built on the verb; art is the enhancement) + the icon route.
+        /// <summary>
+        /// The presentation-ready card shape for a job (label, verb, icon keys, tier). PUBLIC so
+        /// the Manage screen's rows resolve their icon through the SAME path as the card rail -
+        /// two independent icon lookups would eventually disagree about what a job looks like,
+        /// which is the class of bug the shared QueueRailView already exists to prevent.
+        /// </summary>
+        public static DeNelle.Core.UI.ObsidianQueueGate.QueueEntry EntryFor(BuildJobData job) => MakeEntry(job);
+
         private static DeNelle.Core.UI.ObsidianQueueGate.QueueEntry MakeEntry(BuildJobData job)
         {
             string label = ObsidianQueueHud.FormatJobTarget(job);

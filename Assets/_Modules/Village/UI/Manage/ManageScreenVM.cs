@@ -145,6 +145,20 @@ namespace DeNelle.Village.UI
         /// way a filling bar does. -1 means "do not draw a bar".
         /// </summary>
         public float Progress01 = -1f;
+
+        // ── Row identity icon (owner: "should be a select icon") ──────────────
+        // KEYS, not a Sprite: the VM must not touch UnityEngine.UI/art loading (the MVVM
+        // conformance oracle fails a View/VM that reads game state or resolves assets itself).
+        // The View hands these to QueueIconResolver - the SAME resolver the card rail uses, so
+        // a job can never look like one thing in the rail and another here.
+        /// <summary>RpgUiCatalog role, or empty to resolve art from <see cref="JobId"/>.</summary>
+        public string IconRole;
+        /// <summary>Sprite key within <see cref="IconRole"/>. Ignored when IconRole is empty.</summary>
+        public string IconKey;
+        /// <summary>ASCII uppercase verb (BUILD / UPGRADE / TRAIN / RESEARCH) - the icon's fallback.</summary>
+        public string Verb;
+        /// <summary>Target tier, part of the icon cache key.</summary>
+        public int TargetTier;
     }
 
     /// <summary>One row in the "UPGRADES" browse section — the WO-905 affordability answer.</summary>
@@ -377,6 +391,8 @@ namespace DeNelle.Village.UI
         private QueueRowVM MakeJobRow(BuildTimerService svc, ChannelId channel, BuildJobData job,
                                       bool queued, int pendingIndex, int crystals, bool isChild)
         {
+            // Icon keys come from the SERVICE's card shape - the same one the queue rail uses.
+            var card = BuildTimerService.EntryFor(job);
             int price = svc.InstantFinishPrice(channel, job.StructureId);
             double rem = svc.RemainingSeconds(channel, job.StructureId);
 
@@ -411,6 +427,10 @@ namespace DeNelle.Village.UI
                 CanBumpUp = queued && pendingIndex > 0,
                 RefundText = job.Paid.Describe(),
                 Progress01 = ProgressOf(job, queued, rem),
+                IconRole = card.IconRole,
+                IconKey = card.IconKey,
+                Verb = card.Verb,
+                TargetTier = card.TargetTier,
             };
         }
 
