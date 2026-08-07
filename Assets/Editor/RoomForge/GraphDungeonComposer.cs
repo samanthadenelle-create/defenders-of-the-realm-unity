@@ -83,6 +83,8 @@ namespace DeNelle.Editor.RoomForge
         private const string GraphsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-graphs";
         private const string LayoutsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts";
         private const string StarterGraph = "dg_starter_loop.json";
+        /// <summary>WO-1001 slice 1: the smallest graph that descends a floor (bake evidence).</summary>
+        private const string DescentProbeGraph = "dg_descent_probe.json";
         private const string Sys = "DungeonGraph";
 
         /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
@@ -122,6 +124,19 @@ namespace DeNelle.Editor.RoomForge
         public static void ComposeStarterLoopBatch()
         {
             ComposeAndBake(Path.Combine(GraphsFolder, StarterGraph), populateForPlay: true);
+            EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// WO-1001 slice 1 proof: compose the two-level descent probe. Its only job is to make the
+        /// vertical path bakeable EVIDENCE - grep the summary for rooms on more than one Y level.
+        /// populateForPlay stays FALSE: the stair rooms have no stair geometry and no navmesh link
+        /// yet, so seating a hero would imply a walkable descent that does not exist (slice 1b).
+        /// Batchmode: -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeDescentProbeBatch
+        /// </summary>
+        public static void ComposeDescentProbeBatch()
+        {
+            ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: false);
             EditorApplication.Exit(0);
         }
 

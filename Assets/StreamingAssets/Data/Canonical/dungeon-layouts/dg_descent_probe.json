@@ -1,0 +1,113 @@
+{
+  "dungeonId": "dg_descent_probe",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "entry",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "corr1",
+      "cell": [
+        0,
+        0,
+        6
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 2,
+        "max": 4,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "prefab": "StairDown",
+      "instanceId": "stair_down",
+      "cell": [
+        0,
+        0,
+        12
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null
+    },
+    {
+      "prefab": "StairUp",
+      "instanceId": "stair_up",
+      "cell": [
+        0,
+        -6,
+        12
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null
+    },
+    {
+      "prefab": "RewardVault",
+      "instanceId": "deep_vault",
+      "cell": [
+        0,
+        -6,
+        6
+      ],
+      "yawDeg": 180.0,
+      "archetype": "reward",
+      "encounter": null
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "entry",
+      "fromSocket": "n_door_01",
+      "toInstance": "corr1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "corr1",
+      "fromSocket": "n_door_01",
+      "toInstance": "stair_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "stair_down",
+      "fromSocket": "stair_down_01",
+      "toInstance": "stair_up",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "fromInstance": "stair_up",
+      "fromSocket": "s_door_01",
+      "toInstance": "deep_vault",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}

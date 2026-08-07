@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "graphId": "dg_descent_probe",
+  "entry": "entry",
+  "_comment": "WO-1001 slice 1 PROOF GRAPH. The smallest graph that descends a floor: two rooms on level 0, a StairDown/StairUp vertical mate, two rooms on level -1. Its whole job is to make the vertical path bakeable evidence rather than an argument - before slice 1 this graph could not compose at all (stair sockets scored align=-1, the nudge was planar-only, and a correct stack was reported as an overlap). Keep it minimal: it is a probe, not content. The three authored dungeons live in WO-1001 Phase 2.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "corr1",
+      "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 2,
+        "max": 4,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "stair_down",
+      "prefab": "StairDown"
+    },
+    {
+      "id": "stair_up",
+      "prefab": "StairUp"
+    },
+    {
+      "id": "deep_vault",
+      "prefab": "RewardVault"
+    }
+  ],
+  "edges": [
+    {
+      "from": "entry",
+      "fromSocket": "n_door_01",
+      "to": "corr1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "corr1",
+      "fromSocket": "n_door_01",
+      "to": "stair_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "stair_down",
+      "fromSocket": "stair_down_01",
+      "to": "stair_up",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "from": "stair_up",
+      "fromSocket": "s_door_01",
+      "to": "deep_vault",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}
