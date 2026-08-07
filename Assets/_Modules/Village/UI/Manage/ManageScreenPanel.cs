@@ -111,6 +111,17 @@ namespace DeNelle.Village.UI
             public int PendingIndex;
         }
 
+        /// <summary>WO-898 item 1 — progress bars advanced by the same 1 Hz tick as the timers.</summary>
+        private readonly List<ProgressCell> _progressCells = new List<ProgressCell>(16);
+
+        private struct ProgressCell
+        {
+            public ElarionUiKit.BarHandle Handle;
+            public ChannelId Channel;
+            public string JobId;
+            public bool Queued;
+        }
+
         /// <summary>True while the screen is up (the panel is built on open, destroyed on close).</summary>
         public bool IsOpen => _ui != null;
 
@@ -672,13 +683,42 @@ namespace DeNelle.Village.UI
             // right of x=0.455. The left column is three stacked text lines (name / state / refund)
             // — build 1 put the refund line UNDER the button block at x 0.46-0.98 and the two
             // overprinted on every cancellable row.
-            var name = ElarionUiKit.Label(row, label, 0.66f, 0.99f, ElarionUi.Parchment,
+            // WO-898 item 1 re-band. The three text lines shift UP inside the same row height to
+            // free a strip at the bottom for the progress bar. Re-banding beats growing the row:
+            // the list well is measured and clamps to 0px when the bands no longer fit, which
+            // degrades to "headers and no rows" with only a trace line to explain it.
+            var name = ElarionUiKit.Label(row, label, 0.72f, 1.00f, ElarionUi.Parchment,
                                           (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, x0, 0.44f, bold: true);
             ElarionUiKit.FitSingleLine(name);
-            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.34f, 0.64f,
+            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.44f, 0.70f,
                                            ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
                                            TextAlignmentOptions.Left, x0, 0.44f);
             ElarionUiKit.FitSingleLine(state);
+
+            // The bar itself. Drawn only for a job with a known duration (Progress01 >= 0), and
+            // deliberately NOT for a collapsed stack header, which stands for several jobs at
+            // different points and would have to lie about one number.
+            //
+            // COLOURBLIND LAW: the fill is never the only signal - StateText already carries the
+            // percentage in words ("Building - 2m 10s left (63% done)"), so the row reads correctly
+            // with the bar ignored entirely.
+            if (r.Progress01 >= 0f && !r.IsStackHeader)
+            {
+                var bar = ElarionUiKit.Bar(row, ElarionUiKit.BarKind.Castle,
+                                           new Vector2(x0, 0.02f), new Vector2(0.44f, 0.13f));
+                if (bar?.fill != null)
+                {
+                    bar.fill.fillAmount = Mathf.Clamp01(r.Progress01);
+                    bar.fill.raycastTarget = false;
+                }
+                if (bar?.track != null) _progressCells.Add(new ProgressCell
+                {
+                    Handle = bar,
+                    Channel = r.Channel,
+                    JobId = r.JobId,
+                    Queued = r.Queued,
+                });
+            }
 
             if (r.JobId != null && state != null)
                 _tickCells.Add(new TickCell
@@ -760,8 +800,12 @@ namespace DeNelle.Village.UI
                 ElarionUiKit.ClampMinTouch(cancel);
 
                 // Third line of the TEXT column (never under the buttons — see the two-column note).
+                // Third text line, shifted up with the other two. Bands inside the 132px row:
+                // name 0.72-1.00 (~37px) | state 0.44-0.70 (~34px) | refund 0.16-0.42 (~34px) |
+                // bar 0.02-0.13 (~14px). Every text band keeps >= 34px; only the bar is thin,
+                // which is what a progress strip should be.
                 var refund = ElarionUiKit.Label(row, "Refund: " + ManageScreenVM.Ascii(r.RefundText ?? "nothing"),
-                                                0.02f, 0.32f, ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
+                                                0.16f, 0.42f, ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
                                                 TextAlignmentOptions.Left, x0, 0.44f);
                 ElarionUiKit.FitSingleLine(refund);
             }
@@ -831,9 +875,20 @@ namespace DeNelle.Village.UI
                 var cell = _tickCells[i];
                 if (cell.Text == null) continue;
                 double rem = svc.RemainingSeconds(cell.Channel, cell.JobId);
+                // Ordinal("3rd"), matching the VM's build-time string. The tick used to write a raw
+                // int here, so every row silently lost its ordinal one second after being built.
                 cell.Text.text = cell.Queued
-                    ? "Queued - " + (cell.PendingIndex + 1) + " in line (" + ManageScreenVM.FormatTime(rem) + " of work)"
-                    : "Building - " + ManageScreenVM.FormatTime(rem) + " left";
+                    ? "Queued - " + ManageScreenVM.Ordinal(cell.PendingIndex + 1) + " in line (" + ManageScreenVM.FormatTime(rem) + " of work)"
+                    : "Building - " + ManageScreenVM.FormatTime(rem) + " left" + ManageScreenVM.PercentSuffix(svc, cell.Channel, cell.JobId);
+            }
+
+            // WO-898 item 1: advance the fills on the same tick as the timers.
+            for (int i = 0; i < _progressCells.Count; i++)
+            {
+                var pc = _progressCells[i];
+                if (pc.Handle?.fill == null) continue;
+                if (pc.Queued) continue;   // a queued job is 0% until it starts
+                pc.Handle.fill.fillAmount = ManageScreenVM.ProgressOfLive(svc, pc.Channel, pc.JobId);
             }
             // Unity's null operator, NOT ?. — a rail destroyed by a list rebuild is C#-non-null but
             // Unity-null, and ?. would call Sync() straight into a MissingReferenceException.

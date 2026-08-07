@@ -309,7 +309,13 @@ namespace DeNelle.Core
         // OWNER RULING 2026-08-07 ("remove the flag and dev button ... for better screenshots"):
         // default OFF everywhere, including dev builds. Was defaultOn: IsDevBuild, which put the
         // chip in shot on every editor/dev capture. Opt in with ff.devresourcetool=1.
-        public static bool DevResourceTool => Get("devresourcetool", defaultOn: false);
+        // OWNER RULING 2026-08-07 (second pass, "enable the dev tab and rebuild the exe"): default
+        // ON for DESKTOP ONLY. This does not reverse the screenshot ruling above - that ruling was
+        // about chips appearing in DEVICE captures, and Android/iOS stay OFF, so the Seeker shots
+        // and any store APK are unaffected. Desktop is where she iterates and where F8 already
+        // works from the keyboard, so the DEV chip earns its space there.
+        // Still overridable either way: ff.devresourcetool = 0 hides it, = 1 forces it on device.
+        public static bool DevResourceTool => Get("devresourcetool", defaultOn: IsDesktop);
 
         /// <summary>MOBILE FLAG BUTTON (owner felt-tests on Android and CANNOT press F8 - no keyboard).
         /// Gates the on-screen tap-to-capture chip <see cref="DeNelle.Core.Dev.FlagCaptureButton"/>, the
@@ -734,6 +740,19 @@ namespace DeNelle.Core
         /// STRIPS OFF (defaults to hidden) in a public/store APK. The PlayerPrefs "ff.&lt;name&gt;"
         /// override still wins, so a developer can flip the tool back on on any build.</summary>
         private static bool IsDevBuild => Application.isEditor || Debug.isDebugBuild;
+
+        /// <summary>
+        /// TRUE on the editor and on a DESKTOP standalone player; FALSE on Android/iOS.
+        /// Owner-facing dev tooling defaults ON here and OFF on device, which threads the needle
+        /// between two of her standing asks: fast iteration on the EXE, and clean device
+        /// screenshots with no chips in shot. It also keeps the tooling out of any store APK by
+        /// construction rather than by remembering to flip a flag.
+        /// </summary>
+        private static bool IsDesktop =>
+            Application.isEditor
+            || Application.platform == RuntimePlatform.WindowsPlayer
+            || Application.platform == RuntimePlatform.OSXPlayer
+            || Application.platform == RuntimePlatform.LinuxPlayer;
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

@@ -133,6 +133,18 @@ namespace DeNelle.Village.UI
         public bool CanBumpUp;
         /// <summary>What a cancel would hand back, as ASCII ("400 wood, 200 food" / "nothing").</summary>
         public string RefundText;
+
+        /// <summary>
+        /// WO-898 item 1 — how far along this job is, 0..1 (filled = elapsed). A RUNNING job
+        /// reports real progress from StartMs/DurationMs; a QUEUED job is 0 by definition (it has
+        /// not started, StartMs &lt;= 0) and a collapsed stack header is 0 because it stands for
+        /// several jobs at different points.
+        ///
+        /// This is the half of WO-898 that drives the spend: "Complete now" already worked, but a
+        /// bare countdown does not communicate "the wall is nearly up and the raid is inbound" the
+        /// way a filling bar does. -1 means "do not draw a bar".
+        /// </summary>
+        public float Progress01 = -1f;
     }
 
     /// <summary>One row in the "UPGRADES" browse section — the WO-905 affordability answer.</summary>
@@ -305,6 +317,19 @@ namespace DeNelle.Village.UI
             // publish as ONE header with NO JobId and NO cancel/finish affordance; expanding it
             // reveals the REAL per-job ids (the collapse is a PRESENTATION concern — the engine
             // keys cancel by id, not index, so the underlying jobs were always addressable).
+            // CONTENT TABS CROSS CHANNELS (canon: Defence and Buildings share the ONE Builder rail).
+            // The Troops tab must therefore also show TROOP UPGRADES, which the engine runs on the
+            // RESEARCH channel (BarracksService enqueues them there). Without this, tapping Upgrade
+            // on a Troops row put the job on a tab the player was not looking at and Troops kept
+            // saying "Nothing queued on this line" - it read as a dead button.
+            if (Tab == ManageTab.Troops)
+            {
+                var xActive = svc.ActiveJobsOf(ChannelId.Research);
+                for (int i = 0; i < xActive.Count; i++)
+                    QueueRows.Add(MakeJobRow(svc, ChannelId.Research, xActive[i], queued: false,
+                                             pendingIndex: -1, crystals: crystals, isChild: false));
+            }
+
             var pending = svc.PendingJobsOf(channel);
             int idx = 0;
             while (idx < pending.Count)
@@ -359,9 +384,12 @@ namespace DeNelle.Village.UI
             {
                 Label = ObsidianQueueHud.FormatJobTarget(job),
                 // Colourblind law: the state is a SENTENCE, never a tint.
+                // The percentage is stated IN WORDS beside the bar (colourblind law: the fill is
+                // never the only signal). WO-898's monetization driver is the player SEEING how
+                // close the wall is when a raid is inbound; a bare countdown does not carry that.
                 StateText = queued
                     ? "Queued - " + Ordinal(pendingIndex + 1) + " in line (" + FormatTime(rem) + " of work)"
-                    : "Building - " + FormatTime(rem) + " left",
+                    : "Building - " + FormatTime(rem) + " left" + PercentSuffix(svc, channel, job.StructureId),
                 Channel = channel,
                 JobId = job.StructureId,
                 Queued = queued,
@@ -382,7 +410,24 @@ namespace DeNelle.Village.UI
                 CanCancel = true,
                 CanBumpUp = queued && pendingIndex > 0,
                 RefundText = job.Paid.Describe(),
+                Progress01 = ProgressOf(job, queued, rem),
             };
+        }
+
+        /// <summary>
+        /// WO-898 item 1. Elapsed fraction 0..1 for a RUNNING job; 0 for a queued one (it has not
+        /// started - StartMs &lt;= 0 by the engine's contract, and RemainingSeconds deliberately
+        /// reports the FULL duration for such a job, so deriving progress from `rem` alone would
+        /// wrongly read as 0% forever on a job that is genuinely half done).
+        /// </summary>
+        private static float ProgressOf(BuildJobData job, bool queued, double remainingSec)
+        {
+            if (queued || job.StartMs <= 0d) return 0f;
+            if (job.DurationMs <= 0d) return -1f;   // unknown duration: draw no bar rather than a lie
+
+            double totalSec = job.DurationMs / 1000d;
+            double elapsed = totalSec - remainingSec;
+            return Mathf.Clamp01((float)(elapsed / totalSec));
         }
 
         /// <summary>
@@ -806,7 +851,40 @@ namespace DeNelle.Village.UI
             => !string.IsNullOrEmpty(def.DisplayName) ? Ascii(def.DisplayName) : Ascii(def.Id);
 
         /// <summary>"1st" / "2nd" / "3rd" / "4th" — ASCII ordinal for the line position.</summary>
-        private static string Ordinal(int n)
+        /// <summary>
+        /// WO-898 item 1 — live elapsed fraction for a RUNNING job, by id. The 1 Hz tick uses this
+        /// so a bar advances while the screen is open without rebuilding a single row.
+        /// Returns 0 when the job is not running or its duration is unknown.
+        /// </summary>
+        public static float ProgressOfLive(BuildTimerService svc, ChannelId channel, string jobId)
+        {
+            if (svc == null || string.IsNullOrEmpty(jobId)) return 0f;
+            var active = svc.ActiveJobsOf(channel);
+            for (int i = 0; i < active.Count; i++)
+            {
+                if (!string.Equals(active[i].StructureId, jobId, StringComparison.Ordinal)) continue;
+                var job = active[i];
+                if (job.DurationMs <= 0d || job.StartMs <= 0d) return 0f;
+                double totalSec = job.DurationMs / 1000d;
+                double rem = svc.RemainingSeconds(channel, jobId);
+                return Mathf.Clamp01((float)((totalSec - rem) / totalSec));
+            }
+            return 0f;   // not in the active list => queued or finished; the bar stays empty
+        }
+
+        /// <summary>
+        /// The percentage rendered IN WORDS, e.g. " (63% done)". The colourblind law forbids the
+        /// fill being the only signal, so every bar is paired with this. Empty string when there is
+        /// no meaningful progress to state.
+        /// </summary>
+        public static string PercentSuffix(BuildTimerService svc, ChannelId channel, string jobId)
+        {
+            float p = ProgressOfLive(svc, channel, jobId);
+            if (p <= 0f) return "";
+            return " (" + Mathf.RoundToInt(p * 100f) + "% done)";
+        }
+
+        internal static string Ordinal(int n)
         {
             if (n <= 0) return "next";
             int mod100 = n % 100;
