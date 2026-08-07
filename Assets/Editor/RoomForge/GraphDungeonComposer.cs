@@ -93,6 +93,8 @@ namespace DeNelle.Editor.RoomForge
         private const string StarterGraph = "dg_starter_loop.json";
         /// <summary>WO-1001 slice 1: the smallest graph that descends a floor (bake evidence).</summary>
         private const string DescentProbeGraph = "dg_descent_probe.json";
+        /// <summary>WO-1001 Phase 2A: first themed multi-level dungeon.</summary>
+        private const string SunkenVaultGraph = "dg_sunken_vault.json";
         private const string Sys = "DungeonGraph";
 
         /// <summary>UTF-8 WITHOUT a byte-order mark. Never use <c>Encoding.UTF8</c> to
@@ -145,6 +147,32 @@ namespace DeNelle.Editor.RoomForge
         public static void ComposeDescentProbeBatch()
         {
             ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: true);
+            EditorApplication.Exit(0);
+        }
+
+        [MenuItem("Defenders/Dungeon/Compose Sunken Vault (dg_sunken_vault)")]
+        public static void ComposeSunkenVault()
+        {
+            ComposeAndBake(Path.Combine(GraphsFolder, SunkenVaultGraph), populateForPlay: true);
+        }
+
+        /// <summary>
+        /// Batchmode: -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeSunkenVaultBatch
+        /// </summary>
+        public static void ComposeSunkenVaultBatch()
+        {
+            ComposeAndBake(Path.Combine(GraphsFolder, SunkenVaultGraph), populateForPlay: true);
+            EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// Batchmode: re-bake probe + sunken vault for playtests.
+        /// -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeProbeAndSunkenBatch
+        /// </summary>
+        public static void ComposeProbeAndSunkenBatch()
+        {
+            ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: true);
+            ComposeAndBake(Path.Combine(GraphsFolder, SunkenVaultGraph), populateForPlay: true);
             EditorApplication.Exit(0);
         }
 

@@ -13,7 +13,8 @@
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
-      "encounter": null
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "Straight",
@@ -36,8 +37,12 @@
           "slack": 2.0,
           "returnHome": true,
           "wakeRadius": 6.0
-        }
-      }
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null
+      },
+      "chests": null
     },
     {
       "prefab": "StairDown",
@@ -49,7 +54,8 @@
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
-      "encounter": null
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "StairUp",
@@ -61,7 +67,8 @@
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
-      "encounter": null
+      "encounter": null,
+      "chests": null
     },
     {
       "prefab": "RewardVault",
@@ -73,7 +80,34 @@
       ],
       "yawDeg": 180.0,
       "archetype": "reward",
-      "encounter": null
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 1,
+        "max": 1,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        },
+        "isBoss": true,
+        "enemyType": "hollow-warrior",
+        "displayName": "Hollow Warden (probe)"
+      },
+      "chests": [
+        {
+          "id": "probe-deep-chest",
+          "lootTableId": "dungeon-deepboss",
+          "visual": "chest",
+          "offset": [
+            1.5,
+            0.0,
+            0.0
+          ]
+        }
+      ]
     }
   ],
   "connections": [
@@ -110,5 +144,93 @@
     "pacingCombat": 0.6,
     "pacingLore": 0.2,
     "pacingReward": 0.2
-  }
+  },
+  "oilStones": [
+    {
+      "id": "oil-entry",
+      "roomId": "entry",
+      "offset": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "radius": 2.5
+    },
+    {
+      "id": "oil-deep",
+      "roomId": "deep_vault",
+      "offset": [
+        -1.5,
+        0.0,
+        0.0
+      ],
+      "radius": 2.5
+    }
+  ],
+  "traps": [
+    {
+      "id": "corr1-spikes",
+      "roomId": "corr1",
+      "kind": "spike",
+      "damage": 10.0,
+      "radius": 1.3,
+      "offset": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "id": "probe-key",
+      "keyId": "probe-key",
+      "roomId": "corr1",
+      "offset": [
+        2.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "locks": [
+    {
+      "id": "gate-to-stairs",
+      "keyId": "probe-key",
+      "fromRoomId": "corr1",
+      "toRoomId": "stair_down",
+      "fromOffset": [
+        0.0,
+        0.0,
+        2.0
+      ],
+      "toOffset": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "extracts": [
+    {
+      "id": "extract-entry",
+      "roomId": "entry",
+      "offset": [
+        0.0,
+        0.0,
+        -2.5
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "extract-deep",
+      "roomId": "deep_vault",
+      "offset": [
+        0.0,
+        0.0,
+        2.0
+      ],
+      "label": "Extract (deep)"
+    }
+  ]
 }

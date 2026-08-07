@@ -114,6 +114,10 @@ namespace DeNelle.Village.World
             // DungeonPortal routes by this id; LoadDefs injects a matching def when the scene is
             // in the build. Overworld is origin-centered, so (140,0,20) stays reachable.
             new AuthoredPortal("dg_starter_loop", new Vector3(140f, 0f, 20f), 262f),
+            // WO-1001 Phase 2A: Sunken Vault — NW of the walls (distinct compass pull from
+            // starter east + cottage south). Same ~141m radius class as the east portal.
+            // (x,z) = (-100, 100) ≈ 141m; yaw faces castle (SE).
+            new AuthoredPortal("dg_sunken_vault", new Vector3(-100f, 0f, 100f), 142f),
             // WEST row REMOVED (WO-776, 2026-07-30): Folk's Granary is a contentless stub
             // (no DungeonController, no layout JSON, zero lore, one canned encounter) — a
             // real door into a hollow room, and the owner's felt-test walked straight into
@@ -804,6 +808,14 @@ namespace DeNelle.Village.World
                 && !built.Exists(x => x != null && string.Equals(x.DungeonId, StarterLoop, System.StringComparison.OrdinalIgnoreCase)))
             {
                 built.Add(MakeDef(StarterLoop, StarterLoop, "Starter Loop", new Color(0.62f, 0.72f, 1f)));
+            }
+
+            // WO-1001 Phase 2A: composed multi-level Sunken Vault (same def inject pattern).
+            const string SunkenVault = "dg_sunken_vault";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(SunkenVault)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, SunkenVault, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(SunkenVault, SunkenVault, "Sunken Vault of Elarion", new Color(0.45f, 0.62f, 0.85f)));
             }
 
             if (built.Count > 0) return built;

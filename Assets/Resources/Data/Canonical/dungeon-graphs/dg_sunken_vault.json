@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "graphId": "dg_sunken_vault",
+  "entry": "entry",
+  "_comment": "WO-1001 Phase 2A - The Sunken Vault of Elarion. The drowned treasury of the forgotten civilization, masonry half-swallowed by the deep. FOUR LEVELS descending south: each floor runs south from its stairwell to the next StairDown, so floors never self-overlap on their own level and march clear of each other in XZ. Hollow enemies throughout, thickening with depth (walkers up top, warrior/acolyte weight deeper via the group roll). Boss = the Hollow Warden in the BossKeep at the bottom. Oil stones on levels 0, -1 and -3 so the lantern can be topped up roughly every other floor - the gap on -2 is deliberate tension. Extract pads sit on each stairwell landing so the player can bank and leave. Loot: dungeon-chest in the side vaults, dungeon-miniboss on the Warden.",
+  "nodes": [
+    { "id": "entry", "prefab": "EntryHall" },
+    { "id": "hub0", "prefab": "Intersection" },
+    { "id": "vault0", "prefab": "RewardVault",
+      "chests": [
+        { "id": "sv-vault0-chest", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.2] }
+      ]
+    },
+    { "id": "secret0", "prefab": "SecretAlcove",
+      "chests": [
+        { "id": "sv-secret0-cache", "lootTableId": "chest-rare", "visual": "crate", "offset": [0, 0, 1.0] }
+      ]
+    },
+    { "id": "stair_dn_0", "prefab": "StairDown" },
+
+    { "id": "stair_up_1", "prefab": "StairUp" },
+    { "id": "corr1", "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group", "min": 3, "max": 5,
+        "seatMode": "ring", "formationRadius": 3.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.0 }
+      }
+    },
+    { "id": "combat1", "prefab": "CombatChamber",
+      "encounter": {
+        "kind": "hollow-group", "min": 4, "max": 6,
+        "seatMode": "ring", "formationRadius": 4.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 7.0 }
+      },
+      "chests": [
+        { "id": "sv-combat1-crate", "lootTableId": "crate-common", "visual": "crate", "offset": [2.0, 0, -2.0] }
+      ]
+    },
+    { "id": "stair_dn_1", "prefab": "StairDown" },
+
+    { "id": "stair_up_2", "prefab": "StairUp" },
+    { "id": "tjunc2", "prefab": "TJunction" },
+    { "id": "vault2", "prefab": "RewardVault",
+      "chests": [
+        { "id": "sv-vault2-chest", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.2] }
+      ]
+    },
+    { "id": "corr2", "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group", "min": 4, "max": 6,
+        "seatMode": "ring", "formationRadius": 3.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.5 }
+      }
+    },
+    { "id": "stair_dn_2", "prefab": "StairDown" },
+
+    { "id": "stair_up_3", "prefab": "StairUp" },
+    { "id": "approach3", "prefab": "ChokePoint",
+      "encounter": {
+        "kind": "hollow-group", "min": 4, "max": 7,
+        "seatMode": "ring", "formationRadius": 3.0,
+        "confine": { "mode": "room", "slack": 1.5, "returnHome": true, "wakeRadius": 6.0 }
+      }
+    },
+    { "id": "warden", "prefab": "BossKeep",
+      "encounter": {
+        "kind": "hollow-group", "isBoss": true,
+        "enemyType": "hollow-warrior",
+        "displayName": "The Hollow Warden",
+        "min": 1, "max": 1,
+        "seatMode": "ring", "formationRadius": 2.0,
+        "confine": { "mode": "room", "slack": 3.0, "returnHome": false, "wakeRadius": 9.0 }
+      },
+      "chests": [
+        { "id": "sv-warden-hoard", "lootTableId": "dungeon-deepboss", "visual": "chest", "offset": [0, 0, 2.0] }
+      ]
+    }
+  ],
+  "oilStones": [
+    { "id": "sv-oil-entry", "roomId": "entry", "offset": [1.8, 0, 0], "radius": 2.5 },
+    { "id": "sv-oil-l1", "roomId": "combat1", "offset": [-2.5, 0, 2.0], "radius": 2.5 },
+    { "id": "sv-oil-l3", "roomId": "approach3", "offset": [0, 0, 1.8], "radius": 2.5 }
+  ],
+  "extracts": [
+    { "id": "sv-extract-entry", "roomId": "entry", "offset": [0, 0, -2.5], "label": "Extract" },
+    { "id": "sv-extract-l1", "roomId": "stair_up_1", "offset": [1.6, 0, 0], "label": "Extract" },
+    { "id": "sv-extract-l2", "roomId": "stair_up_2", "offset": [1.6, 0, 0], "label": "Extract" },
+    { "id": "sv-extract-l3", "roomId": "stair_up_3", "offset": [1.6, 0, 0], "label": "Extract" }
+  ],
+  "traps": [
+    { "id": "sv-trap-l1", "roomId": "corr1", "kind": "grate", "damage": 10.0, "radius": 1.4, "offset": [0, 0, 0] },
+    { "id": "sv-trap-l2", "roomId": "corr2", "kind": "spike", "damage": 14.0, "radius": 1.4, "offset": [0, 0, 0] }
+  ],
+  "keys": [
+    { "id": "sv-key-secret", "keyId": "sunken-key", "roomId": "secret0", "offset": [0, 0, 0.5] }
+  ],
+  "locks": [
+    {
+      "id": "sv-gate-descent",
+      "keyId": "sunken-key",
+      "fromRoomId": "hub0",
+      "toRoomId": "stair_dn_0",
+      "fromOffset": [0, 0, 2],
+      "toOffset": [0, 0, 0]
+    }
+  ],
+  "edges": [
+    { "from": "entry", "fromSocket": "n_door_01", "to": "hub0", "toSocket": "s_door_01" },
+    { "from": "hub0", "fromSocket": "w_door_01", "to": "vault0", "toSocket": "s_door_01" },
+    { "from": "hub0", "fromSocket": "e_door_01", "to": "secret0", "toSocket": "s_door_01" },
+    { "from": "hub0", "fromSocket": "n_door_01", "to": "stair_dn_0", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_0", "fromSocket": "stair_down_01", "to": "stair_up_1", "toSocket": "stair_up_01" },
+    { "from": "stair_up_1", "fromSocket": "s_door_01", "to": "corr1", "toSocket": "n_door_01" },
+    { "from": "corr1", "fromSocket": "s_door_01", "to": "combat1", "toSocket": "n_door_01" },
+    { "from": "combat1", "fromSocket": "s_door_01", "to": "stair_dn_1", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_1", "fromSocket": "stair_down_01", "to": "stair_up_2", "toSocket": "stair_up_01" },
+    { "from": "stair_up_2", "fromSocket": "s_door_01", "to": "tjunc2", "toSocket": "s_door_01" },
+    { "from": "tjunc2", "fromSocket": "w_door_01", "to": "vault2", "toSocket": "s_door_01" },
+    { "from": "tjunc2", "fromSocket": "e_door_01", "to": "corr2", "toSocket": "n_door_01" },
+    { "from": "corr2", "fromSocket": "s_door_01", "to": "stair_dn_2", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_2", "fromSocket": "stair_down_01", "to": "stair_up_3", "toSocket": "stair_up_01" },
+    { "from": "stair_up_3", "fromSocket": "s_door_01", "to": "approach3", "toSocket": "n_door_01" },
+    { "from": "approach3", "fromSocket": "s_door_01", "to": "warden", "toSocket": "s_door_01" }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}

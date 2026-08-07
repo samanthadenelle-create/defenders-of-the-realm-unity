@@ -77,6 +77,9 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/DungeonCompose/dg_descent_probe.unity
     guid: 4154de12ae096bf459f85d9e35ccb980
+  - enabled: 1
+    path: Assets/Scenes/DungeonCompose/dg_sunken_vault.unity
+    guid: 135af0541cf908241bb8728d22d52d99
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}

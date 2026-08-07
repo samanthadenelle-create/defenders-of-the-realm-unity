@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "graphId": "dg_bonecrypt",
+  "entry": "entry",
+  "_comment": "WO-1001 Phase 2B - The Bonecrypt. An undead crypt where a Hollow necromancer raises the old dead. FIVE LEVELS. The deep floor is GATED: the crypt-key sits in a SecretAlcove side branch on level -2, and the lock spans the level -4 landing, so the player must take the optional branch before the descent will let them through. Undead are authored as the hollow family in enemies.json, so every encounter is hollow-group - depth does the work through the group roll rather than a separate family. Boss = the Necromancer (enemies.json marks it boss:true) carrying dungeon-deepboss, the ONLY legendary-component table in the game. Oil is DELIBERATELY SCARCE - stones on level 0 and level -3 only, so the middle of the descent is the tense stretch.",
+  "nodes": [
+    { "id": "entry", "prefab": "EntryHall" },
+    { "id": "tj0", "prefab": "TJunction" },
+    { "id": "shrine0", "prefab": "LoreShrine" },
+    { "id": "stair_dn_0", "prefab": "StairDown" },
+
+    { "id": "stair_up_1", "prefab": "StairUp" },
+    { "id": "corr1", "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group", "min": 3, "max": 5,
+        "seatMode": "ring", "formationRadius": 3.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.0 }
+      }
+    },
+    { "id": "combat1", "prefab": "CombatChamber",
+      "encounter": {
+        "kind": "hollow-group", "min": 4, "max": 6,
+        "seatMode": "ring", "formationRadius": 4.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 7.0 }
+      },
+      "chests": [
+        { "id": "bc-combat1-crate", "lootTableId": "crate-common", "visual": "crate", "offset": [2.2, 0, -2.0] }
+      ]
+    },
+    { "id": "stair_dn_1", "prefab": "StairDown" },
+
+    { "id": "stair_up_2", "prefab": "StairUp" },
+    { "id": "tj2", "prefab": "TJunction" },
+    { "id": "keyvault2", "prefab": "SecretAlcove",
+      "chests": [
+        { "id": "bc-keyvault-cache", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.0] }
+      ]
+    },
+    { "id": "corr2", "prefab": "Straight",
+      "encounter": {
+        "kind": "hollow-group", "min": 4, "max": 6,
+        "seatMode": "ring", "formationRadius": 3.5,
+        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.5 }
+      }
+    },
+    { "id": "stair_dn_2", "prefab": "StairDown" },
+
+    { "id": "stair_up_3", "prefab": "StairUp" },
+    { "id": "inter3", "prefab": "Intersection" },
+    { "id": "vault3", "prefab": "RewardVault",
+      "chests": [
+        { "id": "bc-vault3-chest", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.2] }
+      ]
+    },
+    { "id": "shrine3", "prefab": "LoreShrine" },
+    { "id": "stair_dn_3", "prefab": "StairDown" },
+
+    { "id": "stair_up_4", "prefab": "StairUp" },
+    { "id": "approach4", "prefab": "ChokePoint",
+      "encounter": {
+        "kind": "hollow-group", "min": 5, "max": 7,
+        "seatMode": "ring", "formationRadius": 3.0,
+        "confine": { "mode": "room", "slack": 1.5, "returnHome": true, "wakeRadius": 6.0 }
+      }
+    },
+    { "id": "necromancer_keep", "prefab": "BossKeep",
+      "encounter": {
+        "kind": "hollow-group", "isBoss": true,
+        "enemyType": "necromancer",
+        "displayName": "The Bonecrypt Necromancer",
+        "min": 1, "max": 1,
+        "seatMode": "ring", "formationRadius": 2.0,
+        "confine": { "mode": "room", "slack": 3.0, "returnHome": false, "wakeRadius": 10.0 }
+      },
+      "chests": [
+        { "id": "bc-necro-hoard", "lootTableId": "dungeon-deepboss", "visual": "chest", "offset": [0, 0, 2.0] }
+      ]
+    }
+  ],
+  "oilStones": [
+    { "id": "bc-oil-entry", "roomId": "entry", "offset": [1.8, 0, 0], "radius": 2.5 },
+    { "id": "bc-oil-l3", "roomId": "inter3", "offset": [0, 0, 1.8], "radius": 2.5 }
+  ],
+  "keys": [
+    { "id": "bc-key-pickup", "keyId": "crypt-key", "roomId": "keyvault2", "offset": [0, 0, -1.0] }
+  ],
+  "locks": [
+    { "id": "bc-deep-lock", "keyId": "crypt-key", "fromRoomId": "stair_up_4", "toRoomId": "approach4",
+      "fromOffset": [0, 0, -1.5], "toOffset": [0, 0, 1.5] }
+  ],
+  "extracts": [
+    { "id": "bc-extract-l1", "roomId": "stair_up_1", "offset": [1.6, 0, 0], "label": "Extract" },
+    { "id": "bc-extract-l2", "roomId": "stair_up_2", "offset": [1.6, 0, 0], "label": "Extract" },
+    { "id": "bc-extract-l3", "roomId": "stair_up_3", "offset": [1.6, 0, 0], "label": "Extract" },
+    { "id": "bc-extract-l4", "roomId": "stair_up_4", "offset": [1.6, 0, 0], "label": "Extract" }
+  ],
+  "traps": [
+    { "id": "bc-trap-l1", "roomId": "corr1", "kind": "spike", "damage": 12.0, "radius": 1.4, "offset": [0, 0, 0] },
+    { "id": "bc-trap-l2", "roomId": "corr2", "kind": "spike", "damage": 16.0, "radius": 1.4, "offset": [0, 0, 0] }
+  ],
+  "edges": [
+    { "from": "entry", "fromSocket": "n_door_01", "to": "tj0", "toSocket": "s_door_01" },
+    { "from": "tj0", "fromSocket": "w_door_01", "to": "shrine0", "toSocket": "s_door_01" },
+    { "from": "tj0", "fromSocket": "e_door_01", "to": "stair_dn_0", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_0", "fromSocket": "stair_down_01", "to": "stair_up_1", "toSocket": "stair_up_01" },
+    { "from": "stair_up_1", "fromSocket": "s_door_01", "to": "corr1", "toSocket": "n_door_01" },
+    { "from": "corr1", "fromSocket": "s_door_01", "to": "combat1", "toSocket": "n_door_01" },
+    { "from": "combat1", "fromSocket": "s_door_01", "to": "stair_dn_1", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_1", "fromSocket": "stair_down_01", "to": "stair_up_2", "toSocket": "stair_up_01" },
+    { "from": "stair_up_2", "fromSocket": "s_door_01", "to": "tj2", "toSocket": "s_door_01" },
+    { "from": "tj2", "fromSocket": "w_door_01", "to": "keyvault2", "toSocket": "s_door_01" },
+    { "from": "tj2", "fromSocket": "e_door_01", "to": "corr2", "toSocket": "n_door_01" },
+    { "from": "corr2", "fromSocket": "s_door_01", "to": "stair_dn_2", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_2", "fromSocket": "stair_down_01", "to": "stair_up_3", "toSocket": "stair_up_01" },
+    { "from": "stair_up_3", "fromSocket": "s_door_01", "to": "inter3", "toSocket": "n_door_01" },
+    { "from": "inter3", "fromSocket": "w_door_01", "to": "vault3", "toSocket": "s_door_01" },
+    { "from": "inter3", "fromSocket": "e_door_01", "to": "shrine3", "toSocket": "s_door_01" },
+    { "from": "inter3", "fromSocket": "s_door_01", "to": "stair_dn_3", "toSocket": "s_door_01" },
+
+    { "from": "stair_dn_3", "fromSocket": "stair_down_01", "to": "stair_up_4", "toSocket": "stair_up_01" },
+    { "from": "stair_up_4", "fromSocket": "s_door_01", "to": "approach4", "toSocket": "n_door_01" },
+    { "from": "approach4", "fromSocket": "s_door_01", "to": "necromancer_keep", "toSocket": "s_door_01" }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  }
+}
