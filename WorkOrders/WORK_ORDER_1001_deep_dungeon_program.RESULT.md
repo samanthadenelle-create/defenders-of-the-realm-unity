@@ -107,6 +107,49 @@ look enterable and dead-end. That is why the probe leaves `populateForPlay: fals
 
 ---
 
+## 4b. A defect slice 1 introduced, found by re-reading the change
+
+Moving the stair sockets half a floor off the room origin meant an **unmated** stair socket would
+seal with a 2.4 × 2.5 wall slab **hanging three metres up in mid-air**. `dg_starter_loop` has
+exactly that shape — its `StairUp`/`StairDown` rooms are attached by their horizontal `s_door_01`,
+and their stair sockets appear in **no** edge — so the artifact would have shown up in the one
+dungeon the owner actually plays, the next time anyone re-baked it.
+
+The logic was wrong before the move too, just less visibly: a stair socket is a hole in the
+**floor**, so a vertical slab is meaningless at any height. Unmated stair sockets now seal
+invisibly (`SEALED_VERTICAL`). The bake trace also stopped printing a `WALL`/`SECRET` ternary that
+would have called these `SECRET` — a door-shaped lie about a floor socket.
+
+`sealedN` counts every seal regardless of geometry, so the pinned sample-layout counts are
+untouched — `[room-forge]` still reports `spine+demo green sealed=1`. Case 6 covers all three seal
+kinds so a future change cannot blank real walls while fixing stairs.
+
+---
+
+## 4c. Runtime verification (AutoPilot fleet, against the shipped EXE)
+
+Static gates do not prove the game runs. Two headless player runs on the 2026-08-07 03:13 build:
+
+```
+BootToGameplay    — ok (1.3s)  — loaded Main_Castle_Overworld
+ResolveHero       — ok
+AssertDungeonLoop — ok (95.9s) — entered=real-tap won=True baselineClean=True
+  A_combatCapable=PASS  B_onNavMesh=PASS  C_canMove=PASS(delta=5.53m)
+  D_notBlack=PASS       E_singlePoseWriter=PASS       verdict=PASS
+```
+
+The dungeon loop survives tonight's changes end to end, including the tougher hollows. `D_notBlack`
+also speaks to ticket #19 (post-victory fade never lifting).
+
+**The fleet surfaced a NEW issue, reproduced 2/2 runs** — `EnvTreeFix`'s own post-fix verify fails
+on ~300 tree/bush renderers in the hub (`shader='Universal Render Pipeline/Lit' still reads
+white/grey`), ~308 error lines per run. Same failure class as the castle "pink floor". Filed as
+task #39 **with the caveat that the fleet runs `-nographics`**, so "trees are white on screen" is
+not yet proven — what is proven is a failing fix flooding the error log, which drowns the F8
+harvest window.
+
+---
+
 ## 5. Two standing rules the probe tripped (caught by the oracle, not by me)
 
 Worth recording because both were *reasoned past* and both were right:
