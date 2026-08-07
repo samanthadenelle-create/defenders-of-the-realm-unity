@@ -38,6 +38,23 @@ not a verbal or chat assurance — D3 requires it in writing.
 ⚠️ **Unverified:** the exact intake route was not confirmed at source. If the dashboard has no such
 category, ask support to route it to the ad policy / Regulated Activities team and keep the case ID.
 
+**Unity organization: `samanthadenelle`** (owner, confirmed 2026-08-07 from the Unity Cloud dashboard).
+Include it in the case so it routes to the right account.
+
+### What is already done, and what it is NOT
+
+On 2026-08-07 the owner granted **Unity Ads access to Developer Data** for this organization
+(Developer Data → Additional access → Unity Ads → *Access granted*).
+
+**That is a data-sharing consent, not an approval.** It lets diagnostics flow between the org and Unity
+Ads projects. Nothing on that screen asks Unity a question, so it has told nobody at Unity that this app
+carries a non-custodial wallet and sells packs for crypto tokens — which is the whole substance of this
+request. **It does not satisfy D3 and does not shorten this document.**
+
+It is also slightly ahead of the gate, and harmlessly so: no SDK is installed (`Packages/manifest.json`
+carries no `unity.services`/LevelPlay entry), and the grant is reversible via **Modify Access** if Unity
+declines. Revoke it in that case rather than leaving a dormant data path to a provider we did not take.
+
 ---
 
 ## THE DRAFT
