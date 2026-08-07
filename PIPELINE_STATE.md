@@ -1,3 +1,12 @@
+> ## ⚠ STALE as of 2026-08-07 02:30 — read `CANON_GROUND_TRUTH_2026-08-07.md` FIRST
+>
+> This file was last refreshed 2026-08-06 ~10:50, BEFORE the overnight run. It does not know about:
+> the wallet main-thread fix, the arena stranding fix, the Manage/Queues screen (bottom bar is now
+> **6 faces**, Upgrade re-pointed, Map moved into Bag and flag-gated off), **save schema v37**, the
+> rewarded-ad gate, town suspension while in a dungeon, the barracks adoption, the F8 harness
+> un-blinding, or the UI seat moving to the **1000-block**.
+>
+> Per CLAUDE.md §15 this is a `STALE:` flag rather than a rewrite — the anchor wins on any conflict.
 # Pipeline State — Defenders of the Realm v2 (ground-truth catalog seed)
 
 Compiled by the build-connected CLI from the actual code (2026-05-29), to seed the
