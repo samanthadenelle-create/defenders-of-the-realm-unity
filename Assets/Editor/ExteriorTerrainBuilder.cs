@@ -700,9 +700,11 @@ namespace DeNelle.Editor
         {
             td.terrainLayers = new[]
             {
-                MakeLayer("Exterior_Grass", new Color(0.34f, 0.46f, 0.24f), 14f),  // warm green
+                // Greener grass (owner 2026-08-07: wants grass that reads as grass, not grey-green).
+                MakeLayer("Exterior_Grass", new Color(0.28f, 0.52f, 0.22f), 12f),  // lively meadow green
                 MakeLayer("Exterior_Stone", new Color(0.55f, 0.52f, 0.45f), 11f),  // warm tan-grey
-                MakeLayer("Exterior_Mud",   new Color(0.40f, 0.31f, 0.21f), 7f),   // foot-worn dirt
+                // Darker packed dirt for roads — must contrast hard against grass.
+                MakeLayer("Exterior_Mud",   new Color(0.36f, 0.26f, 0.16f), 6f),   // road dirt
                 MakeLayer("Exterior_Snow",  new Color(0.90f, 0.92f, 0.96f), 16f),  // snow
                 MakeLayer("Exterior_Dead",  new Color(0.20f, 0.17f, 0.16f), 12f),  // dark dead ground
             };
@@ -730,8 +732,8 @@ namespace DeNelle.Editor
                     float wSnow = 0f;
                     float wDead = 0f;
 
-                    // Exposed stone on steep slopes everywhere (§9.3).
-                    wStone = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.30f, 0.62f, slope));
+                    // Exposed stone only on steeper slopes (was 0.30 — too much grey lawn).
+                    wStone = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.72f, slope));
 
                     // Snow above Y+20 in the north only (§9.3).
                     if (cz > 0f && y > 14f)
@@ -741,24 +743,20 @@ namespace DeNelle.Editor
                     if (cz < 0f && y < -6f)
                         wDead = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-6f, -11f, y));
 
-                    // WORLDFEEL meadow mottling (owner 2026-07-01: "flat single-tone
-                    // green lawn to the horizon"): two independent low-frequency perlin
-                    // patch fields shift a little dry stone + worn earth into the grass
-                    // so flat ground reads as varied meadow instead of one flat colour.
-                    // Gated OUT of the snow/dead extremes (they own their look).
+                    // Light meadow mottling only — keep grass dominant so the world reads green.
+                    // Roads/paths stamp mud later (PaintNaturalPaths). Do NOT spray mud everywhere.
                     float wMud = 0f;
-                    if (wSnow < 0.4f && wDead < 0.4f)
+                    if (wSnow < 0.4f && wDead < 0.4f && slope < 0.35f)
                     {
-                        float dry = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.60f, 0.82f,
-                            Mathf.PerlinNoise(worldX * 0.016f + 91f, worldZ * 0.016f + 47f))) * 0.30f;
-                        float worn = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.62f, 0.84f,
-                            Mathf.PerlinNoise(worldX * 0.011f + 13f, worldZ * 0.011f + 77f))) * 0.20f;
+                        float dry = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.72f, 0.90f,
+                            Mathf.PerlinNoise(worldX * 0.016f + 91f, worldZ * 0.016f + 47f))) * 0.12f;
                         wStone = Mathf.Max(wStone, dry);
-                        wMud = worn;
                     }
 
-                    // Grass is whatever the other layers don't claim.
+                    // Grass is whatever the other layers don't claim — bias toward green.
                     wGrass = Mathf.Max(0f, 1f - wStone - wSnow - wDead - wMud);
+                    if (slope < 0.28f && wSnow < 0.2f && wDead < 0.2f)
+                        wGrass = Mathf.Max(wGrass, 0.55f); // gentle ground stays grassy
 
                     float total = wGrass + wStone + wSnow + wDead + wMud;
                     if (total < 0.0001f) { wGrass = 1f; total = 1f; }
@@ -846,54 +844,96 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>
-        /// Paints 5 wandering "natural" paths into the mud splat layer. These
-        /// are landscape storytelling, NOT gameplay routes (enemies/the player
-        /// never use them). Each path is a bezier-ish polyline; mud is blended
-        /// in along it and the grass weight reduced to match.
+        /// Paints roads + footpaths into the mud splat layer so the world reads as
+        /// connected (owner 2026-08-07: paths, roads, and grass). Includes:
+        /// main roads from castle approaches to dungeon portals, a ring road outside
+        /// the moat, narrative footpaths, and the south cave corridor.
         /// </summary>
         private static void PaintNaturalPaths(TerrainData td)
         {
             int res = td.alphamapResolution;
             var splat = td.GetAlphamaps(0, 0, res, res);
 
-            // Five routes, in WORLD-space control points (XZ). Chosen for
-            // narrative flavour per §9.4; reported in the build summary.
-            //
-            // 1. Animal track   -- from N gate approach, follows a ridge east.
-            // 2. Smuggler's path-- across the western river valley, to nowhere.
-            // 3. Pilgrim's road -- from S gate approach, winding SW, fading off.
-            // 4. Hunter's trail -- through the eastern orchards, between trees.
-            // 5. Crystal-vein   -- NW corner, worn path to a cliffside ore seam.
-            // WO-468 Phase 2: these narrative control points were authored in the
-            // OLD terrain-CENTERED space (village at origin). The terrain now sits
-            // south, so each Z is offset by TerrainCenterZ (via Vp) into true world
-            // Z to keep the cosmetic paths on the (shifted) terrain.
-            var paths = new[]
+            // ── MAIN ROADS (wide, high opacity) — castle → portals / destinations ──
+            // Gate approaches sit just outside the wall ring (~r 50–55). Portals match
+            // DungeonWorldPortalSpawner.AuthoredPortals.
+            const float roadHalf = 7.5f;       // clear dirt road
+            const float trailHalf = 4.2f;      // worn footpath
+
+            // East road → Starter Loop portal (140, 20)
+            PaintPolylineToMud(splat, res, new[]
             {
-                new[] { Vp(0, 124), Vp(22, 138), Vp(58, 132), Vp(96, 116), Vp(124, 96) },     // animal track
-                new[] { Vp(-150, 96), Vp(-186, 52), Vp(-198, -8), Vp(-176, -64), Vp(-148, -118) }, // smuggler's path
-                new[] { Vp(-18, -124), Vp(-58, -150), Vp(-104, -168), Vp(-138, -196), Vp(-152, -240*0.5f) }, // pilgrim's road
-                new[] { Vp(132, 70), Vp(160, 40), Vp(176, 4), Vp(168, -38), Vp(150, -78) },    // hunter's trail
-                new[] { Vp(-128, 96), Vp(-150, 118), Vp(-176, 136), Vp(-198, 150) },          // crystal-vein path
+                V(52f, 0f), V(78f, 6f), V(110f, 14f), V(140f, 20f),
+            }, roadHalf);
+
+            // NW road → Sunken Vault portal (-100, 100)
+            PaintPolylineToMud(splat, res, new[]
+            {
+                V(-38f, 38f), V(-58f, 58f), V(-78f, 80f), V(-100f, 100f),
+            }, roadHalf);
+
+            // South road → Healer's Cottage portal (20, -140)
+            PaintPolylineToMud(splat, res, new[]
+            {
+                V(0f, -52f), V(8f, -80f), V(16f, -110f), V(20f, -140f),
+            }, roadHalf);
+
+            // North road — forest approach / animal track toward ridges
+            PaintPolylineToMud(splat, res, new[]
+            {
+                V(0f, 52f), V(12f, 90f), V(40f, 130f), V(70f, 170f), V(100f, 210f),
+            }, trailHalf);
+
+            // West road — toward river valley
+            PaintPolylineToMud(splat, res, new[]
+            {
+                V(-52f, 0f), V(-90f, -10f), V(-130f, -20f), V(-170f, -5f), V(-210f, 30f),
+            }, trailHalf);
+
+            // Ring road outside moat (~r 78) — links the four approaches so the castle
+            // sits in a green field with a dirt circuit, not a featureless pad.
+            PaintRingRoad(splat, res, radius: 78f, halfWidth: 5.5f, segments: 64);
+
+            // ── Narrative footpaths (storytelling) ──
+            var trails = new[]
+            {
+                new[] { V(0f, 124f), V(22f, 138f), V(58f, 132f), V(96f, 116f), V(124f, 96f) },
+                new[] { V(-150f, 96f), V(-186f, 52f), V(-198f, -8f), V(-176f, -64f), V(-148f, -118f) },
+                new[] { V(132f, 70f), V(160f, 40f), V(176f, 4f), V(168f, -38f), V(150f, -78f) },
+                new[] { V(-128f, 96f), V(-150f, 118f), V(-176f, 136f), V(-198f, 150f) },
+                // Cross-link: starter east road → hunter's orchards
+                new[] { V(140f, 20f), V(155f, -10f), V(160f, -50f) },
+                // Cross-link: sunken NW → crystal ridge
+                new[] { V(-100f, 100f), V(-140f, 120f), V(-175f, 140f) },
             };
+            foreach (var pts in trails)
+                PaintPolylineToMud(splat, res, pts, trailHalf);
 
-            const float pathHalfWidth = 4.5f;   // world units -- a worn footpath
-            foreach (var pts in paths)
-                PaintPolylineToMud(splat, res, pts, pathHalfWidth);
-
-            // WO-468: the CAVE ROAD — a clean, straight, wider road running due
-            // south (x=0) from the castle approach (z=CavePathStartZ) to the cave
-            // mouth (z=CavePathEndZ). Wider than the narrative footpaths so it
-            // reads as the main route. The corridor flatten + tree reject keep it
-            // level and clear.
-            var caveRoad = new[]
+            // South cave corridor road (wide main route)
+            PaintPolylineToMud(splat, res, new[]
             {
                 V(0f, CavePathStartZ),
                 V(0f, CavePathEndZ),
-            };
-            PaintPolylineToMud(splat, res, caveRoad, CavePathHalfWidth);
+            }, CavePathHalfWidth);
 
             td.SetAlphamaps(0, 0, splat);
+            FlowTrace.Step("Exterior",
+                "PaintNaturalPaths: gate roads to 3 portals + ring road + footpaths + cave corridor");
+        }
+
+        /// <summary>Dirt ring road around the castle (outside moat clear zone).</summary>
+        private static void PaintRingRoad(float[,,] splat, int res, float radius, float halfWidth, int segments)
+        {
+            var pts = new Vector2[segments + 1];
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = (i / (float)segments) * Mathf.PI * 2f;
+                // Slight oval so E-W / N-S approaches meet cleanly.
+                float rx = radius * 1.05f;
+                float rz = radius * 0.95f;
+                pts[i] = new Vector2(Mathf.Cos(a) * rx, Mathf.Sin(a) * rz);
+            }
+            PaintPolylineToMud(splat, res, pts, halfWidth);
         }
 
         private static Vector2 V(float x, float z) => new Vector2(x, z);
@@ -953,9 +993,11 @@ namespace DeNelle.Editor
                     if (x < 0 || x >= res) continue;
                     float distPx = Mathf.Sqrt(dx * dx + dz * dz);
                     if (distPx > radPx) continue;
-                    // Soft edge: full mud at centre, fading to 0 at the rim.
-                    float w = 1f - (distPx / Mathf.Max(1, radPx));
-                    w = w * w;   // ease the falloff
+                    // Soft edge: strong packed dirt at centre (reads as road), soft grass shoulders.
+                    float t = 1f - (distPx / Mathf.Max(1, radPx));
+                    float w = t * t;
+                    // Boost centre so roads punch through grass (owner: want visible paths).
+                    if (t > 0.55f) w = Mathf.Min(1f, w * 1.35f);
                     float mud = Mathf.Max(splat[z, x, LayerMud], w);
                     // Renormalise: mud takes from grass first, then stone.
                     float take = mud - splat[z, x, LayerMud];
