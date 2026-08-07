@@ -89,7 +89,16 @@ namespace DeNelle.Village.UI
                     DeathTrace.ScreenClosed("EndState '" + (_open._vm != null ? _open._vm.Title : "?") + "'",
                         "EndStateView.Show (replaced by '" + vm.Title + "')");
             }
-            if (_open != null) { Destroy(_open.gameObject); _open = null; }
+            // Section 12: a NEW Show() replacing an OPEN end-state is the path that stranded the
+            // owner twice - the village wave banner landing on top of an arena victory summary and
+            // taking its home-return action with it. Previously this was logged only when the
+            // DeathTrace forensic window happened to be open, i.e. never in normal play.
+            if (_open != null)
+            {
+                _open.AbandonedPrimaryWarn($"EndStateView.Show - REPLACED by a new end-state '{vm.Title}'");
+                Destroy(_open.gameObject);
+                _open = null;
+            }
 
             // REAL EventSystem buttons (audit §2e: GameOverScreen's manual Input hit-test
             // existed because builds lacked an EventSystem — ensure one, don't hand-roll).
@@ -1414,9 +1423,36 @@ namespace DeNelle.Village.UI
         private void OnSceneLoaded(Scene s, LoadSceneMode m)
         {
             // The world moved on underneath us (e.g. raid-death evac loaded the hub):
-            // tear down silently WITHOUT firing the primary route.
+            // tear down WITHOUT firing the primary route.
+            //
+            // Section 12 - this used to be SILENT, and that silence cost us. An end-state torn
+            // down here takes its Primary action with it; when that action was an arena's only
+            // route home, the player was stranded and NOTHING in the log said why.
+            // Destroying without firing is still CORRECT (a displaced end-state must never
+            // silently trigger continue/respawn) - it just must never be invisible.
+            AbandonedPrimaryWarn("OnSceneLoaded (scene '" + s.name + "' loaded under the panel)");
             _fired = true;
             Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// Section 12 - no silent failures. Announces that this end-state is being destroyed WITHOUT
+        /// running its Primary action, and says loudly when that action was load-bearing. Whoever
+        /// owns a route that matters must not delegate it to a UI object other systems can destroy;
+        /// BattleArena's stranding watchdog exists because of exactly this.
+        /// </summary>
+        private void AbandonedPrimaryWarn(string reason)
+        {
+            bool hadPrimary = _vm != null && _vm.Primary != null && !_fired;
+            string title = _vm != null ? _vm.Title : "?";
+            if (hadPrimary)
+                FlowTrace.Warn("EndState",
+                    $"'{title}' destroyed WITHOUT firing its primary action - {reason}. " +
+                    "That action is now abandoned. If it was an arena home-return, the player is " +
+                    "stranded until BattleArena's watchdog fires.");
+            else
+                FlowTrace.Step("EndState",
+                    $"'{title}' torn down ({reason}) - no primary action pending, nothing abandoned.");
         }
 
         /// <summary>HUD-2: the single-modal arbiter swapped us out (another modal opened over the
@@ -1424,6 +1460,10 @@ namespace DeNelle.Village.UI
         /// silently trigger continue/respawn (mirrors <see cref="OnSceneLoaded"/>).</summary>
         private void CloseFromArbiter()
         {
+            // Section 12: was SILENT. This fires whenever ANY other modal opens over the
+            // end-state (PanelManager.NotifyOpened), so it is the widest of the three
+            // abandon paths - and it left no trace at all.
+            AbandonedPrimaryWarn("CloseFromArbiter (another modal opened over this end-state)");
             _fired = true;
             if (this != null) Destroy(gameObject);
         }

@@ -151,8 +151,34 @@ namespace DeNelle.Village
 
             // 5. "Wave X Cleared!" results banner — the shared end-state template
             //    (compact variant: non-blocking, auto-dismissing, one Continue).
-            DeNelle.Village.UI.EndStateView.Show(
-                DeNelle.Village.UI.EndStateVM.FromWaveClear(waveNumber));
+            //
+            // ARENA GUARD (owner-reported twice: Seeker 313763, desktop EXE F8 seq=2140).
+            // EndStateView.Show DESTROYS whatever end-state is already open (EndStateView.cs:92).
+            // The village WaveManager keeps ticking while the hero is away fighting a real-time
+            // arena encounter 7km out at ArenaCentre, so a village wave can clear seconds after an
+            // ARENA VICTORY panel appears. This banner then replaced that panel and took its
+            // Continue action with it - and that action was the ONLY route home. The owner tapped
+            // what she thought was Continue, hit this banner's action=dismiss instead, and was left
+            // standing in the arena with the HUD locked in Battle.
+            //
+            // A wave-clear banner is pure garnish; an arena victory summary is load-bearing. When
+            // they collide, the garnish yields. The wave is still cleared, rewarded and persisted -
+            // only the cosmetic banner is skipped.
+            // AnyBattleInProgress (BattleArena.cs:227) is the STATIC, null-safe accessor -
+            // BattleInProgress itself is an instance property. Fully qualified because
+            // BattleArena lives in DeNelle.Village.Arena and this file is DeNelle.Village.
+            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("WaveCelebration",
+                    $"wave {waveNumber} clear banner SUPPRESSED - an arena battle is in progress and " +
+                    "showing it would destroy the arena victory summary (and its home-return action). " +
+                    "The wave still cleared and rewarded; only the banner is skipped.");
+            }
+            else
+            {
+                DeNelle.Village.UI.EndStateView.Show(
+                    DeNelle.Village.UI.EndStateVM.FromWaveClear(waveNumber));
+            }
 
             // 6. Camera shake.
             float shakeIntensity = mobile ? 0.25f : 0.42f;

@@ -2314,8 +2314,39 @@ namespace DeNelle.Village.Arena
             var hud = _hud;
             _hud = null;
             if (won && hud != null)
+            {
                 Guard.Try("BattleArena", "battle victory summary",
                     () => hud.ShowResult(true, stars, durationSeconds, totals, doMaskedReturn));
+
+                // =============================================================
+                // STRANDING WATCHDOG (owner-reported twice: Seeker 313763 and desktop
+                // EXE F8 seq=2140, "after I killed the enemies it spawned me back in arena").
+                // -------------------------------------------------------------
+                // doMaskedReturn is the ONLY path home from a won arena, and the line
+                // above hands sole ownership of it to a UI object that THREE other code
+                // paths may destroy without firing it:
+                //   EndStateView.cs:92         a NEW Show() replaces the open panel
+                //   EndStateView.cs:1414-1420  OnSceneLoaded
+                //   EndStateView.cs:1425-1429  CloseFromArbiter (ANY other modal opens)
+                // The worst offender is the village wave banner: WaveCelebrationManager
+                // fires on OnWaveCleared with no battle guard, and the village WaveManager
+                // keeps running while the hero is staged 7km away at ArenaCentre. On the
+                // device a wave cleared 2.7s after the victory panel appeared, replaced it,
+                // and the owner's tap hit the banner's action=dismiss instead.
+                // Its AutoDismissAfter softlock guard dies with the same GameObject, so
+                // BOTH escape routes are lost at once and the hero is left AT the arena
+                // (proof: GetZone(x=5019.6,z=5010.0) vs ArenaCentre 5000,0,5000).
+                //
+                // The panel being destroyed without firing is CORRECT - a displaced
+                // end-state must never silently trigger continue/respawn. The defect is
+                // that ARENA OWNERSHIP was delegated to it. This watchdog takes that
+                // ownership back: the arena guarantees the player gets home regardless of
+                // what happens to any UI. Latched via returnStarted, so a normal Continue
+                // still wins and this is a no-op.
+                // =============================================================
+                Guard.Try("BattleArena", "arm stranding watchdog",
+                    () => StartCoroutine(StrandingWatchdog(() => returnStarted, doMaskedReturn)));
+            }
             else if (won)
                 doMaskedReturn();   // no HUD to host the summary -> return now (no softlock)
             else
@@ -2357,7 +2388,54 @@ namespace DeNelle.Village.Arena
             BattleInProgress = false;
 
             OnBattleEnded?.Invoke(done, won);
-            FlowTrace.Step("BattleArena", $"Resolve: stage torn down, hero {(won ? "returned" : "retreated SAFE")}, battle ended.");
+
+            // HONEST LOG. This used to read "stage torn down, hero returned" on a WIN -- while the
+            // return was still DEFERRED behind the player's Continue tap. It claimed success ~3
+            // seconds before anything moved, and it is the line a future reader would trust while
+            // chasing exactly this bug. On a win, say what is actually true: we are WAITING.
+            // The proving line for an actual arrival is "FADE IN: home arrival" (ReturnHomeWithFade).
+            if (won)
+                FlowTrace.Step("BattleArena",
+                    "Resolve: battle ended, victory summary shown - home return is DEFERRED until " +
+                    "Continue (watchdog armed). NOT yet returned; 'FADE IN: home arrival' proves arrival.");
+            else
+                FlowTrace.Step("BattleArena", "Resolve: stage torn down, hero retreated SAFE, battle ended.");
+        }
+
+        /// <summary>
+        /// Seconds the victory summary may sit before the arena stops trusting the UI and walks the
+        /// player home itself. Generous: a player reading their spoils must never be yanked out.
+        /// EndStateView's own AutoDismissAfter is ~20s, so this only ever fires when that guard died
+        /// with its GameObject -- i.e. exactly the stranding case.
+        /// </summary>
+        private const float StrandWatchdogSeconds = 45f;
+
+        /// <summary>
+        /// Guarantees the masked home return happens even if the victory panel that owned it is
+        /// destroyed without firing (see the call site for the three paths that do that).
+        /// No-op when the player taps Continue normally -- <paramref name="alreadyReturned"/> latches.
+        /// </summary>
+        private System.Collections.IEnumerator StrandingWatchdog(Func<bool> alreadyReturned, Action doMaskedReturn)
+        {
+            float waited = 0f;
+            while (waited < StrandWatchdogSeconds)
+            {
+                if (alreadyReturned != null && alreadyReturned())
+                    yield break;                      // Continue fired - normal path, nothing to do.
+                yield return null;
+                waited += Time.unscaledDeltaTime;     // unscaled: a slow-mo cam must not stretch this
+            }
+
+            if (alreadyReturned != null && alreadyReturned()) yield break;
+
+            // Section 12: never silent. This firing means a UI object ate the only route home.
+            FlowTrace.Fail("BattleArena",
+                $"STRANDING WATCHDOG FIRED after {StrandWatchdogSeconds:0}s - the victory panel was " +
+                "destroyed without firing its Continue action, so the deferred home return never ran. " +
+                "Returning the hero anyway. If you are reading this, find WHAT destroyed the end-state " +
+                "(a wave banner or another modal opening over it) - the watchdog is a safety net, NOT the fix.");
+
+            Guard.Try("BattleArena", "watchdog masked return", () => doMaskedReturn());
         }
 
         // WO-505: wait out the victory/defeat cue, then crossfade back to the open-world
