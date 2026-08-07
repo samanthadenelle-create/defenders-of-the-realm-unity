@@ -6,8 +6,8 @@
 
 **Branch:** `wip/village2-and-f8-tickets` · **HEAD:** `2e6c4709` · **63+ commits ahead of origin,
 NOTHING PUSHED** (push only on the owner's explicit word).
-**Gates as of this file:** `COMPILE_GATE_OK` + **`REGRESSION_OK 124/124 suites`** (124th =
-`[dungeon-multilevel]`, added with WO-1001 slice 1).
+**Gates as of this file:** `COMPILE_GATE_OK` + **`REGRESSION_OK 125/125 suites`** (the two new ones
+are `[dungeon-multilevel]` and `[dungeon-encounter-family]`, from WO-1001 slices 1 and 2).
 
 ---
 
@@ -119,9 +119,21 @@ torch recipe unlock, first-clear recorded). `Dungeon_FolksGranary` is a STUB wit
   `PopulateForPlay` seats a hero root + enemy spawner markers and nothing else; the oil/lantern
   pillar is hand-wired into the single Healer's Cottage scene. WO-1001 slices 3-6 therefore each
   need the composed path to gain a controller FIRST — a shared prerequisite the WO does not name.
-- **Dungeon enemies ignore `enemies.json`.** `OutpostEnemyGroupSpawner` hardcodes four Hollow ids and
-  hand-writes their stat blocks (which disagree with the JSON). `EncounterSpec.kind` is only ever
-  compared to `"none"` — authoring `"orc-group"` today silently spawns hollows.
+- **WO-1001 slice 2 LANDED: `EncounterSpec.kind` now selects a real enemy family.** Kinds =
+  `none | hollow-group | orc-group | troll-group | mixed`; ids come from `enemies.json`, weights stay
+  a C# design table, no boss ids are reachable. An unknown kind falls back to hollow **and warns** —
+  previously `DungeonBaker` compared `kind` only to `"none"`, so `"orc-group"` *silently spawned
+  hollows*. `OutpostEnemyGroupSpawner` also stopped hand-writing stat blocks that ignored (and
+  disagreed with) `enemies.json`; the catalog is now the single source, via the existing
+  `CanonicalJson` + `EnemyCatalog` path.
+  **⚠ FELT CHANGE PENDING A RULING (task #38): dungeon hollows got tougher** — hollow-rogue Hp
+  **34 → 70**, walker 40 → 52, acolyte 60 → 90. The spawn STREAM is unchanged (proven bit-identical
+  over 20k seeded rolls); only the stats moved. If it plays too hard, tune `enemies.json` — do **not**
+  restore hardcoded numbers, that recreates the two-sources-of-truth bug.
+  Roles deliberately still come from a design table, not `EnemyDef.RoleKind`: that maps
+  hollow-rogue's `skirmisher` to `EnemyRole.Ranged`, a stand-off/bow posture that would change
+  shipped melee behaviour. **Depth scaling is NOT implemented** — no depth/tier value is plumbed.
+- Still true: `EncounterSpec.seatMode`, `confine.mode`, `confine.returnHome` are read by **zero** code.
 - New suite `[dungeon-multilevel]` (5/5) pins all of it, including a case that reads the **shipped**
   stair prefabs — the room prefabs are GENERATED, so a builder edit is inert until
   `DefaultDungeonRoomsBuilder.BuildAll` re-runs.
