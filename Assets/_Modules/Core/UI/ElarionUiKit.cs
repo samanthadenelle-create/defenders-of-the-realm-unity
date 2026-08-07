@@ -32,6 +32,7 @@
 
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;   // WO-899 analog stick: pointer down/drag/up on the move widget
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.Diagnostics;
@@ -2844,6 +2845,202 @@ namespace DeNelle.Core.UI
             return ">";
         }
 
+        // =====================================================================
+        // WO-899 §1 — the ANALOG STICK that replaces the digital D-pad.
+        // ---------------------------------------------------------------------
+        // Owner felt-test 2026-08-07: "replace the boxy joypad with a cleaner analog
+        // joystick." BuildVirtualDPad above is a 4-zone DIGITAL pad — each chevron
+        // emits a DISCRETE unit vector, so the hero only ever runs at full speed in
+        // one of four directions. This builder emits a CONTINUOUS deflection instead.
+        //
+        // THE CONTRACT IS UNCHANGED (this is the whole point): onMove receives a
+        // Vector2 in -1..1 whose MAGNITUDE is deflection/radius, and Vector2.zero on
+        // release. That is exactly what HudMoveInput.Set takes, and HeroLocomotion
+        // already clamps + eases it — so nothing in locomotion changes. BuildVirtualDPad
+        // is KEPT (LeanTouchBuildDriver still uses it, and HudKitController falls back
+        // to it if this build ever throws).
+        //
+        // FIXED BASE, not a floating origin: the moveCluster root is positioned by the
+        // hud-areas.json occupancy rows, so a runtime re-centre would fight the layout
+        // owner. The ring stays where the layout put it; the knob tracks the thumb and
+        // clamps to the ring radius. Diameter is 2 x Radius = 236 reference px, well
+        // over the MinTouchPx(112) floor.
+        // =====================================================================
+
+        /// <summary>WO-899 moveCluster: a clean floating-look ANALOG STICK — a semi-transparent
+        /// dark base ring with a gold-dim rim and a filled knob that drags toward the thumb,
+        /// clamped to the ring radius. <paramref name="onMove"/> receives a CONTINUOUS -1..1
+        /// vector (magnitude = deflection/radius) while held and <see cref="Vector2.zero"/> on
+        /// release — the same contract <see cref="BuildVirtualDPad"/> and
+        /// <see cref="BuildControllerCluster"/> feed, so it drops straight into HudMoveInput.Set.
+        /// Returns the same <see cref="ControllerHandle"/>; the four Button fields stay null
+        /// (an analog stick has no discrete buttons) and <c>Current</c> carries the live vector.</summary>
+        public static ControllerHandle BuildAnalogStick(Transform parent, Vector2 anchor, Action<Vector2> onMove)
+        {
+            using var _flow = FlowTrace.Enter("HudKit", "BuildAnalogStick");
+
+            const float Radius  = 118f;   // ring radius in reference px (236 diameter >> MinTouchPx 112)
+            const float KnobDia = 96f;    // knob diameter in reference px
+
+            var h = new ControllerHandle();
+
+            // Guarded construction (§12): a procedural-sprite failure must degrade the stick,
+            // never abort the HUD build. A null handle root tells the caller to fall back.
+            bool ok = Guard.Try("HudKit", "analog stick construction", () =>
+            {
+                // ROOT = the hit area. Transparent Image (raycastTarget ON) so the whole
+                // ring circle claims the press; the driver owns down/drag/up.
+                var go = new GameObject("AnalogStick", typeof(Image), typeof(UiKitAnalogStick));
+                go.transform.SetParent(parent, false);
+                var rt = (RectTransform)go.transform;
+                rt.anchorMin = anchor; rt.anchorMax = anchor;
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(Radius * 2f, Radius * 2f);
+                rt.anchoredPosition = Vector2.zero;
+                h.root = go;
+
+                var hit = go.GetComponent<Image>();
+                var disc = CircleSprite;
+                if (disc != null) { hit.sprite = disc; hit.type = Image.Type.Simple; }
+                hit.color = new Color(0f, 0f, 0f, 0.004f);   // effectively invisible, still raycastable
+                hit.raycastTarget = true;
+
+                // BASE RIM (behind) — a gold-dim ring: a slightly larger disc peeking out
+                // from under the darker fill disc. Same trick the D-pad hub uses.
+                var rim = new GameObject("BaseRim", typeof(Image));
+                rim.transform.SetParent(go.transform, false);
+                var rimRt = (RectTransform)rim.transform;
+                rimRt.anchorMin = rimRt.anchorMax = new Vector2(0.5f, 0.5f);
+                rimRt.sizeDelta = new Vector2(Radius * 2f, Radius * 2f);
+                rimRt.anchoredPosition = Vector2.zero;
+                var rimImg = rim.GetComponent<Image>();
+                if (disc != null) { rimImg.sprite = disc; rimImg.type = Image.Type.Simple; }
+                else ApplyRounded(rimImg);
+                rimImg.color = new Color(C611GoldDim.r, C611GoldDim.g, C611GoldDim.b, 0.45f);
+                rimImg.raycastTarget = false;
+
+                // BASE FILL — the dark translucent well the knob rides in.
+                var baseGo = new GameObject("BaseRing", typeof(Image));
+                baseGo.transform.SetParent(go.transform, false);
+                var baseRt = (RectTransform)baseGo.transform;
+                baseRt.anchorMin = baseRt.anchorMax = new Vector2(0.5f, 0.5f);
+                baseRt.sizeDelta = new Vector2(Radius * 2f - 8f, Radius * 2f - 8f);
+                baseRt.anchoredPosition = Vector2.zero;
+                var baseImg = baseGo.GetComponent<Image>();
+                if (disc != null) { baseImg.sprite = disc; baseImg.type = Image.Type.Simple; }
+                else ApplyRounded(baseImg);
+                baseImg.color = new Color(C611Obsidian.r, C611Obsidian.g, C611Obsidian.b, 0.35f);
+                baseImg.raycastTarget = false;
+
+                // KNOB RIM + KNOB FACE — parented to the base so the driver can move the knob
+                // in the base's own local units (which ARE reference px on this canvas).
+                var knobGo = new GameObject("Knob", typeof(Image));
+                knobGo.transform.SetParent(baseGo.transform, false);
+                var knobRt = (RectTransform)knobGo.transform;
+                knobRt.anchorMin = knobRt.anchorMax = new Vector2(0.5f, 0.5f);
+                knobRt.pivot = new Vector2(0.5f, 0.5f);
+                knobRt.sizeDelta = new Vector2(KnobDia, KnobDia);
+                knobRt.anchoredPosition = Vector2.zero;
+                var knobImg = knobGo.GetComponent<Image>();
+                if (disc != null) { knobImg.sprite = disc; knobImg.type = Image.Type.Simple; }
+                else ApplyRounded(knobImg);
+                knobImg.color = new Color(C611Gold.r, C611Gold.g, C611Gold.b, 0.50f);
+                knobImg.raycastTarget = false;
+
+                var knobCore = new GameObject("KnobCore", typeof(Image));
+                knobCore.transform.SetParent(knobGo.transform, false);
+                var coreRt = (RectTransform)knobCore.transform;
+                coreRt.anchorMin = Vector2.zero; coreRt.anchorMax = Vector2.one;
+                coreRt.offsetMin = new Vector2(5f, 5f); coreRt.offsetMax = new Vector2(-5f, -5f);
+                var coreImg = knobCore.GetComponent<Image>();
+                if (disc != null) { coreImg.sprite = disc; coreImg.type = Image.Type.Simple; }
+                else ApplyRounded(coreImg);
+                coreImg.color = new Color(0.20f, 0.22f, 0.26f, 0.92f);   // forged steel thumb pad
+                coreImg.raycastTarget = false;
+
+                var drv = go.GetComponent<UiKitAnalogStick>();
+                drv.baseRect = baseRt;
+                drv.knob = knobRt;
+                drv.fallbackRadiusPx = Radius;
+                drv.onMove = v => { h.Current = v; onMove?.Invoke(v); };
+
+                FlowTrace.Step("HudKit",
+                    $"analog stick built: radius={Radius:0}px, knob={KnobDia:0}px, contract=HudMoveInput.Set(-1..1 magnitude).");
+            });
+
+            if (!ok || h.root == null)
+            {
+                // A half-built stick must not be left parented in the widget pool: the caller is
+                // about to build the D-pad fallback into the SAME moveCluster mount.
+                if (h.root != null)
+                {
+                    if (Application.isPlaying) UnityEngine.Object.Destroy(h.root);
+                    else UnityEngine.Object.DestroyImmediate(h.root);
+                }
+                FlowTrace.Warn("HudKit", "analog stick construction FAILED — caller should fall back to BuildVirtualDPad.");
+                return null;
+            }
+            return h;
+        }
+
+        /// <summary>WO-899: the analog stick's input driver. Converts a pointer press/drag inside
+        /// the base ring into a CONTINUOUS -1..1 deflection (magnitude = distance/radius) and
+        /// pushes it through <see cref="onMove"/>; pushes <see cref="Vector2.zero"/> on release,
+        /// on cancel AND on disable — a posture swap that hides the HUD mid-hold must never leave
+        /// the hero running forever. Deliberately does NOT implement IPointerExitHandler: on a
+        /// thumbstick the finger routinely leaves the ring while still steering, and the
+        /// EventSystem keeps routing drag to the pressed object.</summary>
+        private sealed class UiKitAnalogStick : MonoBehaviour,
+            IPointerDownHandler, IDragHandler, IPointerUpHandler
+        {
+            public RectTransform baseRect;
+            public RectTransform knob;
+            public Action<Vector2> onMove;
+            public float fallbackRadiusPx = 100f;
+
+            private bool _held;
+            private Vector2 _value;
+
+            /// <summary>The live deflection (-1..1 per axis, magnitude &lt;= 1).</summary>
+            public Vector2 Value => _value;
+
+            public void OnPointerDown(PointerEventData e) { _held = true; Track(e); }
+            public void OnDrag(PointerEventData e) { if (_held) Track(e); }
+            public void OnPointerUp(PointerEventData e) { Release(); }
+            private void OnDisable() { Release(); }
+
+            private void Track(PointerEventData e)
+            {
+                if (baseRect == null) { Release(); return; }
+                if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                        baseRect, e.position, e.pressEventCamera, out var local))
+                    return;
+
+                // Radius read LIVE off the base rect so the stick can never drift from its art
+                // (the const is only the pre-layout fallback, when rect.width is still 0).
+                float r = baseRect.rect.width * 0.5f;
+                if (r < 1f) r = fallbackRadiusPx;
+                if (r < 1f) return;
+
+                Vector2 clamped = Vector2.ClampMagnitude(local, r);
+                if (knob != null) knob.anchoredPosition = clamped;
+                Push(clamped / r);
+            }
+
+            private void Release()
+            {
+                _held = false;
+                if (knob != null) knob.anchoredPosition = Vector2.zero;
+                if (_value != Vector2.zero) Push(Vector2.zero);
+            }
+
+            private void Push(Vector2 v)
+            {
+                _value = v;
+                onMove?.Invoke(v);
+            }
+        }
+
         // ── WO-611 ratified palette (frozen mockup v8-spec-freeze) ──────────
         private static readonly Color C611Edge     = new Color(0.239f, 0.271f, 0.322f, 1f); // #3d4552
         private static readonly Color C611Gold     = new Color(0.831f, 0.686f, 0.353f, 1f); // #d4af5a
@@ -2855,9 +3052,18 @@ namespace DeNelle.Core.UI
         // ── WO-611 procedural sprites (lazily built once; WebGL failure-safe) ──
 
         private static Sprite _c611Pill; private static bool _c611PillTried;
-        /// <summary>The attack-pill face: a stadium (radius = half height) with the mockup's radial
-        /// dark-teal fill, 2px gold-dim border, inner 1px gold inset ring and a soft teal outer glow —
-        /// all baked so the pill can never fall back to a white quad.</summary>
+        /// <summary>The attack-pill face: a stadium (radius = half height) baked so the pill can
+        /// never fall back to a white quad.
+        ///
+        /// WO-899 §3 (owner: the attack button "looks amateur / doesn't blend"): the fill was a
+        /// bespoke dark-TEAL radial, which made the attack pill the ONE teal object in an
+        /// otherwise obsidian+gold bottom bar — every ability medallion
+        /// (<see cref="CombatMedallionSprite"/>) and the bar housing
+        /// (<see cref="CombatHousingSprite"/>) are steel/obsidian with a gold-dim rim. The teal is
+        /// retired: the pill now bakes the SAME vertical obsidian gradient as the housing
+        /// (#20252d -> #13161c), the same 2px gold-dim border and inner gold inset ring, and a
+        /// warm AMBER outer glow instead of a teal one — the one "this is the hit button" accent,
+        /// carried by GLOW and SIZE (shape), never by a colour the player must decode.</summary>
         public static Sprite CombatPillSprite
         {
             get
@@ -2875,9 +3081,12 @@ namespace DeNelle.Core.UI
         private static Sprite BuildCombatPillSprite()
         {
             const int w = 232, h = 104, glowPx = 8;
-            var tealC = new Color(0.106f, 0.239f, 0.235f, 1f);   // #1b3d3c centre
-            var tealM = new Color(0.063f, 0.133f, 0.153f, 1f);   // #102227 mid
-            var tealE = new Color(0.039f, 0.071f, 0.086f, 1f);   // #0a1216 edge
+            // WO-899 §3: the SAME obsidian gradient the action-bar housing bakes, so the pill and
+            // the bar it sits beside read as one material. Top-lit vertical ramp (not a radial) —
+            // that is what the housing does, and a radial was part of what made the pill read as
+            // a foreign object dropped onto the bar.
+            var obsTop = new Color(0.125f, 0.145f, 0.176f, 1f);   // #20252d
+            var obsBot = new Color(0.075f, 0.086f, 0.110f, 1f);   // #13161c
             float cx = (w - 1) * 0.5f, cy = (h - 1) * 0.5f;
             float halfH = (h - 2f * glowPx) * 0.5f;              // stadium radius (= half height)
             float halfW = (w - 2f * glowPx) * 0.5f;
@@ -2894,18 +3103,20 @@ namespace DeNelle.Core.UI
                     Color c;
                     if (sd <= 0f)
                     {
-                        float nx = (x - cx) / halfW, ny = (y - cy) / halfH;
-                        float rr = Mathf.Clamp01(Mathf.Sqrt(nx * nx + ny * ny));
-                        c = rr < 0.5f ? Color.Lerp(tealC, tealM, rr * 2f)
-                                      : Color.Lerp(tealM, tealE, (rr - 0.5f) * 2f);
+                        // Vertical obsidian ramp across the stadium body (bottom -> top).
+                        float t = Mathf.Clamp01((y - (cy - halfH)) / Mathf.Max(1f, halfH * 2f));
+                        c = Color.Lerp(obsBot, obsTop, t);
+                        // A soft top-inner sheen so the plate has depth instead of reading flat.
+                        if (sd < -8f && sd > -18f) c = Color.Lerp(c, obsTop, 0.35f * Mathf.Clamp01((y - cy) / halfH));
                         if (sd > -2.5f) c = C611GoldDim;                                   // 2px gold-dim border
                         else if (sd > -6.5f && sd <= -5.5f) c = Color.Lerp(c, C611Gold, 0.6f); // inner 1px gold ring
                         c.a = Mathf.Clamp01(-sd + 0.5f);                                   // AA edge
                     }
                     else
                     {
-                        c = tealC;
-                        c.a = 0.30f * Mathf.Clamp01(1f - sd / glowPx);                     // soft teal glow
+                        // Warm amber halo (was teal) — the combat accent, in the bar's gold family.
+                        c = C611Amber;
+                        c.a = 0.26f * Mathf.Clamp01(1f - sd / glowPx);
                     }
                     tex.SetPixel(x, y, c);
                 }
@@ -3028,14 +3239,25 @@ namespace DeNelle.Core.UI
 
         /// <summary>WO-611 attack: the oblong stadium ATTACK PILL. Built on the proven
         /// <see cref="BuildActionSlot"/> (keeps the tap + cooldown contract), then the frame is REPLACED
-        /// by the baked stadium face (radial dark-teal + 2px gold-dim border + inner gold ring + teal
-        /// glow) — never ApplyRounded on the prefab frame (that produced the 07-05 white-quad capture:
-        /// a white-tinted prefab root Image handed the plain white rounded sprite). The energy-sword
-        /// icon tilts ~-16 deg per the mockup. Same <see cref="ActionSlotHandle"/> contract.</summary>
+        /// by the baked stadium face — never ApplyRounded on the prefab frame (that produced the 07-05
+        /// white-quad capture: a white-tinted prefab root Image handed the plain white rounded sprite).
+        /// Same <see cref="ActionSlotHandle"/> contract.
+        ///
+        /// WO-899 §3 — "blend it into the bar". Two things made it read as a pasted amateur button:
+        ///   1. the PLATE was the only teal object on an obsidian+gold bar. <see cref="CombatPillSprite"/>
+        ///      is now the housing's own obsidian gradient with the same gold-dim rim (fixed there).
+        ///   2. the ICON sat flat ON the plate with nothing under it, so any icon art carrying its own
+        ///      background square/disc looked stuck on. An INSET ICON WELL (a soft dark shadow disc +
+        ///      a darker socket disc, both BEHIND the icon in sibling order) is added here so the glyph
+        ///      sits IN the plate. The well is preserveAspect on a circle sprite, so it stays concentric
+        ///      with the equally aspect-preserved icon at any pill size.
+        /// Cooldown ring / seconds / count and the 112px touch floor are untouched.</summary>
         public static ActionSlotHandle BuildAttackPill(Transform parent, Vector2 anchorMin, Vector2 anchorMax, Action onTap)
         {
+            using var _flow = FlowTrace.Enter("HudKit", "BuildAttackPill");
+
             var h = BuildActionSlot(parent, anchorMin, anchorMax, onTap);
-            if (h == null || h.root == null) return h;
+            if (h == null || h.root == null) { FlowTrace.Fail("HudKit", "attack pill: BuildActionSlot returned no root."); return h; }
             if (h.frame != null)
             {
                 var pill = CombatPillSprite;
@@ -3045,23 +3267,61 @@ namespace DeNelle.Core.UI
                     h.frame.type = Image.Type.Simple;
                     h.frame.preserveAspect = false;   // the caller's rect IS the stadium proportion
                     h.frame.color = Color.white;      // colours are baked in the sprite
+                    FlowTrace.Step("HudKit", "attack pill: baked obsidian+gold stadium face applied (WO-899 harmonised with the bar).");
                 }
                 else
                 {
-                    // Procedural fallback: flat dark-teal rounded quad + gold-dim ring (never white/blank).
+                    // Procedural fallback: flat obsidian rounded quad + gold-dim ring (never white/blank).
+                    // WO-899: obsidian, NOT the old teal — the fallback must blend for the same reason
+                    // the baked face does, or a WebGL sprite failure re-creates the exact defect.
                     h.frame.sprite = null;
-                    h.frame.color = new Color(0.063f, 0.133f, 0.153f, 0.96f);   // #102227
+                    h.frame.color = new Color(0.075f, 0.086f, 0.110f, 0.96f);   // #13161c
                     ApplyRounded(h.frame);
                     AddRoundedRing(h.root.transform, "GoldTrim", 1f, C611GoldDim, 2f);
+                    FlowTrace.Warn("HudKit", "attack pill: baked stadium sprite unavailable — using the flat obsidian fallback face.");
                 }
             }
             if (h.icon != null)
             {
-                // Owner 2026-07-06 ("fit to frame"): the energy-sword art is horizontal and content-
-                // cropped — seat it flat, aspect-true, slightly inset. The old -16° mockup tilt was
-                // for the square icon_sword fallback and made it overflow the pill (owner capture).
+                // The INSET WELL. Parented to the icon's own parent and inserted at the icon's sibling
+                // index, so it is guaranteed to draw UNDER the icon in both BuildActionSlot modes
+                // (prefab-bound icon can be nested deeper than the constructed one).
+                Guard.Try("HudKit", "attack pill icon well", () =>
+                {
+                    var iconParent = h.icon.transform.parent;
+                    int at = h.icon.transform.GetSiblingIndex();
+                    var disc = CircleSprite;
+
+                    Image Well(string name, float y0, float y1, Color color)
+                    {
+                        var go = new GameObject(name, typeof(Image));
+                        go.transform.SetParent(iconParent, false);
+                        var rt = (RectTransform)go.transform;
+                        rt.anchorMin = new Vector2(0.02f, y0); rt.anchorMax = new Vector2(0.98f, y1);
+                        rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                        var img = go.GetComponent<Image>();
+                        if (disc != null) { img.sprite = disc; img.type = Image.Type.Simple; }
+                        else ApplyRounded(img);
+                        img.preserveAspect = true;      // concentric with the aspect-preserved icon
+                        img.color = color;
+                        img.raycastTarget = false;
+                        go.transform.SetSiblingIndex(at);
+                        return img;
+                    }
+
+                    // ORDER MATTERS: each Well() inserts itself AT the icon's original index, so the
+                    // LAST one created ends up deepest. Socket first, shadow second => final draw
+                    // order is shadow -> socket -> icon.
+                    Well("IconWell",   0.10f, 0.90f, new Color(0.031f, 0.039f, 0.055f, 0.92f)); // the socket
+                    Well("IconShadow", 0.05f, 0.95f, new Color(0f, 0f, 0f, 0.30f));             // rim shadow
+                    FlowTrace.Step("HudKit", "attack pill: inset icon well seated behind the glyph.");
+                });
+
+                // Owner 2026-07-06 ("fit to frame"): seat the glyph FLAT and aspect-true — the old
+                // -16 deg mockup tilt was for the square icon_sword fallback and overflowed the pill.
+                // WO-899: 0.86 -> 0.92 so the glyph fills its socket instead of floating in it.
                 h.icon.transform.localRotation = Quaternion.identity;
-                h.icon.transform.localScale = Vector3.one * 0.86f;   // breathing room inside the ring
+                h.icon.transform.localScale = Vector3.one * 0.92f;
                 h.icon.preserveAspect = true;
                 h.icon.color = Color.white;
             }

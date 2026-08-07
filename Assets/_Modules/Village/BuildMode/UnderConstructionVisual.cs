@@ -30,8 +30,10 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;              // WO-899 §4: the countdown's world-space plate (Image)
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;             // WO-899 §4: ElarionUiKit.ApplyRounded / ElarionUi palette
 
 namespace DeNelle.Village
 {
@@ -54,7 +56,29 @@ namespace DeNelle.Village
         /// `_disabledTower` field that let every Arcane Spire fight through its timer.</summary>
         private readonly List<Behaviour> _silenced = new List<Behaviour>();
 
-        private TextMeshPro _label;
+        // ── WO-899 §4: the build/upgrade COUNTDOWN, on a plate ─────────────────────────
+        // Owner 2026-08-07, verbatim: "add a box around count down timer or make the color
+        // black. I can not see them until very close for structures upgrading."
+        //
+        // WHAT IT WAS: a bare 3D TextMeshPro (fontSize 4) parented straight to the structure.
+        // Three things made it unreadable at range, and the plate fixes all three:
+        //   1. NO BACKGROUND. Gold glyphs sat directly on whatever the world happened to be
+        //      behind them (grass, stone, another building). A near-opaque dark plate is the
+        //      "box" the owner asked for and is what actually buys the contrast.
+        //   2. NO HOST-SCALE COMPENSATION. It inherited the structure's lossy scale, so the
+        //      same timer rendered at wildly different sizes per building.
+        //   3. IT SHRANK WITH DISTANCE like any world object. The plate now grows with camera
+        //      distance up to a cap, so it holds a roughly constant on-screen size out to
+        //      ~50 m instead of vanishing.
+        // Colour carries NOTHING here (owner is red/green colourblind): the meaning is the
+        // digits, and the plate is the same obsidian in every state.
+        private TMP_Text _label;
+        private Transform _labelRoot;      // the world-space canvas root: billboarded + distance-scaled
+        private float _labelBaseScale = PlateWorldScale;
+
+        private const float PlateWorldScale  = 0.01f;   // canvas ref-px -> metres (300x110 px => 3.0 x 1.1 m)
+        private const float PlateRefDistance = 16f;     // below this the plate keeps its natural size
+        private const float PlateMaxGrow     = 3.2f;    // ...and never grows past this (readable to ~50 m)
 
         // Owner 2026-07-24: the CALM "work in progress" tell — the owner-tagged
         // "UpgradeVisual_Aura" (a slowly-circling orb) held as ONE persistent loop parented to
@@ -194,17 +218,73 @@ namespace DeNelle.Village
 
             Guard.Try("Build", "scaffold label", () =>
             {
-                var go = new GameObject("BuildCountdown");
-                go.transform.SetParent(transform, false);
+                using var _plateFlow = FlowTrace.Enter("Build", "countdown plate");
+
+                // Read the host bounds BEFORE anything is parented (the worker above relies on the
+                // same rule). A world-space Canvas adds only CanvasRenderers, never a Renderer, so
+                // it cannot inflate these bounds -- but the ordering stays deliberate.
                 float top = 2.5f;
                 var rend = GetComponentInChildren<Renderer>();
                 if (rend != null) top = rend.bounds.size.y + 1.2f;
-                go.transform.localPosition = new Vector3(0f, top, 0f);
-                _label = go.AddComponent<TextMeshPro>();
-                _label.fontSize = 4f;
-                _label.alignment = TextAlignmentOptions.Center;
-                _label.color = new Color(1f, 0.85f, 0.4f);   // kit gold
-                _label.text = "…";
+
+                float hostScale = Mathf.Abs(transform.lossyScale.x);
+                if (hostScale < 0.0001f || float.IsNaN(hostScale) || float.IsInfinity(hostScale)) hostScale = 1f;
+                _labelBaseScale = PlateWorldScale / hostScale;
+
+                // Canvas FIRST: it RequireComponent(RectTransform), so adding it converts the
+                // GameObject's Transform. Placement is set after the conversion so the values
+                // land on the RectTransform that actually survives.
+                var go = new GameObject("BuildCountdown");
+                go.transform.SetParent(transform, false);
+                var canvas = go.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;   // NO GraphicRaycaster: it is a readout
+                var crt = (RectTransform)go.transform;
+                crt.sizeDelta = new Vector2(300f, 110f);     // reference px; * scale => ~3.0 x 1.1 m
+                crt.localPosition = new Vector3(0f, top, 0f);
+                crt.localRotation = Quaternion.identity;
+                crt.localScale = Vector3.one * _labelBaseScale;
+                _labelRoot = go.transform;
+
+                // The gold-dim RIM peeks out from behind the near-opaque obsidian face.
+                var rim = new GameObject("Rim", typeof(RectTransform), typeof(Image));
+                rim.transform.SetParent(go.transform, false);
+                var rimRt = (RectTransform)rim.transform;
+                rimRt.anchorMin = Vector2.zero; rimRt.anchorMax = Vector2.one;
+                rimRt.offsetMin = Vector2.zero; rimRt.offsetMax = Vector2.zero;
+                var rimImg = rim.GetComponent<Image>();
+                ElarionUiKit.ApplyRounded(rimImg);
+                rimImg.color = new Color(0.604f, 0.498f, 0.243f, 0.95f);   // #9a7f3e gold-dim
+                rimImg.raycastTarget = false;
+
+                var plate = new GameObject("Plate", typeof(RectTransform), typeof(Image));
+                plate.transform.SetParent(go.transform, false);
+                var prt = (RectTransform)plate.transform;
+                prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one;
+                prt.offsetMin = new Vector2(5f, 5f); prt.offsetMax = new Vector2(-5f, -5f);
+                var plateImg = plate.GetComponent<Image>();
+                ElarionUiKit.ApplyRounded(plateImg);
+                plateImg.color = new Color(0.039f, 0.047f, 0.063f, 0.92f);   // near-opaque obsidian
+                plateImg.raycastTarget = false;
+
+                var txt = new GameObject("Countdown", typeof(RectTransform));
+                txt.transform.SetParent(go.transform, false);
+                var trt = (RectTransform)txt.transform;
+                trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+                trt.offsetMin = new Vector2(14f, 10f); trt.offsetMax = new Vector2(-14f, -10f);
+                var tmp = txt.AddComponent<TextMeshProUGUI>();
+                tmp.alignment = TextAlignmentOptions.Center;
+                tmp.fontStyle = FontStyles.Bold;
+                tmp.enableAutoSizing = true;
+                tmp.fontSizeMin = 28f;
+                tmp.fontSizeMax = 76f;
+                tmp.textWrappingMode = TextWrappingModes.NoWrap;
+                tmp.color = new Color(1f, 0.85f, 0.4f);   // kit gold ON the dark plate
+                tmp.raycastTarget = false;
+                tmp.text = "...";                          // ASCII ONLY (the build font has no ellipsis glyph)
+                _label = tmp;
+
+                FlowTrace.Step("Build",
+                    $"countdown plate built for '{_key}' at +{top:0.0}m (hostScale={hostScale:0.00}, baseScale={_labelBaseScale:0.0000}).");
             });
 
             // Start the CALM slow-circling "being worked on" loop (owner-tagged key). Parented to
@@ -366,10 +446,25 @@ namespace DeNelle.Village
                 // F8 (owner 2026-07-17): headless proof the countdown SHOWS + TICKS (~1/s).
                 FlowTrace.Throttle("BuildTimerUI", _key, 1f, $"'{_key}' remaining={s:0}s");
                 _label.text = s >= 60 ? $"{(int)(s / 60)}:{(int)(s % 60):00}" : $"{(int)s}s";
+            }
+
+            // WO-899 §4: billboard the PLATE (not the text) and hold a roughly constant
+            // on-screen size out to PlateRefDistance * PlateMaxGrow metres, so an upgrading
+            // structure's timer is readable from across town instead of only up close.
+            if (_labelRoot != null)
+            {
                 var cam = Camera.main;
                 if (cam != null)
-                    _label.transform.rotation = Quaternion.LookRotation(
-                        _label.transform.position - cam.transform.position);
+                {
+                    Vector3 p = _labelRoot.position;
+                    Vector3 toCam = p - cam.transform.position;
+                    if (toCam.sqrMagnitude > 1e-4f)
+                    {
+                        _labelRoot.rotation = Quaternion.LookRotation(toCam);
+                        float k = Mathf.Clamp(toCam.magnitude / PlateRefDistance, 1f, PlateMaxGrow);
+                        _labelRoot.localScale = Vector3.one * (_labelBaseScale * k);
+                    }
+                }
             }
         }
 
@@ -402,7 +497,12 @@ namespace DeNelle.Village
                     }
                 }
                 RestoreCombat();
-                if (_label != null) DestroyHost(_label.gameObject);
+                // WO-899 §4: drop the WHOLE plate (canvas root), not just the text child -- the
+                // label is now a grandchild, so destroying it alone would strand the plate.
+                if (_labelRoot != null) DestroyHost(_labelRoot.gameObject);
+                else if (_label != null) DestroyHost(_label.gameObject);
+                _labelRoot = null;
+                _label = null;
             });
             // Stop the circling loop IMMEDIATELY on completion so it can't linger under the
             // UpgradeStructureComplete_Aura fireworks the upgrade-apply path fires this same beat.

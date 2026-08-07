@@ -430,7 +430,13 @@ namespace DeNelle.HUD.Kit
                 // Rect = the shared Pill611* constants — the Q/W/E/R arc derives from them.
                 _attackSlot = ElarionUiKit.BuildAttackPill(pool,
                     new Vector2(Pill611X0, Pill611Y0), new Vector2(Pill611X1, Pill611Y1), HudCommands.Attack);
-                var atkIcon = UiStyle.Icon("energy-sword", "attack", "sword", "melee");
+                // WO-899 §3: "attack" now leads the fallback chain. It resolves (concept-icons.json)
+                // to RpgUi/abilities/attack_sword — the SAME energy-sword artwork, but circle-masked
+                // with transparent corners. The old lead concept "energy-sword" resolves to
+                // icons/icon_energy_sword, which is a FULLY OPAQUE RECTANGLE: it painted its own grey
+                // background square onto the pill, which is the "pasted sprite / amateur" read the
+                // owner reported. Kept as the fallback so a missing file still shows a sword.
+                var atkIcon = UiStyle.Icon("attack", "energy-sword", "sword", "melee");
                 if (atkIcon != null) _attackSlot.SetIcon(atkIcon);
             }
             else
@@ -560,9 +566,22 @@ namespace DeNelle.HUD.Kit
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
             {
-                // WO-611: a VIRTUAL D-PAD (cross/plus) replaces the 4-round-button cluster.
-                var dpad = ElarionUiKit.BuildVirtualDPad(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
-                Register("moveCluster", WrapAsWidget("moveCluster", dpad.root));
+                // WO-899 §1 (owner felt-test): the boxy steel D-PAD is replaced by a clean
+                // ANALOG STICK — a base ring + a knob that tracks the thumb and emits a
+                // CONTINUOUS -1..1 deflection (magnitude = distance/radius). Same gate, same
+                // widget id, same HudMoveInput.Set contract, so HeroLocomotion is untouched.
+                //
+                // BuildVirtualDPad is kept as the FALLBACK (not as the flag-OFF branch — the
+                // flag-OFF path must stay byte-identical to the shipping 4-round-button
+                // cluster, WO-611 law). It is used only if the stick's guarded construction
+                // failed, so the move widget can never be missing.
+                var stick = ElarionUiKit.BuildAnalogStick(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
+                if (stick == null || stick.root == null)
+                {
+                    FlowTrace.Warn("HudKit", "analog stick unavailable -- falling back to the WO-611 virtual D-pad.");
+                    stick = ElarionUiKit.BuildVirtualDPad(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
+                }
+                Register("moveCluster", WrapAsWidget("moveCluster", stick.root));
             }
             else
             {

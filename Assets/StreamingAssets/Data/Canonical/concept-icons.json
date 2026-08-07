@@ -230,6 +230,10 @@
    "role": "currency",
    "name": "currency_gold"
   },
+  "attack": {
+   "role": "abilities",
+   "name": "attack_sword"
+  },
   "energy-sword": {
    "role": "icons",
    "name": "icon_energy_sword"

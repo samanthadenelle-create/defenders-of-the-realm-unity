@@ -103,6 +103,15 @@ namespace DeNelle.Editor
             { "PauseHudBootstrap.cs",     "scene bootstrap wiring (finds controllers), not a panel View" },
             { "HudKitController.cs",      "HUD kit wiring; FindAnyObjectByType feeds compass providers (Transform positions), not game state" },
             { "OverworldEncounterSpawner.cs", "world encounter spawner, not a View" },
+            // WO-899: this file gained a world-space Canvas for the build countdown plate (the owner
+            // could not read the old bare 3D text until very close), which is what made the linter
+            // classify it as a View for the first time - the scan went 90 -> 91 files. Its
+            // FindObjectsByType<Building> is PRE-EXISTING and unchanged (verified: present in HEAD,
+            // absent from the diff): a ONE-SHOT attach helper that locates the structure to decorate.
+            // Same category as CollectorStackView above - a world-space diegetic decorator, not a
+            // panel reading game state. Listed rather than baselined because KnownBaseline is
+            // deliberately EMPTY (WO-744 complete) and must stay that way.
+            { "UnderConstructionVisual.cs", "world-space build-countdown decorator; one-shot FindObjectsByType<Building> attach helper (pre-existing), not a panel View" },
             { "EchoUnlockDialogue.cs",    "EventSystem-ensure find, not a game-state read" },
             { "EchoUnlockFeedback.cs",    "EventSystem-ensure find, not a game-state read" },
             { "InventoryUIBuilder.cs",    "sibling-UI panel find; its state reads were migrated in Silo B" },
