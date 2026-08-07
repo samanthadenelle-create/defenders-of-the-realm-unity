@@ -69,15 +69,24 @@ namespace DeNelle.Editor.RoomForge
                 return false;
             }
 
+            // The baker ABORTS on any mate/drift/overlap failure without throwing - it just does
+            // not save. So "the call returned" is NOT success: an earlier version of this counted
+            // three aborted bakes as composed=3/3, which is exactly the kind of false green this
+            // project treats as worse than a red. Judge by the SCENE FILE moving on disk.
+            string scenePath = "Assets/Scenes/DungeonCompose/" +
+                               Path.GetFileNameWithoutExtension(graphFile) + ".unity";
+            long before = File.Exists(scenePath) ? File.GetLastWriteTimeUtc(scenePath).Ticks : -1L;
+
             // populateForPlay: seat the hero + the room spawners so each dungeon is enterable
             // straight off its portal, the same way the starter loop is.
-            bool ok = false;
             Guard.Try(Sys, $"compose {graphFile}", () =>
-            {
-                GraphDungeonComposer.ComposeAndBake(path, populateForPlay: true);
-                ok = true;
-            });
-            return ok;
+                GraphDungeonComposer.ComposeAndBake(path, populateForPlay: true));
+
+            long after = File.Exists(scenePath) ? File.GetLastWriteTimeUtc(scenePath).Ticks : -1L;
+            bool saved = after > before;
+            if (!saved)
+                FlowTrace.Fail(Sys, $"{graphFile} did NOT save a scene (bake aborted - read its SUMMARY line for mate/drift/overlap counts)");
+            return saved;
         }
     }
 }

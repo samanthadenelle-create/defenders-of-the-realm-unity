@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "dungeonId": "dg_sunken_vault",
+  "dungeonId": "dg_bonecrypt",
   "cellSize": 1.0,
   "rooms": [
     {
@@ -17,8 +17,8 @@
       "chests": null
     },
     {
-      "prefab": "Intersection",
-      "instanceId": "hub0",
+      "prefab": "TJunction",
+      "instanceId": "tj0",
       "cell": [
         0,
         0,
@@ -30,62 +30,27 @@
       "chests": null
     },
     {
-      "prefab": "RewardVault",
-      "instanceId": "vault0",
+      "prefab": "LoreShrine",
+      "instanceId": "shrine0",
       "cell": [
         -6,
         0,
         6
       ],
       "yawDeg": 270.0,
-      "archetype": "reward",
+      "archetype": "lore",
       "encounter": null,
-      "chests": [
-        {
-          "id": "sv-vault0-chest",
-          "lootTableId": "dungeon-chest",
-          "visual": "chest",
-          "offset": [
-            0.0,
-            0.0,
-            1.2
-          ]
-        }
-      ]
+      "chests": null
     },
     {
-      "prefab": "SecretAlcove",
-      "instanceId": "secret0",
+      "prefab": "StairDown",
+      "instanceId": "stair_dn_0",
       "cell": [
         6,
         0,
         6
       ],
       "yawDeg": 90.00001,
-      "archetype": "secret",
-      "encounter": null,
-      "chests": [
-        {
-          "id": "sv-secret0-cache",
-          "lootTableId": "chest-rare",
-          "visual": "crate",
-          "offset": [
-            0.0,
-            0.0,
-            1.0
-          ]
-        }
-      ]
-    },
-    {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_0",
-      "cell": [
-        0,
-        0,
-        12
-      ],
-      "yawDeg": 0.0,
       "archetype": "hub",
       "encounter": null,
       "chests": null
@@ -94,9 +59,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_1",
       "cell": [
-        0,
+        6,
         -6,
-        12
+        6
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -107,9 +72,9 @@
       "prefab": "Straight",
       "instanceId": "corr1",
       "cell": [
-        0,
+        6,
         -6,
-        6
+        0
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -135,9 +100,9 @@
       "prefab": "CombatChamber",
       "instanceId": "combat1",
       "cell": [
-        0,
+        6,
         -6,
-        -3
+        -9
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -159,11 +124,11 @@
       },
       "chests": [
         {
-          "id": "sv-combat1-crate",
+          "id": "bc-combat1-crate",
           "lootTableId": "crate-common",
           "visual": "crate",
           "offset": [
-            2.0,
+            2.2,
             0.0,
             -2.0
           ]
@@ -174,9 +139,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_1",
       "cell": [
-        0,
+        6,
         -6,
-        -12
+        -18
       ],
       "yawDeg": 180.0,
       "archetype": "hub",
@@ -187,9 +152,9 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_2",
       "cell": [
-        0,
+        6,
         -12,
-        -12
+        -18
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -198,11 +163,11 @@
     },
     {
       "prefab": "TJunction",
-      "instanceId": "tjunc2",
+      "instanceId": "tj2",
       "cell": [
-        0,
+        6,
         -12,
-        -18
+        -24
       ],
       "yawDeg": 180.0,
       "archetype": "combat",
@@ -210,25 +175,25 @@
       "chests": null
     },
     {
-      "prefab": "RewardVault",
-      "instanceId": "vault2",
+      "prefab": "SecretAlcove",
+      "instanceId": "keyvault2",
       "cell": [
-        6,
+        12,
         -12,
-        -18
+        -24
       ],
       "yawDeg": 90.00002,
-      "archetype": "reward",
+      "archetype": "secret",
       "encounter": null,
       "chests": [
         {
-          "id": "sv-vault2-chest",
+          "id": "bc-keyvault-cache",
           "lootTableId": "dungeon-chest",
           "visual": "chest",
           "offset": [
             0.0,
             0.0,
-            1.2
+            1.0
           ]
         }
       ]
@@ -237,9 +202,9 @@
       "prefab": "Straight",
       "instanceId": "corr2",
       "cell": [
-        -6,
+        0,
         -12,
-        -18
+        -24
       ],
       "yawDeg": 90.0,
       "archetype": "combat",
@@ -265,9 +230,9 @@
       "prefab": "StairDown",
       "instanceId": "stair_dn_2",
       "cell": [
+        -6,
         -12,
-        -12,
-        -18
+        -24
       ],
       "yawDeg": 270.0,
       "archetype": "hub",
@@ -278,9 +243,85 @@
       "prefab": "StairUp",
       "instanceId": "stair_up_3",
       "cell": [
+        -6,
+        -18,
+        -24
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Intersection",
+      "instanceId": "inter3",
+      "cell": [
+        -6,
+        -18,
+        -30
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "RewardVault",
+      "instanceId": "vault3",
+      "cell": [
         -12,
         -18,
-        -18
+        -30
+      ],
+      "yawDeg": 270.0,
+      "archetype": "reward",
+      "encounter": null,
+      "chests": [
+        {
+          "id": "bc-vault3-chest",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [
+            0.0,
+            0.0,
+            1.2
+          ]
+        }
+      ]
+    },
+    {
+      "prefab": "LoreShrine",
+      "instanceId": "shrine3",
+      "cell": [
+        0,
+        -18,
+        -30
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "lore",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairDown",
+      "instanceId": "stair_dn_3",
+      "cell": [
+        -6,
+        -18,
+        -36
+      ],
+      "yawDeg": 180.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairUp",
+      "instanceId": "stair_up_4",
+      "cell": [
+        -6,
+        -24,
+        -36
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -289,17 +330,17 @@
     },
     {
       "prefab": "ChokePoint",
-      "instanceId": "approach3",
+      "instanceId": "approach4",
       "cell": [
-        -12,
-        -18,
-        -24
+        -6,
+        -24,
+        -42
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
       "encounter": {
         "kind": "hollow-group",
-        "min": 4,
+        "min": 5,
         "max": 7,
         "seatMode": "ring",
         "formationRadius": 3.0,
@@ -317,11 +358,11 @@
     },
     {
       "prefab": "BossKeep",
-      "instanceId": "warden",
+      "instanceId": "necromancer_keep",
       "cell": [
-        -12,
-        -18,
-        -33
+        -6,
+        -24,
+        -51
       ],
       "yawDeg": 180.0,
       "archetype": "boss",
@@ -335,15 +376,15 @@
           "mode": "room",
           "slack": 3.0,
           "returnHome": false,
-          "wakeRadius": 9.0
+          "wakeRadius": 10.0
         },
         "isBoss": true,
-        "enemyType": "hollow-warrior",
-        "displayName": "The Hollow Warden"
+        "enemyType": "necromancer",
+        "displayName": "The Bonecrypt Necromancer"
       },
       "chests": [
         {
-          "id": "sv-warden-hoard",
+          "id": "bc-necro-hoard",
           "lootTableId": "dungeon-deepboss",
           "visual": "chest",
           "offset": [
@@ -359,25 +400,19 @@
     {
       "fromInstance": "entry",
       "fromSocket": "n_door_01",
-      "toInstance": "hub0",
+      "toInstance": "tj0",
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "hub0",
-      "fromSocket": "n_door_01",
+      "fromInstance": "tj0",
+      "fromSocket": "e_door_01",
       "toInstance": "stair_dn_0",
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "hub0",
-      "fromSocket": "e_door_01",
-      "toInstance": "secret0",
-      "toSocket": "s_door_01"
-    },
-    {
-      "fromInstance": "hub0",
+      "fromInstance": "tj0",
       "fromSocket": "w_door_01",
-      "toInstance": "vault0",
+      "toInstance": "shrine0",
       "toSocket": "s_door_01"
     },
     {
@@ -413,19 +448,19 @@
     {
       "fromInstance": "stair_up_2",
       "fromSocket": "s_door_01",
-      "toInstance": "tjunc2",
+      "toInstance": "tj2",
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "tjunc2",
+      "fromInstance": "tj2",
       "fromSocket": "e_door_01",
       "toInstance": "corr2",
       "toSocket": "n_door_01"
     },
     {
-      "fromInstance": "tjunc2",
+      "fromInstance": "tj2",
       "fromSocket": "w_door_01",
-      "toInstance": "vault2",
+      "toInstance": "keyvault2",
       "toSocket": "s_door_01"
     },
     {
@@ -443,13 +478,43 @@
     {
       "fromInstance": "stair_up_3",
       "fromSocket": "s_door_01",
-      "toInstance": "approach3",
+      "toInstance": "inter3",
       "toSocket": "n_door_01"
     },
     {
-      "fromInstance": "approach3",
+      "fromInstance": "inter3",
       "fromSocket": "s_door_01",
-      "toInstance": "warden",
+      "toInstance": "stair_dn_3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "inter3",
+      "fromSocket": "e_door_01",
+      "toInstance": "shrine3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "inter3",
+      "fromSocket": "w_door_01",
+      "toInstance": "vault3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "stair_dn_3",
+      "fromSocket": "stair_down_01",
+      "toInstance": "stair_up_4",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "fromInstance": "stair_up_4",
+      "fromSocket": "s_door_01",
+      "toInstance": "approach4",
+      "toSocket": "n_door_01"
+    },
+    {
+      "fromInstance": "approach4",
+      "fromSocket": "s_door_01",
+      "toInstance": "necromancer_keep",
       "toSocket": "s_door_01"
     }
   ],
@@ -464,7 +529,7 @@
   },
   "oilStones": [
     {
-      "id": "sv-oil-entry",
+      "id": "bc-oil-entry",
       "roomId": "entry",
       "offset": [
         1.8,
@@ -474,18 +539,8 @@
       "radius": 2.5
     },
     {
-      "id": "sv-oil-l1",
-      "roomId": "combat1",
-      "offset": [
-        -2.5,
-        0.0,
-        2.0
-      ],
-      "radius": 2.5
-    },
-    {
-      "id": "sv-oil-l3",
-      "roomId": "approach3",
+      "id": "bc-oil-l3",
+      "roomId": "inter3",
       "offset": [
         0.0,
         0.0,
@@ -496,10 +551,10 @@
   ],
   "traps": [
     {
-      "id": "sv-trap-l1",
+      "id": "bc-trap-l1",
       "roomId": "corr1",
-      "kind": "grate",
-      "damage": 10.0,
+      "kind": "spike",
+      "damage": 12.0,
       "radius": 1.4,
       "offset": [
         0.0,
@@ -508,10 +563,10 @@
       ]
     },
     {
-      "id": "sv-trap-l2",
+      "id": "bc-trap-l2",
       "roomId": "corr2",
       "kind": "spike",
-      "damage": 14.0,
+      "damage": 16.0,
       "radius": 1.4,
       "offset": [
         0.0,
@@ -522,47 +577,37 @@
   ],
   "keys": [
     {
-      "id": "sv-key-secret",
-      "keyId": "sunken-key",
-      "roomId": "secret0",
+      "id": "bc-key-pickup",
+      "keyId": "crypt-key",
+      "roomId": "keyvault2",
       "offset": [
         0.0,
         0.0,
-        0.5
+        -1.0
       ]
     }
   ],
   "locks": [
     {
-      "id": "sv-gate-descent",
-      "keyId": "sunken-key",
-      "fromRoomId": "hub0",
-      "toRoomId": "stair_dn_0",
+      "id": "bc-deep-lock",
+      "keyId": "crypt-key",
+      "fromRoomId": "stair_up_4",
+      "toRoomId": "approach4",
       "fromOffset": [
         0.0,
         0.0,
-        2.0
+        -1.5
       ],
       "toOffset": [
         0.0,
         0.0,
-        0.0
+        1.5
       ]
     }
   ],
   "extracts": [
     {
-      "id": "sv-extract-entry",
-      "roomId": "entry",
-      "offset": [
-        0.0,
-        0.0,
-        -2.5
-      ],
-      "label": "Extract"
-    },
-    {
-      "id": "sv-extract-l1",
+      "id": "bc-extract-l1",
       "roomId": "stair_up_1",
       "offset": [
         1.6,
@@ -572,7 +617,7 @@
       "label": "Extract"
     },
     {
-      "id": "sv-extract-l2",
+      "id": "bc-extract-l2",
       "roomId": "stair_up_2",
       "offset": [
         1.6,
@@ -582,8 +627,18 @@
       "label": "Extract"
     },
     {
-      "id": "sv-extract-l3",
+      "id": "bc-extract-l3",
       "roomId": "stair_up_3",
+      "offset": [
+        1.6,
+        0.0,
+        0.0
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "bc-extract-l4",
+      "roomId": "stair_up_4",
       "offset": [
         1.6,
         0.0,

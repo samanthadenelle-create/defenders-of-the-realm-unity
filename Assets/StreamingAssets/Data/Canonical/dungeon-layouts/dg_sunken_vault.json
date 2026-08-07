@@ -189,7 +189,7 @@
       "cell": [
         0,
         -12,
-        -13
+        -12
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -202,7 +202,7 @@
       "cell": [
         0,
         -12,
-        -19
+        -18
       ],
       "yawDeg": 180.0,
       "archetype": "combat",
@@ -215,7 +215,7 @@
       "cell": [
         6,
         -12,
-        -19
+        -18
       ],
       "yawDeg": 90.00002,
       "archetype": "reward",
@@ -239,7 +239,7 @@
       "cell": [
         -6,
         -12,
-        -19
+        -18
       ],
       "yawDeg": 90.0,
       "archetype": "combat",
@@ -267,7 +267,7 @@
       "cell": [
         -12,
         -12,
-        -19
+        -18
       ],
       "yawDeg": 270.0,
       "archetype": "hub",
@@ -280,7 +280,7 @@
       "cell": [
         -12,
         -18,
-        -20
+        -18
       ],
       "yawDeg": 0.0,
       "archetype": "hub",
@@ -293,7 +293,7 @@
       "cell": [
         -12,
         -18,
-        -26
+        -24
       ],
       "yawDeg": 0.0,
       "archetype": "combat",
@@ -319,9 +319,9 @@
       "prefab": "BossKeep",
       "instanceId": "warden",
       "cell": [
-        -13,
+        -12,
         -18,
-        -34
+        -33
       ],
       "yawDeg": 180.0,
       "archetype": "boss",

@@ -227,6 +227,15 @@ namespace DeNelle.Editor.Regression
             if (sock.type != expectType)
                 failures.Add($"[prefab-poses] {path} socket '{socketId}' type is {sock.type}, expected {expectType}");
 
+            // GRID ALIGNMENT. The composer emits cell=[round(x),round(y),round(z)] at cellSize=1
+            // and documents that this is lossless because every socket sits on the 3u grid. A
+            // fractional X/Z on a stair socket silently breaks that: each stairwell injects a half
+            // unit, RoundToInt turns it into a FULL unit of drift, and a deep descent eventually
+            // aborts on an overlap far from the real cause. Cheap to assert, expensive to debug.
+            Vector3 lp = sock.transform.localPosition;
+            if (Mathf.Abs(lp.x) > 0.001f || Mathf.Abs(lp.z) > 0.001f)
+                failures.Add($"[prefab-poses] {path} socket '{socketId}' has a fractional/offset X or Z ({lp.x:0.###}, {lp.z:0.###}) - a stair socket must sit on the room axis or the emitted cell grid drifts by a whole unit per floor");
+
             float y = sock.transform.localPosition.y;
             if (Mathf.Abs(y - expectY) > 0.01f)
                 failures.Add($"[prefab-poses] {path} socket '{socketId}' local Y is {y:0.###}, expected {expectY:0.###}. " +
@@ -295,7 +304,7 @@ namespace DeNelle.Editor.Regression
 
         // A stair socket: on the room's vertical axis, half a floor off the origin.
         private static SockSpec StairSock(string id, RoomSocketType type, float localY, Vector3 outward)
-            => new SockSpec { id = id, type = type, local = new Vector3(0f, localY, 0.5f), outward = outward };
+            => new SockSpec { id = id, type = type, local = new Vector3(0f, localY, 0f), outward = outward };
 
         private static GameObject MakeRoom(string id, params SockSpec[] socks)
         {

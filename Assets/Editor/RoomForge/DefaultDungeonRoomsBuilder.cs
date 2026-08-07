@@ -480,7 +480,14 @@ namespace DeNelle.Editor.RoomForge
 
             var go = new GameObject($"Socket_stair_{stairType}");
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, down ? -halfFloor : halfFloor, 0.5f);
+            // X/Z MUST stay 0. The door helper offsets sockets 0.5u off the wall face, and this
+            // socket inherited that - but a stair socket is a hole in the FLOOR and has no wall to
+            // stand off from, so the 0.5 bought nothing and broke the composer's stated invariant:
+            // "sockets at multiples of 3u ... so cell=[round(x),round(y),round(z)] is a lossless
+            // round-trip". Each stairwell injected a half unit that RoundToInt quantised into a
+            // FULL unit of drift, accumulating down a descent until rooms that should exactly touch
+            // sat 1u too close and the bake aborted on overlap (dg_bonecrypt, dg_ember_deep).
+            go.transform.localPosition = new Vector3(0f, down ? -halfFloor : halfFloor, 0f);
             // Explicit up-vector: LookRotation(up) alone is degenerate (forward parallel to the
             // default world up) and yields an arbitrary roll.
             go.transform.localRotation = down
