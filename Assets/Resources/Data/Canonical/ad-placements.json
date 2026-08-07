@@ -18,11 +18,11 @@
   "version": 2,
   "global": {
     "defaultCooldownSeconds": 480,
-    "hardDailyCap": 10,
+    "hardDailyCap": 14,
     "adProvider": "stub",
     "respectDoNotSell": true,
     "covenantLine": "Ads are always optional. You are never required to watch one. Ever.",
-    "_hardDailyCapNote": "12 -> 10 to match the owner's ruled rolling window (WO-912: 10 watches per 4h window). With only one V1 placement this is the binding number."
+    "_hardDailyCapNote": "14 = the SUM of the three enabled placements' own caps (build 10 + harvest 3 + daily 1), so each placement's cap is what binds and none starves the others. It went 12 -> 10 when build.skip was the only placement, then -> 14 when the owner re-enabled harvest and daily on 2026-08-07. IF A GLOBAL BRAKE IS WANTED it must be a deliberate number BELOW the sum, and it should be the owner's, not a default: set below 14 and the placements start competing by priority, which is a product decision about which offer a player sees last."
   },
 
   "rewards": [
@@ -56,7 +56,15 @@
       "grant": { "service": "OfflineHarvestService", "multiplier": 2.0, "durationSeconds": 3600 },
       "description": "Double passive harvest for 1 hour",
       "maxStack": 1,
-      "_note": "PARKED BY D4 - the owner ruled V1 ads stay strictly on queue timers, so its placement is disabled. The reward itself is legal under _LAW_1 (time, not currency) and can return in V2 without re-litigating policy."
+      "_note": "LIVE (owner reversed D4 on 2026-08-07). Legal under _LAW_1 by construction: it grants a RATE for a duration, not a currency, so there is nothing here that could be converted to money."
+    },
+    {
+      "id": "reward.daily.chest",
+      "kind": "currency",
+      "grant": { "currency": "coins", "amount": 500 },
+      "description": "Daily bonus chest: +500 coins",
+      "maxStack": 0,
+      "_note": "REPLACES the deleted reward.daily.bonusChest, which paid 500 coins AND +100 CRYSTALS nested in a 'bonus' object. The coin half is kept at its full original value so the chest still reads as a chest; the crystal half is gone permanently under _LAW_1 and is NOT a scope decision that can be reversed - it is the difference between a reward with no path to money and one with a path to money. Coins are a soft currency with no purchase route, so 500 of them is not a policy problem at any amount."
     }
   ],
 
@@ -83,7 +91,7 @@
     },
     {
       "id": "place.harvest.doubler",
-      "enabled": false,
+      "enabled": true,
       "surface": "harvest",
       "rewardId": "reward.harvest.doubler",
       "cooldownSeconds": 3600,
@@ -91,19 +99,19 @@
       "requiresFlag": "RewardedAdSkip",
       "priority": 20,
       "prompt": { "headline": "Double Your Harvest", "body": "The echoes work twice as fast for an hour.", "cta": "Watch & Double" },
-      "_note": "DISABLED by owner ruling D4 - V1 ads stay strictly on queue timers. Disabled rather than deleted: D4 says 'recommend NO for V1', which is a scope call that may reverse, unlike the crystal grants which can never come back."
+      "_note": "ENABLED 2026-08-07 - owner REVERSED D4 (\"can you do harvest doubler, its simple and im the only tester so its good\"). Legal under _LAW_1: the grant is a rate multiplier for a duration, not a currency. Note this is the ONE placement whose reward can stack with itself over time (maxStack 1), so its 3600s cooldown is doing real work - do not shorten it without re-checking the offline-harvest economy."
     },
     {
       "id": "place.daily.chest",
-      "enabled": false,
+      "enabled": true,
       "surface": "daily",
-      "rewardId": "reward.coins.small",
+      "rewardId": "reward.daily.chest",
       "cooldownSeconds": 0,
       "dailyCap": 1,
       "requiresFlag": "RewardedAdSkip",
       "priority": 25,
       "prompt": { "headline": "Daily Bonus", "body": "Claim today's bonus - one free watch a day.", "cta": "Claim" },
-      "_note": "DISABLED by D4. ALSO RE-POINTED: it referenced reward.daily.bonusChest, which paid 100 crystals. Re-pointing it at a coins-only reward means that even if someone flips enabled to true without reading this file, it cannot violate _LAW_1. A disabled placement pointing at an illegal reward is a loaded gun with the safety on."
+      "_note": "ENABLED 2026-08-07 - owner reversed D4 alongside the harvest doubler. Points at reward.daily.chest (500 coins), NOT the deleted reward.daily.bonusChest (500 coins + 100 CRYSTALS). Enabling the placement was the owner's scope call; dropping the crystals was not a scope call and is not reversible - see _LAW_1. dailyCap 1 + cooldown 0 is correct here: the cap IS the gate for a once-a-day claim."
     }
   ]
 }

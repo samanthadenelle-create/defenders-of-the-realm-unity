@@ -52,6 +52,21 @@ namespace DeNelle.Editor
         /// <summary>Placements the owner ruled OUT. Their presence at all is the failure.</summary>
         private static readonly string[] RetiredPlacements = { "place.defeat.continue", "place.store.crystals" };
 
+        /// <summary>
+        /// Placements the owner has explicitly ruled LIVE. Adding to this list is a record of a
+        /// PO decision, not a way to make a failure go away — an ad offer appearing in the game
+        /// is a product change, and the smallness of this list is what makes that visible.
+        ///
+        /// 2026-08-07: place.build.skip (D4 original), then place.harvest.doubler and
+        /// place.daily.chest when the owner reversed D4 ("its simple and im the only tester").
+        /// </summary>
+        private static readonly string[] RuledLivePlacements =
+        {
+            "place.build.skip",
+            "place.harvest.doubler",
+            "place.daily.chest",
+        };
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
@@ -112,18 +127,32 @@ namespace DeNelle.Editor
                 }
             }
 
-            // ── CASE 3 [v1-scope] — D4: V1 ads stay on queue timers only ───────
+            // ── CASE 3 [v1-scope] — which placements the owner has ruled LIVE ──
+            //  D4 originally allowed only place.build.skip. The owner REVERSED that on 2026-08-07
+            //  and re-enabled the harvest doubler and the daily chest. This case tracks the ruling
+            //  rather than the original recommendation — a guard that keeps failing against a
+            //  decision the PO has already made teaches people to ignore guards.
+            //
+            //  What it still catches is a placement going live that NOBODY ruled on. That is the
+            //  real risk: the set is small and every member of it was a deliberate decision.
             var enabled = new List<string>();
             foreach (var p in placements)
                 if (p["enabled"] != null && (bool)p["enabled"]) enabled.Add((string)p["id"] ?? "(no id)");
 
             log.AppendLine($"  enabled placements: {(enabled.Count == 0 ? "(none)" : string.Join(", ", enabled))}");
 
-            if (enabled.Count != 1 || enabled[0] != "place.build.skip")
-                failures.Add($"[v1-scope] enabled placements are [{string.Join(", ", enabled)}]; owner ruling D4 " +
-                             "(2026-08-07) is that V1 ads stay STRICTLY on queue timers, so exactly one placement - " +
-                             "'place.build.skip' - may be enabled. Re-enabling another is a product decision the PO " +
-                             "makes, not a config tweak; change the ruling first.");
+            foreach (var id in enabled)
+            {
+                if (Array.IndexOf(RuledLivePlacements, id) >= 0) continue;
+                failures.Add($"[v1-scope] placement '{id}' is ENABLED but has not been ruled live. The live set is " +
+                             $"[{string.Join(", ", RuledLivePlacements)}] (owner, 2026-08-07). Turning on an ad offer " +
+                             "is a product decision the PO makes, not a config tweak - get the ruling, then add it here.");
+            }
+
+            if (!enabled.Contains("place.build.skip"))
+                failures.Add("[v1-scope] 'place.build.skip' is not enabled. It is the queue-timer placement the whole " +
+                             "WO-912 covenant and its near-miss economics are built on; if it is genuinely being " +
+                             "retired that needs a ruling, not a disabled flag.");
 
             // ── CASE 4 [disabled-rows-still-legal] ────────────────────────────
             //  A disabled placement pointing at an illegal reward is a loaded gun with the safety
