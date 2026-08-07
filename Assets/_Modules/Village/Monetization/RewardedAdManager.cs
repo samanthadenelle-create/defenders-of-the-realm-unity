@@ -24,11 +24,14 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Rewarded-ad gate. Call <see cref="TryShowAd"/>; it returns false while the
-    /// cooldown is still active, otherwise it records the view time and runs the
-    /// (stubbed) ad via <see cref="ShowAdInternal"/>, which invokes the reward
-    /// callback. Cooldown is a fixed 8 minutes, tracked with realtime so it is
-    /// unaffected by pausing (Time.timeScale = 0).
+    /// Rewarded-ad gate. Call <see cref="TryShowAd"/>; it returns TRUE ONLY when a reward was
+    /// genuinely earned. It returns false when the feature flag
+    /// <see cref="DeNelle.Core.FeatureFlags.RewardedAdSkip"/> is OFF (the shipping state — no ad
+    /// SDK exists), while the cooldown is still active, or when <see cref="ShowAdInternal"/>
+    /// refuses/fails to present an ad. Cooldown is a fixed 8 minutes, tracked with realtime so it
+    /// is unaffected by pausing (Time.timeScale = 0), and is spent only by an ad actually presented.
+    /// NOTE for the future SDK pass: real rewarded ads complete ASYNCHRONOUSLY, so an override will
+    /// need this bool contract revisited (present -> await callback -> grant), not just filled in.
     /// </summary>
     public class RewardedAdManager : MonoBehaviour
     {
@@ -75,28 +78,75 @@ namespace DeNelle.Village
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
         /// <summary>
-        /// Attempts to show a rewarded ad. Returns false (and does nothing) if the
-        /// cooldown is still active. Otherwise records the view time and dispatches
-        /// to <see cref="ShowAdInternal"/>, which is responsible for invoking
-        /// <paramref name="onReward"/> on successful completion.
+        /// Attempts to show a rewarded ad. Returns TRUE ONLY when <paramref name="onReward"/> was
+        /// actually invoked by <see cref="ShowAdInternal"/> — i.e. a reward was genuinely earned.
+        /// Returns false (granting nothing) when the RewardedAdSkip flag is OFF, while the cooldown
+        /// is still active, or when the presentation refuses/throws. It no longer returns true just
+        /// because it dispatched: callers toast "skipped" off this bool, so a true here with no ad
+        /// shown is the exact free-reward bug this replaces.
         /// </summary>
         public bool TryShowAd(Action onReward)
         {
+            // RELEASE BLOCKER GATE (2026-08-07): the whole rewarded-ad path is flag-gated OFF
+            // until a real SDK + WO-912 server-side window validation land. Refusing HERE as well
+            // as at every UI build site means a stale caller can never reach the reward.
+            if (!DeNelle.Core.FeatureFlags.RewardedAdSkip)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Ads", "flagoff",
+                    "TryShowAd refused: ff.rewardedadskip is OFF (no ad SDK is wired). " +
+                    "No ad is shown and NO reward is granted. See FeatureFlags.RewardedAdSkip.");
+                return false;
+            }
+
             if (!IsAdReady) return false;
-            _lastShownRealtime = Time.realtimeSinceStartup;
-            ShowAdInternal(onReward);
-            return true;
+
+            // The reward may ONLY be granted by a genuine completion callback, so the caller's
+            // action is wrapped: we record whether it actually fired rather than assuming it did.
+            bool granted = false;
+            Action onRewardEarned = () =>
+            {
+                granted = true;
+                onReward?.Invoke();
+            };
+
+            // A throwing SDK presentation must never silently blank the queue screen (CLAUDE.md 12).
+            bool presented = false;
+            DeNelle.Core.Diagnostics.Guard.Try("Ads", "RewardedAdManager.ShowAdInternal",
+                () => { presented = ShowAdInternal(onRewardEarned); });
+
+            // Cooldown is spent only by an ad that was really presented — a refusal must not
+            // lock the player out of a retry once the SDK is wired.
+            if (presented) _lastShownRealtime = Time.realtimeSinceStartup;
+
+            return granted;
         }
 
         /// <summary>
-        /// Stub ad presentation. Immediately grants the reward (no SDK). Override
-        /// in a platform-specific subclass to present a real rewarded ad and only
-        /// invoke <paramref name="onReward"/> on genuine completion.
+        /// Ad presentation seam. Returns true only when a real rewarded ad was actually presented
+        /// by an SDK; the reward itself must come from that SDK's genuine completion callback
+        /// (AdMob OnUserEarnedReward / Unity Ads OnUnityAdsShowComplete) by invoking
+        /// <paramref name="onReward"/> — NEVER from "we showed it".
+        ///
+        /// THIS BASE IMPLEMENTATION IS A REFUSAL, NOT A REWARD. No ad SDK exists anywhere in this
+        /// project (no AdMob / Unity Ads / ironSource / AppLovin package in Packages/manifest.json,
+        /// no ad unit id, no mediation), so there is nothing to show and nothing has been earned.
+        /// It used to call onReward unconditionally, which made "Watch an ad to skip 10 minutes" a
+        /// button that granted the reward instantly, for free, with no ad and no revenue — and once a
+        /// real network sits behind it, granting-on-show is fraud against that network.
         /// </summary>
-        // TODO: integrate Unity Ads / AdMob SDK in a platform override of this method.
-        protected virtual void ShowAdInternal(Action onReward)
+        // TODO (blocked on FeatureFlags.RewardedAdSkip prerequisites): integrate Unity Ads / AdMob in
+        // a platform override of this method. The override presents the ad, returns true, and calls
+        // onReward ONLY from the SDK's earned-reward callback.
+        protected virtual bool ShowAdInternal(Action onReward)
         {
-            onReward?.Invoke();
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Ads",
+                "ShowAdInternal: NO ad SDK is wired in this project (no AdMob/Unity Ads/ironSource/" +
+                "AppLovin package, no ad unit id, no mediation), so no ad can be presented. " +
+                "The reward is WITHHELD on purpose - it may only ever be granted from a real " +
+                "OnUserEarnedReward callback, never from having shown something. " +
+                "See FeatureFlags.RewardedAdSkip for the two prerequisites (real SDK + WO-912 " +
+                "server-side ad-window validation).");
+            return false;
         }
     }
 }
