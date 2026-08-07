@@ -74,7 +74,30 @@ not a verbal or chat assurance — D3 requires it in writing.
 category, ask support to route it to the ad policy / Regulated Activities team and keep the case ID.
 
 **Unity organization: `samanthadenelle`** (owner, confirmed 2026-08-07 from the Unity Cloud dashboard).
-Include it in the case so it routes to the right account.
+**Unity Monetization Project ID: `435f5e1e-b8bf-4f9f-8143-7d5eca669c67`** (created 2026-08-07).
+Include both in the case so it routes to the right account *and* the right project.
+
+### Where the owner is in the runbook right now (2026-08-07)
+
+| Step | State |
+|---|---|
+| Unity org exists | ✅ `samanthadenelle` |
+| Unity Ads Monetization **project** created | ✅ `435f5e1e-…` |
+| Developer Data → Unity Ads access granted | ✅ (a data-sharing consent, **not** an approval — see above) |
+| Payout profile | ⬜ not set — **and not needed to ask a policy question** |
+| Install Unity Ads SDK | ⛔ **BLOCKED BY D3** |
+| Install MAX SDK + Unity Ads adapter | ⛔ **BLOCKED BY D3** |
+| Set Mediation Partner = AppLovin MAX | ⬜ project → Settings → Mediation Partner |
+| Create bidding placement + copy Placement ID | ⬜ |
+| Create MAX ad units + map the IDs | ⬜ |
+
+**The dashboard's "Install the SDK — Required" card is exactly the step D3 gates.** Creating a project
+is reversible and commits nothing; installing the SDK and minting placements is where we start
+operating inventory under a policy we have not yet been told we pass.
+
+**The "now available for in-app bidding in Unity LevelPlay" banner is Unity marketing its own
+mediation.** D2 chose **AppLovin MAX**. Ignore the banner; the step that matters is setting the
+Mediation Partner explicitly.
 
 ### What is already done, and what it is NOT
 
