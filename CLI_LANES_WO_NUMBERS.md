@@ -1,6 +1,10 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-05 (CLI): main line next free = **911**. **782–859 + 900–910 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-05 (CLI / Grok timers): main line next free = **912**. **782–859 + 900–911 CONSUMED.**
+> - **911** = **Timer speed-ups actually available** — Instant crystals + Ad skip on ALL channels
+>   (Builder/Train/Research); root cause: Instant only resolved Builder + dead Ad hid all CTAs.
+>   Crystal packs stay existing currency (no new type). File
+>   `WORK_ORDER_911_timer_speedup_crystals_all_channels.md`. **READY.**
 > - **910** = **Ranger + Mage talent trees: 31 player-reachable nodes have no consumer.** Surfaced the
 >   moment `TalentStrategyRegression`'s `HiddenTrees` was emptied — it had hardcoded `{"ranger","mage"}`,
 >   so guard G3 had NEVER audited 40 player-reachable nodes while reporting green. **Ranger collapses to
@@ -166,8 +170,33 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **911** (782–859 + 900–**910** consumed; 860–899 belongs to the UI seat) |
-> | **860–899 reserved** | UI seat | **895** (860–894 consumed) |
+> | **main line** | CLI | **912** (782–859 + 900–**911** consumed; 860–899 was the UI seat's old block) |
+> | **1000–1099 reserved** | UI seat | **1001** (1000 consumed) |
+>
+> *(UI-seat bumped 1000 → 1001 with the WO-1000 mint — Starter dungeon (KayKit Challenge Outpost) visual
+> overhaul: enclose the top / kill daylight, KayKit textured shell + ceiling, candle-VFX lighting, fog/haze,
+> real props — to the Healer's Cottage bar.)*
+> | ~~860–899~~ | ~~UI seat~~ | ⛔ **CLOSED — 860–899 ALL CONSUMED.** Last mint 899 = HUD polish (analog joystick + wide compass + attack/dodge blend + empty-slot "add skill"). Do not mint here again. |
+>
+> ### ⚠ OWNER RULING 2026-08-07: the UI seat moves to the **1000s**.
+> Her words: *"we can move to 1000's."* The old 860–899 block filled up, and the previously
+> *recommended* "913+" was **WRONG and would have collided** — the CLI main line is at next-free
+> **912** and climbing, so 913 is the CLI's very next number but one. The two blocks must stay
+> **DISJOINT**, which is the entire point of the two-block scheme (five collisions in one day,
+> 2026-08-02, all caused by two seats sharing a number space).
+>
+> **1000–1099 is the UI seat's. The main line stays below 1000 and must never cross it.**
+> If the main line ever approaches 1000, allocate the CLI a fresh block rather than eating into
+> this one. Each seat still bumps ITS OWN row in the SAME edit as its mint — that rule is unchanged
+> and is what actually prevents collisions; a disjoint block only removes the chance of a tie.
+>
+> *(UI-seat bumped 898 → 899 with the WO-898 mint — queue progress bars + "Complete now" with crystals
+> (any item/channel; 5-min-bracket cost, flat under 5 min). ⚠ **899 is the LAST number in the UI-seat
+> 860–899 block — the block is now full after one more mint; a new UI-seat range must be allocated.**)*
+>
+> *(UI-seat bumped 895 → 898 in the same edit as three mints: WO-895 building-upgrade "next-only" redesign +
+> stateful button, WO-896 skill-tree connected-progression-line redesign, WO-897 army composition auto-queue.
+> 894 = Victory screen spinning stars.)*
 >
 > *(⚠ **Row corrected 2026-08-06:** the main-line cell read `910` while the RECONCILED banner at the top of
 > this file — written in the same edit as the WO-910 mint — already said next free = **911** and
