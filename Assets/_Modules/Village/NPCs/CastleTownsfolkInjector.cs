@@ -30,6 +30,7 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.AI;
@@ -67,11 +68,34 @@ namespace DeNelle.Village
         private const float GroundMinY = -0.35f;
         private const float GroundMaxY = 0.75f;
 
-        // People-pack peasant bodies — the same Resources source every NPC injector uses.
+        // The 14 CraftPix medieval townsfolk bodies (owner ruling 2026-08-07: "REPLACE the
+        // town's villager bodies with the 14 CraftPix medieval people" — before this the
+        // WHOLE town wandered on just Mevina + Tob, so every villager was one of two faces).
+        //
+        // Authored by Assets/Editor/CraftPixPeopleBuilder.cs (menu: Defenders/Art/Build
+        // CraftPix Townsfolk Bodies); art staged under Assets/Art/People/CraftPix. The two
+        // People-pack peasants are NOT retired — seven other call sites still load them
+        // (the vendor/steward/quest-cast/introducer injectors + TorchWardenDress +
+        // VillageNpcInjector); they are simply no longer THIS injector's pool.
+        //
+        // Resources-relative form, exactly what Resources.Load expects (paths verified
+        // against CraftPixPeopleBuilder.ExpectedResourcePaths by TownsfolkBodyPoolRegression).
         private static readonly string[] BodyPool =
         {
-            "NPCs/NPC_Peasant_Mevina",
-            "NPCs/NPC_Peasant_Tob",
+            "NPCs/CraftPixPeople/NPC_CityDweller_1",
+            "NPCs/CraftPixPeople/NPC_CityDweller_2",
+            "NPCs/CraftPixPeople/NPC_Peasant_1",
+            "NPCs/CraftPixPeople/NPC_Peasant_2",
+            "NPCs/CraftPixPeople/NPC_Peasant_3",
+            "NPCs/CraftPixPeople/NPC_Peasant_4",
+            "NPCs/CraftPixPeople/NPC_Peasant_5",
+            "NPCs/CraftPixPeople/NPC_Peasant_6",
+            "NPCs/CraftPixPeople/NPC_RichCitizen_1",
+            "NPCs/CraftPixPeople/NPC_RichCitizen_2",
+            "NPCs/CraftPixPeople/NPC_RichCitizen_3",
+            "NPCs/CraftPixPeople/NPC_RichCitizen_4",
+            "NPCs/CraftPixPeople/NPC_King",
+            "NPCs/CraftPixPeople/NPC_Queen",
         };
 
         // Generic everyday voices only — no warden/vendor archetypes (those speak as
@@ -181,6 +205,32 @@ namespace DeNelle.Village
                 $"BLANK-1 gate: {anchors.Count} in-ring building(s) -> spawning {toPlace} villager(s) " +
                 $"(cap {VillagerCount}; one per distinct home building).");
 
+            // BODY VARIETY (2026-08-07, with the 14-body repoint). The old pick was
+            // BodyPool[index % BodyPool.Length] with index = the slot number. With a
+            // TWO-entry pool that alternated; with a FOURTEEN-entry pool and only
+            // VillagerCount(5) slots it would have frozen the town onto entries 0..4 and
+            // the other nine bodies could never have spawned at all — the exact defect
+            // this repoint exists to fix, reintroduced by arithmetic. A shuffled order
+            // instead gives DISTINCT bodies within a run (no twins standing together) and
+            // a different cast each session.
+            int[] bodyOrder = ShuffledBodyOrder();
+            if (bodyOrder.Length == 0)
+            {
+                // Impossible by construction today (BodyPool is a 14-entry literal), but the
+                // pick below is `i % bodyOrder.Length` - an emptied pool would be a
+                // DivideByZeroException OUTSIDE any Guard, killing the whole injection rather
+                // than degrading. One line buys a named failure instead of a silent dead town.
+                FlowTrace.Fail("Townsfolk",
+                    "CastleTownsfolkInjector: BodyPool is EMPTY - no villager body can be picked; injecting nothing.");
+                return;
+            }
+            // Name the cast in the trace: "the town is all one face again" is a LOOK bug with
+            // no exception behind it, so the only thing that can ever prove or disprove it
+            // from a capture is the list of bodies this run actually chose.
+            FlowTrace.Step("Townsfolk",
+                $"body cast ({BodyPool.Length}-body pool, {toPlace} drawn): " +
+                string.Join(", ", bodyOrder.Take(Mathf.Max(0, toPlace)).Select(b => BodyPool[b])));
+
             int placed = 0;
             for (int i = 0; i < toPlace; i++)
             {
@@ -195,7 +245,8 @@ namespace DeNelle.Village
                     continue;
                 }
 
-                if (SpawnVillager(i, pos, hero, holder.transform)) placed++;
+                string bodyRes = BodyPool[bodyOrder[i % bodyOrder.Length]];
+                if (SpawnVillager(i, bodyRes, pos, hero, holder.transform)) placed++;
             }
 
             if (placed == 0)
@@ -248,12 +299,39 @@ namespace DeNelle.Village
             return false;
         }
 
-        /// <summary>Spawns ONE wandering villager. Guarded end to end — a failed spawn
-        /// logs (Warn/Fail -> break-log) and is skipped, never throws.</summary>
-        private bool SpawnVillager(int index, Vector3 pos, Transform hero, Transform parent)
+        /// <summary>
+        /// A shuffled 0..BodyPool.Length-1 order (Fisher-Yates). Drawing slots off the FRONT
+        /// of this gives DISTINCT bodies for as many villagers as the pool has entries, and a
+        /// different cast every session. Guarded: if the shuffle ever throws, the identity
+        /// order is returned so the town still populates (with the old fixed cast) rather
+        /// than going empty.
+        /// </summary>
+        private static int[] ShuffledBodyOrder()
+        {
+            var order = new int[BodyPool.Length];
+            for (int i = 0; i < order.Length; i++) order[i] = i;
+
+            bool shuffled = Guard.Try("Townsfolk", "shuffle body order", () =>
+            {
+                for (int i = order.Length - 1; i > 0; i--)
+                {
+                    int j = Random.Range(0, i + 1);
+                    (order[i], order[j]) = (order[j], order[i]);
+                }
+            });
+            if (!shuffled)
+                FlowTrace.Warn("Townsfolk",
+                    "CastleTownsfolkInjector: body shuffle failed - falling back to declaration order " +
+                    "(the town still populates, but always with the same first faces).");
+
+            return order;
+        }
+
+        /// <summary>Spawns ONE wandering villager on the given body. Guarded end to end — a
+        /// failed spawn logs (Warn/Fail -> break-log) and is skipped, never throws.</summary>
+        private bool SpawnVillager(int index, string bodyRes, Vector3 pos, Transform hero, Transform parent)
         {
             var arch = ArchPool[index % ArchPool.Length];
-            string bodyRes = BodyPool[index % BodyPool.Length];
 
             GameObject go = null;
             var prefab = Resources.Load<GameObject>(bodyRes);

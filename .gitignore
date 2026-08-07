@@ -118,6 +118,17 @@ Thumbs.db
 # (the Portal falls back to a box doorway, buildings would need the re-copy).
 /Assets/Art/TripoStructures/
 /Assets/Art/TripoStructures.meta
+# DELIBERATELY NOT IGNORED (2026-08-07): /Assets/Art/People/CraftPix/ - the 14
+# CraftPix medieval townsfolk FBX + their single shared atlas + License.txt, staged
+# by hand from the owner's download and consumed by CraftPixPeopleBuilder ->
+# Assets/Resources/NPCs/CraftPixPeople/*.prefab -> CastleTownsfolkInjector.BodyPool.
+# This is owner-downloaded art that is NOT re-derivable from any pack: ignoring it
+# would mean it exists on exactly one disk, and every other clone would spawn grey
+# capsule placeholders in the town (same class as the Resources/Structures debt
+# documented below and the 183 gitignored VFX dependencies fixed 2026-08-05).
+# NO rule in this file matches that path today, so no negation is required - the
+# note exists so a future blanket /Assets/Art/ ignore does not silently kill it.
+# (.gitattributes routes *.fbx + *.png through LFS, so it travels as pointers.)
 # NOTE the trailing /* rather than a bare /: git NEVER DESCENDS into an excluded
 # DIRECTORY, so a `!` negation on a file inside `/Assets/Resources/Structures/` was
 # silently dead - `git check-ignore -v` blamed line 121 for every owner-sourced FBX the

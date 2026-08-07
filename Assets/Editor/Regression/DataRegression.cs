@@ -587,6 +587,16 @@ namespace DeNelle.Editor
             // still write the serialized kind the bake depends on ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-encounter-family suite", () => { if (!DeNelle.Editor.Regression.DungeonEncounterFamilyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-encounter-family] " + r); });
 
+            // --- TOWNSFOLK BODIES (owner ruling 2026-08-07): the whole town wandered on
+            // TWO People-pack peasants; CastleTownsfolkInjector.BodyPool now names the 14
+            // CraftPix bodies. Every failure in that chain is SILENT - a bad Resources path,
+            // an unbuilt prefab, a body with no visible mesh, or a URP material with no
+            // albedo bound all produce a warning + a grey capsule or a flat grey person, not
+            // an error. The albedo half is the one that has actually shipped here before
+            // (WO-719's white spire, the white Knight, the 73 gitignored VFX dependencies of
+            // 2026-08-05), because a shader-only check passes an untextured URP mesh ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "townsfolk-bodies suite", () => { if (!DeNelle.Editor.Regression.TownsfolkBodyPoolRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[townsfolk-bodies] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

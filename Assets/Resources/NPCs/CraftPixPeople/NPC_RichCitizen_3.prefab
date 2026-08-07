@@ -1,0 +1,164 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &3180464669632433839
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 194774638527659012, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.13352141
+      objectReference: {fileID: 0}
+    - target: {fileID: 194774638527659012, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.005891358
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_Name
+      value: NPC_RichCitizen_3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158908165976907798, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: b4740a4b2719ff24ba7c8687a855dbf5, type: 2}
+    - target: {fileID: 5866666021909216657, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 001f9e4d19f878a4f94f1656f2638f15, type: 2}
+    - target: {fileID: 7868560801137508580, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.0676003
+      objectReference: {fileID: 0}
+    - target: {fileID: 7868560801137508580, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.09443714
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1579911732403597244}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7847226928477897305}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6168244599686793800}
+  m_SourcePrefab: {fileID: 100100000, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+--- !u!1 &2369507024935465982 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 0b8331a6764966740955bcc8e3316301, type: 3}
+  m_PrefabInstance: {fileID: 3180464669632433839}
+  m_PrefabAsset: {fileID: 0}
+--- !u!195 &1579911732403597244
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2369507024935465982}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
+--- !u!114 &7847226928477897305
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2369507024935465982}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e7171055d86cd8488e5fe12b46bcb2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.AmbientNPC
+  _archetype: 1
+  _wander: 1
+  _roamRadius: 7
+  _walkSpeed: 1.6
+  _pauseSeconds: 2.5
+  _speakRadius: 5.5
+  _speakHysteresis: 1.5
+  _swayHz: 0.45
+  _swayAmplitude: 0.04
+  _reducedMotion: 0
+  _bubble: {fileID: 0}
+  _homeAnchor: {x: 0, y: 0, z: 0}
+--- !u!114 &6168244599686793800
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2369507024935465982}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9172a30bde6a1f47bc0e58df10e51ae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.TownsfolkBubble
+  _height: 2.3
+  _panelWidth: 1.8
+  _panelHeight: 0.7
+  _panelColor: {r: 1, g: 0.99, b: 0.96, a: 0.94}
+  _outlineColor: {r: 0.14, g: 0.11, b: 0.09, a: 0.85}
+  _textColor: {r: 0.1, g: 0.08, b: 0.06, a: 1}
+  _wrapWidth: 22
+  _textScale: 0.07
+  _autoHideSeconds: 4.5
