@@ -27,6 +27,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Dungeons
@@ -112,6 +113,11 @@ namespace DeNelle.Dungeons
         private DungeonController _controller;
         private Transform _hero;
         private IReadOnlyList<DungeonOilStone> _oilStones;
+        /// <summary>
+        /// WO-1001 slice 5: composed dungeons have no full DungeonController — when true,
+        /// oil drains without a cottage run state (ComposedDungeonBootstrap arms this).
+        /// </summary>
+        private bool _standaloneRun;
 
         /// <summary>Current oil in the flask, 0..maxOil.</summary>
         private float _oil;
@@ -191,10 +197,28 @@ namespace DeNelle.Dungeons
             Transform hero)
         {
             _controller = controller;
+            _standaloneRun = false;
             _oilStones = oilStones;
             _hero = hero;
             _oil = _maxOil;
             _liveRange = FullRange;
+        }
+
+        /// <summary>
+        /// WO-1001 slice 5: arm the lantern on a composed dungeon (no DungeonController).
+        /// Oil drains for the whole scene visit; oil stones still refill on proximity.
+        /// </summary>
+        public void ConfigureStandalone(IReadOnlyList<DungeonOilStone> oilStones, Transform hero)
+        {
+            _controller = null;
+            _standaloneRun = true;
+            _oilStones = oilStones;
+            _hero = hero;
+            _oil = _maxOil;
+            _liveRange = FullRange;
+            FlowTrace.Step("Dungeon",
+                $"Lantern.ConfigureStandalone: oil={_oil:F0} stones={oilStones?.Count ?? 0} " +
+                $"hero='{(hero != null ? hero.name : "<null>")}' (composed path)");
         }
 
         /// <summary>
@@ -219,9 +243,10 @@ namespace DeNelle.Dungeons
         {
             FollowHero();
 
-            bool runActive = _controller != null
-                && _controller.RuntimeState != null
-                && _controller.RuntimeState.RunActive;
+            bool runActive = _standaloneRun
+                || (_controller != null
+                    && _controller.RuntimeState != null
+                    && _controller.RuntimeState.RunActive);
 
             if (runActive)
             {
@@ -258,13 +283,16 @@ namespace DeNelle.Dungeons
         {
             if (_hero == null || _oilStones == null) return;
             Vector3 heroPos = _hero.position;
-            heroPos.y = 0f;
+            // Cottage oil stones are planar (Y=0 layout). Composed multi-level uses full 3D
+            // so a stone on floor -6 does not refill the hero on floor 0 (WO-1001 slice 5).
+            bool planar = !_standaloneRun;
+            if (planar) heroPos.y = 0f;
 
             foreach (var stone in _oilStones)
             {
                 if (stone == null) continue;
                 Vector3 stonePos = stone.position.ToWorld();
-                stonePos.y = 0f;
+                if (planar) stonePos.y = 0f;
                 float r = stone.radius;
                 if ((heroPos - stonePos).sqrMagnitude <= r * r)
                 {

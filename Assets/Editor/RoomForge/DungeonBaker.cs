@@ -517,7 +517,167 @@ namespace DeNelle.Editor.RoomForge
             if (specs == 0)
                 FlowTrace.Warn(Sys, $"layout '{layout.dungeonId}' has NO encounter blocks - 0 spawners placed " +
                     "(WO-797: author room.encounter blocks in the graph/layout JSON)");
-            FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 encounterRooms={specs} spawners={placed} (room-owned, WO-797)");
+
+            // WO-1001 slice 1b (default: triggered floor transition — refine to walk-through later).
+            // Multi-level floors are separate navmesh islands (PathPartial). Mated StairUp/StairDown
+            // pairs get DungeonPortLink ports so the Keeper can Descend/Climb between floors.
+            int stairPorts = DressVerticalStairPorts(root, instances, hero.transform);
+
+            // WO-1001 slices 4–5: chests (breakables) + oil stones (lantern refill markers).
+            int chests = PlaceComposeChests(root, instances, layout);
+            int oil = PlaceComposeOilStones(root, instances, layout);
+
+            FlowTrace.Step(Sys, $"PopulateForPlay done: hero=1 encounterRooms={specs} spawners={placed} " +
+                $"stairPorts={stairPorts} chests={chests} oilStones={oil} " +
+                $"(WO-797 + WO-1001 1b/3/4/5)");
+        }
+
+        /// <summary>
+        /// WO-1001 slice 1b: for every mated vertical stair pair, seat two
+        /// <c>DungeonPortLink</c>s (Descend / Climb) that fade+warp the Keeper between floor
+        /// islands. Reuses the cottage WO-711 port idiom — no staircase mesh, no NavMeshLink
+        /// yet. Owner can later swap to walk-through without re-authoring graph edges.
+        /// </summary>
+        private static int DressVerticalStairPorts(Transform root, Dictionary<string, GameObject> instances,
+                                                   Transform hero)
+        {
+            if (hero == null || instances == null || instances.Count == 0) return 0;
+
+            // Group mated vertical sockets by connection id (matedTo = "a.sock::b.sock").
+            // Sealed markers (SEALED_VERTICAL / SEALED_WALL / SEALED_SECRET) are skipped.
+            var byConn = new Dictionary<string, List<RoomSocket>>();
+            foreach (var kv in instances)
+            {
+                if (kv.Value == null) continue;
+                foreach (var s in kv.Value.GetComponentsInChildren<RoomSocket>(true))
+                {
+                    if (s == null || string.IsNullOrEmpty(s.matedTo)) continue;
+                    if (s.matedTo.StartsWith("SEALED_", System.StringComparison.Ordinal)) continue;
+                    if (!DungeonBakerChecks.IsVertical(s.type)) continue;
+                    if (!byConn.TryGetValue(s.matedTo, out var list))
+                    {
+                        list = new List<RoomSocket>(2);
+                        byConn[s.matedTo] = list;
+                    }
+                    list.Add(s);
+                }
+            }
+
+            var portType = FindType("DeNelle.Dungeons.DungeonPortLink");
+            if (portType == null)
+            {
+                FlowTrace.Warn(Sys, "DungeonPortLink type unresolved — vertical stair ports skipped (1b)");
+                return 0;
+            }
+
+            var portsRoot = new GameObject("StairPorts");
+            portsRoot.transform.SetParent(root, false);
+
+            int placed = 0;
+            foreach (var kv in byConn)
+            {
+                if (kv.Value == null || kv.Value.Count != 2)
+                {
+                    FlowTrace.Warn(Sys, $"stair port skip conn='{kv.Key}' mates={kv.Value?.Count ?? 0} (need exactly 2)");
+                    continue;
+                }
+
+                var a = kv.Value[0];
+                var b = kv.Value[1];
+                // Prefer A = StairDown (upper) so prompts read correctly; order is free if swapped.
+                if (a.type == RoomSocketType.StairUp && b.type == RoomSocketType.StairDown)
+                {
+                    var tmp = a; a = b; b = tmp;
+                }
+
+                Vector3 seatA = SeatOnFloorNearSocket(a);
+                Vector3 seatB = SeatOnFloorNearSocket(b);
+                float faceTowardB = YawToward(seatA, seatB);
+                float faceTowardA = YawToward(seatB, seatA);
+
+                // Upper floor (StairDown) → Descend to lower.
+                placed += PlaceStairPort(portsRoot.transform, portType, hero,
+                    name: $"StairPort_Descend_{SanitizeId(kv.Key)}",
+                    prompt: "Descend",
+                    standAt: seatA,
+                    target: seatB,
+                    faceY: faceTowardB,
+                    fromLabel: a.type.ToString(),
+                    toLabel: b.type.ToString()) ? 1 : 0;
+
+                // Lower floor (StairUp) → Climb to upper.
+                placed += PlaceStairPort(portsRoot.transform, portType, hero,
+                    name: $"StairPort_Climb_{SanitizeId(kv.Key)}",
+                    prompt: "Climb",
+                    standAt: seatB,
+                    target: seatA,
+                    faceY: faceTowardA,
+                    fromLabel: b.type.ToString(),
+                    toLabel: a.type.ToString()) ? 1 : 0;
+
+                FlowTrace.Step(Sys,
+                    $"stair port pair conn='{kv.Key}' Descend@{seatA:F1} Climb@{seatB:F1} " +
+                    $"(triggered transition — WO-1001 1b default)");
+            }
+
+            if (placed == 0)
+                FlowTrace.Step(Sys, "DressVerticalStairPorts: no mated vertical pairs (flat layout — OK)");
+            return placed;
+        }
+
+        private static Vector3 SeatOnFloorNearSocket(RoomSocket sock)
+        {
+            // Socket sits half a floor off room origin for vertical mates — project to the
+            // room's floor plane (room root Y) then nav-sample so the stand point is on mesh.
+            var room = sock.transform;
+            while (room.parent != null && room.GetComponent<RoomPrefabMeta>() == null)
+                room = room.parent;
+            float floorY = room.position.y;
+            Vector3 want = new Vector3(sock.WorldPosition.x, floorY, sock.WorldPosition.z);
+            // Nudge slightly into the room (opposite outward) so the port is not in the wall.
+            want -= sock.Outward * 1.2f;
+            want.y = floorY;
+            return SampleNav(want, 4f) + Vector3.up * 0.05f;
+        }
+
+        private static float YawToward(Vector3 from, Vector3 to)
+        {
+            Vector3 d = to - from; d.y = 0f;
+            if (d.sqrMagnitude < 0.0001f) return 0f;
+            return Quaternion.LookRotation(d.normalized, Vector3.up).eulerAngles.y;
+        }
+
+        private static string SanitizeId(string connId)
+        {
+            if (string.IsNullOrEmpty(connId)) return "stair";
+            var sb = new StringBuilder(connId.Length);
+            foreach (char c in connId)
+                sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+            return sb.ToString();
+        }
+
+        private static bool PlaceStairPort(Transform parent, System.Type portType, Transform hero,
+            string name, string prompt, Vector3 standAt, Vector3 target, float faceY,
+            string fromLabel, string toLabel)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = standAt;
+            var link = go.AddComponent(portType);
+            // Configure(prompt, target, faceY, hero, dungeonHero, from, to, radius)
+            var configure = portType.GetMethod("Configure",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            if (configure == null)
+            {
+                FlowTrace.Warn(Sys, "DungeonPortLink.Configure not found — stair port not wired");
+                Object.DestroyImmediate(go);
+                return false;
+            }
+            configure.Invoke(link, new object[]
+            {
+                prompt, target, faceY, hero, null, fromLabel, toLabel, 2.2f
+            });
+            return true;
         }
 
         // WO-797: write the spawner's serialized room-ownership + count fields through
@@ -538,14 +698,123 @@ namespace DeNelle.Editor.RoomForge
             // value. DungeonEncounterFamilyRegression fails the gate if a shipped layout
             // authors a kind the spawner does not know.
             SetString(so, "encounterKind", string.IsNullOrEmpty(enc.kind) ? "hollow-group" : enc.kind.Trim());
+            // WO-1001 slice 3: boss / fixed elite.
+            SetBool(so, "isBoss", enc.isBoss);
+            SetString(so, "fixedEnemyId", enc.enemyType ?? "");
+            if (enc.isBoss)
+            {
+                SetInt(so, "minCount", 1);
+                SetInt(so, "maxCount", 1);
+            }
+            else
+            {
+                SetInt(so, "minCount", Mathf.Max(1, enc.min));
+                SetInt(so, "maxCount", Mathf.Max(Mathf.Max(1, enc.min), enc.max));
+            }
             SetVector3(so, "areaCenter", roomBounds.center);
             SetVector3(so, "areaSize", roomBounds.size);
             SetFloat(so, "areaSlack", enc.confine != null ? enc.confine.slack : 2f);
             SetFloat(so, "wakeRadius", enc.confine != null ? enc.confine.wakeRadius : 6f);
-            SetInt(so, "minCount", Mathf.Max(1, enc.min));
-            SetInt(so, "maxCount", Mathf.Max(Mathf.Max(1, enc.min), enc.max));
             if (enc.formationRadius > 0f) SetFloat(so, "formationRadius", enc.formationRadius);
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetBool(SerializedObject so, string field, bool value)
+        {
+            var p = so.FindProperty(field);
+            if (p != null) p.boolValue = value;
+            else FlowTrace.Warn(Sys, $"spawner field '{field}' not found - SerializedObject write skipped");
+        }
+
+        /// <summary>WO-1001 slice 4: seat BreakableContainer loot props from layout.chests.</summary>
+        private static int PlaceComposeChests(Transform root, Dictionary<string, GameObject> instances,
+                                             DungeonComposeLayout layout)
+        {
+            if (layout?.rooms == null) return 0;
+            var chestRoot = new GameObject("Chests");
+            chestRoot.transform.SetParent(root, false);
+            int n = 0;
+            foreach (var place in layout.rooms)
+            {
+                if (place?.chests == null || place.chests.Count == 0) continue;
+                string id = string.IsNullOrEmpty(place.instanceId) ? place.prefab : place.instanceId;
+                if (!instances.TryGetValue(id, out var rGo) || rGo == null) continue;
+                Bounds roomBounds = DungeonRoomBounds.Compute(rGo);
+                Vector3 centre = new Vector3(roomBounds.center.x, rGo.transform.position.y, roomBounds.center.z);
+                foreach (var c in place.chests)
+                {
+                    if (c == null) continue;
+                    Vector3 off = Offset3(c.offset);
+                    Vector3 pos = SampleNav(centre + off, 4f);
+                    string table = string.IsNullOrEmpty(c.lootTableId) ? "dungeon-chest" : c.lootTableId;
+                    string visual = string.IsNullOrEmpty(c.visual) ? "chest" : c.visual;
+                    var bcType = FindType("DeNelle.Village.BreakableContainer");
+                    if (bcType == null)
+                    {
+                        FlowTrace.Warn(Sys, "BreakableContainer missing — chest not placed");
+                        continue;
+                    }
+                    var create = bcType.GetMethod("Create",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                    if (create == null) continue;
+                    create.Invoke(null, new object[] { chestRoot.transform, pos, table, visual });
+                    n++;
+                    FlowTrace.Step(Sys, $"CHEST '{c.id ?? visual}' table='{table}' @ {pos} room='{id}'");
+                }
+            }
+            if (n == 0) Object.DestroyImmediate(chestRoot);
+            return n;
+        }
+
+        /// <summary>WO-1001 slice 5: seat ComposedOilStone markers for lantern refill.</summary>
+        private static int PlaceComposeOilStones(Transform root, Dictionary<string, GameObject> instances,
+                                                DungeonComposeLayout layout)
+        {
+            if (layout?.oilStones == null || layout.oilStones.Count == 0) return 0;
+            var oilRoot = new GameObject("OilStones");
+            oilRoot.transform.SetParent(root, false);
+            var markerType = FindType("DeNelle.Dungeons.ComposedOilStone");
+            if (markerType == null)
+            {
+                FlowTrace.Warn(Sys, "ComposedOilStone type missing — oil stones not placed");
+                return 0;
+            }
+            int n = 0;
+            foreach (var stone in layout.oilStones)
+            {
+                if (stone == null) continue;
+                Vector3 pos = Vector3.zero;
+                if (!string.IsNullOrEmpty(stone.roomId) &&
+                    instances.TryGetValue(stone.roomId, out var rGo) && rGo != null)
+                {
+                    Bounds b = DungeonRoomBounds.Compute(rGo);
+                    pos = new Vector3(b.center.x, rGo.transform.position.y, b.center.z) + Offset3(stone.offset);
+                }
+                else
+                {
+                    pos = Offset3(stone.offset);
+                }
+                pos = SampleNav(pos, 4f);
+                var go = new GameObject(string.IsNullOrEmpty(stone.id) ? "OilStone" : $"OilStone_{stone.id}");
+                go.transform.SetParent(oilRoot.transform, false);
+                go.transform.position = pos;
+                var marker = go.AddComponent(markerType);
+                var configure = markerType.GetMethod("Configure",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                configure?.Invoke(marker, new object[] { stone.id ?? "oil", stone.radius > 0f ? stone.radius : 2.5f });
+                n++;
+                FlowTrace.Step(Sys, $"OILSTONE '{stone.id}' @ {pos} r={stone.radius:F1}");
+            }
+            return n;
+        }
+
+        private static Vector3 Offset3(float[] o)
+        {
+            if (o == null || o.Length == 0) return Vector3.zero;
+            float x = o.Length > 0 ? o[0] : 0f;
+            float y = o.Length > 1 ? o[1] : 0f;
+            float z = o.Length > 2 ? o[2] : 0f;
+            return new Vector3(x, y, z);
         }
 
         private static void SetString(SerializedObject so, string field, string value)

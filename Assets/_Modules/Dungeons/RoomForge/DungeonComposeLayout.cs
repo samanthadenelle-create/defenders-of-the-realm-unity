@@ -26,6 +26,8 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("rooms")] public List<ComposeRoomPlacement> rooms = new List<ComposeRoomPlacement>();
         [JsonProperty("connections")] public List<ComposeConnection> connections = new List<ComposeConnection>();
         [JsonProperty("rules")] public ComposeRules rules = new ComposeRules();
+        /// <summary>WO-1001 slice 5: oil refill points for composed lantern drain.</summary>
+        [JsonProperty("oilStones")] public List<ComposeOilStone> oilStones = new List<ComposeOilStone>();
     }
 
     /// <summary>One room instance in the layout.</summary>
@@ -49,6 +51,8 @@ namespace DeNelle.Dungeons.RoomForge
         /// spawned mobs to the room's AABB.
         /// </summary>
         [JsonProperty("encounter")] public EncounterSpec encounter;
+        /// <summary>WO-1001 slice 4: breakable chests / crates with loot tables.</summary>
+        [JsonProperty("chests")] public List<ComposeChest> chests;
     }
 
     /// <summary>
@@ -69,6 +73,37 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("seatMode")] public string seatMode = "ring";
         [JsonProperty("formationRadius")] public float formationRadius = 3.5f;
         [JsonProperty("confine")] public EncounterConfine confine = new EncounterConfine();
+        /// <summary>WO-1001 slice 3: single elite/boss spawn (forces count=1).</summary>
+        [JsonProperty("isBoss")] public bool isBoss;
+        /// <summary>WO-1001 slice 3: optional fixed enemies.json id for the boss/elite.</summary>
+        [JsonProperty("enemyType")] public string enemyType;
+        /// <summary>Optional display name for boss intro cards (future HUD).</summary>
+        [JsonProperty("displayName")] public string displayName;
+    }
+
+    /// <summary>WO-1001 slice 4: one breakable loot prop in a room.</summary>
+    [Serializable]
+    public sealed class ComposeChest
+    {
+        [JsonProperty("id")] public string id;
+        /// <summary>loot-tables.json key (e.g. dungeon-chest, dungeon-deepboss, crate-common).</summary>
+        [JsonProperty("lootTableId")] public string lootTableId = "dungeon-chest";
+        /// <summary>Visual token: chest / crate / barrel.</summary>
+        [JsonProperty("visual")] public string visual = "chest";
+        /// <summary>Optional local offset from room centre [x,y,z]. Default = room centre.</summary>
+        [JsonProperty("offset")] public float[] offset;
+    }
+
+    /// <summary>WO-1001 slice 5: lantern refill stone (world coords after compose, or cell-local).</summary>
+    [Serializable]
+    public sealed class ComposeOilStone
+    {
+        [JsonProperty("id")] public string id;
+        /// <summary>Room instance id — stone is placed near that room's centre when set.</summary>
+        [JsonProperty("roomId")] public string roomId;
+        /// <summary>World offset from room centre, or absolute if roomId empty [x,y,z].</summary>
+        [JsonProperty("offset")] public float[] offset;
+        [JsonProperty("radius")] public float radius = 2.5f;
     }
 
     /// <summary>WO-797 confinement rules: pin the room's mobs to the room footprint.</summary>

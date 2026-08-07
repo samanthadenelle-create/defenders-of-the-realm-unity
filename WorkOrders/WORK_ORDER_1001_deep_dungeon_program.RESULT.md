@@ -1,7 +1,16 @@
-# WORK ORDER 1001 — RESULT (PARTIAL: Phase 1, slice 1 only)
+# WORK ORDER 1001 — RESULT (PARTIAL: Phase 1 slices 1–5 foundation)
 
-**Date:** 2026-08-07 (overnight run) · **Seat:** CLI · **Status:** slice 1 LANDED + PROVEN; slices 2–7 NOT started
-**Gates:** `COMPILE_GATE_OK` · `REGRESSION_OK 124/124 suites` (was 123 — `[dungeon-multilevel]` is the new one)
+**Date:** 2026-08-07 · **Seat:** CLI · **Status:** slices 1–2 + 1b + 3–5 foundation LANDED; slice 6–7 + Phase 2 NOT started  
+**Follow-up (same day, owner: assume defaults + proceed):**  
+- **1b** triggered stair ports (Descend/Climb) in `DungeonBaker` + `HeroLocomotion.WarpTo` on `DungeonPortLink`  
+- **3** boss: `EncounterSpec.isBoss` / `enemyType` → spawner count=1 + MiniBoss role  
+- **4** chests: `ComposeChest` → `BreakableContainer.Create` at bake  
+- **5** oil: `oilStones` + `ComposedOilStone` + `Lantern.ConfigureStandalone` via `ComposedDungeonBootstrap`  
+**Assumptions locked:** catalog difficulty, no productName rename, **triggered** stairs (not walk-through yet).  
+**Re-bake required** for probe/starter to materialize ports/chests/oil in scenes.
+
+**Earlier overnight:**  
+**Gates:** `COMPILE_GATE_OK` · `REGRESSION_OK 125/125 suites`  
 **Commits:** `6e2ceb1b` (the contract + suite), the descent-probe bake, the version/mirror fix
 
 ---

@@ -94,6 +94,12 @@ namespace DeNelle.Village
                  "Empty or unknown falls back to hollow-group AND logs a FlowTrace warning - it is never silent.")]
         [SerializeField] private string encounterKind = DefaultKind;
 
+        [Header("Boss / elite (WO-1001 slice 3)")]
+        [Tooltip("When true, force a single elite spawn (count=1) using fixedEnemyId or the family's heaviest weight.")]
+        [SerializeField] private bool isBoss;
+        [Tooltip("Optional fixed enemies.json id for boss/elite. Empty = pick heaviest weight in the family table.")]
+        [SerializeField] private string fixedEnemyId = "";
+
         private Transform _root;
         private int _counter;
         private bool _autoSpawned;
@@ -134,6 +140,7 @@ namespace DeNelle.Village
             if (formation > 0f) formationRadius = formation;
             FlowTrace.Step(Sys, $"room area configured: room '{roomId}' center {areaCenter} " +
                 $"size {areaSize} wake {wakeRadius:F1} slack {areaSlack:F1} kind '{encounterKind}' " +
+                $"boss={isBoss} fixed='{(string.IsNullOrEmpty(fixedEnemyId) ? "-" : fixedEnemyId)}' " +
                 $"(spawned so far {_spawnedBrains.Count})");
 
             // Retro-bind anything already spawned (defensive: the binder normally runs
@@ -190,7 +197,8 @@ namespace DeNelle.Village
             if (max < min) max = min;
 
             var rng = new System.Random(seed);
-            int count = rng.Next(min, max + 1);
+            // WO-1001 slice 3: boss rooms are always a single elite — not a ring of trash.
+            int count = isBoss ? 1 : rng.Next(min, max + 1);
 
             if (_root == null)
                 _root = new GameObject("[OutpostEnemyGroup]").transform;
@@ -216,9 +224,11 @@ namespace DeNelle.Village
                 if (NavMesh.SamplePosition(slot, out NavMeshHit hit, 6f, NavMesh.AllAreas))
                     slot = hit.position;
 
-                string id = WeightedIdFor(kind, rng);
+                string id = isBoss
+                    ? ResolveBossId(kind, fixedEnemyId, rng)
+                    : WeightedIdFor(kind, rng);
                 EnemyDef def = DefFor(id, _counter++);
-                EnemyRole role = RoleForId(id);
+                EnemyRole role = isBoss ? EnemyRole.MiniBoss : RoleForId(id);
 
                 Vector3 toCenter = center - slot; toCenter.y = 0f;
                 Quaternion rot = toCenter.sqrMagnitude > 0.001f
@@ -363,6 +373,30 @@ namespace DeNelle.Village
             {
                 acc += Mathf.Max(0, weights[i]);
                 if (roll < acc) return ids[i];
+            }
+            return ids[ids.Length - 1];
+        }
+
+        /// <summary>
+        /// WO-1001 slice 3: pick the boss enemy id — fixedEnemyId wins when set, else the
+        /// family's highest-weight (elite) entry. Never returns null for a non-none family.
+        /// </summary>
+        public static string ResolveBossId(string resolvedKind, string fixedId, System.Random rng)
+        {
+            if (!string.IsNullOrEmpty(fixedId))
+                return fixedId.Trim();
+            FamilyTable(resolvedKind, out string[] ids, out int[] weights);
+            if (ids.Length == 0) return "hollow-warrior";
+            int best = 0;
+            for (int i = 1; i < weights.Length; i++)
+            {
+                if (weights[i] > weights[best]) best = i;
+            }
+            // Prefer the rarest/elite end when weights are equal (last id).
+            int maxW = weights[best];
+            for (int i = ids.Length - 1; i >= 0; i--)
+            {
+                if (weights[i] == maxW) return ids[i];
             }
             return ids[ids.Length - 1];
         }

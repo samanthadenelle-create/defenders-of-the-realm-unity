@@ -48,6 +48,8 @@ namespace DeNelle.Editor.RoomForge
         [JsonProperty("edges")] public List<GraphEdge> edges = new List<GraphEdge>();
         /// <summary>Optional bake/lint rules passed straight through to the compose layout.</summary>
         [JsonProperty("rules")] public ComposeRules rules;
+        /// <summary>WO-1001 slice 5: oil stones for composed lantern (carried into layout).</summary>
+        [JsonProperty("oilStones")] public List<ComposeOilStone> oilStones;
     }
 
     /// <summary>One room instance in the graph.</summary>
@@ -64,6 +66,8 @@ namespace DeNelle.Editor.RoomForge
         /// encounter room. Null = no enemies in this room.
         /// </summary>
         [JsonProperty("encounter")] public EncounterSpec encounter;
+        /// <summary>WO-1001 slice 4: optional chests on this room (carried into compose layout).</summary>
+        [JsonProperty("chests")] public List<ComposeChest> chests;
     }
 
     /// <summary>A door-to-door connection: fromNode.fromSocket mates toNode.toSocket.</summary>
@@ -128,15 +132,15 @@ namespace DeNelle.Editor.RoomForge
         }
 
         /// <summary>
-        /// WO-1001 slice 1 proof: compose the two-level descent probe. Its only job is to make the
-        /// vertical path bakeable EVIDENCE - grep the summary for rooms on more than one Y level.
-        /// populateForPlay stays FALSE: the stair rooms have no stair geometry and no navmesh link
-        /// yet, so seating a hero would imply a walkable descent that does not exist (slice 1b).
+        /// WO-1001 slice 1 + 1b: compose the two-level descent probe. Grep the bake summary for
+        /// rooms on more than one Y level (slice 1 placement) and stairPorts&gt;=2 (slice 1b
+        /// triggered Descend/Climb ports between floor islands). populateForPlay is ON so the
+        /// hero + ports land in the scene — floors stay separate nav islands; ports bridge them.
         /// Batchmode: -executeMethod DeNelle.Editor.RoomForge.GraphDungeonComposer.ComposeDescentProbeBatch
         /// </summary>
         public static void ComposeDescentProbeBatch()
         {
-            ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: false);
+            ComposeAndBake(Path.Combine(GraphsFolder, DescentProbeGraph), populateForPlay: true);
             EditorApplication.Exit(0);
         }
 
@@ -394,6 +398,7 @@ namespace DeNelle.Editor.RoomForge
                     rooms = new List<ComposeRoomPlacement>(),
                     connections = keptConnections,
                     rules = rules,
+                    oilStones = graph.oilStones ?? new List<ComposeOilStone>(),
                 };
 
                 foreach (var n in graph.nodes)
@@ -415,6 +420,7 @@ namespace DeNelle.Editor.RoomForge
                         archetype = arch,
                         // WO-797: carry the authored encounter block verbatim (rooms own their enemies).
                         encounter = n.encounter,
+                        chests = n.chests,
                     });
                 }
 

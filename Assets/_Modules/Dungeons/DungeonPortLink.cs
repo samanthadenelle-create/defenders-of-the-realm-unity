@@ -137,10 +137,11 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
-        /// The warp itself. DungeonHero.Teleport is the correct API — it disables
-        /// the CharacterController across the move (no rubber-band) and clears
-        /// any in-flight tap-move. Raw transform + CC toggle is the fallback,
-        /// mirroring DungeonController.PlaceHero.
+        /// The warp itself. Prefer <see cref="DungeonHero.Teleport"/> (CharacterController
+        /// cottage path). WO-1001 slice 1b: composed dungeons bake a
+        /// <see cref="HeroLocomotion"/> hero instead — use its WarpTo so the NavMeshAgent
+        /// re-seats on the destination floor island (triggered stair / multi-level).
+        /// Raw transform + CC toggle is last-resort, mirroring DungeonController.PlaceHero.
         /// </summary>
         private void WarpHero()
         {
@@ -154,6 +155,18 @@ namespace DeNelle.Dungeons
             }
 
             if (_hero == null) return;
+
+            // Composed Pipeline A hero (DungeonBaker.PopulateForPlay) — NavMeshAgent mover.
+            var loco = _hero.GetComponent<HeroLocomotion>();
+            if (loco != null)
+            {
+                loco.WarpTo(_target, Quaternion.Euler(0f, _targetFacingY, 0f));
+                FlowTrace.Step("Dungeon",
+                    $"PortLink '{name}': warped (HeroLocomotion.WarpTo) -> {_target}, " +
+                    $"facing {_targetFacingY:0} (WO-1001 1b multi-level stair port).");
+                return;
+            }
+
             var cc = _hero.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
             _hero.position = _target;
