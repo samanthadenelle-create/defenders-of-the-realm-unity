@@ -2,6 +2,73 @@
 
 **Status: READY TO SEND** · **Drafted:** 2026-08-07 (CLI) · **Blocks:** WO-912 D3 (no SDK until this returns in writing)
 
+> ### ★★ D2 SETTLED 2026-08-07 (LATEST — SUPERSEDES THE AMENDMENT BELOW): **UNITY LEVELPLAY** ★★
+>
+> **Owner, 2026-08-07:** *"we are forced down this path as i cannot create an applovin account
+> without an actual published app in app store."*
+>
+> **AppLovin will not onboard a publisher without a live store listing.** This app is pre-launch —
+> the Solana dApp Store listing does not exist yet. So MAX is not merely the weaker option, it is
+> **not available to us at all**, and the MAX-mediator amendment below is moot on eligibility rather
+> than on merit. D2 returns to its original ruling: **Unity LevelPlay.**
+>
+> This is an EXTERNAL constraint, not a preference. Record it so nobody re-opens the comparison:
+> every argument in sec.10.4/10.5 about MAX's lighter dependency graph and cleaner no-fill codes is
+> **unreachable** until the app is published, at which point revisiting is optional, not owed.
+>
+> **What this SIMPLIFIES — one network, one account, one disclosure:**
+> - **Q2a is MOOT.** It asked AppLovin about its silent crypto policy. With no AppLovin account there
+>   is no AppLovin counterparty. Do not send it.
+> - **Q3a is MOOT** twice over — already defused by the Seeker having Play Services, and now by there
+>   being no AppLovin integration to ask about.
+> - **The Unity pre-approval below is the SINGLE remaining gate.** D3 now rests on exactly one answer.
+> - Only ONE mediation SDK is installed, not "Unity Ads SDK + MAX SDK + adapter". Fewer moving parts
+>   against a Gradle graph that has already lost one build to a duplicate-class collision.
+>
+> **What this makes MORE important, not less:** sec.10.4 trap 4 — **LevelPlay's dependency manifest was
+> never opened at source**, and secondary sources put its deps (`play-services-ads-identifier:18.2.0`,
+> `play-services-appset:16.1.0`) *above* our current pins, so they would pull our graph UP rather than
+> resolving harmlessly. With MAX gone there is no lighter fallback if that collides. **Run the Android
+> Resolver and READ the generated `mainTemplate.gradle` diff before committing to the integration** —
+> that check was a nicety when there was an alternative; it is now the only warning we get.
+>
+> ### THE SWITCH-BACK, AND WHY IT CHANGES HOW WE BUILD (owner 2026-08-07)
+>
+> Owner: *"so we have to use this till in the app store … then we can switch."*
+>
+> So the provider swap is **PLANNED, not hypothetical.** That is a different engineering situation
+> from "we might one day migrate", and it settles a question sec.10.5 could only argue in the
+> abstract: `IAdService` is **load-bearing**, not defensive. Keep `AdServiceSeamRegression`
+> (`AD_SEAM_OK`) green and hard — it fails the build if any code outside an adapter names `MaxSdk`,
+> `IronSource`, `LevelPlay` or `Advertisement.*`, and that guard is the entire reason the later swap
+> is a dashboard exercise rather than a rewrite.
+>
+> **TRIGGER for revisiting D2:** the app is live in a store AppLovin recognises → an AppLovin
+> publisher account becomes possible → re-run the sec.10.4 comparison with real numbers (our actual
+> fill, eCPM and no-fill rate on LevelPlay), not the pre-launch estimates.
+>
+> **Two honest cautions on "we'll switch later":**
+> 1. **It is OPTIONAL, not owed.** If LevelPlay fills well, there is no obligation to move. Switch on
+>    measured evidence, not on the earlier paper argument — sec.10.7 already warns against tuning ad
+>    decisions blind, and that applies to the provider too.
+> 2. **It is not a reason to cut corners now.** A LevelPlay integration that reaches past the seam
+>    "because we're replacing it anyway" is exactly what makes the replacement expensive. Build it as
+>    if it were permanent; the seam is what makes it cheap if it is not.
+>
+> **Note:** switching mediation later also means redoing dashboard setup (placements, ad units,
+> mediation partner) and re-running the policy question for the new network. The *code* should not
+> change. If it does, the seam failed and the oracle should have caught it.
+>
+> **Tooling:** Unity ships an official Claude Code skill for this exact integration —
+> `levelplay-unity-integration` from `Unity-Technologies/skills`, installed 2026-08-07. It covers the
+> Ads Mediation package, native dependency resolution, init, rewarded/interstitial/banner, GDPR/CCPA/
+> COPPA, iOS ATT/SKAdNetwork and ILRD. **It does not clear D3** — no skill changes a policy gate — but
+> it is the right guide the moment the answer lands.
+>
+> ---
+>
+> ### ⓘ SUPERSEDED 2026-08-07 — the MAX-mediator amendment (kept for provenance)
+>
 > ### ★ ARCHITECTURE AMENDED 2026-08-07 — MAX MEDIATOR + UNITY BIDDING (not LevelPlay direct) ★
 >
 > D2 first ruled **Unity LevelPlay direct**. A Grok-proposed alternative — **AppLovin MAX as the

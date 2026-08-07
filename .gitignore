@@ -471,3 +471,6 @@ ProjectSettings/Packages/dev.yarnspinner/*-generated.ysls.json
 
 # google-services.json is deliberately gitignored (line 245) -- its .meta follows it
 Assets/google-services.json.meta
+
+# Agent-skill symlinks are machine-local; the real skill content lives in .agents/skills/
+.claude/skills/levelplay-unity-integration
