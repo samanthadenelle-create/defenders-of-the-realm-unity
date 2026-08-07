@@ -209,6 +209,17 @@
 - **FPV camera: owner RE-AFFIRMED default-ON** (2026-07-30). `ff.dungeonfpv` stays `defaultOn:true`; the
   `PAIN_POINTS` §4 "keep only if felt-tested" gate is CLOSED. Two `DungeonCameraRig` headers that called FPV
   "a STUB with no independent look" and named over-the-shoulder the default were corrected.
+  - **⚠ SUPERSEDED 2026-08-07 (WO-920).** `ff.dungeonfpv` is now **`defaultOn:false`** — the shipped explore
+    camera is a **LOCKED over-the-shoulder** rig; FPV survives fully wired as an opt-in A/B (`ff.dungeonfpv=1`).
+    The 07-26 default-ON was a workaround chosen *instead of* raising the ceiling; **WO-919 removed that premise**
+    (composed rooms are now 4 m walls + a ceiling slab, relit dark), so the trade was reversed.
+  - **⚠ AND THE SCOPE OF THAT FLAG WAS ALWAYS NARROWER THAN THIS LINE IMPLIES.** `ff.dungeonfpv` only reaches
+    the **two hand-built** dungeon scenes that carry a `DungeonCameraRig` (`Dungeon_HealersCottage`,
+    `Dungeon_FolksGranary`). The **composed `dg_*` dungeons and `KayKitChallengeOutpost` bake no camera and no
+    rig at all** — their camera is the runtime `GameplayCamera (ensured)` + `DeNelle.Village.SmartMobileCamera`
+    (`HeroControlEnsurer` L283-295), so the flag never applied to them. Their locked seat is
+    `SmartMobileCamera.ApplyDungeonProfileIfNeeded`. Seat + clear colour for **both** pipelines now come from the
+    one authority, `DeNelle.Core.World.DungeonCameraProfile`; the scene test is `HubScenes.IsDungeon`.
 - **STANDING TRUTH — `waves.json` `enemies[]` batches are INERT.** `_smartComposition:1` in both live hubs
   means `WaveManager` GENERATES every wave's roster; only `countdownSeconds`, `boss`, `apexBoss` survive.
   **19 waves / 55 batches / 148 authored enemies are discarded every session.** Not a code regression (WO-362

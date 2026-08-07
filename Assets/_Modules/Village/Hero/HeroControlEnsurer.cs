@@ -288,6 +288,34 @@ namespace DeNelle.Village
                 if (FindFirstObjectByType<AudioListener>() == null) camGo.AddComponent<AudioListener>();
                 Debug.Log("[HeroControlEnsurer] no gameplay camera in scene — created one (Village2 etc.) so the hero is followed.");
             }
+
+            // WO-920 — DUNGEON CLEAR COLOUR. Reaching this line in a DUNGEON scene means the
+            // scene baked no camera of its own (the composed dg_* bake and the hand-coded
+            // outpost both deliberately seat none — DungeonBaker L230-237,
+            // KayKitChallengeOutpostBuilder L77-78 — and a scene that DOES carry a
+            // DungeonCameraRig already returned at L256 above). So this runtime camera IS the
+            // dungeon's camera, and until now it kept Unity's defaults: clearFlags=Skybox with
+            // backgroundColor #314D79. WO-919 then nulled RenderSettings.skybox to kill the sky
+            // dome (DungeonBaker L238) — and a null skybox makes CameraClearFlags.Skybox fall
+            // back to clearing with backgroundColor, i.e. that DEFAULT BLUE. Net effect: every
+            // enclosed, relit dungeon still cleared to daylight blue behind its geometry, so any
+            // hairline in the shell read as "sky" and the whole relight was undersold.
+            // SCOPED TO DUNGEONS ON PURPOSE: the overworld/hub/raid scenes need their real
+            // skybox, so this must never run there. Colour is not re-typed here — it comes from
+            // the one authority (DungeonCameraProfile.ClearColor, itself sourced from the proven
+            // hand-built dungeon background at DungeonSceneBuilder L2067).
+            if (cam != null && DeNelle.Core.HubScenes.IsDungeon(scene))
+            {
+                var priorFlags = cam.clearFlags;
+                var priorColor = cam.backgroundColor;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = DeNelle.Core.World.DungeonCameraProfile.ClearColor;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("DungeonCam",
+                    $"clear: scene='{scene}' cam='{cam.name}' {priorFlags}/{ColorUtility.ToHtmlStringRGB(priorColor)} " +
+                    $"-> SolidColor/#{ColorUtility.ToHtmlStringRGB(cam.backgroundColor)} " +
+                    $"(skybox={(RenderSettings.skybox != null ? RenderSettings.skybox.name : "null")})");
+            }
+
             if (cam != null && cam.GetComponent<SmartMobileCamera>() == null)
             {
                 cam.gameObject.AddComponent<SmartMobileCamera>();

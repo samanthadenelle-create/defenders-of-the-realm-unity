@@ -79,6 +79,41 @@
 //    camera field is how clear-flags drift. WO-1000 §2.1's "near-black camera bg" is
 //    therefore a Village-side edit, reported rather than smuggled in here — exactly
 //    the scope call DungeonBaker L230-237 made for the composed pipeline.
+// -----------------------------------------------------------------------------
+// WO-1000 FOLLOW-UP (2026-08-07) — two defects the first pass left, both measured:
+//
+//  A. FLOOR Z-FIGHT. MakeFloor's nav slab put its TOP FACE at y=0 (center -0.25,
+//     size 0.5) and BuildFloorTiles drops every KayKit tile so ITS top face is also
+//     y=0. Two coplanar surfaces at identical depth — the pale blue-grey wash with
+//     brown floor bleeding through in Builds/dungeon-capture/KayKitChallengeOutpost_eye.png.
+//     The walls never had this because they pass clad:true -> CladBox -> HideMesh.
+//     The floor now gets the SAME treatment (HideFloorSlabIfTiled), CONDITIONALLY:
+//     MakeFloor runs before BuildFloorTiles, and BuildFloorTiles bails when the
+//     gitignored pack is absent, so the slab only loses its mesh once tiles landed.
+//     Not fixed by lifting the tiles an epsilon — that leaves the slab renderable.
+//
+//  B. NAV_FAIL, 4/5 probes. NOT a regression from the visual pass: BuildChoke's
+//     centres/dimensions are byte-identical to 6c740b08^ and the ring walls only lost
+//     0.5 m of HEIGHT, which cannot move a horizontal pinch. VerifyNav did not exist
+//     before, so the check REVEALED a pre-existing seal.
+//     Root cause, from the measured box AABBs: BuildChoke split its wall on the WRONG
+//     AXIS. It offset two FULL-WIDTH boxes +/- `gap` along the wall's THIN axis instead
+//     of splitting the wall along its LONG axis and leaving `gap` as the opening — so a
+//     "chokepoint" was really two parallel barriers with no door. Choke_SouthMid_L
+//     landed at z -10.675..-10.325, a bare 0.725 m north of Ring_Inner_S (z -9.6..-8.4),
+//     and that slot is the ONLY approach to the inner ring's south doorway. Agent
+//     radius is 0.5 (ProjectSettings/NavMeshAreas.asset, the single 'Humanoid' type),
+//     so a walkable slot needs 2*0.5 = 1.0 m. 0.725 < 1.0 -> no navmesh -> arena
+//     sealed. The four quadrant probes sit at (+/-20, +/-20), OUTSIDE the mid ring, so
+//     they never needed that slot — exactly the 4/5 pattern captured.
+//     Fix: BuildChoke now delegates to SpanWall, which already implements "wall with a
+//     central opening" correctly and is what the ring walls use. Every authored
+//     parameter (centre, w, d, h, the 0.45 gap factor) is preserved verbatim; only the
+//     buggy interpretation changed. Choke_SouthMid becomes one wall at its authored
+//     z=-6 with a 4.5 m door, and the 0.725 m slot ceases to exist.
+//     ReportNavClearances() now prints the agent settings and EVERY sub-3 m slot
+//     between two collision boxes with PASS/FAIL against 2*agentRadius, so a sealed
+//     yard is a measured line in the bake log and never a guessing game again.
 // =============================================================================
 
 using System;
@@ -163,12 +198,23 @@ namespace DeNelle.Editor
         private static int _floorTiles, _ceilTiles, _cladPieces, _torches, _torchLights,
                            _props, _fogAnchors, _missingModels;
 
+        // Every collision box that feeds the NavMeshSurface, with its world AABB, so
+        // ReportNavClearances can MEASURE the shell's pinch points instead of anyone
+        // eyeballing coordinates out of the source. Filled by MakeBox(nav:true).
+        private static readonly List<(string name, Bounds box)> _navBoxes =
+            new List<(string name, Bounds box)>();
+
+        // Only slots NARROWER than this are worth a log line — anything wider is
+        // trivially walkable and would drown the interesting ones in noise.
+        private const float ClearanceReportBelow = 3f;
+
         [MenuItem("Defenders/World/Build KayKit Challenge Outpost")]
         public static void Build()
         {
             FlowTrace.Step(Sys, "=== KAYKIT CHALLENGE OUTPOST BUILD START ===");
             _floorTiles = _ceilTiles = _cladPieces = _torches = _torchLights =
                 _props = _fogAnchors = _missingModels = 0;
+            _navBoxes.Clear();
 
             EnsureMats();
             EnsureKayPaths();
@@ -194,8 +240,12 @@ namespace DeNelle.Editor
             surface.overrideTileSize = true;
             surface.tileSize = 1024;
 
-            MakeFloor(root, "Floor_Outer", 0f, 0f, Outer, Outer);
+            // ORDER IS LOAD-BEARING: the slab is laid first (it is the nav floor), the
+            // KayKit tiles are laid on top of it, and only THEN can the slab's mesh be
+            // retired — see HideFloorSlabIfTiled for why that last step is conditional.
+            var floorSlab = MakeFloor(root, "Floor_Outer", 0f, 0f, Outer, Outer);
             BuildFloorTiles(root);
+            HideFloorSlabIfTiled(floorSlab);
 
             BuildRingWalls(root, "Ring_Outer", Outer, gapSouth: true, gapNorth: false);
             BuildRingWalls(root, "Ring_Mid", Mid, gapSouth: false, gapNorth: true);
@@ -237,6 +287,10 @@ namespace DeNelle.Editor
                 (new Vector3( -4f, 0f,  14f), "crate", "crate-common"),
                 (new Vector3(  4f, 0f, -14f), "crate", "crate-common"),
             });
+
+            // MEASURE the shell before baking it: the clearance report tells us WHY a
+            // probe will fail, VerifyNav below only tells us THAT it failed.
+            ReportNavClearances(surface);
 
             NavMesh.RemoveAllNavMeshData();
             surface.BuildNavMesh();
@@ -484,19 +538,31 @@ namespace DeNelle.Editor
             }
         }
 
+        /// <summary>
+        /// A chokepoint: ONE wall at <paramref name="center"/>, split along its LONG
+        /// axis around a central opening of <c>0.45 * span</c>.
+        ///
+        /// It used to build something else entirely, and that was the NAV_FAIL. The old
+        /// body offset two FULL-SPAN boxes by +/-<c>gap</c> along the wall's THIN axis —
+        /// two parallel barriers with no door between them, and <c>gap</c> read as a
+        /// displacement instead of as the opening. For Choke_SouthMid (centre z=-6,
+        /// w=10, d=1) that put the southern box at z -10.675..-10.325, which is 0.725 m
+        /// from Ring_Inner_S (z -9.6..-8.4). That slot is the ONLY approach to the inner
+        /// ring's single doorway, the agent radius is 0.5, and 0.725 &lt; 2*0.5 — so no
+        /// navmesh generated there and the arena was sealed. Pre-existing: the same
+        /// centres/dimensions are in 6c740b08^; VerifyNav merely made it visible.
+        ///
+        /// <see cref="SpanWall"/> already implements "wall with a central opening"
+        /// correctly and is what every ring wall uses, so this now delegates to it
+        /// rather than keeping a second, broken copy of the idea. Every authored
+        /// parameter is passed through verbatim — the centre, the extents, the height
+        /// and the 0.45 factor are unchanged; only the (buggy) interpretation is.
+        /// </summary>
         private static void BuildChoke(Transform root, string name, Vector3 center, float w, float d, float h, bool rotate90 = false)
         {
+            // rotate90 == the wall runs along Z, so its span (and its opening) is d.
             float gap = rotate90 ? d * 0.45f : w * 0.45f;
-            if (rotate90)
-            {
-                MakeBox(root, name + "_L", center + new Vector3(-w * 0.35f, 0f, 0f), new Vector3(w * 0.3f, h, d), _wall, nav: true, clad: true);
-                MakeBox(root, name + "_R", center + new Vector3( w * 0.35f, 0f, 0f), new Vector3(w * 0.3f, h, d), _wall, nav: true, clad: true);
-            }
-            else
-            {
-                MakeBox(root, name + "_L", center + new Vector3(0f, 0f, -gap), new Vector3(w, h, d * 0.35f), _wall, nav: true, clad: true);
-                MakeBox(root, name + "_R", center + new Vector3(0f, 0f,  gap), new Vector3(w, h, d * 0.35f), _wall, nav: true, clad: true);
-            }
+            SpanWall(root, name, center, new Vector3(w, h, d), gap, alongX: !rotate90);
         }
 
         /// <summary>
@@ -868,6 +934,84 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>
+        /// Prints the agent the bake is actually about to bake FOR, then every slot
+        /// narrower than <see cref="ClearanceReportBelow"/> between two collision boxes,
+        /// PASS/FAIL against <c>2 * agentRadius</c>.
+        ///
+        /// This exists because "the centre is unreachable" was a dead end to debug: the
+        /// bake reported a failed probe and nothing about WHY. A NavMesh slot has to be
+        /// at least a full agent DIAMETER wide — Recast erodes the walkable surface by
+        /// agentRadius from every obstacle edge, so a corridor of width W yields
+        /// W - 2*radius of floor and anything at or below zero simply is not there.
+        /// Choke_SouthMid_L vs Ring_Inner_S measured 0.725 m against a required 1.0 and
+        /// that one line is the whole root cause. The radius is READ from the surface's
+        /// own agent type, never assumed to be Unity's 0.5 default.
+        ///
+        /// Two boxes form a "slot" when they overlap in Y (so they block at the same
+        /// height) and overlap on exactly ONE horizontal axis — they then face each
+        /// other across the other axis. Overlapping in both means they intersect;
+        /// overlapping in neither means they are diagonal and enclose nothing.
+        /// Doorways register here too, which is the point: the ring gaps SHOULD show up
+        /// as comfortable PASSes, so a shell that closes one is immediately obvious.
+        /// </summary>
+        private static void ReportNavClearances(NavMeshSurface surface)
+        {
+            var settings = NavMesh.GetSettingsByID(surface.agentTypeID);
+            float radius = settings.agentRadius;
+            float need = radius * 2f;
+
+            FlowTrace.Step(Sys,
+                $"NAV_AGENT id={surface.agentTypeID} '{NavMesh.GetSettingsNameFromID(surface.agentTypeID)}' " +
+                $"radius={radius:F3} height={settings.agentHeight:F2} climb={settings.agentClimb:F2} " +
+                $"slope={settings.agentSlope:F0} minRegionArea={settings.minRegionArea:F2} " +
+                $"=> MIN WALKABLE SLOT = 2*radius = {need:F3}m");
+
+            int slots = 0, fails = 0;
+            for (int i = 0; i < _navBoxes.Count; i++)
+            for (int j = i + 1; j < _navBoxes.Count; j++)
+            {
+                var a = _navBoxes[i];
+                var b = _navBoxes[j];
+                if (a.box.min.y >= b.box.max.y || b.box.min.y >= a.box.max.y) continue;
+
+                bool ovX = a.box.min.x < b.box.max.x && b.box.min.x < a.box.max.x;
+                bool ovZ = a.box.min.z < b.box.max.z && b.box.min.z < a.box.max.z;
+                if (ovX == ovZ) continue;          // intersecting, or diagonal — no slot
+
+                bool acrossX = ovZ;                // they overlap in Z, so they face across X
+                float aLo = acrossX ? a.box.min.x : a.box.min.z;
+                float aHi = acrossX ? a.box.max.x : a.box.max.z;
+                float bLo = acrossX ? b.box.min.x : b.box.min.z;
+                float bHi = acrossX ? b.box.max.x : b.box.max.z;
+
+                bool aFirst = aHi <= bLo;
+                float slotLo = aFirst ? aHi : bHi;
+                float slotHi = aFirst ? bLo : aLo;
+                float gap = slotHi - slotLo;
+                if (gap > ClearanceReportBelow) continue;
+
+                float runLo = acrossX ? Mathf.Max(a.box.min.z, b.box.min.z) : Mathf.Max(a.box.min.x, b.box.min.x);
+                float runHi = acrossX ? Mathf.Min(a.box.max.z, b.box.max.z) : Mathf.Min(a.box.max.x, b.box.max.x);
+
+                slots++;
+                bool pass = gap >= need;
+                if (!pass) fails++;
+                string line =
+                    $"NAV_SLOT {(pass ? "PASS" : "FAIL")} {gap:F3}m (need {need:F3}) " +
+                    $"'{(aFirst ? a.name : b.name)}' -> '{(aFirst ? b.name : a.name)}' " +
+                    $"across {(acrossX ? "X" : "Z")} {slotLo:F3}..{slotHi:F3}, " +
+                    $"runs {(acrossX ? "Z" : "X")} {runLo:F2}..{runHi:F2}";
+                if (pass) FlowTrace.Step(Sys, line);
+                else FlowTrace.Warn(Sys, line);
+            }
+
+            FlowTrace.Step(Sys,
+                $"NAV_CLEARANCE navBoxes={_navBoxes.Count} slots<{ClearanceReportBelow:F0}m={slots} " +
+                $"belowAgentDiameter={fails} (a FAIL is only a SEAL if that slot is the sole route — " +
+                "read it next to the NAV_PROBE lines below)");
+        }
+
+        /// <summary>
         /// The shell was re-skinned, the wall boxes lost 0.5 m of height and the loot
         /// props grew from 1 m cubes to real meshes — all of which touch what the
         /// NavMeshSurface sees. So the bake no longer asserts one path; it walks the
@@ -984,9 +1128,49 @@ namespace DeNelle.Editor
         //  Primitive / scene helpers
         // =====================================================================
 
-        private static void MakeFloor(Transform root, string name, float cx, float cz, float w, float d)
+        /// <summary>
+        /// The nav floor. clad:false deliberately — a floor is not a wall run — which is
+        /// exactly why it never got CladBox's HideMesh and why its TOP FACE (y=0) was
+        /// left fighting the KayKit tiles' top faces (also y=0). The slab is returned so
+        /// <see cref="HideFloorSlabIfTiled"/> can retire its mesh AFTER the tiles land.
+        /// </summary>
+        private static GameObject MakeFloor(Transform root, string name, float cx, float cz, float w, float d)
         {
-            MakeBox(root, name, new Vector3(cx, -0.25f, cz), new Vector3(w, 0.5f, d), _floor, nav: true, clad: false);
+            return MakeBox(root, name, new Vector3(cx, -0.25f, cz), new Vector3(w, 0.5f, d), _floor, nav: true, clad: false);
+        }
+
+        /// <summary>
+        /// Retires the nav slab's MESH once real floor tiles cover it — the same cure
+        /// the walls already get (CladBox -> <see cref="HideMesh"/>): collider kept, and
+        /// with it the NavigationStatic flag, so the slab stays the sole NavMesh
+        /// authority. It never was a renderer question for nav anyway: Build() sets
+        /// <c>useGeometry = PhysicsColliders</c>, so destroying the MeshRenderer/MeshFilter
+        /// cannot move a single navmesh triangle.
+        ///
+        /// Lifting the tiles by an epsilon instead was rejected: that leaves the slab
+        /// renderable, so the two surfaces stay one careless edit apart from fighting
+        /// again. Removing the surface is the fix; separating it is a delay.
+        ///
+        /// CONDITIONAL, and that guard is the whole safety story. MakeFloor runs BEFORE
+        /// BuildFloorTiles, and BuildFloorTiles bails when the gitignored KayKit pack is
+        /// not imported. Hiding an untiled slab would ship an INVISIBLE floor — strictly
+        /// worse than a z-fight — so the mesh only goes away once tiles actually landed.
+        /// </summary>
+        private static void HideFloorSlabIfTiled(GameObject slab)
+        {
+            if (slab == null) return;
+            if (_floorTiles > 0)
+            {
+                HideMesh(slab);
+                FlowTrace.Step(Sys, $"FLOOR SLAB '{slab.name}' mesh RETIRED — {_floorTiles} KayKit tiles cover it; " +
+                                    "collider + NavigationStatic kept (nav authority unchanged), y=0 z-fight gone");
+            }
+            else
+            {
+                FlowTrace.Warn(Sys, $"FLOOR SLAB '{slab.name}' mesh KEPT — 0 floor tiles were placed " +
+                                    "(KayKit pack not imported?). A hidden slab here would be an INVISIBLE floor, " +
+                                    "so the flat-colour slab renders instead and the z-fight cannot occur.");
+            }
         }
 
         private static GameObject MakeBox(Transform root, string name, Vector3 center, Vector3 size,
@@ -1003,6 +1187,11 @@ namespace DeNelle.Editor
             {
                 var f = GameObjectUtility.GetStaticEditorFlags(go);
                 GameObjectUtility.SetStaticEditorFlags(go, f | StaticEditorFlags.NavigationStatic);
+                // World AABB for ReportNavClearances. Every box here is axis-aligned and
+                // the root is identity at the origin, so position/lossyScale IS the AABB
+                // of the unit cube's collider — no bounds query, no renderer dependency
+                // (this must keep working after HideMesh strips the MeshRenderer).
+                _navBoxes.Add((name, new Bounds(go.transform.position, go.transform.lossyScale)));
             }
             if (clad) CladBox(root, go);
             return go;

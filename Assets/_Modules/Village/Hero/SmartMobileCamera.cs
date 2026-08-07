@@ -394,6 +394,136 @@ namespace DeNelle.Village
             }
 
             ResolveCollisionMask();
+
+            // WO-920: dungeons get a locked, calm seat. Must run AFTER the _forceCameraFix
+            // block above, which rewrites _followOffset and _leadDistance unconditionally.
+            ApplyDungeonProfileIfNeeded("Awake");
+        }
+
+        // ── WO-920: the locked dungeon seat ────────────────────────────────────
+        // Tracks whether the dungeon profile is currently applied, so re-entering the
+        // method (Awake + every sceneLoaded) is idempotent and a dungeon->town transition
+        // on a surviving camera restores the village framing instead of staying dark+tight.
+        private bool _dungeonProfileActive;
+        // The village values this camera had before the dungeon profile overwrote them,
+        // captured on the first apply so the restore is exact rather than re-typed defaults.
+        private Vector3 _villageFollowOffset;
+        private float   _villageLookAtHeight;
+        private float   _villageLeadDistance;
+        private float   _villageCombatZoomOut;
+        private float   _villageCombatFovBoost;
+        private bool    _villageFramingEnabled;
+        private bool    _villageCollisionEnabled;
+
+        /// <summary>
+        /// WO-920 — applies (or lifts) the LOCKED DUNGEON CAMERA profile based on the active scene.
+        /// <para>
+        /// WHY THIS LIVES HERE AND NOT IN DungeonCameraRig: verified at source 2026-08-07, the
+        /// composed dungeons (Assets/Scenes/DungeonCompose/dg_*.unity) and the hand-coded
+        /// KayKitChallengeOutpost bake NO camera and NO DungeonCameraRig — grep either .unity for
+        /// the Camera class id (!u!20) and you get nothing. HeroControlEnsurer L283-295 creates
+        /// "GameplayCamera (ensured)" and attaches THIS component, so in those scenes the dungeon
+        /// camera IS SmartMobileCamera. DungeonCameraRig only exists in the two hand-built scenes
+        /// (Dungeon_HealersCottage / Dungeon_FolksGranary), and HeroControlEnsurer L256 hands the
+        /// camera to it there. Fixing only the rig would have left every dungeon the owner is
+        /// actually looking at untouched.
+        /// </para>
+        /// <para>
+        /// WHAT "BOUNCE" ACTUALLY IS on this rig — four independent per-frame motions, all of
+        /// which are correct outdoors and wrong in a 10 m room under a 4 m ceiling:
+        ///   1. OCCLUSION THRASH (the big one). ApplyCollision spherecasts pivot->seat and, at the
+        ///      village 4.5 m seat, hits the wall behind the hero constantly in a corridor. Every
+        ///      hit FADES the occluder to ShadowsOnly (WO-385) — which, now that WO-919 gave these
+        ///      rooms real walls AND a ceiling, means the room strobes invisible and you see the
+        ///      clear colour through it — plus a point-blank pull-in that eases back out at a
+        ///      different speed than it snapped in (_collisionApproachSpeed 40 vs _collisionReturnSpeed
+        ///      8), i.e. a literal in/out bounce.
+        ///   2. COMBAT ZOOM PUMP. _combatZoomOut 2.5 m + _combatFovBoost 4 deg toggling on
+        ///      _enemyInRange. Outdoors mobs are occasional; in a dungeon you are inside the scan
+        ///      radius of something almost continuously, so the seat pumps.
+        ///   3. AUTO-FRAMING YANK. The look-at slides toward the nearest enemy — fine across an
+        ///      open field, a visible swing across a small room.
+        ///   4. MOVEMENT LEAD. The look-at leads the velocity vector; in tight quarters with
+        ///      frequent direction changes that is sway.
+        /// All four are switched OFF here, and the seat is re-anchored to the shared
+        /// DungeonCameraProfile. Numbers are never re-typed at this call site.
+        /// </para>
+        /// <para>
+        /// DELIBERATELY NOT CHANGED: the yaw model. _orbitBehind + the damped facing-recenter is
+        /// what keeps the seat over the hero's shoulder through a corridor turn instead of leaving
+        /// it world-locked behind a wall (that was WO-385's whole point, in enclosed geometry).
+        /// It is damped, converges, and — unlike DungeonCameraRig's FPV sampler, which reads raw
+        /// mouse delta with no button held — cannot drift from idle input: CameraPanInput only
+        /// feeds AddYaw after a deliberate 12 px drag or a held right-mouse (CameraPanInput L17-22,
+        /// L62-64). So WO-920's "no orbit from idle mouse / accidental drag" is already true on
+        /// this rig, and rigidly locking the yaw would trade a real bug for a worse one.
+        /// </para>
+        /// <para>
+        /// KNOWN TRADE, for the felt-test: with collision off the seat can pass through a wall when
+        /// the hero backs flat against one. WO-920 §3 Phase A.3 rules for exactly this ("Enabled =
+        /// false so walls never yank"), and the shorter 3.2 m seat makes it far rarer than the 4.5 m
+        /// one did. If the owner prefers an occasional clip-through to any bounce, this is correct
+        /// as-is; if not, the soft alternative is collision ON with the fade path suppressed, which
+        /// needs a new switch in ApplyCollision.
+        /// </para>
+        /// </summary>
+        private void ApplyDungeonProfileIfNeeded(string why)
+        {
+            bool wantDungeon = DeNelle.Core.HubScenes.IsDungeon(SceneManager.GetActiveScene().name);
+            if (wantDungeon == _dungeonProfileActive) return;
+
+            if (wantDungeon)
+            {
+                // Snapshot the village values ONCE so the restore below is exact.
+                _villageFollowOffset     = _followOffset;
+                _villageLookAtHeight     = _lookAtHeight;
+                _villageLeadDistance     = _leadDistance;
+                _villageCombatZoomOut    = _combatZoomOut;
+                _villageCombatFovBoost   = _combatFovBoost;
+                _villageFramingEnabled   = _framingEnabled;
+                _villageCollisionEnabled = _collisionEnabled;
+
+                _followOffset = new Vector3(
+                    0f,
+                    DeNelle.Core.World.DungeonCameraProfile.CameraHeight,
+                    -DeNelle.Core.World.DungeonCameraProfile.CameraDistance);
+                _lookAtHeight     = DeNelle.Core.World.DungeonCameraProfile.LookAtHeight;
+                _leadDistance     = 0f;      // (4) no look-at sway
+                _combatZoomOut    = 0f;      // (2) no seat pump
+                _combatFovBoost   = 0f;      // (2) no FOV pump
+                _framingEnabled   = false;   // (3) no look-at yank toward mobs
+                _collisionEnabled = false;   // (1) no wall pull-in AND no ceiling/wall fade
+
+                _dungeonProfileActive = true;
+                RestoreAllFaded();   // drop anything the village profile had left hidden
+            }
+            else
+            {
+                _followOffset     = _villageFollowOffset;
+                _lookAtHeight     = _villageLookAtHeight;
+                _leadDistance     = _villageLeadDistance;
+                _combatZoomOut    = _villageCombatZoomOut;
+                _combatFovBoost   = _villageCombatFovBoost;
+                _framingEnabled   = _villageFramingEnabled;
+                _collisionEnabled = _villageCollisionEnabled;
+
+                _dungeonProfileActive = false;
+            }
+
+            // §12 instrumentation: one line answers "which camera am I in, and why" from a log
+            // or a headless capture, with no playtest. Pairs with DungeonCameraRig's "mode="
+            // line — between them, exactly one fires per dungeon, naming which pipeline owns
+            // the view. Camera height vs ceiling is printed because that is the WO's acceptance
+            // criterion and the thing a future seat change would silently break.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DungeonCam",
+                $"mode={(_dungeonProfileActive ? "LockedOTS(SmartMobileCamera)" : "Village(SmartMobileCamera)")} " +
+                $"why={why} scene='{SceneManager.GetActiveScene().name}' " +
+                $"seat=(h {_followOffset.y:F2}, back {-_followOffset.z:F2}) lookAtY={_lookAtHeight:F2} " +
+                $"ceilingRef={DeNelle.Core.World.DungeonCameraProfile.CeilingHeightRef:F1} " +
+                $"headroom={DeNelle.Core.World.DungeonCameraProfile.CeilingHeightRef - _followOffset.y:F2} " +
+                $"lead={_leadDistance:F2} zoomOut={_combatZoomOut:F2} fovBoost={_combatFovBoost:F1} " +
+                $"framing={_framingEnabled} collision={_collisionEnabled} " +
+                $"orbitBehind={_orbitBehind} facingRecenter={_facingRecenterEnabled} (yaw model unchanged)");
         }
 
         // DEF-151: build the camera-occlusion mask from the project's NAMED layers so it
@@ -451,6 +581,10 @@ namespace DeNelle.Village
             // Re-enforce sole camera and snap on any scene load (including additive OuterWorld)
             // so the follow isn't lost after additive loads or scene transitions in Village2.
             EnforceSoleCamera();
+            // WO-920: re-evaluate the dungeon seat BEFORE the snap below, so a camera that
+            // survives into (or out of) a dungeon lands on the right framing in one step instead
+            // of smooth-damping across from the old one. Idempotent — no-ops when nothing changed.
+            ApplyDungeonProfileIfNeeded("sceneLoaded:" + scene.name);
             if (IsTargetValid())
             {
                 ForceFollowImmediate();

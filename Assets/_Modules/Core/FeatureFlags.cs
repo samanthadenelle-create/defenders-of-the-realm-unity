@@ -718,16 +718,27 @@ namespace DeNelle.Core
         // ff.strategicplacement is REMOVED — strategic building placement (WO-673) is
         // ALWAYS ON in every build. All former call sites are the unconditional TRUE path.
 
-        /// <summary>DUNGEON CAMERA — FIRST-PERSON (owner 2026-07-17 felt-test; DEFAULT-ON 2026-07-26 — an
-        /// architect chose FPV traversal over raising the ~4u ceiling, and the owner wants it). The original
-        /// top-down iso rig floated near the ceiling so the room could not be seen; the STUB then only placed
-        /// the camera at the eyeline. This is now a FULL FPV: <see cref="DeNelle.Dungeons.DungeonCameraRig"/>
-        /// adds an independent yaw+pitch LOOK layer (right-half touch-drag / mouse-delta, pitch-clamped ±70,
-        /// DECOUPLED from the movement heading), HIDES the hero body renderers (ShadowsOnly) so the camera is
-        /// not inside the mesh, and keeps obstacle-avoidance + head-bob OFF (motion sickness). Arena fights
-        /// temporarily force over-the-shoulder via <c>SetCombatFraming</c>. Default ON — set PlayerPrefs
-        /// "ff.dungeonfpv" = 0 to REVERT to the fixed over-the-shoulder rig.</summary>
-        public static bool DungeonFpv => Get("dungeonfpv", defaultOn: true);
+        /// <summary>DUNGEON CAMERA — FIRST-PERSON, now an OPT-IN A/B (WO-920, owner 2026-08-07:
+        /// "stationary camera view for in dungeons"). <b>DEFAULT FLIPPED ON->OFF.</b>
+        /// <para>HISTORY, because the reversal only makes sense with it: FPV was made default on 2026-07-26
+        /// as a WORKAROUND — an architect chose first-person traversal INSTEAD OF raising the ~2.8u ceiling,
+        /// since the old top-down iso rig floated at/above the roofline and the room could not be seen.
+        /// WO-919 has since removed the premise: composed rooms are now 4 m walls WITH a ceiling slab
+        /// (RoomForgeCanon.WallHeight/CeilingThickness) and are relit dark. With the room properly enclosed,
+        /// an over-the-shoulder camera seated under the ceiling works, and the owner wants the calm framing
+        /// rather than a free-look that drifts. <see cref="DeNelle.Dungeons.DungeonCameraRig"/>.ResolveMode
+        /// therefore now returns OverShoulder by default.</para>
+        /// <para>OFF (default) = locked over-the-shoulder: no free-look, obstacle-avoidance off, seat from
+        /// DeNelle.Core.World.DungeonCameraProfile, and NO combat reframe (the fight uses the same calm seat).
+        /// ON = the full FPV, preserved intact and NOT deleted: independent yaw+pitch look layer (right-half
+        /// touch-drag / mouse-delta, pitch-clamped ±70, decoupled from the movement heading), hero body
+        /// renderers hidden (ShadowsOnly), and arena fights temporarily forcing over-the-shoulder via
+        /// <c>SetCombatFraming</c>. Set PlayerPrefs "ff.dungeonfpv" = 1 to opt back into first-person.</para>
+        /// <para>SCOPE: this flag only reaches the TWO hand-built dungeon scenes that actually carry a
+        /// DungeonCameraRig (Dungeon_HealersCottage, Dungeon_FolksGranary). The composed dg_* dungeons and
+        /// KayKitChallengeOutpost bake no camera at all and run DeNelle.Village.SmartMobileCamera instead —
+        /// their locked seat is ApplyDungeonProfileIfNeeded there, not this flag.</para></summary>
+        public static bool DungeonFpv => Get("dungeonfpv", defaultOn: false);
 
         /// <summary>DUNGEON CAMERA — LEGACY TOP-DOWN ISO escape hatch (owner 2026-07-17). When ON, the
         /// dungeon rig restores the pre-2026-07-17 fixed top-down isometric framing (pitch ~52, height-capped

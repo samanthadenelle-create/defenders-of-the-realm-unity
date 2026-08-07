@@ -65,6 +65,55 @@ namespace DeNelle.Core
         }
 
         // ─────────────────────────────────────────────────────────────────────
+        //  Dungeon scene test (WO-920)
+        // -----------------------------------------------------------------------
+        //  Added here rather than in a new file for the exact reason this class
+        //  exists (see the header): "is this a dungeon?" was ALREADY answered in two
+        //  drifted, partial places — JupiterSwapBootstrap L133 tests StartsWith
+        //  "Dungeon_" (misses every composed dg_* scene and the outpost), and the
+        //  editor-only DungeonSceneCapture carries a folder + an ExtraScenes array.
+        //  WO-920 needed a THIRD answer at runtime; that is how HubScenes' own root
+        //  cause (WO-411) happened, so it goes next to IsHub/IsOverworld/IsRaid.
+        //
+        //  THREE naming families, all verified against the scenes on disk 2026-08-07:
+        //    dg_*                     composed dungeons, Assets/Scenes/DungeonCompose/
+        //                             (ids authored in RoomForge/Phase2DungeonBatch L30-32
+        //                             + GraphDungeonComposer L97-101). On disk:
+        //                             dg_starter_loop, dg_descent_probe, dg_sunken_vault,
+        //                             dg_bonecrypt, dg_ember_deep.
+        //    Dungeon*                 hand-built: Dungeon, Dungeon_Demo,
+        //                             Dungeon_HealersCottage, Dungeon_FolksGranary.
+        //    KayKitChallengeOutpost   hand-coded starter outpost — a dungeon that lives
+        //                             outside BOTH builders, which is why it keeps missing
+        //                             pipeline fixes (DungeonSceneCapture L59-69 carries it
+        //                             as an explicit extra for the same reason).
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>The hand-coded starter outpost — a dungeon named by neither convention.</summary>
+        public const string OutpostSceneName = "KayKitChallengeOutpost";
+
+        /// <summary>
+        /// True if <paramref name="sceneName"/> is a DUNGEON scene — composed (<c>dg_*</c>),
+        /// hand-built (<c>Dungeon*</c>), or the hand-coded <c>KayKitChallengeOutpost</c>.
+        /// The single source for dungeon-behaviour gates (WO-920 camera + clear colour).
+        /// </summary>
+        /// <remarks>
+        /// MATCHING IS PREFIX/EXACT, NOT SUBSTRING — deliberately TIGHTER than
+        /// <see cref="IsHub"/>. Substring matching would swallow anything merely mentioning
+        /// "Dungeon" and, more importantly, "dg_" is short enough that a Contains test would
+        /// be a live grenade for any future scene name. Garrison_* / RaidBase_* / Outpost1-2
+        /// are deliberately NOT dungeons: they are open-air raid targets that keep the outdoor
+        /// camera and a real sky.
+        /// </remarks>
+        public static bool IsDungeon(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return sceneName.StartsWith("dg_", StringComparison.OrdinalIgnoreCase)
+                || sceneName.StartsWith("Dungeon", StringComparison.OrdinalIgnoreCase)
+                || sceneName.Equals(OutpostSceneName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         //  Enemy-owned scene test (WO-470 / HUD-RCA)
         // -----------------------------------------------------------------------
         //  WHY HERE (architecture): the authoritative ownership flag lives in
