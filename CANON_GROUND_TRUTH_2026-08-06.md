@@ -1,3 +1,9 @@
+> ## SUPERSEDED 2026-08-07 - see `CANON_GROUND_TRUTH_2026-08-07.md`
+>
+> Frozen point-in-time ledger (CLAUDE.md section 15: banner, never rewrite). It predates the
+> overnight run of 2026-08-06/07, so it does NOT know about: the wallet main-thread fix, the arena
+> stranding fix, the Manage/Queues screen (bar is now 6 faces), save schema v37, the rewarded-ad
+> gate, town suspension, the barracks adoption, or the UI seat moving to the 1000-block.
 # CANON GROUND TRUTH — 2026-08-06
 
 **This is the single live anchor (CLAUDE.md §15). It supersedes `CANON_GROUND_TRUTH_2026-08-05.md`.**

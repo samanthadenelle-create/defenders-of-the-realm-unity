@@ -1,0 +1,132 @@
+# CANON GROUND TRUTH — 2026-08-07 (02:2x, overnight run)
+
+> **THE single live anchor (CLAUDE.md §15).** Supersedes `CANON_GROUND_TRUTH_2026-08-06.md`.
+> Every session and agent checks docs against THIS file. Sourced from HEAD commits, the working
+> tree, and captured device/EXE data — never assumption.
+
+**Branch:** `wip/village2-and-f8-tickets` · **HEAD:** `2e6c4709` · **63+ commits ahead of origin,
+NOTHING PUSHED** (push only on the owner's explicit word).
+**Gates as of this file:** `COMPILE_GATE_OK` + **`REGRESSION_OK 123/123 suites`**.
+
+---
+
+## 0. What changed overnight (2026-08-06 evening → 2026-08-07 ~02:30)
+
+Nine commits. In dependency order:
+
+| Commit | What |
+|---|---|
+| `5ec4a983` | **Wallet connect root cause** — `runInBackground: 0` froze the Unity main thread mid-handshake |
+| `3f54a8d2` | Wallet connected-state signal + label (`Wallet CHKK...sfkC`) |
+| `d7e1844f` | Node aura → `Poi_NodeAura` (owner retag; the motes were invisible in daylight) |
+| `7d79d3da` | First-build 5s grace + the bow parent-scale fix that never reached `HeroBowAttachment` |
+| `088b9cda` | Casters carry nothing + a weapon scale sanity guard |
+| `71dd6320` | **Arena stranding fix** — the arena owns the way home again |
+| `a6c65090` | F8 harness un-blinded (throttled a per-frame logger) + tower bake made idempotent |
+| `d1294d73` | Healer's Cottage encounter no longer fires on the spawn point |
+| `287ac354` · `0414d44d` · `c2a9cfb4` · `21d166c9` · `0fe78780` · `4fab809f` · `2e6c4709` | skill tree, army muster, ad gate, Manage screen, town suspension + barracks, regression, docs |
+
+---
+
+## 1. THE HARD FACTS a new session must not get wrong
+
+**The rewarded-ad path is GATED SHUT and must stay that way.** `RewardedAdManager.ShowAdInternal`
+used to be `{ onReward?.Invoke(); }` — it granted the timer skip with **no ad and no SDK**, on all
+three channels after the WO-911 work widened it. There is still NO ad SDK in the project.
+`FeatureFlags.RewardedAdSkip` defaults **OFF**; the stub now returns `false` and never invokes the
+reward. **Two hard prerequisites before it may EVER be switched on:** a real SDK granting only from
+`OnUserEarnedReward`, and **WO-912 server-side window validation** — the ad window is stamped from
+the DEVICE clock, so rolling the clock forward mints a fresh allowance, which behind a live SDK is
+fabricated impressions and an account ban.
+
+**The arena is IN-PLACE at (5000, 0, 5000) in the same scene — not a separate scene.** "Exit battle"
+is a `WarpHero` teleport plus a stage teardown. Any fix that loads a scene is wrong. A hero position
+of ~(5000, *, 5000) while `scene=Main_Castle_Overworld` means STILL IN THE ARENA.
+
+**Save schema is v37.** `BuildJobData` gained `paid{Wood,Food,Iron,Crystals,Magic}` so a cancel
+refunds exactly what was charged (owner ruling Q1, 100% flat). Pre-v37 jobs refund zero, traced.
+The `EchoSpecializationRegression` pin was moved 36 → 37 in the same breath.
+
+**The bottom bar is 6 faces, not 7.** `ActionBarButtonId.Upgrade` is RE-POINTED to the Manage/Queues
+screen; Map moved into Bag as a tab and is **flag-gated OFF** (`ff.maptab`) because
+`RealmMapPanel.cs:30` says travel is a DISABLED stub until WO-827 — the areas genuinely do not
+connect. `ButtonCount` stays 7 (enum identity); a new `MaxVisibleFaces = 6` drives geometry.
+
+**Queue channels are ONLY Builder / Train / Research.** Upgrades ride Builder. The owner's CONTENT
+tabs CROSS those channels: Defence AND Buildings share the ONE Builder rail. Weapons/armour have no
+queue at all and are deliberately omitted.
+
+**Dev chips are OFF by default everywhere**, including development builds. There were TWO — the
+`ResourceDevTool` chip and `OwnerDevToolsOverlay`, and the latter had **no gate at all**, which is
+why the first fix didn't remove it. **F8 capture is untouched** — only the on-screen chips are
+hidden. Restore with `ff.devresourcetool=1` / `ff.flagbutton=1`.
+
+**WO numbering: the UI seat is now on 1000–1099** (owner ruling). The old 860–899 block is CLOSED
+(full at 899). The CLI main line is at **912** and MUST NEVER CROSS 1000. The previously recommended
+"913+" would have collided.
+
+---
+
+## 2. Store readiness (Solana dApp Store, Path A)
+
+- **KYB APPROVED** (Sumsub, portal confirmed).
+- **Privacy policy LIVE and publicly readable**: `https://echoes-of-elarion.vercel.app/privacy`
+  (fetched externally AND confirmed by the owner in a browser). Website:
+  `https://echoes-of-elarion.vercel.app/`. ⚠ Vercel SSO turns itself on at project creation — re-check
+  after ANY redeploy; a login wall there fails the listing while every internal check passes.
+- **Listing copy RULED:** name `Echoes of Elarion` (17/30 chars — note the owner typed "Echos", a
+  slip; every artefact spells it Echoes). Subtitle `They gave their souls to survive.`
+- **Assets produced:** `Builds/StoreAssets/icon_FINAL_512.png`, `banner_FINAL_1200x600.png`, and
+  `previews/` conformed to **1920×1080** (3 of 4 done; the missing one is build-mode/town — nothing
+  in the set currently says "base-builder").
+- **Payment path deferred until AFTER submit (owner ruling).** `Web3.Wallet` is ALWAYS null because
+  Connect goes through `TargetedLocalAssociationScenario` (which is what forces the Seeker wallet),
+  so `SendPayment` can never complete. There is also **no devnet SKR mint** (`SkrMintDevnet` is
+  empty), and mainnet payments are hard-blocked at `SolanaWalletProvider.cs:429`.
+- **WebGL is deprioritised** (owner: zero traffic; kept as an option, not a channel).
+
+---
+
+## 3. Known-broken / open, with evidence
+
+| # | Item | State |
+|---|---|---|
+| 14 | Dungeon arena softlock | Healer's Cottage trigger fixed (`d1294d73`); the "cannot move" cause was the encounter firing ON the spawn point, warping the hero 7,084 m. **Retest needed.** |
+| 17 | Town pause | Threat systems suspended. **Build timers NOT paused** — they run on wall-clock (`TimeSource.NowUnixMs`), so suspending ticks does nothing. Needs a queue time-model change. |
+| 28 | Wave-clear banner clamp | Logged by the game as an error: `body rows COMPRESSED to fit ... every band is now below its own content size` |
+| 31 | Barracks | Adopted at unlock (`0fe78780`). ~0.5 s window where the build card still reads BUILDABLE; closing it cleanly needs a `repo.townGranted` catalog opt-in |
+| 33 | `Bow.fbx` | Imports a STATIC prop as a SkinnedMeshRenderer (`animationType: 2`) with frozen half-written bounds → the -33.56 m. Only TWO prefabs in the tree override renderer bounds: `Bow.prefab` and **`Boss_Dragon.prefab`** (4×, unreported) |
+| 34 | Gear panel showed "Thrain Lv 1" while the HUD said "Grom Lv 3" | Unreproduced since the hero reset |
+| 35 | Fire with no repair | INSTRUMENTED not guessed. One real fix: the repair *installer* checked 4 structure types while the backend prices **8** |
+
+**Only `dg_starter_loop` is a proven-working dungeon end to end** (owner cleared it: loot, caches,
+torch recipe unlock, first-clear recorded). `Dungeon_FolksGranary` is a STUB with no
+`DungeonController`.
+
+---
+
+## 4. Decisions waiting on the owner
+
+1. **Structure height ladder.** Normalization runs, but 20 of 29 structures have NO authored
+   `heightMul` and sit on a flat 4.00 m. A **farm (5.60 m) is taller than every tower (4.80 m) and
+   the Cathedral (4.00 m)**, which is level with a garden wall.
+2. **WO-910** — hide, wire, or leave the 31 dead Ranger/Mage talent nodes. Ranger has **1** working
+   talent of 20; Mage 5. The new progression line marks them INERT so the tree stops lying, which
+   makes the imbalance visible rather than fixing it.
+3. **`extraSlotBaseCrystals = 250`** — an agent had to invent this price; no WO set one.
+4. **In-progress wave at dungeon entry** — suspend-and-resume (default) or cancel (kinder, but
+   farmable: enter a dungeon to wipe a wave going badly). Both built; one line to switch.
+5. **Q9/B8** — `RealmStorePurchase` + the "Coming soon" branch are untouched, so the broke-case route
+   lands on a dead store. Two-line fix once cleared.
+
+---
+
+## 5. Monetization reality (from the SME review, verified at source)
+
+- **The entire crystal sink is ~154 crystals** and a fresh save starts with **250**. A new player can
+  instant-finish every timer in the catalog before buying anything. **Fix the SINK before the price.**
+- **153 convenience tokens across 13 packs evaporate on grant** — zero handlers exist.
+- **40 pack cosmetic SKUs → 25 exist as rows → 0 render anything.** A cosmetic is a hex colour swatch.
+- **`skr_store.json` prices SKR 2.9× cheaper than `packs.json`** — a $19.99 Token Coffer buys the
+  $49.99 Founder's Vow with change. Not live (no runtime loader) but authored and will activate.
+- Pack pricing is back to REAL values (25/60/120/240/600 SKR); the 1-SKR solo-test override is gone.
