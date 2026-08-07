@@ -59,6 +59,15 @@ namespace DeNelle.Village
             Debug.Log("[TroopDialogueCommands] ShowTrainingUI — opened the barracks training panel.");
         }
 
+        // <<ShowMusterUI>> — WO-897: open the Armies panel, where a composition is authored
+        // once and MUSTERED onto the existing Train queue in one action. The panel owns the
+        // Barracks-locked refusal + toast (ArmyMusterPanel.Show), so this is a straight verb.
+        public static void ShowMusterUI()
+        {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Muster", "ShowMusterUI - opening the armies/muster panel.");
+            ArmyMusterPanel.Show();
+        }
+
         // <<StartTraining troopId qty>> — train qty × troopId straight into the army
         // (used if a Yarn option trains without opening the panel). Returns nothing to
         // Yarn; the void shape matches the bridge's Action<string,int> registration.
