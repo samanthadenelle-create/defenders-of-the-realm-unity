@@ -91,6 +91,15 @@ namespace DeNelle.Dungeons
         /// <summary>True when this trigger represents the dungeon's mini-boss fight.</summary>
         private bool _isBossTrigger;
 
+        /// <summary>
+        /// F8 2026-08-07 (Healers Cottage): true once the Keeper has been OBSERVED outside this
+        /// zone after arm. Scripted fights must not fire on the frame the run becomes Ready if
+        /// spawn is inside the radius (garden-hollow-one was authored ON the spawn point — dist=0
+        /// — so TickScripted instantly BattleArena-warped and the player never got a walk-explore
+        /// beat). Require a real entry from outside; spawn-overlap waits until leave+re-enter.
+        /// </summary>
+        private bool _wasOutsideZone;
+
         /// <summary>True while the Keeper stands inside this trigger's proximity zone.</summary>
         public bool HeroInside { get; private set; }
 
@@ -115,6 +124,7 @@ namespace DeNelle.Dungeons
             _runtimeState = runtimeState;
             _hero = hero;
             _isBossTrigger = false;
+            _wasOutsideZone = false;
             if (def != null)
                 transform.position = def.triggerPosition.ToWorld();
             // A scripted encounter already cleared on a resumed run does not re-fire.
@@ -141,6 +151,7 @@ namespace DeNelle.Dungeons
             _runtimeState = runtimeState;
             _hero = hero;
             _isBossTrigger = true;
+            _wasOutsideZone = false;
 
             // Adapt the mini-boss def into the scripted-encounter shape so the
             // one TickScripted path drives both. The boss is a single enemy.
@@ -220,8 +231,27 @@ namespace DeNelle.Dungeons
             Vector3 a = transform.position; a.y = 0f;
             Vector3 b = _hero.position; b.y = 0f;
             float r = _scriptedDef.triggerRadius;
-            HeroInside = (a - b).sqrMagnitude <= r * r;
-            if (!HeroInside) return;
+            float distSq = (a - b).sqrMagnitude;
+            HeroInside = distSq <= r * r;
+            if (!HeroInside)
+            {
+                if (!_wasOutsideZone)
+                    FlowTrace.Once("Dungeon", $"scripted-outside-{_scriptedDef.id}",
+                        $"EncounterTrigger '{_scriptedDef.id}': hero outside zone " +
+                        $"(dist={Mathf.Sqrt(distSq):F1}m r={r:F1}) — armed for first entry.");
+                _wasOutsideZone = true;
+                return;
+            }
+
+            // Spawn-inside guard: do not fire until the Keeper has been outside first.
+            if (!_wasOutsideZone)
+            {
+                FlowTrace.Once("Dungeon", $"scripted-spawn-inside-{_scriptedDef.id}",
+                    $"EncounterTrigger '{_scriptedDef.id}': hero SPAWNED inside radius " +
+                    $"(dist={Mathf.Sqrt(distSq):F1}m r={r:F1}) — holding fire until leave+re-enter " +
+                    "(explore-then-combat; never instant-arena on dungeon entry).");
+                return;
+            }
 
             _hasFired = true;
             // RegisterScriptedEncounter resets the cooldown clock + locks combat;
