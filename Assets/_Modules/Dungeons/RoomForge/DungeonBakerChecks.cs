@@ -88,6 +88,18 @@ namespace DeNelle.Dungeons.RoomForge
         public const float AlignThreshold = 0.25f;
         /// <summary>AABB penetration below this (units) is a shared wall/touch, not an overlap.</summary>
         public const float OverlapTolerance = 0.05f;
+        /// <summary>
+        /// WO-1001 slice 1. Vertical distance (units) between two stacked dungeon floors.
+        /// A StairDown socket sits half this BELOW its room origin and a StairUp socket half
+        /// this ABOVE, so mating the pair drops the child room exactly one floor - which is how
+        /// a multi-level dungeon is expressed without adding an elevation field to the graph
+        /// schema. 6u matches the 6u room cell and clears the 2.8u wall height.
+        /// </summary>
+        public const float FloorSeparationY = 6f;
+
+        /// <summary>True for the two socket types that connect FLOORS rather than walls.</summary>
+        public static bool IsVertical(RoomSocketType t)
+            => t == RoomSocketType.StairUp || t == RoomSocketType.StairDown;
 
         /// <summary>Socket-type compatibility matrix (Door&lt;-&gt;Arch, StairUp&lt;-&gt;StairDown).</summary>
         public static bool TypesCompatible(RoomSocketType a, RoomSocketType b)
@@ -119,9 +131,15 @@ namespace DeNelle.Dungeons.RoomForge
             if (dist > maxD)
             {
                 Vector3 delta = aSock.WorldPosition - bSock.WorldPosition;
-                Vector3 planar = new Vector3(delta.x, 0f, delta.z);
-                nudge = planar.magnitude;
-                bGo.transform.position += planar;
+                // A stair mate is VERTICAL, so a planar-only slide can never close its gap - the
+                // room would be dragged sideways and still report Distance. Take the full 3D
+                // delta for stair pairs; doors keep the planar slide so an off-grid room stays
+                // on its floor rather than being lifted to hide a real authoring error.
+                Vector3 slide = IsVertical(aSock.type) || IsVertical(bSock.type)
+                    ? delta
+                    : new Vector3(delta.x, 0f, delta.z);
+                nudge = slide.magnitude;
+                bGo.transform.position += slide;
                 dist = Vector3.Distance(aSock.WorldPosition, bSock.WorldPosition);
             }
 
@@ -149,11 +167,19 @@ namespace DeNelle.Dungeons.RoomForge
         /// Fix-2 overlap: true when two room footprints penetrate on BOTH X and Z beyond
         /// <paramref name="tolerance"/>. Footprint is the meta's world size (yaw 90/270 swaps
         /// width/depth) centred on the room's world position; a shared wall (touch) is not an
-        /// overlap.
+        /// overlap. WO-1001: rooms more than half a floor apart in Y are on DIFFERENT LEVELS and
+        /// never overlap, whatever their footprints do.
         /// </summary>
         public static bool RoomsOverlap(RoomPrefabMeta a, Vector3 aPos, float aYaw,
                                         RoomPrefabMeta b, Vector3 bPos, float bYaw, float tolerance)
         {
+            // WO-1001 slice 1: rooms on DIFFERENT FLOORS never overlap, however completely their
+            // footprints coincide - a stacked stairwell is total XZ penetration by design. Tested
+            // first, because without it the XZ test below fail-gates every correct vertical stack
+            // as an overlap and aborts the bake. Half a floor is the discriminator: same-floor
+            // rooms sit at dy ~ 0, stacked rooms at dy = FloorSeparationY.
+            if (Mathf.Abs(aPos.y - bPos.y) > FloorSeparationY * 0.5f) return false;
+
             Vector2 ha = HalfExtents(a, aYaw);
             Vector2 hb = HalfExtents(b, bYaw);
             float penX = (ha.x + hb.x) - Mathf.Abs(aPos.x - bPos.x);

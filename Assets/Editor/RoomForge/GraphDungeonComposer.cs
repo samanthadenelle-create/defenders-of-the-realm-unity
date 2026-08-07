@@ -435,10 +435,19 @@ namespace DeNelle.Editor.RoomForge
             float yaw;
             if (target.sqrMagnitude < 1e-6f || src.sqrMagnitude < 1e-6f)
             {
-                // Vertical socket (stair): no planar facing to solve - keep identity yaw and
-                // just align positions. Doors never hit this branch.
+                // WO-1001 slice 1 - the VERTICAL (stair) mate, and a deliberate path rather than
+                // the anomaly this branch used to warn about. A stair socket points straight
+                // up/down, so there is no planar facing to solve and the child keeps its authored
+                // yaw: each floor is laid out in its own frame and must not be spun by how the
+                // stairwell happens to land.
+                //
+                // The height comes out of the position solve below for free. The stair sockets sit
+                // half a floor off their room origins with opposing signs, so
+                //   pos = pPos - cLocalPos = (0,-h,z) - (0,+h,z) = (0,-2h,0)
+                // drops the child exactly FloorSeparationY. Nothing else needs a Y concept - the
+                // emit already rounds p.y into cell[1] and the baker already applies it.
                 yaw = 0f;
-                FlowTrace.Warn(Sys, $"socket '{cSock.id}' has no planar outward (stair?) - yaw unsolved, aligning position only");
+                FlowTrace.Step(Sys, $"socket '{cSock.id}' is a VERTICAL stair mate - keeping authored child yaw; floor offset solved from the socket poses");
             }
             else
             {

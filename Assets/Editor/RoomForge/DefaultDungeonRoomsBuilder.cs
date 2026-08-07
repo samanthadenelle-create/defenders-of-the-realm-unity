@@ -464,10 +464,28 @@ namespace DeNelle.Editor.RoomForge
 
         private static RoomSocket AddStairSocket(Transform parent, RoomSocketType stairType)
         {
+            // WO-1001 slice 1. A stair socket has to express TWO things a door socket never
+            // does: which way you travel through it, and how far down the next floor sits.
+            //
+            // Direction: the mate test is dot(a.Outward, -b.Outward) >= 0.25, so the pair must
+            // OPPOSE. StairDown leads downward (outward -Y), StairUp leads upward (outward +Y);
+            // mating them gives dot(-Y, -(+Y)) = +1. Both used to point down, which scored -1 and
+            // could never mate - that, not the composer, is why no multi-level bake ever existed.
+            //
+            // Height: each socket sits half a floor off its own room origin, so when the composer
+            // slides the child until the socket origins coincide, the rooms land exactly
+            // FloorSeparationY apart with no separate elevation field in the graph schema.
+            float halfFloor = DungeonBakerChecks.FloorSeparationY * 0.5f;
+            bool down = stairType == RoomSocketType.StairDown;
+
             var go = new GameObject($"Socket_stair_{stairType}");
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, 0f, 0.5f);
-            go.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+            go.transform.localPosition = new Vector3(0f, down ? -halfFloor : halfFloor, 0.5f);
+            // Explicit up-vector: LookRotation(up) alone is degenerate (forward parallel to the
+            // default world up) and yields an arbitrary roll.
+            go.transform.localRotation = down
+                ? Quaternion.LookRotation(Vector3.down, Vector3.forward)
+                : Quaternion.LookRotation(Vector3.up, Vector3.forward);
             var sock = go.AddComponent<RoomSocket>();
             sock.id = stairType == RoomSocketType.StairDown ? "stair_down_01" : "stair_up_01";
             sock.type = stairType;
