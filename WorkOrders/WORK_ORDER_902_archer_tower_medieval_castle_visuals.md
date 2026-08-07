@@ -1,6 +1,38 @@
 # WORK ORDER 902 — Archer Tower L1–L3 medieval castle visual swap (Option A)
 
-**Status: READY TO IMPLEMENT**  
+> # ⚠ SUPERSEDED 2026-08-06 — DO NOT IMPLEMENT
+>
+> **Replaced by the owner's ALL-WOOD archer ladder.** Implementing this WO today would *revert* a
+> newer owner ruling and swap the owner's own commissioned art back out for polyperfect castles.
+>
+> **Proof, from the live catalog rather than from memory** — `structures-catalog.json`, row
+> `tower_ground_archer`, field `_bug22`:
+>
+> > *"SUPERSEDED 2026-08-06 by the owner's ALL-WOOD ladder ('New Wooden Tower Level 1', then L2 and
+> > L3): visualPrefabPath + both upgradeVisualPath steps are now Tower_Wooden_Watchtower / _L2 / _L3
+> > — owner-sourced Tripo art staged under Resources/Structures and built by
+> > DeNelle.Editor.WoodenWatchtowerBuilder.Build."*
+>
+> The two are in direct opposition: this WO routes L1–L3 to `Tower_Castle_Round` /
+> `Tower_Castle_Square` / `Tower_Medieval_Big`, and §2 explicitly **bans** the wooden look
+> (*"Do NOT re-use Tower_Medieval_Wood — BUG#22 lumber-pile look — banned for archer"*). The catalog
+> is the newer ruling and it wins.
+>
+> **Body left intact** per CLAUDE.md §15 — dated WOs are frozen; a superseded one gets a banner, not
+> a rewrite. It is kept for provenance: it records *why* the Tribal ladder was rejected, which is
+> still true and still useful.
+>
+> **Still open, and tracked separately — the wooden ladder is not finished.** Two defects were
+> captured with runtime data on 2026-08-07 and neither is fixed:
+> - **L3 binds NO ALBEDO.** Runtime line: `NO ALBEDO on 'Tower_Wooden_Watchtower_L3(Clone)' …
+>   tint=(0.60,0.58,0.54)`, while L1 binds correctly.
+> - **L3's baked rotation is stripped.** `VisualFactory` forces `localRotation = identity`, so
+>   `euler=(270,0,0)` becomes `(0,0,0)`. The owner's OffsetForge fix (`rot.x = -90`) is committed and
+>   correct but cannot take effect until that strip is addressed.
+>
+> Fixing those belongs to the wooden ladder, **not** to this WO. Do not reopen this one to do it.
+
+**Status: SUPERSEDED — do not implement (was: READY TO IMPLEMENT)**  
 **Minted:** 2026-08-04 (CLI / Grok — owner: hates Tribal archer look; ruled **Option A** castle ladder)  
 **Silo:** Structures / catalog art (data + Resources mirror only)  
 **Roles:** CLI or Claude-with-code seat — **no combat logic rewrite**  
